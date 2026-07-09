@@ -1,0 +1,32 @@
+{
+  "name": "hazastudio-donation-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "check": "node --check src/server.js",
+    "cf:dev": "wrangler dev",
+    "cf:deploy": "wrangler deploy",
+    "cf:d1:migrate:local": "wrangler d1 migrations apply donation_db --local",
+    "cf:d1:migrate:remote": "wrangler d1 migrations apply donation_db --remote",
+    "panel:build": "npm --prefix admin-panel run build",
+    "panel:deploy:web": "wrangler pages deploy admin-panel/dist --project-name hazastudio-donation-admin",
+    "local:migrate": "wrangler d1 migrations apply donation_db --local",
+    "local:worker": "wrangler dev --local --port 8787",
+    "local:panel": "npm --prefix admin-panel run dev -- --host 127.0.0.1 --port 4173",
+    "local:up": "concurrently -n worker,panel -c cyan,magenta \"npm run local:worker\" \"npm run local:panel\"",
+    "local:ready": "node scripts/local-ready.mjs",
+    "prod:ready": "node scripts/prod-ready.mjs"
+  },
+  "dependencies": {
+    "pg": "^8.11.5"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "wrangler": "^4.23.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

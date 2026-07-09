@@ -1,0 +1,5477 @@
+{
+  "game_key": "nuwa",
+  "donations": [
+    {
+      "provider_tx_id": "bed5dc74-68cd-4cbb-0b18-08de4fef5e72",
+      "saweria_name": "youuuii30",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-01-11T04:57:53.000Z",
+      "raw_payload": {
+        "id": "bed5dc74-68cd-4cbb-0b18-08de4fef5e72",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "youuuii30",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-01-11T04:57:53.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "f0f51fec-062a-4ba3-cda8-08de518a0fec",
+      "saweria_name": "willowD91",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-01-12T14:42:00.000Z",
+      "raw_payload": {
+        "id": "f0f51fec-062a-4ba3-cda8-08de518a0fec",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "willowD91",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-01-12T14:42:00.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "c60b61b0-3e42-4ea1-cdb9-08de518a0fec",
+      "saweria_name": "Noturaverageboyy",
+      "amount": 200000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-01-12T14:46:44.000Z",
+      "raw_payload": {
+        "id": "c60b61b0-3e42-4ea1-cdb9-08de518a0fec",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Noturaverageboyy",
+        "amount_raw": 200000,
+        "fee": 10000,
+        "net_amount": 190000,
+        "transaction_date": "2026-01-12T14:46:44.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "3f643f32-a0b3-4c87-dbe2-08de540e56ee",
+      "saweria_name": "MUNCE",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-01-17T13:21:42.000Z",
+      "raw_payload": {
+        "id": "3f643f32-a0b3-4c87-dbe2-08de540e56ee",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "MUNCE",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-01-17T13:21:42.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "a94e0b27-a39b-400d-dc0b-08de540e56ee",
+      "saweria_name": "Milodino",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-01-17T13:43:52.000Z",
+      "raw_payload": {
+        "id": "a94e0b27-a39b-400d-dc0b-08de540e56ee",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Milodino",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-01-17T13:43:52.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "d221e494-9502-4160-dc0f-08de540e56ee",
+      "saweria_name": "Milodino771",
+      "amount": 200000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-01-17T13:46:17.000Z",
+      "raw_payload": {
+        "id": "d221e494-9502-4160-dc0f-08de540e56ee",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Milodino771",
+        "amount_raw": 200000,
+        "fee": 10000,
+        "net_amount": 190000,
+        "transaction_date": "2026-01-17T13:46:17.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "37a82564-0063-4fd2-dc14-08de540e56ee",
+      "saweria_name": "milodino771",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-01-17T13:48:18.000Z",
+      "raw_payload": {
+        "id": "37a82564-0063-4fd2-dc14-08de540e56ee",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "milodino771",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-01-17T13:48:18.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "1fd76ce6-7160-48bc-dc68-08de540e56ee",
+      "saweria_name": "ciwhaciw",
+      "amount": 200000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-01-17T14:17:26.000Z",
+      "raw_payload": {
+        "id": "1fd76ce6-7160-48bc-dc68-08de540e56ee",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "ciwhaciw",
+        "amount_raw": 200000,
+        "fee": 10000,
+        "net_amount": 190000,
+        "transaction_date": "2026-01-17T14:17:26.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "e957682a-eec4-4d39-dc90-08de540e56ee",
+      "saweria_name": "MUNCE",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-01-17T14:33:24.000Z",
+      "raw_payload": {
+        "id": "e957682a-eec4-4d39-dc90-08de540e56ee",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "MUNCE",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-01-17T14:33:24.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "be91eb85-6dd0-4c15-dca1-08de540e56ee",
+      "saweria_name": "willowD91",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-01-17T14:40:13.000Z",
+      "raw_payload": {
+        "id": "be91eb85-6dd0-4c15-dca1-08de540e56ee",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "willowD91",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-01-17T14:40:13.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "e5bfbb87-8d66-4e1c-dd22-08de540e56ee",
+      "saweria_name": "glegra8i",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-01-17T15:15:42.000Z",
+      "raw_payload": {
+        "id": "e5bfbb87-8d66-4e1c-dd22-08de540e56ee",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "glegra8i",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-01-17T15:15:42.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "c6fe6d94-ad03-455e-ddc9-08de540e56ee",
+      "saweria_name": "heyelja",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-01-17T15:50:21.000Z",
+      "raw_payload": {
+        "id": "c6fe6d94-ad03-455e-ddc9-08de540e56ee",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "heyelja",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-01-17T15:50:21.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "69f0c4e3-b33d-47b6-01d7-08de540e56ef",
+      "saweria_name": "Milodino",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-01-21T12:27:21.000Z",
+      "raw_payload": {
+        "id": "69f0c4e3-b33d-47b6-01d7-08de540e56ef",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Milodino",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-01-21T12:27:21.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "1a2d9110-1cc6-4438-01e3-08de540e56ef",
+      "saweria_name": "pawwho30",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-01-21T12:32:31.000Z",
+      "raw_payload": {
+        "id": "1a2d9110-1cc6-4438-01e3-08de540e56ef",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "pawwho30",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-01-21T12:32:31.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "67918ead-6e34-4124-01e9-08de540e56ef",
+      "saweria_name": "Milodino771",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-01-21T12:35:57.000Z",
+      "raw_payload": {
+        "id": "67918ead-6e34-4124-01e9-08de540e56ef",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Milodino771",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-01-21T12:35:57.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "a415382d-e8ea-437f-01f2-08de540e56ef",
+      "saweria_name": "milodino771",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-01-21T12:38:55.000Z",
+      "raw_payload": {
+        "id": "a415382d-e8ea-437f-01f2-08de540e56ef",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "milodino771",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-01-21T12:38:55.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "29a0c3aa-15ac-4fa2-09e5-08de540e56ef",
+      "saweria_name": "Noturaverageboyy",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-01-22T14:17:37.000Z",
+      "raw_payload": {
+        "id": "29a0c3aa-15ac-4fa2-09e5-08de540e56ef",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Noturaverageboyy",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-01-22T14:17:37.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "807ae95c-beb6-47e6-0a26-08de540e56ef",
+      "saweria_name": "Noturaverageboyy",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-01-22T14:32:14.000Z",
+      "raw_payload": {
+        "id": "807ae95c-beb6-47e6-0a26-08de540e56ef",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Noturaverageboyy",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-01-22T14:32:14.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "f97bced3-74cc-42d0-0a84-08de540e56ef",
+      "saweria_name": "Noturaverageboyy",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-01-22T14:51:10.000Z",
+      "raw_payload": {
+        "id": "f97bced3-74cc-42d0-0a84-08de540e56ef",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Noturaverageboyy",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-01-22T14:51:10.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "2820b944-c41a-4f0a-18b1-08de540e56ef",
+      "saweria_name": "glegra8i",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-01-24T12:27:24.000Z",
+      "raw_payload": {
+        "id": "2820b944-c41a-4f0a-18b1-08de540e56ef",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "glegra8i",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-01-24T12:27:24.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "ceac9287-d8a0-475b-192c-08de540e56ef",
+      "saweria_name": "Noturaverageboyy",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-01-24T13:55:13.000Z",
+      "raw_payload": {
+        "id": "ceac9287-d8a0-475b-192c-08de540e56ef",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Noturaverageboyy",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-01-24T13:55:13.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "0ada7517-161c-4a64-1933-08de540e56ef",
+      "saweria_name": "Noturaverageboyy",
+      "amount": 150000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-01-24T13:58:35.000Z",
+      "raw_payload": {
+        "id": "0ada7517-161c-4a64-1933-08de540e56ef",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Noturaverageboyy",
+        "amount_raw": 150000,
+        "fee": 7500,
+        "net_amount": 142500,
+        "transaction_date": "2026-01-24T13:58:35.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "ac44889a-5d1f-46e6-193a-08de540e56ef",
+      "saweria_name": "willowD91",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-01-24T14:01:07.000Z",
+      "raw_payload": {
+        "id": "ac44889a-5d1f-46e6-193a-08de540e56ef",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "willowD91",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-01-24T14:01:07.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "b7517ec6-94d5-44e9-196e-08de540e56ef",
+      "saweria_name": "Noturaverageboyy",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-01-24T14:19:02.000Z",
+      "raw_payload": {
+        "id": "b7517ec6-94d5-44e9-196e-08de540e56ef",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Noturaverageboyy",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-01-24T14:19:02.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "7dcc80cc-14e6-4f78-19d4-08de540e56ef",
+      "saweria_name": "willowD91",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-01-24T14:49:16.000Z",
+      "raw_payload": {
+        "id": "7dcc80cc-14e6-4f78-19d4-08de540e56ef",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "willowD91",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-01-24T14:49:16.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "3d070842-ae8d-46cf-217d-08de540e56ef",
+      "saweria_name": "reyvito1010",
+      "amount": 300000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-01-25T12:17:13.000Z",
+      "raw_payload": {
+        "id": "3d070842-ae8d-46cf-217d-08de540e56ef",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "reyvito1010",
+        "amount_raw": 300000,
+        "fee": 15000,
+        "net_amount": 285000,
+        "transaction_date": "2026-01-25T12:17:13.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "86f5c379-25f4-49d9-85e4-08de5d66aa52",
+      "saweria_name": "willowD91",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-01-27T13:04:33.000Z",
+      "raw_payload": {
+        "id": "86f5c379-25f4-49d9-85e4-08de5d66aa52",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "willowD91",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-01-27T13:04:33.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "d53fa1b5-4986-47fd-85ea-08de5d66aa52",
+      "saweria_name": "Chaa",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-01-27T13:06:49.000Z",
+      "raw_payload": {
+        "id": "d53fa1b5-4986-47fd-85ea-08de5d66aa52",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Chaa",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-01-27T13:06:49.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "59fe9b54-9430-465c-fa3c-08de5ef82789",
+      "saweria_name": "Noturaverageboyy",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-01-31T15:18:30.000Z",
+      "raw_payload": {
+        "id": "59fe9b54-9430-465c-fa3c-08de5ef82789",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Noturaverageboyy",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-01-31T15:18:30.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "6f51784c-8ef6-467b-0297-08de5ef8278a",
+      "saweria_name": "NORTHxXwbii",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-01T14:01:35.000Z",
+      "raw_payload": {
+        "id": "6f51784c-8ef6-467b-0297-08de5ef8278a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "NORTHxXwbii",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-01T14:01:35.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "37d5d6ee-1959-4c38-034d-08de5ef8278a",
+      "saweria_name": "KakekSpeedRun",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-01T14:51:37.000Z",
+      "raw_payload": {
+        "id": "37d5d6ee-1959-4c38-034d-08de5ef8278a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "KakekSpeedRun",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-02-01T14:51:37.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "cfb2a52c-1acc-4a79-0c2d-08de5ef8278a",
+      "saweria_name": "aethergoth666",
+      "amount": 25000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-02T12:52:01.000Z",
+      "raw_payload": {
+        "id": "cfb2a52c-1acc-4a79-0c2d-08de5ef8278a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "aethergoth666",
+        "amount_raw": 25000,
+        "fee": 1250,
+        "net_amount": 23750,
+        "transaction_date": "2026-02-02T12:52:01.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "33281ff7-e96c-4564-0c35-08de5ef8278a",
+      "saweria_name": "veeyajee",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-02T12:52:52.000Z",
+      "raw_payload": {
+        "id": "33281ff7-e96c-4564-0c35-08de5ef8278a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "veeyajee",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-02T12:52:52.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "a3bbfa49-aeb3-4fcc-0c3a-08de5ef8278a",
+      "saweria_name": "aethergoth666",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-02T12:54:08.000Z",
+      "raw_payload": {
+        "id": "a3bbfa49-aeb3-4fcc-0c3a-08de5ef8278a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "aethergoth666",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-02T12:54:08.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "940d1481-399a-495b-f146-08de62ed0649",
+      "saweria_name": "milodino771",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-03T13:23:30.000Z",
+      "raw_payload": {
+        "id": "940d1481-399a-495b-f146-08de62ed0649",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "milodino771",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-03T13:23:30.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "ca0e9828-ebc3-43a0-f154-08de62ed0649",
+      "saweria_name": "willowD91",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-03T13:28:07.000Z",
+      "raw_payload": {
+        "id": "ca0e9828-ebc3-43a0-f154-08de62ed0649",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "willowD91",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-03T13:28:07.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "6112c35c-c3d2-43b3-f15b-08de62ed0649",
+      "saweria_name": "milodino771",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-03T13:31:06.000Z",
+      "raw_payload": {
+        "id": "6112c35c-c3d2-43b3-f15b-08de62ed0649",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "milodino771",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-03T13:31:06.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "790c0376-1439-4dcd-f192-08de62ed0649",
+      "saweria_name": "willowD91",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-03T13:53:23.000Z",
+      "raw_payload": {
+        "id": "790c0376-1439-4dcd-f192-08de62ed0649",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "willowD91",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-03T13:53:23.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "2413b5d4-13fe-4273-f1b6-08de62ed0649",
+      "saweria_name": "willowD91",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-03T14:09:09.000Z",
+      "raw_payload": {
+        "id": "2413b5d4-13fe-4273-f1b6-08de62ed0649",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "willowD91",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-03T14:09:09.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "42a8fb91-3f75-4b69-f1ea-08de62ed0649",
+      "saweria_name": "Noturaverageboyy",
+      "amount": 150000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-03T14:20:40.000Z",
+      "raw_payload": {
+        "id": "42a8fb91-3f75-4b69-f1ea-08de62ed0649",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Noturaverageboyy",
+        "amount_raw": 150000,
+        "fee": 7500,
+        "net_amount": 142500,
+        "transaction_date": "2026-02-03T14:20:40.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "1e09847a-9fce-480e-fc64-08de62ed0649",
+      "saweria_name": "whoagass",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-04T14:10:46.000Z",
+      "raw_payload": {
+        "id": "1e09847a-9fce-480e-fc64-08de62ed0649",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "whoagass",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-04T14:10:46.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "105aba6e-27e5-4d00-fc75-08de62ed0649",
+      "saweria_name": "whoagass",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-04T14:16:04.000Z",
+      "raw_payload": {
+        "id": "105aba6e-27e5-4d00-fc75-08de62ed0649",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "whoagass",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-04T14:16:04.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "afb6eea9-dbb9-4a82-fc8b-08de62ed0649",
+      "saweria_name": "willowD91",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-04T14:20:22.000Z",
+      "raw_payload": {
+        "id": "afb6eea9-dbb9-4a82-fc8b-08de62ed0649",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "willowD91",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-04T14:20:22.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "95207bd1-ce44-4b38-fd8f-08de62ed0649",
+      "saweria_name": "xxwbii",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-04T15:00:02.000Z",
+      "raw_payload": {
+        "id": "95207bd1-ce44-4b38-fd8f-08de62ed0649",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "xxwbii",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-02-04T15:00:02.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "5e87b454-7107-4657-062e-08de62ed064a",
+      "saweria_name": "whoagass",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-05T12:27:23.000Z",
+      "raw_payload": {
+        "id": "5e87b454-7107-4657-062e-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "whoagass",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-05T12:27:23.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "3629fd41-2d4c-485c-064c-08de62ed064a",
+      "saweria_name": "whoagass",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-05T12:46:20.000Z",
+      "raw_payload": {
+        "id": "3629fd41-2d4c-485c-064c-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "whoagass",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-02-05T12:46:20.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "41d12233-cde5-467c-073d-08de62ed064a",
+      "saweria_name": "willowD91",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-05T14:17:17.000Z",
+      "raw_payload": {
+        "id": "41d12233-cde5-467c-073d-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "willowD91",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-05T14:17:17.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "707c1dbf-d635-462e-09b6-08de62ed064a",
+      "saweria_name": "milodino771",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-05T15:33:15.000Z",
+      "raw_payload": {
+        "id": "707c1dbf-d635-462e-09b6-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "milodino771",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-05T15:33:15.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "bd86d894-01b8-47ec-1daf-08de62ed064a",
+      "saweria_name": "pawwho30",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-07T09:37:33.000Z",
+      "raw_payload": {
+        "id": "bd86d894-01b8-47ec-1daf-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "pawwho30",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-02-07T09:37:33.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "4e80cc75-46da-4438-1db3-08de62ed064a",
+      "saweria_name": "acila141414",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-07T09:39:04.000Z",
+      "raw_payload": {
+        "id": "4e80cc75-46da-4438-1db3-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "acila141414",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-02-07T09:39:04.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "57a1d9b2-cff9-4a63-1db8-08de62ed064a",
+      "saweria_name": "Acila141414",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-07T09:41:04.000Z",
+      "raw_payload": {
+        "id": "57a1d9b2-cff9-4a63-1db8-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Acila141414",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-02-07T09:41:04.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "1731fc3c-2a23-416d-1e57-08de62ed064a",
+      "saweria_name": "NUWAxReth",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-07T11:51:22.000Z",
+      "raw_payload": {
+        "id": "1731fc3c-2a23-416d-1e57-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "NUWAxReth",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-07T11:51:22.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "d5f58e23-ae1d-4e58-1ed0-08de62ed064a",
+      "saweria_name": "Noturaverageboyy",
+      "amount": 500000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-07T13:18:49.000Z",
+      "raw_payload": {
+        "id": "d5f58e23-ae1d-4e58-1ed0-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Noturaverageboyy",
+        "amount_raw": 500000,
+        "fee": 25000,
+        "net_amount": 475000,
+        "transaction_date": "2026-02-07T13:18:49.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "8913cdb2-ab0e-4082-1ed6-08de62ed064a",
+      "saweria_name": "milodino771",
+      "amount": 200000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-07T13:19:57.000Z",
+      "raw_payload": {
+        "id": "8913cdb2-ab0e-4082-1ed6-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "milodino771",
+        "amount_raw": 200000,
+        "fee": 10000,
+        "net_amount": 190000,
+        "transaction_date": "2026-02-07T13:19:57.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "d13326ce-c8ed-4720-1f27-08de62ed064a",
+      "saweria_name": "Noturaverageboyy",
+      "amount": 500000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-07T13:47:31.000Z",
+      "raw_payload": {
+        "id": "d13326ce-c8ed-4720-1f27-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Noturaverageboyy",
+        "amount_raw": 500000,
+        "fee": 25000,
+        "net_amount": 475000,
+        "transaction_date": "2026-02-07T13:47:31.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "7258db16-858c-4aef-1f94-08de62ed064a",
+      "saweria_name": "Noturaverageboyy",
+      "amount": 500000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-07T14:16:00.000Z",
+      "raw_payload": {
+        "id": "7258db16-858c-4aef-1f94-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Noturaverageboyy",
+        "amount_raw": 500000,
+        "fee": 25000,
+        "net_amount": 475000,
+        "transaction_date": "2026-02-07T14:16:00.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "dd840557-5141-4ae4-1fba-08de62ed064a",
+      "saweria_name": "Rocketbunny046",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-07T14:28:50.000Z",
+      "raw_payload": {
+        "id": "dd840557-5141-4ae4-1fba-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Rocketbunny046",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-07T14:28:50.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "f12f13f5-baee-43b3-1fbb-08de62ed064a",
+      "saweria_name": "ciwhaciw",
+      "amount": 255555,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-07T14:28:53.000Z",
+      "raw_payload": {
+        "id": "f12f13f5-baee-43b3-1fbb-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "ciwhaciw",
+        "amount_raw": 255555,
+        "fee": 12777,
+        "net_amount": 242778,
+        "transaction_date": "2026-02-07T14:28:53.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "83c6a6dc-2a6f-4e41-1fd7-08de62ed064a",
+      "saweria_name": "JunIblis68",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-07T14:34:37.000Z",
+      "raw_payload": {
+        "id": "83c6a6dc-2a6f-4e41-1fd7-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "JunIblis68",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-02-07T14:34:37.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "1cbc9895-c722-4c0d-1fe7-08de62ed064a",
+      "saweria_name": "Rocketbunny046",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-07T14:37:05.000Z",
+      "raw_payload": {
+        "id": "1cbc9895-c722-4c0d-1fe7-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Rocketbunny046",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-07T14:37:05.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "9c828df2-e143-4c05-1fe9-08de62ed064a",
+      "saweria_name": "Hereforyouluvv",
+      "amount": 80000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-07T14:37:45.000Z",
+      "raw_payload": {
+        "id": "9c828df2-e143-4c05-1fe9-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Hereforyouluvv",
+        "amount_raw": 80000,
+        "fee": 4000,
+        "net_amount": 76000,
+        "transaction_date": "2026-02-07T14:37:45.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "99dff2fc-8a6d-4c1e-1ff3-08de62ed064a",
+      "saweria_name": "JunIblis68",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-07T14:40:30.000Z",
+      "raw_payload": {
+        "id": "99dff2fc-8a6d-4c1e-1ff3-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "JunIblis68",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-07T14:40:30.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "c3c3d1c2-4525-47cb-2000-08de62ed064a",
+      "saweria_name": "ciwhaciw",
+      "amount": 111111,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-07T14:41:46.000Z",
+      "raw_payload": {
+        "id": "c3c3d1c2-4525-47cb-2000-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "ciwhaciw",
+        "amount_raw": 111111,
+        "fee": 5555,
+        "net_amount": 105556,
+        "transaction_date": "2026-02-07T14:41:46.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "c70b4228-c1e1-45c9-2004-08de62ed064a",
+      "saweria_name": "Juafob",
+      "amount": 25000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-07T14:42:30.000Z",
+      "raw_payload": {
+        "id": "c70b4228-c1e1-45c9-2004-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Juafob",
+        "amount_raw": 25000,
+        "fee": 1250,
+        "net_amount": 23750,
+        "transaction_date": "2026-02-07T14:42:30.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "ee52f69f-68c9-4b01-2008-08de62ed064a",
+      "saweria_name": "JunIblis68",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-07T14:43:22.000Z",
+      "raw_payload": {
+        "id": "ee52f69f-68c9-4b01-2008-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "JunIblis68",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-02-07T14:43:22.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "0b8d5ae0-d2ee-41e2-2013-08de62ed064a",
+      "saweria_name": "ciwhaciw",
+      "amount": 55555,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-07T14:45:20.000Z",
+      "raw_payload": {
+        "id": "0b8d5ae0-d2ee-41e2-2013-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "ciwhaciw",
+        "amount_raw": 55555,
+        "fee": 2777,
+        "net_amount": 52778,
+        "transaction_date": "2026-02-07T14:45:20.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "097e646f-1b01-4ecc-2016-08de62ed064a",
+      "saweria_name": "JunIblis68",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-07T14:45:31.000Z",
+      "raw_payload": {
+        "id": "097e646f-1b01-4ecc-2016-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "JunIblis68",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-02-07T14:45:31.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "ae05d4d6-5b83-4185-20b4-08de62ed064a",
+      "saweria_name": "ciwhaciw",
+      "amount": 111111,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-07T15:13:37.000Z",
+      "raw_payload": {
+        "id": "ae05d4d6-5b83-4185-20b4-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "ciwhaciw",
+        "amount_raw": 111111,
+        "fee": 5555,
+        "net_amount": 105556,
+        "transaction_date": "2026-02-07T15:13:37.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "2b99b57d-fd4c-4049-20ba-08de62ed064a",
+      "saweria_name": "JunIblis68",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-07T15:14:58.000Z",
+      "raw_payload": {
+        "id": "2b99b57d-fd4c-4049-20ba-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "JunIblis68",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-07T15:14:58.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "e3b21471-b16f-47db-20d1-08de62ed064a",
+      "saweria_name": "JunIblis68",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-07T15:20:54.000Z",
+      "raw_payload": {
+        "id": "e3b21471-b16f-47db-20d1-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "JunIblis68",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-02-07T15:20:54.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "dabca244-2096-4eae-2201-08de62ed064a",
+      "saweria_name": "Lovauree",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-07T16:17:39.000Z",
+      "raw_payload": {
+        "id": "dabca244-2096-4eae-2201-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Lovauree",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-07T16:17:39.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "1eb06476-f186-4bb2-220e-08de62ed064a",
+      "saweria_name": "Lovauree",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-07T16:19:12.000Z",
+      "raw_payload": {
+        "id": "1eb06476-f186-4bb2-220e-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Lovauree",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-07T16:19:12.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "5081f545-51a1-467c-221c-08de62ed064a",
+      "saweria_name": "Lovauree",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-07T16:22:04.000Z",
+      "raw_payload": {
+        "id": "5081f545-51a1-467c-221c-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Lovauree",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-07T16:22:04.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "e81a7a04-22f8-4499-2222-08de62ed064a",
+      "saweria_name": "Lovauree",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-07T16:23:52.000Z",
+      "raw_payload": {
+        "id": "e81a7a04-22f8-4499-2222-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Lovauree",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-07T16:23:52.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "dda094b7-5167-44e4-2242-08de62ed064a",
+      "saweria_name": "Lovauree",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-07T16:32:32.000Z",
+      "raw_payload": {
+        "id": "dda094b7-5167-44e4-2242-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Lovauree",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-07T16:32:32.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "37b02804-0a68-4c0a-28c2-08de62ed064a",
+      "saweria_name": "jasminesophie99",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-08T13:59:59.000Z",
+      "raw_payload": {
+        "id": "37b02804-0a68-4c0a-28c2-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "jasminesophie99",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-02-08T13:59:59.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "f8dc817e-1687-4427-311f-08de62ed064a",
+      "saweria_name": "Marskyy33",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-09T13:07:50.000Z",
+      "raw_payload": {
+        "id": "f8dc817e-1687-4427-311f-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Marskyy33",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-09T13:07:50.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "233f3910-469f-44fb-313f-08de62ed064a",
+      "saweria_name": "Marskyy33",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-09T13:16:13.000Z",
+      "raw_payload": {
+        "id": "233f3910-469f-44fb-313f-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Marskyy33",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-09T13:16:13.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "9cfef4ce-ee19-42fb-316d-08de62ed064a",
+      "saweria_name": "Marskyy33",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-09T13:38:00.000Z",
+      "raw_payload": {
+        "id": "9cfef4ce-ee19-42fb-316d-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Marskyy33",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-09T13:38:00.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "ece83ce2-b444-4101-31ac-08de62ed064a",
+      "saweria_name": "milodino771",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-09T13:59:32.000Z",
+      "raw_payload": {
+        "id": "ece83ce2-b444-4101-31ac-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "milodino771",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-09T13:59:32.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "4662a41d-4f6f-42e7-31af-08de62ed064a",
+      "saweria_name": "milodino771",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-09T14:00:39.000Z",
+      "raw_payload": {
+        "id": "4662a41d-4f6f-42e7-31af-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "milodino771",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-09T14:00:39.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "a4c96c96-832c-4a52-31b5-08de62ed064a",
+      "saweria_name": "milodino771",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-09T14:03:03.000Z",
+      "raw_payload": {
+        "id": "a4c96c96-832c-4a52-31b5-08de62ed064a",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "milodino771",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-09T14:03:03.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "9f529fc4-b5ab-4517-7a51-08de6881ae98",
+      "saweria_name": "milodino771",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-10T12:36:29.000Z",
+      "raw_payload": {
+        "id": "9f529fc4-b5ab-4517-7a51-08de6881ae98",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "milodino771",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-10T12:36:29.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "340cde27-d0be-4941-854b-08de6881ae98",
+      "saweria_name": "haciiiwww",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-11T14:13:24.000Z",
+      "raw_payload": {
+        "id": "340cde27-d0be-4941-854b-08de6881ae98",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "haciiiwww",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-11T14:13:24.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "9df8e9bf-5f2b-4432-ae8a-08de69f99388",
+      "saweria_name": "just4buyyy",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-12T11:56:43.000Z",
+      "raw_payload": {
+        "id": "9df8e9bf-5f2b-4432-ae8a-08de69f99388",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "just4buyyy",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-02-12T11:56:43.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "0823be88-573d-486a-ae96-08de69f99388",
+      "saweria_name": "just4buyyy",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-12T12:01:43.000Z",
+      "raw_payload": {
+        "id": "0823be88-573d-486a-ae96-08de69f99388",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "just4buyyy",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-12T12:01:43.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "426b88f6-5d59-447f-af07-08de69f99388",
+      "saweria_name": "just4buyyy",
+      "amount": 250000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-12T13:00:38.000Z",
+      "raw_payload": {
+        "id": "426b88f6-5d59-447f-af07-08de69f99388",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "just4buyyy",
+        "amount_raw": 250000,
+        "fee": 12500,
+        "net_amount": 237500,
+        "transaction_date": "2026-02-12T13:00:38.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "23cc39fd-5c7a-4c28-a4bb-08de6aad88eb",
+      "saweria_name": "Kelazking77",
+      "amount": 222222,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-14T13:28:03.000Z",
+      "raw_payload": {
+        "id": "23cc39fd-5c7a-4c28-a4bb-08de6aad88eb",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Kelazking77",
+        "amount_raw": 222222,
+        "fee": 11111,
+        "net_amount": 211111,
+        "transaction_date": "2026-02-14T13:28:03.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "688c8c00-b6e1-4483-a4c3-08de6aad88eb",
+      "saweria_name": "Kelazking77",
+      "amount": 333333,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-14T13:30:38.000Z",
+      "raw_payload": {
+        "id": "688c8c00-b6e1-4483-a4c3-08de6aad88eb",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Kelazking77",
+        "amount_raw": 333333,
+        "fee": 16666,
+        "net_amount": 316667,
+        "transaction_date": "2026-02-14T13:30:38.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "5115c244-47ac-4402-a4f7-08de6aad88eb",
+      "saweria_name": "Kelazking77",
+      "amount": 234567,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-14T13:45:06.000Z",
+      "raw_payload": {
+        "id": "5115c244-47ac-4402-a4f7-08de6aad88eb",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Kelazking77",
+        "amount_raw": 234567,
+        "fee": 11728,
+        "net_amount": 222839,
+        "transaction_date": "2026-02-14T13:45:06.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "2c727dd5-aab8-494b-a50e-08de6aad88eb",
+      "saweria_name": "just4buyyy",
+      "amount": 345678,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-14T13:49:34.000Z",
+      "raw_payload": {
+        "id": "2c727dd5-aab8-494b-a50e-08de6aad88eb",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "just4buyyy",
+        "amount_raw": 345678,
+        "fee": 17283,
+        "net_amount": 328395,
+        "transaction_date": "2026-02-14T13:49:34.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "b8b63a2e-993f-4cd7-a51a-08de6aad88eb",
+      "saweria_name": "PVLxKkoyap",
+      "amount": 500000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-14T13:53:10.000Z",
+      "raw_payload": {
+        "id": "b8b63a2e-993f-4cd7-a51a-08de6aad88eb",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "PVLxKkoyap",
+        "amount_raw": 500000,
+        "fee": 25000,
+        "net_amount": 475000,
+        "transaction_date": "2026-02-14T13:53:10.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "b9269318-c646-448e-ab33-08de6aad88eb",
+      "saweria_name": "nyawnyaw2502",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-15T06:21:11.000Z",
+      "raw_payload": {
+        "id": "b9269318-c646-448e-ab33-08de6aad88eb",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "nyawnyaw2502",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-02-15T06:21:11.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "5f6a139a-7647-4967-ab6e-08de6aad88eb",
+      "saweria_name": "nyawnyaw2502",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-15T07:43:08.000Z",
+      "raw_payload": {
+        "id": "5f6a139a-7647-4967-ab6e-08de6aad88eb",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "nyawnyaw2502",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-02-15T07:43:08.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "463ea9d1-cc59-4183-ac32-08de6aad88eb",
+      "saweria_name": "zieyy cantikk",
+      "amount": 25000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-15T11:18:32.000Z",
+      "raw_payload": {
+        "id": "463ea9d1-cc59-4183-ac32-08de6aad88eb",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "zieyy cantikk",
+        "amount_raw": 25000,
+        "fee": 1250,
+        "net_amount": 23750,
+        "transaction_date": "2026-02-15T11:18:32.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "edce8b2c-b90a-4d43-b5b4-08de6aad88eb",
+      "saweria_name": "nyawnyaw2502",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-16T11:57:15.000Z",
+      "raw_payload": {
+        "id": "edce8b2c-b90a-4d43-b5b4-08de6aad88eb",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "nyawnyaw2502",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-16T11:57:15.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "684ef4c7-e66b-4eaf-b5b9-08de6aad88eb",
+      "saweria_name": "nyawnyaw2502",
+      "amount": 25000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-16T12:00:47.000Z",
+      "raw_payload": {
+        "id": "684ef4c7-e66b-4eaf-b5b9-08de6aad88eb",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "nyawnyaw2502",
+        "amount_raw": 25000,
+        "fee": 1250,
+        "net_amount": 23750,
+        "transaction_date": "2026-02-16T12:00:47.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "2b23d6e0-1e3a-416a-a408-08de6de34fc4",
+      "saweria_name": "sirgustavooo",
+      "amount": 555555,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-17T13:54:15.000Z",
+      "raw_payload": {
+        "id": "2b23d6e0-1e3a-416a-a408-08de6de34fc4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "sirgustavooo",
+        "amount_raw": 555555,
+        "fee": 27777,
+        "net_amount": 527778,
+        "transaction_date": "2026-02-17T13:54:15.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "d9e9d296-58fd-4cd3-a417-08de6de34fc4",
+      "saweria_name": "seracsv",
+      "amount": 444444,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-17T13:57:29.000Z",
+      "raw_payload": {
+        "id": "d9e9d296-58fd-4cd3-a417-08de6de34fc4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "seracsv",
+        "amount_raw": 444444,
+        "fee": 22222,
+        "net_amount": 422222,
+        "transaction_date": "2026-02-17T13:57:29.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "5baafd09-86be-47ad-a499-08de6de34fc4",
+      "saweria_name": "tellmeitssean",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-17T14:32:26.000Z",
+      "raw_payload": {
+        "id": "5baafd09-86be-47ad-a499-08de6de34fc4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "tellmeitssean",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-02-17T14:32:26.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "fce90f10-e8ac-4f8f-a4ae-08de6de34fc4",
+      "saweria_name": "tellmeitssean",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-17T14:36:16.000Z",
+      "raw_payload": {
+        "id": "fce90f10-e8ac-4f8f-a4ae-08de6de34fc4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "tellmeitssean",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-02-17T14:36:16.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "71668f3e-3d7f-4387-a4c6-08de6de34fc4",
+      "saweria_name": "Teslalicious23",
+      "amount": 88888,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-17T14:39:54.000Z",
+      "raw_payload": {
+        "id": "71668f3e-3d7f-4387-a4c6-08de6de34fc4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Teslalicious23",
+        "amount_raw": 88888,
+        "fee": 4444,
+        "net_amount": 84444,
+        "transaction_date": "2026-02-17T14:39:54.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "3a76d7b5-ceab-4d4a-a4d7-08de6de34fc4",
+      "saweria_name": "koko07055",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-17T14:42:01.000Z",
+      "raw_payload": {
+        "id": "3a76d7b5-ceab-4d4a-a4d7-08de6de34fc4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "koko07055",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-17T14:42:01.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "abde2a88-f486-471c-a4da-08de6de34fc4",
+      "saweria_name": "KKSxKanda_Kundur",
+      "amount": 250000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-17T14:42:45.000Z",
+      "raw_payload": {
+        "id": "abde2a88-f486-471c-a4da-08de6de34fc4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "KKSxKanda_Kundur",
+        "amount_raw": 250000,
+        "fee": 12500,
+        "net_amount": 237500,
+        "transaction_date": "2026-02-17T14:42:45.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "77a01dc6-c083-492d-a4df-08de6de34fc4",
+      "saweria_name": "Hereforyouluvv",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-17T14:43:15.000Z",
+      "raw_payload": {
+        "id": "77a01dc6-c083-492d-a4df-08de6de34fc4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Hereforyouluvv",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-17T14:43:15.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "adbe7119-48a5-4768-a4e0-08de6de34fc4",
+      "saweria_name": "Teslalicious23",
+      "amount": 18888,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-17T14:43:31.000Z",
+      "raw_payload": {
+        "id": "adbe7119-48a5-4768-a4e0-08de6de34fc4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Teslalicious23",
+        "amount_raw": 18888,
+        "fee": 944,
+        "net_amount": 17944,
+        "transaction_date": "2026-02-17T14:43:31.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "3882633f-04cf-45c2-a4e3-08de6de34fc4",
+      "saweria_name": "koko07055",
+      "amount": 150000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-17T14:44:04.000Z",
+      "raw_payload": {
+        "id": "3882633f-04cf-45c2-a4e3-08de6de34fc4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "koko07055",
+        "amount_raw": 150000,
+        "fee": 7500,
+        "net_amount": 142500,
+        "transaction_date": "2026-02-17T14:44:04.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "94704cab-d7cb-4671-a4ee-08de6de34fc4",
+      "saweria_name": "KKSxKanda_Kundur",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-17T14:44:58.000Z",
+      "raw_payload": {
+        "id": "94704cab-d7cb-4671-a4ee-08de6de34fc4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "KKSxKanda_Kundur",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-02-17T14:44:58.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "8d05c971-f7da-468a-a4f7-08de6de34fc4",
+      "saweria_name": "koko07055",
+      "amount": 250000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-17T14:45:49.000Z",
+      "raw_payload": {
+        "id": "8d05c971-f7da-468a-a4f7-08de6de34fc4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "koko07055",
+        "amount_raw": 250000,
+        "fee": 12500,
+        "net_amount": 237500,
+        "transaction_date": "2026-02-17T14:45:49.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "2713a240-6ef9-4a0e-a510-08de6de34fc4",
+      "saweria_name": "DeeGodaa",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-17T14:49:22.000Z",
+      "raw_payload": {
+        "id": "2713a240-6ef9-4a0e-a510-08de6de34fc4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "DeeGodaa",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-17T14:49:22.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "b4d015cf-e1f4-446a-a539-08de6de34fc4",
+      "saweria_name": "koko07055",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-17T14:54:45.000Z",
+      "raw_payload": {
+        "id": "b4d015cf-e1f4-446a-a539-08de6de34fc4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "koko07055",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-17T14:54:45.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "543e6845-3544-46fa-a57a-08de6de34fc4",
+      "saweria_name": "koko07055",
+      "amount": 250000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-17T15:04:12.000Z",
+      "raw_payload": {
+        "id": "543e6845-3544-46fa-a57a-08de6de34fc4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "koko07055",
+        "amount_raw": 250000,
+        "fee": 12500,
+        "net_amount": 237500,
+        "transaction_date": "2026-02-17T15:04:12.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "66822c18-d246-42d3-a6b9-08de6de34fc4",
+      "saweria_name": "Zoey_Zobion",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-17T16:10:19.000Z",
+      "raw_payload": {
+        "id": "66822c18-d246-42d3-a6b9-08de6de34fc4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Zoey_Zobion",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-17T16:10:19.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "7fd816f2-f846-464a-a6ea-08de6de34fc4",
+      "saweria_name": "koko07055",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-17T16:20:43.000Z",
+      "raw_payload": {
+        "id": "7fd816f2-f846-464a-a6ea-08de6de34fc4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "koko07055",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-17T16:20:43.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "d9515c1a-c3a8-42a8-a6f4-08de6de34fc4",
+      "saweria_name": "koko07055",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-17T16:21:46.000Z",
+      "raw_payload": {
+        "id": "d9515c1a-c3a8-42a8-a6f4-08de6de34fc4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "koko07055",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-17T16:21:46.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "76e52e6c-91f6-488b-a707-08de6de34fc4",
+      "saweria_name": "Zephtyn",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-17T16:25:40.000Z",
+      "raw_payload": {
+        "id": "76e52e6c-91f6-488b-a707-08de6de34fc4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Zephtyn",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-17T16:25:40.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "0d25f61c-cfba-4ecc-a72f-08de6de34fc4",
+      "saweria_name": "koko07055",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-17T16:32:30.000Z",
+      "raw_payload": {
+        "id": "0d25f61c-cfba-4ecc-a72f-08de6de34fc4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "koko07055",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-17T16:32:30.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "cc5b9290-5425-454f-a734-08de6de34fc4",
+      "saweria_name": "Zephtyn",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-17T16:34:37.000Z",
+      "raw_payload": {
+        "id": "cc5b9290-5425-454f-a734-08de6de34fc4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Zephtyn",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-17T16:34:37.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "8419fc1f-6a76-4812-9b08-08de6ed69280",
+      "saweria_name": "Noturaverageboyy",
+      "amount": 777777,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-18T14:30:40.000Z",
+      "raw_payload": {
+        "id": "8419fc1f-6a76-4812-9b08-08de6ed69280",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Noturaverageboyy",
+        "amount_raw": 777777,
+        "fee": 38888,
+        "net_amount": 738889,
+        "transaction_date": "2026-02-18T14:30:40.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "c293beec-a285-4dbb-9b28-08de6ed69280",
+      "saweria_name": "Noturaverageboyy",
+      "amount": 888888,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-18T14:36:34.000Z",
+      "raw_payload": {
+        "id": "c293beec-a285-4dbb-9b28-08de6ed69280",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Noturaverageboyy",
+        "amount_raw": 888888,
+        "fee": 44444,
+        "net_amount": 844444,
+        "transaction_date": "2026-02-18T14:36:34.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "4e8a4008-ff55-4f30-9c49-08de6ed69280",
+      "saweria_name": "7TYOWL",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-18T15:24:00.000Z",
+      "raw_payload": {
+        "id": "4e8a4008-ff55-4f30-9c49-08de6ed69280",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "7TYOWL",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-18T15:24:00.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "1477e57c-bc3c-4ceb-a10a-08de6ed69280",
+      "saweria_name": "Hereforyouluvv",
+      "amount": 250000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-19T04:35:55.000Z",
+      "raw_payload": {
+        "id": "1477e57c-bc3c-4ceb-a10a-08de6ed69280",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Hereforyouluvv",
+        "amount_raw": 250000,
+        "fee": 12500,
+        "net_amount": 237500,
+        "transaction_date": "2026-02-19T04:35:55.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "53aed0bb-c21b-44d2-ab65-08de6ed69280",
+      "saweria_name": "ikokehbuset",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-20T08:51:28.000Z",
+      "raw_payload": {
+        "id": "53aed0bb-c21b-44d2-ab65-08de6ed69280",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "ikokehbuset",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-02-20T08:51:28.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "0add7ede-9fc6-4787-aba5-08de6ed69280",
+      "saweria_name": "Hereforyouluvv",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-20T09:27:32.000Z",
+      "raw_payload": {
+        "id": "0add7ede-9fc6-4787-aba5-08de6ed69280",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Hereforyouluvv",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-02-20T09:27:32.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "f469fd9e-a884-495a-594d-08de708e5726",
+      "saweria_name": "AlvinFarestaa",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-22T13:13:44.000Z",
+      "raw_payload": {
+        "id": "f469fd9e-a884-495a-594d-08de708e5726",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "AlvinFarestaa",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-22T13:13:44.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "739f0b25-28b3-4c48-631f-08de708e5726",
+      "saweria_name": "Marboyyy2302",
+      "amount": 200000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-23T13:45:53.000Z",
+      "raw_payload": {
+        "id": "739f0b25-28b3-4c48-631f-08de708e5726",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Marboyyy2302",
+        "amount_raw": 200000,
+        "fee": 10000,
+        "net_amount": 190000,
+        "transaction_date": "2026-02-23T13:45:53.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "6e41c1c0-f5a7-40f9-6623-08de708e5726",
+      "saweria_name": "MOON",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-23T16:41:48.000Z",
+      "raw_payload": {
+        "id": "6e41c1c0-f5a7-40f9-6623-08de708e5726",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "MOON",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-02-23T16:41:48.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "a6ace257-350e-4501-668a-08de708e5726",
+      "saweria_name": "koko07055",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-23T17:09:57.000Z",
+      "raw_payload": {
+        "id": "a6ace257-350e-4501-668a-08de708e5726",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "koko07055",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-02-23T17:09:57.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "80e9fe4e-db4f-48ca-6953-08de708e5726",
+      "saweria_name": "lenonggg27",
+      "amount": 25000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-24T05:31:12.000Z",
+      "raw_payload": {
+        "id": "80e9fe4e-db4f-48ca-6953-08de708e5726",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "lenonggg27",
+        "amount_raw": 25000,
+        "fee": 1250,
+        "net_amount": 23750,
+        "transaction_date": "2026-02-24T05:31:12.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "ec6f9ede-6a3e-4d0f-6956-08de708e5726",
+      "saweria_name": "lenonggg27",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-24T05:33:51.000Z",
+      "raw_payload": {
+        "id": "ec6f9ede-6a3e-4d0f-6956-08de708e5726",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "lenonggg27",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-02-24T05:33:51.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "85ce6548-6622-4c78-0045-08de73bd19fa",
+      "saweria_name": "Noturaverageboyy",
+      "amount": 500000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-25T14:30:49.000Z",
+      "raw_payload": {
+        "id": "85ce6548-6622-4c78-0045-08de73bd19fa",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Noturaverageboyy",
+        "amount_raw": 500000,
+        "fee": 25000,
+        "net_amount": 475000,
+        "transaction_date": "2026-02-25T14:30:49.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "c2e57906-7a21-47ef-096e-08de73bd19fa",
+      "saweria_name": "Marboyyy2302",
+      "amount": 200000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-26T14:17:13.000Z",
+      "raw_payload": {
+        "id": "c2e57906-7a21-47ef-096e-08de73bd19fa",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Marboyyy2302",
+        "amount_raw": 200000,
+        "fee": 10000,
+        "net_amount": 190000,
+        "transaction_date": "2026-02-26T14:17:13.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "b299bf9a-553e-4ac4-09f9-08de73bd19fa",
+      "saweria_name": "ArthurDayne",
+      "amount": 500000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-26T14:53:20.000Z",
+      "raw_payload": {
+        "id": "b299bf9a-553e-4ac4-09f9-08de73bd19fa",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "ArthurDayne",
+        "amount_raw": 500000,
+        "fee": 25000,
+        "net_amount": 475000,
+        "transaction_date": "2026-02-26T14:53:20.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "63407193-0286-41d6-1336-08de73bd19fa",
+      "saweria_name": "pawwho30",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-02-27T14:08:17.000Z",
+      "raw_payload": {
+        "id": "63407193-0286-41d6-1336-08de73bd19fa",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "pawwho30",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-02-27T14:08:17.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "08134da8-a32c-4cd9-af30-08de78fff289",
+      "saweria_name": "Arkoouunn",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-03T13:11:14.000Z",
+      "raw_payload": {
+        "id": "08134da8-a32c-4cd9-af30-08de78fff289",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Arkoouunn",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-03-03T13:11:14.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "726df618-2f26-47c7-af32-08de78fff289",
+      "saweria_name": "milodino771",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-03T13:12:01.000Z",
+      "raw_payload": {
+        "id": "726df618-2f26-47c7-af32-08de78fff289",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "milodino771",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-03-03T13:12:01.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "ed144ea5-5f56-46b7-af5f-08de78fff289",
+      "saweria_name": "7TYOWL",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-03T13:33:41.000Z",
+      "raw_payload": {
+        "id": "ed144ea5-5f56-46b7-af5f-08de78fff289",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "7TYOWL",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-03-03T13:33:41.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "9ea60586-32b5-456f-af6e-08de78fff289",
+      "saweria_name": "Breee",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-03T13:38:36.000Z",
+      "raw_payload": {
+        "id": "9ea60586-32b5-456f-af6e-08de78fff289",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Breee",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-03-03T13:38:36.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "fc44e85e-042e-4678-af7e-08de78fff289",
+      "saweria_name": "VulcanLXR",
+      "amount": 25000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-03T13:43:05.000Z",
+      "raw_payload": {
+        "id": "fc44e85e-042e-4678-af7e-08de78fff289",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "VulcanLXR",
+        "amount_raw": 25000,
+        "fee": 1250,
+        "net_amount": 23750,
+        "transaction_date": "2026-03-03T13:43:05.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "ca34a752-9c75-4c22-af83-08de78fff289",
+      "saweria_name": "Okidddd06",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-03T13:45:31.000Z",
+      "raw_payload": {
+        "id": "ca34a752-9c75-4c22-af83-08de78fff289",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Okidddd06",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-03-03T13:45:31.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "596b85f3-1859-48d2-af87-08de78fff289",
+      "saweria_name": "Arkoouunn",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-03T13:46:41.000Z",
+      "raw_payload": {
+        "id": "596b85f3-1859-48d2-af87-08de78fff289",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Arkoouunn",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-03-03T13:46:41.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "00afe6da-2183-4981-afb0-08de78fff289",
+      "saweria_name": "Seseorang",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-03T13:58:21.000Z",
+      "raw_payload": {
+        "id": "00afe6da-2183-4981-afb0-08de78fff289",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Seseorang",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-03-03T13:58:21.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "873b9aa9-f199-49ca-afba-08de78fff289",
+      "saweria_name": "AlvinFarestaa",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-03T14:03:05.000Z",
+      "raw_payload": {
+        "id": "873b9aa9-f199-49ca-afba-08de78fff289",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "AlvinFarestaa",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-03-03T14:03:05.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "5a956d79-0881-4f33-afc2-08de78fff289",
+      "saweria_name": "AlvinFarestaa",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-03T14:06:04.000Z",
+      "raw_payload": {
+        "id": "5a956d79-0881-4f33-afc2-08de78fff289",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "AlvinFarestaa",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-03-03T14:06:04.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "62ca7e27-cc35-4989-afca-08de78fff289",
+      "saweria_name": "LuckiXCNCV",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-03T14:08:39.000Z",
+      "raw_payload": {
+        "id": "62ca7e27-cc35-4989-afca-08de78fff289",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "LuckiXCNCV",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-03-03T14:08:39.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "d4358c42-3bf8-4956-b021-08de78fff289",
+      "saweria_name": "Lovauree",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-03T14:30:56.000Z",
+      "raw_payload": {
+        "id": "d4358c42-3bf8-4956-b021-08de78fff289",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Lovauree",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-03-03T14:30:56.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "7ef555ae-fb9a-41cc-b031-08de78fff289",
+      "saweria_name": "Noturaverageboyy",
+      "amount": 500000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-03T14:36:11.000Z",
+      "raw_payload": {
+        "id": "7ef555ae-fb9a-41cc-b031-08de78fff289",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Noturaverageboyy",
+        "amount_raw": 500000,
+        "fee": 25000,
+        "net_amount": 475000,
+        "transaction_date": "2026-03-03T14:36:11.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "828c094f-95ed-428b-b037-08de78fff289",
+      "saweria_name": "Lovauree",
+      "amount": 500000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-03T14:38:09.000Z",
+      "raw_payload": {
+        "id": "828c094f-95ed-428b-b037-08de78fff289",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Lovauree",
+        "amount_raw": 500000,
+        "fee": 25000,
+        "net_amount": 475000,
+        "transaction_date": "2026-03-03T14:38:09.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "33fbfa07-50b1-4b4d-b0db-08de78fff289",
+      "saweria_name": "milodino771",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-03T15:17:01.000Z",
+      "raw_payload": {
+        "id": "33fbfa07-50b1-4b4d-b0db-08de78fff289",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "milodino771",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-03-03T15:17:01.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "ea09ad62-aebc-4464-b44a-08de78fff289",
+      "saweria_name": "HRZxYami",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-03T17:52:04.000Z",
+      "raw_payload": {
+        "id": "ea09ad62-aebc-4464-b44a-08de78fff289",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "HRZxYami",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-03-03T17:52:04.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "c76b892b-c2e0-4eef-b46c-08de78fff289",
+      "saweria_name": "HRZxYami",
+      "amount": 1234,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-03T18:03:12.000Z",
+      "raw_payload": {
+        "id": "c76b892b-c2e0-4eef-b46c-08de78fff289",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "HRZxYami",
+        "amount_raw": 1234,
+        "fee": 61,
+        "net_amount": 1173,
+        "transaction_date": "2026-03-03T18:03:12.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "92779b4d-e43f-4842-b92c-08de78fff289",
+      "saweria_name": "bhrhgn18",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-04T14:05:04.000Z",
+      "raw_payload": {
+        "id": "92779b4d-e43f-4842-b92c-08de78fff289",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "bhrhgn18",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-03-04T14:05:04.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "20223756-f563-417c-b94d-08de78fff289",
+      "saweria_name": "bhrhgn18",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-04T14:12:20.000Z",
+      "raw_payload": {
+        "id": "20223756-f563-417c-b94d-08de78fff289",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "bhrhgn18",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-03-04T14:12:20.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "48cff6fa-533d-432a-cfc2-08de78fff289",
+      "saweria_name": "Prambss",
+      "amount": 25000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-06T17:08:47.000Z",
+      "raw_payload": {
+        "id": "48cff6fa-533d-432a-cfc2-08de78fff289",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Prambss",
+        "amount_raw": 25000,
+        "fee": 1250,
+        "net_amount": 23750,
+        "transaction_date": "2026-03-06T17:08:47.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "8bcee0f5-8b89-48a1-d81c-08de78fff289",
+      "saweria_name": "milodino771",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-07T15:26:54.000Z",
+      "raw_payload": {
+        "id": "8bcee0f5-8b89-48a1-d81c-08de78fff289",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "milodino771",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-03-07T15:26:54.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "3ed2b35f-8f31-4d55-e2ff-08de78fff289",
+      "saweria_name": "Prambss",
+      "amount": 25000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-08T15:17:26.000Z",
+      "raw_payload": {
+        "id": "3ed2b35f-8f31-4d55-e2ff-08de78fff289",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Prambss",
+        "amount_raw": 25000,
+        "fee": 1250,
+        "net_amount": 23750,
+        "transaction_date": "2026-03-08T15:17:26.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "ed06a0d3-5f7b-4299-eb07-08de78fff289",
+      "saweria_name": "milodino771",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-09T13:21:41.000Z",
+      "raw_payload": {
+        "id": "ed06a0d3-5f7b-4299-eb07-08de78fff289",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "milodino771",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-03-09T13:21:41.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "43295489-4f0f-4d3d-c2b5-08de7e71a573",
+      "saweria_name": "Ressssss0998",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-10T14:20:17.000Z",
+      "raw_payload": {
+        "id": "43295489-4f0f-4d3d-c2b5-08de7e71a573",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Ressssss0998",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-03-10T14:20:17.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "89d01398-dfbe-4567-c2c9-08de7e71a573",
+      "saweria_name": "LastMonth10",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-10T14:22:44.000Z",
+      "raw_payload": {
+        "id": "89d01398-dfbe-4567-c2c9-08de7e71a573",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "LastMonth10",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-03-10T14:22:44.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "34752b68-900b-49a7-c6d5-08de7e71a573",
+      "saweria_name": "haciiiwww",
+      "amount": 111111,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-10T16:55:54.000Z",
+      "raw_payload": {
+        "id": "34752b68-900b-49a7-c6d5-08de7e71a573",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "haciiiwww",
+        "amount_raw": 111111,
+        "fee": 5555,
+        "net_amount": 105556,
+        "transaction_date": "2026-03-10T16:55:54.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "88639f3e-2fc5-47c1-11cf-08de801ac7fc",
+      "saweria_name": "nyawnyaw2502",
+      "amount": 429884,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-13T13:20:42.000Z",
+      "raw_payload": {
+        "id": "88639f3e-2fc5-47c1-11cf-08de801ac7fc",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "nyawnyaw2502",
+        "amount_raw": 429884,
+        "fee": 21494,
+        "net_amount": 408390,
+        "transaction_date": "2026-03-13T13:20:42.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "26351799-f450-4b4c-121e-08de801ac7fc",
+      "saweria_name": "Noturaverageboyy",
+      "amount": 500000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-13T13:44:44.000Z",
+      "raw_payload": {
+        "id": "26351799-f450-4b4c-121e-08de801ac7fc",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Noturaverageboyy",
+        "amount_raw": 500000,
+        "fee": 25000,
+        "net_amount": 475000,
+        "transaction_date": "2026-03-13T13:44:44.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "fd90f06e-e425-4c67-45bc-08de806753a4",
+      "saweria_name": "SnpdrnkBOY66",
+      "amount": 16666,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-13T13:52:05.000Z",
+      "raw_payload": {
+        "id": "fd90f06e-e425-4c67-45bc-08de806753a4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "SnpdrnkBOY66",
+        "amount_raw": 16666,
+        "fee": 833,
+        "net_amount": 15833,
+        "transaction_date": "2026-03-13T13:52:05.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "5385e24f-7545-4868-45ca-08de806753a4",
+      "saweria_name": "blxckdxxth",
+      "amount": 25000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-13T13:53:56.000Z",
+      "raw_payload": {
+        "id": "5385e24f-7545-4868-45ca-08de806753a4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "blxckdxxth",
+        "amount_raw": 25000,
+        "fee": 1250,
+        "net_amount": 23750,
+        "transaction_date": "2026-03-13T13:53:56.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "528b651f-1378-400a-1242-08de801ac7fc",
+      "saweria_name": "LUX CLUB",
+      "amount": 25000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-13T13:58:37.000Z",
+      "raw_payload": {
+        "id": "528b651f-1378-400a-1242-08de801ac7fc",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "LUX CLUB",
+        "amount_raw": 25000,
+        "fee": 1250,
+        "net_amount": 23750,
+        "transaction_date": "2026-03-13T13:58:37.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "a9beb9e9-fd05-4bf5-1246-08de801ac7fc",
+      "saweria_name": "just4buyyy",
+      "amount": 500000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-13T13:59:30.000Z",
+      "raw_payload": {
+        "id": "a9beb9e9-fd05-4bf5-1246-08de801ac7fc",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "just4buyyy",
+        "amount_raw": 500000,
+        "fee": 25000,
+        "net_amount": 475000,
+        "transaction_date": "2026-03-13T13:59:30.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "70a9c1e0-2787-4104-45de-08de806753a4",
+      "saweria_name": "LUX CLUB",
+      "amount": 25000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-13T14:07:32.000Z",
+      "raw_payload": {
+        "id": "70a9c1e0-2787-4104-45de-08de806753a4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "LUX CLUB",
+        "amount_raw": 25000,
+        "fee": 1250,
+        "net_amount": 23750,
+        "transaction_date": "2026-03-13T14:07:32.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "55dcdff2-cafe-4ab1-45f1-08de806753a4",
+      "saweria_name": "Noturaverageboyy",
+      "amount": 500000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-13T14:09:49.000Z",
+      "raw_payload": {
+        "id": "55dcdff2-cafe-4ab1-45f1-08de806753a4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Noturaverageboyy",
+        "amount_raw": 500000,
+        "fee": 25000,
+        "net_amount": 475000,
+        "transaction_date": "2026-03-13T14:09:49.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "781c989b-7f53-4ddc-4600-08de806753a4",
+      "saweria_name": "just4buyyy",
+      "amount": 1000000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-13T14:13:04.000Z",
+      "raw_payload": {
+        "id": "781c989b-7f53-4ddc-4600-08de806753a4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "just4buyyy",
+        "amount_raw": 1000000,
+        "fee": 50000,
+        "net_amount": 950000,
+        "transaction_date": "2026-03-13T14:13:04.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "bf966ec1-96da-49ee-461a-08de806753a4",
+      "saweria_name": "novnovv88",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-13T14:23:35.000Z",
+      "raw_payload": {
+        "id": "bf966ec1-96da-49ee-461a-08de806753a4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "novnovv88",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-03-13T14:23:35.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "2338e03a-83cc-4dd0-1363-08de801ac7fc",
+      "saweria_name": "Kakek",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-13T15:18:03.000Z",
+      "raw_payload": {
+        "id": "2338e03a-83cc-4dd0-1363-08de801ac7fc",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Kakek",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-03-13T15:18:03.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "90f303af-ea0d-4941-46f4-08de806753a4",
+      "saweria_name": "Kakek",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-13T15:26:55.000Z",
+      "raw_payload": {
+        "id": "90f303af-ea0d-4941-46f4-08de806753a4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Kakek",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-03-13T15:26:55.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "557b19f6-0395-4c94-1946-08de801ac7fc",
+      "saweria_name": "xataannn",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-14T15:30:29.000Z",
+      "raw_payload": {
+        "id": "557b19f6-0395-4c94-1946-08de801ac7fc",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "xataannn",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-03-14T15:30:29.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "5eb26412-f0f0-4688-5549-08de806753a4",
+      "saweria_name": "Zed",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-16T13:55:14.000Z",
+      "raw_payload": {
+        "id": "5eb26412-f0f0-4688-5549-08de806753a4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Zed",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-03-16T13:55:14.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "22f0c0fb-e94f-40a1-2c75-08de8a0e9fc4",
+      "saweria_name": "ATLS X Silvi",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-03-26T15:59:55.000Z",
+      "raw_payload": {
+        "id": "22f0c0fb-e94f-40a1-2c75-08de8a0e9fc4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "ATLS X Silvi",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-03-26T15:59:55.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "d61c34fd-b3ca-4489-7e5c-08de90bb33e9",
+      "saweria_name": "SF_Longg",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-03T12:59:30.000Z",
+      "raw_payload": {
+        "id": "d61c34fd-b3ca-4489-7e5c-08de90bb33e9",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "SF_Longg",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-04-03T12:59:30.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "41b17c37-5dbe-4242-7e66-08de90bb33e9",
+      "saweria_name": "Longg0454",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-03T13:04:53.000Z",
+      "raw_payload": {
+        "id": "41b17c37-5dbe-4242-7e66-08de90bb33e9",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Longg0454",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-04-03T13:04:53.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "b551135b-9290-4f1e-480c-08de91f8c180",
+      "saweria_name": "KudoMelv",
+      "amount": 5000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-04T13:41:50.000Z",
+      "raw_payload": {
+        "id": "b551135b-9290-4f1e-480c-08de91f8c180",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "KudoMelv",
+        "amount_raw": 5000,
+        "fee": 250,
+        "net_amount": 4750,
+        "transaction_date": "2026-04-04T13:41:50.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "213c26f7-3649-4419-6664-08de91f39288",
+      "saweria_name": "Jexoxxx",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-04T13:50:26.000Z",
+      "raw_payload": {
+        "id": "213c26f7-3649-4419-6664-08de91f39288",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Jexoxxx",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-04-04T13:50:26.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "18dcc180-c3f1-4607-6678-08de91f39288",
+      "saweria_name": "Prambss",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-04T14:01:37.000Z",
+      "raw_payload": {
+        "id": "18dcc180-c3f1-4607-6678-08de91f39288",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Prambss",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-04-04T14:01:37.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "528c8351-8778-4100-667e-08de91f39288",
+      "saweria_name": "Prambss",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-04T14:03:40.000Z",
+      "raw_payload": {
+        "id": "528c8351-8778-4100-667e-08de91f39288",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Prambss",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-04-04T14:03:40.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "e1cea4dc-88f8-42e4-6ef3-08de9388d3c5",
+      "saweria_name": "Gozynn1",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-06T13:45:16.000Z",
+      "raw_payload": {
+        "id": "e1cea4dc-88f8-42e4-6ef3-08de9388d3c5",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Gozynn1",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-04-06T13:45:16.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "5e56bb5b-6be4-4fb5-1c52-08de93890670",
+      "saweria_name": "Gozynn1",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-06T13:53:02.000Z",
+      "raw_payload": {
+        "id": "5e56bb5b-6be4-4fb5-1c52-08de93890670",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Gozynn1",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-04-06T13:53:02.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "fd169623-a61e-4c48-1c65-08de93890670",
+      "saweria_name": "Chimoray",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-06T14:02:45.000Z",
+      "raw_payload": {
+        "id": "fd169623-a61e-4c48-1c65-08de93890670",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Chimoray",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-04-06T14:02:45.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "fb2b5ece-dc1c-43fc-6f3a-08de9388d3c5",
+      "saweria_name": "Gozynn1",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-06T14:23:13.000Z",
+      "raw_payload": {
+        "id": "fb2b5ece-dc1c-43fc-6f3a-08de9388d3c5",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Gozynn1",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-04-06T14:23:13.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "994f4b08-a439-487e-c550-08de948f135d",
+      "saweria_name": "milodino771",
+      "amount": 200000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-08T13:28:32.000Z",
+      "raw_payload": {
+        "id": "994f4b08-a439-487e-c550-08de948f135d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "milodino771",
+        "amount_raw": 200000,
+        "fee": 10000,
+        "net_amount": 190000,
+        "transaction_date": "2026-04-08T13:28:32.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "d9c25903-e6ee-40fa-c581-08de948f135d",
+      "saweria_name": "Prambss",
+      "amount": 11111,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-08T13:54:21.000Z",
+      "raw_payload": {
+        "id": "d9c25903-e6ee-40fa-c581-08de948f135d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Prambss",
+        "amount_raw": 11111,
+        "fee": 555,
+        "net_amount": 10556,
+        "transaction_date": "2026-04-08T13:54:21.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "6530e5a6-7cb7-4906-c592-08de948f135d",
+      "saweria_name": "Noturaverageboyy",
+      "amount": 500000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-08T14:02:35.000Z",
+      "raw_payload": {
+        "id": "6530e5a6-7cb7-4906-c592-08de948f135d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Noturaverageboyy",
+        "amount_raw": 500000,
+        "fee": 25000,
+        "net_amount": 475000,
+        "transaction_date": "2026-04-08T14:02:35.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "cb5833e6-5402-4a4f-c5ca-08de948f135d",
+      "saweria_name": "Noturaverageboyy",
+      "amount": 500000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-08T14:27:59.000Z",
+      "raw_payload": {
+        "id": "cb5833e6-5402-4a4f-c5ca-08de948f135d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Noturaverageboyy",
+        "amount_raw": 500000,
+        "fee": 25000,
+        "net_amount": 475000,
+        "transaction_date": "2026-04-08T14:27:59.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "88d644c1-10dc-466f-c624-08de948f135d",
+      "saweria_name": "Prambss",
+      "amount": 11111,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-08T15:18:44.000Z",
+      "raw_payload": {
+        "id": "88d644c1-10dc-466f-c624-08de948f135d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Prambss",
+        "amount_raw": 11111,
+        "fee": 555,
+        "net_amount": 10556,
+        "transaction_date": "2026-04-08T15:18:44.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "88252c9f-0510-4f41-8c27-08de948ec54c",
+      "saweria_name": "baby_girll071",
+      "amount": 200000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-08T15:38:39.000Z",
+      "raw_payload": {
+        "id": "88252c9f-0510-4f41-8c27-08de948ec54c",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "baby_girll071",
+        "amount_raw": 200000,
+        "fee": 10000,
+        "net_amount": 190000,
+        "transaction_date": "2026-04-08T15:38:39.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "c6d9fc9c-9307-4735-c6cb-08de948f135d",
+      "saweria_name": "foudamoure",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-08T16:26:20.000Z",
+      "raw_payload": {
+        "id": "c6d9fc9c-9307-4735-c6cb-08de948f135d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "foudamoure",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-04-08T16:26:20.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "8c2b8041-06d9-4922-04bc-08de95dd0c0e",
+      "saweria_name": "Lux Club",
+      "amount": 25000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-09T13:54:02.000Z",
+      "raw_payload": {
+        "id": "8c2b8041-06d9-4922-04bc-08de95dd0c0e",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Lux Club",
+        "amount_raw": 25000,
+        "fee": 1250,
+        "net_amount": 23750,
+        "transaction_date": "2026-04-09T13:54:02.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "67317c94-aa65-40ca-06ac-08de95dd0c0e",
+      "saweria_name": "Gozynn1",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-09T16:51:17.000Z",
+      "raw_payload": {
+        "id": "67317c94-aa65-40ca-06ac-08de95dd0c0e",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Gozynn1",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-04-09T16:51:17.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "53615cf3-912f-44d4-4c4c-08de95dd0c0d",
+      "saweria_name": "dua_4441",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-10T14:58:44.000Z",
+      "raw_payload": {
+        "id": "53615cf3-912f-44d4-4c4c-08de95dd0c0d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "dua_4441",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-04-10T14:58:44.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "f7f448e7-f22a-4a0f-11b2-08de95dd0c0e",
+      "saweria_name": "scaa & don",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-12T11:32:31.000Z",
+      "raw_payload": {
+        "id": "f7f448e7-f22a-4a0f-11b2-08de95dd0c0e",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "scaa & don",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-04-12T11:32:31.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "2bacf728-39f6-4115-57e2-08de95dd0c0d",
+      "saweria_name": "PRTBxDua",
+      "amount": 25000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-13T11:03:55.000Z",
+      "raw_payload": {
+        "id": "2bacf728-39f6-4115-57e2-08de95dd0c0d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "PRTBxDua",
+        "amount_raw": 25000,
+        "fee": 1250,
+        "net_amount": 23750,
+        "transaction_date": "2026-04-13T11:03:55.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "bcab549f-e0ea-46d6-57fc-08de95dd0c0d",
+      "saweria_name": "yxscaaa",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-13T11:23:34.000Z",
+      "raw_payload": {
+        "id": "bcab549f-e0ea-46d6-57fc-08de95dd0c0d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "yxscaaa",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-04-13T11:23:34.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "9495b177-3a68-4817-5a06-08de95dd0c0d",
+      "saweria_name": "sheylaajaa",
+      "amount": 25000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-13T15:35:50.000Z",
+      "raw_payload": {
+        "id": "9495b177-3a68-4817-5a06-08de95dd0c0d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "sheylaajaa",
+        "amount_raw": 25000,
+        "fee": 1250,
+        "net_amount": 23750,
+        "transaction_date": "2026-04-13T15:35:50.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "5dc11e47-d42c-428d-1818-08de95dd0c0e",
+      "saweria_name": "sheylaajaa",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-13T15:39:38.000Z",
+      "raw_payload": {
+        "id": "5dc11e47-d42c-428d-1818-08de95dd0c0e",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "sheylaajaa",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-04-13T15:39:38.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "2b55d664-4a84-496d-1824-08de95dd0c0e",
+      "saweria_name": "sheylaa",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-13T15:42:59.000Z",
+      "raw_payload": {
+        "id": "2b55d664-4a84-496d-1824-08de95dd0c0e",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "sheylaa",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-04-13T15:42:59.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "bd873660-815a-4905-5a28-08de95dd0c0d",
+      "saweria_name": "sheylaajaa",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-13T15:47:15.000Z",
+      "raw_payload": {
+        "id": "bd873660-815a-4905-5a28-08de95dd0c0d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "sheylaajaa",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-04-13T15:47:15.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "2aacded5-6897-418d-c430-08de9a43573e",
+      "saweria_name": "PRTBxDua",
+      "amount": 25000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-15T10:16:52.000Z",
+      "raw_payload": {
+        "id": "2aacded5-6897-418d-c430-08de9a43573e",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "PRTBxDua",
+        "amount_raw": 25000,
+        "fee": 1250,
+        "net_amount": 23750,
+        "transaction_date": "2026-04-15T10:16:52.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "124f69fe-ece4-4f1f-c436-08de9a43573e",
+      "saweria_name": "main",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-15T10:26:24.000Z",
+      "raw_payload": {
+        "id": "124f69fe-ece4-4f1f-c436-08de9a43573e",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "main",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-04-15T10:26:24.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "55711159-932d-4514-90f4-08de9a05a8a0",
+      "saweria_name": "MAIN BAIK",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-15T14:12:42.000Z",
+      "raw_payload": {
+        "id": "55711159-932d-4514-90f4-08de9a05a8a0",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "MAIN BAIK",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-04-15T14:12:42.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "b6da3a9d-262c-41e4-90f9-08de9a05a8a0",
+      "saweria_name": "maiinsini",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-15T14:16:46.000Z",
+      "raw_payload": {
+        "id": "b6da3a9d-262c-41e4-90f9-08de9a05a8a0",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "maiinsini",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-04-15T14:16:46.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "2efb0fa4-b4e4-425f-90fd-08de9a05a8a0",
+      "saweria_name": "BSxSasaav",
+      "amount": 20000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-15T14:20:14.000Z",
+      "raw_payload": {
+        "id": "2efb0fa4-b4e4-425f-90fd-08de9a05a8a0",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "BSxSasaav",
+        "amount_raw": 20000,
+        "fee": 1000,
+        "net_amount": 19000,
+        "transaction_date": "2026-04-15T14:20:14.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "2bbdd0af-0ec3-4906-90ff-08de9a05a8a0",
+      "saweria_name": "Seorang Oboy",
+      "amount": 20000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-15T14:22:11.000Z",
+      "raw_payload": {
+        "id": "2bbdd0af-0ec3-4906-90ff-08de9a05a8a0",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Seorang Oboy",
+        "amount_raw": 20000,
+        "fee": 1000,
+        "net_amount": 19000,
+        "transaction_date": "2026-04-15T14:22:11.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "4a7f31f2-d696-4658-c5c6-08de9a43573e",
+      "saweria_name": "Babygd08",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-15T14:57:18.000Z",
+      "raw_payload": {
+        "id": "4a7f31f2-d696-4658-c5c6-08de9a43573e",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Babygd08",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-04-15T14:57:18.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "131a9d38-b777-4d92-c5db-08de9a43573e",
+      "saweria_name": "Kelazking77",
+      "amount": 222222,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-15T15:08:34.000Z",
+      "raw_payload": {
+        "id": "131a9d38-b777-4d92-c5db-08de9a43573e",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Kelazking77",
+        "amount_raw": 222222,
+        "fee": 11111,
+        "net_amount": 211111,
+        "transaction_date": "2026-04-15T15:08:34.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "59475db0-787d-4aae-7a15-08de9b7199b4",
+      "saweria_name": "jinchurikinaruto9",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-16T13:27:32.000Z",
+      "raw_payload": {
+        "id": "59475db0-787d-4aae-7a15-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "jinchurikinaruto9",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-04-16T13:27:32.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "75487486-c29c-46ea-7a1b-08de9b7199b4",
+      "saweria_name": "jinchurikinaruto9",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-16T13:31:28.000Z",
+      "raw_payload": {
+        "id": "75487486-c29c-46ea-7a1b-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "jinchurikinaruto9",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-04-16T13:31:28.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "b9aa4b24-bc93-494f-3ca7-08de9b71c91d",
+      "saweria_name": "Vhanz",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-16T13:33:27.000Z",
+      "raw_payload": {
+        "id": "b9aa4b24-bc93-494f-3ca7-08de9b71c91d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Vhanz",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-04-16T13:33:27.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "303f13c0-cbf8-4918-3caa-08de9b71c91d",
+      "saweria_name": "Vhanz",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-16T13:35:18.000Z",
+      "raw_payload": {
+        "id": "303f13c0-cbf8-4918-3caa-08de9b71c91d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Vhanz",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-04-16T13:35:18.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "f217883c-41bd-49d4-7a39-08de9b7199b4",
+      "saweria_name": "jinchurikinaruto9",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-16T13:49:30.000Z",
+      "raw_payload": {
+        "id": "f217883c-41bd-49d4-7a39-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "jinchurikinaruto9",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-04-16T13:49:30.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "7a296b63-45df-4870-7a3f-08de9b7199b4",
+      "saweria_name": "jinchurikinaruto9",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-16T13:53:18.000Z",
+      "raw_payload": {
+        "id": "7a296b63-45df-4870-7a3f-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "jinchurikinaruto9",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-04-16T13:53:18.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "27514500-8929-441d-7a45-08de9b7199b4",
+      "saweria_name": "Vhanz",
+      "amount": 150000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-16T13:56:34.000Z",
+      "raw_payload": {
+        "id": "27514500-8929-441d-7a45-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Vhanz",
+        "amount_raw": 150000,
+        "fee": 7500,
+        "net_amount": 142500,
+        "transaction_date": "2026-04-16T13:56:34.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "b856c65f-44f6-45a2-3cd0-08de9b71c91d",
+      "saweria_name": "jinchurikinaruto9",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-16T13:59:06.000Z",
+      "raw_payload": {
+        "id": "b856c65f-44f6-45a2-3cd0-08de9b71c91d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "jinchurikinaruto9",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-04-16T13:59:06.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "a7a60b9c-72d5-47c9-7a4d-08de9b7199b4",
+      "saweria_name": "Noturaverageboyy",
+      "amount": 500000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-16T13:59:26.000Z",
+      "raw_payload": {
+        "id": "a7a60b9c-72d5-47c9-7a4d-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Noturaverageboyy",
+        "amount_raw": 500000,
+        "fee": 25000,
+        "net_amount": 475000,
+        "transaction_date": "2026-04-16T13:59:26.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "9fdcbb0d-a109-49ff-7e09-08de9b7199b4",
+      "saweria_name": "maiinsini",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-17T11:28:19.000Z",
+      "raw_payload": {
+        "id": "9fdcbb0d-a109-49ff-7e09-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "maiinsini",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-04-17T11:28:19.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "21f82506-bf93-46fa-7e24-08de9b7199b4",
+      "saweria_name": "maiinsini",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-17T11:54:44.000Z",
+      "raw_payload": {
+        "id": "21f82506-bf93-46fa-7e24-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "maiinsini",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-04-17T11:54:44.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "ea538cfc-ad3e-40d7-7e30-08de9b7199b4",
+      "saweria_name": "Zed",
+      "amount": 25000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-17T12:15:55.000Z",
+      "raw_payload": {
+        "id": "ea538cfc-ad3e-40d7-7e30-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Zed",
+        "amount_raw": 25000,
+        "fee": 1250,
+        "net_amount": 23750,
+        "transaction_date": "2026-04-17T12:15:55.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "f6063797-a1f0-46c0-51f3-08de9b71c91d",
+      "saweria_name": "KADAL",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-21T13:52:51.000Z",
+      "raw_payload": {
+        "id": "f6063797-a1f0-46c0-51f3-08de9b71c91d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "KADAL",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-04-21T13:52:51.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "a4f551c6-0a0f-49f1-a9aa-08de9b7199b4",
+      "saweria_name": "dua_4441",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-27T15:20:10.000Z",
+      "raw_payload": {
+        "id": "a4f551c6-0a0f-49f1-a9aa-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "dua_4441",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-04-27T15:20:10.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "2fc40424-f1b5-43ff-ac88-08de9b7199b4",
+      "saweria_name": "Ezaxx04",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-28T12:02:14.000Z",
+      "raw_payload": {
+        "id": "2fc40424-f1b5-43ff-ac88-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Ezaxx04",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-04-28T12:02:14.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "4e37f11f-bf92-4004-ac89-08de9b7199b4",
+      "saweria_name": "Ezaxx04",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-28T12:04:16.000Z",
+      "raw_payload": {
+        "id": "4e37f11f-bf92-4004-ac89-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Ezaxx04",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-04-28T12:04:16.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "0b58e72a-3f89-4289-ac8b-08de9b7199b4",
+      "saweria_name": "Ezaxx04",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-28T12:05:49.000Z",
+      "raw_payload": {
+        "id": "0b58e72a-3f89-4289-ac8b-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Ezaxx04",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-04-28T12:05:49.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "d3dc85fd-cb02-4255-ac8e-08de9b7199b4",
+      "saweria_name": "Ezaxx04",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-28T12:08:24.000Z",
+      "raw_payload": {
+        "id": "d3dc85fd-cb02-4255-ac8e-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Ezaxx04",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-04-28T12:08:24.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "aab76d18-c84d-4854-ac8f-08de9b7199b4",
+      "saweria_name": "Ezaxx04",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-28T12:10:11.000Z",
+      "raw_payload": {
+        "id": "aab76d18-c84d-4854-ac8f-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Ezaxx04",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-04-28T12:10:11.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "148987fe-dc46-4eb0-acaf-08de9b7199b4",
+      "saweria_name": "4fik_12",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-28T12:52:41.000Z",
+      "raw_payload": {
+        "id": "148987fe-dc46-4eb0-acaf-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "4fik_12",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-04-28T12:52:41.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "b2671a61-d5f5-4210-accc-08de9b7199b4",
+      "saweria_name": "4fik_12",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-28T13:16:10.000Z",
+      "raw_payload": {
+        "id": "b2671a61-d5f5-4210-accc-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "4fik_12",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-04-28T13:16:10.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "e210a754-f10f-483a-acce-08de9b7199b4",
+      "saweria_name": "Zed",
+      "amount": 25000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-28T13:17:25.000Z",
+      "raw_payload": {
+        "id": "e210a754-f10f-483a-acce-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Zed",
+        "amount_raw": 25000,
+        "fee": 1250,
+        "net_amount": 23750,
+        "transaction_date": "2026-04-28T13:17:25.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "697dcf12-230f-400c-6f73-08de9b71c91d",
+      "saweria_name": "Zoey_Zobion",
+      "amount": 200000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-28T13:40:41.000Z",
+      "raw_payload": {
+        "id": "697dcf12-230f-400c-6f73-08de9b71c91d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Zoey_Zobion",
+        "amount_raw": 200000,
+        "fee": 10000,
+        "net_amount": 190000,
+        "transaction_date": "2026-04-28T13:40:41.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "85b9f91c-582f-4447-6f8b-08de9b71c91d",
+      "saweria_name": "Zed",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-28T13:50:10.000Z",
+      "raw_payload": {
+        "id": "85b9f91c-582f-4447-6f8b-08de9b71c91d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Zed",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-04-28T13:50:10.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "c7266338-6c0c-4d03-6f8e-08de9b71c91d",
+      "saweria_name": "Mass itikk",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-28T13:51:47.000Z",
+      "raw_payload": {
+        "id": "c7266338-6c0c-4d03-6f8e-08de9b71c91d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Mass itikk",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-04-28T13:51:47.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "df71d606-9e68-436b-6fe4-08de9b71c91d",
+      "saweria_name": "Noturaverageboyy",
+      "amount": 500000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-28T14:32:11.000Z",
+      "raw_payload": {
+        "id": "df71d606-9e68-436b-6fe4-08de9b71c91d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Noturaverageboyy",
+        "amount_raw": 500000,
+        "fee": 25000,
+        "net_amount": 475000,
+        "transaction_date": "2026-04-28T14:32:11.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "5f410185-bc18-4e71-7015-08de9b71c91d",
+      "saweria_name": "xxwbii",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-28T14:52:52.000Z",
+      "raw_payload": {
+        "id": "5f410185-bc18-4e71-7015-08de9b71c91d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "xxwbii",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-04-28T14:52:52.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "2e635945-51a4-46e5-adb7-08de9b7199b4",
+      "saweria_name": "Noturaverageboyy",
+      "amount": 500000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-28T15:06:07.000Z",
+      "raw_payload": {
+        "id": "2e635945-51a4-46e5-adb7-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Noturaverageboyy",
+        "amount_raw": 500000,
+        "fee": 25000,
+        "net_amount": 475000,
+        "transaction_date": "2026-04-28T15:06:07.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "b7a9279a-85fe-4c03-741a-08de9b71c91d",
+      "saweria_name": "7TYOWL",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-29T13:40:41.000Z",
+      "raw_payload": {
+        "id": "b7a9279a-85fe-4c03-741a-08de9b71c91d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "7TYOWL",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-04-29T13:40:41.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "ddc70371-089c-4e0a-741d-08de9b71c91d",
+      "saweria_name": "jinchurikinaruto9",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-29T13:43:22.000Z",
+      "raw_payload": {
+        "id": "ddc70371-089c-4e0a-741d-08de9b71c91d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "jinchurikinaruto9",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-04-29T13:43:22.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "c6aebd82-3f07-4761-b1ae-08de9b7199b4",
+      "saweria_name": "jinchurikinaruto9",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-29T13:46:33.000Z",
+      "raw_payload": {
+        "id": "c6aebd82-3f07-4761-b1ae-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "jinchurikinaruto9",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-04-29T13:46:33.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "0a8912b0-e6e5-4f48-b1b2-08de9b7199b4",
+      "saweria_name": "jinchurikinaruto9",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-29T13:52:22.000Z",
+      "raw_payload": {
+        "id": "0a8912b0-e6e5-4f48-b1b2-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "jinchurikinaruto9",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-04-29T13:52:22.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "78479364-104b-4c50-b1b3-08de9b7199b4",
+      "saweria_name": "bgdimz29",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-29T13:53:22.000Z",
+      "raw_payload": {
+        "id": "78479364-104b-4c50-b1b3-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "bgdimz29",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-04-29T13:53:22.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "640fd2cb-9cd2-4b3f-b1b5-08de9b7199b4",
+      "saweria_name": "jinchurikinaruto9",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-29T13:55:29.000Z",
+      "raw_payload": {
+        "id": "640fd2cb-9cd2-4b3f-b1b5-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "jinchurikinaruto9",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-04-29T13:55:29.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "4662aaec-6102-4809-b1b8-08de9b7199b4",
+      "saweria_name": "bgdimz29",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-29T13:57:30.000Z",
+      "raw_payload": {
+        "id": "4662aaec-6102-4809-b1b8-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "bgdimz29",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-04-29T13:57:30.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "4af9011d-d481-47df-742b-08de9b71c91d",
+      "saweria_name": "Noturaverageboyy",
+      "amount": 500000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-29T13:58:48.000Z",
+      "raw_payload": {
+        "id": "4af9011d-d481-47df-742b-08de9b71c91d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Noturaverageboyy",
+        "amount_raw": 500000,
+        "fee": 25000,
+        "net_amount": 475000,
+        "transaction_date": "2026-04-29T13:58:48.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "2d63a770-c21a-4a51-b1bd-08de9b7199b4",
+      "saweria_name": "jinchurikinaruto9",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-29T14:02:59.000Z",
+      "raw_payload": {
+        "id": "2d63a770-c21a-4a51-b1bd-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "jinchurikinaruto9",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-04-29T14:02:59.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "e55b9bbc-c599-4f8e-7459-08de9b71c91d",
+      "saweria_name": "Noturaverageboyy",
+      "amount": 500000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-29T14:31:34.000Z",
+      "raw_payload": {
+        "id": "e55b9bbc-c599-4f8e-7459-08de9b71c91d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Noturaverageboyy",
+        "amount_raw": 500000,
+        "fee": 25000,
+        "net_amount": 475000,
+        "transaction_date": "2026-04-29T14:31:34.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "e019042e-0938-42ac-b23f-08de9b7199b4",
+      "saweria_name": "SugarxCanie",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-29T15:13:16.000Z",
+      "raw_payload": {
+        "id": "e019042e-0938-42ac-b23f-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "SugarxCanie",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-04-29T15:13:16.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "e591b267-99ee-465b-74b7-08de9b71c91d",
+      "saweria_name": "SugarxCanie",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-29T15:16:19.000Z",
+      "raw_payload": {
+        "id": "e591b267-99ee-465b-74b7-08de9b71c91d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "SugarxCanie",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-04-29T15:16:19.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "e98e1515-6e39-4f14-b292-08de9b7199b4",
+      "saweria_name": "Noturaverageboyy",
+      "amount": 500000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-29T15:49:16.000Z",
+      "raw_payload": {
+        "id": "e98e1515-6e39-4f14-b292-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Noturaverageboyy",
+        "amount_raw": 500000,
+        "fee": 25000,
+        "net_amount": 475000,
+        "transaction_date": "2026-04-29T15:49:16.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "96dac6ee-8727-4fb3-b63b-08de9b7199b4",
+      "saweria_name": "dua_4441",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-30T13:51:58.000Z",
+      "raw_payload": {
+        "id": "96dac6ee-8727-4fb3-b63b-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "dua_4441",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-04-30T13:51:58.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "cf184729-7f99-4291-78cf-08de9b71c91d",
+      "saweria_name": "heixzii",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-30T14:25:07.000Z",
+      "raw_payload": {
+        "id": "cf184729-7f99-4291-78cf-08de9b71c91d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "heixzii",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-04-30T14:25:07.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "fd2c4441-1fe0-4c85-b6e8-08de9b7199b4",
+      "saweria_name": "SAM",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-30T15:09:01.000Z",
+      "raw_payload": {
+        "id": "fd2c4441-1fe0-4c85-b6e8-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "SAM",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-04-30T15:09:01.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "a4d66114-fd04-4c6a-795e-08de9b71c91d",
+      "saweria_name": "DjarumGG",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-30T15:24:02.000Z",
+      "raw_payload": {
+        "id": "a4d66114-fd04-4c6a-795e-08de9b71c91d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "DjarumGG",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-04-30T15:24:02.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "70deee14-9df3-4259-b718-08de9b7199b4",
+      "saweria_name": "ADM_ACxGuinev",
+      "amount": 20000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-30T15:36:17.000Z",
+      "raw_payload": {
+        "id": "70deee14-9df3-4259-b718-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "ADM_ACxGuinev",
+        "amount_raw": 20000,
+        "fee": 1000,
+        "net_amount": 19000,
+        "transaction_date": "2026-04-30T15:36:17.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "9918cd0b-0e04-4ad9-7987-08de9b71c91d",
+      "saweria_name": "ADM_ACxGuinev",
+      "amount": 15000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-04-30T15:42:59.000Z",
+      "raw_payload": {
+        "id": "9918cd0b-0e04-4ad9-7987-08de9b71c91d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "ADM_ACxGuinev",
+        "amount_raw": 15000,
+        "fee": 750,
+        "net_amount": 14250,
+        "transaction_date": "2026-04-30T15:42:59.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "094d9d85-ea73-4d93-7ddf-08de9b71c91d",
+      "saweria_name": "faygoow",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-05-01T14:09:40.000Z",
+      "raw_payload": {
+        "id": "094d9d85-ea73-4d93-7ddf-08de9b71c91d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "faygoow",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-05-01T14:09:40.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "87976f2b-22f6-4875-bb8d-08de9b7199b4",
+      "saweria_name": "faygoow",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-05-01T14:17:32.000Z",
+      "raw_payload": {
+        "id": "87976f2b-22f6-4875-bb8d-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "faygoow",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-05-01T14:17:32.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "5e1a3450-d543-47b5-7e1d-08de9b71c91d",
+      "saweria_name": "Seseorang",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-05-01T14:32:59.000Z",
+      "raw_payload": {
+        "id": "5e1a3450-d543-47b5-7e1d-08de9b71c91d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Seseorang",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-05-01T14:32:59.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "b345c4bd-6352-42eb-bbc1-08de9b7199b4",
+      "saweria_name": "Seseorang",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-05-01T14:35:57.000Z",
+      "raw_payload": {
+        "id": "b345c4bd-6352-42eb-bbc1-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Seseorang",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-05-01T14:35:57.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "494a7f5e-f165-466e-bbc4-08de9b7199b4",
+      "saweria_name": "Seseorang",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-05-01T14:37:21.000Z",
+      "raw_payload": {
+        "id": "494a7f5e-f165-466e-bbc4-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Seseorang",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-05-01T14:37:21.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "0739e36e-55b1-49d2-bbd0-08de9b7199b4",
+      "saweria_name": "maiinsini",
+      "amount": 200000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-05-01T14:41:24.000Z",
+      "raw_payload": {
+        "id": "0739e36e-55b1-49d2-bbd0-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "maiinsini",
+        "amount_raw": 200000,
+        "fee": 10000,
+        "net_amount": 190000,
+        "transaction_date": "2026-05-01T14:41:24.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "1b24824c-e4a4-4238-7e4e-08de9b71c91d",
+      "saweria_name": "maiinsini",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-05-01T14:49:31.000Z",
+      "raw_payload": {
+        "id": "1b24824c-e4a4-4238-7e4e-08de9b71c91d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "maiinsini",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-05-01T14:49:31.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "60774671-bc80-439a-bc23-08de9b7199b4",
+      "saweria_name": "maiinsini",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-05-01T15:03:30.000Z",
+      "raw_payload": {
+        "id": "60774671-bc80-439a-bc23-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "maiinsini",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-05-01T15:03:30.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "9c8242b8-fece-41ec-c080-08de9b7199b4",
+      "saweria_name": "maiinsini",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-05-02T14:17:14.000Z",
+      "raw_payload": {
+        "id": "9c8242b8-fece-41ec-c080-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "maiinsini",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-05-02T14:17:14.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "7088382f-5e46-4341-c119-08de9b7199b4",
+      "saweria_name": "DjarumGG",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-05-02T15:22:57.000Z",
+      "raw_payload": {
+        "id": "7088382f-5e46-4341-c119-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "DjarumGG",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-05-02T15:22:57.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "9ba59a04-e666-423d-839a-08de9b71c91d",
+      "saweria_name": "maiinsini",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-05-02T15:24:07.000Z",
+      "raw_payload": {
+        "id": "9ba59a04-e666-423d-839a-08de9b71c91d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "maiinsini",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-05-02T15:24:07.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "e15d10e8-6b25-4346-c146-08de9b7199b4",
+      "saweria_name": "Noturaverageboyy",
+      "amount": 500000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-05-02T15:42:47.000Z",
+      "raw_payload": {
+        "id": "e15d10e8-6b25-4346-c146-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Noturaverageboyy",
+        "amount_raw": 500000,
+        "fee": 25000,
+        "net_amount": 475000,
+        "transaction_date": "2026-05-02T15:42:47.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "148c1a30-8230-47c7-83d0-08de9b71c91d",
+      "saweria_name": "Luwixyyn",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-05-02T15:47:20.000Z",
+      "raw_payload": {
+        "id": "148c1a30-8230-47c7-83d0-08de9b71c91d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Luwixyyn",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-05-02T15:47:20.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "f40a68d1-b5a5-4b6e-83e9-08de9b71c91d",
+      "saweria_name": "maiinsini",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-05-02T15:56:56.000Z",
+      "raw_payload": {
+        "id": "f40a68d1-b5a5-4b6e-83e9-08de9b71c91d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "maiinsini",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-05-02T15:56:56.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "47a2283b-ad0d-4f78-c9fd-08de9b7199b4",
+      "saweria_name": "maiinsini",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-05-04T13:50:31.000Z",
+      "raw_payload": {
+        "id": "47a2283b-ad0d-4f78-c9fd-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "maiinsini",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-05-04T13:50:31.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "9af2d8a1-d93d-4352-8c77-08de9b71c91d",
+      "saweria_name": "maiinsini",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-05-04T13:53:18.000Z",
+      "raw_payload": {
+        "id": "9af2d8a1-d93d-4352-8c77-08de9b71c91d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "maiinsini",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-05-04T13:53:18.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "a07fd201-290e-4c36-a4a0-08de9b71c91d",
+      "saweria_name": "bagus_bimanatara03",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-05-09T13:39:45.000Z",
+      "raw_payload": {
+        "id": "a07fd201-290e-4c36-a4a0-08de9b71c91d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "bagus_bimanatara03",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-05-09T13:39:45.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "dd032381-57ca-4d88-fa9b-08de9b7199b4",
+      "saweria_name": "@aimeyy0",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-05-14T14:44:52.000Z",
+      "raw_payload": {
+        "id": "dd032381-57ca-4d88-fa9b-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "@aimeyy0",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-05-14T14:44:52.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "1af460fb-51dd-4919-faa0-08de9b7199b4",
+      "saweria_name": "@aimeyy0",
+      "amount": 250000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-05-14T14:47:38.000Z",
+      "raw_payload": {
+        "id": "1af460fb-51dd-4919-faa0-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "@aimeyy0",
+        "amount_raw": 250000,
+        "fee": 12500,
+        "net_amount": 237500,
+        "transaction_date": "2026-05-14T14:47:38.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "1b2db468-c15f-46d3-fab5-08de9b7199b4",
+      "saweria_name": "@aimeyy0",
+      "amount": 1000000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-05-14T14:57:25.000Z",
+      "raw_payload": {
+        "id": "1b2db468-c15f-46d3-fab5-08de9b7199b4",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "@aimeyy0",
+        "amount_raw": 1000000,
+        "fee": 50000,
+        "net_amount": 950000,
+        "transaction_date": "2026-05-14T14:57:25.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "98c2605a-1f20-439d-0490-08de9b7199b5",
+      "saweria_name": "Mica Plengerr",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-05-16T15:41:47.000Z",
+      "raw_payload": {
+        "id": "98c2605a-1f20-439d-0490-08de9b7199b5",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Mica Plengerr",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-05-16T15:41:47.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "0ce9293f-dbb9-4720-ca2c-08de9b71c91d",
+      "saweria_name": "Micaaa plengerrr",
+      "amount": 100000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-05-17T13:10:53.000Z",
+      "raw_payload": {
+        "id": "0ce9293f-dbb9-4720-ca2c-08de9b71c91d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Micaaa plengerrr",
+        "amount_raw": 100000,
+        "fee": 5000,
+        "net_amount": 95000,
+        "transaction_date": "2026-05-17T13:10:53.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "e313e810-0c42-4902-07e1-08de9b7199b5",
+      "saweria_name": "Mica Plengerrr",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-05-17T13:18:25.000Z",
+      "raw_payload": {
+        "id": "e313e810-0c42-4902-07e1-08de9b7199b5",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Mica Plengerrr",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-05-17T13:18:25.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "c18408f2-19dd-487c-ca8d-08de9b71c91d",
+      "saweria_name": "abiarzap",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-05-17T13:59:54.000Z",
+      "raw_payload": {
+        "id": "c18408f2-19dd-487c-ca8d-08de9b71c91d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "abiarzap",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-05-17T13:59:54.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "9db1ce20-8015-4d3f-ca97-08de9b71c91d",
+      "saweria_name": "abiarzap",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-05-17T14:02:26.000Z",
+      "raw_payload": {
+        "id": "9db1ce20-8015-4d3f-ca97-08de9b71c91d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "abiarzap",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-05-17T14:02:26.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "e9bd4b6b-e43b-4662-cabf-08de9b71c91d",
+      "saweria_name": "bgdimz29",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-05-17T14:18:51.000Z",
+      "raw_payload": {
+        "id": "e9bd4b6b-e43b-4662-cabf-08de9b71c91d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "bgdimz29",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-05-17T14:18:51.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "62c0890a-17fc-4185-cb15-08de9b71c91d",
+      "saweria_name": "Mica Plengerr",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-05-17T14:44:48.000Z",
+      "raw_payload": {
+        "id": "62c0890a-17fc-4185-cb15-08de9b71c91d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Mica Plengerr",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-05-17T14:44:48.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "fafb06cd-15d4-4400-cb28-08de9b71c91d",
+      "saweria_name": "Crystallfuryy",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-05-17T14:49:52.000Z",
+      "raw_payload": {
+        "id": "fafb06cd-15d4-4400-cb28-08de9b71c91d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Crystallfuryy",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-05-17T14:49:52.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "efa0565f-30d9-44d4-cb30-08de9b71c91d",
+      "saweria_name": "Mica plengerrr",
+      "amount": 25000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-05-17T14:53:03.000Z",
+      "raw_payload": {
+        "id": "efa0565f-30d9-44d4-cb30-08de9b71c91d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Mica plengerrr",
+        "amount_raw": 25000,
+        "fee": 1250,
+        "net_amount": 23750,
+        "transaction_date": "2026-05-17T14:53:03.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "64305cec-613a-4daf-cb38-08de9b71c91d",
+      "saweria_name": "Crystallfuryy",
+      "amount": 50000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-05-17T14:55:35.000Z",
+      "raw_payload": {
+        "id": "64305cec-613a-4daf-cb38-08de9b71c91d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "Crystallfuryy",
+        "amount_raw": 50000,
+        "fee": 2500,
+        "net_amount": 47500,
+        "transaction_date": "2026-05-17T14:55:35.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    },
+    {
+      "provider_tx_id": "046dbcc8-1007-4980-d487-08de9b71c91d",
+      "saweria_name": "ielsssss1",
+      "amount": 10000,
+      "message": "",
+      "status": "success",
+      "donation_at": "2026-05-19T13:54:28.000Z",
+      "raw_payload": {
+        "id": "046dbcc8-1007-4980-d487-08de9b71c91d",
+        "transaction_type": "transaction",
+        "debit_credit": "Debit",
+        "donator_name": "ielsssss1",
+        "amount_raw": 10000,
+        "fee": 500,
+        "net_amount": 9500,
+        "transaction_date": "2026-05-19T13:54:28.000Z",
+        "source": "xlsx_transaction_report_import"
+      }
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+name = "hazastudio-donation-api"
+main = "src/worker.js"
+compatibility_date = "2026-05-26"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "donation_db"
+database_id = "e19a661f-3aae-4029-aff2-f148871932c7"
+
+[vars]
+PUBLIC_BASE_URL = "https://hazastudio-donation-api.hazastudio.workers.dev"
+SOCIAL_API_BASE_URL = "https://hazastudio-game-data-api.hazastudio.workers.dev"
+CORS_ORIGIN = "*"

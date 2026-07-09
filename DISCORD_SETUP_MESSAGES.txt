@@ -1,0 +1,449 @@
+================================================================================
+CARA PAKAI: Copy tiap blok MESSAGE (1 pesan = 1 kirim di Discord).
+Urutkan dari MESSAGE 1 sampai terakhir. Pin MESSAGE 1 di channel #setup.
+Jangan post isi Secrets.luau / API key ke Discord.
+================================================================================
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MESSAGE 1/14 — INTRO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📦 **HAZASTUDIO CLUB KIT v1.3 — PANDUAN SETUP**
+
+Halo! Ini panduan lengkap pasang Club Kit di place Roblox kamu.
+
+**Yang perlu kamu tahu dulu:**
+• Config place = **1 file utama** (`ClubKitConfig.luau`)
+• Secret API = **1 file terpisah** (`Secrets.luau`) — server only
+• Engine kit (`Hazastudio_ClubKit`) **jangan diedit** — replace saja kalau ada update
+
+**Tools yang dibutuhkan:**
+• Roblox Studio
+• File **.rbxm** Club Kit (dari Hazastudio)
+• Creator Dashboard (Developer Products untuk shop)
+• (Opsional) Cloudflare Worker Bagi-Bagi untuk donasi cash live
+
+**Estimasi waktu setup:** 30–90 menit (tergantung role & API)
+
+Lanjut **MESSAGE 2** ⬇️
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MESSAGE 2/14 — FILE APA SAJA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📁 **FILE YANG BOLEH / TIDAK BOLEH DIEDIT**
+
+✅ **EDIT — buyer**
+`ReplicatedStorage/Hazastudio_ClubKitConfig/ClubKitConfig.luau`
+→ Group, branding, shop ID, role, membership, donasi, carry, fitur
+
+`ServerScriptService/Hazastudio_ClubKitSecrets/Secrets.luau`
+→ API secret (JANGAN share ke publik / Discord)
+
+⚙️ **OPSIONAL — demo**
+`Hazastudio_ClubKit/Shared/Config/ClubKitShowcase.luau`
+→ Ada = leaderboard demo | Hapus = mode live
+
+❌ **JANGAN EDIT**
+• `Hazastudio_ClubKit/` (engine)
+• `ClubKitDefaults.luau`
+• `Shared/Constants/Config.luau`
+
+**Struktur singkat:**
+```
+ReplicatedStorage/
+  Hazastudio_ClubKit/        ← engine
+  Hazastudio_ClubKitConfig/
+    ClubKitConfig.luau       ← EDIT INI
+ServerScriptService/
+  Hazastudio_ClubKitSecrets/
+    Secrets.luau             ← EDIT INI
+```
+
+Lanjut **MESSAGE 3** ⬇️
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MESSAGE 3/14 — DEMO VS LIVE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎬 **DEMO MODE vs LIVE MODE**
+
+| Kondisi | Mode | Leaderboard |
+|---------|------|-------------|
+| File `ClubKitShowcase.luau` **ada** + `ACTIVE = true` | **SHOWCASE** | Data demo palsu |
+| File **dihapus** atau `ACTIVE = false` | **LIVE** | DataStore + API |
+
+**Tidak perlu** set `Showcase.Enabled` di ClubKitConfig — otomatis dari file showcase.
+
+**Untuk trailer / screenshot:**
+Biarkan `ClubKitShowcase.luau` ada → board terisi tanpa ApiUrl
+
+**Untuk club live / production:**
+Hapus `ClubKitShowcase.luau` → wajib isi ApiUrl untuk board Rupiah
+
+**Toggle in-game (owner):**
+`/showcase on` — nyalakan demo
+`/showcase off` — kembali live
+`/showcase status` — cek mode
+
+Lanjut **MESSAGE 4** ⬇️
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MESSAGE 4/14 — STEP 1: BRANDING & GROUP
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**STEP 1 — Branding & Group**
+
+Buka `ClubKitConfig.luau` → isi bagian ini:
+
+```lua
+Branding = {
+    GameName = "Nama Club Kamu",
+    WelcomeMessage = "Welcome to %s",
+    Greeting = "Welcome to %s",
+},
+
+Group = {
+    GroupId = 12345678,      -- WAJIB live: ID group Roblox
+    OwnerUserId = 987654321, -- WAJIB: userId owner place
+    OwnerGroupRank = 255,    -- rank owner di group
+},
+
+AdminUserIds = {
+    -- [111111] = true,  -- backup admin tanpa group rank
+},
+```
+
+**Cara dapat GroupId:**
+Roblox → Group kamu → URL: `roblox.com/groups/12345678/...`
+
+**OwnerUserId:**
+Profile Roblox → About → User ID (atau pakai website user ID lookup)
+
+**Catatan:**
+• Hanya **Owner** (rank 255) + role dengan privilege `canGift` yang bisa admin commands
+• Role lain di-set pakai `/setrole`, bukan dari group rank otomatis
+
+Lanjut **MESSAGE 5** ⬇️
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MESSAGE 5/14 — STEP 2: SHOP
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**STEP 2 — Shop Membership (Developer Products)**
+
+**Di Creator Dashboard:**
+Monetization → Developer Products → Create
+
+Buat 6 product (contoh):
+• VIP Buy + VIP Gift
+• VVIP Buy + VVIP Gift
+• Supreme Buy + Supreme Gift
+
+Copy **Product ID** masing-masing → paste ke config:
+
+```lua
+Shop = {
+    Products = {
+        Tier1 = { BuyId = 123, GiftId = 456, Price = 99 },  -- VIP
+        Tier2 = { BuyId = 789, GiftId = 101, Price = 199 }, -- VVIP
+        Tier3 = { BuyId = 112, GiftId = 131, Price = 299 }, -- Supreme
+    },
+},
+```
+
+**Penting:**
+• Product harus **Enabled** di dashboard
+• `Price` = harga tampil di UI shop (bukan harga dashboard)
+• Tier1/2/3 = key internal — jangan diubah, cuma Label membership yang boleh diganti
+
+Lanjut **MESSAGE 6** ⬇️
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MESSAGE 6/14 — STEP 3: MEMBERSHIP & ROLE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**STEP 3 — Membership & Role**
+
+**Nama tier shop (tampilan UI):**
+```lua
+Membership = {
+    Tier1 = { Label = "VIP", Enabled = true, Priority = 40 },
+    Tier2 = { Label = "VVIP", Enabled = true, Priority = 50 },
+    Tier3 = { Label = "Supreme", Enabled = true, Priority = 60 },
+},
+```
+
+Kalau ganti Label (misal Supreme → Elite), update juga `CommandAliases`:
+```lua
+elite = "Supreme",
+```
+
+**Role staff** — edit `RoleCategories` di file yang sama:
+• `key` = nama internal role
+• `label` / `chatTag` = tampilan
+• `toolFolder` = nama folder di `ServerStorage/Tools/`
+• `privileges` = canGift, canAnnounce, canTeleport, adminPanel, musicManage
+
+**Spender roles** (leaderboard donor):
+• `Donatur` — role donor manual
+• `CashSpender` — Top Donor Bagi-Bagi (MaxRank = 10)
+• `RobuxSpender` — Top Supporter Robux (MaxRank = 100)
+
+Lanjut **MESSAGE 7** ⬇️
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MESSAGE 7/14 — STEP 4: DONASI BAGI-BAGI
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**STEP 4 — Donasi Bagi-Bagi / Saweria**
+
+```lua
+Donation = {
+    ProviderName = "Bagibagi",
+    ProviderLink = "https://bagibagi.co/halaman-kamu",
+    ApiUrl = "https://xxx.workers.dev/game/clubkit-key",
+    Saweria = { Enabled = true },
+    Robux = { Enabled = true },
+    MinAmount = 1000,  -- min IDR masuk notif + leaderboard
+},
+```
+
+**ApiUrl** = URL Cloudflare Worker / backend Bagi-Bagi kamu
+**ProviderLink** = link halaman donasi (tampil di panel)
+
+**Tanpa ApiUrl:**
+• Board **Rupiah/Bagi-Bagi** tampil: *"Donation API not configured yet"*
+• Notif donasi live **tidak jalan**
+• Showcase demo tetap bisa (kalau file showcase ada)
+
+**Robux tab donasi:**
+Butuh Developer Products khusus donasi (bukan VIP shop)
+→ kosongkan `RobuxProducts = {}` untuk auto-fetch dari dashboard
+
+Lanjut **MESSAGE 8** ⬇️
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MESSAGE 8/14 — STEP 5: SECRETS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**STEP 5 — Secrets (Server Only)**
+
+File: `ServerScriptService/Hazastudio_ClubKitSecrets/Secrets.luau`
+
+```lua
+Secrets.DonationApiSecret = "secret-dari-worker-kamu"
+Secrets.GameDataApiSecret = ""  -- opsional
+```
+
+⚠️ **PENTING:**
+• Harus **match** secret di Cloudflare Worker
+• **JANGAN** upload file ini ke Discord / GitHub public
+• **JANGAN** replicate ke client (sudah server-only by design)
+
+Kalau `ApiUrl` sudah diisi tapi secret kosong → HTTP donasi di-skip (ada warn di server log)
+
+**GameDataApiSecret** hanya perlu kalau pakai social API worker (opsional)
+
+Lanjut **MESSAGE 9** ⬇️
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MESSAGE 9/14 — STEP 6: FITUR & PLACE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**STEP 6 — Fitur On/Off**
+
+```lua
+Features = {
+    MusicPlayer = true,
+    SyncDance = true,
+    Hotbar = true,
+    LoadingScreen = true,
+    LevelSystem = true,
+    Settings = true,
+    Shop = true,
+    Couples = true,
+    Stickers = true,
+    Leaderboards = true,
+    DonationSaweria = true,
+    DonationRobux = true,
+},
+```
+Matikan (`false`) modul yang tidak dipakai → lebih ringan.
+
+**STEP 7 — Cek isi rbxm**
+
+Kit dikirim sebagai **.rbxm** — sudah termasuk:
+
+• `StarterGui` — GUI kit (folder `01-` s/d `15-`)
+• Workspace boards: `RobuxDonationBoard`, `SaweriaDonationBoard`, `CommunityDonationBoard`, `LikesLeaderboard`
+• Poster: `Top1Robux`, `Top1Cash`, dll.
+• `ServerStorage/Tools/` — folder sesuai role (STAFF, VIP, DONOR, dll.)
+
+Setelah insert, cek semua ada di Explorer.
+
+Lanjut **MESSAGE 10** ⬇️
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MESSAGE 10/14 — DEPLOY & TEST STUDIO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**STEP 8 — Insert rbxm & test Studio**
+
+**Studio:**
+1. Buka place kamu (atau place baru)
+2. **Home → Insert from File** → pilih `.rbxm` Club Kit
+3. Edit `ClubKitConfig.luau` + `Secrets.luau` di Explorer
+4. Play test
+
+**Studio DataStore:**
+Default terisolasi (`Studio_*` prefix) — testing tidak tulis data live player.
+
+**Yang harus ditest sebelum publish:**
+☑ Loading screen jalan
+☑ Shop bisa buka (product ID benar)
+☑ `/setrole` + tools muncul
+☑ Leaderboard tampil (demo atau live)
+☑ Donasi panel buka
+☑ Owner command (`/showcase status`)
+
+**Publish:**
+File → Publish to Roblox
+
+Lanjut **MESSAGE 11** ⬇️
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MESSAGE 11/14 — LEADERBOARD
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📊 **LEADERBOARD — SUMBER DATA**
+
+| Board | Butuh API? | Sumber live |
+|-------|------------|-------------|
+| Robux | ❌ Tidak | DataStore |
+| Community | ❌ Tidak | DataStore |
+| Likes | ❌ Tidak | DataStore (like in-game) |
+| Bagi-Bagi / Rupiah | ✅ Ya | HTTP Worker + cache |
+
+**Pesan di board (live, belum ada data):**
+• Saweria + no API → *"Donation API not configured yet"*
+• Saweria + API OK + kosong → *"Waiting for the first Bagi-Bagi donor"*
+• Robux kosong → *"No Robux donors yet"*
+• Likes kosong → *"No likes yet"*
+
+**Community showcase (demo):**
+Otomatis ambil **group milik OwnerUserId**
+
+**Poster Top 1/2/3:**
+Tetap tampil loading + teks (tidak hilang blank)
+
+Lanjut **MESSAGE 12** ⬇️
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MESSAGE 12/14 — COMMANDS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⌨️ **COMMAND PENTING**
+
+**Role & membership**
+`/setrole <player> <role>` — set role (butuh canGift)
+`/gift <player> <tier>` — beri VIP/VVIP/Supreme
+
+**Leaderboard**
+`/showcase on|off|status` — toggle demo (owner)
+`/refreshleaderboard all` — refresh semua board (owner)
+`/refreshleaderboard robux` — refresh robux saja
+
+**Donasi test (preview — tidak persist)**
+`/testcash <jumlah IDR>` — admin: notif + aura + world VFX
+`/testrobux <jumlah Robux>` — admin: notif + aura saja
+`/testsaweria` / `/testdonate` — alias deprecated → `/testcash`
+→ **Tidak** menulis leaderboard / DataStore / manual adjustment
+→ Board tidak berubah — aman untuk QA VFX
+
+**Donasi persist (owner)**
+`/addcash <player> <idr>` — isi board cash (tanpa VFX)
+`/setrobux <player> <robux>` — isi board Robux (tanpa VFX)
+`/donatecash <player> <idr>` — persist + notif + VFX
+`/removecash <player>` — hapus manual IDR (alias: `/removebagibagi`)
+
+**Lainnya**
+`/announce <pesan>` — broadcast (canAnnounce)
+`/bring <player>` — teleport (canTeleport)
+`/setbio <teks>` — bio profil
+
+**Alias role:** vip, vvip, supreme, staff, mod, donor, dll.
+
+Lanjut **MESSAGE 13** ⬇️
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MESSAGE 13/14 — CHECKLIST DEPLOY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ **CHECKLIST LIVE PRODUCTION**
+
+☐ `GroupId` + `OwnerUserId` terisi
+☐ `Shop.Products` BuyId/GiftId terisi
+☐ Product **Enabled** di Creator Dashboard
+☐ `Donation.ApiUrl` + `DonationApiSecret` (jika donasi cash)
+☐ `ProviderLink` halaman Bagi-Bagi
+☐ `ClubKitShowcase.luau` **DIHAPUS** (atau `ACTIVE = false`)
+☐ `/showcase status` → OFF
+☐ Tool folders ada di `ServerStorage/Tools/`
+☐ Test shop, role, leaderboard di Studio (`/testcash` preview tidak persist)
+☐ Tidak ada sisa data manual dari `/addcash` testing (`/removecash` jika perlu)
+☐ Publish place
+
+✅ **CHECKLIST DEMO / TRAILER SAJA**
+
+☐ `ClubKitShowcase.luau` ada
+☐ Tidak wajib ApiUrl untuk board terisi
+☐ Sebelum go-live: hapus showcase + isi API
+
+Lanjut **MESSAGE 14** ⬇️
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MESSAGE 14/14 — TROUBLESHOOTING & SUPPORT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔧 **TROUBLESHOOTING**
+
+| Masalah | Solusi |
+|---------|--------|
+| Warn `BuyId belum diisi` | Isi Shop.Products di ClubKitConfig |
+| Saweria "API not configured" | Isi ApiUrl + DonationApiSecret |
+| Robux/Likes "No … yet" | Normal — belum ada data di DataStore |
+| Mau isi board manual | `/addcash` atau `/setrobux` — bukan `/testcash` |
+| Hapus manual IDR | `/removecash <user>` (alias `/removebagibagi`) |
+| Board blank tanpa teks | Tambah LoadingOverlay di SurfaceGui place |
+| `GROUP_ID tidak valid` | Isi GroupId atau pakai showcase |
+| Shop tidak bisa beli | Product harus Enabled di dashboard |
+| Products Not Found (Robux tab) | Buat dev product donasi atau isi RobuxProducts |
+| Role tidak muncul | Cek `enabled = true` di RoleCategories |
+| Tools tidak keluar | Cek folder `ServerStorage/Tools/<toolFolder>` |
+
+---
+
+❓ **BUTUH BANTUAN?**
+Buka thread di channel support, sertakan:
+• Screenshot error (Output Studio)
+• Sudah live atau showcase?
+• ApiUrl & shop ID sudah diisi atau belum
+
+**Jangan kirim:** isi Secrets.luau / API key
+
+— Hazastudio · Club Kit v1.3 —

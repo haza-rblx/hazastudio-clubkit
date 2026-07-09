@@ -1,0 +1,25 @@
+name = "hazastudio-game-data-api"
+main = "src/worker.js"
+compatibility_date = "2025-01-01"
+
+# KV namespace for caching social/friends data across game servers
+# Create with: wrangler kv:namespace create "GAME_DATA_CACHE"
+# Then copy the ID below:
+[[kv_namespaces]]
+binding = "GAME_DATA_CACHE"
+id = "3548cc06f2f84a6087f0694ba0b670a8"
+preview_id = "3548cc06f2f84a6087f0694ba0b670a8"
+
+# PerfMonitor / TelegramAlert system removed 2026-06-14 — see notes/01 Planning/Current Focus.md.
+# PERF_DB (D1) and TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID secrets cleared.
+# D1 database nuwa-perf-metrics should be destroyed in Cloudflare dashboard.
+
+# Shared with donation-api — social_secret per game lives in games table.
+[[d1_databases]]
+binding = "DB"
+database_name = "donation_db"
+database_id = "e19a661f-3aae-4029-aff2-f148871932c7"
+
+[vars]
+# Legacy per-game secrets still work as fallback: wrangler secret put SECRET_NUWA
+# Preferred: manage social_secret from donation admin dashboard (D1 games table).

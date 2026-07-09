@@ -1,0 +1,36 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Secrets & local env
+.env
+.env.*
+**/Secrets.luau.local
+
+# Tool binaries (portable downloads)
+.tools/*
+!.tools/types/
+
+# Tool output / scratch
+.tools/analyze-output.txt
+.tools/analyze-roblox.txt
+
+# Node (donation-api admin panel, game-data-api)
+node_modules/
+dist/
+.wrangler/
+
+# Roblox build artifacts (source of truth = src/)
+*.rbxl
+*.rbxlx
+
+# Optional: large packaged exports (uncomment if you don't version rbxm)
+# *.rbxm
+# *.rbxmx
+
+# Logs
+*.log

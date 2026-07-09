@@ -1,0 +1,15 @@
+{
+  "name": "game-data-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Game data proxy — social, ACM cache, and game-specific data operations",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "local:up": "wrangler dev --ip 127.0.0.1 --port 8788",
+    "cf:deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.98.0"
+  }
+}

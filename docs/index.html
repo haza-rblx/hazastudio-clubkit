@@ -1,0 +1,1070 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hazastudio Clubkit — Setup Guide</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="theme.css" />
+</head>
+<body>
+
+  <div class="read-progress" id="readProgress" aria-hidden="true"></div>
+
+  <header class="doc-header">
+    <div class="doc-header-inner">
+    <a class="doc-header-brand" href="#quick-start">
+      <span class="brand-mark" aria-hidden="true"></span>
+      Hazastudio Clubkit
+    </a>
+    <nav class="doc-header-nav" aria-label="Top navigation">
+      <a class="nav-link" href="#quick-start">Quick Start</a>
+      <a class="nav-link" href="#architecture">Arsitektur</a>
+      <a class="nav-link" href="#donation">Donation</a>
+      <a class="nav-link" href="#leaderboards">Leaderboards</a>
+      <a class="nav-link" href="#commands">Commands</a>
+    </nav>
+    <div class="doc-header-actions">
+      <a class="btn-primary" href="#checklist">Deploy</a>
+    </div>
+    </div>
+  </header>
+
+  <div class="doc-shell">
+
+    <aside class="sidebar" aria-label="Contents">
+      <div class="sidebar-group">
+        <div class="sidebar-label">Mulai</div>
+        <a class="sidebar-link" href="#quick-start">Quick Start</a>
+        <a class="sidebar-link" href="#files">File buyer</a>
+        <a class="sidebar-link" href="#architecture">Arsitektur</a>
+        <a class="sidebar-link" href="#checklist">Checklist</a>
+        <a class="sidebar-link" href="#secrets">Secrets</a>
+        <a class="sidebar-link" href="#studio">Studio testing</a>
+      </div>
+      <div class="sidebar-group">
+        <div class="sidebar-label">Konfigurasi</div>
+        <a class="sidebar-link" href="#group">Group</a>
+        <a class="sidebar-link" href="#roles">Roles</a>
+        <a class="sidebar-link" href="#privileges">Privileges</a>
+        <a class="sidebar-link" href="#membership">Membership</a>
+        <a class="sidebar-link" href="#paid-broadcast">Paid broadcast</a>
+        <a class="sidebar-link" href="#spender">Spender</a>
+        <a class="sidebar-link" href="#donation">Donation</a>
+        <a class="sidebar-link" href="#leaderboards">Leaderboards</a>
+        <a class="sidebar-link" href="#showcase">Showcase</a>
+        <a class="sidebar-link" href="#features">Features</a>
+        <a class="sidebar-link" href="#tools">Tools</a>
+        <a class="sidebar-link" href="#leaderboard-seeder">Leaderboard seeder</a>
+      </div>
+      <div class="sidebar-group">
+        <div class="sidebar-label">Referensi</div>
+        <a class="sidebar-link" href="#commands">Commands</a>
+        <a class="sidebar-link" href="#scenarios">Skenario</a>
+        <a class="sidebar-link" href="#deploy">Deploy</a>
+        <a class="sidebar-link" href="#troubleshoot">Troubleshooting</a>
+      </div>
+    </aside>
+
+    <main class="main">
+
+      <section id="quick-start">
+        <h2 class="section-title">Quick Start</h2>
+        <p class="section-lead">Tutorial langkah demi langkah — dari terima file sampai siap publish. Centang progress di kartu <strong>Deploy checklist</strong> di kanan saat kamu menyelesaikan tiap poin.</p>
+
+        <div class="tutorial-steps">
+
+          <article class="tutorial-step" id="tutorial-step-1">
+            <div class="tutorial-step-header">
+              <span class="tutorial-step-num">1</span>
+              <h3 class="tutorial-step-title">Terima file &amp; buka Roblox Studio</h3>
+            </div>
+            <p class="tutorial-step-body">Kamu akan menerima <strong>ClubKit.rbxm</strong> dari Hazastudio. File ini sudah berisi GUI, leaderboard boards, tools, dan semua script engine.</p>
+            <ol class="tutorial-substeps">
+              <li>Buka <strong>Roblox Studio</strong> → buka place venue kamu (atau buat place baru).</li>
+              <li>Menu <strong>Home → Insert from File</strong> → pilih file <code>.rbxm</code>.</li>
+              <li>Tunggu sampai folder kit muncul di Explorer.</li>
+            </ol>
+            <div class="tutorial-verify"><strong>✓ Berhasil jika:</strong> di Explorer terlihat minimal:
+              <code>ReplicatedStorage/Hazastudio_ClubKit</code>,
+              <code>ReplicatedStorage/Hazastudio_ClubKitConfig</code>,
+              <code>ServerScriptService/Hazastudio_ClubKit/Server</code>,
+              <code>StarterPlayer/StarterPlayerScripts/Hazastudio_ClubKit</code>,
+              <code>StarterGui</code> (folder GUI <code>01-</code> … <code>15-</code>),
+              <code>ServerStorage/Tools</code>, dan board leaderboard di <code>Workspace</code>.</div>
+          </article>
+
+          <article class="tutorial-step" id="tutorial-step-2">
+            <div class="tutorial-step-header">
+              <span class="tutorial-step-num">2</span>
+              <h3 class="tutorial-step-title">Isi Group &amp; Owner</h3>
+            </div>
+            <p class="tutorial-step-body">Ini langkah pertama wajib — tanpa ini banyak fitur (owner command, community board) tidak jalan.</p>
+            <ol class="tutorial-substeps">
+              <li>Explorer → <code>ReplicatedStorage</code> → <code>Hazastudio_ClubKitConfig</code> → double-click <code>ClubKitConfig</code> (ModuleScript).</li>
+              <li>Isi <code>Group.GroupId</code> dengan ID group Roblox venue kamu.</li>
+              <li>Isi <code>Group.OwnerUserId</code> dengan UserId owner venue.</li>
+              <li>(Opsional) tambahkan admin di <code>AdminUserIds</code>.</li>
+            </ol>
+            <pre><code><span class="key">ClubKitConfig</span>.<span class="key">Group</span> = {
+    <span class="key">GroupId</span> = <span class="num">12345678</span>,
+    <span class="key">OwnerUserId</span> = <span class="num">987654321</span>,
+}</code></pre>
+            <div class="tutorial-verify"><strong>✓ Berhasil jika:</strong> Play test tidak warn <code>GROUP_ID tidak valid</code>. Owner bisa pakai command owner (<code>/showcase status</code>).</div>
+            <div class="tutorial-nav-row"><a href="#group">Detail Group →</a></div>
+          </article>
+
+          <article class="tutorial-step" id="tutorial-step-3">
+            <div class="tutorial-step-header">
+              <span class="tutorial-step-num">3</span>
+              <h3 class="tutorial-step-title">Matikan mode demo (showcase)</h3>
+            </div>
+            <p class="tutorial-step-body">Kit mungkin masih punya file showcase untuk trailer. Production <strong>harus live</strong>, bukan data palsu.</p>
+            <ol class="tutorial-substeps">
+              <li>Explorer → <code>ReplicatedStorage</code> → <code>Hazastudio_ClubKit</code> → <code>Shared</code> → <code>Config</code> → cari <code>ClubKitShowcase</code> (ModuleScript).</li>
+              <li><strong>Production:</strong> hapus file, atau set <code>ACTIVE = false</code>.</li>
+              <li>Play test → ketik <code>/showcase status</code> sebagai owner → harus <strong>OFF</strong>.</li>
+            </ol>
+            <div class="tutorial-verify"><strong>✓ Berhasil jika:</strong> leaderboard menampilkan data live / pesan kosong — bukan profil demo acak.</div>
+            <div class="tutorial-nav-row"><a href="#showcase">Detail Showcase →</a></div>
+          </article>
+
+          <article class="tutorial-step" id="tutorial-step-4">
+            <div class="tutorial-step-header">
+              <span class="tutorial-step-num">4</span>
+              <h3 class="tutorial-step-title">Setup donasi cash (jika dipakai)</h3>
+            </div>
+            <p class="tutorial-step-body">Lewati langkah ini jika venue tidak pakai donasi IDR. Kalau pakai Bagi-Bagi atau Saweria:</p>
+            <ol class="tutorial-substeps">
+              <li>Explorer → <code>ReplicatedStorage/Hazastudio_ClubKitConfig/ClubKitConfig</code> → section <code>Donation</code>: set <code>Provider</code> = <code>"bagibagi"</code> atau <code>"saweria"</code>.</li>
+              <li>Isi <code>ProviderLink</code> dan <code>ApiUrl</code> di file yang sama.</li>
+              <li>Explorer → <code>ServerScriptService/Hazastudio_ClubKitSecrets/Secrets</code> → isi <code>DonationApiSecret</code> (harus sama dengan worker).</li>
+            </ol>
+            <div class="tutorial-verify"><strong>✓ Berhasil jika:</strong> board cash tidak tampil "API not configured". Donasi test masuk (lihat <a href="#donation">Donation</a>).</div>
+            <div class="tutorial-nav-row"><a href="#donation">Detail Donation →</a><a href="#secrets">Secrets →</a></div>
+          </article>
+
+          <article class="tutorial-step" id="tutorial-step-5">
+            <div class="tutorial-step-header">
+              <span class="tutorial-step-num">5</span>
+              <h3 class="tutorial-step-title">Setup shop &amp; donasi Robux</h3>
+            </div>
+            <p class="tutorial-step-body">Membership (VIP/VVIP/Supreme) dan donasi Robux pakai Developer Products terpisah.</p>
+            <ol class="tutorial-substeps">
+              <li>Creator Dashboard → <strong>Monetization → Developer Products</strong> → buat product untuk tiap tier shop (Buy + Gift).</li>
+              <li>Salin Product ID → paste ke <code>ReplicatedStorage/Hazastudio_ClubKitConfig/ClubKitConfig</code> → <code>Shop.Products.Tier1.BuyId</code> / <code>GiftId</code> (ulangi per tier).</li>
+              <li>Buat <strong>satu</strong> Developer Product untuk <strong>broadcast berbayar</strong> (pesan ke seluruh server via ikon topbar Broadcast).</li>
+              <li>Salin ID product tersebut → <code>ClubKitConfig.PaidBroadcast.ProductId</code> (bukan ke <code>Shop.Products</code>).</li>
+              <li>Buat Developer Products donasi Robux (atau biarkan server auto-load).</li>
+              <li>Pastikan <code>Features.Shop</code> dan <code>Features.DonationRobux</code> = <code>true</code> jika dipakai.</li>
+            </ol>
+            <div class="tutorial-verify"><strong>✓ Berhasil jika:</strong> prompt shop muncul di game, ikon Broadcast menampilkan harga Robux, tidak error "Products Not Found" atau warning <code>PaidBroadcast.PRODUCT_ID masih 0</code> di Output.</div>
+            <div class="tutorial-nav-row"><a href="#membership">Membership →</a><a href="#paid-broadcast">Paid broadcast →</a><a href="#donation">Donation Robux →</a></div>
+          </article>
+
+          <article class="tutorial-step" id="tutorial-step-6">
+            <div class="tutorial-step-header">
+              <span class="tutorial-step-num">6</span>
+              <h3 class="tutorial-step-title">Sesuaikan roles &amp; matikan fitur tidak dipakai</h3>
+            </div>
+            <p class="tutorial-step-body">Default kit sudah punya role lengkap. Sesuaikan label, chat tag, dan privilege dengan venue kamu.</p>
+            <ol class="tutorial-substeps">
+              <li>Edit <code>RoleCategories</code> di <code>ReplicatedStorage/Hazastudio_ClubKitConfig/ClubKitConfig</code> — rename role, ubah <code>teamColor</code>, <code>toolFolder</code>.</li>
+              <li>Cek setiap <code>toolFolder</code> punya folder matching di <code>ServerStorage/Tools/&lt;nama folder&gt;/</code> (contoh: <code>STAFF</code>, <code>DONOR</code>).</li>
+              <li>Di <code>Features</code> (file config yang sama), set <code>false</code> untuk modul yang tidak dipakai.</li>
+              <li>Matikan spender role yang tidak dipakai di <code>SpenderRoles</code>.</li>
+            </ol>
+            <div class="tutorial-verify"><strong>✓ Berhasil jika:</strong> <code>/setrole</code> assign role benar + tools muncul di backpack player.</div>
+            <div class="tutorial-nav-row"><a href="#roles">Roles →</a><a href="#features">Features →</a><a href="#tools">Tool folders →</a></div>
+          </article>
+
+          <article class="tutorial-step" id="tutorial-step-7">
+            <div class="tutorial-step-header">
+              <span class="tutorial-step-num">7</span>
+              <h3 class="tutorial-step-title">Play test di Studio</h3>
+            </div>
+            <p class="tutorial-step-body">Studio default pakai DataStore terisolasi (<code>Studio_*</code> prefix) — aman, tidak menulis data live player.</p>
+            <ol class="tutorial-substeps">
+              <li><strong>Game Settings → Security</strong> → Enable Studio Access to API Services = ON.</li>
+              <li>Play (F5) → test shop, ikon <strong>Broadcast</strong> (paid), <code>/setrole</code>, <code>/gift</code>, panel donasi.</li>
+              <li>Test leaderboard boards di workspace tampil (kosong = normal).</li>
+              <li>Admin: <code>/testcash 1000</code> atau <code>/testrobux 10</code> untuk cek notif + VFX (preview saja, tidak persist).</li>
+            </ol>
+            <div class="tutorial-verify"><strong>✓ Berhasil jika:</strong> tidak ada error merah di Output, GUI load normal, command admin merespons.</div>
+            <div class="tutorial-nav-row"><a href="#studio">Studio testing →</a><a href="#commands">Commands →</a></div>
+          </article>
+
+          <article class="tutorial-step" id="tutorial-step-8">
+            <div class="tutorial-step-header">
+              <span class="tutorial-step-num">8</span>
+              <h3 class="tutorial-step-title">Centang checklist &amp; publish</h3>
+            </div>
+            <p class="tutorial-step-body">Sebelum go-live, pastikan semua poin di kartu <strong>Deploy checklist</strong> (kanan) sudah dicentang.</p>
+            <ol class="tutorial-substeps">
+              <li>Review kartu checklist di kanan — klik tiap baris yang sudah selesai.</li>
+              <li>Target: <strong>11 / 11</strong> sebelum publish.</li>
+              <li><strong>File → Publish to Roblox</strong>.</li>
+            </ol>
+            <div class="tutorial-verify"><strong>✓ Siap publish jika:</strong> checklist 11/11, showcase OFF, config &amp; secrets terisi, sudah test di Studio.</div>
+            <div class="tutorial-nav-row"><a href="#checklist">Ke checklist →</a><a href="#deploy">Detail deploy →</a></div>
+          </article>
+
+        </div>
+
+        <div class="card">
+          <div class="card-title">Template kosong = normal</div>
+          <p>Default sengaja kosong: <code>GroupId = 0</code>, <code>ApiUrl = ""</code>, shop IDs <code>0</code>. Startup akan <strong>warn</strong> sebagai reminder — bukan bug.</p>
+        </div>
+      </section>
+
+      <section id="files">
+        <h2 class="section-title">File buyer</h2>
+        <p class="section-lead">Path di bawah = lokasi di <strong>Explorer Roblox Studio</strong> setelah insert <code>.rbxm</code>. Nama instance bisa berbeda dari nama file di disk — yang penting hierarchy service-nya benar.</p>
+
+        <h4>File yang kamu edit</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Path di Explorer</th><th>Edit?</th><th>Isi</th></tr></thead>
+            <tbody>
+              <tr><td><code>ReplicatedStorage/Hazastudio_ClubKitConfig/ClubKitConfig</code></td><td><strong>Ya</strong></td><td>Group, branding, roles, shop, donation, features</td></tr>
+              <tr><td><code>ServerScriptService/Hazastudio_ClubKitSecrets/Secrets</code></td><td><strong>Ya</strong></td><td>API secrets (server-only, tidak replicate)</td></tr>
+              <tr><td><code>ReplicatedStorage/Hazastudio_ClubKit/Shared/Config/ClubKitShowcase</code></td><td>Opsional</td><td>Switch demo — ada &amp; aktif = showcase, hapus = live</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4>Engine — jangan edit (replace saat update kit)</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Path di Explorer</th><th>Catatan</th></tr></thead>
+            <tbody>
+              <tr><td><code>ReplicatedStorage/Hazastudio_ClubKit/</code></td><td>Shared modules, domain, utils</td></tr>
+              <tr><td><code>ServerScriptService/Hazastudio_ClubKit/Server/</code></td><td>Server entry <code>Main.server</code>, services, controllers</td></tr>
+              <tr><td><code>StarterPlayer/StarterPlayerScripts/Hazastudio_ClubKit/</code></td><td>Client entry <code>Main.client</code>, UI, controllers</td></tr>
+              <tr><td><code>ReplicatedFirst/Hazastudio_ClubKit/LoadingBootstrap.client</code></td><td>Loading screen bootstrap</td></tr>
+              <tr><td><code>ReplicatedStorage/Hazastudio_ClubKit/Shared/Config/ClubKitDefaults</code></td><td>Fallback engine — jangan edit</td></tr>
+              <tr><td><code>ReplicatedStorage/Hazastudio_ClubKit/Shared/Constants/Config</code></td><td>Internal constants — advanced only</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4>Peta Explorer lengkap (setelah insert rbxm)</h4>
+        <pre class="path-tree"><code>ReplicatedFirst/
+  └── Hazastudio_ClubKit/
+        └── LoadingBootstrap.client
+
+ReplicatedStorage/
+  ├── Hazastudio_ClubKit/                 ← engine (jangan edit)
+  │     ├── Shared/
+  │     │     ├── Config/
+  │     │     │     ├── ClubKitDefaults
+  │     │     │     └── ClubKitShowcase   ← hapus / ACTIVE=false untuk live
+  │     │     └── Constants/
+  │     │           └── Config            ← advanced: Studio isolation
+  │     └── ...
+  ├── Hazastudio_ClubKitConfig/           ← EDIT
+  │     └── ClubKitConfig
+  └── WorldEffects/                       ← model VFX donasi (Nuke, dll.)
+
+ServerScriptService/
+  ├── Hazastudio_ClubKit/
+  │     └── Server/
+  │           └── Main.server             ← server boot
+  └── Hazastudio_ClubKitSecrets/          ← EDIT
+        └── Secrets
+
+StarterPlayer/
+  └── StarterPlayerScripts/
+        └── Hazastudio_ClubKit/
+              └── Main.client             ← client boot
+
+StarterGui/
+  └── 01- … 15- …                         ← GUI kit (dari rbxm)
+
+ServerStorage/
+  ├── Tools/                              ← folder per role (STAFF, VIP, …)
+  └── DonationEffects/                    ← aura donasi per level
+
+Workspace/
+  ├── RobuxDonationBoard                  ← contoh nama board
+  ├── SaweriaDonationBoard
+  └── … board leaderboard lainnya</code></pre>
+
+        <div class="card">
+          <div class="card-title">Cek setelah insert</div>
+          <p>Pastikan path di atas ada di Explorer. Kalau <code>ServerStorage/Tools</code> atau board di <code>Workspace</code> hilang, insert ulang <code>.rbxm</code> atau restore dari backup Hazastudio.</p>
+        </div>
+        <div class="card">
+          <div class="card-title">Satu sumber config buyer</div>
+          <p>Hanya edit <code>ReplicatedStorage/Hazastudio_ClubKitConfig/ClubKitConfig</code>. Jangan edit <code>ClubKitDefaults</code>.</p>
+        </div>
+      </section>
+
+      <section id="architecture">
+        <h2 class="section-title">Arsitektur</h2>
+        <p class="section-body">Saat server/client load, config buyer di-merge ke sistem inti secara otomatis.</p>
+
+        <div class="flow">
+<span class="hl">ClubKitDefaults</span> <span class="arrow">→</span> deepMerge <span class="hl">ClubKitConfig</span> (buyer)
+<span class="arrow">→</span> deepMerge <span class="hl">ClubKitShowcase</span> (opsional, demo)
+<span class="arrow">→</span> ConfigBootstrap.validate()
+<span class="arrow">→</span> <span class="hl">RoleCategoryBuilder.build()</span>
+<span class="arrow">→</span> RolesDomain.applyDerivedConfig()
+<span class="arrow">→</span> table.freeze(Config)
+        </div>
+        <div class="card">
+          <div class="card-title">Satu sumber buyer</div>
+          <p>Semua setting venue ada di <code>ReplicatedStorage/Hazastudio_ClubKitConfig/ClubKitConfig</code>. Jangan edit <code>ReplicatedStorage/Hazastudio_ClubKit/Shared/Config/ClubKitDefaults</code>.</p>
+        </div>
+
+        <div class="grid-2">
+          <div class="grid-cell">
+            <h5>Role Categories</h5>
+            <p><code>RoleCategories</code> — assign via group rank (Owner) + <code>/setrole</code>.</p>
+          </div>
+          <div class="grid-cell">
+            <h5>Membership</h5>
+            <p><code>Membership</code> + <code>Shop</code> — dari shop atau <code>/gift</code>, bukan group rank.</p>
+          </div>
+          <div class="grid-cell">
+            <h5>Spender Roles</h5>
+            <p><code>SpenderRoles</code> — leaderboard otomatis, top N donor.</p>
+          </div>
+          <div class="grid-cell">
+            <h5>Feature Flags</h5>
+            <p><code>Features</code> — matikan subsystem per place tanpa hapus kode.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="secrets">
+        <h2 class="section-title">Secrets</h2>
+        <p class="section-body">Template ship dengan secrets kosong. Isi sekali per place — tidak replicate ke client.</p>
+        <pre><code><span class="cmt">-- ServerScriptService/Hazastudio_ClubKitSecrets/Secrets</span>
+<span class="key">Secrets</span>.<span class="key">GameDataApiSecret</span> = <span class="str">"your-game-data-api-secret"</span>
+<span class="key">Secrets</span>.<span class="key">DonationApiSecret</span> = <span class="str">"your-donation-worker-secret"</span></code></pre>
+        <div class="card">
+          <div class="card-title">Match backend</div>
+          <p>Harus sama dengan secret di Cloudflare Worker / backend kamu. Kosongkan jika hanya pakai <code>/showcase on</code> tanpa live API.</p>
+          <p>Server log akan <strong>warn</strong> jika <code>ApiUrl</code> sudah diisi tapi <code>DonationApiSecret</code> masih kosong.</p>
+        </div>
+      </section>
+
+      <section id="studio">
+        <h2 class="section-title">Studio testing</h2>
+        <p class="section-body">Default: Play mode di Studio pakai DataStore terisolasi (<code>Studio_*</code> prefix). Command <strong>persist</strong> (<code>/addcash</code>, <code>/setrobux</code>) menulis ke key terisolasi itu — bukan production player data.</p>
+
+        <h4>Test donasi: preview vs persist</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Command</th><th>Akses</th><th>Notif + VFX</th><th>Leaderboard / DataStore</th><th>Kapan dipakai</th></tr></thead>
+            <tbody>
+              <tr><td><code>/testcash &lt;idr&gt;</code></td><td>admin</td><td>✅ aura + world VFX</td><td>❌ tidak</td><td>QA notif &amp; efek IDR</td></tr>
+              <tr><td><code>/testrobux &lt;robux&gt;</code></td><td>admin</td><td>✅ aura saja</td><td>❌ tidak</td><td>QA notif &amp; efek Robux</td></tr>
+              <tr><td><code>/addcash &lt;player&gt; &lt;idr&gt;</code></td><td>owner</td><td>❌</td><td>✅ persist</td><td>Isi board cash tanpa VFX</td></tr>
+              <tr><td><code>/setrobux &lt;player&gt; &lt;robux&gt;</code></td><td>owner</td><td>❌</td><td>✅ persist</td><td>Isi board Robux tanpa VFX</td></tr>
+              <tr><td><code>/donatecash &lt;player&gt; &lt;idr&gt;</code></td><td>owner</td><td>✅</td><td>✅ persist</td><td>Simulasi donasi lengkap + data board</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="section-body">Alias test: <code>/testsaweria</code>, <code>/testdonate</code> → sama seperti <code>/testcash</code> (preview only). Hapus data manual yang sudah di-<code>/addcash</code>: <code>/removecash &lt;player&gt;</code>.</p>
+
+        <h4>Workflow QA cepat</h4>
+        <ol class="plain-list">
+          <li><strong>Game Settings → Security</strong> → Enable Studio Access to API Services = ON</li>
+          <li>Showcase ON → <code>/testrobux 10</code> → cek aura, tanpa world VFX</li>
+          <li>Showcase ON → <code>/testcash 2000</code> → cek aura + Nuke; board <strong>tidak</strong> berubah</li>
+          <li>Butuh entry board → <code>/addcash &lt;player&gt; 5000</code> atau seeder one-time</li>
+          <li>Showcase OFF → <code>/testcash 150000</code> → cek threshold production world VFX</li>
+        </ol>
+
+        <div class="card">
+          <div class="card-title">Production keys (advanced)</div>
+          <p>Untuk debug sengaja ke live DataStore, set di <code>ReplicatedStorage/Hazastudio_ClubKit/Shared/Constants/Config</code>: <code>USE_STUDIO_DATASTORE_ISOLATION = false</code>. Kembalikan ke <code>true</code> setelah selesai. Command persist (<code>/addcash</code>, <code>/setrobux</code>) akan diblokir untuk Robux jika isolation off; cash manual tetap hati-hati.</p>
+        </div>
+      </section>
+
+      <section id="group">
+        <h2 class="section-title">Group &amp; Owner</h2>
+        <p class="section-body">Hanya <strong>Owner</strong> dibaca dari Roblox group rank (<code>OwnerGroupRank</code>, default <code>255</code>). Semua role lain via <code>/setrole</code>.</p>
+        <pre><code><span class="key">ClubKitConfig</span>.<span class="key">Group</span> = {
+    <span class="key">GroupId</span> = <span class="num">12345678</span>,
+    <span class="key">OwnerUserId</span> = <span class="num">987654321</span>,
+    <span class="key">OwnerGroupRank</span> = <span class="num">255</span>,
+}
+
+<span class="key">ClubKitConfig</span>.<span class="key">AdminUserIds</span> = {
+    [<span class="num">111111111</span>] = <span class="kw">true</span>,
+}</code></pre>
+      </section>
+
+      <section id="roles">
+        <h2 class="section-title">Role Categories</h2>
+        <p class="section-body">Buyer definisikan <strong>kategori</strong> dengan privilege bersama. Role di dalamnya beda di label, chat tag, team color, dan tools.</p>
+        <pre><code><span class="key">ClubKitConfig</span>.<span class="key">RoleCategories</span> = {
+    {
+        <span class="key">id</span> = <span class="num">1</span>,
+        <span class="key">label</span> = <span class="str">"Leadership"</span>,
+        <span class="key">priority</span> = <span class="num">140</span>,
+        <span class="key">enabled</span> = <span class="kw">true</span>,
+        <span class="key">privileges</span> = {
+            <span class="key">canGift</span> = <span class="kw">true</span>,
+            <span class="key">canAnnounce</span> = <span class="kw">true</span>,
+            <span class="key">canTeleport</span> = <span class="kw">true</span>,
+            <span class="key">adminPanel</span> = <span class="kw">true</span>,
+            <span class="key">musicManage</span> = <span class="kw">true</span>,
+        },
+        <span class="key">roles</span> = {
+            {
+                <span class="key">key</span> = <span class="str">"Staff"</span>,
+                <span class="key">label</span> = <span class="str">"Staff"</span>,
+                <span class="key">chatTag</span> = <span class="str">"STAFF"</span>,
+                <span class="key">toolFolder</span> = <span class="str">"STAFF"</span>,
+                <span class="key">teamColor</span> = <span class="str">"Royal purple"</span>,
+                <span class="key">enabled</span> = <span class="kw">true</span>,
+            },
+        },
+    },
+}</code></pre>
+        <div class="card">
+          <div class="card-title">Default kit</div>
+          <p>Leadership: <code>Staff</code> · Moderation: <code>Moderator</code> · Content: <code>DJ</code>, <code>Streamer</code>, <code>Influencer</code>, <code>LeadDance</code> · Membership: <code>VIP</code>, <code>VVIP</code>, <code>Supreme</code> · Spender: <code>Donor</code>, <code>Top Donor</code>, <code>Top Supporter</code>.</p>
+        </div>
+        <div class="card">
+          <div class="card-title">Urutan Player List</div>
+          <p>Owner → Staff → Moderator → DJ → Lead Dance → Streamer → Influencer → Top Supporter → Top Donor → Donor → Supreme → VVIP → VIP → Guest. Kategori <code>priority</code> × 100 = blok (Leadership <code>140</code> → <code>14000</code>).</p>
+        </div>
+      </section>
+
+      <section id="privileges">
+        <h2 class="section-title">Privileges</h2>
+        <p class="section-body">Privilege diatur per <strong>kategori</strong>, bukan per role individual.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Key</th><th>Efek</th></tr></thead>
+            <tbody>
+              <tr><td><code>canGift</code></td><td><code>/setrole</code>, <code>/gift</code>, <code>/ungift</code></td></tr>
+              <tr><td><code>canAnnounce</code></td><td><code>/announce</code>, paid broadcast</td></tr>
+              <tr><td><code>canTeleport</code></td><td><code>/bring</code>, <code>/to</code></td></tr>
+              <tr><td><code>adminPanel</code></td><td>Admin panel + cinematic dock</td></tr>
+              <tr><td><code>musicManage</code></td><td>Kontrol DJ music player</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="membership">
+        <h2 class="section-title">Membership</h2>
+        <p class="section-body">Tidak auto-promote dari group join — hanya dari shop atau <code>/gift</code>.</p>
+        <pre><code><span class="key">ClubKitConfig</span>.<span class="key">Membership</span> = {
+    <span class="key">Tier1</span> = { <span class="key">Label</span> = <span class="str">"VIP"</span>,       <span class="key">Enabled</span> = <span class="kw">true</span>, <span class="key">Priority</span> = <span class="num">40</span> },
+    <span class="key">Tier2</span> = { <span class="key">Label</span> = <span class="str">"VVIP"</span>,      <span class="key">Enabled</span> = <span class="kw">true</span>, <span class="key">Priority</span> = <span class="num">50</span> },
+    <span class="key">Tier3</span> = { <span class="key">Label</span> = <span class="str">"Supreme"</span>,  <span class="key">Enabled</span> = <span class="kw">true</span>, <span class="key">Priority</span> = <span class="num">60</span> },
+}
+
+<span class="key">ClubKitConfig</span>.<span class="key">Shop</span> = {
+    <span class="key">Products</span> = {
+        <span class="key">Tier1</span> = { <span class="key">BuyId</span> = <span class="num">123456</span>, <span class="key">GiftId</span> = <span class="num">789012</span> },
+        <span class="key">Tier2</span> = { <span class="key">BuyId</span> = <span class="num">0</span>, <span class="key">GiftId</span> = <span class="num">0</span> },
+        <span class="key">Tier3</span> = { <span class="key">BuyId</span> = <span class="num">0</span>, <span class="key">GiftId</span> = <span class="num">0</span> },
+    },
+}</code></pre>
+        <div class="card">
+          <div class="card-title">Template shop IDs = 0</div>
+          <p>Isi BuyId/GiftId dari Creator Dashboard sebelum shop live.</p>
+        </div>
+      </section>
+
+      <section id="paid-broadcast">
+        <h2 class="section-title">Paid broadcast</h2>
+        <p class="section-body">Player membayar Robux lewat Developer Product untuk mengirim pesan broadcast ke seluruh server (ikon topbar <strong>Broadcast</strong>). Staff dengan privilege <code>canAnnounce</code> tetap bisa <code>/announce</code> gratis.</p>
+        <h4>Setup Developer Product</h4>
+        <ol class="plain-list">
+          <li>Buka <strong>Creator Dashboard</strong> → place kamu → <strong>Monetization → Developer Products</strong>.</li>
+          <li>Buat product baru (mis. nama <em>Server Broadcast</em>) — tipe <strong>Developer Product</strong>, atur harga Robux sesuai venue.</li>
+          <li>Salin <strong>Product ID</strong> (angka) dari dashboard.</li>
+          <li>Paste ke <code>ReplicatedStorage/Hazastudio_ClubKitConfig/ClubKitConfig</code>:</li>
+        </ol>
+        <pre><code><span class="key">ClubKitConfig</span>.<span class="key">PaidBroadcast</span> = {
+    <span class="key">ProductId</span> = <span class="num">3503700307</span>, <span class="cmt">-- ganti dengan ID dari Creator Dashboard</span>
+}</code></pre>
+        <div class="card">
+          <div class="card-title">Jangan campur dengan Shop</div>
+          <p><code>PaidBroadcast.ProductId</code> adalah <strong>satu product terpisah</strong> — bukan <code>Shop.Products</code>. Server memproses receipt broadcast lewat <code>ShopController</code> → <code>PaidBroadcastController</code>.</p>
+        </div>
+        <div class="card">
+          <div class="card-title">Verifikasi</div>
+          <p>Play test → buka ikon Broadcast → ketik pesan → prompt Robux muncul dengan harga product. Jika <code>ProductId</code> masih <code>0</code>, Output menampilkan <code>[ConfigBootstrap] PaidBroadcast.ProductId belum diisi</code>.</p>
+        </div>
+      </section>
+
+      <section id="spender">
+        <h2 class="section-title">Spender</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Key</th><th>Deskripsi</th><th>Assign</th></tr></thead>
+            <tbody>
+              <tr><td><code>Donatur</code></td><td>Donor manual + tools DONOR</td><td>Otomatis / <code>/setrole donor</code></td></tr>
+              <tr><td><code>CashSpender</code></td><td>Top N Bagi-Bagi (IDR)</td><td>Leaderboard, <code>MaxRank</code></td></tr>
+              <tr><td><code>RobuxSpender</code></td><td>Top N Robux</td><td>Leaderboard, <code>MaxRank</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <pre><code><span class="key">ClubKitConfig</span>.<span class="key">SpenderRoles</span> = {
+    <span class="key">Donatur</span> = {
+        <span class="key">Enabled</span> = <span class="kw">true</span>,
+        <span class="key">Label</span> = <span class="str">"Donor"</span>,
+        <span class="key">ChatTag</span> = <span class="str">"DONOR"</span>,
+        <span class="key">ToolFolder</span> = <span class="str">"DONOR"</span>,
+    },
+    <span class="key">CashSpender</span> = { <span class="key">Enabled</span> = <span class="kw">true</span>, <span class="key">MaxRank</span> = <span class="num">10</span>, <span class="key">Priority</span> = <span class="num">80</span> },
+    <span class="key">RobuxSpender</span> = { <span class="key">Enabled</span> = <span class="kw">true</span>, <span class="key">MaxRank</span> = <span class="num">100</span>, <span class="key">Priority</span> = <span class="num">90</span> },
+}
+
+<span class="key">ClubKitConfig</span>.<span class="key">TopSpenders</span> = { [<span class="num">123456789</span>] = <span class="num">1</span> }</code></pre>
+      </section>
+
+      <section id="donation">
+        <h2 class="section-title">Donation</h2>
+        <p class="section-body">Donasi IDR (cash) via Bagi-Bagi atau Saweria — pilih <strong>preset provider</strong>, nama &amp; label panel otomatis. Tab Robux pakai Developer Products terpisah dari shop membership.</p>
+        <pre><code><span class="key">ClubKitConfig</span>.<span class="key">Donation</span> = {
+    <span class="key">Provider</span> = <span class="str">"bagibagi"</span>,  <span class="cmt">-- "bagibagi" | "saweria"</span>
+    <span class="key">ProviderLink</span> = <span class="str">"https://bagibagi.co/your-page"</span>,
+    <span class="key">ApiUrl</span> = <span class="str">"https://your-worker.workers.dev/game/your-game-key"</span>,
+    <span class="key">Cash</span> = { <span class="key">Enabled</span> = <span class="kw">true</span> },
+    <span class="key">Robux</span> = { <span class="key">Enabled</span> = <span class="kw">true</span> },
+    <span class="key">RobuxProducts</span> = {
+        { <span class="key">ProductId</span> = <span class="num">1234567890</span>, <span class="key">Name</span> = <span class="str">"Support 100"</span>, <span class="key">Price</span> = <span class="num">100</span> },
+    },
+}</code></pre>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Provider</th><th>Label otomatis</th></tr></thead>
+            <tbody>
+              <tr><td><code>"bagibagi"</code></td><td>Bagi-Bagi</td></tr>
+              <tr><td><code>"saweria"</code></td><td>Saweria</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card">
+          <div class="card-title">Matikan cash / Robux</div>
+          <p><code>Cash.Enabled = false</code> atau <code>Features.DonationCash = false</code> → HTTP poll cash + tab IDR di panel donasi dimatikan. Legacy <code>Donation.Saweria.Enabled</code> / <code>Features.DonationSaweria</code> tetap didukung sebagai alias.</p>
+          <p><code>Robux.Enabled = false</code> atau <code>Features.DonationRobux = false</code> → donasi Robux in-game dimatikan.</p>
+        </div>
+        <div class="card">
+          <div class="card-title">Robux products</div>
+          <p><strong>Auto:</strong> buat Developer Products di Creator Dashboard — server auto-load. <strong>Manual:</strong> isi <code>Donation.RobuxProducts</code>.</p>
+        </div>
+        <div class="card">
+          <div class="card-title">Test commands (preview only)</div>
+          <p><code>/testcash</code> dan <code>/testrobux</code> memicu notif + aura/VFX seperti donasi asli, tetapi <strong>tidak</strong> menulis leaderboard, manual adjustment, atau DataStore. Untuk data board sungguhan pakai <code>/addcash</code>, <code>/setrobux</code>, atau <code>/donatecash</code>. Detail: <a href="#studio">Studio testing</a>.</p>
+        </div>
+      </section>
+
+      <section id="leaderboards">
+        <h2 class="section-title">Leaderboards</h2>
+        <p class="section-body">Kalau belum ada data, board tetap tampil teks status — tidak hilang kosong.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Board</th><th>Butuh ApiUrl?</th><th>Sumber live</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Robux</strong></td><td>Tidak</td><td>DataStore (pembelian VIP / donasi Robux)</td></tr>
+              <tr><td><strong>Community</strong></td><td>Tidak</td><td>DataStore</td></tr>
+              <tr><td><strong>Likes</strong></td><td>Tidak</td><td>DataStore (like avatar in-game)</td></tr>
+              <tr><td><strong>Bagi-Bagi / Saweria</strong></td><td><strong>Ya</strong></td><td>HTTP worker + cache</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>State</th><th>Contoh pesan</th></tr></thead>
+            <tbody>
+              <tr><td><code>not_configured</code></td><td>"Donation API not configured yet" (khusus Saweria tanpa API)</td></tr>
+              <tr><td><code>empty</code></td><td>"No Robux donors yet", "No likes yet", dll.</td></tr>
+              <tr><td><code>error</code></td><td>"Could not load leaderboard"</td></tr>
+              <tr><td><code>ready</code></td><td>Data normal tampil</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card card-warn">
+          <div class="card-title">Test vs persist commands</div>
+          <p><code>/testcash</code> dan <code>/testrobux</code> hanya <strong>preview</strong> (notif + aura + VFX) — tidak menulis leaderboard, DataStore, atau manual adjustment. Board tidak berubah setelah command test.</p>
+          <p>Untuk isi leaderboard sungguhan: <code>/addcash</code> / <code>/setrobux</code> (tanpa VFX) atau <code>/donatecash</code> (persist + VFX). Hapus manual IDR: <code>/removecash &lt;player&gt;</code>.</p>
+          <p>Alias legacy preview: <code>/testsaweria</code>, <code>/testdonate</code> → <code>/testcash</code>.</p>
+        </div>
+        <div class="card">
+          <div class="card-title">Seed data manual (one-time)</div>
+          <p>Untuk isi leaderboard awal (cash / robux / likes) tanpa sentuh engine Club Kit, pakai script pihak ketiga <strong>One-Time Leaderboard Seeder</strong> — lihat <a href="#leaderboard-seeder">panduan seeder</a>. Bukan bagian runtime kit; hapus setelah dipakai.</p>
+        </div>
+        <div class="card">
+          <div class="card-title">Live tanpa API</div>
+          <p>Board Saweria tampil "API not configured". Robux / Likes / Community kosong = "No … yet" (belum ada data), <strong>bukan</strong> error API.</p>
+        </div>
+      </section>
+
+      <section id="showcase">
+        <h2 class="section-title">Showcase</h2>
+        <p class="section-body">Fake leaderboard untuk screenshot atau trailer. Switch utama: <code>ReplicatedStorage/Hazastudio_ClubKit/Shared/Config/ClubKitShowcase</code> — bukan setting di <code>ClubKitConfig</code>.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Kondisi</th><th>Mode</th><th>Leaderboard</th></tr></thead>
+            <tbody>
+              <tr><td>Module <code>ClubKitShowcase</code> ada &amp; <code>ACTIVE = true</code></td><td><strong>Showcase</strong></td><td>Data demo (profiles palsu)</td></tr>
+              <tr><td>Module dihapus atau <code>ACTIVE = false</code></td><td><strong>Live</strong></td><td>DataStore + API Bagi-Bagi</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card card-warn">
+          <div class="card-title">Kirim ke buyer</div>
+          <p>Hapus <code>ReplicatedStorage/Hazastudio_ClubKit/Shared/Config/ClubKitShowcase</code> dari package sebelum kirim → langsung live mode. Community leaderboard di demo pakai group milik <code>OwnerUserId</code> (bukan data palsu acak).</p>
+        </div>
+        <pre><code><span class="cmt">-- ReplicatedStorage/Hazastudio_ClubKit/Shared/Config/ClubKitShowcase</span>
+<span class="cmt">-- HAPUS file ini sebelum kirim ke buyer</span>
+
+<span class="kw">local</span> <span class="key">ACTIVE</span> = <span class="kw">true</span>
+<span class="kw">if not</span> <span class="key">ACTIVE</span> <span class="kw">then</span>
+    <span class="kw">return nil</span>
+<span class="kw">end</span>
+
+<span class="kw">return</span> {
+    <span class="key">Showcase</span> = {
+        <span class="key">Profiles</span> = {
+            { <span class="key">UserId</span> = <span class="num">156</span>, <span class="key">Username</span> = <span class="str">"builderman"</span> },
+            <span class="cmt">-- ... profiles demo lainnya</span>
+        },
+    },
+}</code></pre>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Command</th><th>Akses</th><th>Fungsi</th></tr></thead>
+            <tbody>
+              <tr><td><code>/showcase on</code></td><td>owner</td><td>Fake Robux, Bagi-Bagi, community, likes, daily</td></tr>
+              <tr><td><code>/showcase off</code></td><td>owner</td><td>Kembali ke live DataStore/API</td></tr>
+              <tr><td><code>/showcase status</code></td><td>owner</td><td>Cek mode saat ini</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="features">
+        <h2 class="section-title">Features</h2>
+        <pre><code><span class="key">ClubKitConfig</span>.<span class="key">Features</span> = {
+    <span class="key">MusicPlayer</span> = <span class="kw">true</span>,  <span class="key">SyncDance</span> = <span class="kw">true</span>,
+    <span class="key">Hotbar</span> = <span class="kw">true</span>,       <span class="key">LoadingScreen</span> = <span class="kw">true</span>,
+    <span class="key">LevelSystem</span> = <span class="kw">true</span>,  <span class="key">Settings</span> = <span class="kw">true</span>,
+    <span class="key">Shop</span> = <span class="kw">true</span>,          <span class="key">Couples</span> = <span class="kw">true</span>,
+    <span class="key">Stickers</span> = <span class="kw">true</span>,      <span class="key">Leaderboards</span> = <span class="kw">true</span>,
+    <span class="key">DonationCash</span> = <span class="kw">true</span>,   <span class="cmt">-- donasi IDR (cash)</span>
+    <span class="key">DonationSaweria</span> = <span class="kw">true</span>, <span class="cmt">-- legacy alias DonationCash</span>
+    <span class="key">DonationRobux</span> = <span class="kw">true</span>,
+}</code></pre>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Config Key</th><th>Internal Flag</th></tr></thead>
+            <tbody>
+              <tr><td><code>MusicPlayer</code></td><td><code>MusicPlayerEnabled</code></td></tr>
+              <tr><td><code>Settings</code></td><td><code>SettingsEnabled</code></td></tr>
+              <tr><td><code>Shop</code></td><td><code>ShopEnabled</code></td></tr>
+              <tr><td><code>Leaderboards</code></td><td><code>LeaderboardEnabled</code></td></tr>
+              <tr><td><code>DonationCash</code></td><td><code>DonationCashEnabled</code></td></tr>
+              <tr><td><code>DonationSaweria</code></td><td><code>DonationSaweriaEnabled</code> (alias)</td></tr>
+              <tr><td><code>DonationRobux</code></td><td><code>DonationRobuxEnabled</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="leaderboard-seeder">
+        <h2 class="section-title">One-Time Leaderboard Seeder</h2>
+        <p class="section-lead">Script standalone untuk seed manual Cash, Robux, dan/atau Likes — sekali jalan, lalu hapus.</p>
+
+        <div class="card">
+          <div class="card-title">Lokasi file (di project kit)</div>
+          <pre><code>tools/OneTimeLeaderboardSeeder/
+  LeaderboardSeedData.luau      ← isi data
+  OneTimeLeaderboardSeeder.server.luau  ← config + runner</code></pre>
+        </div>
+
+        <h4>Taruh di Studio (Explorer)</h4>
+        <pre class="path-tree"><code>ServerScriptService/
+  └── OneTimeLeaderboardSeeder/          ← Folder baru (bukan di dalam Hazastudio_ClubKit)
+        ├── LeaderboardSeedData            ← ModuleScript
+        └── OneTimeLeaderboardSeeder       ← Script</code></pre>
+        <p class="section-body">Kedua instance harus <strong>sibling</strong> dalam folder yang sama. Jangan taruh di <code>ServerScriptService/Hazastudio_ClubKit/</code>.</p>
+
+        <h4>Isi data — LeaderboardSeedData</h4>
+        <pre><code><span class="cmt">-- Cash (IDR)</span>
+{ <span class="key">userId</span> = <span class="num">123456789</span>, <span class="key">idr</span> = <span class="num">1500000</span> }
+{ <span class="key">username</span> = <span class="str">"NamaRoblox"</span>, <span class="key">idr</span> = <span class="num">500000</span> }
+
+<span class="cmt">-- Robux</span>
+{ <span class="key">userId</span> = <span class="num">123456789</span>, <span class="key">robux</span> = <span class="num">250</span> }
+
+<span class="cmt">-- Likes saja (kosongkan Cash &amp; Robux)</span>
+<span class="key">LeaderboardSeedData</span>.<span class="key">Cash</span> = {}
+<span class="key">LeaderboardSeedData</span>.<span class="key">Robux</span> = {}
+<span class="key">LeaderboardSeedData</span>.<span class="key">Likes</span> = {
+    { <span class="key">userId</span> = <span class="num">123456789</span>, <span class="key">likes</span> = <span class="num">120</span> },
+}</code></pre>
+
+        <h4>Config — OneTimeLeaderboardSeeder (Script)</h4>
+        <pre><code><span class="kw">local</span> <span class="key">ENABLED</span> = <span class="kw">true</span>
+<span class="kw">local</span> <span class="key">MODE</span> = <span class="str">"dry_run"</span>  <span class="cmt">-- "dry_run" | "commit"</span>
+
+<span class="kw">local</span> <span class="key">SEED_CASH</span> = <span class="kw">false</span>
+<span class="kw">local</span> <span class="key">SEED_ROBUX</span> = <span class="kw">false</span>
+<span class="kw">local</span> <span class="key">SEED_LIKES</span> = <span class="kw">true</span>
+
+<span class="kw">local</span> <span class="key">STRATEGY</span> = <span class="str">"set"</span>  <span class="cmt">-- "set" | "max" | "add"</span>
+<span class="kw">local</span> <span class="key">USE_STUDIO_DATASTORE_ISOLATION</span> = <span class="kw">true</span></code></pre>
+
+        <ol class="steps">
+          <li><strong>Game Settings → Security</strong> — Enable Studio Access to API Services = ON</li>
+          <li>Isi <code>LeaderboardSeedData</code> (user + angka)</li>
+          <li>Set <code>ENABLED = true</code>, <code>MODE = "dry_run"</code>, toggle <code>SEED_*</code> per board</li>
+          <li><strong>Play (F5)</strong> — cek Output log <code>[LeaderboardSeeder]</code> (preview, tanpa write)</li>
+          <li><code>MODE = "commit"</code> → Play lagi → tunggu <code>COMMIT selesai</code></li>
+          <li>Restart server → owner: <code>/refreshleaderboard all</code></li>
+          <li><strong>Matikan:</strong> <code>ENABLED = false</code> atau hapus folder <code>ServerScriptService/OneTimeLeaderboardSeeder</code></li>
+        </ol>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Board</th><th>DataStore target</th><th>Nyambung ke</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Cash</strong></td><td><code>ManualBagibagiAdjustments_v1</code></td><td>Board IDR, overhead cash stats</td></tr>
+              <tr><td><strong>Robux</strong></td><td><code>RobuxDonationLeaderboard_User_v1</code></td><td>Board Robux, overhead Robux</td></tr>
+              <tr><td><strong>Likes</strong></td><td><code>AvatarLikes_v1</code> + <code>AvatarLikesLeaderboard_v1</code></td><td>Board Likes, overhead, profile, ACM</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card card-warn">
+          <div class="card-title">Setelah seed likes</div>
+          <p>Total likes mengalir ke board, overhead badge, leaderstats, profile tab, dan Avatar Context Menu. Tidak men-seed riwayat &quot;siapa like siapa&quot; (organic toggle tetap terpisah).</p>
+        </div>
+      </section>
+
+      <section id="tools">
+        <h2 class="section-title">Tool folders</h2>
+        <p class="section-body">Setiap <code>toolFolder</code> di config harus punya folder dengan nama persis sama di bawah <code>ServerStorage/Tools/</code>.</p>
+        <pre class="path-tree"><code>ServerStorage/
+  └── Tools/
+        ├── STAFF/
+        ├── MODERATOR/
+        ├── DJ/
+        ├── LEAD DANCE/
+        ├── STREAMER/
+        ├── INFLUENCER/
+        ├── VIP/
+        ├── VVIP/
+        ├── SUPREME/
+        ├── DONOR/
+        ├── TOP DONOR/
+        ├── TOP SUPPORTER/
+        └── GENERAL/</code></pre>
+      </section>
+
+      <section id="commands">
+        <h2 class="section-title">Commands</h2>
+        <p class="section-lead">Donasi: pisahkan <strong>preview</strong> (<code>/test*</code>) dari <strong>persist</strong> (<code>/add*</code>, <code>/setrobux</code>, <code>/donatecash</code>). Lihat <a href="#studio">Studio testing</a>.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Command</th><th>Akses</th><th>Fungsi</th></tr></thead>
+            <tbody>
+              <tr><td><code>/setrole &lt;player&gt; &lt;role&gt;</code></td><td>admin</td><td>Set role override</td></tr>
+              <tr><td><code>/gift &lt;player&gt; &lt;tier&gt;</code></td><td>canGift</td><td>Beri membership</td></tr>
+              <tr><td><code>/ungift &lt;player&gt; &lt;tier&gt;</code></td><td>canGift</td><td>Cabut membership</td></tr>
+              <tr><td><code>/announce &lt;msg&gt;</code></td><td>canAnnounce</td><td>Broadcast</td></tr>
+              <tr><td><code>/bring &lt;player&gt;</code></td><td>canTeleport</td><td>Teleport player ke kamu</td></tr>
+              <tr><td><code>/setbio &lt;text&gt;</code></td><td>semua</td><td>Set bio profil</td></tr>
+              <tr><td><code>/re</code></td><td>semua</td><td>Refresh avatar</td></tr>
+              <tr><td><code>/showcase on|off|status</code></td><td>owner</td><td>Toggle demo leaderboard</td></tr>
+              <tr><td><code>/refreshleaderboard &lt;type&gt;</code></td><td>owner</td><td>Refresh board (<code>all</code>, <code>robux</code>, <code>saweria</code>, <code>likes</code>, …)</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h4 style="margin-top:24px">Donasi — preview (tidak persist)</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Command</th><th>Akses</th><th>Fungsi</th></tr></thead>
+            <tbody>
+              <tr><td><code>/testcash &lt;idr&gt;</code></td><td>admin</td><td>Preview IDR — notif + aura + world VFX; board tidak berubah</td></tr>
+              <tr><td><code>/testrobux &lt;robux&gt;</code></td><td>admin</td><td>Preview Robux — notif + aura saja; board tidak berubah</td></tr>
+              <tr><td><code>/testsaweria &lt;idr&gt;</code></td><td>admin</td><td>Deprecated alias → <code>/testcash</code></td></tr>
+              <tr><td><code>/testdonate &lt;idr&gt;</code></td><td>admin</td><td>Deprecated alias → <code>/testcash</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h4 style="margin-top:24px">Donasi — persist (owner / Studio)</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Command</th><th>Akses</th><th>Fungsi</th></tr></thead>
+            <tbody>
+              <tr><td><code>/donatecash &lt;player&gt; &lt;idr&gt; [msg]</code></td><td>owner</td><td>Persist IDR + notif + aura + world VFX</td></tr>
+              <tr><td><code>/addcash &lt;player&gt; &lt;idr&gt;</code></td><td>owner</td><td>Persist IDR — leaderboard &amp; overhead saja (tanpa VFX)</td></tr>
+              <tr><td><code>/removecash &lt;player&gt; [idr]</code></td><td>owner</td><td>Hapus manual IDR adjustment</td></tr>
+              <tr><td><code>/setrobux &lt;player&gt; &lt;robux&gt;</code></td><td>owner</td><td>Persist Robux — leaderboard saja (tanpa VFX)</td></tr>
+              <tr><td><code>/removerobux &lt;player&gt; [robux]</code></td><td>owner</td><td>Hapus manual Robux adjustment</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="section-body" style="margin-top:16px"><strong>Alias:</strong> <code>staff</code>, <code>mod</code>, <code>donor</code>, <code>vip</code>, <code>vvip</code>, <code>supreme</code>, …</p>
+      </section>
+
+      <section id="scenarios">
+        <h2 class="section-title">Skenario</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Place</th><th>Cash MaxRank</th><th>Robux MaxRank</th><th>Membership</th></tr></thead>
+            <tbody>
+              <tr><td>Club A</td><td>1</td><td>1</td><td>3 tier</td></tr>
+              <tr><td>Club B</td><td>3</td><td>off</td><td>VIP saja</td></tr>
+              <tr><td>Club C</td><td>off</td><td>5</td><td>2 tier</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="deploy">
+        <h2 class="section-title">Deploy rbxm</h2>
+        <p class="section-body">Tidak perlu Rojo atau Argon. Semua setup dilakukan langsung di Roblox Studio.</p>
+        <h4>Pertama kali</h4>
+        <ol class="plain-list">
+          <li>Buka Roblox Studio → place kamu (atau place baru)</li>
+          <li><strong>Home → Insert from File</strong> → pilih <code>ClubKit.rbxm</code> (nama file dari Hazastudio)</li>
+          <li>Pastikan struktur kit muncul di Explorer — lihat <a href="#files">peta path</a> (<code>ReplicatedStorage</code>, <code>ServerScriptService</code>, <code>StarterGui</code>, dll.)</li>
+          <li>Edit <code>ReplicatedStorage/Hazastudio_ClubKitConfig/ClubKitConfig</code> dan <code>ServerScriptService/Hazastudio_ClubKitSecrets/Secrets</code></li>
+          <li>Play test → <strong>File → Publish to Roblox</strong></li>
+        </ol>
+        <h4>Update kit (versi baru)</h4>
+        <ol class="plain-list">
+          <li>Backup isi <code>ReplicatedStorage/Hazastudio_ClubKitConfig/ClubKitConfig</code> + <code>ServerScriptService/Hazastudio_ClubKitSecrets/Secrets</code></li>
+          <li>Hapus folder engine <code>ReplicatedStorage/Hazastudio_ClubKit</code> dan <code>ServerScriptService/Hazastudio_ClubKit</code> — <strong>jangan hapus</strong> <code>Hazastudio_ClubKitConfig</code> / <code>Hazastudio_ClubKitSecrets</code></li>
+          <li>Insert rbxm versi baru</li>
+          <li>Cek config buyer masih ada; restore dari backup kalau tertimpa</li>
+        </ol>
+        <div class="card">
+          <div class="card-title">1 place = 1 config</div>
+          <p>Tiap place punya <code>ReplicatedStorage/Hazastudio_ClubKitConfig/ClubKitConfig</code> sendiri. Duplikat place di Studio kalau mau venue berbeda.</p>
+        </div>
+      </section>
+
+      <section id="troubleshoot">
+        <h2 class="section-title">Troubleshooting</h2>
+        <p class="section-lead">Masalah umum saat setup dan deploy Club Kit.</p>
+        <div class="faq-stack">
+          <div class="faq-item">
+            <div class="faq-question"><code>Group.GROUP_ID tidak valid</code></div>
+            <div class="faq-answer">Isi <code>GroupId</code> di <code>ReplicatedStorage/Hazastudio_ClubKitConfig/ClubKitConfig</code> atau nyalakan showcase.</div>
+          </div>
+          <div class="faq-item">
+            <div class="faq-question"><code>SHEETS_WEB_APP_URL belum dikonfigurasi</code></div>
+            <div class="faq-answer">Isi <code>ApiUrl</code> atau pakai showcase.</div>
+          </div>
+          <div class="faq-item">
+            <div class="faq-question">Shop warning BuyId <code>0</code></div>
+            <div class="faq-answer">Isi ID di <code>ReplicatedStorage/Hazastudio_ClubKitConfig/ClubKitConfig</code> → <code>Shop.Products</code>.</div>
+          </div>
+          <div class="faq-item">
+            <div class="faq-question"><code>PaidBroadcast.PRODUCT_ID masih 0</code></div>
+            <div class="faq-answer">Buat Developer Product broadcast di Creator Dashboard → isi <code>PaidBroadcast.ProductId</code> di <code>ClubKitConfig</code>. Lihat <a href="#paid-broadcast">Paid broadcast</a>.</div>
+          </div>
+          <div class="faq-item">
+            <div class="faq-question">Broadcast topbar tidak muncul prompt / gagal bayar</div>
+            <div class="faq-answer">Cek <code>ProductId</code> benar, product aktif di dashboard, dan harga Robux sudah diset. Receipt diproses lewat shop pipeline yang sama dengan membership.</div>
+          </div>
+          <div class="faq-item">
+            <div class="faq-question">Saweria "API not configured"</div>
+            <div class="faq-answer">Isi <code>ApiUrl</code> + <code>DonationApiSecret</code>; cek <code>DonationCash</code> aktif.</div>
+          </div>
+          <div class="faq-item">
+            <div class="faq-question">Robux/Likes "No … yet"</div>
+            <div class="faq-answer">Normal — belum ada data; atau pakai <a href="#leaderboard-seeder">one-time seeder</a>.</div>
+          </div>
+          <div class="faq-item">
+            <div class="faq-question">Mau isi leaderboard manual untuk test</div>
+            <div class="faq-answer">Pakai <code>/addcash</code> atau <code>/setrobux</code> (owner) — itu yang persist. <code>/testcash</code> dan <code>/testrobux</code> hanya preview VFX/notif.</div>
+          </div>
+          <div class="faq-item">
+            <div class="faq-question">Tab cash masih tampil padahal dimatikan</div>
+            <div class="faq-answer"><code>Cash.Enabled = false</code> + rejoin; tab IDR disembunyikan di client.</div>
+          </div>
+          <div class="faq-item">
+            <div class="faq-question">Seeder tidak jalan</div>
+            <div class="faq-answer"><code>ENABLED = true</code>, API Services ON, cek nama folder ModuleScript.</div>
+          </div>
+          <div class="faq-item">
+            <div class="faq-question">Board blank tanpa teks</div>
+            <div class="faq-answer">Tambah <code>LoadingOverlay</code> di template SurfaceGui place.</div>
+          </div>
+          <div class="faq-item">
+            <div class="faq-question">Products Not Found (Robux)</div>
+            <div class="faq-answer">Buat Developer Products atau isi <code>RobuxProducts</code>.</div>
+          </div>
+          <div class="faq-item">
+            <div class="faq-question">Role tidak muncul</div>
+            <div class="faq-answer">Cek <code>enabled = true</code> dan alias role.</div>
+          </div>
+          <div class="faq-item">
+            <div class="faq-question">Tools tidak diberikan</div>
+            <div class="faq-answer">Cek <code>ServerStorage/Tools/&lt;toolFolder&gt;</code>.</div>
+          </div>
+          <div class="faq-item">
+            <div class="faq-question">Owner command ditolak</div>
+            <div class="faq-answer">Isi <code>OwnerUserId</code> atau group rank 255.</div>
+          </div>
+          <div class="faq-item">
+            <div class="faq-question">Warn secret kosong</div>
+            <div class="faq-answer">Isi <code>ServerScriptService/Hazastudio_ClubKitSecrets/Secrets</code> atau kosongkan <code>ApiUrl</code>.</div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <aside class="checklist-dock" id="checklist" aria-label="Deploy checklist">
+      <div class="checklist-dock-inner">
+        <h2 class="checklist-dock-title">Deploy checklist</h2>
+        <p class="checklist-dock-hint">Klik untuk centang. Progress tersimpan otomatis.</p>
+        <div class="checklist-meta" id="checklistMeta">
+          <div class="checklist-bar" aria-hidden="true"><span id="checklistFill"></span></div>
+          <span class="checklist-score" id="checklistScore">0 / 11</span>
+        </div>
+        <ul class="checklist" id="deployChecklist">
+          <li tabindex="0" role="checkbox" aria-checked="false" data-check="0"><code>ReplicatedStorage/…/ClubKitConfig</code> GroupId + Owner</li>
+          <li tabindex="0" role="checkbox" aria-checked="false" data-check="1"><code>ServerScriptService/…/Secrets</code> (jika API)</li>
+          <li tabindex="0" role="checkbox" aria-checked="false" data-check="2"><code>Donation.Provider</code> + API</li>
+          <li tabindex="0" role="checkbox" aria-checked="false" data-check="3"><code>Shop.Products</code> IDs</li>
+          <li tabindex="0" role="checkbox" aria-checked="false" data-check="4"><code>PaidBroadcast.ProductId</code></li>
+          <li tabindex="0" role="checkbox" aria-checked="false" data-check="5">Robux donation products</li>
+          <li tabindex="0" role="checkbox" aria-checked="false" data-check="6"><code>ClubKitShowcase</code> OFF</li>
+          <li tabindex="0" role="checkbox" aria-checked="false" data-check="7"><code>ServerStorage/Tools/</code></li>
+          <li tabindex="0" role="checkbox" aria-checked="false" data-check="8">Fitur tidak dipakai off</li>
+          <li tabindex="0" role="checkbox" aria-checked="false" data-check="9">Test di Studio</li>
+          <li tabindex="0" role="checkbox" aria-checked="false" data-check="10">Publish place</li>
+        </ul>
+        <p class="checklist-toast" id="checklistToast" hidden>Semua selesai — siap publish!</p>
+        <div class="checklist-dock-note">
+          <strong>Demo / trailer</strong>
+          Showcase boleh aktif untuk trailer. Matikan sebelum go-live.
+        </div>
+      </div>
+    </aside>
+
+  </div>
+
+  <footer class="site-footer">
+    <p class="footer-brand" id="footerBrand">Hazastudio Clubkit v1.3</p>
+    <p class="footer-tagline">Dokumentasi buyer · Hazastudio</p>
+    <div class="footer-links">
+      <a href="../CLUB_KIT_SETUP.md">CLUB_KIT_SETUP.md</a>
+      <a href="#leaderboard-seeder">Leaderboard seeder</a>
+      <a href="#quick-start">Kembali ke atas</a>
+    </div>
+  </footer>
+
+  <script>
+    const sections = document.querySelectorAll("section[id]");
+    const sidebarLinks = document.querySelectorAll(".sidebar-link");
+    const navLinks = document.querySelectorAll(".nav-link");
+    const progressBar = document.getElementById("readProgress");
+
+    const navObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        const id = entry.target.id;
+        sidebarLinks.forEach((link) => {
+          link.classList.toggle("active", link.getAttribute("href") === "#" + id);
+        });
+        navLinks.forEach((link) => {
+          link.classList.toggle("active", link.getAttribute("href") === "#" + id);
+        });
+      });
+    }, { rootMargin: "-15% 0px -75% 0px" });
+
+    sections.forEach((s) => { if (s.id) navObserver.observe(s); });
+
+    function updateProgress() {
+      const doc = document.documentElement;
+      const scrollTop = doc.scrollTop || document.body.scrollTop;
+      const height = doc.scrollHeight - doc.clientHeight;
+      if (progressBar && height > 0) {
+        progressBar.style.width = ((scrollTop / height) * 100) + "%";
+      }
+    }
+
+    window.addEventListener("scroll", updateProgress, { passive: true });
+    updateProgress();
+
+    const checklist = document.getElementById("deployChecklist");
+    const checklistFill = document.getElementById("checklistFill");
+    const checklistScore = document.getElementById("checklistScore");
+    const checklistToast = document.getElementById("checklistToast");
+    const checklistMeta = document.getElementById("checklistMeta");
+    const CHECKLIST_STORAGE_KEY = "clubkit-deploy-checklist-v2";
+
+    function loadChecklistState() {
+      if (!checklist) return;
+      try {
+        const saved = JSON.parse(localStorage.getItem(CHECKLIST_STORAGE_KEY) || "[]");
+        checklist.querySelectorAll("li").forEach((li) => {
+          const idx = li.getAttribute("data-check");
+          const on = saved.includes(Number(idx));
+          li.classList.toggle("is-done", on);
+          li.setAttribute("aria-checked", on ? "true" : "false");
+        });
+      } catch (_) { /* ignore */ }
+      updateChecklist();
+    }
+
+    function saveChecklistState() {
+      if (!checklist) return;
+      const done = [];
+      checklist.querySelectorAll("li").forEach((li) => {
+        if (li.classList.contains("is-done")) {
+          done.push(Number(li.getAttribute("data-check")));
+        }
+      });
+      try { localStorage.setItem(CHECKLIST_STORAGE_KEY, JSON.stringify(done)); } catch (_) { /* ignore */ }
+    }
+
+    function updateChecklist() {
+      if (!checklist) return;
+      const items = checklist.querySelectorAll("li");
+      const done = checklist.querySelectorAll("li.is-done").length;
+      const total = items.length;
+      const pct = total ? (done / total) * 100 : 0;
+      if (checklistFill) checklistFill.style.width = pct + "%";
+      if (checklistScore) checklistScore.textContent = done + " / " + total;
+      if (checklistToast) checklistToast.hidden = done < total;
+      if (checklistMeta) checklistMeta.classList.toggle("is-complete", done === total && total > 0);
+    }
+
+    function toggleChecklistItem(li) {
+      const on = li.classList.toggle("is-done");
+      li.setAttribute("aria-checked", on ? "true" : "false");
+      saveChecklistState();
+      updateChecklist();
+    }
+
+    if (checklist) {
+      loadChecklistState();
+      checklist.querySelectorAll("li").forEach((li) => {
+        li.addEventListener("click", () => toggleChecklistItem(li));
+        li.addEventListener("keydown", (e) => {
+          if (e.key === " " || e.key === "Enter") {
+            e.preventDefault();
+            toggleChecklistItem(li);
+          }
+        });
+      });
+    }
+
+    /* checklist bukan section — tetap observe untuk nav highlight saat scroll ke dock */
+    const checklistDock = document.getElementById("checklist");
+    if (checklistDock) navObserver.observe(checklistDock);
+  </script>
+</body>
+</html>

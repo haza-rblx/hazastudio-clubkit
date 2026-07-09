@@ -1,0 +1,31 @@
+📦 Hazastudio Club Kit v1.3 — Setup
+
+Yang kamu edit (2 file):
+• Hazastudio_ClubKitConfig/ClubKitConfig.luau — group, shop, role, donasi
+• Hazastudio_ClubKitSecrets/Secrets.luau — API secret (JANGAN share ke publik)
+
+Urutan setup:
+1️⃣ GroupId + OwnerUserId
+2️⃣ Shop product ID dari Creator Dashboard (VIP / VVIP / Supreme)
+3️⃣ Role & nama membership di ClubKitConfig
+4️⃣ Donation ApiUrl + DonationApiSecret (kalau pakai Bagi-Bagi)
+5️⃣ Insert rbxm di Studio → edit config → Play → Publish
+
+Demo vs Live:
+• File ClubKitShowcase.luau ADA → leaderboard demo (screenshot/trailer)
+• File DIHAPUS atau ACTIVE = false → mode live
+• Runtime: /showcase on | /showcase off | /showcase status (owner)
+
+Leaderboard live:
+• Robux / Likes / Community → DataStore (tidak butuh API Bagi-Bagi)
+• Bagi-Bagi / Rupiah → butuh ApiUrl + secret di Secrets.luau
+• Tanpa API: board Saweria tampil "Donation API not configured yet"
+
+Penting:
+• /testcash & /testrobux = preview VFX/notif saja (tidak persist board)
+• Isi board manual: /addcash atau /setrobux (owner)
+• Jangan commit / post Secrets.luau ke Discord
+
+📎 Panduan lengkap: lampiran CLUB_KIT_SETUP.md
+
+Butuh bantuan? buka thread di #support

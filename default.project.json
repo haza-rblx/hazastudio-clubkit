@@ -1,0 +1,42 @@
+{
+  "name": "Hazastudio Clubkit v1.3",
+  "$schema": "https://rojo.space/schemas/project-7.json",
+  "globIgnorePaths": [
+    "**/*.rbxmx",
+    "**/*.rbxm"
+  ],
+  "syncRules": [
+    {
+      "pattern": "*.local.luau",
+      "suffix": ".local.luau",
+      "use": "legacyClientScript"
+    },
+    {
+      "pattern": "*.server.luau",
+      "suffix": ".server.luau",
+      "use": "legacyServerScript"
+    }
+  ],
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "$path": "src/ReplicatedStorage",
+      "$ignoreUnknownInstances": true
+    },
+    "ReplicatedFirst": {
+      "$path": "src/ReplicatedFirst",
+      "$ignoreUnknownInstances": true
+    },
+    "ServerScriptService": {
+      "$path": "src/ServerScriptService",
+      "$ignoreUnknownInstances": true
+    },
+    "StarterPlayer": {
+      "$ignoreUnknownInstances": true,
+      "StarterPlayerScripts": {
+        "$path": "src/StarterPlayerScripts/StarterPlayerScripts",
+        "$ignoreUnknownInstances": true
+      }
+    }
+  }
+}
