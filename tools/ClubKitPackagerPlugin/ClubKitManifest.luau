@@ -6,7 +6,7 @@ local ClubKitManifest = {}
 ClubKitManifest.PACKAGE_NAME = "HazastudioClubKit_Package"
 ClubKitManifest.MANIFEST_NAME = "_ClubKitManifest"
 ClubKitManifest.PRODUCT_ID = "hazastudioclubkit"
-ClubKitManifest.KIT_VERSION = "2.0.0"
+ClubKitManifest.KIT_VERSION = "2.1.0"
 
 -- Folder engine per service (seluruh subtree di-clone).
 ClubKitManifest.SERVICE_ROOTS = {
@@ -82,6 +82,30 @@ ClubKitManifest.WORLD_EFFECTS = {
 ClubKitManifest.SERVICE_ALIASES = {
 	StarterPlayerScripts = "StarterPlayerScripts",
 	Workspace = "Workspace",
+}
+
+-- Source-sync updater (GitHub tag → set Script.Source in place).
+ClubKitManifest.UPDATER = {
+	githubOwner = "haza-rblx",
+	githubRepo = "hazastudio-clubkit",
+	defaultBranch = "main",
+	versionFile = "VERSION",
+	changelogFile = "CHANGELOG.md",
+}
+
+-- Repo paths allowed for Luau engine sync (under src/).
+ClubKitManifest.ENGINE_SOURCE_PREFIXES = {
+	"src/ReplicatedFirst/Hazastudio_ClubKit/",
+	"src/ReplicatedStorage/Hazastudio_ClubKit/",
+	"src/ReplicatedStorage/Icon/",
+	"src/ServerScriptService/Hazastudio_ClubKit/",
+	"src/StarterPlayerScripts/StarterPlayerScripts/Hazastudio_ClubKit/",
+}
+
+-- Never fetch or overwrite these repo paths.
+ClubKitManifest.PROTECTED_SOURCE_PREFIXES = {
+	"src/ReplicatedStorage/Hazastudio_ClubKitConfig/",
+	"src/ServerScriptService/Hazastudio_ClubKitSecrets/",
 }
 
 return ClubKitManifest

@@ -11,7 +11,22 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
-_(belum ada perubahan)_
+---
+
+## [2.1.0] — 2026-07-10
+
+Studio plugin **Git source sync** — update engine Luau dari GitHub tag tanpa export/upload RBXM.
+
+### Added
+- `SourceSyncCore`, `RojoPathMap` — fetch `.luau` dari GitHub tag, tulis `Source` ke place
+- Dovetail UI: `UpdaterPanel`, `PackagerPanel`, `DovetailTheme`, `DovetailUI`
+- Toolbar **Check Update** + **Update Engine**
+- `tools/release.ps1` — validasi versi + git tag/push dari Cursor
+- `RolesDomain.buildStudioToolFolderList` — include membership tool folders
+
+### Changed
+- Packager plugin refactor — panel terpisah, widget Dovetail dark theme
+- `EnsureRoleToolFolders` — delegasi ke shared studio module
 
 ---
 

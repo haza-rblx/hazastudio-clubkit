@@ -6,7 +6,7 @@ Panduan untuk AI agent (Cursor) saat bekerja di repo ini.
 
 - **Nama:** Hazastudio Club Kit (Basic Club Kit)
 - **Versi aktif:** baca [`VERSION`](VERSION)
-- **Source:** `src/` (Rojo) → deploy buyer pakai `.rbxm` (Club Kit Packager)
+- **Source:** `src/` (Rojo) → deploy buyer via **Studio plugin source sync** (git tag) atau `.rbxm` manual (Packager)
 - **Buyer config (jangan replace saat update):**
   - `ReplicatedStorage/Hazastudio_ClubKitConfig/ClubKitConfig.luau`
   - `ServerScriptService/Hazastudio_ClubKitSecrets/Secrets.luau`
@@ -61,9 +61,43 @@ Contoh trigger: *"oke ini update 2.1"*, *"rilis versi 1.3.1"*, *"buat changelog 
      - **Opsional** (StarterGui, tools, docs)
 5. **Update versi** di:
    - `VERSION`
+   - `src/ReplicatedStorage/Hazastudio_ClubKit/KitProduct.luau` → `KitVersion`
    - `tools/ClubKitPackagerPlugin/ClubKitManifest.luau` → `KIT_VERSION`
 6. **Reset** `UPGRADE_PROGRESS.md` (kosongkan unreleased, pertahankan template checklist).
 7. **Ringkas ke user:** versi baru, highlight breaking changes, file buyer yang perlu dicek manual.
+
+### Rilis harian — source sync (tanpa RBXM)
+
+Untuk update Luau engine saja (workflow utama):
+
+```powershell
+# Dari root project — validasi + tag + push:
+.\tools\release.ps1              # dry-run: cek VERSION / KitProduct / Manifest sinkron
+.\tools\release.ps1 -Execute     # commit (jika ada perubahan), tag vX.Y.Z, push main + tag
+.\tools\release.ps1 -Execute -GhRelease   # opsional: gh release create (notes-only, no assets)
+```
+
+Atau manual:
+
+```powershell
+.\git.ps1 add -A
+.\git.ps1 commit -m "release: v2.1.0"
+.\git.ps1 tag v2.1.0
+.\git.ps1 push origin main
+.\git.ps1 push origin v2.1.0
+```
+
+**Buyer / dev di Studio:** Plugin → **Check Update** → **Update Engine** → Save place.
+
+Plugin fetch dari **public GitHub repo** (`ClubKitManifest.UPDATER.githubOwner` / `githubRepo`). Config `ClubKitConfig` dan `Secrets` tidak pernah disentuh. StarterGui, Workspace boards, ServerStorage assets **tidak** ikut source sync — deploy manual / RBXM jika berubah.
+
+Set `UPDATER.githubOwner` / `githubRepo` di `tools/ClubKitPackagerPlugin/ClubKitManifest.luau` sebelum publish repo.
+
+### Rilis penuh — RBXM (jarang)
+
+Untuk fresh install atau kirim GUI/board/models ke buyer tanpa Rojo: Studio → **Export RBXM** → kirim file ke buyer → **Unpack RBXM**.
+
+---
 
 ### Format `CHANGED_FILES.md`
 

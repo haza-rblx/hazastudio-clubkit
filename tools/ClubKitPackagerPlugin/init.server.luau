@@ -1,5 +1,5 @@
 --!nocheck
--- Hazastudio Club Kit Packager — export / import RBXM satu klik.
+-- Hazastudio Club Kit Packager — export / import RBXM + Git source sync.
 -- Install: copy folder ini ke %LOCALAPPDATA%\Roblox\Plugins\
 -- atau build rbxm dari Studio lalu drag ke folder Plugins.
 
@@ -8,6 +8,8 @@ local ServerStorage = game:GetService("ServerStorage")
 
 local Manifest = require(script.Parent.ClubKitManifest)
 local PackagerCore = require(script.Parent.PackagerCore)
+local PackagerPanel = require(script.Parent.PackagerPanel)
+local UpdaterPanel = require(script.Parent.UpdaterPanel)
 
 local toolbar = plugin:CreateToolbar("Hazastudio Club Kit")
 local exportButton = toolbar:CreateButton(
@@ -25,122 +27,34 @@ local unpackSelButton = toolbar:CreateButton(
 	"Unpack package yang sedang dipilih di Explorer",
 	"rbxassetid://6035193736"
 )
+local checkUpdateButton = toolbar:CreateButton(
+	"Check Update",
+	"Cek versi engine terbaru dari GitHub tag",
+	"rbxassetid://6035193736"
+)
+local updateEngineButton = toolbar:CreateButton(
+	"Update Engine",
+	"Download .luau engine dari tag terbaru dan tulis Source",
+	"rbxassetid://6035193736"
+)
 
 local widgetInfo = DockWidgetPluginGuiInfo.new(
 	Enum.InitialDockState.Float,
 	false,
 	false,
+	360,
+	520,
 	320,
-	280,
-	280,
-	220
+	400
 )
 local widget = plugin:CreateDockWidgetPluginGui("HazastudioClubKitPackagerOpts", widgetInfo)
 widget.Title = "Club Kit Packager"
 
-local function makeCheckbox(parent: Instance, label: string, default: boolean, layoutOrder: number): BoolValue
-	local row = Instance.new("Frame")
-	row.BackgroundTransparency = 1
-	row.Size = UDim2.new(1, 0, 0, 24)
-	row.LayoutOrder = layoutOrder
-	row.Parent = parent
+local DovetailUI = require(script.Parent.DovetailUI)
+local _, content = DovetailUI.scrollRoot(widget)
 
-	local check = Instance.new("TextButton")
-	check.Size = UDim2.new(0, 22, 0, 22)
-	check.Position = UDim2.new(0, 0, 0, 1)
-	check.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-	check.Text = default and "✓" or ""
-	check.TextColor3 = Color3.new(1, 1, 1)
-	check.Font = Enum.Font.GothamBold
-	check.TextSize = 14
-	check.Parent = row
-
-	local flag = Instance.new("BoolValue")
-	flag.Name = "Flag"
-	flag.Value = default
-	flag.Parent = check
-
-	check.MouseButton1Click:Connect(function()
-		flag.Value = not flag.Value
-		check.Text = flag.Value and "✓" or ""
-	end)
-
-	local text = Instance.new("TextLabel")
-	text.BackgroundTransparency = 1
-	text.Position = UDim2.new(0, 30, 0, 0)
-	text.Size = UDim2.new(1, -30, 1, 0)
-	text.Font = Enum.Font.Gotham
-	text.TextSize = 13
-	text.TextXAlignment = Enum.TextXAlignment.Left
-	text.TextColor3 = Color3.fromRGB(230, 230, 230)
-	text.Text = label
-	text.Parent = row
-
-	return flag
-end
-
-local root = Instance.new("Frame")
-root.Size = UDim2.new(1, 0, 1, 0)
-root.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-root.BorderSizePixel = 0
-root.Parent = widget
-
-local padding = Instance.new("UIPadding")
-padding.PaddingTop = UDim.new(0, 10)
-padding.PaddingBottom = UDim.new(0, 10)
-padding.PaddingLeft = UDim.new(0, 12)
-padding.PaddingRight = UDim.new(0, 12)
-padding.Parent = root
-
-local layout = Instance.new("UIListLayout")
-layout.Padding = UDim.new(0, 6)
-layout.SortOrder = Enum.SortOrder.LayoutOrder
-layout.Parent = root
-
-local title = Instance.new("TextLabel")
-title.BackgroundTransparency = 1
-title.Size = UDim2.new(1, 0, 0, 22)
-title.Font = Enum.Font.GothamBold
-title.TextSize = 15
-title.TextXAlignment = Enum.TextXAlignment.Left
-title.TextColor3 = Color3.new(1, 1, 1)
-title.Text = "Opsi Export / Unpack"
-title.LayoutOrder = 0
-title.Parent = root
-
-local includeConfig = makeCheckbox(root, "Sertakan Hazastudio_ClubKitConfig", true, 1)
-local includeSecrets = makeCheckbox(root, "Sertakan template Secrets", true, 2)
-local replaceExisting = makeCheckbox(root, "Ganti instance yang sudah ada", true, 3)
-local keepBuyerConfig = makeCheckbox(root, "Jangan timpa ClubKitConfig buyer", true, 4)
-local keepBuyerSecrets = makeCheckbox(root, "Jangan timpa Secrets buyer", true, 5)
-
-local hint = Instance.new("TextLabel")
-hint.BackgroundTransparency = 1
-hint.Size = UDim2.new(1, 0, 0, 72)
-hint.Font = Enum.Font.Gotham
-hint.TextSize = 12
-hint.TextWrapped = true
-hint.TextXAlignment = Enum.TextXAlignment.Left
-hint.TextYAlignment = Enum.TextYAlignment.Top
-hint.TextColor3 = Color3.fromRGB(170, 170, 170)
-hint.Text = "Export: klik Export RBXM → pilih lokasi simpan.\nUnpack: klik Unpack RBXM → pilih file .rbxm.\nTarget place cukup unpack — tidak perlu Rojo."
-hint.LayoutOrder = 10
-hint.Parent = root
-
-local function getExportOptions()
-	return {
-		includeConfig = includeConfig.Value,
-		includeSecrets = includeSecrets.Value,
-	}
-end
-
-local function getUnpackOptions()
-	return {
-		replaceExisting = replaceExisting.Value,
-		keepBuyerConfig = keepBuyerConfig.Value,
-		keepBuyerSecrets = keepBuyerSecrets.Value,
-	}
-end
+local updaterApi = UpdaterPanel.create(content)
+local packagerApi = PackagerPanel.create(content)
 
 local busy = false
 
@@ -151,7 +65,7 @@ local function runExport()
 	busy = true
 
 	local ok, err = pcall(function()
-		local packageRoot, report = PackagerCore.collect(getExportOptions())
+		local packageRoot, report = PackagerCore.collect(packagerApi.getExportOptions())
 		PackagerCore.printCollectReport(report)
 
 		if not packageRoot then
@@ -174,7 +88,7 @@ end
 
 local function runUnpackFromPackage(packageRoot: Instance)
 	local ok, err = pcall(function()
-		local report = PackagerCore.unpack(packageRoot, getUnpackOptions())
+		local report = PackagerCore.unpack(packageRoot, packagerApi.getUnpackOptions())
 		PackagerCore.printUnpackReport(report)
 		print("[ClubKitPackager] Unpack selesai. Cek Explorer + Output untuk item yang missing.")
 	end)
@@ -202,11 +116,8 @@ local function runImportUnpack()
 			return
 		end
 
-		-- Parent sementara supaya clone aman selama unpack.
 		packageRoot.Parent = ServerStorage
 		runUnpackFromPackage(packageRoot)
-
-		-- Bersihkan staging import (aset sudah di tempatkan).
 		packageRoot:Destroy()
 	end)
 
@@ -249,5 +160,43 @@ end
 exportButton.Click:Connect(runExport)
 importButton.Click:Connect(runImportUnpack)
 unpackSelButton.Click:Connect(runUnpackSelection)
+checkUpdateButton.Click:Connect(function()
+	updaterApi.checkForUpdates()
+end)
+updateEngineButton.Click:Connect(function()
+	updaterApi.runUpdate()
+end)
+
+local genToolsButton = toolbar:CreateButton(
+	"Gen Tools",
+	"generate_tools_folder() — buat folder kosong ServerStorage.Tools dari role config",
+	"rbxassetid://6035193736"
+)
+
+local function runGenerateToolsFolder()
+	local ReplicatedStorage = game:GetService("ReplicatedStorage")
+	local kit = ReplicatedStorage:FindFirstChild("Hazastudio_ClubKit")
+	local mod = kit
+		and kit:FindFirstChild("Shared")
+		and kit.Shared:FindFirstChild("Studio")
+		and kit.Shared.Studio:FindFirstChild("GenerateRoleToolsFolder")
+	if not mod or not mod:IsA("ModuleScript") then
+		warn("[generate_tools_folder] Sync Rojo — module GenerateRoleToolsFolder belum ada.")
+		return
+	end
+	local ok, err = pcall(function()
+		require(mod).run()
+	end)
+	if not ok then
+		warn("[generate_tools_folder] " .. tostring(err))
+	end
+end
+
+_G.generate_tools_folder = runGenerateToolsFolder
+if typeof(shared) == "table" then
+	shared.generate_tools_folder = runGenerateToolsFolder
+end
+genToolsButton.Click:Connect(runGenerateToolsFolder)
 
 print("[ClubKitPackager] Loaded v" .. Manifest.KIT_VERSION .. " — toolbar: Hazastudio Club Kit")
+print("[ClubKitPackager] Command Bar: generate_tools_folder()")

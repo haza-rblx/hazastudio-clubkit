@@ -13,6 +13,30 @@
     "PackagerCore": {
       "$path": "PackagerCore.luau",
       "$className": "ModuleScript"
+    },
+    "RojoPathMap": {
+      "$path": "RojoPathMap.luau",
+      "$className": "ModuleScript"
+    },
+    "SourceSyncCore": {
+      "$path": "SourceSyncCore.luau",
+      "$className": "ModuleScript"
+    },
+    "DovetailTheme": {
+      "$path": "DovetailTheme.luau",
+      "$className": "ModuleScript"
+    },
+    "DovetailUI": {
+      "$path": "DovetailUI.luau",
+      "$className": "ModuleScript"
+    },
+    "UpdaterPanel": {
+      "$path": "UpdaterPanel.luau",
+      "$className": "ModuleScript"
+    },
+    "PackagerPanel": {
+      "$path": "PackagerPanel.luau",
+      "$className": "ModuleScript"
     }
   }
 }

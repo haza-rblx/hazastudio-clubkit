@@ -357,6 +357,11 @@ function RolesDomain.buildStudioToolFolderList(): { string }
 	for _, name in ipairs(roles.EXTRA_TOOL_FOLDERS) do
 		add(name)
 	end
+	for _, folders in pairs(RolesDomain.buildMembershipToolFolders()) do
+		for _, folderName in ipairs(folders) do
+			add(folderName)
+		end
+	end
 
 	return ordered
 end
