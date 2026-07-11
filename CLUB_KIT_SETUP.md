@@ -270,9 +270,9 @@ Gunakan `/testcash` / `/testrobux` untuk uji notif + VFX tanpa mengubah leaderbo
 |---------|--------|
 | `/donatecash <player> <idr> [msg]` | Persist + notif + VFX |
 | `/addcash <player> <idr>` | Persist leaderboard cash saja (tanpa VFX) |
-| `/removecash <player> [idr]` | Hapus manual IDR (alias: `/removebagibagi`) |
+| `/removecash <player> [idr]` | Hapus manual IDR (alias: `/removebagibagi`). Studio: `/removecash me` clear self |
 | `/setrobux <player> <robux>` | Persist leaderboard Robux (tanpa VFX) |
-| `/removerobux <player> [robux]` | Hapus manual Robux |
+| `/removerobux <player> [robux]` | Hapus Robux LB. Studio: `/removerobux me` clear self |
 
 ### Umum
 

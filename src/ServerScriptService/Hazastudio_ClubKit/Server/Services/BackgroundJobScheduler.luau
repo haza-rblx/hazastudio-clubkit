@@ -43,6 +43,8 @@ export type BackgroundJobScheduler = {
 	register: (self: BackgroundJobScheduler, config: JobConfig) -> (),
 	unregister: (self: BackgroundJobScheduler, name: string) -> (),
 	setEnabled: (self: BackgroundJobScheduler, name: string, enabled: boolean) -> (),
+	-- Update interval; only pulls nextRunAt earlier (never pushes later).
+	setInterval: (self: BackgroundJobScheduler, name: string, intervalMin: number, intervalMax: number?) -> (),
 	runNow: (self: BackgroundJobScheduler, name: string) -> (),
 	start: (self: BackgroundJobScheduler) -> (),
 	stop: (self: BackgroundJobScheduler) -> (),
@@ -196,6 +198,27 @@ local function createBackgroundJobScheduler(deps: {
 		if job then
 			job.enabled = enabled
 			log:info("Job enabled state changed", { name = name, enabled = enabled })
+		end
+	end
+
+	function service:setInterval(name: string, intervalMin: number, intervalMax: number?)
+		local job = jobs[name]
+		if not job then
+			return
+		end
+		local min = math.max(1, intervalMin)
+		local max = math.max(min, intervalMax or min)
+		job.intervalMin = min
+		job.intervalMax = max
+		-- Pull next run earlier when bursting; never delay an already-due/soon tick.
+		local candidate = os.clock() + min
+		if candidate < job.nextRunAt then
+			job.nextRunAt = candidate
+			log:debug("Job interval pulled earlier", {
+				name = name,
+				intervalMin = min,
+				intervalMax = max,
+			})
 		end
 	end
 	

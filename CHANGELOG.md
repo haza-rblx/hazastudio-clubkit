@@ -13,6 +13,19 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ---
 
+## [2.2.4] — 2026-07-11
+
+### Fixed
+- **Dance favorites 1KB cap** — `Validator.favoritesUpdate` tidak lagi pakai `Security.MAX_PAYLOAD_BYTES` (1KB command); limit khusus `Config.Favorites.MAX_PAYLOAD_BYTES` = 32KB (kasus ~54 favorites mentok). Rate limit `FAVORITES_UPDATE` 5/5s → 15/5s.
+- **Donation burst poll** — `getNotifPollDelay` (5s / 45s window) sekarang di-wire ke `BackgroundJobScheduler:setInterval` setelah tiap `donation_poll` (sebelumnya dead setelah migrasi scheduler).
+- **Cash LB overhead** — hapus `refreshAll` rutin setelah leaderboard sync; `assignPlayer`/`clearPlayer` sudah `refreshPlayer` (force path tetap).
+- **Donation notif queue** — backlog memendekkan display; saat penuh, evict amount terkecil di antrian (bukan drop donasi besar yang baru).
+
+### Added
+- **Studio clear-self donation** — `/removecash me` / `/removerobux me` (atau `@me`) clear data donasi sendiri; **Studio-only**. Live tetap pakai username/userId (owner).
+
+---
+
 ## [2.2.3] — 2026-07-11
 
 ### Fixed

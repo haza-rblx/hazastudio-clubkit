@@ -762,13 +762,16 @@ Config.Favorites = {
 	DATASTORE_NAME = "FavoritedAnimations_v2",
 	KEY_PREFIX = "Player_",
 	ATTRIBUTE_KEY = "SavedFavoritedAnimations",
+	-- Full favorites JSON dump (not command payloads). Security.MAX_PAYLOAD_BYTES
+	-- stays 1KB for commands; DataStore allows far more than this.
+	MAX_PAYLOAD_BYTES = 32 * 1024, -- 32KB ≈ 1k–1.5k short anim names
 }
 Config.SyncRateLimit = {
 	ANIM_START = { max = 5, window = 2 },
 	WUTWUT_RESTART = { max = 20, window = 2 },
 	SYNC_REQUEST = { max = 10, window = 5 },
 	SPEED_CHANGE = { max = 20, window = 2 },
-	FAVORITES_UPDATE = { max = 5, window = 5 },
+	FAVORITES_UPDATE = { max = 15, window = 5 }, -- was 5/5s; too tight for rapid star toggles
 }
 -- ============================================================
 -- CARRY SYSTEM (6 styles — weld, offsets, animations)
@@ -1850,10 +1853,12 @@ Config.Donation = {
 	-- Semakin kecil = notif lebih cepat muncul, tapi lebih banyak HTTP request
 	-- Min rekomendasi: 3s | Max: 30s
 	NOTIF_POLL_INTERVAL = 15,
-	-- Adaptive burst polling - saat donasi baru terdeteksi, poll dipercepat sementara
-	-- agar donasi beruntun muncul lebih cepat tanpa waste HTTP saat idle
+	-- Adaptive burst polling — wired via BackgroundJobScheduler:setInterval after each
+	-- donation_poll completes (idle = NOTIF_POLL_INTERVAL; hot = NOTIF_BURST_INTERVAL).
 	NOTIF_BURST_INTERVAL = 5, -- detik polling saat burst mode (setelah donasi terdeteksi)
 	NOTIF_BURST_WINDOW = 45, -- detik sebelum kembali ke NOTIF_POLL_INTERVAL normal
+	-- Client: when pending queue is at least half full, shorten notif display (no drops).
+	NOTIF_BACKLOG_DISPLAY_SCALE = 0.6,
 	-- Backoff saat endpoint error beruntun (exponential, lebih kecil agar recovery cepat)
 	NOTIF_FAILURE_BACKOFF_STEP = 5, -- base delay per failure step (detik)
 	NOTIF_FAILURE_BACKOFF_MAX = 20, -- cap maksimum backoff (detik)
@@ -1907,11 +1912,11 @@ Config.Donation = {
 	MSG_STUDIO_LIVE_DATASTORE_BLOCKED = "[Donation] Studio DataStore isolation removed — commands write production keys.",
 	-- Owner-only manual donation commands (Studio bypass permission check).
 	CMD_ADD_ROBUX = "setrobux", -- /setrobux <username|userId> <robux amount>
-	CMD_REMOVE_ROBUX = "removerobux", -- /removerobux <username|userId> [robux amount]
+	CMD_REMOVE_ROBUX = "removerobux", -- /removerobux <username|userId|me> [robux]; `me` = clear self (Studio only)
 	CMD_TEST_CASH = "testcash", -- /testcash <idr amount> (admin test preview: notif + aura + world VFX, no persist)
 	CMD_DONATE_CASH = "donatecash", -- /donatecash <username|userId> <idr> [message]
 	CMD_ADD_CASH = "addcash", -- /addcash <username|userId> <idr amount> (leaderboard only)
-	CMD_REMOVE_CASH = "removecash", -- /removecash <username|userId> [idr amount]
+	CMD_REMOVE_CASH = "removecash", -- /removecash <username|userId|me> [idr]; `me` = clear self (Studio only)
 	CMD_ADD_BAGIBAGI = "addbagibagi", -- legacy alias → addcash
 	CMD_DONATE_BAGIBAGI = "donatebagibagi", -- legacy alias → donatecash
 	CMD_REMOVE_BAGIBAGI = "removebagibagi", -- legacy alias → removecash

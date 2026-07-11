@@ -268,6 +268,16 @@ local function createSyncController(deps: {
 			return
 		end
 
+		local favoritesMax = (deps.config.Favorites and deps.config.Favorites.MAX_PAYLOAD_BYTES) or 32 * 1024
+		if #encoded > favoritesMax then
+			logger:warn("Favorites update rejected: merged payload too large", {
+				player = player.Name,
+				bytes = #encoded,
+				maxAllowed = favoritesMax,
+			})
+			return
+		end
+
 		player:SetAttribute(deps.config.Favorites.ATTRIBUTE_KEY, encoded)
 		local result = favoritesRepository:save(player.UserId, encoded)
 		if not result.ok then

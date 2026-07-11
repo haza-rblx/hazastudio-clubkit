@@ -59,6 +59,9 @@ local function createDonationService(
 		donationLeaderboardRepository: any?,
 		profileRepository: any?,
 		manualBagibagiRepository: any?,
+		-- Optional: adaptive notif poll burst (setInterval on donation_poll).
+		backgroundJobScheduler: any?,
+		donationPollJobName: string?,
 	}
 )
 	local repo = deps.repo
@@ -71,6 +74,10 @@ local function createDonationService(
 	local donationLeaderboardRepository = deps.donationLeaderboardRepository
 	local profileRepository = deps.profileRepository
 	local manualBagibagiRepository = deps.manualBagibagiRepository
+	local backgroundJobScheduler = deps.backgroundJobScheduler
+	local donationPollJobName = if type(deps.donationPollJobName) == "string" and deps.donationPollJobName ~= ""
+		then deps.donationPollJobName
+		else "donation_poll"
 	local log = Logger.new("DonationService")
 	local donorCashCache: { [number]: DonorCashCacheEntry } = {}
 	-- Phase 1: Negative cache untuk donor_profile saat Worker rate-limited.
@@ -115,11 +122,6 @@ local function createDonationService(
 	}
 	local sheetsBroadcastRevision = 0
 	local lastSheetsBroadcastFingerprint: string? = nil
-	-- Phase 2: Debounce state untuk overheadController:refreshAll().
-	-- Skip kalau leaderboard fingerprint unchanged dalam window REFRESH_ALL_MIN_INTERVAL detik.
-	local lastRefreshAllFingerprint: string? = nil
-	local lastRefreshAllAt: number = 0
-	local REFRESH_ALL_MIN_INTERVAL = 8 -- detik, lebih longgar dari poll interval (5-10s)
 	-- Phase 3: Track userId yang pernah donasi (dari notif, manual adjustment, atau cash stats > 0).
 	-- Skip API call ke donor_profile untuk player yang belum pernah donasi — kebanyakan player
 	-- di leaderboard overhead bukan donor, jadi API call selalu return cash_total=0.
@@ -181,25 +183,6 @@ local function createDonationService(
 		end
 	end
 
-	-- Phase 2: Debounce helper untuk overheadController:refreshAll().
-	-- Return true kalau fingerprint berubah (atau force=true), false kalau skip.
-	-- Min interval 8s sebagai safety net kalau fingerprint computation mahal.
-	local function shouldRefreshAll(force: boolean?): boolean
-		if force == true then
-			return true
-		end
-		local now = os.clock()
-		if now - lastRefreshAllAt < REFRESH_ALL_MIN_INTERVAL then
-			return false
-		end
-		local fingerprint = computeSheetsFingerprint(cachedLeaderboard)
-		if fingerprint == lastRefreshAllFingerprint then
-			return false
-		end
-		lastRefreshAllFingerprint = fingerprint
-		lastRefreshAllAt = now
-		return true
-	end
 	-- { [robloxUsername:lower()]: rank } untuk daily + alltime gabungan
 	local assignedRanks: { [string]: number } = {}
 	-- Daily Robux tracking (in-memory). Reset tiap tengah malam WIB; window 00:01-23:59:59.
@@ -435,6 +418,27 @@ local function createDonationService(
 		local maxDelay = Config.Donation.NOTIF_FAILURE_BACKOFF_MAX
 		-- Exponential: baseDelay * 2^(step-1) -> 5, 10, 20, 20 (capped)
 		return math.min(baseDelay * (2 ^ (step - 1)), maxDelay)
+	end
+
+	-- Adaptive poll delay: burst after new donations, idle otherwise (+ failure backoff).
+	local function getNotifPollDelay(): number
+		local cfg = Config.Donation
+		local timeSinceLast = os.time() - lastNotifReceivedAt
+		local failureBackoff = getNotifFailureBackoff()
+		if lastNotifReceivedAt > 0 and timeSinceLast < cfg.NOTIF_BURST_WINDOW then
+			return math.max(cfg.NOTIF_BURST_INTERVAL, failureBackoff)
+		end
+		return math.max(cfg.NOTIF_POLL_INTERVAL, failureBackoff)
+	end
+
+	-- donation_poll is async (task.spawn); scheduler already scheduled next tick with
+	-- idle interval when the thin callback returned. Pull nextRunAt earlier for burst.
+	local function rescheduleNotifPollJob()
+		if not backgroundJobScheduler or type(backgroundJobScheduler.setInterval) ~= "function" then
+			return
+		end
+		local delay = getNotifPollDelay()
+		backgroundJobScheduler:setInterval(donationPollJobName, delay, delay + 1)
 	end
 
 	local function cleanProviderName(value: any): string
@@ -912,8 +916,9 @@ local function createDonationService(
 		invalidateOverheadRankCaches(drainChangedUserIds())
 		broadcastSheetsLeaderboardSignal(forceBroadcast == true)
 		service:notifyWorkspaceLeaderboardsUpdated()
-		-- Phase 2: Skip refreshAll kalau leaderboard fingerprint unchanged.
-		if shouldRefreshAll(forceBroadcast == true) and overheadController and type(overheadController.refreshAll) == "function" then
+		-- assignPlayer/clearPlayer already refreshPlayer for changed online users.
+		-- Full refreshAll only on explicit force (admin / manual sync).
+		if forceBroadcast == true and overheadController and type(overheadController.refreshAll) == "function" then
 			task.defer(function()
 				overheadController:refreshAll()
 			end)
@@ -999,6 +1004,7 @@ local function createDonationService(
 					updatedAt = os.time(),
 				}
 				applyLeaderboardDiff(allTimeEntries)
+				invalidateOverheadRankCaches(drainChangedUserIds())
 			end
 			broadcastSheetsLeaderboardSignal(forceBroadcast == true)
 			service:notifyWorkspaceLeaderboardsUpdated()
@@ -1024,10 +1030,14 @@ local function createDonationService(
 		end
 		-- Apply diff berdasarkan all-time (overhead tag berdasarkan all-time)
 		applyLeaderboardDiff(allTimeEntries)
+		-- Same as syncBagibagiLeaderboardFromCache: per-user invalidate after diff
+		-- (refreshAll no longer runs on routine polls).
+		invalidateOverheadRankCaches(drainChangedUserIds())
 		broadcastSheetsLeaderboardSignal(forceBroadcast == true)
 		service:notifyWorkspaceLeaderboardsUpdated()
-		-- Phase 2: Skip refreshAll kalau leaderboard fingerprint unchanged.
-		if shouldRefreshAll(forceBroadcast == true) and overheadController and type(overheadController.refreshAll) == "function" then
+		-- Rank tags already refreshed per-player in applyLeaderboardDiff.
+		-- Full refreshAll only on explicit forceBroadcast.
+		if forceBroadcast == true and overheadController and type(overheadController.refreshAll) == "function" then
 			task.defer(function()
 				overheadController:refreshAll()
 			end)
@@ -1209,6 +1219,7 @@ local function createDonationService(
 		task.spawn(function()
 			local function finishPoll()
 				_pollRunning = false
+				rescheduleNotifPollJob()
 			end
 			local cursorQuery: { [string]: string } = {
 				limit = "50",
@@ -2508,18 +2519,6 @@ local function createDonationService(
 	Players.PlayerRemoving:Connect(function(player: Player)
 		claimCooldowns[player.UserId] = nil
 	end)
-	-- Adaptive polling helper
-	-- Saat ada donasi baru terdeteksi, poll dipercepat ke NOTIF_BURST_INTERVAL
-	-- selama NOTIF_BURST_WINDOW detik, lalu kembali ke NOTIF_POLL_INTERVAL normal.
-	local function getNotifPollDelay(): number
-		local cfg = Config.Donation
-		local timeSinceLast = os.time() - lastNotifReceivedAt
-		local failureBackoff = getNotifFailureBackoff()
-		if timeSinceLast < cfg.NOTIF_BURST_WINDOW then
-			return math.max(cfg.NOTIF_BURST_INTERVAL, failureBackoff)
-		end
-		return math.max(cfg.NOTIF_POLL_INTERVAL, failureBackoff)
-	end
 
 	-- ── Public wrappers ───────────────────────────────────────────────────────
 	-- Diperlukan agar BackgroundJobScheduler di Main.server.luau bisa register
@@ -2579,6 +2578,7 @@ local function createDonationService(
 		notifPollInterval = Config.Donation.NOTIF_POLL_INTERVAL,
 		notifBurstInterval = Config.Donation.NOTIF_BURST_INTERVAL,
 		notifBurstWindow = Config.Donation.NOTIF_BURST_WINDOW,
+		burstSchedulerWired = backgroundJobScheduler ~= nil,
 		leaderboardPollInterval = Config.Donation.POLL_INTERVAL,
 		httpTimeout = Config.Donation.HTTP_TIMEOUT,
 		retryEnabled = Config.Donation.NOTIF_RETRY_ENABLED,

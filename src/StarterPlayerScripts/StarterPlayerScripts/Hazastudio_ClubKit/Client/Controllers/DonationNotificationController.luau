@@ -1483,6 +1483,8 @@ local function init(_deps: {}?)
 		GenericBroadcastLayoutBridge.setDonationNotifActive(active)
 	end
 	local maxPendingQueue = math.max(1, Config.Donation.NOTIF_MAX_QUEUE)
+	local backlogDisplayScale = math.clamp(tonumber(Config.Donation.NOTIF_BACKLOG_DISPLAY_SCALE) or 0.6, 0.25, 1)
+	local backlogThreshold = math.max(1, math.floor(maxPendingQueue * 0.5))
 	-- Token untuk membatalkan loop background spin & heartbeat
 	local animToken = 0
 	local runningTextToken = 0
@@ -1701,6 +1703,10 @@ local function init(_deps: {}?)
 		staggerReveal(refs, token)
 		-- CountDownBar: tween width 100% -> 0% selama durasi tampil (per-tier).
 		local notifDuration = resolveNotifDuration(payload)
+		-- Drain faster when more notifs are waiting (no drops).
+		if #queue >= backlogThreshold then
+			notifDuration = notifDuration * backlogDisplayScale
+		end
 		if refs.countDownBar then
 			refs.countDownBar.Size = UDim2.new(1, 0, refs.countDownBar.Size.Y.Scale, refs.countDownBar.Size.Y.Offset)
 			tween(
@@ -1854,12 +1860,32 @@ local function init(_deps: {}?)
 		end
 		local pendingCount = #queue + (if isShowingNotif then 1 else 0)
 		if pendingCount >= maxPendingQueue then
-			log:warn("Donation notification queue penuh, notif dibuang", {
-				dedupKey = dedupKey,
+			-- Evict lowest-amount queued item to make room (never drop incoming solely for being new).
+			local evictIdx: number? = nil
+			local evictAmount = math.huge
+			for i, queued in ipairs(queue) do
+				local amt = tonumber(queued.amount) or 0
+				if amt < evictAmount then
+					evictAmount = amt
+					evictIdx = i
+				end
+			end
+			if evictIdx == nil then
+				log:warn("Donation notification queue penuh, notif dibuang", {
+					dedupKey = dedupKey,
+					queueSize = #queue,
+					isShowing = isShowingNotif,
+				})
+				return
+			end
+			local evicted = table.remove(queue, evictIdx)
+			log:warn("Donation notification queue eviction (lowest amount)", {
+				evictedAmount = evicted and evicted.amount or nil,
+				evictedName = evicted and evicted.saweriaName or nil,
+				incomingAmount = notifPayload.amount,
 				queueSize = #queue,
-				isShowing = isShowingNotif,
 			})
-			return
+			syncDonationBroadcastLayout()
 		end
 		table.insert(queue, notifPayload)
 		syncDonationBroadcastLayout()

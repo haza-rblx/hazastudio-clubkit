@@ -686,6 +686,8 @@ local donationService = createDonationService({
 		donationLeaderboardRepository = donationLeaderboardRepository,
 		profileRepository = profileRepo,
 		manualBagibagiRepository = manualBagibagiRepository,
+		backgroundJobScheduler = backgroundJobScheduler,
+		donationPollJobName = "donation_poll",
 	})
 if type(overheadService.setDonationService) == "function" then
 	overheadService:setDonationService(donationService)

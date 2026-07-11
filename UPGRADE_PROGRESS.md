@@ -2,7 +2,7 @@
 
 Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
 
-**Versi saat ini:** `2.2.3` (lihat [`VERSION`](VERSION))  
+**Versi saat ini:** `2.2.4` (lihat [`VERSION`](VERSION))  
 **Target rilis berikutnya:** _(belum ditetapkan)_
 
 ---
@@ -11,7 +11,7 @@ Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
 
 | Area | Status |
 |------|--------|
-| v2.2.3 Gravity naming + faster drop | ✅ Released |
+| v2.2.4 favorites 32KB + donation burst + Studio me clear | ✅ Released |
 
 ---
 

@@ -291,7 +291,8 @@ function Validator.favoritesUpdate(jsonData: any): VResult
 	if not ok or type(decoded) ~= "table" then
 		table.insert(e, "favorites payload must be valid json object")
 	end
-	if #jsonData > MAX_PAYLOAD_BYTES then
+	local favoritesMax = (Config.Favorites and Config.Favorites.MAX_PAYLOAD_BYTES) or MAX_PAYLOAD_BYTES
+	if #jsonData > favoritesMax then
 		table.insert(e, "favorites payload too large")
 	end
 	return vr(e)

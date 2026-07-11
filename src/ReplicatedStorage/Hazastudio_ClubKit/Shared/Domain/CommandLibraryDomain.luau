@@ -290,7 +290,7 @@ local REGISTRY = table.freeze({
 	makeEntry({
 		id = "removerobux",
 		alias = Config.Donation.CMD_REMOVE_ROBUX,
-		description = "Remove Robux from leaderboard total. /removerobux <player> [amount]",
+		description = "Remove Robux from leaderboard total. /removerobux <player|me> [amount] — `me` Studio-only clear self",
 		category = "Admin",
 		needsArguments = true,
 		iconKey = "admin_donation",
@@ -317,7 +317,7 @@ local REGISTRY = table.freeze({
 	makeEntry({
 		id = "removecash",
 		alias = Config.Donation.CMD_REMOVE_CASH,
-		description = "Remove IDR from manual cash adjustment. /removecash <player> [amount]",
+		description = "Remove IDR from manual cash adjustment. /removecash <player|me> [amount] — `me` Studio-only clear self",
 		category = "Admin",
 		needsArguments = true,
 		iconKey = "admin_donation",

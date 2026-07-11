@@ -1021,24 +1021,50 @@ local function createDonationController(deps: {
 	-- Robux → DataStore OrderedDataStore; Bagi-Bagi → cache + overhead sync.
 	local donationCfg = Config.Donation
 
-	local function resolveUserIdFromArg(arg: string): (number?, string?)
+	-- Returns: userId, resolvedName, isSelfAlias ("me" / "@me")
+	local function resolveUserIdFromArg(arg: string, caller: Player?): (number?, string?, boolean)
+		local lower = string.lower(arg)
+		if lower == "me" or lower == "@me" then
+			if caller then
+				return caller.UserId, caller.Name, true
+			end
+			return nil, nil, true
+		end
 		local asNumber = tonumber(arg)
 		if asNumber and asNumber > 0 then
-			return asNumber, nil
+			return asNumber, nil, false
 		end
-		local lower = arg:lower()
 		for _, p in ipairs(game:GetService("Players"):GetPlayers()) do
 			if p.Name:lower() == lower then
-				return p.UserId, p.Name
+				return p.UserId, p.Name, false
 			end
 		end
 		local ok, result = pcall(function()
 			return game:GetService("Players"):GetUserIdFromNameAsync(arg)
 		end)
 		if ok and type(result) == "number" and result > 0 then
-			return result, arg
+			return result, arg, false
 		end
-		return nil, nil
+		return nil, nil, false
+	end
+
+	local function requireStudioForSelfAlias(player: Player, label: string, isSelfAlias: boolean): boolean
+		if not isSelfAlias then
+			return true
+		end
+		if IS_STUDIO then
+			return true
+		end
+		notify.player(
+			player,
+			string.format(
+				"[%s] `me` is Studio-only. Use /%s me in Studio Play to clear your own donation data.",
+				label,
+				label:lower()
+			),
+			"ERROR"
+		)
+		return false
 	end
 
 	local function refreshUserIfOnline(userId: number)
@@ -1147,7 +1173,7 @@ local function createDonationController(deps: {
 			return
 		end
 		task.spawn(function()
-			local userId, resolvedName = resolveUserIdFromArg(target)
+			local userId, resolvedName = resolveUserIdFromArg(target, player)
 			if not userId then
 				notify.player(player, string.format("[%s] Player '%s' nggak ketemu.", label, target), "ERROR")
 				return
@@ -1184,13 +1210,20 @@ local function createDonationController(deps: {
 		if not target then
 			notify.player(
 				player,
-				string.format("[%s] Usage: /%s <username|userId> [robux amount]", label, label:lower()),
+				string.format(
+					"[%s] Usage: /%s <username|userId|me> [robux amount] — `me` = clear self (Studio only)",
+					label,
+					label:lower()
+				),
 				"WARNING"
 			)
 			return
 		end
 		task.spawn(function()
-			local userId, resolvedName = resolveUserIdFromArg(target)
+			local userId, resolvedName, isSelfAlias = resolveUserIdFromArg(target, player)
+			if not requireStudioForSelfAlias(player, label, isSelfAlias) then
+				return
+			end
 			if not userId then
 				notify.player(player, string.format("[%s] Player '%s' nggak ketemu.", label, target), "ERROR")
 				return
@@ -1199,7 +1232,8 @@ local function createDonationController(deps: {
 				notify.player(player, string.format("[%s] Service tidak tersedia.", label), "ERROR")
 				return
 			end
-			local amount = tonumber(amountStr)
+			-- `me` without amount → wipe full Robux LB total for caller
+			local amount = if isSelfAlias and (amountStr == nil or amountStr == "") then nil else tonumber(amountStr)
 			local ok, err = donationService:removeManualRobuxAdjustment(userId, amount)
 			if not ok then
 				notify.player(player, string.format("[%s] Gagal: %s", label, err), "ERROR")
@@ -1210,7 +1244,12 @@ local function createDonationController(deps: {
 			broadcastWorkspaceLeaderboards(true)
 			notify.player(
 				player,
-				string.format("[%s] %s Robux leaderboard dikurangi.", label, resolvedName or tostring(userId)),
+				string.format(
+					"[%s] %s Robux leaderboard %s.",
+					label,
+					resolvedName or tostring(userId),
+					if isSelfAlias and amount == nil then "cleared (self)" else "dikurangi"
+				),
 				"SUCCESS"
 			)
 		end)
@@ -1247,7 +1286,7 @@ local function createDonationController(deps: {
 		end
 		local message = if #messageParts > 0 then table.concat(messageParts, " ") else nil
 		task.spawn(function()
-			local userId, resolvedName = resolveUserIdFromArg(target)
+			local userId, resolvedName = resolveUserIdFromArg(target, player)
 			if not userId then
 				notify.player(player, string.format("[%s] Player '%s' nggak ketemu.", label, target), "ERROR")
 				return
@@ -1312,7 +1351,7 @@ local function createDonationController(deps: {
 			return
 		end
 		task.spawn(function()
-			local userId, resolvedName = resolveUserIdFromArg(target)
+			local userId, resolvedName = resolveUserIdFromArg(target, player)
 			if not userId then
 				notify.player(player, string.format("[%s] Player '%s' nggak ketemu.", label, target), "ERROR")
 				return
@@ -1363,13 +1402,20 @@ local function createDonationController(deps: {
 		if not target then
 			notify.player(
 				player,
-				string.format("[%s] Usage: /%s <username|userId> [idr amount]", label, label:lower()),
+				string.format(
+					"[%s] Usage: /%s <username|userId|me> [idr amount] — `me` = clear self (Studio only)",
+					label,
+					label:lower()
+				),
 				"WARNING"
 			)
 			return
 		end
 		task.spawn(function()
-			local userId, resolvedName = resolveUserIdFromArg(target)
+			local userId, resolvedName, isSelfAlias = resolveUserIdFromArg(target, player)
+			if not requireStudioForSelfAlias(player, label, isSelfAlias) then
+				return
+			end
 			if not userId then
 				notify.player(player, string.format("[%s] Player '%s' nggak ketemu.", label, target), "ERROR")
 				return
@@ -1379,7 +1425,8 @@ local function createDonationController(deps: {
 				notify.player(player, string.format("[%s] Service tidak tersedia.", label), "ERROR")
 				return
 			end
-			local amount = tonumber(amountStr)
+			-- `me` without amount → wipe all manual cash adjustment for caller
+			local amount = if isSelfAlias and (amountStr == nil or amountStr == "") then nil else tonumber(amountStr)
 			local ok, err, remaining = removeManual(donationService, userId, amount)
 			if not ok then
 				notify.player(player, string.format("[%s] Gagal: %s", label, err), "ERROR")
@@ -1391,10 +1438,11 @@ local function createDonationController(deps: {
 			notify.player(
 				player,
 				string.format(
-					"[%s] %s adjustment sekarang %d IDR.",
+					"[%s] %s adjustment sekarang %d IDR%s.",
 					label,
 					resolvedName or tostring(userId),
-					remaining or 0
+					remaining or 0,
+					if isSelfAlias and amount == nil then " (cleared self)" else ""
 				),
 				"SUCCESS"
 			)
