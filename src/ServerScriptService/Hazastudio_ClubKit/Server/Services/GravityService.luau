@@ -40,6 +40,8 @@ local function createGravityService(deps: {
 
 	local activeStates: { [number]: ActiveGravityState } = {}
 	local characterConnections: { [number]: RBXScriptConnection } = {}
+	-- Server-wide float mode: while active, all current + joining players float.
+	local serverModeSpeed = 0
 	local service = {}
 
 	local function getHumanoid(player: Player): Humanoid?
@@ -153,7 +155,7 @@ local function createGravityService(deps: {
 	local function applyUngravity(player: Player, speed: number, silent: boolean?): Result<nil>
 		local blocked, reason = isBlocked(player)
 		if blocked then
-			if reason == "carry_active" then
+			if reason == "carry_active" and not silent then
 				notify.player(player, gravityConfig.MSG_BLOCKED_CARRY, "WARNING")
 			end
 			return Result.Err(reason or "blocked")
@@ -225,6 +227,13 @@ local function createGravityService(deps: {
 		return Result.Ok(nil)
 	end
 
+	local function applyServerModeToPlayer(player: Player): ()
+		if serverModeSpeed <= 0 then
+			return
+		end
+		applyUngravity(player, serverModeSpeed, true)
+	end
+
 	function service:getSpeed(userId: number): number
 		local state = activeStates[userId]
 		if state == nil then
@@ -237,31 +246,68 @@ local function createGravityService(deps: {
 		return service:getSpeed(userId) > 0
 	end
 
-	function service:setSpeed(player: Player, speed: number, options: { silent: boolean?, skipRateLimit: boolean? }?): Result<nil>
+	function service:isServerModeActive(): boolean
+		return serverModeSpeed > 0
+	end
+
+	function service:getServerModeSpeed(): number
+		return serverModeSpeed
+	end
+
+	--- Toggle server-wide float. speed <= 0 restores gravity for everyone.
+	function service:setServerMode(actor: Player, speed: number, options: { silent: boolean?, skipRateLimit: boolean? }?): Result<nil>
 		if Config.FeatureFlags.GravityEnabled ~= true then
 			return Result.Err("feature_disabled")
 		end
 		local silent = options and options.silent == true
 		local skipRateLimit = options and options.skipRateLimit == true
-		if not skipRateLimit and not limiter:check(player.UserId) then
-			notify.player(player, gravityConfig.MSG_RATE_LIMIT, "WARNING")
+		if not skipRateLimit and not limiter:check(actor.UserId) then
+			notify.player(actor, gravityConfig.MSG_RATE_LIMIT, "WARNING")
 			return Result.Err("rate_limited")
 		end
 
 		if speed <= 0 then
-			return disableUngravity(player, silent)
+			serverModeSpeed = 0
+			for _, player in ipairs(Players:GetPlayers()) do
+				disableUngravity(player, true)
+			end
+			if not silent then
+				notify.all(gravityConfig.MSG_DISABLED, "SUCCESS")
+			end
+			log:info("gravity_restored_all", { actor = actor.Name })
+			return Result.Ok(nil)
 		end
 
 		local clamped = math.clamp(math.floor(speed + 0.5), gravityConfig.MIN_SPEED, gravityConfig.MAX_SPEED)
-		return applyUngravity(player, clamped, silent)
+		serverModeSpeed = clamped
+		for _, player in ipairs(Players:GetPlayers()) do
+			applyUngravity(player, clamped, true)
+		end
+		if not silent then
+			notify.all(string.format(gravityConfig.MSG_ENABLED, clamped), "SUCCESS")
+		end
+		log:info("ungravity_enabled_all", { actor = actor.Name, speed = clamped })
+		return Result.Ok(nil)
+	end
+
+	-- Back-compat wrappers used by controller / character re-apply paths.
+	function service:setSpeed(player: Player, speed: number, options: { silent: boolean?, skipRateLimit: boolean? }?): Result<nil>
+		return service:setServerMode(player, speed, options)
+	end
+
+	function service:enableDefault(player: Player): Result<nil>
+		return service:setServerMode(player, gravityConfig.DEFAULT_SPEED)
+	end
+
+	function service:disable(player: Player): Result<nil>
+		return service:setServerMode(player, 0)
 	end
 
 	function service:handleCommand(player: Player, args: string): Result<nil>
 		local trimmed = args:match("^%s*(.-)%s*$") or ""
 		if trimmed == "" then
-			local current = service:getSpeed(player.UserId)
-			if current > 0 then
-				notify.player(player, string.format(gravityConfig.MSG_STATUS, current), "INFO")
+			if serverModeSpeed > 0 then
+				notify.player(player, string.format(gravityConfig.MSG_STATUS, serverModeSpeed), "INFO")
 			else
 				notify.player(player, gravityConfig.MSG_USAGE, "WARNING")
 			end
@@ -274,15 +320,7 @@ local function createGravityService(deps: {
 			return Result.Err("invalid_speed")
 		end
 
-		return service:setSpeed(player, speed)
-	end
-
-	function service:enableDefault(player: Player): Result<nil>
-		return service:setSpeed(player, gravityConfig.DEFAULT_SPEED)
-	end
-
-	function service:disable(player: Player): Result<nil>
-		return service:setSpeed(player, 0)
+		return service:setServerMode(player, speed)
 	end
 
 	function service:onPlayerAdded(player: Player): ()
@@ -300,20 +338,21 @@ local function createGravityService(deps: {
 
 	function service:onCharacterAdded(player: Player): ()
 		local state = activeStates[player.UserId]
-		if state == nil or state.speed <= 0 then
+		if state then
+			state.speed = 0
+			state.savedHumanoid = nil
+			clearPhysics(state)
+		end
+
+		if serverModeSpeed <= 0 then
 			return
 		end
 
-		local savedSpeed = state.speed
-		state.speed = 0
-		state.savedHumanoid = nil
-		clearPhysics(state)
-
 		task.defer(function()
-			if not player.Parent then
+			if not player.Parent or serverModeSpeed <= 0 then
 				return
 			end
-			service:setSpeed(player, savedSpeed, { silent = true, skipRateLimit = true })
+			applyServerModeToPlayer(player)
 		end)
 	end
 
@@ -331,6 +370,7 @@ local function createGravityService(deps: {
 	end
 
 	function service:destroy(): ()
+		serverModeSpeed = 0
 		for userId, conn in pairs(characterConnections) do
 			conn:Disconnect()
 			characterConnections[userId] = nil

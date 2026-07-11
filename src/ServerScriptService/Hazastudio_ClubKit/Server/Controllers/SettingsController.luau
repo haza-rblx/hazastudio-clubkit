@@ -11,6 +11,7 @@ local NetworkManager = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils
 local Validator = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Validator)
 local RateLimiter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.RateLimiter)
 local TTLSet = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.TTLSet)
+local Result = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Result)
 
 type ILogger = Types.ILogger
 type INotify = {
@@ -25,6 +26,7 @@ local function createSettingsController(deps: {
 	notify: INotify?,
 	overheadRepository: any?,
 	overheadController: any?,
+	profileLoader: any?,
 })
 	local log = deps.logger
 	local remotes = deps.remotes
@@ -32,6 +34,7 @@ local function createSettingsController(deps: {
 	local notify = deps.notify
 	local overheadRepository = deps.overheadRepository
 	local overheadController = deps.overheadController
+	local profileLoader = deps.profileLoader
 
 	local syncRemote = remotes:WaitForChild(Config.Settings.REMOTE_SYNC) :: RemoteEvent
 	local requestRemote = remotes:WaitForChild(Config.Settings.REMOTE_REQUEST) :: RemoteEvent
@@ -236,21 +239,36 @@ local function createSettingsController(deps: {
 			end
 		end))
 
-		track(Players.PlayerAdded:Connect(function(player)
-			task.spawn(function()
-				fireSyncWithRetry(player)
-			end)
-		end))
-
-		for _, player in ipairs(Players:GetPlayers()) do
-			task.spawn(function()
-				fireSyncWithRetry(player)
-			end)
-		end
-
 		track(Players.PlayerRemoving:Connect(function(player)
 			settingsService:onPlayerRemoving(player)
 		end))
+
+		-- Fold join-time settings GetAsync into SharedProfileLoader instead of
+		-- free-firing parallel reads on PlayerAdded against overhead/profile.
+		if profileLoader and type(profileLoader.register) == "function" and type(profileLoader.enqueueKind) == "function" then
+			profileLoader:register("settings", function(player: Player)
+				fireSyncWithRetry(player)
+				return Result.Ok(true)
+			end)
+			track(Players.PlayerAdded:Connect(function(player)
+				profileLoader:enqueueKind(player, "settings")
+			end))
+			for _, player in ipairs(Players:GetPlayers()) do
+				profileLoader:enqueueKind(player, "settings")
+			end
+		else
+			track(Players.PlayerAdded:Connect(function(player)
+				task.spawn(function()
+					fireSyncWithRetry(player)
+				end)
+			end))
+
+			for _, player in ipairs(Players:GetPlayers()) do
+				task.spawn(function()
+					fireSyncWithRetry(player)
+				end)
+			end
+		end
 
 		log:info("SettingsController initialized")
 	end

@@ -39,6 +39,10 @@ local function destroyConnections()
 		conn:Disconnect()
 		_pendingFlushConnections[userId] = nil
 	end
+	for userId, conn in pairs(_playerCharacterConnections) do
+		conn:Disconnect()
+		_playerCharacterConnections[userId] = nil
+	end
 	table.clear(_pendingPayloads)
 	table.clear(_cachedPayloadsByUserId)
 	table.clear(_roleCache)
@@ -78,6 +82,7 @@ local cachedPayloadsByUserId = _cachedPayloadsByUserId
 local _uiCache: { [number]: any } = {}
 local _pendingPayloads: { [number]: OverheadPayload } = {}
 local _pendingFlushConnections: { [number]: RBXScriptConnection } = {}
+local _playerCharacterConnections: { [number]: RBXScriptConnection } = {}
 local NIL_SENTINEL = DeltaCompressor.NIL_SENTINEL
 local applyLocalPayloadPatchImpl: ((number, { [string]: any }) -> ())? = nil
 
@@ -161,6 +166,8 @@ local function init(_deps: {}?): ()
 	-- Connections that watch for the overhead GUI appearing on a character's Head.
 	local pendingFlushConnections = _pendingFlushConnections
 	local uiCache = _uiCache
+	-- Per-player CharacterAdded — Disconnect on PlayerRemoving (not module-lifetime _connections).
+	local playerCharacterConnections = _playerCharacterConnections
 
 	-- Forward declaration: `applyPayload` is defined further down in init(),
 	-- but `flushPendingPayload` (a callback installed by CharacterAdded) needs
@@ -214,7 +221,12 @@ local function init(_deps: {}?): ()
 
 	local function watchPlayer(player: Player)
 		local userId = player.UserId
-		track(player.CharacterAdded:Connect(function(character)
+		local existing = playerCharacterConnections[userId]
+		if existing then
+			existing:Disconnect()
+			playerCharacterConnections[userId] = nil
+		end
+		playerCharacterConnections[userId] = player.CharacterAdded:Connect(function(character)
 			-- Destroy previous OverheadUI before clearing cache so AttributeChanged connections disconnect.
 			local old = uiCache[userId]
 			if old and type(old.destroy) == "function" then
@@ -224,7 +236,7 @@ local function init(_deps: {}?): ()
 			pendingPayloads[userId] = nil
 			disconnectPendingFlush(userId)
 			bindOverheadGuiWatcher(player, character)
-		end))
+		end)
 		if player.Character then
 			bindOverheadGuiWatcher(player, player.Character)
 		end
@@ -233,6 +245,11 @@ local function init(_deps: {}?): ()
 	track(Players.PlayerAdded:Connect(watchPlayer))
 	track(Players.PlayerRemoving:Connect(function(player)
 		local userId = player.UserId
+		local charConn = playerCharacterConnections[userId]
+		if charConn then
+			charConn:Disconnect()
+			playerCharacterConnections[userId] = nil
+		end
 		local old = uiCache[userId]
 		if old and type(old.destroy) == "function" then
 			old:destroy()

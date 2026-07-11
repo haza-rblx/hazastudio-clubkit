@@ -16,7 +16,9 @@ type ShopMembershipTier  = Types.ShopMembershipTier
 export type IShopService = {
 	grantMembership   : (self: IShopService, userId: number, tier: ShopMembershipTier) -> Result<nil>,
 	storePendingGift  : (self: IShopService, fromId: number, toId: number) -> Result<nil>,
+	-- Peek only — does not delete pending. Call consumePendingGift after grant succeeds.
 	resolvePendingGift: (self: IShopService, fromId: number) -> (number?),
+	consumePendingGift: (self: IShopService, fromId: number) -> (),
 }
 type PendingEntry = {
 	toId : number,
@@ -78,29 +80,48 @@ local function createShopService(deps: {
 		log:info("Gift pending stored", { from = fromId, to = toId })
 		return ResultUtil.Ok(nil)
 	end
-	-- Ambil dan hapus pending gift milik fromId.
-	-- Return targetUserId atau nil kalau tidak ada / expired.
+	-- Peek target without consuming — ProcessReceipt can retry if grant fails.
 	function self:resolvePendingGift(fromId: number): (number?)
 		cleanupPending()
 		local entry = pending[fromId]
 		if entry and os.time() - entry.at <= Config.Shop.GIFT_PENDING_TIMEOUT then
-			pending[fromId] = nil
 			return entry.toId
 		end
-		if giftPendingRepository and type(giftPendingRepository.consume) == "function" then
+		if giftPendingRepository and type(giftPendingRepository.peek) == "function" then
+			local peekResult = giftPendingRepository:peek(fromId)
+			if peekResult.ok and type(peekResult.value) == "number" and peekResult.value > 0 then
+				return peekResult.value
+			end
+			if not peekResult.ok then
+				log:warn("Gift pending peek failed", {
+					from = fromId,
+					error = peekResult.error,
+				})
+			end
+		elseif giftPendingRepository and type(giftPendingRepository.consume) == "function" then
+			-- Legacy fallback if peek is missing (should not happen on current kit).
 			local consumeResult = giftPendingRepository:consume(fromId)
 			if consumeResult.ok and type(consumeResult.value) == "number" and consumeResult.value > 0 then
-				pending[fromId] = nil
+				pending[fromId] = {
+					toId = consumeResult.value,
+					at = os.time(),
+				}
 				return consumeResult.value
 			end
+		end
+		return nil
+	end
+	function self:consumePendingGift(fromId: number)
+		pending[fromId] = nil
+		if giftPendingRepository and type(giftPendingRepository.consume) == "function" then
+			local consumeResult = giftPendingRepository:consume(fromId)
 			if not consumeResult.ok then
-				log:warn("Gift pending consume failed", {
+				log:warn("Gift pending consume failed after grant", {
 					from = fromId,
 					error = consumeResult.error,
 				})
 			end
 		end
-		return nil
 	end
 	return self
 end

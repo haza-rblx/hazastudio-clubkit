@@ -5,6 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
+local Result = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Result)
 
 local log = Logger.new("Server.StickerService")
 
@@ -98,10 +99,12 @@ end
 function StickerService.new(deps: {
 	logger: any?,
 	repository: any,
+	profileLoader: any?,
 }): any
 	local self = setmetatable({}, StickerService)
 	self._log = deps.logger or log
 	self._repository = deps.repository
+	self._profileLoader = deps.profileLoader
 	self._connections = {} :: { RBXScriptConnection }
 	self._currentImages = {} :: { [number]: string }
 	self._activeGuis = {} :: { [number]: BillboardGui }
@@ -421,22 +424,62 @@ function StickerService:onStart()
 		end)
 	end
 
-	self:_track(Players.PlayerAdded:Connect(function(player: Player)
-		task.spawn(function()
-			if not player.Parent then
-				return
-			end
-			local payload = self:buildSyncPayload(player)
-			self._currentImages[player.UserId] = normalizeImage(payload.selectedSticker)
-			player:SetAttribute(Config.Sticker.STICKER_IMAGE_ATTRIBUTE, self._currentImages[player.UserId])
-		end)
-
-		connectCharacterAdded(player)
-
-		if player.Character then
-			self:_hookCharacter(player, player.Character)
+	local function applyJoinStickerState(player: Player)
+		if not player.Parent then
+			return
 		end
-	end))
+		local payload = self:buildSyncPayload(player)
+		self._currentImages[player.UserId] = normalizeImage(payload.selectedSticker)
+		player:SetAttribute(Config.Sticker.STICKER_IMAGE_ATTRIBUTE, self._currentImages[player.UserId])
+	end
+
+	local profileLoader = self._profileLoader
+	if profileLoader and type(profileLoader.register) == "function" and type(profileLoader.enqueueKind) == "function" then
+		-- Fold personal sticker GetAsync into SharedProfileLoader so join does not
+		-- free-fire a parallel read against overhead/profile/likes.
+		profileLoader:register("stickers", function(player: Player)
+			applyJoinStickerState(player)
+			return Result.Ok(true)
+		end)
+		self:_track(Players.PlayerAdded:Connect(function(player: Player)
+			profileLoader:enqueueKind(player, "stickers")
+			connectCharacterAdded(player)
+			if player.Character then
+				self:_hookCharacter(player, player.Character)
+			end
+		end))
+		for _, player in ipairs(Players:GetPlayers()) do
+			profileLoader:enqueueKind(player, "stickers")
+			connectCharacterAdded(player)
+			if player.Character then
+				self:_hookCharacter(player, player.Character)
+			end
+		end
+	else
+		self:_track(Players.PlayerAdded:Connect(function(player: Player)
+			task.spawn(function()
+				applyJoinStickerState(player)
+			end)
+
+			connectCharacterAdded(player)
+
+			if player.Character then
+				self:_hookCharacter(player, player.Character)
+			end
+		end))
+
+		for _, player in ipairs(Players:GetPlayers()) do
+			task.spawn(function()
+				applyJoinStickerState(player)
+			end)
+
+			connectCharacterAdded(player)
+
+			if player.Character then
+				self:_hookCharacter(player, player.Character)
+			end
+		end
+	end
 
 	self:_track(Players.PlayerRemoving:Connect(function(player: Player)
 		-- Cleanup per-player CharacterAdded connection
@@ -450,23 +493,6 @@ function StickerService:onStart()
 		self._displayTokens[player.UserId] = nil
 		self._personalByUserId[player.UserId] = nil
 	end))
-
-	for _, player in ipairs(Players:GetPlayers()) do
-		task.spawn(function()
-			if not player.Parent then
-				return
-			end
-			local payload = self:buildSyncPayload(player)
-			self._currentImages[player.UserId] = normalizeImage(payload.selectedSticker)
-			player:SetAttribute(Config.Sticker.STICKER_IMAGE_ATTRIBUTE, self._currentImages[player.UserId])
-		end)
-
-		connectCharacterAdded(player)
-
-		if player.Character then
-			self:_hookCharacter(player, player.Character)
-		end
-	end
 
 	-- Simpan referensi playerConnections agar destroy() bisa cleanup
 	self._playerConnections = playerConnections

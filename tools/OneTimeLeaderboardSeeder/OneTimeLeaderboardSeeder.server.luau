@@ -24,7 +24,8 @@
     - Likes count : DataStore  AvatarLikes_v1  key likes:summary:{userId}
     - Metadata    : DataStore  DonationLeaderboardMetadata_v1  key user:{userId}
 
-  Studio = live keys (no Studio_ prefix) — sama seperti Club Kit Config.DataStoreScope.
+-- Studio isolation: default Studio_ prefix (same as Config USE_STUDIO_DATASTORE_ISOLATION).
+-- Set USE_STUDIO_DATASTORE_ISOLATION = false ONLY when intentionally writing live keys from Studio.
 ]]
 
 local DataStoreService = game:GetService("DataStoreService")
@@ -37,8 +38,7 @@ local RunService = game:GetService("RunService")
 local ENABLED = false -- true = jalankan seeder saat server boot
 local MODE = "dry_run" -- "dry_run" | "commit"
 
--- Legacy flag (unused): Club Kit no longer prefixes Studio_ keys.
-local USE_STUDIO_DATASTORE_ISOLATION = false
+local USE_STUDIO_DATASTORE_ISOLATION = true
 
 local SEED_CASH = true
 local SEED_ROBUX = true
@@ -51,7 +51,7 @@ local WRITE_METADATA = true -- username/thumbnail di DonationLeaderboardMetadata
 local PACE_SECONDS = 0.12 -- jeda antar write (hindari throttle)
 local BUDGET_WAIT = 4
 
--- Production keys (match Config.luau — Studio & live sama)
+-- Base production keys (scoped below when Studio isolation is on)
 local KEY_MANUAL_CASH = "ManualBagibagiAdjustments_v1"
 local KEY_ROBUX_ORDERED = "RobuxDonationLeaderboard_User_v1"
 local KEY_LIKES_ORDERED = "AvatarLikesLeaderboard_v1"
@@ -80,6 +80,9 @@ local function warnLog(msg: string, ...)
 end
 
 local function scopedKey(baseKey: string): string
+	if USE_STUDIO_DATASTORE_ISOLATION and RunService:IsStudio() then
+		return "Studio_" .. baseKey
+	end
 	return baseKey
 end
 

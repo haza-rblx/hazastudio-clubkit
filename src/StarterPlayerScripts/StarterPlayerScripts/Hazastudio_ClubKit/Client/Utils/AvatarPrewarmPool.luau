@@ -70,6 +70,7 @@ function AvatarPrewarmPool.create(config: PoolConfig?): AvatarPrewarmPool
 	local cleaner = Cleaner.new()
 	local pool: { [number]: PoolEntry } = {}
 	local loading: { [number]: boolean } = {}
+	local loadGeneration: { [number]: number } = {}
 	local pinnedUserIds: { [number]: boolean } = {}
 	local poolSize = 0
 	local lastLoadAt = 0
@@ -79,6 +80,12 @@ function AvatarPrewarmPool.create(config: PoolConfig?): AvatarPrewarmPool
 	-- Setelah fire, callback di-remove agar tidak bocor memori untuk player
 	-- yang频繁 di-klik.
 	local modelReadyListeners: { [number]: { () -> () } } = {}
+
+	local function bumpLoadGeneration(userId: number): number
+		local nextGen = (loadGeneration[userId] or 0) + 1
+		loadGeneration[userId] = nextGen
+		return nextGen
+	end
 
 	local function notifyModelReady(userId: number)
 		local list = modelReadyListeners[userId]
@@ -165,10 +172,11 @@ function AvatarPrewarmPool.create(config: PoolConfig?): AvatarPrewarmPool
 		end
 	end
 
-	local function loadModel(userId: number)
-		if pool[userId] or loading[userId] then
+	local function loadModel(userId: number, force: boolean?)
+		if not force and (pool[userId] or loading[userId]) then
 			return
 		end
+		local gen = bumpLoadGeneration(userId)
 		loading[userId] = true
 
 		local function executeLoad()
@@ -179,13 +187,24 @@ function AvatarPrewarmPool.create(config: PoolConfig?): AvatarPrewarmPool
 				end)
 
 				activeLoads -= 1
-				loading[userId] = nil
+				if loadGeneration[userId] == gen then
+					loading[userId] = nil
+				end
 
 				-- Drain antrian berikutnya setelah slot bebas
 				drainQueue()
 
 				if not alive then
-					if success and model then model:Destroy() end
+					if success and model then
+						model:Destroy()
+					end
+					return
+				end
+				-- Stale completion (respawn / force reload / destroy) — drop orphan.
+				if loadGeneration[userId] ~= gen then
+					if success and model then
+						model:Destroy()
+					end
 					return
 				end
 				if not success or not model then
@@ -195,6 +214,15 @@ function AvatarPrewarmPool.create(config: PoolConfig?): AvatarPrewarmPool
 				if not Players:GetPlayerByUserId(userId) then
 					model:Destroy()
 					return
+				end
+				-- Destroy displaced model before overwrite (fixes poolSize double-count).
+				local existing = pool[userId]
+				if existing then
+					if existing.model then
+						existing.model:Destroy()
+					end
+					pool[userId] = nil
+					poolSize -= 1
 				end
 				-- Evict if pool full
 				if poolSize >= maxPoolSize then
@@ -382,6 +410,7 @@ function AvatarPrewarmPool.create(config: PoolConfig?): AvatarPrewarmPool
 		end
 		poolSize = 0
 		table.clear(loading)
+		table.clear(loadGeneration)
 		-- Bersihkan antrian load yang belum sempat jalan.
 		table.clear(loadQueue)
 		-- Bersihkan listener yang belum sempat fire (panel tertutup saat loading).
@@ -412,6 +441,7 @@ function AvatarPrewarmPool.create(config: PoolConfig?): AvatarPrewarmPool
 			poolSize -= 1
 		end
 		loading[player.UserId] = nil
+		loadGeneration[player.UserId] = nil
 	end))
 
 	if prewarmSelf and localPlayer then
@@ -436,7 +466,8 @@ function AvatarPrewarmPool.create(config: PoolConfig?): AvatarPrewarmPool
 				-- Cek player masih valid setelah delay
 				if not Players:GetPlayerByUserId(player.UserId) then return end
 
-				-- Invalidate model lama (kalau masih di pool) agar tidak reuse stale.
+				-- Invalidate model lama + bump generation so in-flight loads are stale.
+				bumpLoadGeneration(player.UserId)
 				local entry = pool[player.UserId]
 				if entry and entry.model then
 					entry.model:Destroy()
@@ -444,7 +475,7 @@ function AvatarPrewarmPool.create(config: PoolConfig?): AvatarPrewarmPool
 					poolSize -= 1
 				end
 				loading[player.UserId] = nil
-				loadModel(player.UserId)
+				loadModel(player.UserId, true)
 			end)
 		end)
 		characterAddedConns[player.UserId] = conn

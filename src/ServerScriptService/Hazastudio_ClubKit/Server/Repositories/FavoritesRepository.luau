@@ -51,6 +51,9 @@ function FavoritesRepository._key(self: FavoritesRepositoryImpl, userId: number)
 end
 
 function FavoritesRepository.onPlayerAdded(self: FavoritesRepositoryImpl, player: Player)
+	if self._loaded[player.UserId] == true then
+		return
+	end
 	local loadResult = self._budgetGate:executeAsync(Enum.DataStoreRequestType.GetAsync, function()
 		return Result.withRetry(function()
 			return self._store:GetAsync(self:_key(player.UserId))

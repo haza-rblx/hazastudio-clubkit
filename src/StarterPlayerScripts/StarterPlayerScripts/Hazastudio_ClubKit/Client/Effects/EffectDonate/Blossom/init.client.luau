@@ -9,6 +9,7 @@ local TweenService = game:GetService("TweenService")
 
 local SoundAssetSanitizer = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.SoundAssetSanitizer)
 local DonationExperiencePrefs = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DonationExperiencePrefs)
+local WorldEffectFlight = require(script.Parent.Parent.Parent.Utils.WorldEffectFlight)
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local HttpApiCounter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.HttpApiCounter)
 local ClientHttpApi = require(script.Parent.Parent.Parent.Utils.ClientHttpApi)
@@ -71,8 +72,63 @@ local randomRotation = math.random(-180, 180)
 
 -- Main donation effect function
 local function createDonationEffect(donorName, recipientName, donationAmount, donorUserId)
+	local gen = WorldEffectFlight:begin()
+	local cleaned = false
+	local effectModel = nil
+	local portal = nil
+	local soundsFolder = nil
+	local colorCorrection = nil
+	local bloomEffect = nil
+	local giantAnimation = nil
+	local hammerFlameConnection = nil
+	local markerConnections = {}
+	local meteorShowerActive = true
+	local impactEffect = nil
+
+	local function safeDestroy(inst)
+		if inst and typeof(inst) == "Instance" and inst.Parent then
+			inst:Destroy()
+		end
+	end
+
+	local function cleanup()
+		if cleaned then
+			return
+		end
+		cleaned = true
+		meteorShowerActive = false
+		for _, conn in ipairs(markerConnections) do
+			conn:Disconnect()
+		end
+		table.clear(markerConnections)
+		if hammerFlameConnection then
+			hammerFlameConnection:Disconnect()
+			hammerFlameConnection = nil
+		end
+		if giantAnimation then
+			pcall(function()
+				giantAnimation:Stop()
+			end)
+			giantAnimation = nil
+		end
+		safeDestroy(impactEffect)
+		safeDestroy(portal)
+		safeDestroy(soundsFolder)
+		safeDestroy(colorCorrection)
+		safeDestroy(bloomEffect)
+		safeDestroy(effectModel)
+	end
+	WorldEffectFlight:setCleanup(gen, cleanup)
+
+	local function wait(seconds)
+		if not WorldEffectFlight:wait(gen, seconds) then
+			error("WorldEffectAborted")
+		end
+	end
+
+	local ok, err = pcall(function()
 	-- Clone the main effect model
-	local effectModel = ReplicatedStorage.WorldEffects.Smite4:Clone()
+	effectModel = ReplicatedStorage.WorldEffects.Smite4:Clone()
 	SoundAssetSanitizer.removeBlockedSounds(effectModel)
 	local diamondHammer = effectModel.DiamondHammer
 
@@ -108,20 +164,20 @@ local function createDonationEffect(donorName, recipientName, donationAmount, do
 	effectModel.Objects:Destroy()
 
 	-- Move sounds to workspace
-	local soundsFolder = effectModel.Sounds
+	soundsFolder = effectModel.Sounds
 	soundsFolder.Parent = workspace
 	soundsFolder.Name = "1MDonationEffect_Sounds"
 
 	-- Load animation
-	local giantAnimation = effectModel.Humanoid:LoadAnimation(effectModel.Animations.Giant_MainAnimation)
+	giantAnimation = effectModel.Humanoid:LoadAnimation(effectModel.Animations.Giant_MainAnimation)
 
 	-- Create lighting effects
-	local colorCorrection = Instance.new("ColorCorrectionEffect")
+	colorCorrection = Instance.new("ColorCorrectionEffect")
 	colorCorrection.Enabled = true
 	colorCorrection.Name = "SmiteColorCorrection"
 	colorCorrection.Parent = game.Lighting
 
-	local bloomEffect = Instance.new("BloomEffect")
+	bloomEffect = Instance.new("BloomEffect")
 	bloomEffect.Enabled = true
 	bloomEffect.Name = "SmiteBloom"
 	bloomEffect.Size = 20
@@ -146,7 +202,7 @@ local function createDonationEffect(donorName, recipientName, donationAmount, do
 	effectModel.PrimaryPart = effectModel.HumanoidRootPart
 
 	-- Create portal effect
-	local portal = portalTemplate:Clone()
+	portal = portalTemplate:Clone()
 	portalTemplate.PortalAmbiance.Volume = 0
 	portalTemplate.PortalAmbiance.PlaybackSpeed = 0
 	portal.CFrame = effectModel.FloorLevel.CFrame
@@ -238,18 +294,22 @@ local function createDonationEffect(donorName, recipientName, donationAmount, do
 	}):Play()
 
 	-- Meteor shower variables
-	local meteorShowerActive = true
 	local meteorStartTime = tick()
 	local meteorSpawnDelay = 0.5
 
 	-- Start meteor shower
 	spawn(function()
-		while meteorShowerActive do
+		while meteorShowerActive and WorldEffectFlight:isActive(gen) do
 			if tick() - meteorStartTime > 90 then
 				break
 			end
-			wait(meteorSpawnDelay)
+			if not WorldEffectFlight:wait(gen, meteorSpawnDelay) then
+				break
+			end
 			spawn(function()
+				if not WorldEffectFlight:isActive(gen) then
+					return
+				end
 				local sizeMultiplier = math.random(100, 400) / 100
 				local fallDuration = math.random(250, 400) / 100
 				local fallHeight = math.random(500, 750)
@@ -432,11 +492,18 @@ local function createDonationEffect(donorName, recipientName, donationAmount, do
 		end
 	end
 
-	local hammerFlameConnection = effectModel.Values.Hammer_FlameEffectTransparency.Changed:Connect(updateHammerFlameEffects)
+	hammerFlameConnection = effectModel.Values.Hammer_FlameEffectTransparency.Changed:Connect(updateHammerFlameEffects)
 	updateHammerFlameEffects(1)
 
+	local function trackMarker(name, handler)
+		table.insert(markerConnections, giantAnimation:GetMarkerReachedSignal(name):Connect(handler))
+	end
+
 	-- Animation event handlers
-	giantAnimation:GetMarkerReachedSignal("Eye lense flare"):Connect(function()
+	trackMarker("Eye lense flare", function()
+		if not WorldEffectFlight:isActive(gen) then
+			return
+		end
 		soundsFolder.LenseFlareEyes:Play()
 		effectModel.Head.LeftEyeAttachment.Flare.Enabled = true
 		effectModel.Head.LeftEyeAttachment.FlareFlash:Emit(1)
@@ -444,7 +511,10 @@ local function createDonationEffect(donorName, recipientName, donationAmount, do
 		effectModel.Head.RightEyeAttachment.FlareFlash:Emit(1)
 	end)
 
-	giantAnimation:GetMarkerReachedSignal("HammerAppear"):Connect(function()
+	trackMarker("HammerAppear", function()
+		if not WorldEffectFlight:isActive(gen) then
+			return
+		end
 		diamondHammer.Handle.AppearSound.Playing = true
 		diamondHammer.Handle.AppearSound.Volume = 0
 		diamondHammer.Handle.AppearSound.PlaybackSpeed = 0.75
@@ -482,7 +552,10 @@ local function createDonationEffect(donorName, recipientName, donationAmount, do
 		}):Play()
 	end)
 
-	giantAnimation:GetMarkerReachedSignal("ChargeSwing"):Connect(function()
+	trackMarker("ChargeSwing", function()
+		if not WorldEffectFlight:isActive(gen) then
+			return
+		end
 		local handle = diamondHammer.Handle
 		SoundAssetSanitizer.safePlay(handle:FindFirstChild("ChargeSound1"))
 		SoundAssetSanitizer.safePlay(handle:FindFirstChild("ChargeSound2"))
@@ -508,7 +581,10 @@ local function createDonationEffect(donorName, recipientName, donationAmount, do
 		}):Play()
 	end)
 
-	giantAnimation:GetMarkerReachedSignal("SwingStart"):Connect(function()
+	trackMarker("SwingStart", function()
+		if not WorldEffectFlight:isActive(gen) then
+			return
+		end
 		local handle = diamondHammer.Handle
 		local mainChargeSound = handle:FindFirstChild("MainChargeSound")
 		local baseCenter = handle:FindFirstChild("BaseCenter")
@@ -556,7 +632,10 @@ local function createDonationEffect(donorName, recipientName, donationAmount, do
 		end
 	end)
 
-	giantAnimation:GetMarkerReachedSignal("SwingEnd"):Connect(function()
+	trackMarker("SwingEnd", function()
+		if not WorldEffectFlight:isActive(gen) then
+			return
+		end
 		meteorSpawnDelay = 0.25
 		SoundAssetSanitizer.safeStop(diamondHammer.Handle:FindFirstChild("MainChargeSound"))
 		SoundAssetSanitizer.safePlay(soundsFolder:FindFirstChild("Rumble"))
@@ -608,7 +687,7 @@ local function createDonationEffect(donorName, recipientName, donationAmount, do
 
 		cameraShaker:ShakeOnce(6, 6, 0.25, 5)
 
-		local impactEffect = impactVisuals:Clone()
+		impactEffect = impactVisuals:Clone()
 		impactEffect.Position = GIANT_SPAWN_POSITION
 		impactEffect.Parent = workspace
 
@@ -731,16 +810,23 @@ local function createDonationEffect(donorName, recipientName, donationAmount, do
 
 		wait(30)
 		impactEffect:Destroy()
+		impactEffect = nil
 	end)
 
-	giantAnimation:GetMarkerReachedSignal("Release"):Connect(function()
+	trackMarker("Release", function()
+		if not WorldEffectFlight:isActive(gen) then
+			return
+		end
 		effectModel.Head.LeftEyeAttachment.Flare.Enabled = false
 		effectModel.Head.RightEyeAttachment.Flare.Enabled = false
 	end)
 
 	local appearanceParticle = effectModel.Particles.Appearance
 
-	giantAnimation:GetMarkerReachedSignal("Fade"):Connect(function()
+	trackMarker("Fade", function()
+		if not WorldEffectFlight:isActive(gen) then
+			return
+		end
 		local fadeSound = soundsFolder.GiantFade:Clone()
 		fadeSound.Volume = 0
 		fadeSound.PlaybackSpeed = 1.5
@@ -794,10 +880,19 @@ local function createDonationEffect(donorName, recipientName, donationAmount, do
 		}):Play()
 	end)
 
-	giantAnimation:GetMarkerReachedSignal("FadeEnd"):Connect(function()
-		hammerFlameConnection:Disconnect()
-		wait(5)
-		effectModel:Destroy()
+	trackMarker("FadeEnd", function()
+		if not WorldEffectFlight:isActive(gen) then
+			return
+		end
+		if hammerFlameConnection then
+			hammerFlameConnection:Disconnect()
+			hammerFlameConnection = nil
+		end
+		if not WorldEffectFlight:wait(gen, 5) then
+			return
+		end
+		safeDestroy(effectModel)
+		effectModel = nil
 	end)
 
 	wait(1)
@@ -805,6 +900,9 @@ local function createDonationEffect(donorName, recipientName, donationAmount, do
 
 	-- Start environmental effects
 	spawn(function()
+		if not WorldEffectFlight:isActive(gen) then
+			return
+		end
 		soundsFolder.Earthquake:Play()
 		soundsFolder.CrumbleLoop.Volume = 0
 		soundsFolder.CrumbleLoop.Playing = true
@@ -834,7 +932,9 @@ local function createDonationEffect(donorName, recipientName, donationAmount, do
 			end
 		end
 
-		wait(7)
+		if not WorldEffectFlight:wait(gen, 7) then
+			return
+		end
 
 		TweenService:Create(soundsFolder.CrumbleLoop, TweenInfo.new(10, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, 0), {
 			Volume = 0
@@ -870,8 +970,11 @@ local function createDonationEffect(donorName, recipientName, donationAmount, do
 		}):Play()
 
 		portal.PortalClose1.PlayOnRemove = true
-		wait(5)
-		portal:Destroy()
+		if not WorldEffectFlight:wait(gen, 5) then
+			return
+		end
+		safeDestroy(portal)
+		portal = nil
 	end)
 
 	wait(30)
@@ -889,10 +992,23 @@ local function createDonationEffect(donorName, recipientName, donationAmount, do
 	}):Play()
 
 	wait(30)
-	colorCorrection:Destroy()
-	bloomEffect:Destroy()
-	soundsFolder:Destroy()
-	hammerFlameConnection:Disconnect()
+	safeDestroy(colorCorrection)
+	colorCorrection = nil
+	safeDestroy(bloomEffect)
+	bloomEffect = nil
+	safeDestroy(soundsFolder)
+	soundsFolder = nil
+	if hammerFlameConnection then
+		hammerFlameConnection:Disconnect()
+		hammerFlameConnection = nil
+	end
+	end)
+
+	cleanup()
+	WorldEffectFlight:finish(gen)
+	if not ok and tostring(err) ~= "WorldEffectAborted" then
+		warn("Blossom effect failed:", err)
+	end
 end
 
 
@@ -910,7 +1026,7 @@ local donationEffectConn = DonationEffect.OnClientEvent:Connect(function(effectN
 	if not DonationExperiencePrefs.shouldShowWorldEffect() then
 		return
 	end
-	pcall(createDonationEffect, donorName, recipientName, donationAmount, userId)
+	createDonationEffect(donorName, recipientName, donationAmount, userId)
 end)
 script.Destroying:Connect(function()
 	donationEffectConn:Disconnect()

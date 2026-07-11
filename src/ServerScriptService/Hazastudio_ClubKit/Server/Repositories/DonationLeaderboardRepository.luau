@@ -14,6 +14,9 @@ local LeaderboardIdentity = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.
 local HttpApiCounter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.HttpApiCounter)
 local HttpApi = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.HttpApi)
 local MemoryStoreCache = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.MemoryStoreCache)
+local CrossServerCache = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.CrossServerCache)
+
+local LEADERBOARD_INVALIDATE_TOPIC = "DonationLeaderboardInvalidate"
 
 -- P0: Detect throttle/queue errors di pcall catch dan propagate ke global lockout
 -- supaya repository-wide operations short-circuit selama cooldown. Roblox
@@ -356,6 +359,21 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 		end
 	end
 
+	local function invalidateLocalLeaderboardCaches()
+		cacheInvalidatePrefix("robux:")
+		cacheInvalidatePrefix("community:")
+		invalidateMemoryStoreLeaderboards()
+	end
+
+	-- Other servers drop local+MS LB cache after a write on this server.
+	CrossServerCache.subscribe(LEADERBOARD_INVALIDATE_TOPIC, function(_userId: number)
+		invalidateLocalLeaderboardCaches()
+	end)
+
+	local function publishLeaderboardInvalidation()
+		CrossServerCache.publish(LEADERBOARD_INVALIDATE_TOPIC, 0)
+	end
+
 	type ReceiptState = {
 		status: string,
 		userId: number,
@@ -363,6 +381,8 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 		amount: number,
 		userIncremented: boolean?,
 		communityIncremented: boolean?,
+		userIncrementStarted: boolean?,
+		communityIncrementStarted: boolean?,
 		communityId: number?,
 		claimedAt: number?,
 		processedAt: number?,
@@ -394,6 +414,8 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 						amount = math.max(0, math.floor(record.amount)),
 						userIncremented = false,
 						communityIncremented = false,
+						userIncrementStarted = false,
+						communityIncrementStarted = false,
 						communityId = if record.community then record.community.id else nil,
 						claimedAt = os.time(),
 					}
@@ -415,7 +437,12 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 
 	local function persistReceiptProgress(
 		purchaseId: string,
-		flags: { userIncremented: boolean?, communityIncremented: boolean? }
+		flags: {
+			userIncremented: boolean?,
+			communityIncremented: boolean?,
+			userIncrementStarted: boolean?,
+			communityIncrementStarted: boolean?,
+		}
 	): Result<ReceiptState>
 		local saved: ReceiptState? = nil
 		local result = budgetGate:executeAsync(Enum.DataStoreRequestType.UpdateAsync, function()
@@ -425,11 +452,19 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 						return nil
 					end
 					local nextState = table.clone(current) :: ReceiptState
+					if flags.userIncrementStarted == true then
+						nextState.userIncrementStarted = true
+					end
+					if flags.communityIncrementStarted == true then
+						nextState.communityIncrementStarted = true
+					end
 					if flags.userIncremented == true then
 						nextState.userIncremented = true
+						nextState.userIncrementStarted = true
 					end
 					if flags.communityIncremented == true then
 						nextState.communityIncremented = true
+						nextState.communityIncrementStarted = true
 					end
 					saved = nextState
 					return nextState
@@ -626,7 +661,23 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 
 		local receiptState = claim.state
 		local needsUserIncrement = not (receiptState and receiptState.userIncremented == true)
-		local needsCommunityIncrement = record.community ~= nil
+
+		-- Community credit is frozen at claim time (receiptState.communityId).
+		-- Retries must not re-resolve /setcommun or primary-group — wrong or lost credit.
+		local frozenCommunityId = if receiptState then receiptState.communityId else nil
+		local effectiveCommunity: CommunityData? = nil
+		if type(frozenCommunityId) == "number" and frozenCommunityId > 0 then
+			if record.community and record.community.id == frozenCommunityId then
+				effectiveCommunity = record.community
+			else
+				effectiveCommunity = {
+					id = frozenCommunityId,
+					name = "Community " .. tostring(frozenCommunityId),
+					logo = "",
+				}
+			end
+		end
+		local needsCommunityIncrement = effectiveCommunity ~= nil
 			and not (receiptState and receiptState.communityIncremented == true)
 
 		local receiptMode = opts and opts.receiptMode == true
@@ -678,23 +729,51 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 			return executeWithDeferRetry(incrementOnce, "user:" .. tostring(userId))
 		end
 
-		-- User increment first: if it fails, nothing is committed to OrderedDS.
+		-- Intent-before-Increment: prefer under-credit over double-credit if progress
+		-- fails after IncrementAsync (or crash between intent and Increment).
 		if needsUserIncrement then
-			local incrementResult = gatedUserIncrement(record.userId, record.amount)
-			if not incrementResult.ok then
-				return Result.Err(incrementResult.error)
+			local userStarted = receiptState and receiptState.userIncrementStarted == true
+			if not userStarted then
+				local intentResult = persistReceiptProgress(record.purchaseId, { userIncrementStarted = true })
+				if not intentResult.ok then
+					return Result.Err(intentResult.error)
+				end
+				receiptState = intentResult.value
+				local incrementResult = gatedUserIncrement(record.userId, record.amount)
+				if not incrementResult.ok then
+					return Result.Err(incrementResult.error)
+				end
+			else
+				log:warn("Resuming Robux receipt after userIncrementStarted — skipping Increment to avoid double credit", {
+					purchaseId = record.purchaseId,
+					userId = record.userId,
+				})
 			end
 			local progressResult = persistReceiptProgress(record.purchaseId, { userIncremented = true })
 			if not progressResult.ok then
 				return Result.Err(progressResult.error)
 			end
+			receiptState = progressResult.value
 		end
 
-		if needsCommunityIncrement and record.community then
-			local community = record.community
-			local communityResult = gatedCommunityIncrement(community.id, record.amount)
-			if not communityResult.ok then
-				return Result.Err(communityResult.error)
+		if needsCommunityIncrement and effectiveCommunity then
+			local community = effectiveCommunity
+			local communityStarted = receiptState and receiptState.communityIncrementStarted == true
+			if not communityStarted then
+				local intentResult = persistReceiptProgress(record.purchaseId, { communityIncrementStarted = true })
+				if not intentResult.ok then
+					return Result.Err(intentResult.error)
+				end
+				receiptState = intentResult.value
+				local communityResult = gatedCommunityIncrement(community.id, record.amount)
+				if not communityResult.ok then
+					return Result.Err(communityResult.error)
+				end
+			else
+				log:warn("Resuming Robux receipt after communityIncrementStarted — skipping Increment to avoid double credit", {
+					purchaseId = record.purchaseId,
+					communityId = community.id,
+				})
 			end
 			local progressResult = persistReceiptProgress(record.purchaseId, { communityIncremented = true })
 			if not progressResult.ok then
@@ -716,7 +795,18 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 			updatedAt = os.time(),
 		})
 
-		local markResult = finalizeReceiptProcessed(record)
+		-- finalizeReceiptProcessed still uses record.community for communityIncremented flag;
+		-- pass frozen community so finalize matches credit path.
+		local finalizeRecord = record
+		if effectiveCommunity then
+			finalizeRecord = table.clone(record)
+			finalizeRecord.community = effectiveCommunity
+		elseif frozenCommunityId == nil then
+			finalizeRecord = table.clone(record)
+			finalizeRecord.community = nil
+		end
+
+		local markResult = finalizeReceiptProcessed(finalizeRecord)
 		if not markResult.ok then
 			log:error("Donation receipt finalize failed after leaderboard increment", {
 				purchaseId = record.purchaseId,
@@ -731,6 +821,7 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 		repo:markCommunityLeaderboardDirty()
 		repo:markPlayerTotalDirty(record.userId)
 		invalidateMemoryStoreLeaderboards()
+		publishLeaderboardInvalidation()
 
 		return Result.Ok("processed")
 	end
@@ -808,6 +899,7 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 		repo:markRobuxLeaderboardDirty()
 		repo:markPlayerTotalDirty(userId)
 		invalidateMemoryStoreLeaderboards()
+		publishLeaderboardInvalidation()
 		return Result.Ok(nil)
 	end
 

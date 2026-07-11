@@ -2,6 +2,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local DonationExperiencePrefs = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DonationExperiencePrefs)
+local WorldEffectFlight = require(script.Parent.Parent.Parent.Utils.WorldEffectFlight)
 local LocalPlayer = game.Players.LocalPlayer
 local Debris = game:GetService("Debris")
 local TweenService = game:GetService("TweenService")
@@ -37,7 +38,53 @@ end
 
 -- Main nuke effect function
 local function createNukeEffect(nukeModel, donatorName, recipientName, donationAmount)
-	local nukeClone = nukeModel:Clone()
+	local gen = WorldEffectFlight:begin()
+	local cleaned = false
+	local nukeClone = nil
+	local bloomEffect = nil
+	local heartbeatConnection = nil
+	local confettiClone = nil
+
+	local function cleanup()
+		if cleaned then
+			return
+		end
+		cleaned = true
+		if heartbeatConnection then
+			heartbeatConnection:Disconnect()
+			heartbeatConnection = nil
+		end
+		local alarmSound = script:FindFirstChild("Alarm")
+		if alarmSound and alarmSound:IsA("Sound") then
+			alarmSound:Stop()
+		end
+		local activeFireworks = workspace:FindFirstChild("ActiveFireworks")
+		if activeFireworks then
+			activeFireworks:Destroy()
+		end
+		if bloomEffect then
+			bloomEffect:Destroy()
+			bloomEffect = nil
+		end
+		if confettiClone then
+			confettiClone:Destroy()
+			confettiClone = nil
+		end
+		if nukeClone then
+			nukeClone:Destroy()
+			nukeClone = nil
+		end
+	end
+	WorldEffectFlight:setCleanup(gen, cleanup)
+
+	local function wait(seconds)
+		if not WorldEffectFlight:wait(gen, seconds) then
+			error("WorldEffectAborted")
+		end
+	end
+
+	local ok, err = pcall(function()
+	nukeClone = nukeModel:Clone()
 	SoundAssetSanitizer.removeBlockedSounds(nukeClone)
 	local nukeCFrame = nukeClone.NukeValues.NukeCFrame
 	local donationFrame = nukeClone.BillboardGuiAnimation.Frame
@@ -49,7 +96,7 @@ local function createNukeEffect(nukeModel, donatorName, recipientName, donationA
 	local thrustEmitPoint = nukeClone.ThrustEmitPoint
 
 	-- Create bloom effect
-	local bloomEffect = Instance.new("BloomEffect")
+	bloomEffect = Instance.new("BloomEffect")
 	bloomEffect.Enabled = true
 	bloomEffect.Name = "NukeBloom"
 	bloomEffect.Size = 15
@@ -106,7 +153,7 @@ local function createNukeEffect(nukeModel, donatorName, recipientName, donationA
 	nukeClone.Parent = workspace
 
 	-- Position tracking
-	local heartbeatConnection = RunService.Heartbeat:Connect(function()
+	heartbeatConnection = RunService.Heartbeat:Connect(function()
 		nukeClone.AlignPosition.Position = nukeCFrame.Value.Position
 		nukeClone.AlignOrientation.CFrame = nukeCFrame.Value
 	end)
@@ -328,7 +375,7 @@ local function createNukeEffect(nukeModel, donatorName, recipientName, donationA
 	centerEmitPoint.Spark3:Emit(50)
 
 	-- Create confetti effect
-	local confettiClone = confettiBox:Clone()
+	confettiClone = confettiBox:Clone()
 	confettiClone.Position = SPAWN_POSITION + Vector3.new(0, 250, 0)
 	confettiClone.Parent = workspace
 
@@ -337,14 +384,20 @@ local function createNukeEffect(nukeModel, donatorName, recipientName, donationA
 	}):Play()
 
 	spawn(function()
-		local confettiEffects = confettiClone:GetChildren()
+		local ownedConfetti = confettiClone
+		if not ownedConfetti or not WorldEffectFlight:isActive(gen) then
+			return
+		end
+		local confettiEffects = ownedConfetti:GetChildren()
 		for _, effect in pairs(confettiEffects) do
 			if effect:IsA("ParticleEmitter") then
 				effect.Enabled = true
 			end
 		end
 
-		wait(60)
+		if not WorldEffectFlight:wait(gen, 60) then
+			return
+		end
 
 		for _, effect in pairs(confettiEffects) do
 			if effect:IsA("ParticleEmitter") then
@@ -354,10 +407,18 @@ local function createNukeEffect(nukeModel, donatorName, recipientName, donationA
 			end
 		end
 
-		wait(60)
-		confettiClone.Size = Vector3.new(0, 0, 0)
-		wait(30)
-		confettiClone:Destroy()
+		if not WorldEffectFlight:wait(gen, 60) then
+			return
+		end
+		if ownedConfetti.Parent then
+			ownedConfetti.Size = Vector3.new(0, 0, 0)
+		end
+		if not WorldEffectFlight:wait(gen, 30) then
+			return
+		end
+		if ownedConfetti.Parent then
+			ownedConfetti:Destroy()
+		end
 	end)
 
 	-- Enable fireworks
@@ -408,10 +469,13 @@ local function createNukeEffect(nukeModel, donatorName, recipientName, donationA
 
 	wait(30)
 	cameraShaker:Stop()
-	bloomEffect:Destroy()
-	heartbeatConnection:Disconnect()
-	nukeClone:Destroy()
-	confettiClone:Destroy()
+	end)
+
+	cleanup()
+	WorldEffectFlight:finish(gen)
+	if not ok and tostring(err) ~= "WorldEffectAborted" then
+		warn("LocalNuke effect failed:", err)
+	end
 end
 
 -- Main function that checks user settings
@@ -433,7 +497,7 @@ if not DonationEffect then
 end
 local donationEffectConn = DonationEffect.OnClientEvent:Connect(function(effectName, donatorName, recipientName, donationAmount)
 	if effectName ~= "Nuke" then return end
-	pcall(handleNukeEffect, donatorName, recipientName, donationAmount)
+	handleNukeEffect(donatorName, recipientName, donationAmount)
 end)
 script.Destroying:Connect(function()
 	donationEffectConn:Disconnect()

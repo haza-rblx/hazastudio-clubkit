@@ -1,5 +1,5 @@
 -- Konfigurasi
-local FIREWORK_COUNT = 140
+local FIREWORK_COUNT = 40
 local SPAWN_DELAY = 0.75
 local EXPLOSION_DELAY_MIN = 0.75
 local EXPLOSION_DELAY_MAX = 2.0

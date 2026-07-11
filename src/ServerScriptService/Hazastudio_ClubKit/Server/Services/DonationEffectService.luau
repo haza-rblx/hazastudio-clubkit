@@ -41,12 +41,28 @@ local function createDonationEffectService(deps: {
 
 	-- Global nuke queue: serialize world-position Nuke/Smite/BlackHole VFX
 	-- supaya donations gantian (full serialize — tunggu nuke selesai DULU
-	-- sebelum mulai berikutnya). Sebelumnya broadcastNuke fires concurrent
-	-- untuk semua donations ≥100k IDR → "ga gantian".
-	-- Duration = NUKE_DEFAULT_DURATION (20s) supaya nuke berikutnya mulai
-	-- setelah visual yang sebelumnya selesai.
+	-- sebelum mulai berikutnya). Duration = WORLD_EFFECT_DURATIONS[effect]
+	-- (Nuke 90 / Smite4 180 / BlackHole 240) matching client EffectDonate
+	-- lifetimes; fallback NUKE_DEFAULT_DURATION. Client also single-flights.
+	-- Do NOT enable NukeEffectController alongside EffectDonate (double VFX).
 	local nukeQueue: { { player: Player, source: string, amount: number } } = {}
 	local nukeWorkerThread: thread? = nil
+
+	local function getWorldEffectDuration(effectName: string): number
+		local donation = Config.Donation :: any
+		local map = donation.WORLD_EFFECT_DURATIONS
+		if type(map) == "table" then
+			local configured = map[effectName]
+			if type(configured) == "number" and configured > 0 then
+				return configured
+			end
+		end
+		local fallback = donation.NUKE_DEFAULT_DURATION
+		if type(fallback) == "number" and fallback > 0 then
+			return fallback
+		end
+		return 90
+	end
 
 	local function getDonationConfig(): { [string]: any }
 		return Config.Donation :: any
@@ -360,22 +376,18 @@ local function createDonationEffectService(deps: {
 		})
 	end
 
-	-- Nuke queue worker: dequeue satu per satu, tunggu NUKE_DEFAULT_DURATION
-	-- sebelum mulai nuke berikutnya. Full serialize supaya donations gantian.
+	-- Nuke queue worker: dequeue satu per satu, tunggu WORLD_EFFECT_DURATIONS
+	-- untuk effect yang baru di-broadcast sebelum mulai berikutnya.
 	local function processNukeQueue()
 		while #nukeQueue > 0 do
 			local item = table.remove(nukeQueue, 1)
 			local player = item.player
-			if player and player.Parent then
+			local effect = resolveNukeEffect(item.source, item.amount)
+			if player and player.Parent and effect then
 				broadcastNuke(player, item.source, item.amount)
-			end
-			-- Tunggu nuke visual selesai sebelum mulai berikutnya.
-			-- Pakai NUKE_DEFAULT_DURATION (20s) supaya nuke berikutnya mulai
-			-- setelah Debris cleanup yang sebelumnya. Kalau masih ada antrian,
-			-- tunggu; kalau kosong, exit.
-			if #nukeQueue > 0 then
-				local nukeDuration = (Config.Donation :: any).NUKE_DEFAULT_DURATION or 20
-				task.wait(nukeDuration)
+				-- Always wait the real client lifetime so a late enqueue during
+				-- this wait is still serialized (worker stays alive).
+				task.wait(getWorldEffectDuration(effect))
 			end
 		end
 		nukeWorkerThread = nil

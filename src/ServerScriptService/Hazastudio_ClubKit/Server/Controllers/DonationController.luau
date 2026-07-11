@@ -447,10 +447,11 @@ local function createDonationController(deps: {
 		end)
 	end
 
-	-- Pre-warm the workspace leaderboard cache at controller init so the first
-	-- client snapshot request hits a hot cache instead of yielding through cold
-	-- DataStore calls. Without this, BudgetGate defers + GetSortedAsync latency
-	-- can stack to >10s on first call, exceeding the client's snapshot timeout.
+	-- Paint loading/empty boards immediately, but defer the heavy DataStore
+	-- pre-warm so it does not compete with join-time SharedProfileLoader reads.
+	-- Live soak showed ~4 concurrent joins + uncapped LB metadata GetAsync
+	-- flooding the request queue during the first minutes of a server.
+	local LEADERBOARD_PREWARM_DELAY_SEC = 25
 	task.spawn(function()
 		WorkspaceLeaderboardRenderer.bootstrapLoadingUntilRevision()
 	end)
@@ -468,22 +469,36 @@ local function createDonationController(deps: {
 		return payload
 	end
 
-	task.spawn(function()
+	-- Seed empty/loading cache so joiner pushes never cold-build against DS.
+	do
+		local empty = emptyWorkspaceLeaderboardPayload()
+		stampLeaderboardRevision(empty)
+		workspaceLeaderboardCache = empty
+		workspaceLeaderboardCacheExpiresAt = os.clock() + LEADERBOARD_PREWARM_DELAY_SEC + 5
+		paintWorkspaceLeaderboards(empty)
+	end
+
+	task.delay(LEADERBOARD_PREWARM_DELAY_SEC, function()
+		invalidateWorkspaceLeaderboardCache()
 		local ok, payloadOrErr = pcall(buildWorkspaceLeaderboardPayload, false)
 		if not ok then
 			log:warn("Leaderboard cache pre-warm failed", { error = tostring(payloadOrErr) })
 			local fallback = emptyWorkspaceLeaderboardPayload()
 			stampLeaderboardRevision(fallback)
+			workspaceLeaderboardCache = fallback
+			workspaceLeaderboardCacheExpiresAt = os.clock() + Config.Leaderboards.WORKSPACE_CACHE_TTL
 			paintWorkspaceLeaderboards(fallback)
 			return
 		end
 		stampLeaderboardRevision(payloadOrErr)
 		paintWorkspaceLeaderboards(payloadOrErr)
+		if leaderboardsNetwork then
+			leaderboardsNetwork:fireAllClients(payloadOrErr)
+		end
 	end)
 
-	-- Server-push leaderboard to new joiners. Replaces the cold-cache snapshot
-	-- request roundtrip with a direct push using the cached payload, so the
-	-- workspace SurfaceGui has data ready by the time the player can see it.
+	-- Server-push leaderboard to new joiners. Uses cached (empty until warm, then
+	-- hot payload) so join never triggers a cold GetSortedAsync/GetAsync storm.
 	-- Snapshot request remote stays wired as a fallback for explicit refresh.
 	local function pushLeaderboardTo(player: Player)
 		if not leaderboardsNetwork then
@@ -497,12 +512,20 @@ local function createDonationController(deps: {
 			end
 			invalidateWorkspaceLeaderboardCache()
 		end
+		-- Prefer cache; only build when demo forced invalidate left it empty.
+		if workspaceLeaderboardCache and os.clock() < workspaceLeaderboardCacheExpiresAt then
+			leaderboardsNetwork:fireClient(player, workspaceLeaderboardCache)
+			return
+		end
 		local ok, payloadOrError = pcall(buildWorkspaceLeaderboardPayload, false)
 		if not ok then
 			log:warn("Leaderboard push to joiner failed", {
 				player = player.Name,
 				error = tostring(payloadOrError),
 			})
+			local fallback = emptyWorkspaceLeaderboardPayload()
+			stampLeaderboardRevision(fallback)
+			leaderboardsNetwork:fireClient(player, fallback)
 			return
 		end
 		stampLeaderboardRevision(payloadOrError)

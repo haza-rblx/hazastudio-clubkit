@@ -210,6 +210,7 @@ local function createAvatarContextController(deps: {
 		local trackedCharacters = {} :: { [number]: Model }
 		local characterFilterList = {} :: { Instance }
 		local nonLocalCharacterFilterList = {} :: { Instance }
+		local playerCharacterConnections: { [number]: { RBXScriptConnection } } = {}
 
 		local function rebuildRaycastFilterList()
 			local nextFilterList = {} :: { Instance }
@@ -236,19 +237,30 @@ local function createAvatarContextController(deps: {
 
 		local clearHighlight: () -> ()
 
+		local function disconnectPlayerCharacterHooks(userId: number)
+			local conns = playerCharacterConnections[userId]
+			if not conns then
+				return
+			end
+			for _, conn in ipairs(conns) do
+				conn:Disconnect()
+			end
+			playerCharacterConnections[userId] = nil
+		end
+
 		local function trackPlayer(player: Player)
+			disconnectPlayerCharacterHooks(player.UserId)
 			if player.Character then
 				setTrackedCharacter(player, player.Character)
 			end
 
-			player.CharacterAdded:Connect(function(character)
+			local added = player.CharacterAdded:Connect(function(character)
 				setTrackedCharacter(player, character)
 				if player == localPlayer then
 					clearHighlight()
 				end
 			end)
-
-			player.CharacterRemoving:Connect(function(character)
+			local removing = player.CharacterRemoving:Connect(function(character)
 				if trackedCharacters[player.UserId] == character then
 					setTrackedCharacter(player, nil)
 				end
@@ -256,6 +268,7 @@ local function createAvatarContextController(deps: {
 					clearHighlight()
 				end
 			end)
+			playerCharacterConnections[player.UserId] = { added, removing }
 		end
 
 		clearHighlight = function()
@@ -300,6 +313,7 @@ local function createAvatarContextController(deps: {
 		end)
 
 		Players.PlayerRemoving:Connect(function(player)
+			disconnectPlayerCharacterHooks(player.UserId)
 			local removedCharacter = trackedCharacters[player.UserId]
 			trackedCharacters[player.UserId] = nil
 			rebuildRaycastFilterList()

@@ -240,6 +240,7 @@ if LOADING_SCREEN_ENABLED then
 
 		if not ui then
 			warn("[LoadingScreenUI] bootstrap controller not ready")
+			enterGameplay()
 			return
 		end
 
@@ -252,6 +253,7 @@ if LOADING_SCREEN_ENABLED then
 		ui:start(Players.LocalPlayer.DisplayName)
 		if ui:isFinished() then
 			loadingFinished = true
+			enterGameplay()
 			return
 		end
 		if loadingFinished then
@@ -272,7 +274,9 @@ local function finishLoadingScreen()
 	if loadingScreen and not loadingScreen:isFinished() then
 		loadingScreen:finish()
 	end
-	if not LOADING_SCREEN_ENABLED then
+	-- When loading UI is disabled or never attached, unlock gameplay here.
+	-- When UI is present, enterGameplay fires via onGameplayEntered after dismiss.
+	if not LOADING_SCREEN_ENABLED or not loadingScreen then
 		enterGameplay()
 	end
 end

@@ -664,17 +664,24 @@ local function createAvatarLikeRepository(deps: { logger: Types.ILogger? }?)
 			return Result.Err(sortedResult.error)
 		end
 
+		-- Cap metadata GetAsync per call (same spirit as DonationLeaderboardRepository
+		-- METADATA_READ_LIMIT). Ranks beyond the cap use Players API identity fallback
+		-- so a likes board of 50 does not burn 50 Standard Reads on every cold build.
+		local METADATA_READ_LIMIT = 20
+		local page = sortedResult.value:GetCurrentPage()
 		local entries = {}
-		for index, item in ipairs(sortedResult.value:GetCurrentPage()) do
+		for index, item in ipairs(page) do
 			local userId = tonumber(item.key) or 0
 			local metadata: any = nil
-			local metadataResult = budgetGate:executeAsync(Enum.DataStoreRequestType.GetAsync, function()
-				return Result.withRetry(function()
-					return metadataStore:GetAsync(getUserMetadataStoreKey(userId))
-				end, Config.DataStore.RETRY_ATTEMPTS)
-			end)
-			if metadataResult.ok and type(metadataResult.value) == "table" then
-				metadata = metadataResult.value
+			if index <= METADATA_READ_LIMIT then
+				local metadataResult = budgetGate:executeAsync(Enum.DataStoreRequestType.GetAsync, function()
+					return Result.withRetry(function()
+						return metadataStore:GetAsync(getUserMetadataStoreKey(userId))
+					end, Config.DataStore.RETRY_ATTEMPTS)
+				end)
+				if metadataResult.ok and type(metadataResult.value) == "table" then
+					metadata = metadataResult.value
+				end
 			end
 
 			local fallbackUsername, fallbackDisplayName = getUserIdentity(userId)

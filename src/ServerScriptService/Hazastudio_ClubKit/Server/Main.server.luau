@@ -112,12 +112,27 @@ do
 		kitFolder:SetAttribute("Vendor", KitProduct.Vendor)
 	end
 end
-log:info("DataStore scope: production keys (Studio = live)", {
-	isStudioSession = Config.DataStoreScope.IS_STUDIO,
-	robuxLeaderboard = Config.Leaderboards.ROBUX_USER_ORDERED_KEY,
-	overhead = Config.DataStore.OVERHEAD_KEY,
-	settings = Config.Settings.DATASTORE_KEY,
-})
+if Config.DataStoreScope.IS_STUDIO and Config.DataStoreScope.USE_STUDIO_ISOLATION then
+	log:info("DataStore scope: Studio (isolated from live, persists across Studio restarts)", {
+		prefix = Config.DataStoreScope.PREFIX,
+		robuxLeaderboard = Config.Leaderboards.ROBUX_USER_ORDERED_KEY,
+		overhead = Config.DataStore.OVERHEAD_KEY,
+		settings = Config.Settings.DATASTORE_KEY,
+	})
+elseif Config.DataStoreScope.IS_STUDIO then
+	log:warn("DataStore scope: LIVE production keys from Studio — testing akan mengubah data player asli", {
+		robuxLeaderboard = Config.Leaderboards.ROBUX_USER_ORDERED_KEY,
+		overhead = Config.DataStore.OVERHEAD_KEY,
+		settings = Config.Settings.DATASTORE_KEY,
+	})
+else
+	log:info("DataStore scope: Live (production keys)", {
+		isStudioSession = Config.DataStoreScope.IS_STUDIO,
+		robuxLeaderboard = Config.Leaderboards.ROBUX_USER_ORDERED_KEY,
+		overhead = Config.DataStore.OVERHEAD_KEY,
+		settings = Config.Settings.DATASTORE_KEY,
+	})
+end
 
 do
 	local BrandLogoApplier = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.BrandLogoApplier)
@@ -467,6 +482,7 @@ local stickerService = trackLifecycle(
 	createStickerService.new({
 		logger = Logger.new("StickerService"),
 		repository = StickerRepository,
+		-- profileLoader wired after SharedProfileLoader is created (before startAll).
 	})
 )
 trackLifecycle(
@@ -581,6 +597,18 @@ end)
 sharedProfileLoader:register("likes_summary", function(player: Player)
 	return avatarLikeRepository:getSummary(player.UserId)
 end)
+-- Dance favorites must be registered before the first enqueue so SyncDance join
+-- does not need a second sharedProfileLoader:enqueue (which duplicated reads).
+if Config.FeatureFlags.SyncDanceEnabled then
+	syncFavoritesRepo = FavoritesRepository.new({
+		config = Config.Favorites,
+		logger = Logger.new("FavoritesRepository"),
+	})
+	sharedProfileLoader:register("favorites", function(player: Player)
+		syncFavoritesRepo:onPlayerAdded(player)
+		return Result.Ok(true)
+	end)
+end
 local OVERHEAD_JOIN_RETRY_DELAYS = { 2, 5, 10 }
 
 local function isRetryableOverheadLoadError(err: string?): boolean
@@ -962,11 +990,14 @@ do
 			notify = Notify,
 			overheadRepository = repo,
 			overheadController = overheadController,
+			profileLoader = sharedProfileLoader,
 		})
 	)
 	settingsController:init()
 end
 if Config.FeatureFlags.StickersEnabled ~= false then
+	-- Stickers join load folds into SharedProfileLoader (registered in onStart).
+	stickerService._profileLoader = sharedProfileLoader
 	trackLifecycle(
 		"StickerController",
 		createStickerController.new({
@@ -1030,16 +1061,7 @@ connectionCleaner:add(Players.PlayerRemoving:Connect(function(player)
 end))
 local _sessionCommandController
 if Config.FeatureFlags.SyncDanceEnabled then
-	syncFavoritesRepo = FavoritesRepository.new({
-		config = Config.Favorites,
-		logger = Logger.new("FavoritesRepository"),
-	})
-	-- Favorites load is part of the shared join-time read queue instead of a
-	-- separate ProfileLoader, so all join-time DataStore reads share one budget.
-	sharedProfileLoader:register("favorites", function(player: Player)
-		syncFavoritesRepo:onPlayerAdded(player)
-		return Result.Ok(true)
-	end)
+	-- syncFavoritesRepo + "favorites" kind already registered before first enqueue.
 	syncService = createSyncService({
 		config = Config.Sync,
 		domain = SyncDomain,
@@ -1075,16 +1097,16 @@ if Config.FeatureFlags.SyncDanceEnabled then
 			),
 		},
 	})
+	-- Wire sync session only — do NOT re-enqueue SharedProfileLoader (favorites
+	-- already queued on the first join enqueue above).
 	for _, player in ipairs(Players:GetPlayers()) do
 		syncService:onPlayerAdded(player)
-		sharedProfileLoader:enqueue(player)
 		if player.Character then
 			syncService:onCharacterAdded(player, player.Character)
 		end
 	end
 	connectionCleaner:add(Players.PlayerAdded:Connect(function(player)
 		syncService:onPlayerAdded(player)
-		sharedProfileLoader:enqueue(player)
 	end))
 	-- v2.2: route respawn-triggered hard unsync through the same notification
 	-- pipeline used for player-leave. This is what unsticks followers after
@@ -1097,7 +1119,9 @@ if Config.FeatureFlags.SyncDanceEnabled then
 	end
 	connectionCleaner:add(Players.PlayerRemoving:Connect(function(player)
 		local removalInfo = syncService:onPlayerRemoving(player)
-		syncFavoritesRepo:onPlayerRemoving(player)
+		if syncFavoritesRepo then
+			syncFavoritesRepo:onPlayerRemoving(player)
+		end
 		if
 			removalInfo
 			and syncController
@@ -1163,6 +1187,7 @@ if gravityService then
 	local gravityController = createGravityController({
 		service = gravityService,
 		commandExecutionService = commandExecutionService,
+		overheadService = overheadService,
 		notify = Notify,
 		logger = Logger.new("GravityController"),
 		rateLimiter = RateLimiter.new(Config.Gravity.RATE_MAX, Config.Gravity.RATE_WINDOW),
@@ -1207,6 +1232,19 @@ if Config.FeatureFlags.MusicPlayerEnabled then
 			config = Config.Music,
 			logger = Logger.new("MusicFavoritesRepository"),
 		})
+		-- Fold music favorites GetAsync into SharedProfileLoader (separate from
+		-- SyncDance FavoritesRepository). MusicService.onPlayerAdded still runs
+		-- for session/rank; repo onPlayerAdded is idempotent if already loaded.
+		sharedProfileLoader:register("music_favorites", function(player: Player)
+			musicFavoritesRepo:onPlayerAdded(player)
+			return Result.Ok(true)
+		end)
+		for _, existingPlayer in ipairs(Players:GetPlayers()) do
+			sharedProfileLoader:enqueueKind(existingPlayer, "music_favorites")
+		end
+		connectionCleaner:add(Players.PlayerAdded:Connect(function(player)
+			sharedProfileLoader:enqueueKind(player, "music_favorites")
+		end))
 		local musicService = createMusicService({
 			repo = musicRepo,
 			favoritesRepository = musicFavoritesRepo,
@@ -1215,6 +1253,7 @@ if Config.FeatureFlags.MusicPlayerEnabled then
 			logger = Logger.new("MusicService"),
 			config = Config.Music,
 			groupId = Config.Group.GROUP_ID,
+			loadFavoritesOnJoin = false,
 		})
 		_musicService = musicService
 		local musicInitOk, musicInitErr = pcall(function()
@@ -1246,7 +1285,7 @@ if Config.FeatureFlags.MusicPlayerEnabled then
 				logger = Logger.new("ZoneTrackerService"),
 			})
 		)
-		-- Sync state ke player yang baru join (client polls get_state; push is best-effort).
+		-- Session/rank sync only — favorites load via SharedProfileLoader above.
 		connectionCleaner:add(Players.PlayerAdded:Connect(function(player)
 			task.defer(function()
 				if player and player.Parent then

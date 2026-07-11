@@ -5,6 +5,7 @@
 
 local Players = game:GetService("Players")
 local SoundService = game:GetService("SoundService")
+local Debris = game:GetService("Debris")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local HttpService = game:GetService("HttpService")
@@ -1433,11 +1434,14 @@ function MusicPlayerController:_playDjSoundboardItem(itemId: string)
 	sound.PlaybackSpeed = math.max(0.05, tonumber(item.playbackSpeed) or 1)
 	sound.RollOffMaxDistance = 0
 	sound.Parent = SoundService
+	sound:Play()
 	sound.Ended:Once(function()
-		sound:Destroy()
+		if sound.Parent then
+			sound:Destroy()
+		end
 	end)
-
-	SoundService:PlayLocalSound(sound)
+	local lifetime = sound.TimeLength
+	Debris:AddItem(sound, if lifetime > 0 then lifetime + 1 else 8)
 end
 
 function MusicPlayerController:_resolveMusicResponse(payload: any)

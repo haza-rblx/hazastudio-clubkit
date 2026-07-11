@@ -4,6 +4,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SoundService = game:GetService("SoundService")
+local Debris = game:GetService("Debris")
 local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
@@ -95,10 +96,14 @@ local function playEnterSound()
 	sound.Volume = math.clamp(tonumber(Config.Announcement.ENTER_SOUND_VOLUME) or 0.65, 0, 1)
 	sound.RollOffMaxDistance = 0
 	sound.Parent = SoundService
+	sound:Play()
 	sound.Ended:Once(function()
-		sound:Destroy()
+		if sound.Parent then
+			sound:Destroy()
+		end
 	end)
-	SoundService:PlayLocalSound(sound)
+	local lifetime = sound.TimeLength
+	Debris:AddItem(sound, if lifetime > 0 then lifetime + 1 else 8)
 end
 
 local function colorFromHex(hex: string): Color3?

@@ -8,6 +8,7 @@ local Lighting = game:GetService("Lighting")
 
 local SoundAssetSanitizer = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.SoundAssetSanitizer)
 local DonationExperiencePrefs = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DonationExperiencePrefs)
+local WorldEffectFlight = require(script.Parent.Parent.Parent.Utils.WorldEffectFlight)
 
 -- Constants
 local SPAWN_POSITION = Vector3.new(17, 0.5, -100)
@@ -55,36 +56,95 @@ end
 
 -- Main Black Hole effect function
 local function createBlackHoleEffect(donatorName, recipientName, donationAmount)
+	-- Abort any prior world VFX first so Lighting restore runs before we snapshot.
+	local gen = WorldEffectFlight:begin()
 	local savedLighting = {
 		ClockTime = Lighting.ClockTime,
 		Brightness = Lighting.Brightness,
 		FogColor = Lighting.FogColor,
 	}
 
+	local cleaned = false
+	local meteorShowerActive = true
+	local effectModel = nil
+	local floorAmbianceClone = nil
+	local airAmbiance = nil
+	local soundsFolder = nil
+	local colorCorrection = nil
+	local bloomEffect = nil
+	local blackHoleOrb = nil
+	local heavenBallClone = nil
+	local impactVisuals = nil
+	local ambianceSound = nil
+	local whiteHole1, whiteHole2, whiteHole3, whiteHole4 = nil, nil, nil, nil
+	local tickSound = nil
+
+	local function safeDestroy(inst)
+		if inst and typeof(inst) == "Instance" and inst.Parent then
+			inst:Destroy()
+		end
+	end
+
+	local function cleanup()
+		if cleaned then
+			return
+		end
+		cleaned = true
+		meteorShowerActive = false
+		safeDestroy(tickSound)
+		safeDestroy(impactVisuals)
+		safeDestroy(heavenBallClone)
+		safeDestroy(blackHoleOrb)
+		safeDestroy(whiteHole1)
+		safeDestroy(whiteHole2)
+		safeDestroy(whiteHole3)
+		safeDestroy(whiteHole4)
+		safeDestroy(ambianceSound)
+		safeDestroy(soundsFolder)
+		safeDestroy(floorAmbianceClone)
+		safeDestroy(airAmbiance)
+		safeDestroy(colorCorrection)
+		safeDestroy(bloomEffect)
+		safeDestroy(effectModel)
+		Lighting.Brightness = savedLighting.Brightness
+		Lighting.ClockTime = savedLighting.ClockTime
+		Lighting.FogColor = savedLighting.FogColor
+	end
+	WorldEffectFlight:setCleanup(gen, cleanup)
+
+	local function wait(seconds)
+		if not WorldEffectFlight:wait(gen, seconds) then
+			error("WorldEffectAborted")
+		end
+	end
+
+	local ok, err = pcall(function()
 	-- Clone effect model
-	local effectModel = ReplicatedStorage.WorldEffects.BlackHole:Clone()
+	effectModel = ReplicatedStorage.WorldEffects.BlackHole:Clone()
 	SoundAssetSanitizer.removeBlockedSounds(effectModel)
 
 	-- Clone objects before destroying the Objects folder
 	local npcModel = effectModel.Objects.NPC:Clone()
 	local floorAmbiance = effectModel.Objects.FloorAmbiance:Clone()
 	local ambiance = effectModel.Objects.Ambiance:Clone()
-	local impactVisuals = effectModel.Objects.ImpactVisuals:Clone()
+	impactVisuals = effectModel.Objects.ImpactVisuals:Clone()
 	local heavenBall = effectModel.Objects.Heavenball:Clone()
-	local whiteHole1 = effectModel.Objects.Whitehole:Clone()
-	local whiteHole2 = effectModel.Objects.Whitehole2:Clone()
-	local whiteHole3 = effectModel.Objects.Whitehole3:Clone()
-	local whiteHole4 = effectModel.Objects.Whitehole4:Clone()
+	whiteHole1 = effectModel.Objects.Whitehole:Clone()
+	whiteHole2 = effectModel.Objects.Whitehole2:Clone()
+	whiteHole3 = effectModel.Objects.Whitehole3:Clone()
+	whiteHole4 = effectModel.Objects.Whitehole4:Clone()
 	local orb = effectModel.Objects.Orb:Clone()
 	local meteorTemplate = effectModel.Objects.Meteor:Clone()
+	-- Unused clone — destroy immediately so it cannot leak if Objects linger.
+	npcModel:Destroy()
 
 	-- Setup floor ambiance
-	local floorAmbianceClone = floorAmbiance:Clone()
+	floorAmbianceClone = floorAmbiance:Clone()
 	floorAmbianceClone.Position = SPAWN_POSITION + Vector3.new(0, -0.5, 0)
 	floorAmbianceClone.Parent = workspace
 
 	-- Setup air ambiance
-	local airAmbiance = ambiance:Clone()
+	airAmbiance = ambiance:Clone()
 	airAmbiance.Position = SPAWN_POSITION
 	airAmbiance.Size = Vector3.new(1000, 1000, 1000)
 	local randomRotation = math.random(-180, 180)
@@ -98,7 +158,7 @@ local function createBlackHoleEffect(donatorName, recipientName, donationAmount)
 	}):Play()
 
 	-- Setup sounds
-	local soundsFolder = effectModel.Sounds:Clone()
+	soundsFolder = effectModel.Sounds:Clone()
 	SoundAssetSanitizer.removeBlockedSounds(soundsFolder)
 	soundsFolder.Parent = workspace
 
@@ -113,12 +173,12 @@ local function createBlackHoleEffect(donatorName, recipientName, donationAmount)
 	}
 
 	-- Create lighting effects
-	local colorCorrection = Instance.new("ColorCorrectionEffect")
+	colorCorrection = Instance.new("ColorCorrectionEffect")
 	colorCorrection.Enabled = true
 	colorCorrection.Name = "EventColorCorrection"
 	colorCorrection.Parent = Lighting
 
-	local bloomEffect = Instance.new("BloomEffect")
+	bloomEffect = Instance.new("BloomEffect")
 	bloomEffect.Enabled = true
 	bloomEffect.Name = "SmiteBloom"
 	bloomEffect.Size = 20
@@ -135,7 +195,7 @@ local function createBlackHoleEffect(donatorName, recipientName, donationAmount)
 	}):Play()
 
 	-- Create black hole orb
-	local blackHoleOrb = orb:Clone()
+	blackHoleOrb = orb:Clone()
 	blackHoleOrb.Parent = workspace
 	blackHoleOrb.Position = BLACKHOLE_POSITION
 
@@ -143,7 +203,7 @@ local function createBlackHoleEffect(donatorName, recipientName, donationAmount)
 	cameraShaker:ShakeSustain(CameraShaker.Presets.Earthquake)
 
 	-- Play ambient sounds
-	local ambianceSound = soundsFolder.Ambiance:Clone()
+	ambianceSound = soundsFolder.Ambiance:Clone()
 	ambianceSound.Parent = workspace
 	ambianceSound:Play()
 
@@ -172,17 +232,21 @@ local function createBlackHoleEffect(donatorName, recipientName, donationAmount)
 	end
 
 	-- Meteor shower system
-	local meteorShowerActive = true
 	local meteorStartTime = tick()
 	local meteorSpawnDelay = 0.5
 
 	spawn(function()
-		while meteorShowerActive do
+		while meteorShowerActive and WorldEffectFlight:isActive(gen) do
 			if tick() - meteorStartTime > 90 then
 				break
 			end
-			wait(meteorSpawnDelay)
+			if not WorldEffectFlight:wait(gen, meteorSpawnDelay) then
+				break
+			end
 			spawn(function()
+				if not WorldEffectFlight:isActive(gen) then
+					return
+				end
 				local sizeMultiplier = math.random(100, 400) / 100
 				local fallDuration = math.random(250, 400) / 100
 				local fallHeight = math.random(500, 750)
@@ -232,7 +296,10 @@ local function createBlackHoleEffect(donatorName, recipientName, donationAmount)
 					Volume = 1
 				}):Play()
 
-				wait(fallDuration)
+				if not WorldEffectFlight:wait(gen, fallDuration) then
+					meteor:Destroy()
+					return
+				end
 
 				-- Meteor impact
 				meteor.Transparency = 1
@@ -261,7 +328,10 @@ local function createBlackHoleEffect(donatorName, recipientName, donationAmount)
 				meteor.Whoosh.Playing = false
 				meteor.Impact:Play()
 
-				wait(3)
+				if not WorldEffectFlight:wait(gen, 3) then
+					meteor:Destroy()
+					return
+				end
 				meteor:Destroy()
 			end)
 		end
@@ -321,7 +391,7 @@ local function createBlackHoleEffect(donatorName, recipientName, donationAmount)
 	whiteHole4.Parent = workspace
 
 	-- Setup heaven ball
-	local heavenBallClone = heavenBall:Clone()
+	heavenBallClone = heavenBall:Clone()
 	local chargeSound = soundsFolder.Charge_2:Clone()
 	chargeSound.Parent = heavenBallClone
 	heavenBallClone.Parent = workspace
@@ -370,7 +440,7 @@ local function createBlackHoleEffect(donatorName, recipientName, donationAmount)
 	wait(3)
 
 	-- Time distortion effect
-	local tickSound = soundsFolder.Tick:Clone()
+	tickSound = soundsFolder.Tick:Clone()
 	tickSound.Parent = workspace
 	tickSound.Playing = true
 
@@ -385,6 +455,7 @@ local function createBlackHoleEffect(donatorName, recipientName, donationAmount)
 
 	tickSound:Stop()
 	tickSound:Destroy()
+	tickSound = nil
 	wait(5)
 
 	-- Final sequence
@@ -655,8 +726,11 @@ local function createBlackHoleEffect(donatorName, recipientName, donationAmount)
 	wait(10)
 
 	colorCorrection:Destroy()
+	colorCorrection = nil
 	bloomEffect:Destroy()
+	bloomEffect = nil
 	soundsFolder:Destroy()
+	soundsFolder = nil
 
 	floorAmbianceClone.Size = Vector3.new(0, 0, 0)
 	airAmbiance.Size = Vector3.new(0, 0, 0)
@@ -669,7 +743,18 @@ local function createBlackHoleEffect(donatorName, recipientName, donationAmount)
 	Lighting.FogColor = savedLighting.FogColor
 
 	floorAmbianceClone:Destroy()
+	floorAmbianceClone = nil
 	airAmbiance:Destroy()
+	airAmbiance = nil
+	impactVisuals:Destroy()
+	impactVisuals = nil
+	end)
+
+	cleanup()
+	WorldEffectFlight:finish(gen)
+	if not ok and tostring(err) ~= "WorldEffectAborted" then
+		warn("BlackHole effect failed:", err)
+	end
 end
 
 
@@ -687,7 +772,7 @@ local donationEffectConn = DonationEffect.OnClientEvent:Connect(function(effectN
 	if not DonationExperiencePrefs.shouldShowWorldEffect() then
 		return
 	end
-	pcall(createBlackHoleEffect, donatorName, recipientName, donationAmount)
+	createBlackHoleEffect(donatorName, recipientName, donationAmount)
 end)
 script.Destroying:Connect(function()
 	donationEffectConn:Disconnect()

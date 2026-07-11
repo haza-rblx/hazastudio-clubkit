@@ -102,6 +102,11 @@ function MusicFavoritesRepository.save(self: MusicFavoritesRepositoryImpl, userI
 end
 
 function MusicFavoritesRepository.onPlayerAdded(self: MusicFavoritesRepositoryImpl, player: Player)
+	-- Idempotent: SharedProfileLoader may call this; MusicService.onPlayerAdded
+	-- must not re-GetAsync if already loaded for this session.
+	if self._loaded[player.UserId] == true then
+		return
+	end
 	local loadResult = self._budgetGate:executeAsync(Enum.DataStoreRequestType.GetAsync, function()
 		return Result.withRetry(function()
 			return self._store:GetAsync(self:_key(player.UserId))

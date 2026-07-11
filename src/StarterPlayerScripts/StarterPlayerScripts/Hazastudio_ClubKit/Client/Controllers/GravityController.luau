@@ -7,7 +7,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
+local PermissionDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.PermissionDomain)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
+local OverheadController = require(script.Parent.OverheadController)
 
 local TOGGLE_INPUT_PRIORITY = Enum.ContextActionPriority.Low.Value
 -- Shift+U = ungravity (float), Shift+G = gravity (restore / turun)
@@ -24,6 +26,11 @@ local function createGravityController(_deps: { freecamScript: ModuleScript? }?)
 	local moduleConnections: { RBXScriptConnection } = {}
 	local freecamScript = _deps and _deps.freecamScript
 
+	local function canUseGravity(): boolean
+		local role = OverheadController.getPlayerRole(localPlayer.UserId)
+		return PermissionDomain.canUseAdminPanel(role, localPlayer.UserId)
+	end
+
 	local function isFreecamActive(): boolean
 		if freecamScript then
 			local value = freecamScript:GetAttribute(FREECAM_ENABLED_ATTRIBUTE)
@@ -36,6 +43,9 @@ local function createGravityController(_deps: { freecamScript: ModuleScript? }?)
 
 	local function fireCommand(action: string, speed: number?): ()
 		if commandRemote == nil then
+			return
+		end
+		if not canUseGravity() then
 			return
 		end
 		commandRemote:FireServer({
@@ -59,6 +69,9 @@ local function createGravityController(_deps: { freecamScript: ModuleScript? }?)
 			return Enum.ContextActionResult.Pass
 		end
 		if isFreecamActive() then
+			return Enum.ContextActionResult.Pass
+		end
+		if not canUseGravity() then
 			return Enum.ContextActionResult.Pass
 		end
 
@@ -112,7 +125,7 @@ local function createGravityController(_deps: { freecamScript: ModuleScript? }?)
 		end
 
 		bindInput()
-		log:info("Gravity keybinds ready (Shift+U float / Shift+G restore)")
+		log:info("Gravity keybinds ready (Shift+U float / Shift+G restore, staff+)")
 	end
 
 	function controller:destroy(): ()

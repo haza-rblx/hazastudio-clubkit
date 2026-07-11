@@ -540,7 +540,10 @@ local function createShopController(
 			log:warn("Duplicate ProcessReceipt skipped", { purchaseId = purchaseId, userId = userId })
 			return Enum.ProductPurchaseDecision.PurchaseGranted
 		end
-		processedPurchases[purchaseId] = now + Config.Security.PURCHASE_DEDUPE_WINDOW
+
+		local function markPurchaseProcessed()
+			processedPurchases[purchaseId] = os.clock() + Config.Security.PURCHASE_DEDUPE_WINDOW
+		end
 
 		local paidProductId = Config.PaidBroadcast.PRODUCT_ID
 		if
@@ -549,7 +552,11 @@ local function createShopController(
 			and paidBroadcastController
 			and type(paidBroadcastController.processReceipt) == "function"
 		then
-			return paidBroadcastController:processReceipt(receiptInfo)
+			local decision = paidBroadcastController:processReceipt(receiptInfo)
+			if decision == Enum.ProductPurchaseDecision.PurchaseGranted then
+				markPurchaseProcessed()
+			end
+			return decision
 		end
 
 		-- Buy
@@ -564,14 +571,14 @@ local function createShopController(
 					overheadController:refreshPlayer(player)
 				end
 				log:info("Buy processed", { userId = userId, tier = buyTier })
+				markPurchaseProcessed()
 				return Enum.ProductPurchaseDecision.PurchaseGranted
 			else
 				log:error("Buy grant fail", { userId = userId, error = result.error })
-				processedPurchases[purchaseId] = nil
 				return Enum.ProductPurchaseDecision.NotProcessedYet
 			end
 		end
-		-- Cek gift product
+		-- Cek gift product — peek pending, grant, then consume (so grant fail keeps pending for retry)
 		local isGift, giftTier = ShopDomain.isGiftProduct(productId)
 		if isGift and giftTier then
 			local toId = shopService:resolvePendingGift(userId)
@@ -580,11 +587,11 @@ local function createShopController(
 					userId = userId,
 					purchaseId = purchaseId,
 				})
-				processedPurchases[purchaseId] = nil
 				return Enum.ProductPurchaseDecision.NotProcessedYet
 			end
 			local result = shopService:grantMembership(toId, giftTier)
 			if result.ok then
+				shopService:consumePendingGift(userId)
 				-- Ambil nama pengirim untuk notif giftee
 				local sender = Players:GetPlayerByUserId(userId)
 				local fromName = sender and sender.DisplayName or "Someone"
@@ -595,10 +602,10 @@ local function createShopController(
 					overheadController:refreshPlayer(giftee)
 				end
 				log:info("Gift processed", { from = userId, to = toId, tier = giftTier })
+				markPurchaseProcessed()
 				return Enum.ProductPurchaseDecision.PurchaseGranted
 			else
 				log:error("Gift grant fail", { to = toId, error = result.error })
-				processedPurchases[purchaseId] = nil
 				return Enum.ProductPurchaseDecision.NotProcessedYet
 			end
 		end
@@ -664,7 +671,6 @@ local function createShopController(
 						price = price,
 						error = recordResult.error,
 					})
-					processedPurchases[purchaseId] = nil
 					return Enum.ProductPurchaseDecision.NotProcessedYet
 				end
 				isDuplicateReceipt = recordResult.value == "duplicate"
@@ -783,6 +789,7 @@ local function createShopController(
 				productId = productId,
 				price = price,
 			})
+			markPurchaseProcessed()
 			return Enum.ProductPurchaseDecision.PurchaseGranted
 		end
 		-- ProductId tidak dikenal oleh shop - mungkin sistem lain

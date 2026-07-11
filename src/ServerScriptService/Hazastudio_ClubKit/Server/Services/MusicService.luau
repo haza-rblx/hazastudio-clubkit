@@ -32,12 +32,15 @@ local function createMusicService(deps: {
 	logger: any,
 	config: any,
 	groupId: number,
+	-- When false, favorites GetAsync is owned by SharedProfileLoader (Main).
+	loadFavoritesOnJoin: boolean?,
 })
 	local repo = deps.repo
 	local favoritesRepo = deps.favoritesRepository
 	local overheadRepository = deps.overheadRepository
 	local eventBus = deps.eventBus
 	local log = deps.logger
+	local loadFavoritesOnJoin = deps.loadFavoritesOnJoin ~= false
 	local config = deps.config
 	local groupId = deps.groupId
 
@@ -1006,7 +1009,7 @@ local function createMusicService(deps: {
 	end
 
 	function service:onPlayerAdded(player: Player)
-		if favoritesRepo and type(favoritesRepo.onPlayerAdded) == "function" then
+		if loadFavoritesOnJoin and favoritesRepo and type(favoritesRepo.onPlayerAdded) == "function" then
 			favoritesRepo:onPlayerAdded(player)
 		end
 		task.spawn(fetchAndCacheRank, player)

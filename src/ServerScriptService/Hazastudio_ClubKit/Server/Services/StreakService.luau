@@ -24,6 +24,20 @@ local function createStreakService(deps: {
 		local userId = player.UserId
 		local now    = os.time()
 
+		-- Peek already-loaded overhead (SharedProfileLoader / Cache) before any
+		-- UpdateAsync. Returning unchanged from UpdateAsync still burns write budget.
+		local peek = repo:load(userId)
+		if peek.ok then
+			local peeked = StreakDomain.evaluateStreak(peek.value.streakDays, peek.value.lastLoginAt, now)
+			if peeked.alreadyCounted then
+				log:debug("Streak sudah dihitung hari ini (skip UpdateAsync)", {
+					player = player.Name,
+					streak = peeked.newStreakDays,
+				})
+				return ResultUtil.Ok(peeked)
+			end
+		end
+
 		local computedResult: typeof(StreakDomain.evaluateStreak(0, 0, 0))? = nil
 		local updateResult = repo:update(userId, function(current)
 			local streakResult = StreakDomain.evaluateStreak(current.streakDays, current.lastLoginAt, now)

@@ -11,6 +11,7 @@ local BudgetGate = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Bud
 
 export type GiftPendingRepository = {
 	store: (self: GiftPendingRepository, fromUserId: number, toUserId: number) -> Result<nil>,
+	peek: (self: GiftPendingRepository, fromUserId: number) -> Result<number?>,
 	consume: (self: GiftPendingRepository, fromUserId: number) -> Result<number?>,
 }
 
@@ -33,6 +34,20 @@ local function createRepository(deps: { logger: any? }?): GiftPendingRepository
 	local function isExpired(entry: StoredGiftPending): boolean
 		local ttl = Config.Shop.GIFT_PENDING_PERSIST_TIMEOUT or Config.Shop.GIFT_PENDING_TIMEOUT
 		return os.time() - entry.storedAt > ttl
+	end
+
+	local function parseEntry(old: any): StoredGiftPending?
+		if type(old) ~= "table" then
+			return nil
+		end
+		local entry: StoredGiftPending = {
+			toUserId = math.floor(tonumber(old.toUserId) or 0),
+			storedAt = math.floor(tonumber(old.storedAt) or 0),
+		}
+		if entry.toUserId > 0 and entry.storedAt > 0 and not isExpired(entry) then
+			return entry
+		end
+		return nil
 	end
 
 	local self = {} :: GiftPendingRepository
@@ -63,6 +78,26 @@ local function createRepository(deps: { logger: any? }?): GiftPendingRepository
 		return Result.Ok(nil)
 	end
 
+	-- Read-only: do not delete. ProcessReceipt peeks, grants, then consume().
+	function self:peek(fromUserId: number): Result<number?>
+		if fromUserId <= 0 then
+			return Result.Ok(nil)
+		end
+		local readResult = budgetGate:executeAsync(Enum.DataStoreRequestType.GetAsync, function()
+			return Result.withRetry(function()
+				return store:GetAsync(keyFor(fromUserId))
+			end, Config.DataStore.RETRY_ATTEMPTS)
+		end)
+		if not readResult.ok then
+			return Result.Err(readResult.error)
+		end
+		local entry = parseEntry(readResult.value)
+		if entry then
+			return Result.Ok(entry.toUserId)
+		end
+		return Result.Ok(nil)
+	end
+
 	function self:consume(fromUserId: number): Result<number?>
 		if fromUserId <= 0 then
 			return Result.Ok(nil)
@@ -85,22 +120,8 @@ local function createRepository(deps: { logger: any? }?): GiftPendingRepository
 		local updateResult = budgetGate:executeAsync(Enum.DataStoreRequestType.UpdateAsync, function()
 			return Result.withRetry(function()
 				store:UpdateAsync(keyFor(fromUserId), function(old)
-					if type(old) ~= "table" then
-						-- Key absent or already consumed (by another server or
-						-- a prior retry of this call). Clear any capture from a
-						-- previous invocation so we don't report a consume we
-						-- didn't perform.
-						consumedToUserId = nil
-						return nil
-					end
-					-- Valid entry in THIS invocation. Capture its toUserId; the
-					-- last invocation's capture is the one that matters because
-					-- its return value is what commits.
-					local entry: StoredGiftPending = {
-						toUserId = math.floor(tonumber(old.toUserId) or 0),
-						storedAt = math.floor(tonumber(old.storedAt) or 0),
-					}
-					if entry.toUserId > 0 and entry.storedAt > 0 and not isExpired(entry) then
+					local entry = parseEntry(old)
+					if entry then
 						consumedToUserId = entry.toUserId
 					else
 						consumedToUserId = nil

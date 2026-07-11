@@ -3,6 +3,7 @@
 local Players = game:GetService("Players")
 local SoundService = game:GetService("SoundService")
 local ContentProvider = game:GetService("ContentProvider")
+local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local AssetHealthReporter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.AssetHealthReporter)
@@ -111,11 +112,15 @@ function UISoundHelper:_playTemplate(template: Sound): ()
 
 	local sound = template:Clone()
 	sound.Parent = SoundService
+	sound:Play()
+	-- Play() (not PlayLocalSound) so Ended fires; Debris is a safety net.
 	sound.Ended:Once(function()
-		sound:Destroy()
+		if sound.Parent then
+			sound:Destroy()
+		end
 	end)
-
-	SoundService:PlayLocalSound(sound)
+	local lifetime = sound.TimeLength
+	Debris:AddItem(sound, if lifetime > 0 then lifetime + 1 else 8)
 end
 
 function UISoundHelper:_validateTemplate(template: Sound, sourcePath: string): ()

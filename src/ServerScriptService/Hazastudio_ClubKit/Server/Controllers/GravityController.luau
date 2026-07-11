@@ -3,6 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
+local PermissionDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.PermissionDomain)
 
 local function splitArgs(rawText: string): { string }
 	local args: { string } = {}
@@ -15,12 +16,14 @@ end
 local function createGravityController(deps: {
 	service: any,
 	commandExecutionService: any?,
+	overheadService: any?,
 	notify: any,
 	logger: any,
 	rateLimiter: any,
 })
 	local service = deps.service
 	local commandExecutionService = deps.commandExecutionService
+	local overheadService = deps.overheadService
 	local notify = deps.notify
 	local logger = deps.logger
 	local rateLimiter = deps.rateLimiter
@@ -54,17 +57,45 @@ local function createGravityController(deps: {
 		end
 	end
 
+	-- Same gate as Admin panel: Owner + Leadership category (adminPanel/canGift) + AdminUserIds.
+	local function canUseGravity(player: Player): boolean
+		if overheadService and type(overheadService.getEffectivePayload) == "function" then
+			local payloadResult = overheadService:getEffectivePayload(player)
+			if payloadResult.ok then
+				return PermissionDomain.canUseAdminPanel(payloadResult.value.role, player.UserId)
+			end
+		end
+		if overheadService and type(overheadService.getRawGroupRole) == "function" then
+			return PermissionDomain.canUseAdminPanel(overheadService:getRawGroupRole(player), player.UserId)
+		end
+		return PermissionDomain.canUseAdminPanel(nil, player.UserId)
+	end
+
+	local function denyIfUnauthorized(player: Player): boolean
+		if canUseGravity(player) then
+			return false
+		end
+		notify.player(player, gravityConfig.MSG_NO_PERM, "WARNING")
+		return true
+	end
+
 	local function registerChatCommands(): ()
 		if commandExecutionService == nil then
 			return
 		end
 
-		-- /gravity = restore (turun). /ungravity [1-10] = float (melayang).
+		-- /gravity = restore all. /ungravity [1-10] = float all.
 		commandExecutionService:registerRawHandler(gravityConfig.CMD_ALIAS, function(player: Player, _rawText: string)
+			if denyIfUnauthorized(player) then
+				return
+			end
 			service:disable(player)
 		end)
 
 		commandExecutionService:registerRawHandler(gravityConfig.CMD_ALIAS_UNGRAVITY, function(player: Player, rawText: string)
+			if denyIfUnauthorized(player) then
+				return
+			end
 			local args = splitArgs(rawText)
 			table.remove(args, 1)
 			local speedText = args[1]
@@ -90,6 +121,9 @@ local function createGravityController(deps: {
 			return
 		end
 		if type(payload) ~= "table" then
+			return
+		end
+		if denyIfUnauthorized(player) then
 			return
 		end
 		if not rateLimiter:check(player.UserId) then

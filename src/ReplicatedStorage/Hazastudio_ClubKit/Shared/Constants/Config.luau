@@ -1,22 +1,31 @@
 --!strict
 local RunService = game:GetService("RunService")
 local IS_STUDIO = RunService:IsStudio()
+-- true = Studio Play pakai prefix Studio_* (terisolasi dari live). Default aman.
+-- false = Studio & live pakai key production yang sama — HANYA sengaja untuk debug data asli.
+local USE_STUDIO_DATASTORE_ISOLATION = true
+local DATASTORE_SCOPE_PREFIX = if IS_STUDIO and USE_STUDIO_DATASTORE_ISOLATION then "Studio_" else ""
+
+local function scopedDataStoreKey(baseKey: string): string
+	if baseKey == "" or DATASTORE_SCOPE_PREFIX == "" then
+		return baseKey
+	end
+	return DATASTORE_SCOPE_PREFIX .. baseKey
+end
 
 local Config = {}
 
--- Studio Play & live memakai key DataStore yang sama (tidak ada prefix Studio_*).
--- Sengaja: testing di Studio = gambaran production; tulis DataStore dari Studio mempengaruhi data live.
+local function studioWritesToLiveDatastore(): boolean
+	return IS_STUDIO and not USE_STUDIO_DATASTORE_ISOLATION
+end
+
 Config.DataStoreScope = {
 	IS_STUDIO = IS_STUDIO,
-	USE_STUDIO_ISOLATION = false,
-	PREFIX = "",
-	scopedKey = function(baseKey: string): string
-		return baseKey
-	end,
-	-- Legacy no-op: isolation dihapus, tidak ada blokir write Studio→live.
-	writesToLive = function(): boolean
-		return false
-	end,
+	USE_STUDIO_ISOLATION = USE_STUDIO_DATASTORE_ISOLATION,
+	PREFIX = DATASTORE_SCOPE_PREFIX,
+	scopedKey = scopedDataStoreKey,
+	-- true = Play di Studio menulis ke key production (bahaya untuk /setrobux dll.).
+	writesToLive = studioWritesToLiveDatastore,
 }
 
 -- ============================================================
@@ -389,8 +398,8 @@ Config.CinematicDock = {
 -- DATASTORE KEYS (versioned)
 -- ============================================================
 Config.DataStore = {
-	OVERHEAD_KEY = "Overhead_v1",
-	ABOUT_ROSTER_KEY = "AboutRoster_v1",
+	OVERHEAD_KEY = scopedDataStoreKey("Overhead_v1"),
+	ABOUT_ROSTER_KEY = scopedDataStoreKey("AboutRoster_v1"),
 	ABOUT_ROSTER_ENTRY_KEY = "team",
 	CACHE_TTL = 120,  -- Scaling 100→200 CCU: extended from 60s to 120s to reduce DataStore GetAsync by 50%
 	GROUP_CACHE_TTL = 120,
@@ -768,7 +777,7 @@ Config.Sync = {
 	},
 }
 Config.Favorites = {
-	DATASTORE_NAME = "FavoritedAnimations_v2",
+	DATASTORE_NAME = scopedDataStoreKey("FavoritedAnimations_v2"),
 	KEY_PREFIX = "Player_",
 	ATTRIBUTE_KEY = "SavedFavoritedAnimations",
 	-- Full favorites JSON dump (not command payloads). Security.MAX_PAYLOAD_BYTES
@@ -961,7 +970,7 @@ Config.Sticker = {
 	BILLBOARD_IMAGE_NAME = "Sticker",
 	STICKER_IMAGE_ATTRIBUTE = "StickerImage",
 	STICKER_CLEAR_ATTRIBUTE = "StickerClear",
-	DATASTORE_NAME = "StickerCollection_v1",
+	DATASTORE_NAME = scopedDataStoreKey("StickerCollection_v1"),
 	KEY_PREFIX = "Player_",
 	-- Shared pool: satu upload tampil di picker semua player (DataStore key terpisah dari Player_*).
 	GLOBAL_POOL_KEY = "GlobalPool_v1",
@@ -1279,7 +1288,7 @@ Config.Shop = {
 	GIFT_PENDING_TIMEOUT = 120,
 	-- Durable gift intent (DataStore) — survives server restart until ProcessReceipt.
 	GIFT_PENDING_PERSIST_TIMEOUT = 1800,
-	GIFT_PENDING_DATASTORE_KEY = "ShopGiftPending_v1",
+	GIFT_PENDING_DATASTORE_KEY = scopedDataStoreKey("ShopGiftPending_v1"),
 	-- Rate limit untuk ShopGiftPending remote
 	GIFT_RATE_MAX = 3,
 	GIFT_RATE_WINDOW = 60,
@@ -1423,8 +1432,9 @@ Config.Session = {
 	RE_CACHE_TTL = 300,
 }
 -- ============================================================
--- GRAVITY / UNGRAVITY — /ungravity = float, /gravity = restore
--- Keybinds: Shift+U float, Shift+G restore
+-- GRAVITY / UNGRAVITY — server-wide float (staff+ only)
+-- /ungravity = float ALL players, /gravity = restore ALL
+-- Keybinds: Shift+U float, Shift+G restore (same permission gate)
 -- ============================================================
 Config.Gravity = {
 	REMOTE_FOLDER = "GravityRemotes",
@@ -1441,13 +1451,14 @@ Config.Gravity = {
 	RESTORE_HORIZONTAL_DAMP = 0.35,
 	RATE_MAX = 12,
 	RATE_WINDOW = 5,
-	MSG_USAGE = "[Gravity] /ungravity or /ungravity 1-10 = float. /gravity or Shift+G = restore. Shift+U = float.",
-	MSG_STATUS = "[Ungravity] Floating at speed %d. Use /gravity or Shift+G to restore.",
-	MSG_ENABLED = "[Ungravity] Floating at speed %d.",
-	MSG_DISABLED = "[Gravity] Gravity restored.",
+	MSG_USAGE = "[Gravity] Staff only. /ungravity or /ungravity 1-10 = float everyone. /gravity or Shift+G = restore. Shift+U = float.",
+	MSG_STATUS = "[Ungravity] Server floating at speed %d. Use /gravity or Shift+G to restore.",
+	MSG_ENABLED = "[Ungravity] Everyone floating at speed %d.",
+	MSG_DISABLED = "[Gravity] Gravity restored for everyone.",
 	MSG_BLOCKED_CARRY = "[Ungravity] Cannot float while carrying or being carried.",
 	MSG_RATE_LIMIT = "[Gravity] Slow down — try again in a moment.",
 	MSG_INVALID_SPEED = "[Ungravity] Speed must be a number from 1 to 10.",
+	MSG_NO_PERM = "[Gravity] Only Owner / Leadership (admin panel) can use this.",
 }
 -- ============================================================
 -- ADMIN PANEL
@@ -1645,8 +1656,8 @@ Config.AvatarContext = {
 	CAMERA_FOV = 40,
 
 	-- DataStore
-	PROFILE_DATASTORE_KEY = "Profile_v1",
-	LIKE_DATASTORE_KEY = "AvatarLikes_v1",
+	PROFILE_DATASTORE_KEY = scopedDataStoreKey("Profile_v1"),
+	LIKE_DATASTORE_KEY = scopedDataStoreKey("AvatarLikes_v1"),
 	LIKE_SHARD_COUNT = 128,
 
 	-- Remote names
@@ -1786,7 +1797,7 @@ Config.Graphics = {
 Config.Settings = {
 	GUI_NAME = "07-MenuGUI",
 	BACKDROP_BLUR_NAME = "SettingsUIBlur",
-	DATASTORE_KEY = "Settings_v1",
+	DATASTORE_KEY = scopedDataStoreKey("Settings_v1"),
 	REMOTE_REQUEST = "SettingsRequest",
 	REMOTE_SYNC = "SettingsSync",
 	REMOTE_UPDATE = "SettingsUpdate",
@@ -1914,11 +1925,11 @@ Config.Donation = {
 	},
 	-- Tambahan nilai manual (delta), di-merge ke leaderboard utama saat poll/refresh.
 	-- Persisted via ManualBagibagiRepository (DataStore). Runtime cache di MANUAL_BAGIBAGI_ADJUSTMENTS.
-	MANUAL_BAGIBAGI_DATASTORE_KEY = "ManualBagibagiAdjustments_v1",
-	-- Robux: increment OrderedDataStore (production key — Studio & live sama).
+	MANUAL_BAGIBAGI_DATASTORE_KEY = scopedDataStoreKey("ManualBagibagiAdjustments_v1"),
+	-- Robux: increment OrderedDataStore (scoped via DataStoreScope — Studio_* when isolated).
 	MANUAL_ROBUX_ADJUSTMENTS = {} :: { [number]: number },
 	MANUAL_BAGIBAGI_ADJUSTMENTS = {} :: { [number]: number },
-	MSG_STUDIO_LIVE_DATASTORE_BLOCKED = "[Donation] Studio DataStore isolation removed — commands write production keys.",
+	MSG_STUDIO_LIVE_DATASTORE_BLOCKED = "[Donation] Studio: set USE_STUDIO_DATASTORE_ISOLATION=false in Config only if you intentionally write production keys. Manual Robux/cash commands are blocked while Studio writes live.",
 	-- Owner-only manual donation commands (Studio bypass permission check).
 	CMD_ADD_ROBUX = "setrobux", -- /setrobux <username|userId> <robux amount>
 	CMD_REMOVE_ROBUX = "removerobux", -- /removerobux <username|userId|me> [robux]; `me` = clear self (Studio only)
@@ -1991,12 +2002,18 @@ Config.Donation = {
 	-- Hardcoded world position for the nuke VFX (set to your Stage part).
 	-- Override per-place via Config if needed.
 	NUKE_WORLD_POSITION = Vector3.new(-262.2, 1.285, 64.9),
-	-- Fallback duration (seconds) a cloned nuke VFX lives before Debris
-	-- cleanup. Models with their own particle/sound length will work fine
-	-- with this default; tune per effect if you need longer cycles.
-	NUKE_DEFAULT_DURATION = 20,
-	-- Unused: Robux path does not broadcast world VFX (aura only).
-	ROBUX_NUKE_TIERS = {},
+	-- Fallback duration (seconds) when WORLD_EFFECT_DURATIONS lacks an effect key.
+	-- Raised from 20 → 90: LocalNuke client lifetime is ~85s; 20s caused overlap.
+	NUKE_DEFAULT_DURATION = 90,
+	-- Per-effect server queue wait (seconds) after broadcasting world VFX.
+	-- Conservative covers client EffectDonate main path (+ buffer). Client also
+	-- single-flights via WorldEffectFlight — server wait is belt-and-suspenders.
+	-- Nuke≈85s → 90; Smite4/Blossom multi-minute → 180; BlackHole long path → 240.
+	WORLD_EFFECT_DURATIONS = {
+		Nuke = 90,
+		Smite4 = 180,
+		BlackHole = 240,
+	},
 	-- Saweria/Bagi-Bagi IDR thresholds for world VFX (highest match wins).
 	-- Nuke = Rocket (100k–249k), Smite4 = Hammer (250k–499k), BlackHole = 500k+.
 	WORLD_EFFECT_TIERS = {
@@ -2004,6 +2021,8 @@ Config.Donation = {
 		{ min = 250000, effect = "Smite4" },
 		{ min = 100000, effect = "Nuke" },
 	},
+	-- Unused: Robux path does not broadcast world VFX (aura only).
+	ROBUX_NUKE_TIERS = {},
 	-- Per-tier durations: `duration` covers aura/notif/cycle, `cameraDuration` is
 	-- camera-specific (0 disables camera).
 	AURA_TIERS = {
@@ -2171,11 +2190,11 @@ Config.Leaderboards = {
 	LIKES_PAINT_LIMIT = 20,
 	LIKES_BACKFILL_MAX_KEYS = 500,
 	LIKES_BACKFILL_COOLDOWN = 300,
-	ROBUX_USER_ORDERED_KEY = "RobuxDonationLeaderboard_User_v1",
-	ROBUX_COMMUNITY_ORDERED_KEY = "RobuxDonationLeaderboard_Community_v1",
-	METADATA_KEY = "DonationLeaderboardMetadata_v1",
-	RECEIPT_KEY = "DonationRobuxReceipts_v1",
-	LIKE_ORDERED_KEY = "AvatarLikesLeaderboard_v1",
+	ROBUX_USER_ORDERED_KEY = scopedDataStoreKey("RobuxDonationLeaderboard_User_v1"),
+	ROBUX_COMMUNITY_ORDERED_KEY = scopedDataStoreKey("RobuxDonationLeaderboard_Community_v1"),
+	METADATA_KEY = scopedDataStoreKey("DonationLeaderboardMetadata_v1"),
+	RECEIPT_KEY = scopedDataStoreKey("DonationRobuxReceipts_v1"),
+	LIKE_ORDERED_KEY = scopedDataStoreKey("AvatarLikesLeaderboard_v1"),
 	-- P1: MemoryStoreService cross-server cache untuk leaderboard. Default ON
 	-- karena MemoryStore quota lebih murah dari DataStore GetSortedAsync
 	-- per-experience (10/min). Semua server share key yang sama dengan TTL
@@ -2356,11 +2375,11 @@ Config.Music = {
 	},
 
 	-- DataStore
-	DATASTORE_NAME = "MusicLibrary_v1",
-	PLAYLIST_KEY = "Playlists",
-	TRACK_KEY = "Tracks",
-	FAVORITES_DATASTORE_NAME = "MusicFavorites_v1",
-	FAVORITES_KEY_PREFIX = "MusicFavorites_",
+	DATASTORE_NAME = scopedDataStoreKey("MusicLibrary_v1"),
+	PLAYLIST_KEY = scopedDataStoreKey("Playlists"),
+	TRACK_KEY = scopedDataStoreKey("Tracks"),
+	FAVORITES_DATASTORE_NAME = scopedDataStoreKey("MusicFavorites_v1"),
+	FAVORITES_KEY_PREFIX = scopedDataStoreKey("MusicFavorites_"),
 	FAVORITES_ATTRIBUTE_KEY = "MusicFavoriteTrackIds",
 	REMOTE_VOTE_STATE = "MusicVoteState",
 	-- Remote names
