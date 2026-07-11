@@ -8,8 +8,9 @@
 --   fully reset on destroy(), causing new icons to fail occupying the same slot.
 -- Why NOT just setEnabled(false):
 --   setEnabled(false) does not reliably hide the visual on every TopbarPlus build.
--- Solution: cache the widget GuiObject immediately after creation, then
---   reparent it to nil on hide (guaranteed invisible) and restore on show.
+-- Solution: cache the widget GuiObject + a non-nil restore parent, reparent to
+--   nil on hide, and on show always re-apply styling (align) so TopbarPlus
+--   reparents even if our cached parent was lost.
 
 local MusicTopbarIcon = {}
 MusicTopbarIcon.__index = MusicTopbarIcon
@@ -45,31 +46,28 @@ local function safePcall(fn: () -> ()): ()
 	end
 end
 
--- Attempt to resolve the widget GuiObject from a TopbarPlus icon.
--- Tries multiple known property/method names across versions.
-local function resolveWidget(icon: any): GuiObject?
-	local function tryResolve(candidate: any): GuiObject?
-		if typeof(candidate) == "Instance" and (candidate :: Instance):IsA("GuiObject") then
-			return candidate :: GuiObject
-		end
-		return nil
+local function tryGuiObject(candidate: any): GuiObject?
+	if typeof(candidate) == "Instance" and (candidate :: Instance):IsA("GuiObject") then
+		return candidate :: GuiObject
 	end
+	return nil
+end
 
-	-- Direct property access
+-- Attempt to resolve the widget GuiObject from a TopbarPlus icon.
+local function resolveWidget(icon: any): GuiObject?
 	local directNames = { "widget", "_widget", "widgetInstance", "_widgetInstance", "buttonInstance", "_buttonInstance" }
 	for _, name in ipairs(directNames) do
 		local ok, val = pcall(function()
 			return (icon :: any)[name]
 		end)
 		if ok then
-			local w = tryResolve(val)
+			local w = tryGuiObject(val)
 			if w then
 				return w
 			end
 		end
 	end
 
-	-- Method access
 	local methodNames = { "getInstance", "getWidget", "getButton", "getIconInstance" }
 	for _, methodName in ipairs(methodNames) do
 		local method = (icon :: any)[methodName]
@@ -78,7 +76,7 @@ local function resolveWidget(icon: any): GuiObject?
 				return method(icon, "Widget")
 			end)
 			if ok then
-				local w = tryResolve(result)
+				local w = tryGuiObject(result)
 				if w then
 					return w
 				end
@@ -87,7 +85,7 @@ local function resolveWidget(icon: any): GuiObject?
 				return method(icon)
 			end)
 			if ok then
-				local w = tryResolve(result)
+				local w = tryGuiObject(result)
 				if w then
 					return w
 				end
@@ -96,6 +94,26 @@ local function resolveWidget(icon: any): GuiObject?
 	end
 
 	return nil
+end
+
+-- Prefer TopbarPlus alignmentHolder; never treat nil as a valid restore parent.
+local function resolveRestoreParent(icon: any, widget: GuiObject?): Instance?
+	local okHolder, holder = pcall(function()
+		return (icon :: any).alignmentHolder
+	end)
+	if okHolder and typeof(holder) == "Instance" then
+		return holder
+	end
+	if widget and widget.Parent then
+		return widget.Parent
+	end
+	return nil
+end
+
+local function rememberParent(self: MusicTopbarIcon, parent: Instance?)
+	if parent ~= nil then
+		self._widgetParent = parent
+	end
 end
 
 function MusicTopbarIcon.new(deps: Deps): MusicTopbarIcon
@@ -115,7 +133,6 @@ function MusicTopbarIcon.new(deps: Deps): MusicTopbarIcon
 		_destroyed = false,
 	}, MusicTopbarIcon)
 
-	-- Create the icon instance once, apply styling, then immediately hide.
 	local ok, instance = pcall(deps.iconFactory)
 	if not ok or instance == nil then
 		if deps.logger then
@@ -128,18 +145,13 @@ function MusicTopbarIcon.new(deps: Deps): MusicTopbarIcon
 
 	self._instance = instance
 
-	-- Apply styling (image, label, alignment, theme).
 	safePcall(function()
 		deps.applyStyling(instance)
 	end)
 
-	-- Wire selection events. These connections live for the lifetime of the icon.
-	-- Callbacks check _shown to prevent firing when hidden.
 	if instance.selected and type(instance.selected.Connect) == "function" then
 		instance.selected:Connect(function()
 			if not self._shown then
-				-- Icon is hidden but somehow got selected (shouldn't happen with
-				-- reparent, but defensive). Force deselect.
 				safePcall(function()
 					instance:deselect()
 				end)
@@ -164,24 +176,18 @@ function MusicTopbarIcon.new(deps: Deps): MusicTopbarIcon
 		end)
 	end
 
-	-- Resolve and cache widget. Retry with defer/delay for timing.
 	local function cacheWidget()
-		if self._widget then
+		local w = self._widget or resolveWidget(instance)
+		if not w then
 			return
 		end
-		local w = resolveWidget(instance)
-		if w then
-			self._widget = w
-			self._widgetParent = w.Parent
+		self._widget = w
+		rememberParent(self, resolveRestoreParent(instance, w))
 
-			-- If icon is currently hidden, ensure the newly-cached widget is also
-			-- hidden immediately. This handles the case where hide() was called
-			-- before the widget was resolved.
-			if not self._shown then
-				w.Visible = false
-				w.Active = false
-				w.Parent = nil
-			end
+		if not self._shown then
+			w.Visible = false
+			w.Active = false
+			w.Parent = nil
 		end
 	end
 
@@ -191,84 +197,71 @@ function MusicTopbarIcon.new(deps: Deps): MusicTopbarIcon
 	task.delay(0.5, cacheWidget)
 	task.delay(1, cacheWidget)
 
-	-- Start hidden (icon should only appear when player enters a zone).
+	-- Start hidden; MusicPlayerController shows it after engine/panel boot
+	-- (global mode) or on zone enter (zone mode).
 	self:hide()
 
 	return (self :: any) :: MusicTopbarIcon
 end
 
--- Returns true if the icon is currently visible.
 function MusicTopbarIcon:isShown(): boolean
 	return self._shown
 end
 
--- Internal accessor for raw TopbarPlus icon.
 function MusicTopbarIcon:getInstance(): any
 	return self._instance
 end
 
--- Make the icon visible in the topbar.
-function MusicTopbarIcon:show()
-	if self._destroyed or self._instance == nil then
-		return
-	end
-	if self._shown then
-		return
-	end
-	self._shown = true
-
+local function assertVisible(self: MusicTopbarIcon)
 	local instance = self._instance
+	if instance == nil then
+		return
+	end
 
-	-- Call setEnabled(true) FIRST so TopbarPlus internal state knows the icon
-	-- should be active. This may trigger internal layout that expects the widget.
 	safePcall(function()
 		(instance :: any):setEnabled(true)
 	end)
 
-	-- If widget wasn't cached yet, try resolving now.
-	if not self._widget then
-		local w = resolveWidget(instance)
-		if w then
-			self._widget = w
-			if not self._widgetParent then
-				-- Widget might have been reparented by TopbarPlus during setEnabled.
-				-- Use current parent as the canonical parent.
-				self._widgetParent = w.Parent
-			end
+	-- Re-align via caller styling so TopbarPlus reparents to alignmentHolder
+	-- even when our cached parent was lost (Parent was already nil when cached).
+	safePcall(function()
+		self._applyStyling(instance)
+	end)
+
+	local widget = self._widget or resolveWidget(instance)
+	if widget then
+		self._widget = widget
+		rememberParent(self, resolveRestoreParent(instance, widget))
+		local parent = self._widgetParent
+		if parent then
+			widget.Parent = parent
 		end
+		widget.Visible = true
+		widget.Active = true
+	end
+end
+
+-- Make the icon visible. Idempotent: re-asserts parenting even if already shown.
+function MusicTopbarIcon:show()
+	if self._destroyed or self._instance == nil then
+		return
 	end
 
-	-- Restore widget to topbar AFTER setEnabled so TopbarPlus doesn't fight us.
-	if self._widget and self._widgetParent then
-		self._widget.Parent = self._widgetParent
-		self._widget.Visible = true
-		self._widget.Active = true
-	end
+	self._shown = true
+	assertVisible(self)
 
-	-- TopbarPlus may re-layout after setEnabled and override our widget state.
-	-- Re-apply visibility after a short defer to win the race.
-	-- Also re-apply styling to force TopbarPlus to recalculate internal layout
-	-- (without this, icon+label alignment is broken until first interaction).
-	if self._widget then
-		local widget = self._widget
-		local widgetParent = self._widgetParent
-		task.defer(function()
-			if self._shown and widget and widgetParent then
-				widget.Parent = widgetParent
-				widget.Visible = true
-				widget.Active = true
-			end
-			-- Re-apply styling forces TopbarPlus to recalculate layout (fixes
-			-- icon+label misalignment on first show before any interaction).
-			if self._shown and self._instance then
-				safePcall(function()
-					self._applyStyling(self._instance)
-				end)
-			end
-		end)
-	end
-
-
+	-- TopbarPlus may re-layout after setEnabled; win the race + fix first-show
+	-- icon/label alignment by re-asserting after a defer and short delay.
+	task.defer(function()
+		if self._shown and not self._destroyed then
+			assertVisible(self)
+		end
+	end)
+	task.delay(0.15, function()
+		if self._shown and not self._destroyed then
+			assertVisible(self)
+		end
+	end)
 end
 
 local function fireDeselectedCallbacks(self: MusicTopbarIcon)
@@ -278,64 +271,39 @@ local function fireDeselectedCallbacks(self: MusicTopbarIcon)
 	end
 end
 
--- Hide the icon from the topbar. Does NOT destroy — just reparents widget away.
 function MusicTopbarIcon:hide()
 	if self._instance == nil then
-		return
-	end
-	if not self._shown and self._widget ~= nil then
-		-- Already hidden but ensure widget is gone
-		self._widget.Parent = nil
 		return
 	end
 
 	local instance = self._instance
 	local wasShown = self._shown
 
-	-- Notify listeners (e.g. MobilePanelManager.close) while still marked shown.
-	-- TopbarPlus deselect alone is not enough: our deselected handler ignores
-	-- events once _shown is false, which left mobile GUI focus stuck open.
 	if wasShown then
 		fireDeselectedCallbacks(self)
 	end
 
 	self._shown = false
 
-	-- Deselect after callbacks so TopbarPlus internal state also closes.
 	safePcall(function()
 		(instance :: any):deselect()
 	end)
 
-	-- setEnabled(false) as first layer
 	safePcall(function()
 		(instance :: any):setEnabled(false)
 	end)
 
-	-- If widget wasn't cached yet, try resolving now before hiding.
-	if not self._widget then
-		local w = resolveWidget(instance)
-		if w then
-			self._widget = w
-			if not self._widgetParent then
-				self._widgetParent = w.Parent
-			end
-		end
+	local widget = self._widget or resolveWidget(instance)
+	if widget then
+		self._widget = widget
+		-- Capture restore parent BEFORE unparenting; never overwrite with nil.
+		rememberParent(self, resolveRestoreParent(instance, widget))
+		widget.Visible = false
+		widget.Active = false
+		widget.Parent = nil
 	end
-
-	-- Reparent widget to nil — guaranteed invisible regardless of TopbarPlus internals
-	if self._widget then
-		if not self._widgetParent then
-			self._widgetParent = self._widget.Parent
-		end
-		self._widget.Visible = false
-		self._widget.Active = false
-		self._widget.Parent = nil
-	end
-
-
 end
 
--- Force the icon into the deselected (closed) state. No-op if not shown.
 function MusicTopbarIcon:deselect()
 	if not self._shown or self._instance == nil then
 		return
@@ -357,19 +325,14 @@ local function appendCallback(list: { SelectionCallback }, cb: SelectionCallback
 	end
 end
 
--- Register a callback fired when the icon is selected (clicked open).
--- Returns an unsubscribe function — caller MUST store it for cleanup.
 function MusicTopbarIcon:onSelected(callback: SelectionCallback): () -> ()
 	return appendCallback(self._selectedCallbacks, callback)
 end
 
--- Register a callback fired when the icon is deselected (closed).
--- Returns an unsubscribe function — caller MUST store it for cleanup.
 function MusicTopbarIcon:onDeselected(callback: SelectionCallback): () -> ()
 	return appendCallback(self._deselectedCallbacks, callback)
 end
 
--- Full teardown.
 function MusicTopbarIcon:destroy()
 	if self._destroyed then
 		return
@@ -379,7 +342,6 @@ function MusicTopbarIcon:destroy()
 	table.clear(self._selectedCallbacks)
 	table.clear(self._deselectedCallbacks)
 
-	-- Best-effort destroy of the TopbarPlus icon
 	if self._instance then
 		local instance = self._instance
 		self._instance = nil

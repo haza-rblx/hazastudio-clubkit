@@ -2296,7 +2296,7 @@ Config.Music = {
 	-- GUI
 	GUI_NAME = "06-MusicPlayerGUI",
 	TOPBAR_LABEL = "",
-	TOPBAR_ORDER = 99,
+	TOPBAR_ORDER = 1,
 	TOPBAR_ICON = Config.Icons.Topbar.Music,
 	-- Header 2-SliderSelector tab buttons (Option1..4 fallback + legacy names)
 	TAB_LEGACY_BUTTON_NAMES = {

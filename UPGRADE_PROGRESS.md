@@ -13,6 +13,7 @@ Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
 |------|--------|
 | v2.1.0 source-sync updater | ✅ Released |
 | Gravity / Ungravity feature | 🚧 In progress |
+| Music topbar icon missing (audio OK) | ✅ Fixed |
 
 ---
 
@@ -20,6 +21,8 @@ Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
 
 | Path | Change |
 |------|--------|
+| `src/StarterPlayerScripts/.../UI/MusicTopbarIcon.luau` | Fixed — robust show/hide restore via alignmentHolder |
+| `src/StarterPlayerScripts/.../Controllers/MusicPlayerController.luau` | Fixed — no hide-on-engine-init; re-assert icon after panel boot |
 | `src/ServerScriptService/.../Services/GravityService.luau` | Added — server float physics |
 | `src/ServerScriptService/.../Controllers/GravityController.luau` | Added — remote + chat commands |
 | `src/StarterPlayerScripts/.../Controllers/GravityController.luau` | Added — Shift+G / Shift+U keybinds |

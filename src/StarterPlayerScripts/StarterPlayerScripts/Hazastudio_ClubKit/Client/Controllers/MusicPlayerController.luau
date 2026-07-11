@@ -2250,7 +2250,8 @@ function MusicPlayerController:initEngine()
 	local binder = self._binder
 	local log = self._log
 
-	self:_setMusicIconVisible(false)
+	-- Do not hide here: MusicTopbarIcon starts hidden, and a hide-before-remotes
+	-- race used to mark the icon "shown" without a restore parent (invisible forever).
 
 	-- Resolve remotes
 	self._trackChangedRE = self:_waitMusicRemote(config.REMOTE_TRACK_CHANGED)
@@ -2679,7 +2680,21 @@ function MusicPlayerController:initPanel()
 	end
 
 	-- Show topbar before bindAll so the icon appears even if a later bind fails.
+	-- show() is idempotent and re-asserts TopbarPlus parenting.
 	self:_setMusicIconVisible(self:_computeIconVisible())
+	-- LoadingScreen / TopbarPlus layout can race the first show; re-assert shortly after.
+	task.defer(function()
+		if self._destroyed then
+			return
+		end
+		self:_setMusicIconVisible(self:_computeIconVisible())
+	end)
+	task.delay(0.5, function()
+		if self._destroyed then
+			return
+		end
+		self:_setMusicIconVisible(self:_computeIconVisible())
+	end)
 
 	-- Bind UI
 	binder:bindAll()
