@@ -87,30 +87,96 @@ function DonationSystemController.init(deps: {
 		log:debug("donation panel open state changed", { open = open })
 	end
 
-	local function mergeDonorProfiles(existing: any?, incoming: any?): any?
-		if type(incoming) ~= "table" then
-			return existing
+	-- Prefer latest snapshot (no sticky max-total / min-rank). Rank must match total.
+	local function sanitizeDonorProfile(profile: any?): any?
+		if type(profile) ~= "table" then
+			return nil
 		end
-		if type(existing) ~= "table" then
-			return incoming
+		local robuxTotal = math.max(0, math.floor(tonumber(profile.robuxTotal) or 0))
+		local cashTotal = math.max(0, math.floor(tonumber(profile.cashTotal) or 0))
+		local robuxRank = tonumber(profile.robuxRank)
+		local cashRank = tonumber(profile.cashRank)
+		if robuxTotal <= 0 then
+			robuxRank = nil
 		end
-		local function bestRank(a: number?, b: number?): number?
-			if type(a) == "number" and type(b) == "number" then
-				return math.min(a, b)
-			end
-			return a or b
+		if cashTotal <= 0 then
+			cashRank = nil
 		end
 		return {
 			userId = localPlayer.UserId,
 			username = localPlayer.Name,
+			displayName = if type(profile.displayName) == "string" and profile.displayName ~= ""
+				then profile.displayName
+				else localPlayer.DisplayName,
+			robuxTotal = robuxTotal,
+			robuxRank = robuxRank,
+			cashTotal = cashTotal,
+			cashRank = cashRank,
+		}
+	end
+
+	-- Combine overhead + server into one snapshot, then sanitize.
+	-- Totals: prefer higher while both positive (race during donate).
+	-- Ranks: prefer better (lower) only when that side's total > 0; never keep rank with 0 total.
+	local function mergeDonorProfiles(existing: any?, incoming: any?): any?
+		if type(incoming) ~= "table" then
+			return sanitizeDonorProfile(existing)
+		end
+		if type(existing) ~= "table" then
+			return sanitizeDonorProfile(incoming)
+		end
+		local robuxTotal = math.max(existing.robuxTotal or 0, incoming.robuxTotal or 0)
+		local cashTotal = math.max(existing.cashTotal or 0, incoming.cashTotal or 0)
+		-- If either side reports 0, trust the clear (sync after /removerobux etc.).
+		if (existing.robuxTotal or 0) <= 0 or (incoming.robuxTotal or 0) <= 0 then
+			robuxTotal = math.min(existing.robuxTotal or 0, incoming.robuxTotal or 0)
+		end
+		if (existing.cashTotal or 0) <= 0 or (incoming.cashTotal or 0) <= 0 then
+			cashTotal = math.min(existing.cashTotal or 0, incoming.cashTotal or 0)
+		end
+		local function pickRank(total: number, a: number?, b: number?, totalA: number, totalB: number): number?
+			if total <= 0 then
+				return nil
+			end
+			local candidates = {}
+			if type(a) == "number" and totalA > 0 then
+				table.insert(candidates, a)
+			end
+			if type(b) == "number" and totalB > 0 then
+				table.insert(candidates, b)
+			end
+			if #candidates == 0 then
+				return nil
+			end
+			local best = candidates[1]
+			for i = 2, #candidates do
+				if candidates[i] < best then
+					best = candidates[i]
+				end
+			end
+			return best
+		end
+		return sanitizeDonorProfile({
 			displayName = if type(incoming.displayName) == "string" and incoming.displayName ~= ""
 				then incoming.displayName
 				else existing.displayName,
-			robuxTotal = math.max(existing.robuxTotal or 0, incoming.robuxTotal or 0),
-			robuxRank = bestRank(existing.robuxRank, incoming.robuxRank),
-			cashTotal = math.max(existing.cashTotal or 0, incoming.cashTotal or 0),
-			cashRank = bestRank(existing.cashRank, incoming.cashRank),
-		}
+			robuxTotal = robuxTotal,
+			robuxRank = pickRank(
+				robuxTotal,
+				tonumber(existing.robuxRank),
+				tonumber(incoming.robuxRank),
+				existing.robuxTotal or 0,
+				incoming.robuxTotal or 0
+			),
+			cashTotal = cashTotal,
+			cashRank = pickRank(
+				cashTotal,
+				tonumber(existing.cashRank),
+				tonumber(incoming.cashRank),
+				existing.cashTotal or 0,
+				incoming.cashTotal or 0
+			),
+		})
 	end
 
 	local lastDonorProfile: any? = nil
@@ -119,9 +185,7 @@ function DonationSystemController.init(deps: {
 		if type(overheadPayload) ~= "table" then
 			return nil
 		end
-		return {
-			userId = localPlayer.UserId,
-			username = localPlayer.Name,
+		return sanitizeDonorProfile({
 			displayName = if type(overheadPayload.displayName) == "string"
 					and overheadPayload.displayName ~= ""
 				then overheadPayload.displayName
@@ -130,7 +194,7 @@ function DonationSystemController.init(deps: {
 			robuxRank = tonumber(overheadPayload.topDonateRank),
 			cashTotal = math.max(0, math.floor(tonumber(overheadPayload.cashDonated) or 0)),
 			cashRank = tonumber(overheadPayload.topSpenderRank),
-		}
+		})
 	end
 
 	local function profileFromOverheadOnly(): any?
@@ -142,15 +206,15 @@ function DonationSystemController.init(deps: {
 		if not profile then
 			return
 		end
-		local merged = mergeDonorProfiles(lastDonorProfile, profile)
-		lastDonorProfile = merged
-		ui:applyDonorProfile(merged)
+		-- Replace sticky session state with latest overhead snapshot (sanitized).
+		lastDonorProfile = profile
+		ui:applyDonorProfile(profile)
 		log:debug("overhead profile applied to donation panel", {
 			userId = localPlayer.UserId,
-			robuxRank = merged.robuxRank,
-			robuxTotal = merged.robuxTotal,
-			cashRank = merged.cashRank,
-			cashTotal = merged.cashTotal,
+			robuxRank = profile.robuxRank,
+			robuxTotal = profile.robuxTotal,
+			cashRank = profile.cashRank,
+			cashTotal = profile.cashTotal,
 		})
 	end
 
@@ -161,9 +225,9 @@ function DonationSystemController.init(deps: {
 			else nil
 		local merged = if overheadProfile and remoteProfile
 			then mergeDonorProfiles(overheadProfile, remoteProfile)
-			else (remoteProfile or overheadProfile)
+			else sanitizeDonorProfile(remoteProfile or overheadProfile)
 		if merged then
-			lastDonorProfile = mergeDonorProfiles(lastDonorProfile, merged)
+			lastDonorProfile = merged
 			return lastDonorProfile
 		end
 		return nil

@@ -82,6 +82,28 @@ local function createDonationRobuxService(deps: {
 	local donorProfileRemoteCooldownUntil = 0
 	local service = {} :: Service
 
+	local function sanitizeDonorProfile(profile: DonorProfilePayload?): DonorProfilePayload?
+		if type(profile) ~= "table" then
+			return nil
+		end
+		local robuxTotal = math.max(0, math.floor(tonumber(profile.robuxTotal) or 0))
+		local cashTotal = math.max(0, math.floor(tonumber(profile.cashTotal) or 0))
+		local robuxRank = tonumber(profile.robuxRank)
+		local cashRank = tonumber(profile.cashRank)
+		if robuxTotal <= 0 then
+			robuxRank = nil
+		end
+		if cashTotal <= 0 then
+			cashRank = nil
+		end
+		local sanitized = table.clone(profile)
+		sanitized.robuxTotal = robuxTotal
+		sanitized.robuxRank = robuxRank
+		sanitized.cashTotal = cashTotal
+		sanitized.cashRank = cashRank
+		return sanitized
+	end
+
 	local function mergeDonorProfiles(
 		overheadProfile: DonorProfilePayload?,
 		serverProfile: DonorProfilePayload?
@@ -95,31 +117,48 @@ local function createDonationRobuxService(deps: {
 				merged = table.clone(profile)
 				continue
 			end
-			if (profile.robuxTotal or 0) > (merged.robuxTotal or 0) then
-				merged.robuxTotal = profile.robuxTotal
+			local overheadRobux = merged.robuxTotal or 0
+			local serverRobux = profile.robuxTotal or 0
+			local overheadCash = merged.cashTotal or 0
+			local serverCash = profile.cashTotal or 0
+			-- Trust a zero from either side so clears sync; otherwise keep the higher live total.
+			if overheadRobux <= 0 or serverRobux <= 0 then
+				merged.robuxTotal = math.min(overheadRobux, serverRobux)
+			elseif serverRobux > overheadRobux then
+				merged.robuxTotal = serverRobux
 			end
-			if type(profile.robuxRank) == "number" then
-				if type(merged.robuxRank) == "number" then
-					merged.robuxRank = math.min(merged.robuxRank, profile.robuxRank)
-				else
-					merged.robuxRank = profile.robuxRank
+			if overheadCash <= 0 or serverCash <= 0 then
+				merged.cashTotal = math.min(overheadCash, serverCash)
+			elseif serverCash > overheadCash then
+				merged.cashTotal = serverCash
+			end
+			if (merged.robuxTotal or 0) > 0 then
+				if type(profile.robuxRank) == "number" then
+					if type(merged.robuxRank) == "number" then
+						merged.robuxRank = math.min(merged.robuxRank, profile.robuxRank)
+					else
+						merged.robuxRank = profile.robuxRank
+					end
 				end
+			else
+				merged.robuxRank = nil
 			end
-			if (profile.cashTotal or 0) > (merged.cashTotal or 0) then
-				merged.cashTotal = profile.cashTotal
-			end
-			if type(profile.cashRank) == "number" then
-				if type(merged.cashRank) == "number" then
-					merged.cashRank = math.min(merged.cashRank, profile.cashRank)
-				else
-					merged.cashRank = profile.cashRank
+			if (merged.cashTotal or 0) > 0 then
+				if type(profile.cashRank) == "number" then
+					if type(merged.cashRank) == "number" then
+						merged.cashRank = math.min(merged.cashRank, profile.cashRank)
+					else
+						merged.cashRank = profile.cashRank
+					end
 				end
+			else
+				merged.cashRank = nil
 			end
 			if type(profile.displayName) == "string" and profile.displayName ~= "" then
 				merged.displayName = profile.displayName
 			end
 		end
-		return merged
+		return sanitizeDonorProfile(merged)
 	end
 
 	local function profileFromOverheadCache(): DonorProfilePayload?
@@ -131,7 +170,7 @@ local function createDonationRobuxService(deps: {
 		local cashRank = tonumber(payload.topSpenderRank)
 		local robuxTotal = math.max(0, math.floor(tonumber(payload.robuxDonated) or 0))
 		local cashTotal = math.max(0, math.floor(tonumber(payload.cashDonated) or 0))
-		return {
+		return sanitizeDonorProfile({
 			userId = localPlayer.UserId,
 			username = localPlayer.Name,
 			displayName = if type(payload.displayName) == "string" and payload.displayName ~= ""
@@ -141,7 +180,7 @@ local function createDonationRobuxService(deps: {
 			robuxRank = robuxRank,
 			cashTotal = cashTotal,
 			cashRank = cashRank,
-		}
+		})
 	end
 
 	local function connectProductsResponse(responseRemote: RemoteEvent)

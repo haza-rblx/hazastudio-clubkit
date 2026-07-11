@@ -13,6 +13,13 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ---
 
+## [2.2.7] — 2026-07-11
+
+### Fixed
+- **Donation panel rank sticky** — merge tidak lagi nempel `#N` saat total sudah 0; overhead juga drop rank chip kalau donated = 0; `/removerobux` invalidate + refresh overhead.
+
+---
+
 ## [2.2.6] — 2026-07-11
 
 ### Fixed

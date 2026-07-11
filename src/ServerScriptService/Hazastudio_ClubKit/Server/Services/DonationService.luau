@@ -2100,6 +2100,13 @@ local function createDonationService(
 		end
 
 		service:notifyWorkspaceLeaderboardsUpdated()
+		if overheadService and type(overheadService.invalidateRankCaches) == "function" then
+			overheadService:invalidateRankCaches(userId)
+		end
+		local onlinePlayer = Players:GetPlayerByUserId(userId)
+		if onlinePlayer and type(service.refreshPlayerOverhead) == "function" then
+			service:refreshPlayerOverhead(onlinePlayer)
+		end
 		return true, ""
 	end
 
@@ -2139,6 +2146,12 @@ local function createDonationService(
 			end
 		end
 		local cashTotal, cashRank = service:getPlayerCashStats(userId, username)
+		if robuxTotal <= 0 then
+			robuxRank = nil
+		end
+		if cashTotal <= 0 then
+			cashRank = nil
+		end
 		local profile = {
 			userId = userId,
 			username = username,

@@ -703,6 +703,13 @@ local function createOverheadService(deps: {
 				topSpenderText = OverheadDomain.NIL,
 			})
 		else
+			-- Rank chips must track live totals: 0 donated ⇒ no rank (don't keep stale DS ranks).
+			if robuxDonated <= 0 then
+				robuxTopDonateRank = nil
+			end
+			if cashDonated <= 0 then
+				saweriaTopSpenderRank = nil
+			end
 			local activeRobuxRank = OverheadDomain.normalizeLeaderboardRank(robuxTopDonateRank)
 			if activeRobuxRank then
 				stored = OverheadDomain.mergeStored(stored, {
