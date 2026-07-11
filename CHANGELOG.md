@@ -13,6 +13,16 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ---
 
+## [2.2.1] — 2026-07-11
+
+### Fixed
+- **Source sync Script.Source limit** — `MusicPlayerUIBinder.luau` (247k) melebihi batas Roblox 200k; dipecah ke `MusicPlayerUIBinderPart2.luau` agar plugin Update Engine bisa menulis Source.
+
+### Changed
+- **Music player UI source split** — late methods load dari sibling ModuleScript; API binder tidak berubah.
+
+---
+
 ## [2.2.0] — 2026-07-11
 
 ### Added
