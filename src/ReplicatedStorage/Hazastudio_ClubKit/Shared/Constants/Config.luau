@@ -1,31 +1,22 @@
 --!strict
 local RunService = game:GetService("RunService")
 local IS_STUDIO = RunService:IsStudio()
--- true = Studio Play pakai prefix Studio_* (terisolasi dari live). Default aman untuk testing.
--- false = Studio & live pakai key DataStore production yang sama — HANYA sengaja untuk debug data asli.
-local USE_STUDIO_DATASTORE_ISOLATION = true
-local DATASTORE_SCOPE_PREFIX = if IS_STUDIO and USE_STUDIO_DATASTORE_ISOLATION then "Studio_" else ""
-
-local function scopedDataStoreKey(baseKey: string): string
-	if baseKey == "" or DATASTORE_SCOPE_PREFIX == "" then
-		return baseKey
-	end
-	return DATASTORE_SCOPE_PREFIX .. baseKey
-end
 
 local Config = {}
 
-local function studioWritesToLiveDatastore(): boolean
-	return IS_STUDIO and not USE_STUDIO_DATASTORE_ISOLATION
-end
-
+-- Studio Play & live memakai key DataStore yang sama (tidak ada prefix Studio_*).
+-- Sengaja: testing di Studio = gambaran production; tulis DataStore dari Studio mempengaruhi data live.
 Config.DataStoreScope = {
 	IS_STUDIO = IS_STUDIO,
-	USE_STUDIO_ISOLATION = USE_STUDIO_DATASTORE_ISOLATION,
-	PREFIX = DATASTORE_SCOPE_PREFIX,
-	scopedKey = scopedDataStoreKey,
-	-- true = Play di Studio menulis ke key production (bahaya untuk /setrobux dll.).
-	writesToLive = studioWritesToLiveDatastore,
+	USE_STUDIO_ISOLATION = false,
+	PREFIX = "",
+	scopedKey = function(baseKey: string): string
+		return baseKey
+	end,
+	-- Legacy no-op: isolation dihapus, tidak ada blokir write Studio→live.
+	writesToLive = function(): boolean
+		return false
+	end,
 }
 
 -- ============================================================
@@ -389,8 +380,8 @@ Config.CinematicDock = {
 -- DATASTORE KEYS (versioned)
 -- ============================================================
 Config.DataStore = {
-	OVERHEAD_KEY = scopedDataStoreKey("Overhead_v1"),
-	ABOUT_ROSTER_KEY = scopedDataStoreKey("AboutRoster_v1"),
+	OVERHEAD_KEY = "Overhead_v1",
+	ABOUT_ROSTER_KEY = "AboutRoster_v1",
 	ABOUT_ROSTER_ENTRY_KEY = "team",
 	CACHE_TTL = 120,  -- Scaling 100→200 CCU: extended from 60s to 120s to reduce DataStore GetAsync by 50%
 	GROUP_CACHE_TTL = 120,
@@ -768,7 +759,7 @@ Config.Sync = {
 	},
 }
 Config.Favorites = {
-	DATASTORE_NAME = scopedDataStoreKey("FavoritedAnimations_v2"),
+	DATASTORE_NAME = "FavoritedAnimations_v2",
 	KEY_PREFIX = "Player_",
 	ATTRIBUTE_KEY = "SavedFavoritedAnimations",
 }
@@ -958,7 +949,7 @@ Config.Sticker = {
 	BILLBOARD_IMAGE_NAME = "Sticker",
 	STICKER_IMAGE_ATTRIBUTE = "StickerImage",
 	STICKER_CLEAR_ATTRIBUTE = "StickerClear",
-	DATASTORE_NAME = scopedDataStoreKey("StickerCollection_v1"),
+	DATASTORE_NAME = "StickerCollection_v1",
 	KEY_PREFIX = "Player_",
 	-- Shared pool: satu upload tampil di picker semua player (DataStore key terpisah dari Player_*).
 	GLOBAL_POOL_KEY = "GlobalPool_v1",
@@ -1276,7 +1267,7 @@ Config.Shop = {
 	GIFT_PENDING_TIMEOUT = 120,
 	-- Durable gift intent (DataStore) — survives server restart until ProcessReceipt.
 	GIFT_PENDING_PERSIST_TIMEOUT = 1800,
-	GIFT_PENDING_DATASTORE_KEY = scopedDataStoreKey("ShopGiftPending_v1"),
+	GIFT_PENDING_DATASTORE_KEY = "ShopGiftPending_v1",
 	-- Rate limit untuk ShopGiftPending remote
 	GIFT_RATE_MAX = 3,
 	GIFT_RATE_WINDOW = 60,
@@ -1638,8 +1629,8 @@ Config.AvatarContext = {
 	CAMERA_FOV = 40,
 
 	-- DataStore
-	PROFILE_DATASTORE_KEY = scopedDataStoreKey("Profile_v1"),
-	LIKE_DATASTORE_KEY = scopedDataStoreKey("AvatarLikes_v1"),
+	PROFILE_DATASTORE_KEY = "Profile_v1",
+	LIKE_DATASTORE_KEY = "AvatarLikes_v1",
 	LIKE_SHARD_COUNT = 128,
 
 	-- Remote names
@@ -1779,7 +1770,7 @@ Config.Graphics = {
 Config.Settings = {
 	GUI_NAME = "07-MenuGUI",
 	BACKDROP_BLUR_NAME = "SettingsUIBlur",
-	DATASTORE_KEY = scopedDataStoreKey("Settings_v1"),
+	DATASTORE_KEY = "Settings_v1",
 	REMOTE_REQUEST = "SettingsRequest",
 	REMOTE_SYNC = "SettingsSync",
 	REMOTE_UPDATE = "SettingsUpdate",
@@ -1905,11 +1896,11 @@ Config.Donation = {
 	},
 	-- Tambahan nilai manual (delta), di-merge ke leaderboard utama saat poll/refresh.
 	-- Persisted via ManualBagibagiRepository (DataStore). Runtime cache di MANUAL_BAGIBAGI_ADJUSTMENTS.
-	MANUAL_BAGIBAGI_DATASTORE_KEY = scopedDataStoreKey("ManualBagibagiAdjustments_v1"),
-	-- Robux: increment OrderedDataStore — di Studio pakai key Studio_* (Config.DataStoreScope).
+	MANUAL_BAGIBAGI_DATASTORE_KEY = "ManualBagibagiAdjustments_v1",
+	-- Robux: increment OrderedDataStore (production key — Studio & live sama).
 	MANUAL_ROBUX_ADJUSTMENTS = {} :: { [number]: number },
 	MANUAL_BAGIBAGI_ADJUSTMENTS = {} :: { [number]: number },
-	MSG_STUDIO_LIVE_DATASTORE_BLOCKED = "[Donation] Studio: nyalakan USE_STUDIO_DATASTORE_ISOLATION di Config (default true). Perintah ini diblokir agar tidak menulis Robux leaderboard production.",
+	MSG_STUDIO_LIVE_DATASTORE_BLOCKED = "[Donation] Studio DataStore isolation removed — commands write production keys.",
 	-- Owner-only manual donation commands (Studio bypass permission check).
 	CMD_ADD_ROBUX = "setrobux", -- /setrobux <username|userId> <robux amount>
 	CMD_REMOVE_ROBUX = "removerobux", -- /removerobux <username|userId> [robux amount]
@@ -2162,11 +2153,11 @@ Config.Leaderboards = {
 	LIKES_PAINT_LIMIT = 20,
 	LIKES_BACKFILL_MAX_KEYS = 500,
 	LIKES_BACKFILL_COOLDOWN = 300,
-	ROBUX_USER_ORDERED_KEY = scopedDataStoreKey("RobuxDonationLeaderboard_User_v1"),
-	ROBUX_COMMUNITY_ORDERED_KEY = scopedDataStoreKey("RobuxDonationLeaderboard_Community_v1"),
-	METADATA_KEY = scopedDataStoreKey("DonationLeaderboardMetadata_v1"),
-	RECEIPT_KEY = scopedDataStoreKey("DonationRobuxReceipts_v1"),
-	LIKE_ORDERED_KEY = scopedDataStoreKey("AvatarLikesLeaderboard_v1"),
+	ROBUX_USER_ORDERED_KEY = "RobuxDonationLeaderboard_User_v1",
+	ROBUX_COMMUNITY_ORDERED_KEY = "RobuxDonationLeaderboard_Community_v1",
+	METADATA_KEY = "DonationLeaderboardMetadata_v1",
+	RECEIPT_KEY = "DonationRobuxReceipts_v1",
+	LIKE_ORDERED_KEY = "AvatarLikesLeaderboard_v1",
 	-- P1: MemoryStoreService cross-server cache untuk leaderboard. Default ON
 	-- karena MemoryStore quota lebih murah dari DataStore GetSortedAsync
 	-- per-experience (10/min). Semua server share key yang sama dengan TTL
@@ -2347,11 +2338,11 @@ Config.Music = {
 	},
 
 	-- DataStore
-	DATASTORE_NAME = scopedDataStoreKey("MusicLibrary_v1"),
-	PLAYLIST_KEY = scopedDataStoreKey("Playlists"),
-	TRACK_KEY = scopedDataStoreKey("Tracks"),
-	FAVORITES_DATASTORE_NAME = scopedDataStoreKey("MusicFavorites_v1"),
-	FAVORITES_KEY_PREFIX = scopedDataStoreKey("MusicFavorites_"),
+	DATASTORE_NAME = "MusicLibrary_v1",
+	PLAYLIST_KEY = "Playlists",
+	TRACK_KEY = "Tracks",
+	FAVORITES_DATASTORE_NAME = "MusicFavorites_v1",
+	FAVORITES_KEY_PREFIX = "MusicFavorites_",
 	FAVORITES_ATTRIBUTE_KEY = "MusicFavoriteTrackIds",
 	REMOTE_VOTE_STATE = "MusicVoteState",
 	-- Remote names

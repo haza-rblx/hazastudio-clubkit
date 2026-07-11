@@ -2,7 +2,7 @@
 
 Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
 
-**Versi saat ini:** `2.2.1` (lihat [`VERSION`](VERSION))  
+**Versi saat ini:** `2.2.2` (lihat [`VERSION`](VERSION))  
 **Target rilis berikutnya:** _(belum ditetapkan)_
 
 ---
@@ -11,7 +11,7 @@ Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
 
 | Area | Status |
 |------|--------|
-| v2.2.1 MusicPlayerUIBinder Source limit | ✅ Released |
+| v2.2.2 Studio=live + TeamColor unique | ✅ Released |
 
 ---
 

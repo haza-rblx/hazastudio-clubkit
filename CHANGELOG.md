@@ -13,6 +13,14 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ---
 
+## [2.2.2] — 2026-07-11
+
+### Changed
+- **DataStore: Studio = live** — hapus prefix `Studio_*` / isolation; Play di Studio memakai key production yang sama agar testing mencerminkan live (write dari Studio mempengaruhi data asli).
+- **PlayerList TeamColor unique** — runtime auto-remap BrickColor bila config role bentrok, supaya player tidak nyasar ke team lain di leaderboard Roblox.
+
+---
+
 ## [2.2.1] — 2026-07-11
 
 ### Fixed

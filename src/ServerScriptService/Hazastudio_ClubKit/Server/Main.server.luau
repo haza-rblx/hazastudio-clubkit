@@ -112,27 +112,12 @@ do
 		kitFolder:SetAttribute("Vendor", KitProduct.Vendor)
 	end
 end
-if Config.DataStoreScope.USE_STUDIO_ISOLATION then
-	log:info("DataStore scope: Studio (isolated from live, persists across Studio restarts)", {
-		prefix = Config.DataStoreScope.PREFIX,
-		robuxLeaderboard = Config.Leaderboards.ROBUX_USER_ORDERED_KEY,
-		overhead = Config.DataStore.OVERHEAD_KEY,
-		settings = Config.Settings.DATASTORE_KEY,
-	})
-elseif Config.DataStoreScope.IS_STUDIO then
-	log:warn("DataStore scope: LIVE production keys from Studio — testing akan mengubah data player asli", {
-		robuxLeaderboard = Config.Leaderboards.ROBUX_USER_ORDERED_KEY,
-		overhead = Config.DataStore.OVERHEAD_KEY,
-		settings = Config.Settings.DATASTORE_KEY,
-	})
-else
-	log:info("DataStore scope: Live (production keys)", {
-		isStudioSession = Config.DataStoreScope.IS_STUDIO,
-		robuxLeaderboard = Config.Leaderboards.ROBUX_USER_ORDERED_KEY,
-		overhead = Config.DataStore.OVERHEAD_KEY,
-		settings = Config.Settings.DATASTORE_KEY,
-	})
-end
+log:info("DataStore scope: production keys (Studio = live)", {
+	isStudioSession = Config.DataStoreScope.IS_STUDIO,
+	robuxLeaderboard = Config.Leaderboards.ROBUX_USER_ORDERED_KEY,
+	overhead = Config.DataStore.OVERHEAD_KEY,
+	settings = Config.Settings.DATASTORE_KEY,
+})
 
 local Secrets = require(ServerScriptService.Hazastudio_ClubKitSecrets.Secrets)
 local donationApiUrl = if type(Config.Donation) == "table" then Config.Donation.SHEETS_WEB_APP_URL else ""

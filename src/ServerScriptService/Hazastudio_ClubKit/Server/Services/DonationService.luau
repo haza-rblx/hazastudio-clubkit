@@ -79,13 +79,6 @@ local function createDonationService(
 	local donorFailureCache: { [number]: { expiresAt: number } } = {}
 	local DONOR_PROFILE_FAILURE_CACHE_TTL = 120 -- detik
 
-	local function assertStudioManualDonationSafe(): (boolean, string?)
-		if Config.DataStoreScope.writesToLive() then
-			return false, Config.Donation.MSG_STUDIO_LIVE_DATASTORE_BLOCKED
-		end
-		return true, nil
-	end
-
 	local function invalidateDonorCashCache(userId: number?)
 		if userId then
 			donorCashCache[userId] = nil
@@ -2007,10 +2000,6 @@ local function createDonationService(
 		displayName: string?,
 		deltaRobux: number
 	): (boolean, string)
-		local safe, blockReason = assertStudioManualDonationSafe()
-		if not safe then
-			return false, blockReason or "studio_live_blocked"
-		end
 		local delta = math.floor(tonumber(deltaRobux) or 0)
 		if userId <= 0 or delta == 0 then
 			return false, "invalid_amount"
@@ -2050,10 +2039,6 @@ local function createDonationService(
 		userId: number,
 		amountRobux: number?
 	): (boolean, string)
-		local safe, blockReason = assertStudioManualDonationSafe()
-		if not safe then
-			return false, blockReason or "studio_live_blocked"
-		end
 		if userId <= 0 then
 			return false, "invalid_user"
 		end

@@ -731,18 +731,120 @@ end
 			end
 		end
 	end
+	-- Roblox treats TeamColor as the unique team ID. Duplicate BrickColors cause
+	-- players to snap onto the wrong Team in the PlayerList. Prefer config color,
+	-- then claim the next free BrickColor from a stable palette.
+	local UNIQUE_TEAM_COLOR_PALETTE: { string } = {
+		"Gold",
+		"Bright orange",
+		"Dark orange",
+		"Bright red",
+		"Really red",
+		"Hot pink",
+		"Magenta",
+		"Bright violet",
+		"Royal purple",
+		"Bright blue",
+		"Deep blue",
+		"Cyan",
+		"Teal",
+		"Bright bluish green",
+		"Bright green",
+		"Lime green",
+		"New Yeller",
+		"Bright yellow",
+		"Light orange",
+		"CGA brown",
+		"Brown",
+		"Reddish brown",
+		"Nougat",
+		"White",
+		"Light stone grey",
+		"Medium stone grey",
+		"Dark stone grey",
+		"Black",
+		"Institutional white",
+		"Pastel Blue",
+		"Pastel green",
+		"Pastel yellow",
+		"Pastel orange",
+		"Pastel violet",
+		"Pink",
+		"Rose",
+		"Alder",
+		"Lavender",
+		"Sand blue",
+		"Sand green",
+		"Earth green",
+		"Camo",
+		"Olive",
+		"Sea green",
+		"Storm blue",
+		"Steel blue",
+		"Lapis",
+		"Electric blue",
+		"Toothpaste",
+		"Mint",
+		"Moss",
+		"Shamrock",
+		"Forest green",
+		"Grime",
+		"Cork",
+		"Burlap",
+		"Brick yellow",
+		"Cool yellow",
+		"Neon orange",
+		"Persimmon",
+		"Crimson",
+		"Maroon",
+		"Burgundy",
+	}
+	local function brickColorName(color: BrickColor): string
+		return color.Name
+	end
+	local function isTeamColorTaken(color: BrickColor, exceptTeam: Team?): boolean
+		local name = brickColorName(color)
+		for _, child in ipairs(Teams:GetChildren()) do
+			if child:IsA("Team") and child ~= exceptTeam then
+				if brickColorName(child.TeamColor) == name then
+					return true
+				end
+			end
+		end
+		return false
+	end
+	local function claimUniqueTeamColor(preferred: BrickColor?, team: Team): BrickColor
+		if preferred and not isTeamColorTaken(preferred, team) then
+			return preferred
+		end
+		for _, colorName in ipairs(UNIQUE_TEAM_COLOR_PALETTE) do
+			local candidate = BrickColor.new(colorName)
+			if not isTeamColorTaken(candidate, team) then
+				if preferred and brickColorName(preferred) ~= brickColorName(candidate) then
+					log:debug("TeamColor remapped to keep PlayerList teams unique", {
+						team = team.Name,
+						preferred = brickColorName(preferred),
+						assigned = brickColorName(candidate),
+					})
+				end
+				return candidate
+			end
+		end
+		-- Exhausted palette: keep preferred or fall back to Medium stone grey.
+		return preferred or BrickColor.new("Medium stone grey")
+	end
 	local function applyTeamColor(team: Team, colorKey: string, fallbackRoleKey: string)
 		local resolvedColorKey = normalizeColorKey(colorKey) or colorKey
 		local colorName = Config.PlayerList.TEAM_COLORS[resolvedColorKey]
 			or Config.PlayerList.TEAM_COLORS[fallbackRoleKey]
 		local chatHex = Config.ChatPrimaryTagColor[resolvedColorKey] or Config.ChatPrimaryTagColor[fallbackRoleKey]
-		local targetColor: BrickColor? = nil
+		local preferred: BrickColor? = nil
 		if colorName then
-			targetColor = BrickColor.new(colorName)
+			preferred = BrickColor.new(colorName)
 		elseif chatHex then
 			local color = hexToColor3(chatHex)
 			if color then
-				targetColor = BrickColor.new(color)
+				preferred = BrickColor.new(color)
 			else
 				log:warn("hexToColor3 gagal parse warna untuk tag, team akan pakai warna default", {
 					tagName = fallbackRoleKey,
@@ -750,9 +852,7 @@ end
 				})
 			end
 		end
-		if targetColor then
-			team.TeamColor = targetColor
-		end
+		team.TeamColor = claimUniqueTeamColor(preferred, team)
 	end
 	local function getOrCreateTeam(tagName: string, colorKey: string?): Team?
 		local roleKey = resolveRoleKeyFromTag(tagName) or OverheadDomain.normalizeRoleKey(tagName)
