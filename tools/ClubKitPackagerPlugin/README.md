@@ -16,15 +16,20 @@ Plugin Roblox Studio untuk **export** dan **unpack** seluruh aset Club Kit v1.3 
 
 ## Install plugin
 
-### Opsi A — Copy folder (dev)
+### Opsi A — Install `.rbxm` (disarankan)
 
-1. Copy folder `tools/ClubKitPackagerPlugin/` ke:
-   ```
-   %LOCALAPPDATA%\Roblox\Plugins\HazastudioClubKitPackager\
-   ```
-2. Restart Roblox Studio.
+Dari root repo:
 
-### Opsi B — Rojo sync (dev)
+```powershell
+cd tools/ClubKitPackagerPlugin
+..\..\..tools\rojo\rojo.exe build default.project.json --output "$env:LOCALAPPDATA\Roblox\Plugins\HazastudioClubKitPackager.rbxm"
+```
+
+Restart Roblox Studio → toolbar **Hazastudio Club Kit** muncul di tab Plugins.
+
+### Opsi B — Copy folder (tidak cukup)
+
+Copy folder saja **tidak** cukup — Roblox hanya load `.rbxm` / `.plugin.luau`, bukan folder `init.server.luau` biasa. Pakai Opsi A.
 
 ```bash
 rojo serve tools/ClubKitPackagerPlugin/default.project.json

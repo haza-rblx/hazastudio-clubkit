@@ -89,8 +89,19 @@ local function provisionCarryRemotes(replicatedStorage: ReplicatedStorage, confi
 	ensureRemoteEvent(carryFolder, carryConfig.DEBUG_REMOTE)
 end
 
+local function provisionGravityRemotes(replicatedStorage: ReplicatedStorage, config: any)
+	if config.FeatureFlags.GravityEnabled ~= true then
+		return
+	end
+
+	local gravityConfig = config.Gravity
+	local gravityFolder = ensureFolder(replicatedStorage, gravityConfig.REMOTE_FOLDER)
+	ensureRemoteEvent(gravityFolder, gravityConfig.COMMAND_REMOTE)
+end
+
 return function(replicatedStorage: ReplicatedStorage, remotes: Folder, config: any)
 	provisionRemotesFolder(remotes, config)
 	provisionSyncRemotes(replicatedStorage, config)
 	provisionCarryRemotes(replicatedStorage, config)
+	provisionGravityRemotes(replicatedStorage, config)
 end

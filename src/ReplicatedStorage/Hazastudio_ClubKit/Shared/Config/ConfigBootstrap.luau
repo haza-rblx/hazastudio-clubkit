@@ -303,6 +303,7 @@ function ConfigBootstrap.apply(config: any)
 			DonationCash = "DonationCashEnabled",
 			DonationSaweria = "DonationSaweriaEnabled",
 			DonationRobux = "DonationRobuxEnabled",
+			Gravity = "GravityEnabled",
 		}
 		for sourceKey, targetKey in pairs(map) do
 			if type(features[sourceKey]) == "boolean" then

@@ -1,42 +1,31 @@
 {
   "name": "HazastudioClubKitPackager",
   "tree": {
-    "$className": "Folder",
-    "init": {
-      "$path": "init.server.luau",
-      "$className": "Script"
-    },
+    "$className": "Script",
+    "$path": "plugin/HazastudioClubKit.plugin.luau",
     "ClubKitManifest": {
-      "$path": "ClubKitManifest.luau",
-      "$className": "ModuleScript"
+      "$path": "plugin/ClubKitManifest.luau"
     },
     "PackagerCore": {
-      "$path": "PackagerCore.luau",
-      "$className": "ModuleScript"
+      "$path": "plugin/PackagerCore.luau"
     },
     "RojoPathMap": {
-      "$path": "RojoPathMap.luau",
-      "$className": "ModuleScript"
+      "$path": "plugin/RojoPathMap.luau"
     },
     "SourceSyncCore": {
-      "$path": "SourceSyncCore.luau",
-      "$className": "ModuleScript"
+      "$path": "plugin/SourceSyncCore.luau"
     },
     "DovetailTheme": {
-      "$path": "DovetailTheme.luau",
-      "$className": "ModuleScript"
+      "$path": "plugin/DovetailTheme.luau"
     },
     "DovetailUI": {
-      "$path": "DovetailUI.luau",
-      "$className": "ModuleScript"
+      "$path": "plugin/DovetailUI.luau"
     },
     "UpdaterPanel": {
-      "$path": "UpdaterPanel.luau",
-      "$className": "ModuleScript"
+      "$path": "plugin/UpdaterPanel.luau"
     },
     "PackagerPanel": {
-      "$path": "PackagerPanel.luau",
-      "$className": "ModuleScript"
+      "$path": "plugin/PackagerPanel.luau"
     }
   }
 }

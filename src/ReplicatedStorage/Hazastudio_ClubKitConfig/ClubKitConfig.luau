@@ -474,6 +474,7 @@ ClubKitConfig.Features = {
 	DonationCash = true,
 	DonationSaweria = true, -- legacy alias untuk DonationCash
 	DonationRobux = true,
+	Gravity = true,
 }
 
 return ClubKitConfig

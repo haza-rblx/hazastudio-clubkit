@@ -460,6 +460,7 @@ local PaidBroadcastController = require(script.Parent.Client.Controllers.PaidBro
 local CinematicDockController = require(script.Parent.Client.Controllers.CinematicDockController)
 local TopMenuController = require(script.Parent.Client.Controllers.TopMenuController)
 local createFreecamController = require(script.Parent.Client.Controllers.FreecamController)
+local createGravityController = require(script.Parent.Client.Controllers.GravityController)
 local createMobileFreecamController = require(script.Parent.Client.Controllers.MobileFreecamController)
 local createSyncLeadTopbarController = require(script.Parent.Client.Controllers.SyncLeadTopbarController)
 local createAvatarContextUI = require(script.Parent.Client.UI.AvatarContextUI)
@@ -1074,6 +1075,13 @@ local _freecamController = trackClientLifecycle(
 		iconApi = Icon,
 	})
 )
+if Config.FeatureFlags.GravityEnabled ~= false then
+	local gravityController = createGravityController({
+		freecamScript = script.Parent.Client.Controllers.FreecamController,
+	})
+	trackClientLifecycle("GravityController", gravityController)
+	gravityController:init()
+end
 local _mobileFreecamController = trackClientLifecycle(
 	"MobileFreecamController",
 	createMobileFreecamController({

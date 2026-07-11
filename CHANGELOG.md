@@ -11,6 +11,9 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+### Added
+- **Gravity / Ungravity** — float mode per player: Shift+G (float), Shift+U (restore), `/gravity 0-10`, `/ungravity`. Dance/sync tetap jalan; anim fall di-suppress.
+
 ---
 
 ## [2.1.0] — 2026-07-10

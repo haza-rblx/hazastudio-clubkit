@@ -12,7 +12,7 @@ Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
 | Area | Status |
 |------|--------|
 | v2.1.0 source-sync updater | ✅ Released |
-| Unreleased work | — |
+| Gravity / Ungravity feature | 🚧 In progress |
 
 ---
 
@@ -20,7 +20,16 @@ Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
 
 | Path | Change |
 |------|--------|
-| _(kosong — isi saat development berikutnya)_ | |
+| `src/ServerScriptService/.../Services/GravityService.luau` | Added — server float physics |
+| `src/ServerScriptService/.../Controllers/GravityController.luau` | Added — remote + chat commands |
+| `src/StarterPlayerScripts/.../Controllers/GravityController.luau` | Added — Shift+G / Shift+U keybinds |
+| `src/ReplicatedStorage/.../Constants/Config.luau` | Added `Config.Gravity`, `GravityEnabled` flag |
+| `src/ReplicatedStorage/.../Config/ConfigBootstrap.luau` | Gravity feature flag mapping |
+| `src/ReplicatedStorage/Hazastudio_ClubKitConfig/ClubKitConfig.luau` | `Features.Gravity` |
+| `src/ServerScriptService/.../Init/EarlyRemotes.luau` | Gravity remotes |
+| `src/ServerScriptService/.../Main.server.luau` | Wire GravityService + controller |
+| `src/StarterPlayerScripts/.../Main.client.luau` | Wire client GravityController |
+| `src/ReplicatedStorage/.../Domain/CommandLibraryDomain.luau` | `/gravity`, `/ungravity` entries |
 
 ---
 

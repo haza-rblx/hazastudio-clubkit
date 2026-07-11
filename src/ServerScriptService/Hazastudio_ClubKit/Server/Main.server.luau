@@ -23,6 +23,7 @@ local createProfileSocialService = require(script.Parent.Services.ProfileSocialS
 local createAvatarContextService = require(script.Parent.Services.AvatarContextService)
 local createAvatarLikeService = require(script.Parent.Services.AvatarLikeService)
 local createCarryService = require(script.Parent.Services.CarryService)
+local createGravityService = require(script.Parent.Services.GravityService)
 local createProfileCommandService = require(script.Parent.Services.ProfileCommandService)
 local createProfileMenuService = require(script.Parent.Services.ProfileMenuService)
 local createSessionCommandService = require(script.Parent.Services.SessionCommandService)
@@ -52,6 +53,7 @@ local createAdminController = require(script.Parent.Controllers.AdminController)
 local createAvatarContextController = require(script.Parent.Controllers.AvatarContextController)
 local createAvatarLikeController = require(script.Parent.Controllers.AvatarLikeController)
 local createCarryController = require(script.Parent.Controllers.CarryController)
+local createGravityController = require(script.Parent.Controllers.GravityController)
 local createProfileMenuController = require(script.Parent.Controllers.ProfileMenuController)
 local createCommandLibraryController = require(script.Parent.Controllers.CommandLibraryController)
 local createChatCommandController = require(script.Parent.Controllers.ChatCommandController)
@@ -446,6 +448,16 @@ local carryService = trackLifecycle(
 		logger = Logger.new("CarryService"),
 	})
 )
+local gravityService: any = nil
+if Config.FeatureFlags.GravityEnabled ~= false then
+	gravityService = trackLifecycle(
+		"GravityService",
+		createGravityService({
+			carryService = carryService,
+			notify = Notify,
+		})
+	)
+end
 local stickerService = trackLifecycle(
 	"StickerService",
 	createStickerService.new({
@@ -907,6 +919,17 @@ end))
 connectionCleaner:add(Players.PlayerRemoving:Connect(function(player)
 	carryService:onPlayerRemoving(player)
 end))
+if gravityService then
+	for _, player in ipairs(Players:GetPlayers()) do
+		gravityService:onPlayerAdded(player)
+	end
+	connectionCleaner:add(Players.PlayerAdded:Connect(function(player)
+		gravityService:onPlayerAdded(player)
+	end))
+	connectionCleaner:add(Players.PlayerRemoving:Connect(function(player)
+		gravityService:onPlayerRemoving(player)
+	end))
+end
 do
 	local profileMenuController = createProfileMenuController({
 		logger = Logger.new("ProfileMenuController"),
@@ -1130,6 +1153,16 @@ commandExecutionService = createCommandExecutionService({
 	genericBroadcastService = genericBroadcastService,
 	grantNetwork = giftGrantNetwork,
 })
+if gravityService then
+	local gravityController = createGravityController({
+		service = gravityService,
+		commandExecutionService = commandExecutionService,
+		notify = Notify,
+		logger = Logger.new("GravityController"),
+		rateLimiter = RateLimiter.new(Config.Gravity.RATE_MAX, Config.Gravity.RATE_WINDOW),
+	})
+	gravityController:init()
+end
 _commandLibraryController = createCommandLibraryController({
 	service = commandExecutionService,
 	remotes = Remotes,

@@ -1043,6 +1043,7 @@ Config.FeatureFlags = {
 	DonationSaweriaEnabled = true,
 	DonationRobuxEnabled = true,
 	AfkGuardEnabled = true,
+	GravityEnabled = true,
 }
 -- ============================================================
 -- DEMO MODE
@@ -1417,6 +1418,29 @@ Config.Session = {
 	-- D4 (quota-efficiency-pass-2026-06, Phase 1): cache TTL untuk !re HumanoidDescription
 	-- response. Description rarely changes. Set to 0 to disable caching (always refetch).
 	RE_CACHE_TTL = 300,
+}
+-- ============================================================
+-- GRAVITY / UNGRAVITY (float mode — Shift+G / Shift+U, /gravity)
+-- ============================================================
+Config.Gravity = {
+	REMOTE_FOLDER = "GravityRemotes",
+	COMMAND_REMOTE = "GravityCommand",
+	CMD_ALIAS = "gravity",
+	CMD_ALIAS_UNGRAVITY = "ungravity",
+	DEFAULT_SPEED = 3,
+	MIN_SPEED = 1,
+	MAX_SPEED = 10,
+	FLOAT_SPEED_AT_MIN = 3,
+	FLOAT_SPEED_AT_MAX = 18,
+	RATE_MAX = 12,
+	RATE_WINDOW = 5,
+	MSG_USAGE = "[Gravity] Use /gravity 0 to restore, or /gravity 1-10 for float speed. Shift+G = float, Shift+U = restore.",
+	MSG_STATUS = "[Gravity] Floating at speed %d. Use /gravity 0 or Shift+U to restore.",
+	MSG_ENABLED = "[Gravity] Floating at speed %d.",
+	MSG_DISABLED = "[Gravity] Gravity restored.",
+	MSG_BLOCKED_CARRY = "[Gravity] Cannot float while carrying or being carried.",
+	MSG_RATE_LIMIT = "[Gravity] Slow down — try again in a moment.",
+	MSG_INVALID_SPEED = "[Gravity] Speed must be a number from 0 to 10.",
 }
 -- ============================================================
 -- ADMIN PANEL
