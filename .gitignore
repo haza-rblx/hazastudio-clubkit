@@ -28,6 +28,12 @@ dist/
 *.rbxl
 *.rbxlx
 
+# Packager plugin local test artifacts
+tools/ClubKitPackagerPlugin/test-*.rbxmx
+tools/ClubKitPackagerPlugin/test-*.plugin.luau
+tools/ClubKitPackagerPlugin/test-*.project.json
+tools/ClubKitPackagerPlugin/debug-plugin.rbxmx
+
 # Optional: large packaged exports (uncomment if you don't version rbxm)
 # *.rbxm
 # *.rbxmx

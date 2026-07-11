@@ -2,7 +2,7 @@
 
 Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
 
-**Versi saat ini:** `2.1.0` (lihat [`VERSION`](VERSION))  
+**Versi saat ini:** `2.2.0` (lihat [`VERSION`](VERSION))  
 **Target rilis berikutnya:** _(belum ditetapkan)_
 
 ---
@@ -11,9 +11,7 @@ Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
 
 | Area | Status |
 |------|--------|
-| v2.1.0 source-sync updater | ✅ Released |
-| Gravity / Ungravity feature | 🚧 In progress |
-| Music topbar icon missing (audio OK) | ✅ Fixed |
+| v2.2.0 Gravity + music topbar | ✅ Released |
 
 ---
 
@@ -21,18 +19,7 @@ Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
 
 | Path | Change |
 |------|--------|
-| `src/StarterPlayerScripts/.../UI/MusicTopbarIcon.luau` | Fixed — robust show/hide restore via alignmentHolder |
-| `src/StarterPlayerScripts/.../Controllers/MusicPlayerController.luau` | Fixed — no hide-on-engine-init; re-assert icon after panel boot |
-| `src/ServerScriptService/.../Services/GravityService.luau` | Added — server float physics |
-| `src/ServerScriptService/.../Controllers/GravityController.luau` | Added — remote + chat commands |
-| `src/StarterPlayerScripts/.../Controllers/GravityController.luau` | Added — Shift+G / Shift+U keybinds |
-| `src/ReplicatedStorage/.../Constants/Config.luau` | Added `Config.Gravity`, `GravityEnabled` flag |
-| `src/ReplicatedStorage/.../Config/ConfigBootstrap.luau` | Gravity feature flag mapping |
-| `src/ReplicatedStorage/Hazastudio_ClubKitConfig/ClubKitConfig.luau` | `Features.Gravity` |
-| `src/ServerScriptService/.../Init/EarlyRemotes.luau` | Gravity remotes |
-| `src/ServerScriptService/.../Main.server.luau` | Wire GravityService + controller |
-| `src/StarterPlayerScripts/.../Main.client.luau` | Wire client GravityController |
-| `src/ReplicatedStorage/.../Domain/CommandLibraryDomain.luau` | `/gravity`, `/ungravity` entries |
+| _(kosong)_ | |
 
 ---
 

@@ -46,7 +46,11 @@ function Read-KitProductVersion {
 }
 
 function Read-ManifestVersion {
-    $manifest = Join-Path $root "tools\ClubKitPackagerPlugin\ClubKitManifest.luau"
+    $manifest = Join-Path $root "tools\ClubKitPackagerPlugin\plugin\ClubKitManifest.luau"
+    if (-not (Test-Path $manifest)) {
+        # Legacy flat layout (pre-2.2 plugin restructure)
+        $manifest = Join-Path $root "tools\ClubKitPackagerPlugin\ClubKitManifest.luau"
+    }
     if (-not (Test-Path $manifest)) {
         throw "ClubKitManifest.luau missing."
     }
