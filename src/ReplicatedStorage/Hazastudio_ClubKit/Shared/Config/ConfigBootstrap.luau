@@ -143,6 +143,13 @@ function ConfigBootstrap.apply(config: any)
 		config.Branding = config.Branding or {}
 		config.Branding.GAME_NAME = branding.GameName
 	end
+	if type(branding.LogoImage) == "string" and branding.LogoImage ~= "" then
+		config.Branding = config.Branding or {}
+		config.Branding.LOGO_IMAGE = branding.LogoImage
+	end
+	if type(config.Branding) == "table" and type(config.Branding.DEFAULT_LOGO_IMAGE) ~= "string" then
+		config.Branding.DEFAULT_LOGO_IMAGE = "rbxassetid://79426970537296"
+	end
 
 	local group = clubKit.Group or {}
 	if type(config.Group) == "table" then

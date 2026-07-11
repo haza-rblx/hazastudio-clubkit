@@ -33,6 +33,15 @@ Config.Group = {
 	-- Expected HTTP API reduction: 3/m baseline → 1.5/m baseline.
 	RANK_CACHE_TTL = 600,
 }
+
+-- Branding (ClubKitConfig.Branding → ConfigBootstrap). Logo applied at boot via BrandLogoApplier.
+Config.Branding = {
+	GAME_NAME = "",
+	-- Kit default baked into loading/poster/board ImageLabels; used as match key.
+	DEFAULT_LOGO_IMAGE = "rbxassetid://79426970537296",
+	-- Buyer override from ClubKitConfig.Branding.LogoImage (same as default until changed).
+	LOGO_IMAGE = "rbxassetid://79426970537296",
+}
 -- ============================================================
 -- MEMBERSHIP TIERS (system-wide presentation config)
 -- ============================================================

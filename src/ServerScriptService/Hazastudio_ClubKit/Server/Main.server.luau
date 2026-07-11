@@ -119,6 +119,18 @@ log:info("DataStore scope: production keys (Studio = live)", {
 	settings = Config.Settings.DATASTORE_KEY,
 })
 
+do
+	local BrandLogoApplier = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.BrandLogoApplier)
+	local Workspace = game:GetService("Workspace")
+	local StarterGui = game:GetService("StarterGui")
+	local applied = BrandLogoApplier.applyRoots({ Workspace, StarterGui }, Config)
+	connectionCleaner:add(BrandLogoApplier.watch(Workspace, Config))
+	connectionCleaner:add(BrandLogoApplier.watch(StarterGui, Config))
+	if applied > 0 then
+		log:info("Brand logo applied", { imageLabels = applied })
+	end
+end
+
 local Secrets = require(ServerScriptService.Hazastudio_ClubKitSecrets.Secrets)
 local donationApiUrl = if type(Config.Donation) == "table" then Config.Donation.SHEETS_WEB_APP_URL else ""
 if type(donationApiUrl) == "string" and donationApiUrl ~= "" then

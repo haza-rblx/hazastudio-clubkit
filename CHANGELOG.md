@@ -13,6 +13,13 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ---
 
+## [2.2.5] — 2026-07-11
+
+### Added
+- **Branding.LogoImage** — ganti logo club sekali di `ClubKitConfig.Branding.LogoImage`; boot auto-apply ke ImageLabel yang masih pakai ID bawaan kit (`79426970537296`) di loading / poster / leaderboard.
+
+---
+
 ## [2.2.4] — 2026-07-11
 
 ### Fixed

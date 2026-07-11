@@ -43,6 +43,18 @@ if Config.FeatureFlags.LoadingScreenEnabled ~= true then
 end
 local bootstrapWaitTimeout = LoadingConfig.BOOTSTRAP_WAIT_TIMEOUT
 
+local utilsFolder = sharedRoot:WaitForChild("Utils", bootstrapWaitTimeout)
+local BrandLogoApplier = nil
+if utilsFolder then
+	local brandLogoModule = utilsFolder:FindFirstChild("BrandLogoApplier")
+	if brandLogoModule and brandLogoModule:IsA("ModuleScript") then
+		local ok, result = pcall(require, brandLogoModule)
+		if ok then
+			BrandLogoApplier = result
+		end
+	end
+end
+
 local uiFolder = sharedRoot:WaitForChild("UI", bootstrapWaitTimeout)
 if not uiFolder then
 	warn("[LoadingBootstrap] ReplicatedStorage.Hazastudio_ClubKit.Shared.UI not found")
@@ -77,6 +89,10 @@ if not (runtimeRoot and runtimeRoot:IsA("ScreenGui")) then
 		ReplicatedFirst:RemoveDefaultLoadingScreen()
 		return
 	end
+end
+
+if BrandLogoApplier and runtimeRoot then
+	BrandLogoApplier.applyToInstance(runtimeRoot, Config)
 end
 
 local ui = LoadingScreenUI.attach(runtimeRoot :: ScreenGui, {

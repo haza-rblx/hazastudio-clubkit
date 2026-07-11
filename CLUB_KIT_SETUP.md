@@ -45,6 +45,8 @@ Branding = {
     GameName = "Nama Club Kamu",
     WelcomeMessage = "Welcome to %s",
     Greeting = "Welcome to %s",
+    -- Ganti logo club (loading / poster / leaderboard) — 1 ID untuk semua
+    LogoImage = "rbxassetid://79426970537296",
 },
 
 Group = {

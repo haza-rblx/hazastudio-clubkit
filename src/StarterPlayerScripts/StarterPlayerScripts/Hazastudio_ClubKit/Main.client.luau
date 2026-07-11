@@ -125,6 +125,26 @@ local SharedUI = Shared:WaitForChild("UI")
 local Config = require(SharedConstants:WaitForChild("Config"))
 local PermissionDomain = require(SharedDomain:WaitForChild("PermissionDomain"))
 local LoadingScreenUI = require(SharedUI:WaitForChild("LoadingScreenUI"))
+
+do
+	local utilsFolder = Shared:FindFirstChild("Utils")
+	local brandLogoModule = utilsFolder and utilsFolder:FindFirstChild("BrandLogoApplier")
+	if brandLogoModule and brandLogoModule:IsA("ModuleScript") then
+		local ok, BrandLogoApplier = pcall(require, brandLogoModule)
+		if ok and BrandLogoApplier then
+			local function applyBrandLogos(root: Instance)
+				BrandLogoApplier.applyToInstance(root, Config)
+				table.insert(_clientConnections, BrandLogoApplier.watch(root, Config))
+			end
+			applyBrandLogos(StarterGui)
+			task.spawn(function()
+				local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
+				applyBrandLogos(playerGui)
+			end)
+		end
+	end
+end
+
 type LoadingConfigType = {
 	BOOTSTRAP_WAIT_TIMEOUT: number,
 	CONTROLLER_WAIT_TIMEOUT: number,

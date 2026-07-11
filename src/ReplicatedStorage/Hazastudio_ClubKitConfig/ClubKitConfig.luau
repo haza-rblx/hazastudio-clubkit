@@ -28,6 +28,8 @@ ClubKitConfig.Branding = {
 	GameName = "Club", -- tampil di VFX donasi / label umum
 	WelcomeMessage = "Welcome to the club, %s", -- tap to continue (%s = nama player)
 	Greeting = "Welcome to the club, %s", -- loading screen awal
+	-- Diganti sekali di sini → loading, poster, leaderboard (ImageLabel yang masih ID bawaan kit) ikut.
+	LogoImage = "rbxassetid://79426970537296",
 }
 
 -- =============================================================================
