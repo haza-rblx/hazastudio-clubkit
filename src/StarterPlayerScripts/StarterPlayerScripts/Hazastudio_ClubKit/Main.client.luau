@@ -166,6 +166,7 @@ local clientBootScheduler = ClientBootScheduler.create({
 })
 local PhoneLayout = require(script.Parent.Client.Utils.PhoneLayout)
 local AvatarPrewarmShared = require(script.Parent.Client.Utils.AvatarPrewarmShared)
+local JoinCommunityPromptController = require(script.Parent.Client.Controllers.JoinCommunityPromptController)
 local syncDanceController: any = nil
 local syncLeadTopbarController: any = nil
 local giftController: any = nil
@@ -204,6 +205,7 @@ local function enterGameplay()
 			end)
 		end
 	end
+	JoinCommunityPromptController.tryPromptAfterGameplay()
 end
 
 local function updateLoadingProgress()

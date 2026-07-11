@@ -477,6 +477,8 @@ ClubKitConfig.Features = {
 	DonationSaweria = true, -- legacy alias untuk DonationCash
 	DonationRobux = true,
 	Gravity = true,
+	-- After loading: show Roblox community join prompt (always, even if already a member). Needs Group.GroupId > 0.
+	PromptJoinCommunityOnLoad = true,
 }
 
 return ClubKitConfig

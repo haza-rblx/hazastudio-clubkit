@@ -1056,6 +1056,7 @@ Config.FeatureFlags = {
 	DonationRobuxEnabled = true,
 	AfkGuardEnabled = true,
 	GravityEnabled = true,
+	PromptJoinCommunityOnLoadEnabled = true,
 }
 -- ============================================================
 -- DEMO MODE

@@ -311,6 +311,7 @@ function ConfigBootstrap.apply(config: any)
 			DonationSaweria = "DonationSaweriaEnabled",
 			DonationRobux = "DonationRobuxEnabled",
 			Gravity = "GravityEnabled",
+			PromptJoinCommunityOnLoad = "PromptJoinCommunityOnLoadEnabled",
 		}
 		for sourceKey, targetKey in pairs(map) do
 			if type(features[sourceKey]) == "boolean" then

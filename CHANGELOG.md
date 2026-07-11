@@ -13,6 +13,13 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ---
 
+## [2.3.1] - 2026-07-12
+
+### Added
+- **Prompt join community on load** — after loading/`enterGameplay`, client shows Roblox `GroupService:PromptJoinAsync` for `ClubKitConfig.Group.GroupId` (once per session, always prompt even if already a member). Toggle: `Features.PromptJoinCommunityOnLoad` (default on); skipped when `GroupId` is `0`.
+
+---
+
 ## [2.3.0] - 2026-07-11
 
 ### Fixed
