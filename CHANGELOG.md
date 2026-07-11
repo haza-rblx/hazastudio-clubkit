@@ -13,6 +13,14 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ---
 
+## [2.2.3] — 2026-07-11
+
+### Fixed
+- **Gravity / Ungravity naming** — `/ungravity` (+ Shift+U) = float; `/gravity` (+ Shift+G) = restore. Sebelumnya keybind & `/gravity N` terbalik secara makna.
+- **Ungravity → gravity drop** — restore tidak lagi nol-kan Y (ngambang dulu); langsung kick ke bawah + Freefall supaya turun lebih cepat.
+
+---
+
 ## [2.2.2] — 2026-07-11
 
 ### Changed

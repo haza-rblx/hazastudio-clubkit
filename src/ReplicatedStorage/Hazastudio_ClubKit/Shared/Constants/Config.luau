@@ -1411,7 +1411,8 @@ Config.Session = {
 	RE_CACHE_TTL = 300,
 }
 -- ============================================================
--- GRAVITY / UNGRAVITY (float mode — Shift+G / Shift+U, /gravity)
+-- GRAVITY / UNGRAVITY — /ungravity = float, /gravity = restore
+-- Keybinds: Shift+U float, Shift+G restore
 -- ============================================================
 Config.Gravity = {
 	REMOTE_FOLDER = "GravityRemotes",
@@ -1423,15 +1424,18 @@ Config.Gravity = {
 	MAX_SPEED = 10,
 	FLOAT_SPEED_AT_MIN = 3,
 	FLOAT_SPEED_AT_MAX = 18,
+	-- Saat /gravity: kick ke bawah (studs/s) supaya tidak "ngambang" dulu.
+	RESTORE_DOWNWARD_VELOCITY = -45,
+	RESTORE_HORIZONTAL_DAMP = 0.35,
 	RATE_MAX = 12,
 	RATE_WINDOW = 5,
-	MSG_USAGE = "[Gravity] Use /gravity 0 to restore, or /gravity 1-10 for float speed. Shift+G = float, Shift+U = restore.",
-	MSG_STATUS = "[Gravity] Floating at speed %d. Use /gravity 0 or Shift+U to restore.",
-	MSG_ENABLED = "[Gravity] Floating at speed %d.",
+	MSG_USAGE = "[Gravity] /ungravity or /ungravity 1-10 = float. /gravity or Shift+G = restore. Shift+U = float.",
+	MSG_STATUS = "[Ungravity] Floating at speed %d. Use /gravity or Shift+G to restore.",
+	MSG_ENABLED = "[Ungravity] Floating at speed %d.",
 	MSG_DISABLED = "[Gravity] Gravity restored.",
-	MSG_BLOCKED_CARRY = "[Gravity] Cannot float while carrying or being carried.",
+	MSG_BLOCKED_CARRY = "[Ungravity] Cannot float while carrying or being carried.",
 	MSG_RATE_LIMIT = "[Gravity] Slow down — try again in a moment.",
-	MSG_INVALID_SPEED = "[Gravity] Speed must be a number from 0 to 10.",
+	MSG_INVALID_SPEED = "[Ungravity] Speed must be a number from 1 to 10.",
 }
 -- ============================================================
 -- ADMIN PANEL

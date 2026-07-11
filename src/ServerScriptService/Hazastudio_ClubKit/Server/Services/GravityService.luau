@@ -129,12 +129,19 @@ local function createGravityService(deps: {
 		restoreHumanoid(player, state)
 		state.speed = 0
 
+		local humanoid = getHumanoid(player)
 		local hrp = getRootPart(player)
 		if hrp then
 			local velocity = hrp.AssemblyLinearVelocity
-			if velocity.Y > 0 then
-				hrp.AssemblyLinearVelocity = Vector3.new(velocity.X, 0, velocity.Z)
-			end
+			local damp = math.clamp(tonumber(gravityConfig.RESTORE_HORIZONTAL_DAMP) or 0.35, 0, 1)
+			local dropY = tonumber(gravityConfig.RESTORE_DOWNWARD_VELOCITY) or -45
+			-- Snap out of float: damp horizontal drift + immediate downward kick.
+			hrp.AssemblyLinearVelocity = Vector3.new(velocity.X * damp, math.min(velocity.Y, dropY), velocity.Z * damp)
+		end
+		if humanoid then
+			pcall(function()
+				humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
+			end)
 		end
 
 		if not silent then

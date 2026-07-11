@@ -10,8 +10,9 @@ local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Con
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 
 local TOGGLE_INPUT_PRIORITY = Enum.ContextActionPriority.Low.Value
-local UNGRAVITY_MACRO_KB = { Enum.KeyCode.LeftShift, Enum.KeyCode.G }
-local GRAVITY_MACRO_KB = { Enum.KeyCode.LeftShift, Enum.KeyCode.U }
+-- Shift+U = ungravity (float), Shift+G = gravity (restore / turun)
+local UNGRAVITY_MACRO_KB = { Enum.KeyCode.LeftShift, Enum.KeyCode.U }
+local GRAVITY_MACRO_KB = { Enum.KeyCode.LeftShift, Enum.KeyCode.G }
 local FREECAM_ENABLED_ATTRIBUTE = "FreecamEnabled"
 
 local function createGravityController(_deps: { freecamScript: ModuleScript? }?)
@@ -111,7 +112,7 @@ local function createGravityController(_deps: { freecamScript: ModuleScript? }?)
 		end
 
 		bindInput()
-		log:info("Gravity keybinds ready (Shift+G / Shift+U)")
+		log:info("Gravity keybinds ready (Shift+U float / Shift+G restore)")
 	end
 
 	function controller:destroy(): ()

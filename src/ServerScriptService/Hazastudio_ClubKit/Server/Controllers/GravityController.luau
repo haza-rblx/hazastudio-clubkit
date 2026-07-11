@@ -59,11 +59,9 @@ local function createGravityController(deps: {
 			return
 		end
 
-		commandExecutionService:registerRawHandler(gravityConfig.CMD_ALIAS, function(player: Player, rawText: string)
-			local args = splitArgs(rawText)
-			table.remove(args, 1)
-			local argText = table.concat(args, " ")
-			service:handleCommand(player, argText)
+		-- /gravity = restore (turun). /ungravity [1-10] = float (melayang).
+		commandExecutionService:registerRawHandler(gravityConfig.CMD_ALIAS, function(player: Player, _rawText: string)
+			service:disable(player)
 		end)
 
 		commandExecutionService:registerRawHandler(gravityConfig.CMD_ALIAS_UNGRAVITY, function(player: Player, rawText: string)
@@ -74,6 +72,10 @@ local function createGravityController(deps: {
 				local speed = tonumber(speedText)
 				if speed == nil then
 					notify.player(player, gravityConfig.MSG_INVALID_SPEED, "WARNING")
+					return
+				end
+				if speed <= 0 then
+					service:disable(player)
 					return
 				end
 				service:setSpeed(player, speed)
