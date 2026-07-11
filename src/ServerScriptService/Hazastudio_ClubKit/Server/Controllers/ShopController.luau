@@ -488,6 +488,19 @@ local function createShopController(
 		if not player or not overheadService then
 			return nil
 		end
+		-- Prefer the same effective community as overhead badge (/setcommun, else
+		-- primary Roblox group when PRIMARY_FALLBACK_ENABLED and not cleared).
+		if type(overheadService.resolveEffectiveCommunity) == "function" then
+			local effectiveResult = overheadService:resolveEffectiveCommunity(player)
+			if effectiveResult.ok then
+				return effectiveResult.value
+			end
+			log:debug("Donation community effective resolve failed", {
+				userId = userId,
+				error = effectiveResult.error,
+			})
+		end
+		-- Legacy fallback if older OverheadService without resolveEffectiveCommunity.
 		if type(overheadService.getStored) ~= "function" or type(overheadService.resolveCommunity) ~= "function" then
 			return nil
 		end

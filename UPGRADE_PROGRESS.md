@@ -2,7 +2,7 @@
 
 Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
 
-**Versi saat ini:** `2.2.8` (lihat [`VERSION`](VERSION))  
+**Versi saat ini:** `2.2.9` (lihat [`VERSION`](VERSION))  
 **Target rilis berikutnya:** _(belum ditetapkan)_
 
 ---
@@ -11,7 +11,7 @@ Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
 
 | Area | Status |
 |------|--------|
-| v2.2.8 donation rank / roles / volume / cinematic / carry template | ✅ Released |
+| v2.2.9 music topbar + community LB primary fallback | ✅ Released |
 
 ---
 

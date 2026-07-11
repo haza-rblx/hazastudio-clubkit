@@ -857,6 +857,24 @@ local function createOverheadService(deps: {
 		end
 		return ResultUtil.Err(Config.Community.MSG_NOT_MEMBER)
 	end
+
+	-- Same resolution as overhead badge: stored /setcommun id, else primary group
+	-- when PRIMARY_FALLBACK_ENABLED and badge not suppressed. Used for donation
+	-- community leaderboard credit so donors without /setcommun still count.
+	function service:resolveEffectiveCommunity(player: Player): Result<CommunityData?>
+		local userId = player.UserId
+		local storedResult = repo:load(userId)
+		if not storedResult.ok then
+			return ResultUtil.Err(storedResult.error)
+		end
+		local groups, ok = getGroups(userId)
+		if not ok or not groups then
+			return ResultUtil.Err(Config.Community.MSG_LOOKUP_FAILED)
+		end
+		local communityData = resolveEffectiveCommunityData(storedResult.value, groups)
+		return ResultUtil.Ok(communityData)
+	end
+
 	function service:resolveCommunityByQuery(player: Player, query: string): Result<CommunityLookupResult>
 		local groups, ok = getGroups(player.UserId)
 		if not ok or not groups then

@@ -13,6 +13,14 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ---
 
+## [2.2.9] — 2026-07-11
+
+### Changed
+- **Music topbar** — pindah ke strip kanan, order paling kiri (sebelah kiri Command): Music → Command → Admin → Menu.
+- **Community leaderboard credit** — donasi Robux pakai community efektif sama seperti badge: `/setcommun` **atau** primary Roblox group (kalau `PRIMARY_FALLBACK_ENABLED` dan belum `/clearcommun`).
+
+---
+
 ## [2.2.8] — 2026-07-11
 
 ### Fixed

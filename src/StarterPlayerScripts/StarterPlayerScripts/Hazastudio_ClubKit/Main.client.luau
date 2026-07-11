@@ -1057,7 +1057,7 @@ if Config.FeatureFlags.MusicPlayerEnabled then
 				icon:setImage(Config.Music.TOPBAR_ICON)
 			end
 			icon:setLabel(Config.Music.TOPBAR_LABEL)
-			placeTopbarIconLeft(icon, Config.Music.TOPBAR_ORDER)
+			placeTopbarIcon(icon, Config.Music.TOPBAR_ORDER)
 			setCompactTopbarWidth(icon, 36)
 			removeTopbarInnerPadding(icon)
 			styleTopbarPill(icon)
