@@ -206,15 +206,20 @@ function DonationSystemController.init(deps: {
 		if not profile then
 			return
 		end
-		-- Replace sticky session state with latest overhead snapshot (sanitized).
-		lastDonorProfile = profile
-		ui:applyDonorProfile(profile)
+		-- Merge with last panel snapshot: while total > 0, nil overhead rank must not
+		-- overwrite a known numeric rank (avoids `#1` → `#-` flicker). Clear when total ≤ 0.
+		local merged = mergeDonorProfiles(lastDonorProfile, profile)
+		if not merged then
+			return
+		end
+		lastDonorProfile = merged
+		ui:applyDonorProfile(merged)
 		log:debug("overhead profile applied to donation panel", {
 			userId = localPlayer.UserId,
-			robuxRank = profile.robuxRank,
-			robuxTotal = profile.robuxTotal,
-			cashRank = profile.cashRank,
-			cashTotal = profile.cashTotal,
+			robuxRank = merged.robuxRank,
+			robuxTotal = merged.robuxTotal,
+			cashRank = merged.cashRank,
+			cashTotal = merged.cashTotal,
 		})
 	end
 

@@ -2142,7 +2142,17 @@ local function createDonationService(
 				end
 			end
 			if not robuxRank and robuxTotal > 0 then
-				robuxRank = resolveRobuxDonationRank(userId, username)
+				-- Prefer estimated rank API (page scan + estimate) over raw page miss → nil.
+				if donationLeaderboardRepository
+					and type(donationLeaderboardRepository.getPlayerRobuxRank) == "function"
+				then
+					local rankResult = donationLeaderboardRepository:getPlayerRobuxRank(userId, robuxTotal)
+					if rankResult.ok then
+						robuxRank = rankResult.value
+					end
+				else
+					robuxRank = resolveRobuxDonationRank(userId, username)
+				end
 			end
 		end
 		local cashTotal, cashRank = service:getPlayerCashStats(userId, username)

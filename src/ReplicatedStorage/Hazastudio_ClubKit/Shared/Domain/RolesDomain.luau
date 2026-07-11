@@ -208,36 +208,208 @@ function RolesDomain.buildSpecialRank(): { [string]: { text: string, gradient: b
 	return map
 end
 
-local function warnDuplicateRoleColors()
+local function ensureUniqueRoleColors()
 	local roles = getRoles()
-	local seenTeam: { [string]: string } = {}
-	local seenPrimary: { [string]: string } = {}
-	for roleKey, definition in pairs(roles.DEFINITIONS) do
-		local teamColor = definition.teamColor
-		if seenTeam[teamColor] then
-			warn(
-				string.format(
-					"[Roles] Duplicate teamColor %q on %s and %s — leaderboard teams may merge visually",
-					teamColor,
-					roleKey,
-					seenTeam[teamColor]
-				)
-			)
-		else
-			seenTeam[teamColor] = roleKey
+	local definitions = roles.DEFINITIONS
+	local teamPalette = {
+		"Gold",
+		"Bright orange",
+		"Dark orange",
+		"Bright red",
+		"Really red",
+		"Hot pink",
+		"Magenta",
+		"Bright violet",
+		"Royal purple",
+		"Bright blue",
+		"Deep blue",
+		"Cyan",
+		"Teal",
+		"Bright bluish green",
+		"Bright green",
+		"Lime green",
+		"New Yeller",
+		"Bright yellow",
+		"Light orange",
+		"CGA brown",
+		"Brown",
+		"Nougat",
+		"White",
+		"Light stone grey",
+		"Medium stone grey",
+		"Dark stone grey",
+		"Pastel Blue",
+		"Pastel green",
+		"Pastel yellow",
+		"Pastel orange",
+		"Pastel violet",
+		"Pink",
+		"Rose",
+		"Alder",
+		"Lavender",
+		"Sand blue",
+		"Sand green",
+		"Earth green",
+		"Camo",
+		"Olive",
+		"Sea green",
+		"Storm blue",
+		"Steel blue",
+		"Mint",
+		"Moss",
+		"Shamrock",
+		"Forest green",
+		"Neon orange",
+		"Persimmon",
+		"Crimson",
+		"Maroon",
+	}
+	local primaryPalette = {
+		"#FFD700",
+		"#F97316",
+		"#EF4444",
+		"#BE123C",
+		"#DB2777",
+		"#C026D3",
+		"#A855F7",
+		"#8B5CF6",
+		"#7C3AED",
+		"#2563EB",
+		"#0EA5E9",
+		"#06B6D4",
+		"#14B8A6",
+		"#10B981",
+		"#22C55E",
+		"#84CC16",
+		"#EAB308",
+		"#94A3B8",
+		"#64748B",
+		"#6B7280",
+		"#F43F5E",
+		"#EC4899",
+		"#D946EF",
+		"#6366F1",
+		"#3B82F6",
+		"#0891B2",
+		"#059669",
+		"#65A30D",
+		"#CA8A04",
+		"#EA580C",
+	}
+
+	local orderedKeys: { string } = {}
+	local seenKey: { [string]: boolean } = {}
+	for _, roleKey in ipairs(roles.ORDER) do
+		if definitions[roleKey] and not seenKey[roleKey] then
+			seenKey[roleKey] = true
+			table.insert(orderedKeys, roleKey)
 		end
-		local primary = definition.roleColor.primary
-		if seenPrimary[primary] then
+	end
+	for roleKey in pairs(definitions) do
+		if not seenKey[roleKey] then
+			seenKey[roleKey] = true
+			table.insert(orderedKeys, roleKey)
+		end
+	end
+
+	local claimedTeam: { [string]: string } = {}
+	local claimedPrimary: { [string]: string } = {}
+	local teamPaletteIndex = 1
+	local primaryPaletteIndex = 1
+
+	local function nextFreeTeam(preferred: string, roleKey: string): string
+		local preferredKey = string.lower(preferred)
+		if preferred ~= "" and not claimedTeam[preferredKey] then
+			claimedTeam[preferredKey] = roleKey
+			return preferred
+		end
+		while teamPaletteIndex <= #teamPalette do
+			local candidate = teamPalette[teamPaletteIndex]
+			teamPaletteIndex += 1
+			local candidateKey = string.lower(candidate)
+			if not claimedTeam[candidateKey] then
+				claimedTeam[candidateKey] = roleKey
+				return candidate
+			end
+		end
+		-- Exhausted named palette scan: reclaim any still-free entry, else keep preferred.
+		for _, candidate in ipairs(teamPalette) do
+			local candidateKey = string.lower(candidate)
+			if not claimedTeam[candidateKey] then
+				claimedTeam[candidateKey] = roleKey
+				return candidate
+			end
+		end
+		local fallback = if preferred ~= "" then preferred else "White"
+		claimedTeam[string.lower(fallback)] = roleKey
+		return fallback
+	end
+
+	local function nextFreePrimary(preferred: string, roleKey: string): string
+		local preferredKey = string.upper(preferred)
+		if preferred ~= "" and not claimedPrimary[preferredKey] then
+			claimedPrimary[preferredKey] = roleKey
+			return preferred
+		end
+		while primaryPaletteIndex <= #primaryPalette do
+			local candidate = primaryPalette[primaryPaletteIndex]
+			primaryPaletteIndex += 1
+			local candidateKey = string.upper(candidate)
+			if not claimedPrimary[candidateKey] then
+				claimedPrimary[candidateKey] = roleKey
+				return candidate
+			end
+		end
+		-- Last resort: generate a distinct-ish hex from role name hash.
+		local hash = 0
+		for i = 1, #roleKey do
+			hash = (hash * 31 + string.byte(roleKey, i)) % 16777215
+		end
+		local generated = string.format("#%06X", hash)
+		while claimedPrimary[generated] do
+			hash = (hash + 9973) % 16777215
+			generated = string.format("#%06X", hash)
+		end
+		claimedPrimary[generated] = roleKey
+		return generated
+	end
+
+	for _, roleKey in ipairs(orderedKeys) do
+		local definition = definitions[roleKey]
+		if type(definition) ~= "table" then
+			continue
+		end
+		local preferredTeam = if type(definition.teamColor) == "string" then definition.teamColor else ""
+		local assignedTeam = nextFreeTeam(preferredTeam, roleKey)
+		if assignedTeam ~= preferredTeam then
 			warn(
 				string.format(
-					"[Roles] Duplicate roleColor.primary %q on %s and %s — chat tags may look identical",
-					primary,
+					"[Roles] Remapped duplicate teamColor %q on %s → %q (was shared; PlayerList/leaderboard teams must be unique)",
+					preferredTeam,
 					roleKey,
-					seenPrimary[primary]
+					assignedTeam
 				)
 			)
-		else
-			seenPrimary[primary] = roleKey
+			definition.teamColor = assignedTeam
+		end
+
+		local roleColor = definition.roleColor
+		if type(roleColor) ~= "table" then
+			roleColor = { primary = "#6B7280", secondary = "#9CA3AF" }
+			definition.roleColor = roleColor
+		end
+		local preferredPrimary = if type(roleColor.primary) == "string" then roleColor.primary else ""
+		local assignedPrimary = nextFreePrimary(preferredPrimary, roleKey)
+		if assignedPrimary ~= preferredPrimary then
+			warn(
+				string.format(
+					"[Roles] Remapped duplicate roleColor.primary %q on %s → %q (chat tags must be unique)",
+					preferredPrimary,
+					roleKey,
+					assignedPrimary
+				)
+			)
+			roleColor.primary = assignedPrimary
 		end
 	end
 end
@@ -564,13 +736,15 @@ function RolesDomain.applyDerivedConfig(config: any)
 		config.Group.RANK_MAP = RolesDomain.buildRankMap()
 	end
 
+	-- Fix buyer ClubKitConfig duplicates before deriving palette / PlayerList maps.
+	ensureUniqueRoleColors()
+
 	config.ChatPrimaryTagPriority = RolesDomain.buildChatPrimaryTagPriority()
 	config.ChatPrimaryTagLabel = RolesDomain.buildChatPrimaryTagLabel()
 	config.RoleColorPalette = RolesDomain.buildRoleColorPalette()
 	config.ChatPrimaryTagColor = RolesDomain.buildChatPrimaryTagColor(config.RoleColorPalette)
 	config.SpecialRank = RolesDomain.buildSpecialRank()
 	config.PlayerList.TEAM_COLORS = RolesDomain.buildTeamColors()
-	warnDuplicateRoleColors()
 	syncMembershipChatColors(config)
 
 	local membershipFrames = {

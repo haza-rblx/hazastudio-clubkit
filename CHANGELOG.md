@@ -13,6 +13,19 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ---
 
+## [2.2.8] — 2026-07-11
+
+### Fixed
+- **Donation panel rank flicker** — jangan clear/`#-` pada rank lookup gagal; `assignRobuxTopDonate` align limit 100 + skip miss; `getDonorProfile` pakai `getPlayerRobuxRank`; panel merge overhead supaya nil rank tidak menimpa `#N` saat total > 0. Clear rank saat total benar-benar 0 tetap jalan (v2.2.7).
+- **Duplicate role team/chat colors** — `RolesDomain` auto-remap `teamColor` + `roleColor.primary` yang bentrok (ClubKitConfig buyer) supaya PlayerList/leaderboard teams dan chat tags unik.
+
+### Changed
+- **Default music volume** — 50% → **100%** (settings + music player store). Existing saves still on old default **50** are migrated once to **100**.
+- **Cinematic/freecam topbar icon** — `Icons.Topbar.Camera` → `rbxassetid://131545412033411` (menu cinematic + MobileFreecam HP).
+- **Carry template anim IDs** — `ClubKitConfig.Carry` kit template pakai anim buyer (6 style kit names; legacy CoupleHug/Pasakal/PiggyUpperBack dibuang dari template).
+
+---
+
 ## [2.2.7] — 2026-07-11
 
 ### Fixed

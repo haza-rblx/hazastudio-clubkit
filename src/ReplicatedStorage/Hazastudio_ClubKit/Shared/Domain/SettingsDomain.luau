@@ -10,6 +10,9 @@ local GraphicsQuality = require(script.Parent.Parent.Utils.GraphicsQuality)
 
 local SettingsDomain = {}
 
+-- Schema for music volume product default (old kit default was 50%).
+SettingsDomain.MUSIC_VOLUME_BASE_SCHEMA = 1
+
 local DEFAULT_STORED: SettingsStoredData = {
 	cameraFocus = "Torso",
 	fov = 70,
@@ -23,7 +26,8 @@ local DEFAULT_STORED: SettingsStoredData = {
 	playerEffects = true,
 	hideAllParticles = false,
 	textures = 2,
-	musicVolume = 50,
+	musicVolume = 100,
+	_musicVolBase = SettingsDomain.MUSIC_VOLUME_BASE_SCHEMA,
 	graphicsPreset = "Balanced",
 	shadowQuality = "Balanced",
 	overheadDistance = "Medium",
@@ -152,6 +156,15 @@ function SettingsDomain.sanitizeStored(raw: any): SettingsStoredData
 	base.hideAllParticles = pickBoolean(raw.hideAllParticles, base.hideAllParticles)
 	base.textures = pickNumber(raw.textures, base.textures, 0, 2)
 	base.musicVolume = pickNumber(raw.musicVolume, base.musicVolume, 0, 100)
+	local musicVolBase = pickNumber(raw._musicVolBase, 0, 0, 999)
+	if musicVolBase < SettingsDomain.MUSIC_VOLUME_BASE_SCHEMA then
+		-- One-shot: remapped old kit default 50% → 100% for everyone still on it.
+		if type(raw.musicVolume) ~= "number" or raw.musicVolume == 50 then
+			base.musicVolume = 100
+		end
+		musicVolBase = SettingsDomain.MUSIC_VOLUME_BASE_SCHEMA
+	end
+	base._musicVolBase = musicVolBase
 	base.graphicsPreset = if raw.graphicsPreset == "Ultra"
 		then "High"
 		else pickEnum(raw.graphicsPreset, { "Low", "Balanced", "High" }, base.graphicsPreset)
@@ -216,6 +229,7 @@ function SettingsDomain.merge(stored: SettingsStoredData?, session: SettingsSess
 		hideAllParticles = storedData.hideAllParticles,
 		textures = storedData.textures,
 		musicVolume = storedData.musicVolume,
+		_musicVolBase = storedData._musicVolBase,
 		graphicsPreset = storedData.graphicsPreset,
 		shadowQuality = storedData.shadowQuality,
 		overheadDistance = storedData.overheadDistance,

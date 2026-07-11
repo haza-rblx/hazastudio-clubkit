@@ -434,12 +434,20 @@ local function createShopController(
 		end
 
 		task.spawn(function()
+			-- Flush dirty leaderboard caches so post-donate resolve sees the write
+			-- (background ticker only flushes every ~1s).
+			if type(leaderboardRepository.flushDirtyCaches) == "function" then
+				leaderboardRepository:flushDirtyCaches()
+			end
+
 			local robuxResult = leaderboardRepository:getRobuxLeaderboard(Config.Leaderboards.ROBUX_LIMIT)
 			if not robuxResult.ok or type(robuxResult.value) ~= "table" then
+				-- Fetch failed: keep previous chip; do not NIL.
 				return
 			end
 
-			local leaderboardLimit = Config.Donation.LEADERBOARD_LIMIT or 10
+			-- Align with donor-profile / overhead lookup (100), not Donation.LEADERBOARD_LIMIT (10).
+			local leaderboardLimit = Config.Leaderboards.ROBUX_LIMIT or 100
 			local matchedRank: number? = nil
 			for rank, entry in ipairs(robuxResult.value) do
 				local userId = tonumber(entry.userId) or 0
@@ -449,31 +457,26 @@ local function createShopController(
 				end
 			end
 
-			local merge: { [string]: any }
-			if matchedRank and matchedRank >= 1 and matchedRank <= leaderboardLimit then
-				merge = {
-					topDonateRank = matchedRank,
-					topDonateText = "#" .. tostring(matchedRank) .. " DONATION",
-				}
-			else
-				merge = {
-					topDonateRank = OverheadDomain.NIL,
-					topDonateText = OverheadDomain.NIL,
-				}
+			-- Miss / outside board: skip update (keep previous). Clear-on-zero is handled
+			-- by overhead refresh when total is confirmed 0 — not here.
+			if not matchedRank or matchedRank < 1 or matchedRank > leaderboardLimit then
+				return
 			end
 
+			local merge = {
+				topDonateRank = matchedRank,
+				topDonateText = "#" .. tostring(matchedRank) .. " DONATION",
+			}
+
 			local updateResult = overheadRepository:update(player.UserId, function(current)
-				local shouldUpdate = if matchedRank and matchedRank >= 1 and matchedRank <= leaderboardLimit
-					then current.topDonateRank ~= matchedRank
-					else current.topDonateRank ~= nil
-				if not shouldUpdate then
+				if current.topDonateRank == matchedRank then
 					return current
 				end
 				return OverheadDomain.mergeStored(current, merge)
 			end)
 			if updateResult.ok then
 				overheadController:refreshPlayer(player, "recovery")
-			elseif matchedRank then
+			else
 				log:warn("Donation Robux top donate overhead update failed", {
 					player = player.Name,
 					error = updateResult.error,

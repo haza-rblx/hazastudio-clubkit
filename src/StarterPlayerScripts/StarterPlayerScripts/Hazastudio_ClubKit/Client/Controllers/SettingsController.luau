@@ -508,6 +508,7 @@ local function createSettingsController(deps: {
 			hideAllParticles = payload.hideAllParticles,
 			textures = payload.textures,
 			musicVolume = payload.musicVolume,
+			_musicVolBase = payload._musicVolBase,
 			graphicsPreset = payload.graphicsPreset,
 			shadowQuality = payload.shadowQuality,
 			overheadDistance = payload.overheadDistance,
@@ -1467,7 +1468,7 @@ local function createSettingsController(deps: {
 		setAttr("SettingsHideDonationAura", currentPayload.hideDonationAura)
 		setAttr("SettingsHideDonatorHighlight", currentPayload.hideDonatorHighlight)
 		setAttr("SettingsHideSystemAnnounce", currentPayload.hideSystemAnnounce)
-		setAttr("SettingsMusicVolume", math.clamp((tonumber(currentPayload.musicVolume) or 50) / 100, 0, 1))
+		setAttr("SettingsMusicVolume", math.clamp((tonumber(currentPayload.musicVolume) or 100) / 100, 0, 1))
 	end
 
 	local function applyHideAllGui()
@@ -1634,6 +1635,10 @@ local function createSettingsController(deps: {
 			hideAllParticles = currentPayload.hideAllParticles,
 			textures = currentPayload.textures,
 			musicVolume = currentPayload.musicVolume,
+			_musicVolBase = math.max(
+				tonumber(currentPayload._musicVolBase) or 0,
+				SettingsDomain.MUSIC_VOLUME_BASE_SCHEMA
+			),
 			graphicsPreset = currentPayload.graphicsPreset,
 			shadowQuality = currentPayload.shadowQuality,
 			overheadDistance = currentPayload.overheadDistance,

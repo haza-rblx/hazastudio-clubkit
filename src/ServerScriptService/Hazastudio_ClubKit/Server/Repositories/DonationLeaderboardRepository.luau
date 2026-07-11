@@ -193,6 +193,11 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 		end
 	end
 
+	-- Immediate flush for post-donate rank resolve (avoid ~1s stale GetSortedAsync page).
+	function repo:flushDirtyCaches()
+		flushDirtyCaches()
+	end
+
 	-- R7.4, R7.5: Defer/retry wrapper — when BudgetGate returns budget_exhausted,
 	-- retry at ≤6s intervals over a 60s window. On expiry, return failure.
 	local DEFER_RETRY_INTERVAL = 6

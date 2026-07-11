@@ -403,6 +403,8 @@ export type SettingsStoredData = {
 	hideAllParticles: boolean,
 	textures: number,
 	musicVolume: number,
+	-- 1+ = music default base is 100% (migrated from old 50% kit default)
+	_musicVolBase: number,
 	graphicsPreset: GraphicsPreset,
 	shadowQuality: ShadowQuality,
 	overheadDistance: OverheadDistanceMode,

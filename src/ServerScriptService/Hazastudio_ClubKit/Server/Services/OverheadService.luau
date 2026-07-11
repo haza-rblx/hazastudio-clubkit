@@ -262,8 +262,11 @@ local function createOverheadService(deps: {
 	-- but their `local function` definitions live further down. Without these
 	-- forward declarations the earlier closure captures a nil global and throws
 	-- "attempt to call a nil value" at runtime.
-	local _resolveRobuxTopDonateRank: (userId: number, playerName: string?) -> number?
-	local _resolveSaweriaTopSpenderRank: (userId: number, playerName: string?) -> number?
+	-- Returns (rank?, lookupOk). lookupOk=false → transient failure; do not clear stored rank.
+	local _resolveRobuxTopDonateRank: (userId: number, playerName: string?) -> (number?, boolean)
+	local _resolveSaweriaTopSpenderRank: (userId: number, playerName: string?) -> (number?, boolean)
+	-- Confirmed "no rank" negative cache — short TTL so post-donate retries aren't stuck on `#-`.
+	local NEGATIVE_RANK_CACHE_TTL = 5
 
 	-- Async rank resolution: we used to call these on the join-time critical path,
 	-- but getRobuxLeaderboard / getWorkspaceSaweriaLeaderboard can hit DataStore or
@@ -271,7 +274,9 @@ local function createOverheadService(deps: {
 	local function updateStoredRanksIfChanged(
 		userId: number,
 		robuxRank: number?,
-		saweriaRank: number?
+		robuxLookupOk: boolean,
+		saweriaRank: number?,
+		saweriaLookupOk: boolean
 	)
 		if isHiddenDonationUser(userId) then
 			return
@@ -289,8 +294,22 @@ local function createOverheadService(deps: {
 				merge.topDonateText = "#" .. tostring(activeRobuxRank) .. " DONATION"
 			end
 		elseif current.topDonateRank ~= nil or current.topDonateText ~= nil then
-			merge.topDonateRank = OverheadDomain.NIL
-			merge.topDonateText = OverheadDomain.NIL
+			-- Clear only on confirmed miss / outside board, or confirmed total ≤ 0.
+			-- Transient lookup failure must not wipe a known good rank (panel `#-` flicker).
+			local shouldClearRobux = robuxLookupOk
+			if not shouldClearRobux
+				and donationLeaderboardRepository
+				and type(donationLeaderboardRepository.getPlayerRobuxTotal) == "function"
+			then
+				local totalResult = donationLeaderboardRepository:getPlayerRobuxTotal(userId)
+				if totalResult.ok and math.max(0, math.floor(tonumber(totalResult.value) or 0)) <= 0 then
+					shouldClearRobux = true
+				end
+			end
+			if shouldClearRobux then
+				merge.topDonateRank = OverheadDomain.NIL
+				merge.topDonateText = OverheadDomain.NIL
+			end
 		end
 		local activeSaweriaRank = OverheadDomain.normalizeLeaderboardRank(saweriaRank)
 		if activeSaweriaRank then
@@ -304,8 +323,10 @@ local function createOverheadService(deps: {
 				end
 			end
 		elseif current.topSpenderRank ~= nil or current.topSpenderText ~= nil then
-			merge.topSpenderRank = OverheadDomain.NIL
-			merge.topSpenderText = OverheadDomain.NIL
+			if saweriaLookupOk then
+				merge.topSpenderRank = OverheadDomain.NIL
+				merge.topSpenderText = OverheadDomain.NIL
+			end
 		end
 		if next(merge) == nil then
 			return
@@ -340,40 +361,42 @@ local function createOverheadService(deps: {
 				return
 			end
 			local robuxRank: number? = nil
+			local robuxLookupOk = false
 			local saweriaRank: number? = nil
+			local saweriaLookupOk = false
 			local ok, err = pcall(function()
-				robuxRank = _resolveRobuxTopDonateRank(userId, username)
-				saweriaRank = _resolveSaweriaTopSpenderRank(userId, username)
+				robuxRank, robuxLookupOk = _resolveRobuxTopDonateRank(userId, username)
+				saweriaRank, saweriaLookupOk = _resolveSaweriaTopSpenderRank(userId, username)
 			end)
 			if not ok then
 				log:debug("Async rank resolution failed", { userId = userId, error = tostring(err) })
 				finish()
 				return
 			end
-			updateStoredRanksIfChanged(userId, robuxRank, saweriaRank)
+			updateStoredRanksIfChanged(userId, robuxRank, robuxLookupOk, saweriaRank, saweriaLookupOk)
 			finish()
 		end)
 	end
 
-	function _resolveRobuxTopDonateRank(userId: number, playerName: string?): number?
+	function _resolveRobuxTopDonateRank(userId: number, playerName: string?): (number?, boolean)
 		if isHiddenDonationUser(userId) then
-			return nil
+			return nil, true
 		end
 
 		if
 			not donationLeaderboardRepository
 			or type(donationLeaderboardRepository.getRobuxLeaderboard) ~= "function"
 		then
-			return nil
+			return nil, false
 		end
 
 		local cacheKey = ROBUX_TOP_DONATE_PREFIX .. tostring(userId)
 		local cached = Cache.get(cacheKey)
 		if cached ~= nil then
 			if cached == false then
-				return nil
+				return nil, true
 			end
-			return OverheadDomain.normalizeLeaderboardRank(cached)
+			return OverheadDomain.normalizeLeaderboardRank(cached), true
 		end
 
 		local result = donationLeaderboardRepository:getRobuxLeaderboard(Config.Leaderboards.ROBUX_LIMIT)
@@ -382,7 +405,8 @@ local function createOverheadService(deps: {
 				userId = userId,
 				error = result.error,
 			})
-			return nil
+			-- Do not negative-cache failures — keep last known rank until a confirmed miss.
+			return nil, false
 		end
 
 		-- Match userId dulu, fallback ke username biar konsisten dengan DonationService.assignPlayer
@@ -406,8 +430,12 @@ local function createOverheadService(deps: {
 		end
 
 		local normalizedRank = OverheadDomain.normalizeLeaderboardRank(resolvedRank)
-		Cache.set(cacheKey, normalizedRank or false, Config.Leaderboards.WORKSPACE_CACHE_TTL)
-		return normalizedRank
+		if normalizedRank then
+			Cache.set(cacheKey, normalizedRank, Config.Leaderboards.WORKSPACE_CACHE_TTL)
+		else
+			Cache.set(cacheKey, false, NEGATIVE_RANK_CACHE_TTL)
+		end
+		return normalizedRank, true
 	end
 	local function getManualTopSpenderRank(userId: number): number?
 		local overrides = Config.TopSpenders
@@ -419,26 +447,26 @@ local function createOverheadService(deps: {
 		end
 		return nil
 	end
-	function _resolveSaweriaTopSpenderRank(userId: number, playerName: string?): number?
+	function _resolveSaweriaTopSpenderRank(userId: number, playerName: string?): (number?, boolean)
 		if isHiddenDonationUser(userId) then
-			return nil
+			return nil, true
 		end
 		local manualRank = getManualTopSpenderRank(userId)
 		if manualRank then
-			return manualRank
+			return manualRank, true
 		end
 
 		if not donationService or type(donationService.getWorkspaceSaweriaLeaderboard) ~= "function" then
-			return nil
+			return nil, false
 		end
 
 		local cacheKey = SAWERIA_TOP_SPENDER_PREFIX .. tostring(userId)
 		local cached = Cache.get(cacheKey)
 		if cached ~= nil then
 			if cached == false then
-				return nil
+				return nil, true
 			end
-			return OverheadDomain.normalizeLeaderboardRank(cached)
+			return OverheadDomain.normalizeLeaderboardRank(cached), true
 		end
 
 		local ok, entriesOrErr = pcall(function()
@@ -449,7 +477,7 @@ local function createOverheadService(deps: {
 				userId = userId,
 				error = tostring(entriesOrErr),
 			})
-			return nil
+			return nil, false
 		end
 
 		-- Match userId dulu, fallback ke username. Saweria leaderboard sering punya entry
@@ -473,8 +501,12 @@ local function createOverheadService(deps: {
 		end
 
 		local normalizedRank = OverheadDomain.normalizeLeaderboardRank(resolvedRank)
-		Cache.set(cacheKey, normalizedRank or false, Config.Leaderboards.WORKSPACE_CACHE_TTL)
-		return normalizedRank
+		if normalizedRank then
+			Cache.set(cacheKey, normalizedRank, Config.Leaderboards.WORKSPACE_CACHE_TTL)
+		else
+			Cache.set(cacheKey, false, NEGATIVE_RANK_CACHE_TTL)
+		end
+		return normalizedRank, true
 	end
 	local function resolveCommunityFromGroups(groups: { RobloxGroupEntry }, communityId: number): CommunityData?
 		for _, groupInfo in ipairs(groups) do

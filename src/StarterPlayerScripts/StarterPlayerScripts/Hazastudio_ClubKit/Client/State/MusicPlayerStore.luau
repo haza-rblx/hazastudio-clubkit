@@ -81,7 +81,7 @@ return createStore({
 	isPlaying       = false,
 	isDjMode        = false,
 	djOwnerUserId   = nil,     -- number? userId yang menyalakan DJ mode
-	volume          = 0.5,     -- 0..1 (client-side only)
+	volume          = 1,       -- 0..1 (client-side only)
 	queue           = {},      -- { TrackInfo } user requests only (Next up)
 	prefetchBuffer  = {},      -- { TrackInfo } hidden server auto buffer (preload only)
 

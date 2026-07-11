@@ -133,6 +133,7 @@ local function createDonationRobuxService(deps: {
 				merged.cashTotal = serverCash
 			end
 			if (merged.robuxTotal or 0) > 0 then
+				-- Nil rank from one side must not drop a known numeric rank (total > 0).
 				if type(profile.robuxRank) == "number" then
 					if type(merged.robuxRank) == "number" then
 						merged.robuxRank = math.min(merged.robuxRank, profile.robuxRank)

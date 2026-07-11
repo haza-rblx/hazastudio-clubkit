@@ -1721,7 +1721,7 @@ Config.Icons = {
 		-- Gunakan placeholder yang lebih jelas daripada 0
 		Command = "rbxassetid://70457204831369", -- Empty string = no icon (lebih jelas daripada rbxassetid://0)
 		Music = "rbxassetid://109703706311990",
-		Camera = "rbxassetid://72364819265040", -- Freecam / cinematic topbar
+		Camera = "rbxassetid://131545412033411", -- Freecam / cinematic topbar (HP)
 		Broadcast = "rbxassetid://101268994273611",
 	},
 	Admin = {
