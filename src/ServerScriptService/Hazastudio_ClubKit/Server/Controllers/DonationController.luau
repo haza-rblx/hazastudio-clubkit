@@ -20,6 +20,7 @@ local DemoDataProvider = require(script.Parent.Parent.Services.DemoDataProvider)
 local LeaderboardIdentity = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.LeaderboardIdentity)
 local WorkspaceLeaderboardRenderService = require(script.Parent.Parent.Services.WorkspaceLeaderboardRenderService)
 local WorkspaceLeaderboardRenderer = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Leaderboards.WorkspaceLeaderboardRenderer)
+local BrandLogoApplier = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.BrandLogoApplier)
 local LeaderboardScaleAudit = require(script.Parent.Parent.Debug.LeaderboardScaleAudit)
 type INotify = {
 	player: (Player, string, string?) -> (),
@@ -350,6 +351,8 @@ local function createDonationController(deps: {
 	local function paintWorkspaceLeaderboards(payload: any)
 		if Config.Leaderboards.SERVER_PAINT_WORKSPACE == true then
 			WorkspaceLeaderboardRenderService.apply(payload)
+			-- Board paint can touch ImageLabels; re-assert brand logo after paint.
+			BrandLogoApplier.applyToInstance(workspace, Config)
 		end
 	end
 

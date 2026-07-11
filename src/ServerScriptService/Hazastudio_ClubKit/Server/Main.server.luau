@@ -123,11 +123,18 @@ do
 	local BrandLogoApplier = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.BrandLogoApplier)
 	local Workspace = game:GetService("Workspace")
 	local StarterGui = game:GetService("StarterGui")
-	local applied = BrandLogoApplier.applyRoots({ Workspace, StarterGui }, Config)
+	local stats = BrandLogoApplier.applyRoots({ Workspace, StarterGui }, Config)
 	connectionCleaner:add(BrandLogoApplier.watch(Workspace, Config))
 	connectionCleaner:add(BrandLogoApplier.watch(StarterGui, Config))
-	if applied > 0 then
-		log:info("Brand logo applied", { imageLabels = applied })
+	log:info("Brand logo applied", {
+		matched = stats.matched,
+		mutated = stats.mutated,
+		targetLogo = stats.targetLogo,
+		defaultLogo = stats.defaultLogo,
+		sameAsDefault = stats.targetLogo == stats.defaultLogo,
+	})
+	if stats.targetLogo == stats.defaultLogo then
+		log:warn("Branding.LogoImage masih ID bawaan kit — ganti di ClubKitConfig.Branding.LogoImage supaya logo berubah")
 	end
 end
 

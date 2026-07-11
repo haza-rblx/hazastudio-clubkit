@@ -13,6 +13,13 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ---
 
+## [2.2.6] — 2026-07-11
+
+### Fixed
+- **Branding.LogoImage** — logging target vs default; support ImageButton + nama `LogoImage`/`ClubLogo`; re-apply setelah workspace board paint.
+
+---
+
 ## [2.2.5] — 2026-07-11
 
 ### Added
