@@ -479,8 +479,16 @@ async function resolveCommunityPayload(env, groupId) {
     displayName: nameMap[userId] || `User ${userId}`,
   }));
 
+  const memberCount =
+    meta && meta.memberCount != null && Number.isFinite(meta.memberCount)
+      ? meta.memberCount
+      : null;
+
   return {
-    memberCount: meta && meta.memberCount != null ? meta.memberCount : 0,
+    // null when Open Cloud meta failed / omitted count — never coerce to 0
+    // (kit treats 0 as "known empty" and hides +99 / "others").
+    memberCount,
+    memberCountKnown: memberCount != null,
     members,
     emblemUrl: emblemUrl || null,
     fetchedAt: Date.now() / 1000,
@@ -505,17 +513,32 @@ async function handleCommunity(env, gameKey, groupId) {
   const cache = caches.default;
   const cacheKey = makeCommunityCacheKey(gameKey, groupId);
 
+  const formatCommunityJson = (data, extra = {}) => {
+    let count =
+      typeof data.memberCount === "number" && Number.isFinite(data.memberCount) && data.memberCount >= 0
+        ? Math.floor(data.memberCount)
+        : null;
+    // Stale cache from older worker may have coerced missing meta → 0 while members[] is full.
+    if (count === 0 && Array.isArray(data.members) && data.members.length > 0) {
+      count = null;
+    }
+    const known =
+      typeof data.memberCountKnown === "boolean" ? data.memberCountKnown && count != null : count != null;
+    return json({
+      ok: true,
+      memberCount: count,
+      memberCountKnown: known && count != null,
+      members: Array.isArray(data.members) ? data.members : [],
+      emblemUrl: data.emblemUrl || null,
+      ...extra,
+    });
+  };
+
   const cachedResp = await cache.match(cacheKey);
   if (cachedResp) {
     const data = await cachedResp.json();
     if (data && Array.isArray(data.members)) {
-      return json({
-        ok: true,
-        memberCount: typeof data.memberCount === "number" ? data.memberCount : 0,
-        members: data.members,
-        emblemUrl: data.emblemUrl || null,
-        fromCache: true,
-      });
+      return formatCommunityJson(data, { fromCache: true });
     }
   }
 
@@ -523,27 +546,14 @@ async function handleCommunity(env, gameKey, groupId) {
   if (result.error) {
     if (cachedResp) {
       const stale = await cachedResp.clone().json();
-      return json({
-        ok: true,
-        memberCount: typeof stale.memberCount === "number" ? stale.memberCount : 0,
-        members: Array.isArray(stale.members) ? stale.members : [],
-        emblemUrl: stale.emblemUrl || null,
-        fromCache: true,
-        stale: true,
-      });
+      return formatCommunityJson(stale, { fromCache: true, stale: true });
     }
     const status = result.error === "roblox_api_key_missing" ? 503 : 502;
     return json({ ok: false, error: result.error }, status);
   }
 
   await cacheCommunityPayload(cache, cacheKey, result);
-  return json({
-    ok: true,
-    memberCount: result.memberCount,
-    members: result.members,
-    emblemUrl: result.emblemUrl,
-    fromCache: false,
-  });
+  return formatCommunityJson(result, { fromCache: false });
 }
 
 // ── Router ───────────────────────────────────────────────────────────

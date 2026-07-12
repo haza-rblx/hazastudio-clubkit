@@ -13,6 +13,11 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ---
 
+## [2.4.10] - 2026-07-12
+
+### Fixed
+- **Join Commun +99 / "others" missing** - when game-data `/community` returned members but Open Cloud meta omitted/`0`-coerced `memberCount`, the kit treated the total as known-empty (or skipped roproxy after worker OK) so body used `BODY_THREE` without others and hid `CounterLeft`. Now: worker sends `null` + `memberCountKnown`; kit rejects inconsistent `0` + samples and falls through to `MEMBER_INFO_URL` for count; client DEBUG log once (`memberCount`, `memberCountKnown`, `remainder`, `counterFound`).
+
 ## [2.4.9] - 2026-07-12
 
 ### Changed

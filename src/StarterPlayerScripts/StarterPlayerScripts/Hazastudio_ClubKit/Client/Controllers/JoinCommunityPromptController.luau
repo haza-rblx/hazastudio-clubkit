@@ -31,6 +31,7 @@ local MODAL_BLUR_OPTIONS = {
 
 local promptedThisSession = false
 local missingGuiWarned = false
+local fillDebugLogged = false
 local wired = false
 local isOpen = false
 local isClosing = false
@@ -521,6 +522,37 @@ local function mergeMemberSamples(
 	return out
 end
 
+local function findCounterLeft(thumbnailHost: GuiObject?, mainWrapper: GuiObject): (GuiObject?, TextLabel?)
+	local searchRoots: { Instance } = {}
+	if thumbnailHost then
+		table.insert(searchRoots, thumbnailHost)
+	end
+	table.insert(searchRoots, mainWrapper)
+
+	local nameCandidates = { "CounterLeft", "Counter", "CounterBadge" }
+	for _, root in ipairs(searchRoots) do
+		for _, name in ipairs(nameCandidates) do
+			local counter = root:FindFirstChild(name, true)
+			if counter and counter:IsA("GuiObject") then
+				local label: TextLabel? = nil
+				local direct = counter:FindFirstChild("TextLabel")
+				if direct and direct:IsA("TextLabel") then
+					label = direct
+				else
+					local nested = counter:FindFirstChildWhichIsA("TextLabel", true)
+					if nested and nested:IsA("TextLabel") then
+						label = nested
+					elseif counter:IsA("TextLabel") then
+						label = counter :: TextLabel
+					end
+				end
+				return counter, label
+			end
+		end
+	end
+	return nil, nil
+end
+
 local function resolveRefs(): Refs?
 	local localPlayer = Players.LocalPlayer
 	if not localPlayer then
@@ -577,15 +609,8 @@ local function resolveRefs(): Refs?
 		if template and template:IsA("ImageLabel") then
 			thumbnailTemplate = template
 		end
-		local counter = thumbnailHost:FindFirstChild("CounterLeft")
-		if counter and counter:IsA("GuiObject") then
-			counterLeft = counter
-			local label = counter:FindFirstChild("TextLabel")
-			if label and label:IsA("TextLabel") then
-				counterLabel = label
-			end
-		end
 	end
+	counterLeft, counterLabel = findCounterLeft(thumbnailHost, mainWrapper)
 
 	return {
 		root = rootInst :: ScreenGui,
@@ -634,6 +659,11 @@ local function fillMemberThumbnailsAsync(groupId: number, generation: number)
 		serverMembers = serverPayload.members
 		memberCount = serverPayload.memberCount
 		memberCountKnown = serverPayload.memberCountKnown
+		-- Defensive: server claimed empty community but returned samples — treat as unknown.
+		if memberCountKnown and memberCount == 0 and #serverMembers > 0 then
+			memberCountKnown = false
+			memberCount = 0
+		end
 		applyEmblemFromServerIfNeeded(r, serverPayload.emblemUrl)
 	elseif not communityLogoFromEmblem then
 		-- No server payload — Branding then GUI default.
@@ -674,10 +704,27 @@ local function fillMemberThumbnailsAsync(groupId: number, generation: number)
 	end
 
 	-- CounterLeft = remainder after 8 thumb slots (memberCount - 8), capped display +99.
+	local remainder = 0
+	local showCounter = false
 	if memberCountKnown and memberCount > MAX_THUMBNAILS then
-		setCounterVisible(true, memberCount - MAX_THUMBNAILS)
+		remainder = memberCount - MAX_THUMBNAILS
+		showCounter = true
+		setCounterVisible(true, remainder)
 	else
 		setCounterVisible(false)
+	end
+
+	if not fillDebugLogged then
+		fillDebugLogged = true
+		log:debug("JoinCommun fill", {
+			memberCount = memberCount,
+			memberCountKnown = memberCountKnown,
+			remainder = remainder,
+			thumbs = #merged,
+			counterFound = r.counterLeft ~= nil,
+			counterLabelFound = r.counterLabel ~= nil,
+			showCounter = showCounter,
+		})
 	end
 
 	local displayNames: { string } = {}

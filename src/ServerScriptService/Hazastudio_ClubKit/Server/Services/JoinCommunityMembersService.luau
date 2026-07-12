@@ -5,9 +5,10 @@
 --   Prefer GroupService:GetGroupInfoAsync → MemberCount when present.
 --   Official engine docs do NOT list MemberCount on that table; when missing we
 --   do not invent a total from online/pool size. Next: game-data-api /community
---   (Secrets.GameDataApiSecret). MEMBER_INFO_URL / roproxy only when the worker
---   was skipped (no secret) or failed — never in the same resolve after a
---   successful worker response (even if some fields are missing).
+--   (Secrets.GameDataApiSecret). If the worker returns members/emblem but omits
+--   a real count (or sends inconsistent 0 + samples), fall through to
+--   MEMBER_INFO_URL / roproxy for the count only. Skip roproxy users/count only
+--   when the worker was skipped (no secret) or failed entirely.
 --
 -- AVATAR SAMPLES:
 --   Prefer game-data-api GET /game/:gameKey/community/:groupId (members[] in one
@@ -689,12 +690,20 @@ local function createJoinCommunityMembersService(deps: {
 		local count = extractMemberCount(decoded)
 		local emblem = extractEmblemUrl(decoded)
 		local samples = parseUserRowsFromProxy(decoded)
+		-- Prefer explicit worker flag; else count present ⇒ known.
+		local knownFlag = (decoded :: any).memberCountKnown
+		local countKnown = if type(knownFlag) == "boolean" then knownFlag and count ~= nil else count ~= nil
+		-- Stale/buggy payloads: memberCount 0 + non-empty members[] is not a real empty group.
+		if countKnown and count == 0 and #samples > 0 then
+			count = nil
+			countKnown = false
+		end
 		if #samples > 0 then
 			mergeSamplesIntoPool(samples)
 		end
 
 		-- Also warm dedicated caches so emblem/count resolvers stay consistent.
-		if count ~= nil then
+		if countKnown and count ~= nil then
 			memberCountCache = {
 				expiresAt = now + memberCountTtl,
 				value = count,
@@ -717,7 +726,7 @@ local function createJoinCommunityMembersService(deps: {
 		communityWorkerCache = {
 			expiresAt = now + memberCountTtl,
 			memberCount = count,
-			memberCountKnown = count ~= nil,
+			memberCountKnown = countKnown,
 			emblemUrl = emblem,
 			samples = samples,
 			ok = true,
@@ -727,6 +736,7 @@ local function createJoinCommunityMembersService(deps: {
 			groupId = groupId,
 			gameKey = gameKey,
 			memberCount = count,
+			memberCountKnown = countKnown,
 			members = #samples,
 			fromCache = (decoded :: any).fromCache == true,
 		})
@@ -734,7 +744,7 @@ local function createJoinCommunityMembersService(deps: {
 		return {
 			ok = true,
 			memberCount = count,
-			memberCountKnown = count ~= nil,
+			memberCountKnown = countKnown,
 			emblemUrl = emblem,
 			samples = samples,
 		}
@@ -1078,7 +1088,7 @@ local function createJoinCommunityMembersService(deps: {
 			if not loggedMemberCountMissing then
 				loggedMemberCountMissing = true
 				log:debug(
-					"JoinCommunityMembers GetGroupInfoAsync has no MemberCount (engine often omits it); falling back to game-data community (roproxy only if worker skipped/failed)",
+					"JoinCommunityMembers GetGroupInfoAsync has no MemberCount (engine often omits it); falling back to game-data community then MEMBER_INFO_URL if count still unknown",
 					{
 						groupId = groupId,
 						memberInfoUrl = memberInfoUrlTemplate ~= "",
@@ -1088,22 +1098,15 @@ local function createJoinCommunityMembersService(deps: {
 		end
 
 		-- 2) game-data-api /community (preferred over roproxy when secret is set).
-		-- On worker success, never call MEMBER_INFO_URL — even if count is missing
-		-- (members/emblem from the same response are enough for the modal).
+		-- If worker returns a real count, use it. If worker ok but count missing /
+		-- inconsistent (0 + samples), fall through to MEMBER_INFO_URL for count only
+		-- (members still come from the worker via resolveRemoteUsersPage).
 		local worker = resolveCommunityWorker(groupId)
-		if worker.ok then
-			if worker.memberCountKnown and worker.memberCount ~= nil then
-				return worker.memberCount, true
-			end
-			memberCountCache = {
-				expiresAt = now + failCacheTtl,
-				value = 0,
-				known = false,
-			}
-			return 0, false
+		if worker.ok and worker.memberCountKnown and worker.memberCount ~= nil then
+			return worker.memberCount, true
 		end
 
-		-- 3) MEMBER_INFO_URL / roproxy only when worker skipped or failed
+		-- 3) MEMBER_INFO_URL / roproxy when worker skipped/failed OR count still unknown
 		local proxyCount, proxySamples, proxyEmblem = tryFetchMemberInfoProxy(groupId)
 		if proxySamples then
 			mergeSamplesIntoPool(proxySamples)

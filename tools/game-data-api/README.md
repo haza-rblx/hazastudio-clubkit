@@ -52,6 +52,7 @@ or wrangler `SECRET_<GAME_KEY>`).
 {
   "ok": true,
   "memberCount": 10589188,
+  "memberCountKnown": true,
   "members": [
     { "userId": 1, "displayName": "Alice" },
     { "userId": 2, "displayName": "Bob" }
@@ -59,6 +60,11 @@ or wrangler `SECRET_<GAME_KEY>`).
   "emblemUrl": "https://tr.rbxcdn.com/..."
 }
 ```
+
+When Open Cloud group meta fails or omits `memberCount`, the worker returns
+`memberCount: null` and `memberCountKnown: false` (never coerces to `0` — that
+made the kit hide CounterLeft / “others”). The Club Kit then falls back to
+`MEMBER_INFO_URL` / roproxy for the count while still using worker `members[]`.
 
 Cached aggressively (~5 min). Uses Open Cloud (`ROBLOX_GROUP_API_KEY`) for group +
 memberships, plus public users/thumbnails APIs for names and emblem.
