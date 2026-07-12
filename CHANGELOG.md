@@ -11,6 +11,12 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.14] - 2026-07-12
+
+### Fixed
+- **Join Community button label** - CTA text ("Join Community" / "Already joined") writes to nested `JoinCommunityButton > TextLabel` instead of only `TextButton.Text` (Studio layout uses the child label).
+- **Join greeting CountDownBar color** - no longer applies role accent / overwrites `BackgroundColor3` or Studio `UIGradient`; bar keeps designer colors while width/progress timing unchanged.
+
 ## [2.4.13] - 2026-07-12
 
 ### Changed

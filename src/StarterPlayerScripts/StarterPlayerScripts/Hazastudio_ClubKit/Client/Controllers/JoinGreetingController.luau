@@ -120,71 +120,6 @@ local function maxVisibleCards(): number
 	return math.max(1, tonumber(getCfg().MAX_VISIBLE_CARDS) or 2)
 end
 
--- Role accent helpers — same approach as GenericBroadcastController.
-local function colorFromHex(hex: string): Color3?
-	local value = string.gsub(hex, "#", "")
-	if #value ~= 6 then
-		return nil
-	end
-
-	local r = tonumber(string.sub(value, 1, 2), 16)
-	local g = tonumber(string.sub(value, 3, 4), 16)
-	local b = tonumber(string.sub(value, 5, 6), 16)
-	if not r or not g or not b then
-		return nil
-	end
-
-	return Color3.fromRGB(r, g, b)
-end
-
-local function getRoleAccentColor(role: string): Color3
-	local palette = Config.RoleColorPalette
-	local rolePalette = if type(palette) == "table" then palette[role] or palette.Member else nil
-	local rawColor = if type(rolePalette) == "table" then rolePalette.primary else nil
-	if rawColor == nil then
-		local roleColors = Config.ChatPrimaryTagColor
-		rawColor = if type(roleColors) == "table" then roleColors[role] or roleColors.Member else nil
-	end
-	if type(rawColor) == "string" then
-		return colorFromHex(rawColor) or Color3.fromRGB(77, 132, 255)
-	end
-	if typeof(rawColor) == "Color3" then
-		return rawColor
-	end
-	return Color3.fromRGB(77, 132, 255)
-end
-
-local function getRoleSecondaryColor(role: string, primary: Color3): Color3
-	local palette = Config.RoleColorPalette
-	local rolePalette = if type(palette) == "table" then palette[role] or palette.Member else nil
-	local rawColor = if type(rolePalette) == "table" then rolePalette.secondary else nil
-	if type(rawColor) == "string" then
-		return colorFromHex(rawColor) or primary:Lerp(Color3.new(0, 0, 0), 0.22)
-	end
-	if typeof(rawColor) == "Color3" then
-		return rawColor
-	end
-	return primary:Lerp(Color3.new(0, 0, 0), 0.22)
-end
-
-local function applyCountDownBarAccent(countDownBar: GuiObject, role: string)
-	local accent = getRoleAccentColor(role)
-	local secondary = getRoleSecondaryColor(role, accent)
-	local gradient = countDownBar:FindFirstChildOfClass("UIGradient")
-	if not gradient then
-		gradient = Instance.new("UIGradient")
-		gradient.Parent = countDownBar
-	end
-
-	gradient.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, accent),
-		ColorSequenceKeypoint.new(1, secondary),
-	})
-	gradient.Rotation = 0
-	gradient.Enabled = true
-	countDownBar.BackgroundColor3 = accent
-end
-
 local function resolveRefs(): Refs?
 	local playerGui = Players.LocalPlayer:FindFirstChildOfClass("PlayerGui")
 	if not playerGui then
@@ -498,10 +433,10 @@ local function playGreeting(refs: Refs, payload: Payload)
 	-- Show window only (bar depletes, then exit anim — same order as GenericBroadcast/Donation).
 	local showDuration = messageHold + (messageFade * 2) + welcomeHold
 
+	-- Width/progress only — leave CountDownBar colors / Studio UIGradient alone (no role tint).
 	local countDownBar = findFrame(card, "CountDownBar")
 	if countDownBar then
 		countDownBar.Size = UDim2.new(1, 0, countDownBar.Size.Y.Scale, countDownBar.Size.Y.Offset)
-		applyCountDownBarAccent(countDownBar, tostring(payload.roleKey or "Member"))
 	end
 
 	local active: ActiveCard = {

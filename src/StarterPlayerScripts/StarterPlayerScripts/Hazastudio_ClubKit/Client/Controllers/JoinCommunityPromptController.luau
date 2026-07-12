@@ -345,13 +345,14 @@ local function formatBody(names: { string }, memberCount: number, memberCountKno
 end
 
 local function setJoinButtonLabel(button: GuiButton, text: string)
-	if button:IsA("TextButton") then
-		(button :: TextButton).Text = text
-		return
-	end
+	-- Prefer nested TextLabel (JoinCommunityButton > TextLabel); TextButton.Text is often unused in Studio.
 	local nested = button:FindFirstChildWhichIsA("TextLabel", true)
 	if nested then
 		nested.Text = text
+		return
+	end
+	if button:IsA("TextButton") then
+		(button :: TextButton).Text = text
 	end
 end
 
