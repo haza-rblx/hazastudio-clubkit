@@ -11,7 +11,14 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
----
+## [2.4.11] - 2026-07-12
+
+### Fixed
+- **NukeWorldPosition ignored by LocalNuke** - active EffectDonate rocket used hardcoded `SPAWN_POSITION` + required `workspace.NukeModel`; `ClubKitConfig.Donation.NukeWorldPosition` only fed disabled `NukeEffectController`. Descent/impact now uses `Config.Donation.NUKE_WORLD_POSITION`; launch pad falls back to that stage if `NukeModel` is missing. BlackHole / GreenHammer / Blossom stage anchors also read the same config.
+- **Double Join Greeting** - server claimed an in-flight lock before yielding `getPayload` (`buildPayload`), so concurrent `onPlayerReady` + cash `onPayloadUpdated` could both fire the same RoyaleSpender toast ~1s apart. Client also ignores duplicate remotes per joiner for the session.
+
+### Changed
+- **game-data `/community` allowlist** - Join Commun worker endpoint now accepts any authenticated `gameKey` (empty `COMMUNITY_ENABLED_GAMES`); secret auth unchanged. Clients like `night-zone` only need matching `GameKey` + `GameDataApiSecret`.
 
 ## [2.4.10] - 2026-07-12
 

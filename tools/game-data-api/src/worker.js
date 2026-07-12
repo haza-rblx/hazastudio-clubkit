@@ -33,9 +33,9 @@ function json(body, status = 200) {
 // Other games get 403 — prevents accidental cross-game impact.
 const GROUPS_ENABLED_GAMES = ["nuwa"];
 
-// Games that have opted in to the /community endpoint (Join Commun modal data).
-// Includes every groups-enabled game plus the-basic (Club Kit).
-const COMMUNITY_ENABLED_GAMES = ["nuwa", "the-basic"];
+// Games allowed on /community (Join Commun modal data).
+// Empty = all authenticated gameKeys. Non-empty = explicit allowlist.
+const COMMUNITY_ENABLED_GAMES = [];
 
 // Per-game default group IDs (used when ?groupId not provided on /groups)
 const DEFAULT_GROUP_IDS = { nuwa: 141321616 };
@@ -502,7 +502,7 @@ async function resolveCommunityPayload(env, groupId) {
  * Cache: Cache API, 5 min TTL.
  */
 async function handleCommunity(env, gameKey, groupId) {
-  if (!COMMUNITY_ENABLED_GAMES.includes(gameKey)) {
+  if (COMMUNITY_ENABLED_GAMES.length > 0 && !COMMUNITY_ENABLED_GAMES.includes(gameKey)) {
     return json({ ok: false, error: "community endpoint not enabled for this game" }, 403);
   }
 

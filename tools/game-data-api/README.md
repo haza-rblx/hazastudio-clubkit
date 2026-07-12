@@ -43,10 +43,11 @@ GET /game/:gameKey/community/:groupId?secret=...
 ```
 
 Join Commun modal data: real `memberCount`, a sample of members (display names),
-optional `emblemUrl`. Allowlisted via `COMMUNITY_ENABLED_GAMES` (`nuwa`, `the-basic`).
+optional `emblemUrl`. Available for **any** authenticated `gameKey`
+(`COMMUNITY_ENABLED_GAMES` empty = allow all; set a list only to restrict).
 
 Auth: `?secret=` or `Authorization: Bearer …` (same as social/groups — D1 `social_secret`
-or wrangler `SECRET_<GAME_KEY>`).
+or wrangler `SECRET_<GAME_KEY>`). Required — endpoint is not public.
 
 ```json
 {
@@ -69,19 +70,18 @@ made the kit hide CounterLeft / “others”). The Club Kit then falls back to
 Cached aggressively (~5 min). Uses Open Cloud (`ROBLOX_GROUP_API_KEY`) for group +
 memberships, plus public users/thumbnails APIs for names and emblem.
 
-## Enable for the-basic (Club Kit)
+## Enable for a Club Kit place (any gameKey)
 
 1. Deploy this worker (see below) with `ROBLOX_GROUP_API_KEY` set (Open Cloud key with
-   group read scopes).
-2. Ensure `the-basic` is in `COMMUNITY_ENABLED_GAMES` (already included in `worker.js`).
-3. Set the game secret:
-   - Preferred: D1 `games.social_secret` for `game_key = the-basic` (donation admin), or
-   - `npx wrangler secret put SECRET_THE_BASIC`
-4. In Studio / live place:
-   - `ClubKitConfig.GameDataApi.GameKey = "the-basic"`
+   group read scopes). Community is open to all authenticated gameKeys (no allowlist).
+2. Set the game secret for that key:
+   - Preferred: D1 `games.social_secret` for `game_key = <your-key>` (donation admin), or
+   - `npx wrangler secret put SECRET_<YOUR_KEY>` (uppercase, hyphens → underscores)
+3. In Studio / live place:
+   - `ClubKitConfig.GameDataApi.GameKey = "<your-key>"` (e.g. `the-basic`, `night-zone`)
    - `Secrets.GameDataApiSecret` = that same secret (server-only module)
    - `HttpService.HttpEnabled = true`
-5. Without `GameDataApiSecret`, the kit skips the worker (DEBUG log) and falls back to
+4. Without `GameDataApiSecret`, the kit skips the worker (DEBUG log) and falls back to
    roproxy `MEMBER_INFO_URL` / `MEMBER_USERS_URL` — expected in Studio with empty secrets.
 
 Test:
@@ -122,8 +122,9 @@ npx wrangler secret put SECRET_CLIENT_GAME_KEY
 
 Then:
 
-1. Add the game key to `COMMUNITY_ENABLED_GAMES` and/or `GROUPS_ENABLED_GAMES` in `src/worker.js`
-2. Redeploy
+1. **Community** — works immediately for any authenticated gameKey (no allowlist edit).
+2. **Groups** (overhead rank) — still requires adding the key to `GROUPS_ENABLED_GAMES` in
+   `src/worker.js` and redeploying.
 3. Set buyer `ClubKitConfig.GameDataApi.GameKey` + `Secrets.GameDataApiSecret`
 
 ```

@@ -50,7 +50,7 @@ ClubKitConfig.AdminUserIds = {
 ClubKitConfig.TopSpenders = {} :: { [number]: number }
 
 ClubKitConfig.GameDataApi = {
-	GameKey = "the-basic", -- must match game-data-api COMMUNITY_ENABLED_GAMES + D1/wrangler secret
+	GameKey = "the-basic", -- must match D1/wrangler SECRET_<GAME_KEY> (community open to all authenticated keys)
 }
 
 -- =============================================================================
@@ -68,7 +68,8 @@ ClubKitConfig.Donation = {
 	-- Min IDR agar masuk notif + leaderboard (bukan tier aura).
 	MinAmount = 1000,
 
-	-- Posisi world VFX Rocket / Hammer / BlackHole (atur di Studio → Vector3 stage).
+	-- Posisi stage world VFX Rocket / Hammer / BlackHole (impact / anchor).
+	-- Rocket descends to this Vector3. Optional workspace.NukeModel = launch pad only.
 	NukeWorldPosition = Vector3.new(-262.2, 1.285, 64.9),
 
 	-- Aura per player (folder ServerStorage.DonationEffects/LevelN).

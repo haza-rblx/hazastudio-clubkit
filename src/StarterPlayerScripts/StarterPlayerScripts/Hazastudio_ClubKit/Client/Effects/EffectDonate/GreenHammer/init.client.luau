@@ -38,8 +38,23 @@ end
 -- Camera shaker module
 local CameraShaker = require(script.CameraShaker)
 
--- Giant spawn position -- harus nya ini cukup
-local GIANT_SPAWN_POSITION = Vector3.new(17.124, 242.798, 44.581)  --  itu vector3 nya?
+-- Giant spawn: ClubKitConfig.Donation.NukeWorldPosition + aerial offset (legacy Y≈242).
+local DEFAULT_GIANT_SPAWN = Vector3.new(17.124, 242.798, 44.581)
+local AERIAL_Y_OFFSET = 241.513 -- legacy giant Y relative to ground-ish stage
+
+local function resolveGiantSpawnPosition(): Vector3
+	local pos = (Config.Donation :: any).NUKE_WORLD_POSITION
+	if typeof(pos) ~= "Vector3" then
+		return DEFAULT_GIANT_SPAWN
+	end
+	-- Buyer stage is usually ground-level; keep hammer in the air above it.
+	if pos.Y < 50 then
+		return Vector3.new(pos.X, pos.Y + AERIAL_Y_OFFSET, pos.Z)
+	end
+	return pos
+end
+
+local GIANT_SPAWN_POSITION = resolveGiantSpawnPosition()
 
 local function applyGiantAppearance(userId, character)
 	-- HTTP API telemetry counter (quota-efficiency-pass-2026-06, Phase 0).

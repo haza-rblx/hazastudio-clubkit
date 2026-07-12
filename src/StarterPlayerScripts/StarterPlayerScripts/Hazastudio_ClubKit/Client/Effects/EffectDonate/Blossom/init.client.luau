@@ -39,8 +39,22 @@ end
 -- Camera shaker module
 local CameraShaker = require(script.CameraShaker)
 
--- Giant spawn position
-local GIANT_SPAWN_POSITION = Vector3.new(17.124, 242.798, 44.581)
+-- Giant spawn: ClubKitConfig.Donation.NukeWorldPosition + aerial offset.
+local DEFAULT_GIANT_SPAWN = Vector3.new(17.124, 242.798, 44.581)
+local AERIAL_Y_OFFSET = 241.513
+
+local function resolveGiantSpawnPosition(): Vector3
+	local pos = (Config.Donation :: any).NUKE_WORLD_POSITION
+	if typeof(pos) ~= "Vector3" then
+		return DEFAULT_GIANT_SPAWN
+	end
+	if pos.Y < 50 then
+		return Vector3.new(pos.X, pos.Y + AERIAL_Y_OFFSET, pos.Z)
+	end
+	return pos
+end
+
+local GIANT_SPAWN_POSITION = resolveGiantSpawnPosition()
 
 -- Function to apply giant appearance to character
 local function applyGiantAppearance(userId, character)

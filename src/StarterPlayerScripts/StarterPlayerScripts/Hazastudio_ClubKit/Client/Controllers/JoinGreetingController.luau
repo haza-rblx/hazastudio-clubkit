@@ -74,6 +74,8 @@ local presenting = false
 -- Hold until loading click + cinematic reveal finish (`enterGameplay` / notifyGameplayReady).
 local gameplayReady = false
 local heldUntilGameplay: { Payload } = {}
+-- Belt-and-suspenders: ignore duplicate remotes for the same joiner this client session.
+local seenGreetingUserIds: { [number]: boolean } = {}
 
 local function avatarHeadshot(userId: number): string
 	return ("rbxthumb://type=AvatarHeadShot&id=%d&w=420&h=420"):format(userId)
@@ -456,7 +458,22 @@ local function pumpQueue()
 	presenting = false
 end
 
+local function claimGreetingUserId(payload: Payload): boolean
+	local userId = tonumber(payload.userId)
+	if not userId or userId <= 0 then
+		return true
+	end
+	if seenGreetingUserIds[userId] then
+		return false
+	end
+	seenGreetingUserIds[userId] = true
+	return true
+end
+
 local function presentPayload(payload: Payload)
+	if not claimGreetingUserId(payload) then
+		return
+	end
 	if not gameplayReady then
 		table.insert(heldUntilGameplay, payload)
 		return
@@ -487,6 +504,7 @@ local function clearActiveCards()
 	end
 	table.clear(presentQueue)
 	table.clear(heldUntilGameplay)
+	table.clear(seenGreetingUserIds)
 end
 
 local JoinGreetingController = {}

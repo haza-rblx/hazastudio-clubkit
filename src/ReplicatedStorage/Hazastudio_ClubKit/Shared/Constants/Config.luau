@@ -2202,8 +2202,8 @@ Config.Donation = {
 	-- Folder in ReplicatedStorage that holds the world-position VFX models
 	-- (one Model per effect name: Nuke / Smite / BlackHole).
 	NUKE_EFFECTS_FOLDER = "WorldEffects",
-	-- Hardcoded world position for the nuke VFX (set to your Stage part).
-	-- Override per-place via Config if needed.
+	-- Stage world position for Nuke / Smite / BlackHole EffectDonate VFX.
+	-- Buyer override: ClubKitConfig.Donation.NukeWorldPosition → ConfigBootstrap.
 	NUKE_WORLD_POSITION = Vector3.new(-262.2, 1.285, 64.9),
 	-- Fallback duration (seconds) when WORLD_EFFECT_DURATIONS lacks an effect key.
 	-- Raised from 20 → 90: LocalNuke client lifetime is ~85s; 20s caused overlap.

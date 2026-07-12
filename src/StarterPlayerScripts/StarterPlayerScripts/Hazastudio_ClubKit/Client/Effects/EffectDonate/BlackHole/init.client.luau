@@ -9,10 +9,22 @@ local Lighting = game:GetService("Lighting")
 local SoundAssetSanitizer = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.SoundAssetSanitizer)
 local DonationExperiencePrefs = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DonationExperiencePrefs)
 local WorldEffectFlight = require(script.Parent.Parent.Parent.Utils.WorldEffectFlight)
+local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 
--- Constants
-local SPAWN_POSITION = Vector3.new(17, 0.5, -100)
-local BLACKHOLE_POSITION = Vector3.new(17.124, 242.798, 44.581)
+-- Stage anchor from ClubKitConfig.Donation.NukeWorldPosition (fallback = legacy hardcode).
+local DEFAULT_SPAWN_POSITION = Vector3.new(17, 0.5, -100)
+local AERIAL_Y_OFFSET = 242.298 -- legacy BLACKHOLE_POSITION.Y - SPAWN.Y approx
+
+local function resolveNukeWorldPosition(): Vector3
+	local pos = (Config.Donation :: any).NUKE_WORLD_POSITION
+	if typeof(pos) == "Vector3" then
+		return pos
+	end
+	return DEFAULT_SPAWN_POSITION
+end
+
+local SPAWN_POSITION = resolveNukeWorldPosition()
+local BLACKHOLE_POSITION = Vector3.new(SPAWN_POSITION.X, SPAWN_POSITION.Y + AERIAL_Y_OFFSET, SPAWN_POSITION.Z)
 
 -- Helper function to add commas to numbers
 local function addCommasToNumber(number)

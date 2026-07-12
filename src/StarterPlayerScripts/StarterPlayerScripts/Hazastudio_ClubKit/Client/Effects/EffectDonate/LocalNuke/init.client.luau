@@ -3,6 +3,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local DonationExperiencePrefs = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DonationExperiencePrefs)
 local WorldEffectFlight = require(script.Parent.Parent.Parent.Utils.WorldEffectFlight)
+local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local LocalPlayer = game.Players.LocalPlayer
 local Debris = game:GetService("Debris")
 local TweenService = game:GetService("TweenService")
@@ -12,7 +13,34 @@ local RunService = game:GetService("RunService")
 -- Camera shaker and constants
 local CameraShaker = require(script.CameraShaker)
 local SoundAssetSanitizer = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.SoundAssetSanitizer)
-local SPAWN_POSITION = Vector3.new(-60.5, 1.5, -44.891)
+-- Fallback only — buyer sets ClubKitConfig.Donation.NukeWorldPosition → NUKE_WORLD_POSITION.
+local DEFAULT_SPAWN_POSITION = Vector3.new(-60.5, 1.5, -44.891)
+
+local function resolveNukeWorldPosition(): Vector3
+	local pos = (Config.Donation :: any).NUKE_WORLD_POSITION
+	if typeof(pos) == "Vector3" then
+		return pos
+	end
+	return DEFAULT_SPAWN_POSITION
+end
+
+-- Optional legacy launch pad in the place. If missing, launch from the configured impact spot.
+local function resolveLaunchCFrame(impactPosition: Vector3): CFrame
+	local nukeModel = workspace:FindFirstChild("NukeModel")
+	if nukeModel then
+		local cfValue = nukeModel:FindFirstChild("CFrame")
+		if cfValue and cfValue:IsA("CFrameValue") then
+			return cfValue.Value
+		end
+		if nukeModel:IsA("BasePart") then
+			return nukeModel.CFrame
+		end
+		if nukeModel:IsA("Model") then
+			return nukeModel:GetPivot()
+		end
+	end
+	return CFrame.new(impactPosition)
+end
 
 -- Helper function to scale particle effects
 local function scaleParticleEffect(particleEmitter, scaleFactor)
@@ -84,6 +112,9 @@ local function createNukeEffect(nukeModel, donatorName, recipientName, donationA
 	end
 
 	local ok, err = pcall(function()
+	-- Impact / descent target: ClubKitConfig.Donation.NukeWorldPosition
+	local SPAWN_POSITION = resolveNukeWorldPosition()
+
 	nukeClone = nukeModel:Clone()
 	SoundAssetSanitizer.removeBlockedSounds(nukeClone)
 	local nukeCFrame = nukeClone.NukeValues.NukeCFrame
@@ -119,9 +150,6 @@ local function createNukeEffect(nukeModel, donatorName, recipientName, donationA
 		StopSustained = function() end,
 	}
 
-	-- Position nuke
-	nukeClone.Position = SPAWN_POSITION
-
 	-- Scale all particle effects
 	scaleParticleEffect(thrustEmitPoint.Flame, 5)
 	scaleParticleEffect(thrustEmitPoint.Shockwave, 15)
@@ -144,8 +172,9 @@ local function createNukeEffect(nukeModel, donatorName, recipientName, donationA
 	scaleParticleEffect(centerEmitPoint.SparkleExplosion, 4)
 	scaleParticleEffect(centerEmitPoint.Spark3, 25)
 
-	-- Setup positioning system
-	nukeClone.CFrame = workspace.NukeModel.CFrame.Value -- Nuke Position
+	-- Launch pad: optional workspace.NukeModel; else stage (NUKE_WORLD_POSITION).
+	-- Descent / impact always targets NUKE_WORLD_POSITION (SPAWN_POSITION below).
+	nukeClone.CFrame = resolveLaunchCFrame(SPAWN_POSITION)
 	nukeClone.AlignPosition.Position = nukeClone.Position
 	nukeClone.AlignOrientation.CFrame = nukeClone.CFrame
 	nukeCFrame.Value = nukeClone.CFrame

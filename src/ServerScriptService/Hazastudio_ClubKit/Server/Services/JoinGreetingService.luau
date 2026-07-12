@@ -286,7 +286,12 @@ local function createJoinGreetingService(deps: {
 	local overheadService = deps.overheadService
 	local log = deps.logger or Logger.new("JoinGreetingService")
 
+	-- Once-per-session: fired userIds. Also gate concurrent evaluates — getPayload
+	-- yields (OverheadService.buildPayload waits on GroupService/DataStore), so
+	-- onPlayerReady + onPayloadUpdated (~cash settle) can both pass a post-check
+	-- guard and double-fire the same RoyaleSpender greeting ~1s apart.
 	local greetedUserIds: { [number]: boolean } = {}
+	local evaluationInFlight: { [number]: boolean } = {}
 	local settleScheduled: { [number]: boolean } = {}
 	local evaluationComplete: { [number]: boolean } = {}
 
@@ -358,46 +363,59 @@ local function createJoinGreetingService(deps: {
 		end
 
 		local userId = player.UserId
-		if greetedUserIds[userId] or evaluationComplete[userId] then
+		if greetedUserIds[userId] or evaluationComplete[userId] or evaluationInFlight[userId] then
 			return
 		end
+		-- Claim before getPayload yields so concurrent onPlayerReady / onPayloadUpdated
+		-- cannot both fire the same session greeting.
+		evaluationInFlight[userId] = true
 
-		local payload = getPayload(player)
-		local match = evaluateMatch(player, payload)
-		if match then
-			greetedUserIds[userId] = true
-			evaluationComplete[userId] = true
-			fireGreeting(player, match)
-			return
-		end
+		local ok, err = pcall(function()
+			local payload = getPayload(player)
+			local match = evaluateMatch(player, payload)
+			if match then
+				greetedUserIds[userId] = true
+				evaluationComplete[userId] = true
+				fireGreeting(player, match)
+				return
+			end
 
-		if allowScheduleSettle and not settleScheduled[userId] and ranksMayStillSettle(payload) then
-			settleScheduled[userId] = true
-			local baseDelay = tonumber(Config.Overhead and Config.Overhead.GROUP_RANK_SETTLE_DELAY) or 5
-			-- Match OverheadController's final settle rebroadcast window.
-			local delaySec = baseDelay * 2
-			task.delay(delaySec, function()
-				if not player.Parent then
-					evaluationComplete[userId] = true
-					return
-				end
-				if greetedUserIds[userId] or evaluationComplete[userId] then
-					return
-				end
-				-- Final settle pass: ranks may have arrived via overhead rebroadcast.
-				tryEvaluate(player, false)
-				if not greetedUserIds[userId] then
-					evaluationComplete[userId] = true
-				end
-			end)
-			return
-		end
+			if allowScheduleSettle and not settleScheduled[userId] and ranksMayStillSettle(payload) then
+				settleScheduled[userId] = true
+				local baseDelay = tonumber(Config.Overhead and Config.Overhead.GROUP_RANK_SETTLE_DELAY) or 5
+				-- Match OverheadController's final settle rebroadcast window.
+				local delaySec = baseDelay * 2
+				task.delay(delaySec, function()
+					if not player.Parent then
+						evaluationComplete[userId] = true
+						return
+					end
+					if greetedUserIds[userId] or evaluationComplete[userId] then
+						return
+					end
+					-- Final settle pass: ranks may have arrived via overhead rebroadcast.
+					tryEvaluate(player, false)
+					if not greetedUserIds[userId] then
+						evaluationComplete[userId] = true
+					end
+				end)
+				return
+			end
 
-		-- Ready path with ranks already present (or nil settle not needed): stop retrying.
-		if allowScheduleSettle and not ranksMayStillSettle(payload) then
-			evaluationComplete[userId] = true
+			-- Ready path with ranks already present (or nil settle not needed): stop retrying.
+			if allowScheduleSettle and not ranksMayStillSettle(payload) then
+				evaluationComplete[userId] = true
+			end
+			-- onPayloadUpdated before settle completes: leave incomplete so a late rank can still greet.
+		end)
+
+		evaluationInFlight[userId] = nil
+		if not ok then
+			log:warn("Join greeting evaluate failed", {
+				userId = userId,
+				error = tostring(err),
+			})
 		end
-		-- onPayloadUpdated before settle completes: leave incomplete so a late rank can still greet.
 	end
 
 	function service.onPlayerReady(_self: Service, player: Player)
@@ -405,19 +423,21 @@ local function createJoinGreetingService(deps: {
 	end
 
 	function service.onPayloadUpdated(_self: Service, player: Player)
-		-- Rank rebroadcast / cash settle: re-check only if not yet greeted.
+		-- Rank rebroadcast / cash settle: re-check only if not yet greeted / in-flight.
 		tryEvaluate(player, false)
 	end
 
 	function service.onPlayerRemoving(_self: Service, player: Player)
 		local userId = player.UserId
 		greetedUserIds[userId] = nil
+		evaluationInFlight[userId] = nil
 		settleScheduled[userId] = nil
 		evaluationComplete[userId] = nil
 	end
 
 	function service.destroy(_self: Service)
 		table.clear(greetedUserIds)
+		table.clear(evaluationInFlight)
 		table.clear(settleScheduled)
 		table.clear(evaluationComplete)
 	end
