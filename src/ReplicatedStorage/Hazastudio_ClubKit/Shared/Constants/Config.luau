@@ -243,14 +243,16 @@ Config.JoinCommunityPrompt = {
 	REMOTE_REQUEST = "JoinCommunityMembersRequest",
 	REMOTE_RESPONSE = "JoinCommunityMembersResponse",
 	SAMPLE_LIMIT = 8,
-	CACHE_TTL = 120,
+	POOL_SIZE = 40, -- single HTTP page slice; enough for random 8
+	CACHE_TTL = 300, -- seconds; avoid repeat Http on every join
 	REQUEST_RATE_MAX = 4,
 	REQUEST_RATE_WINDOW = 30,
-	-- Copy (community-focused — not VIP). Applied at modal open so Studio placeholders get overwritten.
-	TITLE = "Join our community.",
-	SUBHEADLINE = "Stay connected with the club.",
+	-- Headline = VIP incentive; social strip = community members (not VIP framing).
+	TITLE = "Join our community, and get free VIP.",
+	SUBHEADLINE = "Limited time, save up to 50 Robux.",
 	SUBTITLE_WITH_COUNT = "Join with other %d players.",
 	SUBTITLE_FALLBACK = "Join with other players.",
+	SUBTITLE_WITH_SAMPLE = "Players already in this community.",
 	BODY_EMPTY_WITH_COUNT = "%d players already joined this community.",
 	BODY_EMPTY = "Be among the first to join this community.",
 	BODY_ONE = "%s already joined this community.",

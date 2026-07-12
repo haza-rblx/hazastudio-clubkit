@@ -20,7 +20,7 @@ local GUI_WAIT_TIMEOUT = 8
 local ROOT_GUI_NAME = "16-JoinCommunPrompt"
 local MAX_THUMBNAILS = 8
 local BODY_NAME_LIMIT = 3
-local SERVER_SAMPLE_TIMEOUT = 6
+local SERVER_SAMPLE_TIMEOUT = 8
 
 -- Shop / Gift / PaidBroadcast blur+zoom options (not Couple, which skips backdrop).
 local MODAL_BLUR_OPTIONS = {
@@ -161,8 +161,11 @@ local function joinPromptCfg(): any
 	return if type(cfg) == "table" then cfg else {}
 end
 
-local function formatSubtitle(memberCount: number): string
+local function formatSubtitle(memberCount: number, hasSampleNames: boolean): string
 	local cfg = joinPromptCfg()
+	if hasSampleNames then
+		return tostring(cfg.SUBTITLE_WITH_SAMPLE or "Players already in this community.")
+	end
 	if memberCount > 0 then
 		local template = tostring(cfg.SUBTITLE_WITH_COUNT or "Join with other %d players.")
 		return string.format(template, memberCount)
@@ -226,7 +229,7 @@ local function applyCopy(memberCount: number, displayNames: { string })
 	end
 	applyHeadlineCopy()
 	if r.subtitleLabel then
-		r.subtitleLabel.Text = formatSubtitle(memberCount)
+		r.subtitleLabel.Text = formatSubtitle(memberCount, #displayNames > 0)
 	end
 	if r.bodyLabel then
 		r.bodyLabel.Text = formatBody(displayNames, memberCount)
@@ -364,10 +367,11 @@ local function mergeMemberSamples(
 		table.insert(out, sample)
 	end
 
-	for _, sample in ipairs(online) do
+	-- Prefer random community roster (already joined), then fill with online in-group.
+	for _, sample in ipairs(serverMembers) do
 		tryAdd(sample)
 	end
-	for _, sample in ipairs(serverMembers) do
+	for _, sample in ipairs(online) do
 		tryAdd(sample)
 	end
 	return out
@@ -472,35 +476,33 @@ local function fillMemberThumbnailsAsync(groupId: number, generation: number)
 	clearThumbClones()
 	applyCopy(0, {})
 
-	local online = collectOnlineInGroup(groupId)
-	if generation ~= fillGeneration or refs ~= r then
-		return
-	end
-
-	-- Optimistic copy from online-only while server sample loads.
-	local optimisticCount = #online
-	local optimisticNames: { string } = {}
-	for _, sample in ipairs(online) do
-		table.insert(optimisticNames, sample.displayName)
-	end
-	applyCopy(optimisticCount, optimisticNames)
-
+	-- Server-first (cached random community sample). Avoid N× IsInGroupAsync up front.
 	local serverPayload = requestServerMembersAsync(groupId)
 	if generation ~= fillGeneration or refs ~= r then
 		return
 	end
 
 	local serverMembers: { MemberSample } = {}
-	local memberCount = optimisticCount
+	local memberCount = 0
 	if serverPayload then
 		serverMembers = serverPayload.members
-		if serverPayload.memberCount > 0 then
-			memberCount = serverPayload.memberCount
+		memberCount = serverPayload.memberCount
+	end
+
+	local online: { MemberSample } = {}
+	if #serverMembers < MAX_THUMBNAILS then
+		online = collectOnlineInGroup(groupId)
+		if generation ~= fillGeneration or refs ~= r then
+			return
 		end
-	else
+	end
+
+	if memberCount <= 0 then
 		local localCount = tryGetGroupMemberCountLocal(groupId)
 		if type(localCount) == "number" and localCount > 0 then
 			memberCount = localCount
+		elseif #serverMembers > 0 or #online > 0 then
+			memberCount = math.max(#serverMembers, #online)
 		end
 	end
 
