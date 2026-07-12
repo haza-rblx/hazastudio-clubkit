@@ -4,24 +4,29 @@
 -- REAL TOTAL (memberCount):
 --   Prefer GroupService:GetGroupInfoAsync → MemberCount when present.
 --   Official engine docs do NOT list MemberCount on that table; when missing we
---   do not invent a total from online/pool size. Optional MEMBER_INFO_URL
---   (non-*.roblox.com worker) can supply the real count + optional samples.
+--   do not invent a total from online/pool size. Next: game-data-api /community
+--   (Secrets.GameDataApiSecret). Then MEMBER_INFO_URL / ClubKitConfig override
+--   (default roproxy).
 --
 -- AVATAR SAMPLES:
---   Primary: 1 page via MEMBER_USERS_URL (default groups.roproxy.com users API),
---   O(k) random pick, CACHE_TTL. In-experience / MemoryStore pool is secondary fill.
---   Http to groups.roblox.com is blocked from game servers.
+--   Prefer game-data-api GET /game/:gameKey/community/:groupId (members[] in one
+--   response — no separate users fetch). Else MEMBER_USERS_URL (roproxy).
+--   In-experience / MemoryStore pool is secondary fill. Http to groups.roblox.com
+--   is blocked from game servers. Studio without GameDataApiSecret falls back
+--   to roproxy (same as empty DonationApiSecret skip).
 
 local GroupService = game:GetService("GroupService")
 local HttpService = game:GetService("HttpService")
 local MemoryStoreService = game:GetService("MemoryStoreService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local KitProduct = require(ReplicatedStorage.Hazastudio_ClubKit.KitProduct)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local RateLimiter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.RateLimiter)
+local Secrets = require(ServerScriptService.Hazastudio_ClubKitSecrets.Secrets)
 
 export type MemberSample = {
 	userId: number,
@@ -141,10 +146,12 @@ end
 
 -- Roblox GET /v1/groups/{id}/users only accepts these page sizes (else HTTP 400).
 local VALID_USERS_PAGE_LIMITS = { 10, 25, 50, 100 }
+-- Prefer 50 for thumb sampling (valid + enough variety without maxing proxy load).
+local DEFAULT_USERS_PAGE_LIMIT = 50
 
 local function nearestUsersPageLimit(desired: number): number
-	local target = if type(desired) == "number" and desired == desired then desired else 50
-	local best = 50
+	local target = if type(desired) == "number" and desired == desired then desired else DEFAULT_USERS_PAGE_LIMIT
+	local best = DEFAULT_USERS_PAGE_LIMIT
 	local bestDist = math.huge
 	for _, allowed in ipairs(VALID_USERS_PAGE_LIMITS) do
 		local dist = math.abs(allowed - target)
@@ -157,14 +164,54 @@ local function nearestUsersPageLimit(desired: number): number
 	return best
 end
 
+-- Clamp limit= to a Roblox-valid page size; normalize sortOrder to Asc (Desc 400s on some huge groups).
 local function sanitizeMemberUsersUrl(url: string, preferredLimit: number): string
 	local pageLimit = nearestUsersPageLimit(preferredLimit)
 	local limitToken = "limit=" .. tostring(pageLimit)
-	if string.find(url, "limit=", 1, true) then
-		return (string.gsub(url, "limit=%d+", limitToken, 1))
+	local out = url
+	if string.find(string.lower(out), "limit=", 1, true) then
+		out = (string.gsub(out, "[Ll][Ii][Mm][Ii][Tt]=%d+", limitToken, 1))
+	else
+		local sep = if string.find(out, "?", 1, true) then "&" else "?"
+		out = out .. sep .. limitToken
 	end
-	local sep = if string.find(url, "?", 1, true) then "&" else "?"
-	return url .. sep .. limitToken
+	if string.find(string.lower(out), "sortorder=", 1, true) then
+		out = (string.gsub(out, "[Ss][Oo][Rr][Tt][Oo][Rr][Dd][Ee][Rr]=[^&]*", "sortOrder=Asc", 1))
+	end
+	return out
+end
+
+local function stripSortOrder(url: string): string
+	local out = (string.gsub(url, "[?&][Ss][Oo][Rr][Tt][Oo][Rr][Dd][Ee][Rr]=[^&]*", ""))
+	out = (string.gsub(out, "%?&", "?"))
+	out = (string.gsub(out, "&&+", "&"))
+	out = (string.gsub(out, "%?$", ""))
+	out = (string.gsub(out, "&$", ""))
+	return out
+end
+
+-- Rebuild users URL variants for fallback attempts (same host/path, different query).
+local function buildUsersUrlVariants(primaryUrl: string, preferredLimit: number): { string }
+	local pageLimit = nearestUsersPageLimit(preferredLimit)
+	local withAsc = sanitizeMemberUsersUrl(primaryUrl, pageLimit)
+	local noSort = sanitizeMemberUsersUrl(stripSortOrder(withAsc), pageLimit)
+	local sep = if string.find(noSort, "?", 1, true) then "&" else "?"
+	local explicitAsc = sanitizeMemberUsersUrl(noSort .. sep .. "sortOrder=Asc", pageLimit)
+	local limit100Asc = sanitizeMemberUsersUrl(noSort, 100)
+
+	local variants: { string } = {}
+	local seen: { [string]: boolean } = {}
+	local function push(u: string)
+		if u ~= "" and not seen[u] then
+			seen[u] = true
+			table.insert(variants, u)
+		end
+	end
+	push(withAsc)
+	push(noSort)
+	push(explicitAsc)
+	push(limit100Asc)
+	return variants
 end
 
 local function truncateForLog(text: string, maxLen: number): string
@@ -172,6 +219,13 @@ local function truncateForLog(text: string, maxLen: number): string
 		return text
 	end
 	return string.sub(text, 1, maxLen) .. "…"
+end
+
+local function bodyForLog(body: any): string
+	if type(body) ~= "string" or body == "" then
+		return "(empty)"
+	end
+	return truncateForLog(body, 220)
 end
 
 local function formatUrlTemplate(template: string, groupId: number): string?
@@ -193,6 +247,65 @@ local function formatUrlTemplate(template: string, groupId: number): string?
 		return nil
 	end
 	return url
+end
+
+-- Derive .../v1/groups/{id}/roles from a users or group-info URL when possible.
+local function buildGroupRolesUrl(groupId: number, usersOrInfoUrl: string?): string
+	local fallback = string.format("https://groups.roproxy.com/v1/groups/%d/roles", groupId)
+	if type(usersOrInfoUrl) ~= "string" or usersOrInfoUrl == "" then
+		return fallback
+	end
+	local formatted = formatUrlTemplate(usersOrInfoUrl, groupId)
+	if type(formatted) ~= "string" or formatted == "" then
+		return fallback
+	end
+	local rolesUrl = (string.gsub(formatted, "/users%?.*$", "/roles"))
+	rolesUrl = (string.gsub(rolesUrl, "/users$", "/roles"))
+	if string.find(rolesUrl, "/roles", 1, true) and not string.find(rolesUrl, "/users", 1, true) then
+		return rolesUrl
+	end
+	-- Group info URL: .../v1/groups/123 → append /roles
+	local trimmed = (string.gsub(formatted, "/$", ""))
+	if string.match(trimmed, "/v%d+/groups/%d+$") then
+		return trimmed .. "/roles"
+	end
+	return fallback
+end
+
+local function buildRoleUsersUrl(rolesUrl: string, roleSetId: number, pageLimit: number): string
+	local base = (string.gsub(rolesUrl, "/roles/?$", ""))
+	local limit = nearestUsersPageLimit(pageLimit)
+	return string.format("%s/roles/%d/users?limit=%d&sortOrder=Asc", base, roleSetId, limit)
+end
+
+local function pickBestRoleSetId(rolesDecoded: any): number?
+	if type(rolesDecoded) ~= "table" then
+		return nil
+	end
+	local roles = (rolesDecoded :: any).roles
+	if type(roles) ~= "table" then
+		return nil
+	end
+	local bestId: number? = nil
+	local bestCount = -1
+	local baseId: number? = nil
+	for _, role in ipairs(roles) do
+		if type(role) == "table" then
+			local rank = tonumber((role :: any).rank) or -1
+			local roleId = tonumber((role :: any).id) or 0
+			local memberCount = tonumber((role :: any).memberCount) or 0
+			if roleId > 0 and rank > 0 then
+				if (role :: any).isBase == true then
+					baseId = roleId
+				end
+				if memberCount > bestCount then
+					bestCount = memberCount
+					bestId = roleId
+				end
+			end
+		end
+	end
+	return baseId or bestId
 end
 
 local function parseUserRowsFromProxy(decoded: any): { MemberSample }
@@ -303,6 +416,15 @@ local function createJoinCommunityMembersService(deps: {
 	local memberCountCache: { expiresAt: number, value: number, known: boolean }? = nil
 	local emblemCache: { expiresAt: number, value: string? }? = nil
 	local usersPageCache: { expiresAt: number, samples: { MemberSample } }? = nil
+	-- Unified game-data-api /community cache (count + members + emblem in one response).
+	local communityWorkerCache: {
+		expiresAt: number,
+		memberCount: number?,
+		memberCountKnown: boolean,
+		emblemUrl: string?,
+		samples: { MemberSample },
+		ok: boolean,
+	}? = nil
 	local memoryStore: any? = nil
 	local memoryStoreDirty = false
 	local memoryStoreWriteScheduled = false
@@ -312,6 +434,8 @@ local function createJoinCommunityMembersService(deps: {
 	local loggedMemberCountMissing = false
 	local warnedProxyFail = false
 	local warnedUsersProxyFail = false
+	local warnedCommunityWorkerFail = false
+	local loggedCommunityWorkerSkip = false
 
 	local function track(conn: RBXScriptConnection): RBXScriptConnection
 		table.insert(connections, conn)
@@ -411,8 +535,205 @@ local function createJoinCommunityMembersService(deps: {
 		if url == nil then
 			return nil
 		end
-		-- Clamp limit= to Roblox-valid page size even if buyer/template still has 40 etc.
-		return sanitizeMemberUsersUrl(url, poolCap)
+		-- Clamp limit= to Roblox-valid page size; force Asc. Do NOT use POOL_SIZE (40) as the API limit.
+		return sanitizeMemberUsersUrl(url, DEFAULT_USERS_PAGE_LIMIT)
+	end
+
+	local function getGameDataApiConfig(): (string?, string?, string?, boolean)
+		local apiCfg = Config.GameDataApi
+		if type(apiCfg) ~= "table" then
+			return nil, nil, nil, false
+		end
+		if apiCfg.COMMUNITY_ENDPOINT_ENABLED == false then
+			return nil, nil, nil, false
+		end
+		local baseUrl = apiCfg.BASE_URL
+		local gameKey = apiCfg.GAME_KEY
+		if type(baseUrl) ~= "string" or baseUrl == "" or type(gameKey) ~= "string" or gameKey == "" then
+			return nil, nil, nil, false
+		end
+		local secret = Secrets.GameDataApiSecret
+		if type(secret) ~= "string" or secret == "" then
+			if not loggedCommunityWorkerSkip then
+				loggedCommunityWorkerSkip = true
+				log:debug(
+					"JoinCommunityMembers GameDataApiSecret kosong — community worker di-skip (normal di Studio); fallback roproxy",
+					{ gameKey = gameKey }
+				)
+			end
+			return nil, nil, nil, false
+		end
+		return baseUrl, gameKey, secret, true
+	end
+
+	-- Prefer game-data-api /community (one Http → count + members + emblem). Cached CACHE_TTL.
+	local function resolveCommunityWorker(groupId: number): {
+		ok: boolean,
+		memberCount: number?,
+		memberCountKnown: boolean,
+		emblemUrl: string?,
+		samples: { MemberSample },
+	}
+		local now = os.clock()
+		if communityWorkerCache and communityWorkerCache.expiresAt > now then
+			return {
+				ok = communityWorkerCache.ok,
+				memberCount = communityWorkerCache.memberCount,
+				memberCountKnown = communityWorkerCache.memberCountKnown,
+				emblemUrl = communityWorkerCache.emblemUrl,
+				samples = communityWorkerCache.samples,
+			}
+		end
+
+		local baseUrl, gameKey, secret, enabled = getGameDataApiConfig()
+		if not enabled or type(baseUrl) ~= "string" or type(gameKey) ~= "string" or type(secret) ~= "string" then
+			communityWorkerCache = {
+				expiresAt = now + failCacheTtl,
+				memberCount = nil,
+				memberCountKnown = false,
+				emblemUrl = nil,
+				samples = {},
+				ok = false,
+			}
+			return {
+				ok = false,
+				memberCount = nil,
+				memberCountKnown = false,
+				emblemUrl = nil,
+				samples = {},
+			}
+		end
+
+		local url = string.format(
+			"%s/game/%s/community/%d?secret=%s",
+			baseUrl,
+			gameKey,
+			groupId,
+			secret
+		)
+		local timeout = 5
+		if type(Config.GameDataApi) == "table" and type(Config.GameDataApi.HTTP_TIMEOUT) == "number" then
+			timeout = Config.GameDataApi.HTTP_TIMEOUT
+		end
+
+		local okHttp, responseOrErr = pcall(function()
+			return HttpService:RequestAsync({
+				Url = url,
+				Method = "GET",
+				Headers = { Accept = "application/json" },
+				Timeout = timeout,
+			})
+		end)
+		if not okHttp or type(responseOrErr) ~= "table" or responseOrErr.Success ~= true then
+			if not warnedCommunityWorkerFail then
+				warnedCommunityWorkerFail = true
+				local statusCode = if type(responseOrErr) == "table" then tonumber(responseOrErr.StatusCode) else nil
+				log:warn("JoinCommunityMembers game-data community request failed", {
+					groupId = groupId,
+					gameKey = gameKey,
+					statusCode = statusCode or 0,
+					err = if okHttp then "HTTP fail" else tostring(responseOrErr),
+				})
+			end
+			communityWorkerCache = {
+				expiresAt = now + failCacheTtl,
+				memberCount = nil,
+				memberCountKnown = false,
+				emblemUrl = nil,
+				samples = {},
+				ok = false,
+			}
+			return {
+				ok = false,
+				memberCount = nil,
+				memberCountKnown = false,
+				emblemUrl = nil,
+				samples = {},
+			}
+		end
+
+		local body = if type(responseOrErr.Body) == "string" then responseOrErr.Body else ""
+		local okJson, decoded = pcall(function()
+			return HttpService:JSONDecode(body)
+		end)
+		if not okJson or type(decoded) ~= "table" or (decoded :: any).ok ~= true then
+			if not warnedCommunityWorkerFail then
+				warnedCommunityWorkerFail = true
+				log:warn("JoinCommunityMembers game-data community returned invalid payload", {
+					groupId = groupId,
+					gameKey = gameKey,
+					body = bodyForLog(body),
+				})
+			end
+			communityWorkerCache = {
+				expiresAt = now + failCacheTtl,
+				memberCount = nil,
+				memberCountKnown = false,
+				emblemUrl = nil,
+				samples = {},
+				ok = false,
+			}
+			return {
+				ok = false,
+				memberCount = nil,
+				memberCountKnown = false,
+				emblemUrl = nil,
+				samples = {},
+			}
+		end
+
+		local count = extractMemberCount(decoded)
+		local emblem = extractEmblemUrl(decoded)
+		local samples = parseUserRowsFromProxy(decoded)
+		if #samples > 0 then
+			mergeSamplesIntoPool(samples)
+		end
+
+		-- Also warm dedicated caches so emblem/count resolvers stay consistent.
+		if count ~= nil then
+			memberCountCache = {
+				expiresAt = now + memberCountTtl,
+				value = count,
+				known = true,
+			}
+		end
+		if type(emblem) == "string" and emblem ~= "" then
+			emblemCache = {
+				expiresAt = now + memberCountTtl,
+				value = emblem,
+			}
+		end
+		if #samples > 0 then
+			usersPageCache = {
+				expiresAt = now + memberCountTtl,
+				samples = samples,
+			}
+		end
+
+		communityWorkerCache = {
+			expiresAt = now + memberCountTtl,
+			memberCount = count,
+			memberCountKnown = count ~= nil,
+			emblemUrl = emblem,
+			samples = samples,
+			ok = true,
+		}
+
+		log:debug("JoinCommunityMembers game-data community ok", {
+			groupId = groupId,
+			gameKey = gameKey,
+			memberCount = count,
+			members = #samples,
+			fromCache = (decoded :: any).fromCache == true,
+		})
+
+		return {
+			ok = true,
+			memberCount = count,
+			memberCountKnown = count ~= nil,
+			emblemUrl = emblem,
+			samples = samples,
+		}
 	end
 
 	local function tryFetchMemberInfoProxy(groupId: number): (number?, { MemberSample }?, string?)
@@ -428,6 +749,7 @@ local function createJoinCommunityMembersService(deps: {
 				warnedProxyFail = true
 				log:warn("JoinCommunityMembers MEMBER_INFO_URL request failed", {
 					groupId = groupId,
+					url = url,
 					err = tostring(bodyOrErr),
 				})
 			end
@@ -441,6 +763,7 @@ local function createJoinCommunityMembersService(deps: {
 				warnedProxyFail = true
 				log:warn("JoinCommunityMembers MEMBER_INFO_URL returned invalid JSON", {
 					groupId = groupId,
+					url = url,
 				})
 			end
 			return nil, nil, nil
@@ -452,77 +775,122 @@ local function createJoinCommunityMembersService(deps: {
 		return count, if #samples > 0 then samples else nil, emblem
 	end
 
-	-- One page of group members via roproxy (or buyer MEMBER_USERS_URL). Cached CACHE_TTL.
-	local function tryFetchGroupUsersPage(groupId: number): { MemberSample }?
-		local url = buildMemberUsersUrl(groupId)
-		if url == nil then
-			return nil
-		end
-		-- RequestAsync so we can log a truncated body once on non-2xx (GetAsync only yields "HTTP 400").
+	-- GET JSON via RequestAsync. User-Agent is locked by Roblox HttpService (cannot set).
+	local function httpGetJson(url: string): (boolean, number?, string, any?)
 		local okHttp, responseOrErr = pcall(function()
 			return HttpService:RequestAsync({
 				Url = url,
 				Method = "GET",
+				Headers = {
+					Accept = "application/json",
+				},
 			})
 		end)
 		if not okHttp then
-			if not warnedUsersProxyFail then
-				warnedUsersProxyFail = true
-				log:warn("JoinCommunityMembers MEMBER_USERS_URL request failed", {
-					groupId = groupId,
-					err = tostring(responseOrErr),
-					pageLimit = nearestUsersPageLimit(poolCap),
-				})
-			end
-			return nil
+			return false, nil, tostring(responseOrErr), nil
 		end
 		local response = responseOrErr
-		if type(response) ~= "table" or response.Success ~= true then
-			if not warnedUsersProxyFail then
-				warnedUsersProxyFail = true
-				local statusCode = if type(response) == "table" then tonumber(response.StatusCode) else nil
-				local bodySnippet: string? = nil
-				if type(response) == "table" and type(response.Body) == "string" and response.Body ~= "" then
-					bodySnippet = truncateForLog(response.Body, 180)
-				end
-				log:warn("JoinCommunityMembers MEMBER_USERS_URL request failed", {
-					groupId = groupId,
-					err = if statusCode then ("HTTP " .. tostring(statusCode)) else "request failed",
-					statusCode = statusCode,
-					body = bodySnippet,
-					pageLimit = nearestUsersPageLimit(poolCap),
-				})
-			end
-			return nil
+		if type(response) ~= "table" then
+			return false, nil, "invalid response", nil
 		end
-		local body = response.Body
-		if type(body) ~= "string" then
-			if not warnedUsersProxyFail then
-				warnedUsersProxyFail = true
-				log:warn("JoinCommunityMembers MEMBER_USERS_URL returned empty body", {
-					groupId = groupId,
-				})
-			end
-			return nil
+		local statusCode = tonumber(response.StatusCode)
+		local body = if type(response.Body) == "string" then response.Body else ""
+		if response.Success ~= true then
+			return false, statusCode, body, nil
 		end
 		local okJson, decoded = pcall(function()
 			return HttpService:JSONDecode(body)
 		end)
 		if not okJson or type(decoded) ~= "table" then
-			if not warnedUsersProxyFail then
-				warnedUsersProxyFail = true
-				log:warn("JoinCommunityMembers MEMBER_USERS_URL returned invalid JSON", {
-					groupId = groupId,
-					body = truncateForLog(body, 180),
-				})
+			return false, statusCode, body, nil
+		end
+		return true, statusCode, body, decoded
+	end
+
+	local function logUsersFetchFail(groupId: number, url: string, statusCode: number?, bodyOrErr: string, attempt: string)
+		if warnedUsersProxyFail then
+			return
+		end
+		warnedUsersProxyFail = true
+		log:warn("JoinCommunityMembers MEMBER_USERS_URL request failed", {
+			groupId = groupId,
+			url = url,
+			err = if statusCode then ("HTTP " .. tostring(statusCode)) else truncateForLog(bodyOrErr, 120),
+			statusCode = statusCode or 0,
+			body = bodyForLog(bodyOrErr),
+			pageLimit = nearestUsersPageLimit(DEFAULT_USERS_PAGE_LIMIT),
+			attempt = attempt,
+			kitVersion = tostring(KitProduct.KitVersion),
+		})
+	end
+
+	-- Fallback: roles list → base/largest role → /roles/{roleSetId}/users (flat user rows).
+	local function tryFetchRoleUsersPage(groupId: number, seedUrl: string?): { MemberSample }?
+		local seed = seedUrl
+		if type(seed) ~= "string" or seed == "" then
+			if memberInfoUrlTemplate ~= "" then
+				seed = memberInfoUrlTemplate
+			elseif memberUsersUrlTemplate ~= "" then
+				seed = memberUsersUrlTemplate
 			end
+		end
+		local rolesUrl = buildGroupRolesUrl(groupId, seed)
+		if isBlockedRobloxHost(rolesUrl) then
 			return nil
 		end
-		local samples = parseUserRowsFromProxy(decoded)
+		local okRoles, _statusRoles, _bodyRoles, decodedRoles = httpGetJson(rolesUrl)
+		if not okRoles or type(decodedRoles) ~= "table" then
+			return nil
+		end
+		local roleSetId = pickBestRoleSetId(decodedRoles)
+		if roleSetId == nil then
+			return nil
+		end
+		local roleUsersUrl = buildRoleUsersUrl(rolesUrl, roleSetId, DEFAULT_USERS_PAGE_LIMIT)
+		local okUsers, _statusUsers, _bodyUsers, decodedUsers = httpGetJson(roleUsersUrl)
+		if not okUsers or type(decodedUsers) ~= "table" then
+			return nil
+		end
+		local samples = parseUserRowsFromProxy(decodedUsers)
 		if #samples == 0 then
 			return nil
 		end
 		return samples
+	end
+
+	-- One page of group members via roproxy (or buyer MEMBER_USERS_URL). Cached CACHE_TTL.
+	-- Retries Asc / no-sort / limit=100, then roles/{id}/users for huge groups when /users 400s.
+	local function tryFetchGroupUsersPage(groupId: number): { MemberSample }?
+		local primary = buildMemberUsersUrl(groupId)
+		if primary == nil then
+			return nil
+		end
+
+		local variants = buildUsersUrlVariants(primary, DEFAULT_USERS_PAGE_LIMIT)
+		local lastUrl = primary
+		local lastStatus: number? = nil
+		local lastBody = ""
+
+		for _, url in ipairs(variants) do
+			lastUrl = url
+			local ok, statusCode, body, decoded = httpGetJson(url)
+			lastStatus = statusCode
+			lastBody = body
+			if ok and type(decoded) == "table" then
+				local samples = parseUserRowsFromProxy(decoded)
+				if #samples > 0 then
+					return samples
+				end
+			end
+		end
+
+		local roleSamples = tryFetchRoleUsersPage(groupId, primary)
+		if roleSamples and #roleSamples > 0 then
+			return roleSamples
+		end
+
+		logUsersFetchFail(groupId, lastUrl, lastStatus, lastBody, "users+roles-exhausted")
+		return nil
 	end
 
 	local function resolveRemoteUsersPage(groupId: number): { MemberSample }
@@ -531,6 +899,13 @@ local function createJoinCommunityMembersService(deps: {
 			return usersPageCache.samples
 		end
 
+		-- 1) game-data-api /community (members[] — no separate users fetch)
+		local worker = resolveCommunityWorker(groupId)
+		if worker.ok and #worker.samples > 0 then
+			return worker.samples
+		end
+
+		-- 2) MEMBER_USERS_URL / roproxy (or ClubKitConfig override via Config)
 		local fetched = tryFetchGroupUsersPage(groupId)
 		if fetched then
 			usersPageCache = {
@@ -595,6 +970,16 @@ local function createJoinCommunityMembersService(deps: {
 		end
 
 		-- 2) Optional MEMBER_INFO_URL / roproxy JSON emblem fields (same proxy as MemberCount).
+		-- Prefer game-data community emblem when available (single worker call).
+		local worker = resolveCommunityWorker(groupId)
+		if type(worker.emblemUrl) == "string" and worker.emblemUrl ~= "" then
+			emblemCache = {
+				expiresAt = now + memberCountTtl,
+				value = worker.emblemUrl,
+			}
+			return worker.emblemUrl
+		end
+
 		local _proxyCount, proxySamples, proxyEmblem = tryFetchMemberInfoProxy(groupId)
 		if proxySamples then
 			mergeSamplesIntoPool(proxySamples)
@@ -654,7 +1039,7 @@ local function createJoinCommunityMembersService(deps: {
 			if not loggedMemberCountMissing then
 				loggedMemberCountMissing = true
 				log:debug(
-					"JoinCommunityMembers GetGroupInfoAsync has no MemberCount (engine often omits it); falling back to MEMBER_INFO_URL",
+					"JoinCommunityMembers GetGroupInfoAsync has no MemberCount (engine often omits it); falling back to game-data community / MEMBER_INFO_URL",
 					{
 						groupId = groupId,
 						memberInfoUrl = memberInfoUrlTemplate ~= "",
@@ -663,7 +1048,13 @@ local function createJoinCommunityMembersService(deps: {
 			end
 		end
 
-		-- 2) Optional buyer proxy (non-*.roblox.com) for real MemberCount + optional samples/emblem.
+		-- 2) game-data-api /community (preferred over roproxy when secret is set)
+		local worker = resolveCommunityWorker(groupId)
+		if worker.ok and worker.memberCountKnown and worker.memberCount ~= nil then
+			return worker.memberCount, true
+		end
+
+		-- 3) Optional buyer proxy (non-*.roblox.com) for real MemberCount + optional samples/emblem.
 		local proxyCount, proxySamples, proxyEmblem = tryFetchMemberInfoProxy(groupId)
 		if proxySamples then
 			mergeSamplesIntoPool(proxySamples)
@@ -969,9 +1360,11 @@ local function createJoinCommunityMembersService(deps: {
 		memberCountCache = nil
 		emblemCache = nil
 		usersPageCache = nil
+		communityWorkerCache = nil
 		limiter:destroy()
 	end
 
+	local _, _, _, communityWorkerEnabled = getGameDataApiConfig()
 	log:info("JoinCommunityMembersService ready", {
 		request = requestName,
 		response = responseName,
@@ -980,6 +1373,7 @@ local function createJoinCommunityMembersService(deps: {
 		memoryStore = memoryStoreEnabled,
 		memberInfoUrl = memberInfoUrlTemplate ~= "",
 		memberUsersUrl = memberUsersUrlTemplate ~= "",
+		gameDataCommunity = communityWorkerEnabled,
 	})
 
 	return service

@@ -1,4 +1,4 @@
-# Changelog
+﻿# Changelog
 
 Semua perubahan penting Club Kit dicatat di sini.
 
@@ -10,6 +10,15 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 ---
 
 ## [Unreleased]
+
+---
+
+## [2.4.8] - 2026-07-12
+### Added
+- **Join Commun via game-data worker** - preferred source for Join Community modal data is now `GET /game/:gameKey/community/:groupId` on the game-data-api worker (Open Cloud + cached). Returns `memberCount`, `members[]` (display names), optional `emblemUrl` in one call. Allowlist includes `the-basic` (+ `nuwa`). Requires `Secrets.GameDataApiSecret` + deployed worker; Studio without secret still falls back to roproxy `MEMBER_INFO_URL` / `MEMBER_USERS_URL` (DEBUG skip log).
+
+### Fixed
+- **Join Commun thumbs HTTP 400** - hardened `MEMBER_USERS_URL` fetch for huge groups (e.g. 3996161): default `sortOrder=Asc` (not Desc), clamp limit without using `POOL_SIZE=40`, retry Asc/no-sort/`limit=100`, then fallback `GET /v1/groups/{id}/roles` → `/roles/{roleSetId}/users`. Fail log always includes final `url`, `statusCode`, `body`, `kitVersion` (once). Note: Roblox HttpService locks `User-Agent` (cannot set browser UA).
 
 ---
 

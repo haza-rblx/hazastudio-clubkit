@@ -247,14 +247,20 @@ Config.JoinCommunityPrompt = {
 	CACHE_TTL = 300, -- seconds; successful MemberCount + users-page cache
 	MEMBER_COUNT_FAIL_TTL = 45, -- short negative cache when total unresolved
 	-- GroupService:GetGroupInfoAsync docs omit MemberCount (often absent → expected engine behavior).
-	-- Real total via non-*.roblox.com group-info JSON (Http to groups.roblox.com is blocked).
-	-- Default: community proxy. Override/disable via ClubKitConfig.JoinCommunity.MemberInfoUrl ("" = off).
+	-- Preference for real total + thumbs:
+	--   1) GroupService MemberCount / EmblemUrl when present
+	--   2) game-data-api GET /game/:gameKey/community/:groupId (Secrets.GameDataApiSecret + Config.GameDataApi)
+	--   3) MEMBER_INFO_URL / MEMBER_USERS_URL (default roproxy) or ClubKitConfig.JoinCommunity.MemberInfoUrl
+	-- Studio without GameDataApiSecret skips worker and uses (3) — same pattern as Overhead/ProfileSocial.
 	-- Supports "%d" or "{groupId}". Expected JSON: { "memberCount": N, "members"?: [...], "emblemUrl"?: "..." }
 	MEMBER_INFO_URL = "https://groups.roproxy.com/v1/groups/%d",
-	-- One page of group members for avatar thumbs (same proxy family; requires HttpEnabled).
+	-- Fallback page of group members for avatar thumbs when worker community is unavailable.
 	-- Roblox Groups API only accepts limit ∈ {10, 25, 50, 100}; kit clamps any other value (was 40 → HTTP 400).
+	-- Default Asc: Desc has been seen to 400 on some huge groups / proxy paths; service also retries Asc + roles/{id}/users.
 	-- Expected JSON: { "data": [ { "user": { "userId", "displayName"|"username" } } ] }
-	MEMBER_USERS_URL = "https://groups.roproxy.com/v1/groups/%d/users?limit=50&sortOrder=Desc",
+	-- Role-users fallback may return flat { userId, displayName } rows in data[].
+	-- Skipped when game-data community returns members[].
+	MEMBER_USERS_URL = "https://groups.roproxy.com/v1/groups/%d/users?limit=50&sortOrder=Asc",
 	-- Cross-server thumb pool via MemoryStore (bonus samples only).
 	MEMORY_STORE_ENABLED = true,
 	MEMORY_STORE_TTL = 86400,
@@ -1901,6 +1907,9 @@ Config.GameDataApi = {
 	-- Feature flag: enable Worker-based group rank resolution (Open Cloud API).
 	-- Set to false to disable without deploy (falls back to GroupService).
 	GROUPS_ENDPOINT_ENABLED = true,
+	-- Feature flag: Join Commun memberCount + thumbs via Worker /community (Open Cloud).
+	-- Requires Secrets.GameDataApiSecret; without it the kit falls back to roproxy.
+	COMMUNITY_ENDPOINT_ENABLED = true,
 }
 Config.CommandLibrary = {
 	GUI_NAME = "CommandLibraryGUI",

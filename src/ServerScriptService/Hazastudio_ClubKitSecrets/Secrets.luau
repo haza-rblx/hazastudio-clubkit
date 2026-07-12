@@ -13,7 +13,10 @@
 
 local Secrets = {}
 
--- Cloudflare Game Data API secret (OverheadService group ranks, ProfileSocialService)
+-- Cloudflare Game Data API secret (OverheadService group ranks, ProfileSocialService,
+-- JoinCommunityMembersService /community thumbs + memberCount).
+-- Empty = worker calls skipped (normal in Studio); Join Commun falls back to roproxy.
+-- Must match social_secret for GameKey (e.g. the-basic) on the game-data worker / D1.
 Secrets.GameDataApiSecret = ""
 
 -- Donation API secret (DonationService Bagi-Bagi / Saweria worker)

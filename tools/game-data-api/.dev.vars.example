@@ -1,3 +1,6 @@
 # Local dev secrets — copy to .dev.vars and fill in
 SECRET_NUWA=local-dev-secret
-OPEN_CLOUD_API_KEY=
+SECRET_THE_BASIC=local-dev-secret
+ROBLOX_GROUP_API_KEY=
+# Optional alias (worker accepts either):
+# OPEN_CLOUD_API_KEY=

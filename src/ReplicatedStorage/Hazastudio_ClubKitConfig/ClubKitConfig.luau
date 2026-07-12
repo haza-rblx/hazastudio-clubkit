@@ -50,7 +50,7 @@ ClubKitConfig.AdminUserIds = {
 ClubKitConfig.TopSpenders = {} :: { [number]: number }
 
 ClubKitConfig.GameDataApi = {
-	GameKey = "the-basic",
+	GameKey = "the-basic", -- must match game-data-api COMMUNITY_ENABLED_GAMES + D1/wrangler secret
 }
 
 -- =============================================================================
@@ -461,13 +461,15 @@ ClubKitConfig.CommandAliases = {
 }
 
 -- =============================================================================
--- JOIN COMMUNITY (optional — real MemberCount proxy)
+-- JOIN COMMUNITY (optional — real MemberCount proxy fallback)
 -- =============================================================================
--- Engine GetGroupInfoAsync often has no MemberCount. Kit default uses a non-*.roblox.com
--- proxy (Config.JoinCommunityPrompt.MEMBER_INFO_URL). Leave nil to keep kit default;
--- set "" to disable; or your own worker URL with {groupId} / %d.
+-- Preference: Secrets.GameDataApiSecret + GameDataApi → worker
+--   GET {BASE_URL}/game/{GameKey}/community/{groupId}?secret=...
+-- Without secret (typical Studio), kit falls back to MEMBER_INFO_URL / MEMBER_USERS_URL
+-- (engine default roproxy). Leave MemberInfoUrl nil for kit default; "" = off;
+-- or set your own worker URL with {groupId} / %d (legacy override only).
 ClubKitConfig.JoinCommunity = {
-	MemberInfoUrl = nil :: string?, -- nil = kit default; "" = off; else e.g. "https://your.worker/groups/{groupId}"
+	MemberInfoUrl = nil :: string?, -- nil = kit default; "" = off; else e.g. "https://your.proxy/groups/%d"
 }
 
 -- =============================================================================
