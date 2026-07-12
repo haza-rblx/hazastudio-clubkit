@@ -1,12 +1,15 @@
 --!strict
 -- Server sample of group members for the Join Community modal (thumbnails + copy).
--- Efficient: 1 HTTP page max, GroupService for count, cached pool, O(k) random pick.
+-- Pool = community members seen in this experience (no Http to *.roblox.com).
+-- MemberCount via GroupService; O(k) random pick from in-memory (+ optional MemoryStore) pool.
 
 local GroupService = game:GetService("GroupService")
-local HttpService = game:GetService("HttpService")
+local MemoryStoreService = game:GetService("MemoryStoreService")
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
+local KitProduct = require(ReplicatedStorage.Hazastudio_ClubKit.KitProduct)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local RateLimiter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.RateLimiter)
 
@@ -23,12 +26,6 @@ export type MembersPayload = {
 
 export type Service = {
 	destroy: (self: Service) -> (),
-}
-
-type CacheEntry = {
-	expiresAt: number,
-	memberCount: number,
-	members: { MemberSample },
 }
 
 local function getCfg(): any
@@ -96,172 +93,264 @@ local function createJoinCommunityMembersService(deps: {
 	local responseRemote = ensureRemoteEvent(remotes, responseName)
 
 	local sampleLimit = math.clamp(tonumber(cfg.SAMPLE_LIMIT) or 8, 1, 8)
-	-- One API page is 100 max; keep a modest pool for random picks (not multi-page crawl).
-	local poolSize = math.clamp(tonumber(cfg.POOL_SIZE) or 40, sampleLimit, 100)
-	local cacheTtl = math.max(60, tonumber(cfg.CACHE_TTL) or 300)
+	local poolCap = math.clamp(tonumber(cfg.POOL_SIZE) or 40, sampleLimit, 100)
+	local memberCountTtl = math.max(60, tonumber(cfg.CACHE_TTL) or 300)
+	local memoryStoreEnabled = cfg.MEMORY_STORE_ENABLED ~= false
+	local memoryStoreTtl = math.max(30, tonumber(cfg.MEMORY_STORE_TTL) or 86400)
+	local memoryStoreName = tostring(
+		cfg.MEMORY_STORE_NAME
+			or ((tostring(KitProduct.MemoryStorePrefix or "HazastudioClubKit")) .. "JoinCommunityPool")
+	)
 	local limiter = RateLimiter.new(
 		tonumber(cfg.REQUEST_RATE_MAX) or 4,
 		tonumber(cfg.REQUEST_RATE_WINDOW) or 30
 	)
 
-	local cacheByGroup: { [number]: CacheEntry } = {}
-	local inFlight: { [number]: BindableEvent? } = {}
+	-- In-experience pool: members seen online in this place who are in GroupId.
+	local poolByUserId: { [number]: MemberSample } = {}
+	local poolOrder: { number } = {} -- FIFO for eviction when over cap
+	local memberCountCache: { expiresAt: number, value: number }? = nil
+	local memoryStore: any? = nil
+	local memoryStoreDirty = false
+	local memoryStoreWriteScheduled = false
 	local connections: { RBXScriptConnection } = {}
+	local destroyed = false
 
 	local function track(conn: RBXScriptConnection): RBXScriptConnection
 		table.insert(connections, conn)
 		return conn
 	end
 
-	local function resolveMemberCount(groupId: number): number
-		-- Prefer engine API (no Http budget).
-		local okInfo, info = pcall(function()
-			return GroupService:GetGroupInfoAsync(groupId)
-		end)
-		if okInfo and type(info) == "table" then
-			local count = (info :: any).MemberCount or (info :: any).memberCount
-			if type(count) == "number" and count > 0 then
-				return count
-			end
+	local function getConfiguredGroupId(): number
+		local groupId = Config.Group.GROUP_ID
+		if type(groupId) == "number" and groupId > 0 then
+			return groupId
 		end
 		return 0
 	end
 
-	-- Single page only (limit<=100). Enough entropy for 8 random thumbs.
-	local function fetchRosterPage(groupId: number, limit: number): { MemberSample }
-		local url = string.format(
-			"https://groups.roblox.com/v1/groups/%d/users?limit=%d&sortOrder=Desc",
-			groupId,
-			math.clamp(limit, 1, 100)
-		)
-		local okHttp, bodyOrErr = pcall(function()
-			return HttpService:GetAsync(url)
+	local function resolveMemberCount(groupId: number): number
+		local now = os.clock()
+		if memberCountCache and memberCountCache.expiresAt > now then
+			return memberCountCache.value
+		end
+
+		local okInfo, info = pcall(function()
+			return GroupService:GetGroupInfoAsync(groupId)
 		end)
-		if not okHttp or type(bodyOrErr) ~= "string" or bodyOrErr == "" then
-			log:warn("JoinCommunityMembers roster HTTP failed", {
-				groupId = groupId,
-				err = tostring(bodyOrErr),
-				hint = "Enable HttpService.HttpEnabled",
-			})
-			return {}
-		end
-
-		local okJson, decoded = pcall(function()
-			return HttpService:JSONDecode(bodyOrErr)
-		end)
-		if not okJson or type(decoded) ~= "table" then
-			log:warn("JoinCommunityMembers roster JSON failed", { groupId = groupId })
-			return {}
-		end
-
-		local data = (decoded :: any).data
-		if type(data) ~= "table" then
-			return {}
-		end
-
-		local out: { MemberSample } = {}
-		local seen: { [number]: boolean } = {}
-		for _, row in ipairs(data) do
-			if #out >= limit then
-				break
+		local count = 0
+		if okInfo and type(info) == "table" then
+			local raw = (info :: any).MemberCount or (info :: any).memberCount
+			if type(raw) == "number" and raw > 0 then
+				count = raw
 			end
-			if type(row) == "table" then
-				local user = (row :: any).user
-				if type(user) == "table" then
-					local userId = tonumber(user.userId) or 0
-					if userId > 0 and not seen[userId] then
-						seen[userId] = true
-						local displayName = user.displayName
-						if type(displayName) ~= "string" or displayName == "" then
-							displayName = if type(user.username) == "string" and user.username ~= ""
-								then user.username
-								else ("User " .. tostring(userId))
-						end
-						table.insert(out, {
-							userId = userId,
-							displayName = displayName,
-						})
-					end
-				end
+		end
+		memberCountCache = {
+			expiresAt = now + memberCountTtl,
+			value = count,
+		}
+		return count
+	end
+
+	local function poolAsArray(): { MemberSample }
+		local out: { MemberSample } = table.create(#poolOrder)
+		for _, userId in ipairs(poolOrder) do
+			local sample = poolByUserId[userId]
+			if sample then
+				table.insert(out, sample)
 			end
 		end
 		return out
 	end
 
-	local function loadCache(groupId: number): CacheEntry
-		local now = os.clock()
-		local cached = cacheByGroup[groupId]
-		if cached and cached.expiresAt > now then
-			return cached
+	local function upsertPoolMember(userId: number, displayName: string)
+		if userId <= 0 then
+			return
+		end
+		local name = displayName
+		if type(name) ~= "string" or name == "" then
+			name = "User " .. tostring(userId)
 		end
 
-		local waitEvent = inFlight[groupId]
-		if waitEvent then
-			waitEvent.Event:Wait()
-			local after = cacheByGroup[groupId]
-			if after then
-				return after
+		local existing = poolByUserId[userId]
+		if existing then
+			if existing.displayName ~= name then
+				existing.displayName = name
+				memoryStoreDirty = true
+			end
+			return
+		end
+
+		poolByUserId[userId] = {
+			userId = userId,
+			displayName = name,
+		}
+		table.insert(poolOrder, userId)
+		memoryStoreDirty = true
+
+		while #poolOrder > poolCap do
+			local evicted = table.remove(poolOrder, 1)
+			if evicted then
+				poolByUserId[evicted] = nil
 			end
 		end
+	end
 
-		local gate = Instance.new("BindableEvent")
-		inFlight[groupId] = gate
+	local function mergeSamplesIntoPool(samples: { MemberSample })
+		for _, sample in ipairs(samples) do
+			if type(sample) == "table" then
+				local userId = tonumber(sample.userId) or 0
+				if userId > 0 then
+					local displayName = sample.displayName
+					if type(displayName) ~= "string" or displayName == "" then
+						displayName = "User " .. tostring(userId)
+					end
+					upsertPoolMember(userId, displayName)
+				end
+			end
+		end
+	end
 
-		-- Parallel-ish: count via GroupService, roster via one Http get.
-		local members: { MemberSample } = {}
-		local memberCount = 0
-		local rosterDone = false
-		local countDone = false
-
-		task.spawn(function()
-			members = fetchRosterPage(groupId, poolSize)
-			rosterDone = true
+	local function tryGetMemoryStore(): any?
+		if not memoryStoreEnabled then
+			return nil
+		end
+		if memoryStore ~= nil then
+			return memoryStore
+		end
+		local ok, store = pcall(function()
+			return MemoryStoreService:GetHashMap(memoryStoreName)
 		end)
-		task.spawn(function()
-			memberCount = resolveMemberCount(groupId)
-			countDone = true
+		if ok and store ~= nil then
+			memoryStore = store
+			return store
+		end
+		return nil
+	end
+
+	local function memoryStoreKey(groupId: number): string
+		return "g" .. tostring(groupId)
+	end
+
+	local function loadPoolFromMemoryStore(groupId: number)
+		local store = tryGetMemoryStore()
+		if store == nil then
+			return
+		end
+		local ok, value = pcall(function()
+			return store:GetAsync(memoryStoreKey(groupId))
 		end)
-
-		local deadline = os.clock() + 8
-		while (not rosterDone or not countDone) and os.clock() < deadline do
-			task.wait(0.05)
+		if not ok or type(value) ~= "table" then
+			return
 		end
-
-		if memberCount <= 0 then
-			memberCount = #members
+		local samples: { MemberSample } = {}
+		for _, row in ipairs(value) do
+			if type(row) == "table" then
+				local userId = tonumber((row :: any).userId) or 0
+				if userId > 0 then
+					local displayName = (row :: any).displayName
+					if type(displayName) ~= "string" or displayName == "" then
+						displayName = "User " .. tostring(userId)
+					end
+					table.insert(samples, {
+						userId = userId,
+						displayName = displayName,
+					})
+				end
+			end
 		end
-
-		if #members == 0 then
-			log:warn("JoinCommunityMembers roster empty", {
+		if #samples > 0 then
+			mergeSamplesIntoPool(samples)
+			-- Merged remote snapshot; avoid immediate rewrite storm.
+			memoryStoreDirty = false
+			log:info("JoinCommunityMembers MemoryStore pool loaded", {
 				groupId = groupId,
-				memberCount = memberCount,
-			})
-		else
-			log:info("JoinCommunityMembers roster cached", {
-				groupId = groupId,
-				poolSize = #members,
-				memberCount = memberCount,
+				loaded = #samples,
+				poolSize = #poolOrder,
 			})
 		end
+	end
 
-		local entry: CacheEntry = {
-			expiresAt = now + cacheTtl,
-			memberCount = memberCount,
-			members = members,
-		}
-		cacheByGroup[groupId] = entry
-		inFlight[groupId] = nil
-		gate:Fire()
-		gate:Destroy()
-		return entry
+	local function flushPoolToMemoryStore(groupId: number)
+		if not memoryStoreDirty or destroyed then
+			return
+		end
+		local store = tryGetMemoryStore()
+		if store == nil then
+			return
+		end
+		local snapshot = poolAsArray()
+		local ok = pcall(function()
+			store:SetAsync(memoryStoreKey(groupId), snapshot, memoryStoreTtl)
+		end)
+		if ok then
+			memoryStoreDirty = false
+			log:debug("JoinCommunityMembers MemoryStore pool saved", {
+				groupId = groupId,
+				poolSize = #snapshot,
+			})
+		end
+	end
+
+	local function scheduleMemoryStoreWrite(groupId: number)
+		if not memoryStoreEnabled or memoryStoreWriteScheduled or not memoryStoreDirty then
+			return
+		end
+		memoryStoreWriteScheduled = true
+		task.delay(15, function()
+			memoryStoreWriteScheduled = false
+			if destroyed then
+				return
+			end
+			flushPoolToMemoryStore(groupId)
+		end)
+	end
+
+	local function playerDisplayName(player: Player): string
+		local displayName = player.DisplayName
+		if type(displayName) == "string" and displayName ~= "" then
+			return displayName
+		end
+		return player.Name
+	end
+
+	local function isPlayerInGroupAsync(player: Player, groupId: number): boolean
+		local okAsync, inGroup = pcall(function()
+			return player:IsInGroupAsync(groupId)
+		end)
+		if okAsync and type(inGroup) == "boolean" then
+			return inGroup
+		end
+		local okSync, inGroupSync = pcall(function()
+			return player:IsInGroup(groupId)
+		end)
+		return okSync and inGroupSync == true
+	end
+
+	local function considerPlayer(player: Player, groupId: number)
+		if destroyed or groupId <= 0 then
+			return
+		end
+		if not isPlayerInGroupAsync(player, groupId) then
+			return
+		end
+		upsertPoolMember(player.UserId, playerDisplayName(player))
+		scheduleMemoryStoreWrite(groupId)
+	end
+
+	local function seedFromOnlinePlayers(groupId: number)
+		for _, player in ipairs(Players:GetPlayers()) do
+			considerPlayer(player, groupId)
+		end
 	end
 
 	local function buildPayload(groupId: number, excludeUserId: number?): MembersPayload
-		local entry = loadCache(groupId)
+		local memberCount = resolveMemberCount(groupId)
+		local pool = poolAsArray()
 		return {
 			groupId = groupId,
-			memberCount = entry.memberCount,
-			members = pickRandomSamples(entry.members, sampleLimit, excludeUserId),
+			memberCount = memberCount,
+			members = pickRandomSamples(pool, sampleLimit, excludeUserId),
 		}
 	end
 
@@ -273,15 +362,15 @@ local function createJoinCommunityMembersService(deps: {
 		}
 	end
 
-	local function payloadFromCache(groupId: number, excludeUserId: number): MembersPayload?
-		local cached = cacheByGroup[groupId]
-		if not cached then
-			return nil
+	local function payloadFromPool(groupId: number, excludeUserId: number): MembersPayload
+		local memberCount = 0
+		if memberCountCache then
+			memberCount = memberCountCache.value
 		end
 		return {
 			groupId = groupId,
-			memberCount = cached.memberCount,
-			members = pickRandomSamples(cached.members, sampleLimit, excludeUserId),
+			memberCount = memberCount,
+			members = pickRandomSamples(poolAsArray(), sampleLimit, excludeUserId),
 		}
 	end
 
@@ -293,8 +382,8 @@ local function createJoinCommunityMembersService(deps: {
 			groupId = tonumber((raw :: any).groupId) or 0
 		end
 
-		local configured = Config.Group.GROUP_ID
-		if type(configured) ~= "number" or configured <= 0 then
+		local configured = getConfiguredGroupId()
+		if configured <= 0 then
 			responseRemote:FireClient(player, emptyPayload(groupId))
 			return
 		end
@@ -302,11 +391,14 @@ local function createJoinCommunityMembersService(deps: {
 			groupId = configured
 		end
 
-		-- Serve cache immediately when rate-limited (still random sample).
+		-- Opportunistic: requester may themselves be in-group (seed pool).
+		task.spawn(function()
+			considerPlayer(player, groupId)
+		end)
+
 		local allowed = limiter:check(player.UserId)
 		if not allowed then
-			local fromCache = payloadFromCache(groupId, player.UserId)
-			responseRemote:FireClient(player, fromCache or emptyPayload(groupId))
+			responseRemote:FireClient(player, payloadFromPool(groupId, player.UserId))
 			return
 		end
 
@@ -319,39 +411,73 @@ local function createJoinCommunityMembersService(deps: {
 				groupId = groupId,
 				err = tostring(payload),
 			})
-			local fromCache = payloadFromCache(groupId, player.UserId)
-			responseRemote:FireClient(player, fromCache or emptyPayload(groupId))
+			responseRemote:FireClient(player, payloadFromPool(groupId, player.UserId))
 			return
 		end
 		responseRemote:FireClient(player, payload)
 	end))
 
-	-- Pre-warm after boot settles (avoid competing with join DataStore storm).
-	task.delay(12, function()
-		local groupId = Config.Group.GROUP_ID
-		if type(groupId) == "number" and groupId > 0 then
-			pcall(function()
-				loadCache(groupId)
-			end)
+	track(Players.PlayerAdded:Connect(function(player: Player)
+		local groupId = getConfiguredGroupId()
+		if groupId <= 0 then
+			return
 		end
+		-- Slight delay so group membership cache can settle on join.
+		task.delay(2, function()
+			if destroyed or not player.Parent then
+				return
+			end
+			considerPlayer(player, groupId)
+		end)
+	end))
+
+	-- Pre-warm: MemoryStore snapshot + currently online in-group (no Http).
+	task.delay(8, function()
+		if destroyed then
+			return
+		end
+		local groupId = getConfiguredGroupId()
+		if groupId <= 0 then
+			return
+		end
+		pcall(function()
+			loadPoolFromMemoryStore(groupId)
+		end)
+		seedFromOnlinePlayers(groupId)
+		pcall(function()
+			resolveMemberCount(groupId)
+		end)
+		log:info("JoinCommunityMembers pool warmed", {
+			groupId = groupId,
+			poolSize = #poolOrder,
+			memberCount = if memberCountCache then memberCountCache.value else 0,
+		})
 	end)
 
 	local service = {}
 
 	function service:destroy()
+		destroyed = true
+		local groupId = getConfiguredGroupId()
+		if groupId > 0 and memoryStoreDirty then
+			flushPoolToMemoryStore(groupId)
+		end
 		for _, conn in ipairs(connections) do
 			conn:Disconnect()
 		end
 		table.clear(connections)
-		table.clear(cacheByGroup)
+		table.clear(poolByUserId)
+		table.clear(poolOrder)
+		memberCountCache = nil
 		limiter:destroy()
 	end
 
 	log:info("JoinCommunityMembersService ready", {
 		request = requestName,
 		response = responseName,
-		poolSize = poolSize,
-		cacheTtl = cacheTtl,
+		poolCap = poolCap,
+		memberCountTtl = memberCountTtl,
+		memoryStore = memoryStoreEnabled,
 	})
 
 	return service

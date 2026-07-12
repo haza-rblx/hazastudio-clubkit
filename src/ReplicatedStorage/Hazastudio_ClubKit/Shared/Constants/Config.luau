@@ -243,8 +243,12 @@ Config.JoinCommunityPrompt = {
 	REMOTE_REQUEST = "JoinCommunityMembersRequest",
 	REMOTE_RESPONSE = "JoinCommunityMembersResponse",
 	SAMPLE_LIMIT = 8,
-	POOL_SIZE = 40, -- single HTTP page slice; enough for random 8
-	CACHE_TTL = 300, -- seconds; avoid repeat Http on every join
+	POOL_SIZE = 40, -- in-experience seen members cap (random sample source)
+	CACHE_TTL = 300, -- seconds; GroupService MemberCount cache
+	-- Cross-server pool via MemoryStore (not Http to *.roblox.com — Roblox blocks that).
+	MEMORY_STORE_ENABLED = true,
+	MEMORY_STORE_TTL = 86400,
+	MEMORY_STORE_NAME = nil, -- default: KitProduct.MemoryStorePrefix .. "JoinCommunityPool"
 	REQUEST_RATE_MAX = 4,
 	REQUEST_RATE_WINDOW = 30,
 	-- Headline = VIP incentive; social strip = community members (not VIP framing).
