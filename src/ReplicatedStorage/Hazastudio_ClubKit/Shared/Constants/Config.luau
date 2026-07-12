@@ -310,7 +310,13 @@ Config.JoinGreeting = {
 	-- Client holds toast until Main enterGameplay (after loading click + camera reveal).
 	WAIT_FOR_GAMEPLAY = true,
 	MAX_VISIBLE_CARDS = 2,
-	WELCOME_OWNER_PREFIX = "owner",
+	-- Second-line toast after creative message (placeholders: {Gelar}, {DisplayName}).
+	ENTERED_SPACE_TEMPLATE = "{Gelar} {DisplayName} has entered the space!",
+	-- Spender gelar templates only (#{N}/{N}). Role-based gelar uses Roles DEFINITIONS.label.
+	GELAR_TITLES = {
+		SpenderRobux = "Top Spender #{N}",
+		SpenderCash = "Top Donor #{N}",
+	},
 	CHIP_LABELS = {
 		Owner = "The Owner",
 		Staff = "Staff",

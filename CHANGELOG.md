@@ -11,6 +11,11 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.13] - 2026-07-12
+
+### Changed
+- **Join greeting gelar + chip amount** - second line is `{Gelar} {DisplayName} has entered the space!` (not Welcome back). Role greetings (Owner / Leadership / Content and any roles in those categories) use that role's **display title** from Roles config. Top Robux / Top Cash greetings use `Top Spender #N` / `Top Donor #N` (`Config.JoinGreeting.GELAR_TITLES`). Spender toasts also send `amount` / `amountText` / `amountKind` from overhead totals and show the total on the Universal chip (`Versatilechiptext` append, or a dedicated Amount/Value/Robux/Cash label if present).
+
 ## [2.4.12] - 2026-07-12
 
 ### Changed

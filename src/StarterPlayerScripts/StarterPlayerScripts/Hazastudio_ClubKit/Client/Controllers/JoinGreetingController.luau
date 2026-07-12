@@ -1,7 +1,7 @@
 --!strict
 -- Presents 99-NotificationCenter > GreetingNotifications join greetings.
 -- Enter/exit + CountDownBar follow GenericBroadcastController (UIScale + GroupTransparency).
--- Message sequence (creative → fade → Welcome back) keeps TextTransparency crossfade
+-- Message sequence (creative → fade → entered-the-space) keeps TextTransparency crossfade
 -- (same family as DonationNotificationController content fades) — no abrupt Visible toggles.
 
 local Players = game:GetService("Players")
@@ -9,6 +9,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
+local RolesDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.RolesDomain)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 
 local log = Logger.new("JoinGreetingController")
@@ -35,9 +36,13 @@ type Payload = {
 	roleKey: any,
 	categoryKind: any,
 	chipText: any,
+	gelar: any,
 	message: any,
 	roleBadge: any,
 	rank: any,
+	amount: any,
+	amountText: any,
+	amountKind: any,
 	messageHold: any,
 	messageFade: any,
 	welcomeHold: any,
@@ -234,14 +239,126 @@ local function normalizePayload(raw: any): Payload?
 	return raw :: Payload
 end
 
-local function buildWelcomeText(payload: Payload): string
-	local displayName = tostring(payload.displayName or "Unknown")
-	local kind = tostring(payload.categoryKind or "")
-	if kind == "Owner" then
-		local prefix = tostring(getCfg().WELCOME_OWNER_PREFIX or "owner")
-		return ("Welcome back, %s %s"):format(prefix, displayName)
+local AMOUNT_LABEL_NAMES = {
+	"Amount",
+	"Value",
+	"Robux",
+	"Cash",
+	"DonationAmount",
+	"ChipAmount",
+}
+
+local CHIP_FRAME_NAMES = { "Universalchip", "UniversalChip" }
+
+local function findNamedTextIn(root: Instance, names: { string }): TextLabel?
+	for _, name in ipairs(names) do
+		local found = root:FindFirstChild(name, true)
+		if found and found:IsA("TextLabel") and found.Name ~= "Versatilechiptext" then
+			return found
+		end
 	end
-	return ("Welcome back, %s"):format(displayName)
+	return nil
+end
+
+local function findAmountLabel(root: Instance): TextLabel?
+	for _, frameName in ipairs(CHIP_FRAME_NAMES) do
+		local chipFrame = findFrame(root, frameName)
+		if chipFrame then
+			local nested = findNamedTextIn(chipFrame, AMOUNT_LABEL_NAMES)
+			if nested then
+				return nested
+			end
+		end
+	end
+	return findNamedTextIn(root, AMOUNT_LABEL_NAMES)
+end
+
+local function resolveAmountText(payload: Payload): string
+	local amountText = payload.amountText
+	if type(amountText) == "string" and amountText ~= "" then
+		return amountText
+	end
+	local amount = tonumber(payload.amount)
+	if not amount or amount <= 0 then
+		return ""
+	end
+	local kind = tostring(payload.amountKind or payload.categoryKind or "")
+	if kind == "robux" or kind == "SpenderRobux" then
+		return tostring(math.floor(amount)) .. " Robux"
+	end
+	if kind == "cash" or kind == "SpenderCash" then
+		return "Rp " .. tostring(math.floor(amount))
+	end
+	return tostring(math.floor(amount))
+end
+
+local function fillEnteredPlaceholders(template: string, gelar: string, displayName: string): string
+	local text = template
+	text = string.gsub(text, "{Gelar}", gelar)
+	text = string.gsub(text, "{DisplayName}", displayName)
+	return text
+end
+
+local function resolveGelarFromPayload(payload: Payload): string
+	local gelar = payload.gelar
+	if type(gelar) == "string" and gelar ~= "" then
+		return gelar
+	end
+
+	local kind = tostring(payload.categoryKind or "")
+	local rank = tonumber(payload.rank)
+	local titles = getCfg().GELAR_TITLES
+	if type(titles) ~= "table" then
+		titles = {}
+	end
+
+	if kind == "SpenderRobux" or kind == "SpenderCash" then
+		local template = titles[kind]
+		if type(template) == "string" and template ~= "" then
+			local text = template
+			if rank ~= nil then
+				text = string.gsub(text, "#{N}", "#" .. tostring(rank))
+				text = string.gsub(text, "{N}", tostring(rank))
+			end
+			return text
+		end
+		if kind == "SpenderRobux" then
+			return ("Top Spender #%d"):format(rank or 0)
+		end
+		return ("Top Donor #%d"):format(rank or 0)
+	end
+
+	local roleKey = tostring(payload.roleKey or "")
+	if roleKey ~= "" then
+		local definition = RolesDomain.getDefinition(roleKey)
+		if definition then
+			if type(definition.label) == "string" and definition.label ~= "" then
+				return definition.label
+			end
+			if type(definition.chatTag) == "string" and definition.chatTag ~= "" then
+				return definition.chatTag
+			end
+		end
+	end
+
+	return if roleKey ~= "" then roleKey else "Member"
+end
+
+local function resolveDisplayName(payload: Payload): string
+	local displayName = payload.displayName
+	if type(displayName) == "string" and displayName ~= "" then
+		return displayName
+	end
+	local username = payload.username
+	if type(username) == "string" and username ~= "" then
+		return username
+	end
+	return "Unknown"
+end
+
+local function buildEnteredSpaceText(payload: Payload): string
+	local template = tostring(getCfg().ENTERED_SPACE_TEMPLATE or "{Gelar} {DisplayName} has entered the space!")
+	return fillEnteredPlaceholders(template, resolveGelarFromPayload(payload), resolveDisplayName(payload))
 end
 
 local function fillCard(card: CanvasGroup, payload: Payload)
@@ -249,6 +366,7 @@ local function fillCard(card: CanvasGroup, payload: Payload)
 	local displayName = tostring(payload.displayName or "Unknown")
 	local username = tostring(payload.username or "unknown")
 	local chipText = tostring(payload.chipText or "")
+	local amountText = resolveAmountText(payload)
 	local roleBadge = tostring(payload.roleBadge or "")
 	local message = tostring(payload.message or "")
 
@@ -263,8 +381,21 @@ local function fillCard(card: CanvasGroup, payload: Payload)
 	end
 
 	local chipLabel = findText(card, "Versatilechiptext")
-	if chipLabel then
-		chipLabel.Text = chipText
+	local amountLabel = findAmountLabel(card)
+	if amountLabel and amountText ~= "" then
+		amountLabel.Text = amountText
+		amountLabel.Visible = true
+		if chipLabel then
+			chipLabel.Text = chipText
+		end
+	elseif chipLabel then
+		if amountText ~= "" and chipText ~= "" then
+			chipLabel.Text = chipText .. " · " .. amountText
+		elseif amountText ~= "" then
+			chipLabel.Text = amountText
+		else
+			chipLabel.Text = chipText
+		end
 	end
 
 	local messageLabel = findText(card, "Message")
@@ -409,14 +540,14 @@ local function playGreeting(refs: Refs, payload: Payload)
 		return
 	end
 
-	-- Crossfade creative → Welcome back via TextTransparency (not Visible toggles).
+	-- Crossfade creative → entered-the-space via TextTransparency (not Visible toggles).
 	if messageLabel then
 		local fadeInfo = TweenInfo.new(messageFade, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
 		tweenWait(messageLabel, fadeInfo, { TextTransparency = 1 })
 		if active.dismissing or not card.Parent then
 			return
 		end
-		messageLabel.Text = buildWelcomeText(payload)
+		messageLabel.Text = buildEnteredSpaceText(payload)
 		tweenWait(messageLabel, fadeInfo, { TextTransparency = 0 })
 	else
 		task.wait(messageFade * 2)

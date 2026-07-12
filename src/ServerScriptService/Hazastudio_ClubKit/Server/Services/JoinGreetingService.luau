@@ -5,6 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local RolesDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.RolesDomain)
+local DonationAmountFormat = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DonationAmountFormat)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 
 export type CategoryKind = "Owner" | "Leadership" | "Content" | "SpenderRobux" | "SpenderCash"
@@ -190,6 +191,102 @@ local function resolveChip(match: Match): string
 	return roleKey
 end
 
+local function roleDisplayTitle(roleKey: string): string?
+	local definition = RolesDomain.getDefinition(roleKey)
+	if not definition then
+		return nil
+	end
+	if type(definition.label) == "string" and definition.label ~= "" then
+		return definition.label
+	end
+	if type(definition.chatTag) == "string" and definition.chatTag ~= "" then
+		return definition.chatTag
+	end
+	return nil
+end
+
+local function spenderGelarFromConfig(kind: CategoryKind, rank: number?): string
+	local titles = getGreetingCfg().GELAR_TITLES
+	if type(titles) == "table" then
+		local template = titles[kind]
+		if type(template) == "string" and template ~= "" then
+			return fillPlaceholders(template, rank)
+		end
+	end
+
+	local spenderRoles = Config.SpenderRoles
+	if type(spenderRoles) == "table" then
+		local entry = if kind == "SpenderRobux" then spenderRoles.RobuxSpender else spenderRoles.CashSpender
+		if type(entry) == "table" then
+			local label = entry.Label or entry.label
+			if type(label) == "string" and label ~= "" then
+				return fillPlaceholders(label .. " #{N}", rank)
+			end
+		end
+	end
+
+	if kind == "SpenderRobux" then
+		return ("Top Spender #%d"):format(rank or 0)
+	end
+	return ("Top Donor #%d"):format(rank or 0)
+end
+
+-- Short public title for the entered-the-space second line (not the chip label).
+-- Role greetings: that role's display title from Roles config (any Leadership/Content role).
+-- Spender greetings: GELAR_TITLES / SpenderRoles label + rank #.
+local function resolveGelar(match: Match): string
+	local kind = match.categoryKind
+	if kind == "SpenderRobux" or kind == "SpenderCash" then
+		return spenderGelarFromConfig(kind, match.rank)
+	end
+
+	local fromRole = roleDisplayTitle(match.roleKey)
+	if fromRole then
+		return fromRole
+	end
+
+	local titles = getGreetingCfg().GELAR_TITLES
+	if type(titles) == "table" then
+		local template = titles[kind]
+		if type(template) == "string" and template ~= "" then
+			return fillPlaceholders(template, match.rank)
+		end
+	end
+
+	return match.roleKey
+end
+
+local function resolveAmountFields(match: Match, overheadPayload: any): (number?, string?, string?)
+	if type(overheadPayload) ~= "table" then
+		return nil, nil, nil
+	end
+
+	local kind = match.categoryKind
+	if kind == "SpenderRobux" then
+		local amount = math.max(0, math.floor(tonumber(overheadPayload.robuxDonated) or 0))
+		if amount <= 0 then
+			return nil, nil, nil
+		end
+		return amount, DonationAmountFormat.formatCompact(amount) .. " Robux", "robux"
+	end
+	if kind == "SpenderCash" then
+		local amount = math.max(0, math.floor(tonumber(overheadPayload.cashDonated) or 0))
+		if amount <= 0 then
+			return nil, nil, nil
+		end
+		return amount, "Rp " .. DonationAmountFormat.formatCompact(amount), "cash"
+	end
+	return nil, nil, nil
+end
+
+local function resolveDisplayName(player: Player): string
+	local displayName = player.DisplayName
+	if type(displayName) == "string" and displayName ~= "" then
+		return displayName
+	end
+	return player.Name
+end
+
 local function resolveRoleBadge(roleKey: string): string
 	local badges = Config.Donation and Config.Donation.ROLE_BADGE_IMAGE
 	if type(badges) ~= "table" then
@@ -316,11 +413,13 @@ local function createJoinGreetingService(deps: {
 		return nil
 	end
 
-	local function fireGreeting(player: Player, match: Match)
+	local function fireGreeting(player: Player, match: Match, overheadPayload: any?)
 		local message = resolveMessage(match)
 		local chipText = resolveChip(match)
+		local gelar = resolveGelar(match)
+		local amount, amountText, amountKind = resolveAmountFields(match, overheadPayload)
 		local cfg = getGreetingCfg()
-		-- Show window = hold + fade-out + fade-in + welcome (exit anim is after bar, like broadcast).
+		-- Show window = hold + fade-out + fade-in + entered-space (exit anim is after bar, like broadcast).
 		local messageFade = tonumber(cfg.MESSAGE_FADE) or 0.25
 		local showDuration = (tonumber(cfg.MESSAGE_HOLD) or 3.7)
 			+ (messageFade * 2)
@@ -328,14 +427,18 @@ local function createJoinGreetingService(deps: {
 
 		local payload = {
 			userId = player.UserId,
-			displayName = player.DisplayName,
+			displayName = resolveDisplayName(player),
 			username = player.Name,
 			roleKey = match.roleKey,
 			categoryKind = match.categoryKind,
 			chipText = chipText,
+			gelar = gelar,
 			message = message,
 			roleBadge = resolveRoleBadge(match.roleKey),
 			rank = match.rank,
+			amount = amount,
+			amountText = amountText,
+			amountKind = amountKind,
 			messageHold = tonumber(cfg.MESSAGE_HOLD) or 3.7,
 			messageFade = messageFade,
 			welcomeHold = tonumber(cfg.WELCOME_HOLD) or 2.8,
@@ -351,6 +454,7 @@ local function createJoinGreetingService(deps: {
 			categoryKind = match.categoryKind,
 			roleKey = match.roleKey,
 			rank = match.rank,
+			amount = amount,
 		})
 	end
 
@@ -376,7 +480,7 @@ local function createJoinGreetingService(deps: {
 			if match then
 				greetedUserIds[userId] = true
 				evaluationComplete[userId] = true
-				fireGreeting(player, match)
+				fireGreeting(player, match, payload)
 				return
 			end
 
