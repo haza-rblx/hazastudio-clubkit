@@ -243,7 +243,7 @@ Config.JoinCommunityPrompt = {
 	REMOTE_REQUEST = "JoinCommunityMembersRequest",
 	REMOTE_RESPONSE = "JoinCommunityMembersResponse",
 	SAMPLE_LIMIT = 8,
-	POOL_SIZE = 40, -- remote users page + in-experience pool cap (bonus thumbs only — not the community total)
+	POOL_SIZE = 40, -- in-experience / MemoryStore pool cap (bonus thumbs only — not the community total)
 	CACHE_TTL = 300, -- seconds; successful MemberCount + users-page cache
 	MEMBER_COUNT_FAIL_TTL = 45, -- short negative cache when total unresolved
 	-- GroupService:GetGroupInfoAsync docs omit MemberCount (often absent → expected engine behavior).
@@ -252,8 +252,9 @@ Config.JoinCommunityPrompt = {
 	-- Supports "%d" or "{groupId}". Expected JSON: { "memberCount": N, "members"?: [...], "emblemUrl"?: "..." }
 	MEMBER_INFO_URL = "https://groups.roproxy.com/v1/groups/%d",
 	-- One page of group members for avatar thumbs (same proxy family; requires HttpEnabled).
+	-- Roblox Groups API only accepts limit ∈ {10, 25, 50, 100}; kit clamps any other value (was 40 → HTTP 400).
 	-- Expected JSON: { "data": [ { "user": { "userId", "displayName"|"username" } } ] }
-	MEMBER_USERS_URL = "https://groups.roproxy.com/v1/groups/%d/users?limit=40&sortOrder=Desc",
+	MEMBER_USERS_URL = "https://groups.roproxy.com/v1/groups/%d/users?limit=50&sortOrder=Desc",
 	-- Cross-server thumb pool via MemoryStore (bonus samples only).
 	MEMORY_STORE_ENABLED = true,
 	MEMORY_STORE_TTL = 86400,

@@ -139,6 +139,41 @@ local function isBlockedRobloxHost(url: string): boolean
 		or string.find(lower, "apis.roblox.com", 1, true) ~= nil
 end
 
+-- Roblox GET /v1/groups/{id}/users only accepts these page sizes (else HTTP 400).
+local VALID_USERS_PAGE_LIMITS = { 10, 25, 50, 100 }
+
+local function nearestUsersPageLimit(desired: number): number
+	local target = if type(desired) == "number" and desired == desired then desired else 50
+	local best = 50
+	local bestDist = math.huge
+	for _, allowed in ipairs(VALID_USERS_PAGE_LIMITS) do
+		local dist = math.abs(allowed - target)
+		-- Prefer larger page on ties (more thumbs to sample from).
+		if dist < bestDist or (dist == bestDist and allowed > best) then
+			best = allowed
+			bestDist = dist
+		end
+	end
+	return best
+end
+
+local function sanitizeMemberUsersUrl(url: string, preferredLimit: number): string
+	local pageLimit = nearestUsersPageLimit(preferredLimit)
+	local limitToken = "limit=" .. tostring(pageLimit)
+	if string.find(url, "limit=", 1, true) then
+		return (string.gsub(url, "limit=%d+", limitToken, 1))
+	end
+	local sep = if string.find(url, "?", 1, true) then "&" else "?"
+	return url .. sep .. limitToken
+end
+
+local function truncateForLog(text: string, maxLen: number): string
+	if #text <= maxLen then
+		return text
+	end
+	return string.sub(text, 1, maxLen) .. "…"
+end
+
 local function formatUrlTemplate(template: string, groupId: number): string?
 	if template == "" then
 		return nil
@@ -373,7 +408,11 @@ local function createJoinCommunityMembersService(deps: {
 				})
 			end
 		end
-		return url
+		if url == nil then
+			return nil
+		end
+		-- Clamp limit= to Roblox-valid page size even if buyer/template still has 40 etc.
+		return sanitizeMemberUsersUrl(url, poolCap)
 	end
 
 	local function tryFetchMemberInfoProxy(groupId: number): (number?, { MemberSample }?, string?)
@@ -419,27 +458,62 @@ local function createJoinCommunityMembersService(deps: {
 		if url == nil then
 			return nil
 		end
-		local okHttp, bodyOrErr = pcall(function()
-			return HttpService:GetAsync(url)
+		-- RequestAsync so we can log a truncated body once on non-2xx (GetAsync only yields "HTTP 400").
+		local okHttp, responseOrErr = pcall(function()
+			return HttpService:RequestAsync({
+				Url = url,
+				Method = "GET",
+			})
 		end)
 		if not okHttp then
 			if not warnedUsersProxyFail then
 				warnedUsersProxyFail = true
 				log:warn("JoinCommunityMembers MEMBER_USERS_URL request failed", {
 					groupId = groupId,
-					err = tostring(bodyOrErr),
+					err = tostring(responseOrErr),
+					pageLimit = nearestUsersPageLimit(poolCap),
+				})
+			end
+			return nil
+		end
+		local response = responseOrErr
+		if type(response) ~= "table" or response.Success ~= true then
+			if not warnedUsersProxyFail then
+				warnedUsersProxyFail = true
+				local statusCode = if type(response) == "table" then tonumber(response.StatusCode) else nil
+				local bodySnippet: string? = nil
+				if type(response) == "table" and type(response.Body) == "string" and response.Body ~= "" then
+					bodySnippet = truncateForLog(response.Body, 180)
+				end
+				log:warn("JoinCommunityMembers MEMBER_USERS_URL request failed", {
+					groupId = groupId,
+					err = if statusCode then ("HTTP " .. tostring(statusCode)) else "request failed",
+					statusCode = statusCode,
+					body = bodySnippet,
+					pageLimit = nearestUsersPageLimit(poolCap),
+				})
+			end
+			return nil
+		end
+		local body = response.Body
+		if type(body) ~= "string" then
+			if not warnedUsersProxyFail then
+				warnedUsersProxyFail = true
+				log:warn("JoinCommunityMembers MEMBER_USERS_URL returned empty body", {
+					groupId = groupId,
 				})
 			end
 			return nil
 		end
 		local okJson, decoded = pcall(function()
-			return HttpService:JSONDecode(bodyOrErr :: string)
+			return HttpService:JSONDecode(body)
 		end)
 		if not okJson or type(decoded) ~= "table" then
 			if not warnedUsersProxyFail then
 				warnedUsersProxyFail = true
 				log:warn("JoinCommunityMembers MEMBER_USERS_URL returned invalid JSON", {
 					groupId = groupId,
+					body = truncateForLog(body, 180),
 				})
 			end
 			return nil
