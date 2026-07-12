@@ -236,6 +236,15 @@ local function formatCompactCount(n: number): string
 	return string.format("%.1f%s", tenths, suffix)
 end
 
+-- Badge remainder after 8 thumbs: +N up to +99 (never k/M/B on CounterLeft).
+local function formatCounterExtra(extra: number): string
+	local value = math.floor(math.max(0, extra))
+	if value > 99 then
+		return "+99"
+	end
+	return "+" .. tostring(value)
+end
+
 local function setCounterVisible(visible: boolean, extra: number?)
 	local r = refs
 	if not r or not r.counterLeft then
@@ -243,7 +252,7 @@ local function setCounterVisible(visible: boolean, extra: number?)
 	end
 	if visible and type(extra) == "number" and extra > 0 then
 		if r.counterLabel then
-			r.counterLabel.Text = "+" .. formatCompactCount(extra)
+			r.counterLabel.Text = formatCounterExtra(extra)
 		end
 		r.counterLeft.Visible = true
 	else
@@ -313,8 +322,20 @@ local function formatBody(names: { string }, memberCount: number, memberCountKno
 		return string.format(template, listed[1], listed[2], listed[3])
 	end
 
-	local listedJoined = table.concat(listed, ", ")
-	local template = tostring(cfg.BODY_WITH_EXTRA or "%s, and %s other players already joined.")
+	-- "Name1, Name2, and Name3 and 10.6M others already joined this community."
+	local listedJoined: string
+	if listedCount == 1 then
+		listedJoined = listed[1]
+	elseif listedCount == 2 then
+		listedJoined = listed[1] .. " and " .. listed[2]
+	else
+		listedJoined = string.format("%s, %s, and %s", listed[1], listed[2], listed[3])
+	end
+	local template = tostring(
+		cfg.BODY_WITH_NAMES
+			or cfg.BODY_WITH_EXTRA
+			or "%s and %s others already joined this community."
+	)
 	return string.format(template, listedJoined, formatCompactCount(remaining))
 end
 
@@ -652,7 +673,8 @@ local function fillMemberThumbnailsAsync(groupId: number, generation: number)
 		end
 	end
 
-	if memberCountKnown and memberCount > MAX_THUMBNAILS and #merged > 0 then
+	-- CounterLeft = remainder after 8 thumb slots (memberCount - 8), capped display +99.
+	if memberCountKnown and memberCount > MAX_THUMBNAILS then
 		setCounterVisible(true, memberCount - MAX_THUMBNAILS)
 	else
 		setCounterVisible(false)

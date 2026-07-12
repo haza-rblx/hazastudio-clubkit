@@ -1,8 +1,8 @@
-﻿# Upgrade Progress - Club Kit
+﻿# Upgrade Progress — Club Kit
 
 Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
 
-**Versi saat ini:** `2.4.8` (lihat [`VERSION`](VERSION))  
+**Versi saat ini:** `2.4.9` (lihat [`VERSION`](VERSION))  
 **Target rilis berikutnya:** _(belum ditetapkan)_
 
 ---
@@ -19,11 +19,11 @@ Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
 
 | Path | Change |
 |------|--------|
-| _(kosong)_ | — |
+| _(belum ada)_ | — |
 
 ---
 
-## Saat rilis - checklist agent
+## Saat rilis — checklist agent
 
 1. [ ] User konfirmasi nomor versi
 2. [ ] Pindahkan `[Unreleased]` di `CHANGELOG.md` ke section versi baru + tanggal

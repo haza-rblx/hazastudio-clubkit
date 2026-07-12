@@ -5,15 +5,16 @@
 --   Prefer GroupService:GetGroupInfoAsync → MemberCount when present.
 --   Official engine docs do NOT list MemberCount on that table; when missing we
 --   do not invent a total from online/pool size. Next: game-data-api /community
---   (Secrets.GameDataApiSecret). Then MEMBER_INFO_URL / ClubKitConfig override
---   (default roproxy).
+--   (Secrets.GameDataApiSecret). MEMBER_INFO_URL / roproxy only when the worker
+--   was skipped (no secret) or failed — never in the same resolve after a
+--   successful worker response (even if some fields are missing).
 --
 -- AVATAR SAMPLES:
 --   Prefer game-data-api GET /game/:gameKey/community/:groupId (members[] in one
---   response — no separate users fetch). Else MEMBER_USERS_URL (roproxy).
---   In-experience / MemoryStore pool is secondary fill. Http to groups.roblox.com
---   is blocked from game servers. Studio without GameDataApiSecret falls back
---   to roproxy (same as empty DonationApiSecret skip).
+--   response — no separate users fetch). MEMBER_USERS_URL / roproxy only when
+--   the worker was skipped or failed. In-experience / MemoryStore pool is
+--   secondary fill. Http to groups.roblox.com is blocked from game servers.
+--   Studio without GameDataApiSecret falls back to roproxy.
 
 local GroupService = game:GetService("GroupService")
 local HttpService = game:GetService("HttpService")
@@ -433,9 +434,12 @@ local function createJoinCommunityMembersService(deps: {
 	local warnedGetGroupInfoFail = false
 	local loggedMemberCountMissing = false
 	local warnedProxyFail = false
+	local loggedProxy429 = false
 	local warnedUsersProxyFail = false
 	local warnedCommunityWorkerFail = false
 	local loggedCommunityWorkerSkip = false
+	-- Skip MEMBER_INFO_URL briefly after HTTP 429 (or any hard fail) to avoid spam.
+	local memberInfoBackoffUntil = 0
 
 	local function track(conn: RBXScriptConnection): RBXScriptConnection
 		table.insert(connections, conn)
@@ -736,7 +740,15 @@ local function createJoinCommunityMembersService(deps: {
 		}
 	end
 
+	local function isHttp429(err: string): boolean
+		return string.find(err, "429", 1, true) ~= nil
+	end
+
 	local function tryFetchMemberInfoProxy(groupId: number): (number?, { MemberSample }?, string?)
+		local now = os.clock()
+		if now < memberInfoBackoffUntil then
+			return nil, nil, nil
+		end
 		local url = buildMemberInfoUrl(groupId)
 		if url == nil then
 			return nil, nil, nil
@@ -745,12 +757,24 @@ local function createJoinCommunityMembersService(deps: {
 			return HttpService:GetAsync(url)
 		end)
 		if not okHttp then
-			if not warnedProxyFail then
+			local errStr = tostring(bodyOrErr)
+			memberInfoBackoffUntil = now + failCacheTtl
+			if isHttp429(errStr) then
+				if not loggedProxy429 then
+					loggedProxy429 = true
+					log:debug("JoinCommunityMembers MEMBER_INFO_URL rate limited (429)", {
+						groupId = groupId,
+						url = url,
+						err = errStr,
+						backoffSec = failCacheTtl,
+					})
+				end
+			elseif not warnedProxyFail then
 				warnedProxyFail = true
 				log:warn("JoinCommunityMembers MEMBER_INFO_URL request failed", {
 					groupId = groupId,
 					url = url,
-					err = tostring(bodyOrErr),
+					err = errStr,
 				})
 			end
 			return nil, nil, nil
@@ -759,6 +783,7 @@ local function createJoinCommunityMembersService(deps: {
 			return HttpService:JSONDecode(bodyOrErr :: string)
 		end)
 		if not okJson or type(decoded) ~= "table" then
+			memberInfoBackoffUntil = now + failCacheTtl
 			if not warnedProxyFail then
 				warnedProxyFail = true
 				log:warn("JoinCommunityMembers MEMBER_INFO_URL returned invalid JSON", {
@@ -899,13 +924,19 @@ local function createJoinCommunityMembersService(deps: {
 			return usersPageCache.samples
 		end
 
-		-- 1) game-data-api /community (members[] — no separate users fetch)
+		-- 1) game-data-api /community (members[] — no separate users fetch).
+		-- On worker success, never call MEMBER_USERS_URL in the same resolve
+		-- (even if members[] is empty — secondary fill uses in-experience pool).
 		local worker = resolveCommunityWorker(groupId)
-		if worker.ok and #worker.samples > 0 then
+		if worker.ok then
+			usersPageCache = {
+				expiresAt = now + (if #worker.samples > 0 then memberCountTtl else failCacheTtl),
+				samples = worker.samples,
+			}
 			return worker.samples
 		end
 
-		-- 2) MEMBER_USERS_URL / roproxy (or ClubKitConfig override via Config)
+		-- 2) MEMBER_USERS_URL / roproxy only when worker skipped or failed
 		local fetched = tryFetchGroupUsersPage(groupId)
 		if fetched then
 			usersPageCache = {
@@ -969,8 +1000,8 @@ local function createJoinCommunityMembersService(deps: {
 			return emblem
 		end
 
-		-- 2) Optional MEMBER_INFO_URL / roproxy JSON emblem fields (same proxy as MemberCount).
-		-- Prefer game-data community emblem when available (single worker call).
+		-- 2) Prefer game-data community emblem (single worker call).
+		-- On worker success, do not call MEMBER_INFO_URL for emblem.
 		local worker = resolveCommunityWorker(groupId)
 		if type(worker.emblemUrl) == "string" and worker.emblemUrl ~= "" then
 			emblemCache = {
@@ -979,7 +1010,15 @@ local function createJoinCommunityMembersService(deps: {
 			}
 			return worker.emblemUrl
 		end
+		if worker.ok then
+			emblemCache = {
+				expiresAt = now + failCacheTtl,
+				value = nil,
+			}
+			return nil
+		end
 
+		-- 3) MEMBER_INFO_URL / roproxy only when worker skipped or failed
 		local _proxyCount, proxySamples, proxyEmblem = tryFetchMemberInfoProxy(groupId)
 		if proxySamples then
 			mergeSamplesIntoPool(proxySamples)
@@ -1039,7 +1078,7 @@ local function createJoinCommunityMembersService(deps: {
 			if not loggedMemberCountMissing then
 				loggedMemberCountMissing = true
 				log:debug(
-					"JoinCommunityMembers GetGroupInfoAsync has no MemberCount (engine often omits it); falling back to game-data community / MEMBER_INFO_URL",
+					"JoinCommunityMembers GetGroupInfoAsync has no MemberCount (engine often omits it); falling back to game-data community (roproxy only if worker skipped/failed)",
 					{
 						groupId = groupId,
 						memberInfoUrl = memberInfoUrlTemplate ~= "",
@@ -1048,13 +1087,23 @@ local function createJoinCommunityMembersService(deps: {
 			end
 		end
 
-		-- 2) game-data-api /community (preferred over roproxy when secret is set)
+		-- 2) game-data-api /community (preferred over roproxy when secret is set).
+		-- On worker success, never call MEMBER_INFO_URL — even if count is missing
+		-- (members/emblem from the same response are enough for the modal).
 		local worker = resolveCommunityWorker(groupId)
-		if worker.ok and worker.memberCountKnown and worker.memberCount ~= nil then
-			return worker.memberCount, true
+		if worker.ok then
+			if worker.memberCountKnown and worker.memberCount ~= nil then
+				return worker.memberCount, true
+			end
+			memberCountCache = {
+				expiresAt = now + failCacheTtl,
+				value = 0,
+				known = false,
+			}
+			return 0, false
 		end
 
-		-- 3) Optional buyer proxy (non-*.roblox.com) for real MemberCount + optional samples/emblem.
+		-- 3) MEMBER_INFO_URL / roproxy only when worker skipped or failed
 		local proxyCount, proxySamples, proxyEmblem = tryFetchMemberInfoProxy(groupId)
 		if proxySamples then
 			mergeSamplesIntoPool(proxySamples)

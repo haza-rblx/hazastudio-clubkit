@@ -286,7 +286,8 @@ Config.JoinCommunityPrompt = {
 	BODY_ONE = "%s already joined this community.",
 	BODY_TWO = "%s and %s already joined this community.",
 	BODY_THREE = "%s, %s, and %s already joined this community.",
-	BODY_WITH_EXTRA = "%s, and %s other players already joined.",
+	-- First %s = up to 3 names (Oxford "and"); second %s = compact remaining (k/M/B, not +99-capped).
+	BODY_WITH_NAMES = "%s and %s others already joined this community.",
 }
 
 Config.JoinGreeting = {
