@@ -491,7 +491,7 @@ ClubKitConfig.Features = {
 	DonationSaweria = true, -- legacy alias untuk DonationCash
 	DonationRobux = true,
 	Gravity = true,
-	-- After loading: show custom Join Community modal (skip if already a member). Needs Group.GroupId > 0.
+	-- After loading: show custom Join Community modal (always if GroupId > 0; already-joined CTA = "Already joined").
 	PromptJoinCommunityOnLoad = true,
 	-- Toast when Owner / Leadership / Content / top-10 Robux or cash spender joins (once per session).
 	JoinGreetings = true,

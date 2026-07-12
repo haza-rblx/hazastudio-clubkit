@@ -11,6 +11,12 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.12] - 2026-07-12
+
+### Changed
+- **Join Community modal always shows** - `16-JoinCommunPrompt` opens after gameplay even if the player is already in the group (feature flag + `GroupId > 0` unchanged). Already-in-group CTA uses `BUTTON_ALREADY_JOINED` ("Already joined") and dismisses without `PromptJoinAsync`; non-members keep `BUTTON_JOIN` ("Join Community") then PromptJoinAsync.
+- **Join greeting duration ~7s** - `Config.JoinGreeting` MESSAGE_HOLD 3.7 + MESSAGE_FADE 0.25x2 + WELCOME_HOLD 2.8 so the toast CountDownBar runs ~7 seconds (was ~15s).
+
 ## [2.4.11] - 2026-07-12
 
 ### Fixed

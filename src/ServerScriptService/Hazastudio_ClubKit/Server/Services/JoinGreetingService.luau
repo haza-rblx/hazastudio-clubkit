@@ -321,10 +321,10 @@ local function createJoinGreetingService(deps: {
 		local chipText = resolveChip(match)
 		local cfg = getGreetingCfg()
 		-- Show window = hold + fade-out + fade-in + welcome (exit anim is after bar, like broadcast).
-		local messageFade = tonumber(cfg.MESSAGE_FADE) or 0.35
-		local showDuration = (tonumber(cfg.MESSAGE_HOLD) or 8.0)
+		local messageFade = tonumber(cfg.MESSAGE_FADE) or 0.25
+		local showDuration = (tonumber(cfg.MESSAGE_HOLD) or 3.7)
 			+ (messageFade * 2)
-			+ (tonumber(cfg.WELCOME_HOLD) or 6.3)
+			+ (tonumber(cfg.WELCOME_HOLD) or 2.8)
 
 		local payload = {
 			userId = player.UserId,
@@ -336,9 +336,9 @@ local function createJoinGreetingService(deps: {
 			message = message,
 			roleBadge = resolveRoleBadge(match.roleKey),
 			rank = match.rank,
-			messageHold = tonumber(cfg.MESSAGE_HOLD) or 8.0,
+			messageHold = tonumber(cfg.MESSAGE_HOLD) or 3.7,
 			messageFade = messageFade,
-			welcomeHold = tonumber(cfg.WELCOME_HOLD) or 6.3,
+			welcomeHold = tonumber(cfg.WELCOME_HOLD) or 2.8,
 			exitDuration = tonumber(cfg.EXIT) or 0.22,
 			enterDuration = tonumber(cfg.ENTER) or 0.28,
 			duration = showDuration,

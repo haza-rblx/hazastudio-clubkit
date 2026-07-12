@@ -1,6 +1,8 @@
 --!strict
--- After loading/gameplay entry, show custom 16-JoinCommunPrompt (once per session),
--- then CoreGui PromptJoinAsync only when the player clicks Join.
+-- After loading/gameplay entry, show custom 16-JoinCommunPrompt (once per session)
+-- whether or not the player is already in the group.
+-- Join CTA → PromptJoinAsync only when not already a member; already-joined shows
+-- "Already joined" and dismisses (no CoreGui re-prompt).
 -- Center-modal motion: AnimationHelper presentCenterPanel / dismissCenterPanel
 -- (same family as ShopUI / GiftUI / PaidBroadcastUI — scale 0.96↔1 + PanelBlur + FOV zoom).
 
@@ -35,6 +37,8 @@ local fillDebugLogged = false
 local wired = false
 local isOpen = false
 local isClosing = false
+-- Set on each open: already in Config Group → CTA dismisses only (no PromptJoinAsync).
+local alreadyJoinedThisOpen = false
 
 local anim = AnimationHelper.new()
 
@@ -338,6 +342,33 @@ local function formatBody(names: { string }, memberCount: number, memberCountKno
 			or "%s and %s others already joined this community."
 	)
 	return string.format(template, listedJoined, formatCompactCount(remaining))
+end
+
+local function setJoinButtonLabel(button: GuiButton, text: string)
+	if button:IsA("TextButton") then
+		(button :: TextButton).Text = text
+		return
+	end
+	local nested = button:FindFirstChildWhichIsA("TextLabel", true)
+	if nested then
+		nested.Text = text
+	end
+end
+
+local function applyJoinButtonState(alreadyJoined: boolean)
+	local r = refs
+	if not r then
+		return
+	end
+	local cfg = joinPromptCfg()
+	local label = if alreadyJoined
+		then tostring(cfg.BUTTON_ALREADY_JOINED or "Already joined")
+		else tostring(cfg.BUTTON_JOIN or "Join Community")
+	setJoinButtonLabel(r.joinButton, label)
+	-- Keep clickable: already-joined click dismisses (same as Close); not Active=false
+	-- so the player can clear the modal from the CTA without CoreGui.
+	r.joinButton.Active = true
+	r.joinButton.AutoButtonColor = not alreadyJoined
 end
 
 local function applyHeadlineCopy()
@@ -786,6 +817,11 @@ local function wireButtons(groupId: number)
 		if isClosing then
 			return
 		end
+		if alreadyJoinedThisOpen then
+			-- Already a member: dismiss only (do not PromptJoinAsync / CoreGui).
+			dismissModal(nil)
+			return
+		end
 		dismissModal(function()
 			promptJoinCoreGui(groupId)
 		end)
@@ -804,6 +840,10 @@ local function showModal(groupId: number)
 
 	refs = resolved
 	local r = resolved
+
+	local localPlayer = Players.LocalPlayer
+	alreadyJoinedThisOpen = localPlayer ~= nil and isPlayerInGroupAsync(localPlayer, groupId)
+
 	-- Gift / PaidBroadcast: enable ScreenGui, hide panel, then presentCenterPanel
 	-- (UIScale open 0.96→1 Sine Out + blur/zoom via MODAL_BLUR_OPTIONS).
 	r.root.Enabled = true
@@ -815,6 +855,7 @@ local function showModal(groupId: number)
 	end
 	applyCommunityLogo(r, groupId)
 	applyCopy(0, false, {})
+	applyJoinButtonState(alreadyJoinedThisOpen)
 
 	wireButtons(groupId)
 
@@ -844,18 +885,9 @@ local function tryPromptAfterGameplay()
 
 	promptedThisSession = true
 
-	local localPlayer = Players.LocalPlayer
-	if localPlayer and isPlayerInGroupAsync(localPlayer, groupId) then
-		return
-	end
-
+	-- Always show 16-JoinCommunPrompt (members get "Already joined" CTA; non-members Join → PromptJoinAsync).
 	task.delay(PROMPT_DELAY_SEC, function()
-		local player = Players.LocalPlayer
-		if not player then
-			return
-		end
-		-- Re-check in case membership changed during the delay.
-		if isPlayerInGroupAsync(player, groupId) then
+		if not Players.LocalPlayer then
 			return
 		end
 		showModal(groupId)

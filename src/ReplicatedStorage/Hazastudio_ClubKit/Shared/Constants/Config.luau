@@ -270,6 +270,9 @@ Config.JoinCommunityPrompt = {
 	-- Headline = VIP incentive; social strip = community members (not VIP framing).
 	TITLE = "Join our community, and get free VIP.",
 	SUBHEADLINE = "Limited time, save up to 50 Robux.",
+	-- CTA: always show modal; label depends on IsInGroup (already joined → no PromptJoinAsync).
+	BUTTON_JOIN = "Join Community",
+	BUTTON_ALREADY_JOINED = "Already joined",
 	-- Social strip: subtitle qualitative (no huge number); body carries compact count once.
 	SUBTITLE_WITH_COUNT = "Players already in this community.",
 	SUBTITLE_FALLBACK = "Join players already here.",
@@ -297,10 +300,10 @@ Config.JoinGreeting = {
 		Leadership = 1,
 		Content = 3,
 	},
-	-- Visible card ≈ 15s: MESSAGE_HOLD + (MESSAGE_FADE * 2) + WELCOME_HOLD
-	MESSAGE_HOLD = 8.0,
-	MESSAGE_FADE = 0.35,
-	WELCOME_HOLD = 6.3,
+	-- Visible card ≈ 7s: MESSAGE_HOLD + (MESSAGE_FADE * 2) + WELCOME_HOLD
+	MESSAGE_HOLD = 3.7,
+	MESSAGE_FADE = 0.25,
+	WELCOME_HOLD = 2.8,
 	-- EXIT/ENTER match GenericBroadcastController toast timings (0.22 / 0.28).
 	EXIT = 0.22,
 	ENTER = 0.28,

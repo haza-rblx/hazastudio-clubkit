@@ -1,12 +1,12 @@
 --!strict
--- Hazastudio Clubkit product fingerprint (read-only â€” do not edit in buyer places).
+-- Hazastudio Clubkit product fingerprint (read-only Ã¢â‚¬â€ do not edit in buyer places).
 -- Venue branding lives in ReplicatedStorage.Hazastudio_ClubKitConfig.ClubKitConfig.
 
 local KitProduct = {
 	ProductId = "hazastudioclubkit",
 	ProductName = "Hazastudio Clubkit",
 	Vendor = "Hazastudio",
-	KitVersion = "2.4.11",
+	KitVersion = "2.4.12",
 	BuildId = "20260712",
 	LicenseApiProduct = "clubkit",
 	-- v1.3+: server polls donation-api /v2/license/verify. Older kit builds omit this flag.
