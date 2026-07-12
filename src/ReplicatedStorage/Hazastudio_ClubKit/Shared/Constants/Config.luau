@@ -236,6 +236,18 @@ Config.Announcement = {
 -- ============================================================
 -- JOIN GREETINGS (toast when Owner / Leadership / Content / top-10 spender joins)
 -- ============================================================
+-- ============================================================
+-- JOIN COMMUNITY PROMPT (custom 16-JoinCommunPrompt modal)
+-- ============================================================
+Config.JoinCommunityPrompt = {
+	REMOTE_REQUEST = "JoinCommunityMembersRequest",
+	REMOTE_RESPONSE = "JoinCommunityMembersResponse",
+	SAMPLE_LIMIT = 8,
+	CACHE_TTL = 120,
+	REQUEST_RATE_MAX = 4,
+	REQUEST_RATE_WINDOW = 30,
+}
+
 Config.JoinGreeting = {
 	REMOTE = "JoinGreeting",
 	SPENDER_TOP_N = 10,
@@ -243,9 +255,10 @@ Config.JoinGreeting = {
 		Leadership = 1,
 		Content = 3,
 	},
-	MESSAGE_HOLD = 2.2,
+	-- Visible card ≈ 15s: MESSAGE_HOLD + (MESSAGE_FADE * 2) + WELCOME_HOLD
+	MESSAGE_HOLD = 8.0,
 	MESSAGE_FADE = 0.35,
-	WELCOME_HOLD = 1.8,
+	WELCOME_HOLD = 6.3,
 	-- EXIT/ENTER match GenericBroadcastController toast timings (0.22 / 0.28).
 	EXIT = 0.22,
 	ENTER = 0.28,

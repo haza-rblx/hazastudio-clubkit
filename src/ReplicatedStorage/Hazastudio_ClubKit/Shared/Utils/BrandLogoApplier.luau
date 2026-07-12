@@ -5,7 +5,7 @@
   Match rules (any one):
   1. Image still equals kit default asset id
   2. Attribute/tag ClubKitBrandLogo (previous apply)
-  3. Instance name is LogoImage / ClubLogo / BrandLogo / ClubKitLogo
+  3. Instance name is LogoImage / ClubLogo / BrandLogo / ClubKitLogo / CommunityLogo / LoadingLogo
 
   One-shot / DescendantAdded — not per-frame.
 ]]
@@ -23,6 +23,7 @@ local NAME_MATCH: { [string]: boolean } = {
 	ClubLogo = true,
 	BrandLogo = true,
 	ClubKitLogo = true,
+	CommunityLogo = true,
 	LoadingLogo = true,
 }
 

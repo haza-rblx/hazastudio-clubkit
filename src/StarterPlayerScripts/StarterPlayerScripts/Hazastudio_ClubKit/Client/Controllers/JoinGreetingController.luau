@@ -355,9 +355,9 @@ local function playGreeting(refs: Refs, payload: Payload)
 	scale.Scale = ENTER_START_SCALE
 
 	local enterDuration = math.max(tonumber(payload.enterDuration) or getCfg().ENTER or ENTER_DURATION, 0.05)
-	local messageHold = math.max(tonumber(payload.messageHold) or getCfg().MESSAGE_HOLD or 2.2, 0.1)
+	local messageHold = math.max(tonumber(payload.messageHold) or getCfg().MESSAGE_HOLD or 8.0, 0.1)
 	local messageFade = math.max(tonumber(payload.messageFade) or getCfg().MESSAGE_FADE or 0.35, 0.05)
-	local welcomeHold = math.max(tonumber(payload.welcomeHold) or getCfg().WELCOME_HOLD or 1.8, 0.1)
+	local welcomeHold = math.max(tonumber(payload.welcomeHold) or getCfg().WELCOME_HOLD or 6.3, 0.1)
 	local exitDuration = math.max(tonumber(payload.exitDuration) or getCfg().EXIT or EXIT_DURATION, 0.05)
 	-- Show window only (bar depletes, then exit anim — same order as GenericBroadcast/Donation).
 	local showDuration = messageHold + (messageFade * 2) + welcomeHold

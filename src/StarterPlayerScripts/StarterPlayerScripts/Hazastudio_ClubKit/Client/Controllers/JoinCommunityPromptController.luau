@@ -5,12 +5,12 @@
 -- (same family as ShopUI / GiftUI / PaidBroadcastUI — scale 0.96↔1 + PanelBlur + FOV zoom).
 
 local GroupService = game:GetService("GroupService")
-local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
+local BrandLogoApplier = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.BrandLogoApplier)
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
 
 local log = Logger.new("JoinCommunityPrompt")
@@ -19,6 +19,8 @@ local PROMPT_DELAY_SEC = 2
 local GUI_WAIT_TIMEOUT = 8
 local ROOT_GUI_NAME = "16-JoinCommunPrompt"
 local MAX_THUMBNAILS = 8
+local BODY_NAME_LIMIT = 3
+local SERVER_SAMPLE_TIMEOUT = 6
 
 -- Shop / Gift / PaidBroadcast blur+zoom options (not Couple, which skips backdrop).
 local MODAL_BLUR_OPTIONS = {
@@ -35,19 +37,28 @@ local isClosing = false
 
 local anim = AnimationHelper.new()
 
+type MemberSample = {
+	userId: number,
+	displayName: string,
+}
+
 type Refs = {
 	root: ScreenGui,
 	mainWrapper: Frame,
 	closeButton: GuiButton,
 	joinButton: GuiButton,
+	communityLogo: ImageLabel?,
 	thumbnailHost: Frame?,
 	thumbnailTemplate: ImageLabel?,
 	counterLeft: GuiObject?,
 	counterLabel: TextLabel?,
+	subtitleLabel: TextLabel?,
+	bodyLabel: TextLabel?,
 }
 
 local refs: Refs? = nil
 local thumbClones: { ImageLabel } = {}
+local fillGeneration = 0
 
 local function findGuiObject(root: Instance, name: string): GuiObject?
 	local found = root:FindFirstChild(name, true)
@@ -60,6 +71,14 @@ end
 local function findGuiButton(root: Instance, name: string): GuiButton?
 	local found = root:FindFirstChild(name, true)
 	if found and found:IsA("GuiButton") then
+		return found
+	end
+	return nil
+end
+
+local function findTextLabel(root: Instance, name: string): TextLabel?
+	local found = root:FindFirstChild(name, true)
+	if found and found:IsA("TextLabel") then
 		return found
 	end
 	return nil
@@ -85,7 +104,7 @@ local function isPlayerInGroupAsync(player: Player, groupId: number): boolean
 	return false
 end
 
-local function tryGetGroupMemberCount(groupId: number): number?
+local function tryGetGroupMemberCountLocal(groupId: number): number?
 	local okInfo, info = pcall(function()
 		return GroupService:GetGroupInfoAsync(groupId)
 	end)
@@ -95,22 +114,6 @@ local function tryGetGroupMemberCount(groupId: number): number?
 			return count
 		end
 	end
-
-	local okHttp, body = pcall(function()
-		return HttpService:GetAsync("https://groups.roblox.com/v1/groups/" .. tostring(groupId))
-	end)
-	if okHttp and type(body) == "string" and body ~= "" then
-		local okJson, decoded = pcall(function()
-			return HttpService:JSONDecode(body)
-		end)
-		if okJson and type(decoded) == "table" then
-			local count = (decoded :: any).memberCount
-			if type(count) == "number" and count > 0 then
-				return count
-			end
-		end
-	end
-
 	return nil
 end
 
@@ -136,6 +139,211 @@ local function setCounterVisible(visible: boolean, extra: number?)
 	else
 		r.counterLeft.Visible = false
 	end
+end
+
+local function applyCommunityLogo(r: Refs)
+	local logoAsset = BrandLogoApplier.resolveTargetLogo(Config)
+	if logoAsset == "" then
+		return
+	end
+
+	-- Always set CommunityLogo from Branding (NAME_MATCH + explicit Image).
+	BrandLogoApplier.applyToInstance(r.root, Config)
+	if r.communityLogo then
+		r.communityLogo.Image = logoAsset
+	end
+end
+
+local function formatSubtitle(memberCount: number): string
+	if memberCount > 0 then
+		return string.format("Join with other %d players.", memberCount)
+	end
+	return "Join with other players."
+end
+
+local function formatBody(names: { string }, memberCount: number): string
+	if #names == 0 then
+		if memberCount > 0 then
+			return string.format("%d players are already VIP Members.", memberCount)
+		end
+		return "Be among the first VIP Members."
+	end
+
+	local listed = {}
+	for i = 1, math.min(BODY_NAME_LIMIT, #names) do
+		table.insert(listed, names[i])
+	end
+
+	local listedCount = #listed
+	local remaining = math.max(0, memberCount - listedCount)
+	if remaining <= 0 then
+		if listedCount == 1 then
+			return listed[1] .. " is also a VIP Member."
+		end
+		if listedCount == 2 then
+			return listed[1] .. " and " .. listed[2] .. " are also VIP Members."
+		end
+		return table.concat(listed, ", ", 1, listedCount - 1)
+			.. ", and "
+			.. listed[listedCount]
+			.. " are also VIP Members."
+	end
+
+	return table.concat(listed, ", ")
+		.. string.format(", and %d other players also a VIP Member.", remaining)
+end
+
+local function applyCopy(memberCount: number, displayNames: { string })
+	local r = refs
+	if not r then
+		return
+	end
+	if r.subtitleLabel then
+		r.subtitleLabel.Text = formatSubtitle(memberCount)
+	end
+	if r.bodyLabel then
+		r.bodyLabel.Text = formatBody(displayNames, memberCount)
+	end
+end
+
+local function requestServerMembersAsync(groupId: number): { memberCount: number, members: { MemberSample } }?
+	local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+	if not remotes or not remotes:IsA("Folder") then
+		return nil
+	end
+
+	local cfg = Config.JoinCommunityPrompt or {}
+	local requestName = tostring(cfg.REMOTE_REQUEST or "JoinCommunityMembersRequest")
+	local responseName = tostring(cfg.REMOTE_RESPONSE or "JoinCommunityMembersResponse")
+
+	local requestRemote = remotes:FindFirstChild(requestName)
+	local responseRemote = remotes:FindFirstChild(responseName)
+	if not requestRemote then
+		requestRemote = remotes:WaitForChild(requestName, 3)
+	end
+	if not responseRemote then
+		responseRemote = remotes:WaitForChild(responseName, 3)
+	end
+	if not requestRemote or not requestRemote:IsA("RemoteEvent") then
+		return nil
+	end
+	if not responseRemote or not responseRemote:IsA("RemoteEvent") then
+		return nil
+	end
+
+	local done = false
+	local payload: any = nil
+	local conn: RBXScriptConnection? = nil
+	conn = (responseRemote :: RemoteEvent).OnClientEvent:Connect(function(raw: any)
+		if done then
+			return
+		end
+		if type(raw) ~= "table" then
+			return
+		end
+		local rawGroupId = tonumber((raw :: any).groupId)
+		if rawGroupId ~= nil and rawGroupId ~= groupId then
+			return
+		end
+		done = true
+		payload = raw
+		if conn then
+			conn:Disconnect()
+			conn = nil
+		end
+	end)
+
+	;(requestRemote :: RemoteEvent):FireServer({ groupId = groupId })
+
+	local deadline = os.clock() + SERVER_SAMPLE_TIMEOUT
+	while not done and os.clock() < deadline do
+		task.wait(0.05)
+	end
+	if conn then
+		conn:Disconnect()
+	end
+	if type(payload) ~= "table" then
+		return nil
+	end
+
+	local memberCount = tonumber((payload :: any).memberCount) or 0
+	local membersRaw = (payload :: any).members
+	local members: { MemberSample } = {}
+	if type(membersRaw) == "table" then
+		for _, row in ipairs(membersRaw) do
+			if type(row) == "table" then
+				local userId = tonumber((row :: any).userId) or 0
+				if userId > 0 then
+					local displayName = (row :: any).displayName
+					if type(displayName) ~= "string" or displayName == "" then
+						displayName = "Player"
+					end
+					table.insert(members, {
+						userId = userId,
+						displayName = displayName,
+					})
+				end
+			end
+		end
+	end
+
+	return {
+		memberCount = memberCount,
+		members = members,
+	}
+end
+
+local function collectOnlineInGroup(groupId: number): { MemberSample }
+	local localPlayer = Players.LocalPlayer
+	local out: { MemberSample } = {}
+	for _, player in ipairs(Players:GetPlayers()) do
+		if #out >= MAX_THUMBNAILS then
+			break
+		end
+		local isLocal = localPlayer ~= nil and player.UserId == localPlayer.UserId
+		if not isLocal and isPlayerInGroupAsync(player, groupId) then
+			local displayName = player.DisplayName
+			if type(displayName) ~= "string" or displayName == "" then
+				displayName = player.Name
+			end
+			table.insert(out, {
+				userId = player.UserId,
+				displayName = displayName,
+			})
+		end
+	end
+	return out
+end
+
+local function mergeMemberSamples(
+	online: { MemberSample },
+	serverMembers: { MemberSample },
+	localUserId: number?
+): { MemberSample }
+	local seen: { [number]: boolean } = {}
+	local out: { MemberSample } = {}
+
+	local function tryAdd(sample: MemberSample)
+		if #out >= MAX_THUMBNAILS then
+			return
+		end
+		if localUserId ~= nil and sample.userId == localUserId then
+			return
+		end
+		if seen[sample.userId] then
+			return
+		end
+		seen[sample.userId] = true
+		table.insert(out, sample)
+	end
+
+	for _, sample in ipairs(online) do
+		tryAdd(sample)
+	end
+	for _, sample in ipairs(serverMembers) do
+		tryAdd(sample)
+	end
+	return out
 end
 
 local function resolveRefs(): Refs?
@@ -178,6 +386,12 @@ local function resolveRefs(): Refs?
 		return nil
 	end
 
+	local communityLogoInst = mainWrapper:FindFirstChild("CommunityLogo", true)
+	local communityLogo: ImageLabel? = nil
+	if communityLogoInst and communityLogoInst:IsA("ImageLabel") then
+		communityLogo = communityLogoInst
+	end
+
 	local thumbnailHost = findGuiObject(mainWrapper, "CommunityMemberThumbnail")
 	local thumbnailTemplate: ImageLabel? = nil
 	local counterLeft: GuiObject? = nil
@@ -203,51 +417,94 @@ local function resolveRefs(): Refs?
 		mainWrapper = mainWrapper :: Frame,
 		closeButton = closeButton,
 		joinButton = joinButton,
+		communityLogo = communityLogo,
 		thumbnailHost = if thumbnailHost and thumbnailHost:IsA("Frame") then thumbnailHost :: Frame else nil,
 		thumbnailTemplate = thumbnailTemplate,
 		counterLeft = counterLeft,
 		counterLabel = counterLabel,
+		subtitleLabel = findTextLabel(mainWrapper, "Subtitle"),
+		bodyLabel = findTextLabel(mainWrapper, "Body"),
 	}
 end
 
-local function fillMemberThumbnailsAsync(groupId: number)
+local function fillMemberThumbnailsAsync(groupId: number, generation: number)
 	local r = refs
-	if not r or not r.thumbnailHost or not r.thumbnailTemplate then
+	if not r then
 		return
 	end
 
-	local host = r.thumbnailHost
-	local template = r.thumbnailTemplate
-	template.Visible = false
+	local localPlayer = Players.LocalPlayer
+	local localUserId = if localPlayer then localPlayer.UserId else nil
+
+	if r.thumbnailHost and r.thumbnailTemplate then
+		r.thumbnailTemplate.Visible = false
+	end
 	setCounterVisible(false)
 	clearThumbClones()
+	applyCopy(0, {})
 
-	local userIds: { number } = {}
-	for _, player in ipairs(Players:GetPlayers()) do
-		if #userIds >= MAX_THUMBNAILS then
-			break
+	local online = collectOnlineInGroup(groupId)
+	if generation ~= fillGeneration or refs ~= r then
+		return
+	end
+
+	-- Optimistic copy from online-only while server sample loads.
+	local optimisticCount = #online
+	local optimisticNames: { string } = {}
+	for _, sample in ipairs(online) do
+		table.insert(optimisticNames, sample.displayName)
+	end
+	applyCopy(optimisticCount, optimisticNames)
+
+	local serverPayload = requestServerMembersAsync(groupId)
+	if generation ~= fillGeneration or refs ~= r then
+		return
+	end
+
+	local serverMembers: { MemberSample } = {}
+	local memberCount = optimisticCount
+	if serverPayload then
+		serverMembers = serverPayload.members
+		if serverPayload.memberCount > 0 then
+			memberCount = serverPayload.memberCount
 		end
-		if isPlayerInGroupAsync(player, groupId) then
-			table.insert(userIds, player.UserId)
+	else
+		local localCount = tryGetGroupMemberCountLocal(groupId)
+		if type(localCount) == "number" and localCount > 0 then
+			memberCount = localCount
 		end
 	end
 
-	for index, userId in ipairs(userIds) do
-		local clone = template:Clone()
-		clone.Name = "PlayerProfileThumbnail_" .. tostring(index)
-		clone.Image = headshotUrl(userId)
-		clone.Visible = true
-		clone.LayoutOrder = index
-		clone.Parent = host
-		table.insert(thumbClones, clone)
+	local merged = mergeMemberSamples(online, serverMembers, localUserId)
+	if memberCount < #merged then
+		memberCount = #merged
 	end
 
-	local memberCount = tryGetGroupMemberCount(groupId)
-	if type(memberCount) == "number" and memberCount > MAX_THUMBNAILS then
+	if r.thumbnailHost and r.thumbnailTemplate then
+		local host = r.thumbnailHost
+		local template = r.thumbnailTemplate
+		for index, sample in ipairs(merged) do
+			local clone = template:Clone()
+			clone.Name = "PlayerProfileThumbnail_" .. tostring(index)
+			clone.Image = headshotUrl(sample.userId)
+			clone.Visible = true
+			clone.LayoutOrder = index
+			clone.Parent = host
+			table.insert(thumbClones, clone)
+		end
+	end
+
+	if memberCount > MAX_THUMBNAILS then
 		setCounterVisible(true, memberCount - MAX_THUMBNAILS)
 	else
 		setCounterVisible(false)
 	end
+
+	local displayNames: { string } = {}
+	for _, sample in ipairs(merged) do
+		table.insert(displayNames, sample.displayName)
+	end
+	applyCopy(memberCount, displayNames)
 end
 
 local function dismissModal(onDone: (() -> ())?)
@@ -329,6 +586,8 @@ local function showModal(groupId: number)
 	if r.thumbnailTemplate then
 		r.thumbnailTemplate.Visible = false
 	end
+	applyCommunityLogo(r)
+	applyCopy(0, {})
 
 	wireButtons(groupId)
 
@@ -337,8 +596,10 @@ local function showModal(groupId: number)
 	anim:presentCenterPanel(r.mainWrapper, nil, MODAL_BLUR_OPTIONS)
 
 	-- Thumbnails / member count are best-effort and must not block open.
+	fillGeneration += 1
+	local generation = fillGeneration
 	task.spawn(function()
-		fillMemberThumbnailsAsync(groupId)
+		fillMemberThumbnailsAsync(groupId, generation)
 	end)
 end
 

@@ -6,7 +6,7 @@ local ClubKitManifest = {}
 ClubKitManifest.PACKAGE_NAME = "HazastudioClubKit_Package"
 ClubKitManifest.MANIFEST_NAME = "_ClubKitManifest"
 ClubKitManifest.PRODUCT_ID = "hazastudioclubkit"
-ClubKitManifest.KIT_VERSION = "2.4.0"
+ClubKitManifest.KIT_VERSION = "2.4.1"
 
 -- Folder engine per service (seluruh subtree di-clone).
 ClubKitManifest.SERVICE_ROOTS = {
@@ -17,7 +17,7 @@ ClubKitManifest.SERVICE_ROOTS = {
 	{ service = "StarterPlayerScripts", name = "Hazastudio_ClubKit" },
 }
 
--- Opsional — buyer config & secrets (bisa di-skip saat export update).
+-- Opsional â€” buyer config & secrets (bisa di-skip saat export update).
 ClubKitManifest.OPTIONAL_ROOTS = {
 	{ service = "ReplicatedStorage", name = "Hazastudio_ClubKitConfig", key = "config" },
 	{ service = "ServerScriptService", name = "Hazastudio_ClubKitSecrets", key = "secrets" },
@@ -84,7 +84,7 @@ ClubKitManifest.SERVICE_ALIASES = {
 	Workspace = "Workspace",
 }
 
--- Source-sync updater (GitHub tag → set Script.Source in place).
+-- Source-sync updater (GitHub tag â†’ set Script.Source in place).
 ClubKitManifest.UPDATER = {
 	githubOwner = "haza-rblx",
 	githubRepo = "hazastudio-clubkit",

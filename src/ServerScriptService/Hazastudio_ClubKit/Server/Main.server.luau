@@ -64,6 +64,7 @@ local createMusicController = require(script.Parent.Controllers.MusicController)
 local createSettingsController = require(script.Parent.Controllers.SettingsController)
 local createGenericBroadcastService = require(script.Parent.Services.GenericBroadcastService)
 local createJoinGreetingService = require(script.Parent.Services.JoinGreetingService)
+local createJoinCommunityMembersService = require(script.Parent.Services.JoinCommunityMembersService)
 local createPaidBroadcastController = require(script.Parent.Controllers.PaidBroadcastController)
 local createCinematicDockController = require(script.Parent.Controllers.CinematicDockController)
 -- Repository
@@ -233,6 +234,9 @@ ensureRemoteEvent(Remotes, "OverheadUpdate")
 ensureRemoteEvent(Remotes, (Config.ClientBoot :: any).CLIENT_GAMEPLAY_READY_REMOTE or "ClientGameplayReady")
 local GenericBroadcastRemote = ensureRemoteEvent(Remotes, Config.Announcement.REMOTE_BROADCAST)
 local JoinGreetingRemote = ensureRemoteEvent(Remotes, (Config.JoinGreeting and Config.JoinGreeting.REMOTE) or "JoinGreeting")
+local joinCommunityPromptCfg = Config.JoinCommunityPrompt or {}
+ensureRemoteEvent(Remotes, tostring(joinCommunityPromptCfg.REMOTE_REQUEST or "JoinCommunityMembersRequest"))
+ensureRemoteEvent(Remotes, tostring(joinCommunityPromptCfg.REMOTE_RESPONSE or "JoinCommunityMembersResponse"))
 ensureRemoteEvent(Remotes, Config.PaidBroadcast.REMOTE_SUBMIT)
 local _PaidBroadcastResultRemote = ensureRemoteEvent(Remotes, Config.PaidBroadcast.REMOTE_RESULT)
 -- Create UnreliableRemoteEvent untuk cosmetic data (particles, VFX hints)
@@ -528,6 +532,13 @@ local joinGreetingService = trackLifecycle(
 		broadcastNetwork = joinGreetingNetwork,
 		overheadService = overheadService,
 		logger = Logger.new("JoinGreetingService"),
+	})
+)
+trackLifecycle(
+	"JoinCommunityMembersService",
+	createJoinCommunityMembersService({
+		remotes = Remotes,
+		logger = Logger.new("JoinCommunityMembersService"),
 	})
 )
 local giftGrantNetwork = NetworkManager.create({
