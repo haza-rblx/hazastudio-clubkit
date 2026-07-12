@@ -242,6 +242,10 @@ Config.Announcement = {
 Config.JoinCommunityPrompt = {
 	REMOTE_REQUEST = "JoinCommunityMembersRequest",
 	REMOTE_RESPONSE = "JoinCommunityMembersResponse",
+	-- Client → server after PromptJoinAsync (or anytime): re-check IsInGroup + grant VIP if flag on.
+	REMOTE_VIP_RECHECK = "CommunityVipRecheck",
+	VIP_RECHECK_RATE_MAX = 4,
+	VIP_RECHECK_RATE_WINDOW = 60,
 	SAMPLE_LIMIT = 8,
 	POOL_SIZE = 40, -- in-experience / MemoryStore pool cap (bonus thumbs only — not the community total)
 	CACHE_TTL = 300, -- seconds; successful MemberCount + users-page cache
@@ -1264,6 +1268,8 @@ Config.FeatureFlags = {
 	AfkGuardEnabled = true,
 	GravityEnabled = true,
 	PromptJoinCommunityOnLoadEnabled = true,
+	-- Grant Tier1 (VIP) membershipBadge when player IsInGroup(Group.GROUP_ID). Default off.
+	VipOnCommunityJoinEnabled = false,
 	JoinGreetingsEnabled = true,
 }
 -- ============================================================

@@ -320,6 +320,7 @@ function ConfigBootstrap.apply(config: any)
 			DonationRobux = "DonationRobuxEnabled",
 			Gravity = "GravityEnabled",
 			PromptJoinCommunityOnLoad = "PromptJoinCommunityOnLoadEnabled",
+			VipOnCommunityJoin = "VipOnCommunityJoinEnabled",
 			JoinGreetings = "JoinGreetingsEnabled",
 		}
 		for sourceKey, targetKey in pairs(map) do

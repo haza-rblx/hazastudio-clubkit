@@ -3,6 +3,8 @@
 -- whether or not the player is already in the group.
 -- Join CTA → PromptJoinAsync only when not already a member; already-joined shows
 -- "Already joined" and dismisses (no CoreGui re-prompt).
+-- After PromptJoinAsync returns, fires CommunityVipRecheck so server can grant VIP
+-- when Features.VipOnCommunityJoin is enabled (server still verifies IsInGroup).
 -- Center-modal motion: AnimationHelper presentCenterPanel / dismissCenterPanel
 -- (same family as ShopUI / GiftUI / PaidBroadcastUI — scale 0.96↔1 + PanelBlur + FOV zoom).
 
@@ -797,10 +799,38 @@ local function dismissModal(onDone: (() -> ())?)
 	end, MODAL_BLUR_OPTIONS)
 end
 
+local function getVipRecheckRemote(): RemoteEvent?
+	local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+	if not remotes then
+		return nil
+	end
+	local name = tostring((Config.JoinCommunityPrompt and Config.JoinCommunityPrompt.REMOTE_VIP_RECHECK) or "CommunityVipRecheck")
+	local remote = remotes:FindFirstChild(name)
+	if remote and remote:IsA("RemoteEvent") then
+		return remote
+	end
+	return nil
+end
+
+local function requestCommunityVipRecheck()
+	if Config.FeatureFlags.VipOnCommunityJoinEnabled ~= true then
+		return
+	end
+	local remote = getVipRecheckRemote()
+	if not remote then
+		return
+	end
+	pcall(function()
+		remote:FireServer()
+	end)
+end
+
 local function promptJoinCoreGui(groupId: number)
 	pcall(function()
 		GroupService:PromptJoinAsync(groupId)
 	end)
+	-- Prompt closed (joined or dismissed). Server re-checks IsInGroup and grants VIP if flag on.
+	requestCommunityVipRecheck()
 end
 
 local function wireButtons(groupId: number)

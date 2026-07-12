@@ -493,6 +493,10 @@ ClubKitConfig.Features = {
 	Gravity = true,
 	-- After loading: show custom Join Community modal (always if GroupId > 0; already-joined CTA = "Already joined").
 	PromptJoinCommunityOnLoad = true,
+	-- If true and Group.GroupId > 0: players already in the community group get VIP (Tier1)
+	-- on join; after JoinCommun PromptJoinAsync, server re-checks and grants if now a member.
+	-- Default false — existing places unchanged until buyer enables.
+	VipOnCommunityJoin = false,
 	-- Toast when Owner / Leadership / Content / top-10 Robux or cash spender joins (once per session).
 	JoinGreetings = true,
 }

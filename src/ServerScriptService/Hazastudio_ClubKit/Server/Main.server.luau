@@ -65,6 +65,7 @@ local createSettingsController = require(script.Parent.Controllers.SettingsContr
 local createGenericBroadcastService = require(script.Parent.Services.GenericBroadcastService)
 local createJoinGreetingService = require(script.Parent.Services.JoinGreetingService)
 local createJoinCommunityMembersService = require(script.Parent.Services.JoinCommunityMembersService)
+local createCommunityVipService = require(script.Parent.Services.CommunityVipService)
 local createPaidBroadcastController = require(script.Parent.Controllers.PaidBroadcastController)
 local createCinematicDockController = require(script.Parent.Controllers.CinematicDockController)
 -- Repository
@@ -237,6 +238,7 @@ local JoinGreetingRemote = ensureRemoteEvent(Remotes, (Config.JoinGreeting and C
 local joinCommunityPromptCfg = Config.JoinCommunityPrompt or {}
 ensureRemoteEvent(Remotes, tostring(joinCommunityPromptCfg.REMOTE_REQUEST or "JoinCommunityMembersRequest"))
 ensureRemoteEvent(Remotes, tostring(joinCommunityPromptCfg.REMOTE_RESPONSE or "JoinCommunityMembersResponse"))
+ensureRemoteEvent(Remotes, tostring(joinCommunityPromptCfg.REMOTE_VIP_RECHECK or "CommunityVipRecheck"))
 ensureRemoteEvent(Remotes, Config.PaidBroadcast.REMOTE_SUBMIT)
 local _PaidBroadcastResultRemote = ensureRemoteEvent(Remotes, Config.PaidBroadcast.REMOTE_RESULT)
 -- Create UnreliableRemoteEvent untuk cosmetic data (particles, VFX hints)
@@ -601,6 +603,15 @@ local overheadController = createOverheadController({
 	interest = interestManager,     -- R1.3: shared InterestManager
 	playerSnapshotService = playerSnapshotService,
 })
+local communityVipService = trackLifecycle(
+	"CommunityVipService",
+	createCommunityVipService({
+		repo = repo,
+		overheadController = overheadController,
+		remotes = Remotes,
+		logger = Logger.new("CommunityVipService"),
+	})
+)
 local streakController = createStreakController({
 	streakService = streakService,
 	overheadController = overheadController,
@@ -664,6 +675,9 @@ local function scheduleOverheadJoinRetry(player: Player)
 				if joinGreetingService and type(joinGreetingService.onPlayerReady) == "function" then
 					joinGreetingService:onPlayerReady(player)
 				end
+				if communityVipService and type(communityVipService.onPlayerReady) == "function" then
+					communityVipService:onPlayerReady(player)
+				end
 				log:info("Overhead join retry succeeded", {
 					userId = player.UserId,
 					delaySec = delaySec,
@@ -691,6 +705,9 @@ sharedProfileLoader:onLoaded(function(event)
 		streakController:processLoginForPlayer(event.player)
 		if joinGreetingService and type(joinGreetingService.onPlayerReady) == "function" then
 			joinGreetingService:onPlayerReady(event.player)
+		end
+		if communityVipService and type(communityVipService.onPlayerReady) == "function" then
+			communityVipService:onPlayerReady(event.player)
 		end
 	else
 		scheduleOverheadJoinRetry(event.player)
