@@ -162,6 +162,14 @@ function ConfigBootstrap.apply(config: any)
 		config.Group.OWNER_GROUP_RANK = group.OwnerGroupRank or 255
 	end
 
+	local joinCommunity = clubKit.JoinCommunity
+	if type(config.JoinCommunityPrompt) == "table" and type(joinCommunity) == "table" then
+		local memberInfoUrl = joinCommunity.MemberInfoUrl or joinCommunity.MEMBER_INFO_URL
+		if type(memberInfoUrl) == "string" then
+			config.JoinCommunityPrompt.MEMBER_INFO_URL = memberInfoUrl
+		end
+	end
+
 	config.AdminUserIds = clubKit.AdminUserIds or {}
 	config.TopSpenders = clubKit.TopSpenders or {}
 

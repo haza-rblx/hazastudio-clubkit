@@ -11,7 +11,20 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+---
+
+## [2.4.5] - 2026-07-12
+
+### Changed
+- **Join Commun logo (JoinCommun-only)** - `16-JoinCommunPrompt` `CommunityLogo` now prefers the Roblox **group emblem** (`GroupService:GetGroupInfoAsync` -> `EmblemUrl`, or `rbxthumb` GroupIcon when info succeeds but the field is omitted), then optional `MEMBER_INFO_URL` / roproxy JSON `emblemUrl` via `JoinCommunityMembersService`, then soft fallback to `Branding.LogoImage`, then the Studio GUI default. BrandLogoApplier no longer stamps Branding onto JoinCommun; shop / overhead / boards / other `CommunityLogo` targets are unchanged.
+
+### Fixed
+- **Join community MemberCount** - `GroupService:GetGroupInfoAsync` usually has **no** `MemberCount` field (official docs omit it), so v2.4.4 cached `0` and the modal showed "Be among the first.". Now: warn once when the field is missing/fails; never treat online/pool size as the community total; resolve real total via optional `MEMBER_INFO_URL` (default `groups.roproxy.com` group-info JSON, or buyer worker / `ClubKitConfig.JoinCommunity.MemberInfoUrl`). Payload includes `memberCountKnown`. Empty thumbs with known count > 0 use "%d players already joined."; unknown count uses neutral `BODY_NO_COUNT` (not a false empty claim). Full random roster still needs a proxy - game servers cannot Http `groups.roblox.com`.
+
+---
+
 ## [2.4.4] - 2026-07-12
+
 
 ### Fixed
 - **Join community roster** - stop calling `groups.roblox.com` via HttpService (Roblox blocks Http to own domains even with `HttpEnabled`). MemberCount stays on `GroupService:GetGroupInfoAsync`; avatar strip samples an in-experience pool of community members seen in this place (PlayerAdded + online warm), with optional MemoryStore cross-server share. Client online in-group merge unchanged.

@@ -7,6 +7,9 @@
   2. Attribute/tag ClubKitBrandLogo (previous apply)
   3. Instance name is LogoImage / ClubLogo / BrandLogo / ClubKitLogo / CommunityLogo / LoadingLogo
 
+  Exception: descendants of `16-JoinCommunPrompt` are skipped — JoinCommun sets CommunityLogo
+  from the Roblox group EmblemUrl (JoinCommunityPromptController), not Branding.LogoImage.
+
   One-shot / DescendantAdded — not per-frame.
 ]]
 
@@ -86,8 +89,23 @@ local function setImage(inst: Instance, image: string)
 	end
 end
 
+-- JoinCommun modal owns its CommunityLogo (group EmblemUrl) — do not stamp Branding.LogoImage there.
+local function isUnderJoinCommunPrompt(inst: Instance): boolean
+	local current: Instance? = inst
+	while current do
+		if current.Name == "16-JoinCommunPrompt" then
+			return true
+		end
+		current = current.Parent
+	end
+	return false
+end
+
 local function shouldReplace(inst: Instance, defaultLogo: string): boolean
 	if not isBrandImageHolder(inst) then
+		return false
+	end
+	if isUnderJoinCommunPrompt(inst) then
 		return false
 	end
 	if inst:GetAttribute(ATTR_MARK) == true then

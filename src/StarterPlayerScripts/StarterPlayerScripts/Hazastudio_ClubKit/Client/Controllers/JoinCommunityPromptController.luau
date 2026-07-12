@@ -61,6 +61,8 @@ type Refs = {
 local refs: Refs? = nil
 local thumbClones: { ImageLabel } = {}
 local fillGeneration = 0
+-- true once CommunityLogo was set from group emblem (engine or server proxy) this open.
+local communityLogoFromEmblem = false
 
 local function findGuiObject(root: Instance, name: string): GuiObject?
 	local found = root:FindFirstChild(name, true)
@@ -106,17 +108,92 @@ local function isPlayerInGroupAsync(player: Player, groupId: number): boolean
 	return false
 end
 
-local function tryGetGroupMemberCountLocal(groupId: number): number?
+-- Engine GetGroupInfoAsync often omits MemberCount (not in official docs).
+-- Returns count only when the field is actually present; never invents from online size.
+local function tryGetGroupMemberCountLocal(groupId: number): (number?, boolean)
 	local okInfo, info = pcall(function()
 		return GroupService:GetGroupInfoAsync(groupId)
 	end)
-	if okInfo and type(info) == "table" then
-		local count = (info :: any).MemberCount or (info :: any).memberCount
-		if type(count) == "number" and count > 0 then
-			return count
-		end
+	if not okInfo or type(info) ~= "table" then
+		return nil, false
+	end
+	local raw = (info :: any).MemberCount
+	if type(raw) ~= "number" then
+		raw = (info :: any).memberCount
+	end
+	if type(raw) == "number" and raw == raw and raw >= 0 then
+		return math.floor(raw), true
+	end
+	return nil, false
+end
+
+local function extractEmblemUrlFromInfo(info: any): string?
+	if type(info) ~= "table" then
+		return nil
+	end
+	local raw: any = (info :: any).EmblemUrl
+	if raw == nil then
+		raw = (info :: any).emblemUrl
+	end
+	if type(raw) == "string" and raw ~= "" then
+		return raw
 	end
 	return nil
+end
+
+local function groupIconThumbUrl(groupId: number): string
+	return ("rbxthumb://type=GroupIcon&id=%d&w=150&h=150"):format(groupId)
+end
+
+-- JoinCommun-only: group emblem → Branding.LogoImage → leave GUI default.
+local function tryGetGroupEmblemLocal(groupId: number): string?
+	local okInfo, info = pcall(function()
+		return GroupService:GetGroupInfoAsync(groupId)
+	end)
+	if not okInfo or type(info) ~= "table" then
+		return nil
+	end
+	return extractEmblemUrlFromInfo(info) or groupIconThumbUrl(groupId)
+end
+
+local function setCommunityLogoImage(r: Refs, image: string, fromEmblem: boolean)
+	if not r.communityLogo or image == "" then
+		return
+	end
+	r.communityLogo.Image = image
+	if fromEmblem then
+		communityLogoFromEmblem = true
+	end
+end
+
+local function applyCommunityLogoFallbacks(r: Refs)
+	-- Soft Branding fallback only (no BrandLogoApplier sweep of JoinCommun tree).
+	local logoAsset = BrandLogoApplier.resolveTargetLogo(Config)
+	if logoAsset ~= "" and r.communityLogo then
+		r.communityLogo.Image = logoAsset
+	end
+	-- else leave Studio GUI Image as-is
+end
+
+local function applyCommunityLogo(r: Refs, groupId: number)
+	communityLogoFromEmblem = false
+	local emblem = tryGetGroupEmblemLocal(groupId)
+	if type(emblem) == "string" and emblem ~= "" then
+		setCommunityLogoImage(r, emblem, true)
+		return
+	end
+	-- Defer Branding fallback until after server sample (may carry proxy emblemUrl).
+end
+
+local function applyEmblemFromServerIfNeeded(r: Refs, emblemUrl: string?)
+	if communityLogoFromEmblem then
+		return
+	end
+	if type(emblemUrl) == "string" and emblemUrl ~= "" then
+		setCommunityLogoImage(r, emblemUrl, true)
+		return
+	end
+	applyCommunityLogoFallbacks(r)
 end
 
 local function clearThumbClones()
@@ -143,44 +220,35 @@ local function setCounterVisible(visible: boolean, extra: number?)
 	end
 end
 
-local function applyCommunityLogo(r: Refs)
-	local logoAsset = BrandLogoApplier.resolveTargetLogo(Config)
-	if logoAsset == "" then
-		return
-	end
-
-	-- Always set CommunityLogo from Branding (NAME_MATCH + explicit Image).
-	BrandLogoApplier.applyToInstance(r.root, Config)
-	if r.communityLogo then
-		r.communityLogo.Image = logoAsset
-	end
-end
-
 local function joinPromptCfg(): any
 	local cfg = Config.JoinCommunityPrompt
 	return if type(cfg) == "table" then cfg else {}
 end
 
-local function formatSubtitle(memberCount: number, hasSampleNames: boolean): string
+local function formatSubtitle(memberCount: number, memberCountKnown: boolean, hasSampleNames: boolean): string
 	local cfg = joinPromptCfg()
 	if hasSampleNames then
 		return tostring(cfg.SUBTITLE_WITH_SAMPLE or "Players already in this community.")
 	end
-	if memberCount > 0 then
+	if memberCountKnown and memberCount > 0 then
 		local template = tostring(cfg.SUBTITLE_WITH_COUNT or "Join with other %d players.")
 		return string.format(template, memberCount)
 	end
 	return tostring(cfg.SUBTITLE_FALLBACK or "Join with other players.")
 end
 
-local function formatBody(names: { string }, memberCount: number): string
+local function formatBody(names: { string }, memberCount: number, memberCountKnown: boolean): string
 	local cfg = joinPromptCfg()
 	if #names == 0 then
-		if memberCount > 0 then
+		if memberCountKnown and memberCount > 0 then
 			local template = tostring(cfg.BODY_EMPTY_WITH_COUNT or "%d players already joined this community.")
 			return string.format(template, memberCount)
 		end
-		return tostring(cfg.BODY_EMPTY or "Be among the first to join this community.")
+		-- Only claim "first to join" when the real total is known to be zero.
+		if memberCountKnown and memberCount == 0 then
+			return tostring(cfg.BODY_EMPTY or "Be among the first to join this community.")
+		end
+		return tostring(cfg.BODY_NO_COUNT or "Join players already in this community.")
 	end
 
 	local listed = {}
@@ -189,7 +257,7 @@ local function formatBody(names: { string }, memberCount: number): string
 	end
 
 	local listedCount = #listed
-	local remaining = math.max(0, memberCount - listedCount)
+	local remaining = if memberCountKnown then math.max(0, memberCount - listedCount) else 0
 	if remaining <= 0 then
 		if listedCount == 1 then
 			local template = tostring(cfg.BODY_ONE or "%s already joined this community.")
@@ -222,21 +290,26 @@ local function applyHeadlineCopy()
 	end
 end
 
-local function applyCopy(memberCount: number, displayNames: { string })
+local function applyCopy(memberCount: number, memberCountKnown: boolean, displayNames: { string })
 	local r = refs
 	if not r then
 		return
 	end
 	applyHeadlineCopy()
 	if r.subtitleLabel then
-		r.subtitleLabel.Text = formatSubtitle(memberCount, #displayNames > 0)
+		r.subtitleLabel.Text = formatSubtitle(memberCount, memberCountKnown, #displayNames > 0)
 	end
 	if r.bodyLabel then
-		r.bodyLabel.Text = formatBody(displayNames, memberCount)
+		r.bodyLabel.Text = formatBody(displayNames, memberCount, memberCountKnown)
 	end
 end
 
-local function requestServerMembersAsync(groupId: number): { memberCount: number, members: { MemberSample } }?
+local function requestServerMembersAsync(groupId: number): {
+	memberCount: number,
+	memberCountKnown: boolean,
+	emblemUrl: string?,
+	members: { MemberSample },
+}?
 	local remotes = ReplicatedStorage:FindFirstChild("Remotes")
 	if not remotes or not remotes:IsA("Folder") then
 		return nil
@@ -297,6 +370,12 @@ local function requestServerMembersAsync(groupId: number): { memberCount: number
 	end
 
 	local memberCount = tonumber((payload :: any).memberCount) or 0
+	local memberCountKnown = (payload :: any).memberCountKnown == true
+	local emblemRaw = (payload :: any).emblemUrl
+	local emblemUrl: string? = nil
+	if type(emblemRaw) == "string" and emblemRaw ~= "" then
+		emblemUrl = emblemRaw
+	end
 	local membersRaw = (payload :: any).members
 	local members: { MemberSample } = {}
 	if type(membersRaw) == "table" then
@@ -319,6 +398,8 @@ local function requestServerMembersAsync(groupId: number): { memberCount: number
 
 	return {
 		memberCount = memberCount,
+		memberCountKnown = memberCountKnown,
+		emblemUrl = emblemUrl,
 		members = members,
 	}
 end
@@ -474,9 +555,10 @@ local function fillMemberThumbnailsAsync(groupId: number, generation: number)
 	end
 	setCounterVisible(false)
 	clearThumbClones()
-	applyCopy(0, {})
+	-- Neutral loading copy — never flash "Be among the first..." before count resolves.
+	applyCopy(0, false, {})
 
-	-- Server-first (cached random community sample). Avoid N× IsInGroupAsync up front.
+	-- Server-first (real MemberCount + bonus in-experience sample). Avoid N× IsInGroupAsync up front.
 	local serverPayload = requestServerMembersAsync(groupId)
 	if generation ~= fillGeneration or refs ~= r then
 		return
@@ -484,9 +566,15 @@ local function fillMemberThumbnailsAsync(groupId: number, generation: number)
 
 	local serverMembers: { MemberSample } = {}
 	local memberCount = 0
+	local memberCountKnown = false
 	if serverPayload then
 		serverMembers = serverPayload.members
 		memberCount = serverPayload.memberCount
+		memberCountKnown = serverPayload.memberCountKnown
+		applyEmblemFromServerIfNeeded(r, serverPayload.emblemUrl)
+	elseif not communityLogoFromEmblem then
+		-- No server payload — Branding then GUI default.
+		applyCommunityLogoFallbacks(r)
 	end
 
 	local online: { MemberSample } = {}
@@ -497,19 +585,16 @@ local function fillMemberThumbnailsAsync(groupId: number, generation: number)
 		end
 	end
 
-	if memberCount <= 0 then
-		local localCount = tryGetGroupMemberCountLocal(groupId)
-		if type(localCount) == "number" and localCount > 0 then
+	-- Client fallback for real total only — never use online/#thumbs as community size.
+	if not memberCountKnown then
+		local localCount, localKnown = tryGetGroupMemberCountLocal(groupId)
+		if localKnown and type(localCount) == "number" then
 			memberCount = localCount
-		elseif #serverMembers > 0 or #online > 0 then
-			memberCount = math.max(#serverMembers, #online)
+			memberCountKnown = true
 		end
 	end
 
 	local merged = mergeMemberSamples(online, serverMembers, localUserId)
-	if memberCount < #merged then
-		memberCount = #merged
-	end
 
 	if r.thumbnailHost and r.thumbnailTemplate then
 		local host = r.thumbnailHost
@@ -525,7 +610,7 @@ local function fillMemberThumbnailsAsync(groupId: number, generation: number)
 		end
 	end
 
-	if memberCount > MAX_THUMBNAILS then
+	if memberCountKnown and memberCount > MAX_THUMBNAILS and #merged > 0 then
 		setCounterVisible(true, memberCount - MAX_THUMBNAILS)
 	else
 		setCounterVisible(false)
@@ -535,7 +620,7 @@ local function fillMemberThumbnailsAsync(groupId: number, generation: number)
 	for _, sample in ipairs(merged) do
 		table.insert(displayNames, sample.displayName)
 	end
-	applyCopy(memberCount, displayNames)
+	applyCopy(memberCount, memberCountKnown, displayNames)
 end
 
 local function dismissModal(onDone: (() -> ())?)
@@ -617,8 +702,8 @@ local function showModal(groupId: number)
 	if r.thumbnailTemplate then
 		r.thumbnailTemplate.Visible = false
 	end
-	applyCommunityLogo(r)
-	applyCopy(0, {})
+	applyCommunityLogo(r, groupId)
+	applyCopy(0, false, {})
 
 	wireButtons(groupId)
 

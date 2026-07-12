@@ -243,9 +243,15 @@ Config.JoinCommunityPrompt = {
 	REMOTE_REQUEST = "JoinCommunityMembersRequest",
 	REMOTE_RESPONSE = "JoinCommunityMembersResponse",
 	SAMPLE_LIMIT = 8,
-	POOL_SIZE = 40, -- in-experience seen members cap (random sample source)
-	CACHE_TTL = 300, -- seconds; GroupService MemberCount cache
-	-- Cross-server pool via MemoryStore (not Http to *.roblox.com — Roblox blocks that).
+	POOL_SIZE = 40, -- in-experience seen members cap (bonus thumbs only — not the community total)
+	CACHE_TTL = 300, -- seconds; successful MemberCount cache
+	MEMBER_COUNT_FAIL_TTL = 45, -- short negative cache when total unresolved
+	-- GroupService:GetGroupInfoAsync docs omit MemberCount (often absent → was the memberCount=0 bug).
+	-- Real total via non-*.roblox.com group-info JSON (Http to groups.roblox.com is blocked).
+	-- Default: community proxy. Override/disable via ClubKitConfig.JoinCommunity.MemberInfoUrl ("" = off).
+	-- Supports "%d" or "{groupId}". Expected JSON: { "memberCount": N, "members"?: [...], "emblemUrl"?: "..." }
+	MEMBER_INFO_URL = "https://groups.roproxy.com/v1/groups/%d",
+	-- Cross-server thumb pool via MemoryStore (bonus samples only).
 	MEMORY_STORE_ENABLED = true,
 	MEMORY_STORE_TTL = 86400,
 	MEMORY_STORE_NAME = nil, -- default: KitProduct.MemoryStorePrefix .. "JoinCommunityPool"
@@ -259,6 +265,7 @@ Config.JoinCommunityPrompt = {
 	SUBTITLE_WITH_SAMPLE = "Players already in this community.",
 	BODY_EMPTY_WITH_COUNT = "%d players already joined this community.",
 	BODY_EMPTY = "Be among the first to join this community.",
+	BODY_NO_COUNT = "Join players already in this community.",
 	BODY_ONE = "%s already joined this community.",
 	BODY_TWO = "%s and %s already joined this community.",
 	BODY_THREE = "%s, %s, and %s already joined this community.",

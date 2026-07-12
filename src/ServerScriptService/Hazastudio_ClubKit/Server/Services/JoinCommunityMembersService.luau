@@ -1,9 +1,18 @@
 --!strict
 -- Server sample of group members for the Join Community modal (thumbnails + copy).
--- Pool = community members seen in this experience (no Http to *.roblox.com).
--- MemberCount via GroupService; O(k) random pick from in-memory (+ optional MemoryStore) pool.
+--
+-- REAL TOTAL (memberCount):
+--   Prefer GroupService:GetGroupInfoAsync → MemberCount when present.
+--   Official engine docs do NOT list MemberCount on that table; when missing we
+--   do not invent a total from online/pool size. Optional MEMBER_INFO_URL
+--   (non-*.roblox.com worker) can supply the real count + optional samples.
+--
+-- AVATAR SAMPLES:
+--   In-experience pool of community members seen in this place (bonus fill only).
+--   Full random roster via groups.roblox.com is blocked from game servers.
 
 local GroupService = game:GetService("GroupService")
+local HttpService = game:GetService("HttpService")
 local MemoryStoreService = game:GetService("MemoryStoreService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -21,6 +30,8 @@ export type MemberSample = {
 export type MembersPayload = {
 	groupId: number,
 	memberCount: number,
+	memberCountKnown: boolean,
+	emblemUrl: string?,
 	members: { MemberSample },
 }
 
@@ -79,6 +90,46 @@ local function pickRandomSamples(
 	return out
 end
 
+local function extractMemberCount(info: any): number?
+	if type(info) ~= "table" then
+		return nil
+	end
+	local raw: any = (info :: any).MemberCount
+	if raw == nil then
+		raw = (info :: any).memberCount
+	end
+	local n = tonumber(raw)
+	if type(n) == "number" and n == n and n >= 0 then
+		return math.floor(n)
+	end
+	return nil
+end
+
+-- Emblem string fields only (no invented thumb). GroupIcon is applied by caller after a successful group lookup.
+local function extractEmblemUrl(info: any): string?
+	if type(info) ~= "table" then
+		return nil
+	end
+	local raw: any = (info :: any).EmblemUrl
+	if raw == nil then
+		raw = (info :: any).emblemUrl
+	end
+	if raw == nil then
+		raw = (info :: any).iconUrl
+	end
+	if raw == nil then
+		raw = (info :: any).IconUrl
+	end
+	if type(raw) == "string" and raw ~= "" then
+		return raw
+	end
+	return nil
+end
+
+local function groupIconThumbUrl(groupId: number): string
+	return ("rbxthumb://type=GroupIcon&id=%d&w=150&h=150"):format(groupId)
+end
+
 local function createJoinCommunityMembersService(deps: {
 	remotes: Folder,
 	logger: any?,
@@ -95,26 +146,38 @@ local function createJoinCommunityMembersService(deps: {
 	local sampleLimit = math.clamp(tonumber(cfg.SAMPLE_LIMIT) or 8, 1, 8)
 	local poolCap = math.clamp(tonumber(cfg.POOL_SIZE) or 40, sampleLimit, 100)
 	local memberCountTtl = math.max(60, tonumber(cfg.CACHE_TTL) or 300)
+	local failCacheTtl = math.max(15, tonumber(cfg.MEMBER_COUNT_FAIL_TTL) or 45)
 	local memoryStoreEnabled = cfg.MEMORY_STORE_ENABLED ~= false
 	local memoryStoreTtl = math.max(30, tonumber(cfg.MEMORY_STORE_TTL) or 86400)
 	local memoryStoreName = tostring(
 		cfg.MEMORY_STORE_NAME
 			or ((tostring(KitProduct.MemoryStorePrefix or "HazastudioClubKit")) .. "JoinCommunityPool")
 	)
+	local memberInfoUrlTemplate = ""
+	if type(cfg.MEMBER_INFO_URL) == "string" then
+		memberInfoUrlTemplate = cfg.MEMBER_INFO_URL
+	elseif type(cfg.MEMBER_COUNT_URL) == "string" then
+		-- Alias kept for older drafts.
+		memberInfoUrlTemplate = cfg.MEMBER_COUNT_URL
+	end
 	local limiter = RateLimiter.new(
 		tonumber(cfg.REQUEST_RATE_MAX) or 4,
 		tonumber(cfg.REQUEST_RATE_WINDOW) or 30
 	)
 
-	-- In-experience pool: members seen online in this place who are in GroupId.
+	-- In-experience pool: members seen online in this place who are in GroupId (bonus thumbs only).
 	local poolByUserId: { [number]: MemberSample } = {}
-	local poolOrder: { number } = {} -- FIFO for eviction when over cap
-	local memberCountCache: { expiresAt: number, value: number }? = nil
+	local poolOrder: { number } = {}
+	local memberCountCache: { expiresAt: number, value: number, known: boolean }? = nil
+	local emblemCache: { expiresAt: number, value: string? }? = nil
 	local memoryStore: any? = nil
 	local memoryStoreDirty = false
 	local memoryStoreWriteScheduled = false
 	local connections: { RBXScriptConnection } = {}
 	local destroyed = false
+	local warnedGetGroupInfoFail = false
+	local warnedMemberCountMissing = false
+	local warnedProxyFail = false
 
 	local function track(conn: RBXScriptConnection): RBXScriptConnection
 		table.insert(connections, conn)
@@ -127,29 +190,6 @@ local function createJoinCommunityMembersService(deps: {
 			return groupId
 		end
 		return 0
-	end
-
-	local function resolveMemberCount(groupId: number): number
-		local now = os.clock()
-		if memberCountCache and memberCountCache.expiresAt > now then
-			return memberCountCache.value
-		end
-
-		local okInfo, info = pcall(function()
-			return GroupService:GetGroupInfoAsync(groupId)
-		end)
-		local count = 0
-		if okInfo and type(info) == "table" then
-			local raw = (info :: any).MemberCount or (info :: any).memberCount
-			if type(raw) == "number" and raw > 0 then
-				count = raw
-			end
-		end
-		memberCountCache = {
-			expiresAt = now + memberCountTtl,
-			value = count,
-		}
-		return count
 	end
 
 	local function poolAsArray(): { MemberSample }
@@ -211,6 +251,214 @@ local function createJoinCommunityMembersService(deps: {
 		end
 	end
 
+	local function buildMemberInfoUrl(groupId: number): string?
+		if memberInfoUrlTemplate == "" then
+			return nil
+		end
+		local url = memberInfoUrlTemplate
+		if string.find(url, "{groupId}", 1, true) then
+			url = (string.gsub(url, "{groupId}", tostring(groupId)))
+		elseif string.find(url, "%", 1, true) then
+			-- "%d" / other format templates (e.g. https://groups.roproxy.com/v1/groups/%d)
+			local okFormat, formatted = pcall(function()
+				return string.format(memberInfoUrlTemplate, groupId)
+			end)
+			if okFormat and type(formatted) == "string" and formatted ~= "" then
+				url = formatted
+			end
+		end
+		local lower = string.lower(url)
+		-- Block official Roblox hosts only (proxy hosts like roproxy.com are allowed).
+		if string.find(lower, "groups.roblox.com", 1, true)
+			or string.find(lower, "://roblox.com", 1, true)
+			or string.find(lower, "://www.roblox.com", 1, true)
+			or string.find(lower, "apis.roblox.com", 1, true)
+		then
+			if not warnedProxyFail then
+				warnedProxyFail = true
+				log:warn("JoinCommunityMembers MEMBER_INFO_URL points at roblox.com (blocked); use a non-roblox proxy/worker", {
+					groupId = groupId,
+				})
+			end
+			return nil
+		end
+		return url
+	end
+
+	local function tryFetchMemberInfoProxy(groupId: number): (number?, { MemberSample }?, string?)
+		local url = buildMemberInfoUrl(groupId)
+		if url == nil then
+			return nil, nil, nil
+		end
+		local okHttp, bodyOrErr = pcall(function()
+			return HttpService:GetAsync(url)
+		end)
+		if not okHttp then
+			if not warnedProxyFail then
+				warnedProxyFail = true
+				log:warn("JoinCommunityMembers MEMBER_INFO_URL request failed", {
+					groupId = groupId,
+					err = tostring(bodyOrErr),
+				})
+			end
+			return nil, nil, nil
+		end
+		local okJson, decoded = pcall(function()
+			return HttpService:JSONDecode(bodyOrErr :: string)
+		end)
+		if not okJson or type(decoded) ~= "table" then
+			if not warnedProxyFail then
+				warnedProxyFail = true
+				log:warn("JoinCommunityMembers MEMBER_INFO_URL returned invalid JSON", {
+					groupId = groupId,
+				})
+			end
+			return nil, nil, nil
+		end
+
+		local count = extractMemberCount(decoded)
+		local emblem = extractEmblemUrl(decoded)
+		local samples: { MemberSample } = {}
+		local membersRaw = (decoded :: any).members
+		if type(membersRaw) == "table" then
+			for _, row in ipairs(membersRaw) do
+				if type(row) == "table" then
+					local userId = tonumber((row :: any).userId) or 0
+					if userId > 0 then
+						local displayName = (row :: any).displayName
+						if type(displayName) ~= "string" or displayName == "" then
+							displayName = "User " .. tostring(userId)
+						end
+						table.insert(samples, {
+							userId = userId,
+							displayName = displayName,
+						})
+					end
+				end
+			end
+		end
+		return count, if #samples > 0 then samples else nil, emblem
+	end
+
+	local function resolveEmblemUrl(groupId: number): string?
+		local now = os.clock()
+		if emblemCache and emblemCache.expiresAt > now then
+			return emblemCache.value
+		end
+
+		-- 1) Engine GroupService EmblemUrl (or GroupIcon thumb when info succeeded but field omitted).
+		local okInfo, infoOrErr = pcall(function()
+			return GroupService:GetGroupInfoAsync(groupId)
+		end)
+		if okInfo and type(infoOrErr) == "table" then
+			local emblem = extractEmblemUrl(infoOrErr) or groupIconThumbUrl(groupId)
+			emblemCache = {
+				expiresAt = now + memberCountTtl,
+				value = emblem,
+			}
+			return emblem
+		end
+
+		-- 2) Optional MEMBER_INFO_URL / roproxy JSON emblem fields (same proxy as MemberCount).
+		local _proxyCount, proxySamples, proxyEmblem = tryFetchMemberInfoProxy(groupId)
+		if proxySamples then
+			mergeSamplesIntoPool(proxySamples)
+		end
+		if type(proxyEmblem) == "string" and proxyEmblem ~= "" then
+			emblemCache = {
+				expiresAt = now + memberCountTtl,
+				value = proxyEmblem,
+			}
+			return proxyEmblem
+		end
+
+		emblemCache = {
+			expiresAt = now + failCacheTtl,
+			value = nil,
+		}
+		return nil
+	end
+
+	local function resolveMemberCount(groupId: number): (number, boolean)
+		local now = os.clock()
+		if memberCountCache and memberCountCache.expiresAt > now then
+			return memberCountCache.value, memberCountCache.known
+		end
+
+		-- 1) Engine GroupService — real total IF MemberCount is present (often absent per docs).
+		local okInfo, infoOrErr = pcall(function()
+			return GroupService:GetGroupInfoAsync(groupId)
+		end)
+		if not okInfo then
+			if not warnedGetGroupInfoFail then
+				warnedGetGroupInfoFail = true
+				log:warn("JoinCommunityMembers GetGroupInfoAsync failed", {
+					groupId = groupId,
+					err = tostring(infoOrErr),
+				})
+			end
+		else
+			-- Warm emblem cache from the same successful group info call.
+			if not (emblemCache and emblemCache.expiresAt > now and type(emblemCache.value) == "string") then
+				local emblem = extractEmblemUrl(infoOrErr) or groupIconThumbUrl(groupId)
+				emblemCache = {
+					expiresAt = now + memberCountTtl,
+					value = emblem,
+				}
+			end
+			local count = extractMemberCount(infoOrErr)
+			if count ~= nil then
+				memberCountCache = {
+					expiresAt = now + memberCountTtl,
+					value = count,
+					known = true,
+				}
+				return count, true
+			end
+			if not warnedMemberCountMissing then
+				warnedMemberCountMissing = true
+				log:warn(
+					"JoinCommunityMembers GetGroupInfoAsync has no MemberCount (engine often omits it); falling back to MEMBER_INFO_URL",
+					{
+						groupId = groupId,
+						hasName = type((infoOrErr :: any).Name) == "string",
+						memberInfoUrl = memberInfoUrlTemplate ~= "",
+					}
+				)
+			end
+		end
+
+		-- 2) Optional buyer proxy (non-*.roblox.com) for real MemberCount + optional samples/emblem.
+		local proxyCount, proxySamples, proxyEmblem = tryFetchMemberInfoProxy(groupId)
+		if proxySamples then
+			mergeSamplesIntoPool(proxySamples)
+		end
+		if type(proxyEmblem) == "string" and proxyEmblem ~= "" then
+			if not (emblemCache and emblemCache.expiresAt > now and type(emblemCache.value) == "string") then
+				emblemCache = {
+					expiresAt = now + memberCountTtl,
+					value = proxyEmblem,
+				}
+			end
+		end
+		if proxyCount ~= nil then
+			memberCountCache = {
+				expiresAt = now + memberCountTtl,
+				value = proxyCount,
+				known = true,
+			}
+			return proxyCount, true
+		end
+
+		-- Unknown — short negative cache. Never treat pool/online size as the community total.
+		memberCountCache = {
+			expiresAt = now + failCacheTtl,
+			value = 0,
+			known = false,
+		}
+		return 0, false
+	end
+
 	local function tryGetMemoryStore(): any?
 		if not memoryStoreEnabled then
 			return nil
@@ -261,7 +509,6 @@ local function createJoinCommunityMembersService(deps: {
 		end
 		if #samples > 0 then
 			mergeSamplesIntoPool(samples)
-			-- Merged remote snapshot; avoid immediate rewrite storm.
 			memoryStoreDirty = false
 			log:info("JoinCommunityMembers MemoryStore pool loaded", {
 				groupId = groupId,
@@ -345,12 +592,14 @@ local function createJoinCommunityMembersService(deps: {
 	end
 
 	local function buildPayload(groupId: number, excludeUserId: number?): MembersPayload
-		local memberCount = resolveMemberCount(groupId)
-		local pool = poolAsArray()
+		local memberCount, known = resolveMemberCount(groupId)
+		local emblemUrl = resolveEmblemUrl(groupId)
 		return {
 			groupId = groupId,
 			memberCount = memberCount,
-			members = pickRandomSamples(pool, sampleLimit, excludeUserId),
+			memberCountKnown = known,
+			emblemUrl = emblemUrl,
+			members = pickRandomSamples(poolAsArray(), sampleLimit, excludeUserId),
 		}
 	end
 
@@ -358,18 +607,28 @@ local function createJoinCommunityMembersService(deps: {
 		return {
 			groupId = groupId,
 			memberCount = 0,
+			memberCountKnown = false,
+			emblemUrl = nil,
 			members = {},
 		}
 	end
 
 	local function payloadFromPool(groupId: number, excludeUserId: number): MembersPayload
 		local memberCount = 0
+		local known = false
 		if memberCountCache then
 			memberCount = memberCountCache.value
+			known = memberCountCache.known
+		end
+		local emblemUrl: string? = nil
+		if emblemCache and type(emblemCache.value) == "string" and emblemCache.value ~= "" then
+			emblemUrl = emblemCache.value
 		end
 		return {
 			groupId = groupId,
 			memberCount = memberCount,
+			memberCountKnown = known,
+			emblemUrl = emblemUrl,
 			members = pickRandomSamples(poolAsArray(), sampleLimit, excludeUserId),
 		}
 	end
@@ -391,7 +650,6 @@ local function createJoinCommunityMembersService(deps: {
 			groupId = configured
 		end
 
-		-- Opportunistic: requester may themselves be in-group (seed pool).
 		task.spawn(function()
 			considerPlayer(player, groupId)
 		end)
@@ -422,7 +680,6 @@ local function createJoinCommunityMembersService(deps: {
 		if groupId <= 0 then
 			return
 		end
-		-- Slight delay so group membership cache can settle on join.
 		task.delay(2, function()
 			if destroyed or not player.Parent then
 				return
@@ -431,7 +688,6 @@ local function createJoinCommunityMembersService(deps: {
 		end)
 	end))
 
-	-- Pre-warm: MemoryStore snapshot + currently online in-group (no Http).
 	task.delay(8, function()
 		if destroyed then
 			return
@@ -444,13 +700,15 @@ local function createJoinCommunityMembersService(deps: {
 			loadPoolFromMemoryStore(groupId)
 		end)
 		seedFromOnlinePlayers(groupId)
+		local memberCount, known = 0, false
 		pcall(function()
-			resolveMemberCount(groupId)
+			memberCount, known = resolveMemberCount(groupId)
 		end)
 		log:info("JoinCommunityMembers pool warmed", {
 			groupId = groupId,
 			poolSize = #poolOrder,
-			memberCount = if memberCountCache then memberCountCache.value else 0,
+			memberCount = memberCount,
+			memberCountKnown = known,
 		})
 	end)
 
@@ -469,6 +727,7 @@ local function createJoinCommunityMembersService(deps: {
 		table.clear(poolByUserId)
 		table.clear(poolOrder)
 		memberCountCache = nil
+		emblemCache = nil
 		limiter:destroy()
 	end
 
@@ -478,6 +737,7 @@ local function createJoinCommunityMembersService(deps: {
 		poolCap = poolCap,
 		memberCountTtl = memberCountTtl,
 		memoryStore = memoryStoreEnabled,
+		memberInfoUrl = memberInfoUrlTemplate ~= "",
 	})
 
 	return service

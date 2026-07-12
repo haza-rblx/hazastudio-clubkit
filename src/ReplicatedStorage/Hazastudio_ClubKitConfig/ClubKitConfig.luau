@@ -461,6 +461,16 @@ ClubKitConfig.CommandAliases = {
 }
 
 -- =============================================================================
+-- JOIN COMMUNITY (optional — real MemberCount proxy)
+-- =============================================================================
+-- Engine GetGroupInfoAsync often has no MemberCount. Kit default uses a non-*.roblox.com
+-- proxy (Config.JoinCommunityPrompt.MEMBER_INFO_URL). Leave nil to keep kit default;
+-- set "" to disable; or your own worker URL with {groupId} / %d.
+ClubKitConfig.JoinCommunity = {
+	MemberInfoUrl = nil :: string?, -- nil = kit default; "" = off; else e.g. "https://your.worker/groups/{groupId}"
+}
+
+-- =============================================================================
 -- FITUR (matikan modul yang tidak dipakai)
 -- =============================================================================
 ClubKitConfig.Features = {
