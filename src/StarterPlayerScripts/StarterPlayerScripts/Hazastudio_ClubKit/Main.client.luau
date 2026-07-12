@@ -482,6 +482,7 @@ local DonationNotificationController = require(script.Parent.Client.Controllers.
 local DonationSystemController = require(script.Parent.Client.Controllers.DonationSystemController)
 local DonationSystemBootstrap = require(script.Parent.Client.DonationSystemBootstrap)
 local GenericBroadcastController = require(script.Parent.Client.Controllers.GenericBroadcastController)
+local JoinGreetingController = require(script.Parent.Client.Controllers.JoinGreetingController)
 local PaidBroadcastController = require(script.Parent.Client.Controllers.PaidBroadcastController)
 local CinematicDockController = require(script.Parent.Client.Controllers.CinematicDockController)
 local TopMenuController = require(script.Parent.Client.Controllers.TopMenuController)
@@ -532,6 +533,7 @@ end
 trackClientLifecycle("OverheadController", OverheadController)
 trackClientLifecycle("NotifController", NotifController)
 trackClientLifecycle("GenericBroadcastController", GenericBroadcastController)
+trackClientLifecycle("JoinGreetingController", JoinGreetingController)
 trackClientLifecycle("ChatTagsController", ChatTagsController)
 trackClientLifecycle("StreakController", StreakController)
 trackClientLifecycle("AfkGuardController", AfkGuardController)
@@ -910,6 +912,7 @@ NotifController.init({
 	notifyRemote = Remotes:WaitForChild("Notify") :: RemoteEvent,
 })
 GenericBroadcastController.init()
+JoinGreetingController.init()
 -- === UI SFX ===
 uiSoundHelper:init()
 AvatarLikeWorldEffect.init({

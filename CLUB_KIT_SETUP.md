@@ -160,7 +160,8 @@ Features = {
     DonationCash = true,
     DonationSaweria = true, -- legacy alias untuk DonationCash
     DonationRobux = true,
-    PromptJoinCommunityOnLoad = true, -- setelah loading: prompt join group (butuh GroupId > 0)
+    PromptJoinCommunityOnLoad = true, -- setelah loading: modal Join Community (skip jika sudah member; butuh GroupId > 0)
+    JoinGreetings = true, -- toast Owner/Leadership/Content/top-10 joiners
     -- matikan yang tidak dipakai: false
 },
 ```

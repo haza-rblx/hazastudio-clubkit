@@ -1,8 +1,8 @@
-# Upgrade Progress — Club Kit
+﻿# Upgrade Progress — Club Kit
 
 Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
 
-**Versi saat ini:** `2.3.1` (lihat [`VERSION`](VERSION))  
+**Versi saat ini:** `2.4.0` (lihat [`VERSION`](VERSION))  
 **Target rilis berikutnya:** _(belum ditetapkan)_
 
 ---
@@ -11,7 +11,7 @@ Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
 
 | Area | Status |
 |------|--------|
-| v2.3.1 prompt join community on load | ✅ Released |
+| v2.4.0 join greetings + custom join community modal | ✅ Released |
 
 ---
 

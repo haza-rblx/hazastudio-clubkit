@@ -63,6 +63,7 @@ local createStickerController = require(script.Parent.Controllers.StickerControl
 local createMusicController = require(script.Parent.Controllers.MusicController)
 local createSettingsController = require(script.Parent.Controllers.SettingsController)
 local createGenericBroadcastService = require(script.Parent.Services.GenericBroadcastService)
+local createJoinGreetingService = require(script.Parent.Services.JoinGreetingService)
 local createPaidBroadcastController = require(script.Parent.Controllers.PaidBroadcastController)
 local createCinematicDockController = require(script.Parent.Controllers.CinematicDockController)
 -- Repository
@@ -231,6 +232,7 @@ local NotifyRemote = ensureRemoteEvent(Remotes, "Notify")
 ensureRemoteEvent(Remotes, "OverheadUpdate")
 ensureRemoteEvent(Remotes, (Config.ClientBoot :: any).CLIENT_GAMEPLAY_READY_REMOTE or "ClientGameplayReady")
 local GenericBroadcastRemote = ensureRemoteEvent(Remotes, Config.Announcement.REMOTE_BROADCAST)
+local JoinGreetingRemote = ensureRemoteEvent(Remotes, (Config.JoinGreeting and Config.JoinGreeting.REMOTE) or "JoinGreeting")
 ensureRemoteEvent(Remotes, Config.PaidBroadcast.REMOTE_SUBMIT)
 local _PaidBroadcastResultRemote = ensureRemoteEvent(Remotes, Config.PaidBroadcast.REMOTE_RESULT)
 -- Create UnreliableRemoteEvent untuk cosmetic data (particles, VFX hints)
@@ -515,6 +517,19 @@ local genericBroadcastService = createGenericBroadcastService({
 	overheadService = overheadService,
 	logger = Logger.new("GenericBroadcastService"),
 })
+local joinGreetingNetwork = NetworkManager.create({
+	reliable = JoinGreetingRemote,
+	logger = Logger.new("JoinGreetingNetwork"),
+	isServer = true,
+})
+local joinGreetingService = trackLifecycle(
+	"JoinGreetingService",
+	createJoinGreetingService({
+		broadcastNetwork = joinGreetingNetwork,
+		overheadService = overheadService,
+		logger = Logger.new("JoinGreetingService"),
+	})
+)
 local giftGrantNetwork = NetworkManager.create({
 	reliable = ShopGrantRemote,
 	logger = Logger.new("GiftGrantNetwork"),
@@ -635,6 +650,9 @@ local function scheduleOverheadJoinRetry(player: Player)
 				overheadController:onPlayerDataReady(player)
 				overheadController:refreshPlayer(player, "recovery")
 				streakController:processLoginForPlayer(player)
+				if joinGreetingService and type(joinGreetingService.onPlayerReady) == "function" then
+					joinGreetingService:onPlayerReady(player)
+				end
 				log:info("Overhead join retry succeeded", {
 					userId = player.UserId,
 					delaySec = delaySec,
@@ -660,6 +678,9 @@ sharedProfileLoader:onLoaded(function(event)
 	if event.result.ok then
 		overheadController:onPlayerDataReady(event.player)
 		streakController:processLoginForPlayer(event.player)
+		if joinGreetingService and type(joinGreetingService.onPlayerReady) == "function" then
+			joinGreetingService:onPlayerReady(event.player)
+		end
 	else
 		scheduleOverheadJoinRetry(event.player)
 	end
@@ -745,6 +766,9 @@ if type(overheadService.setCashStatsReadyCallback) == "function" then
 		local player = Players:GetPlayerByUserId(userId)
 		if player and overheadController and type(overheadController.refreshPlayer) == "function" then
 			overheadController:refreshPlayer(player)
+		end
+		if player and joinGreetingService and type(joinGreetingService.onPayloadUpdated) == "function" then
+			joinGreetingService:onPayloadUpdated(player)
 		end
 	end)
 end
@@ -1057,6 +1081,9 @@ connectionCleaner:add(Players.PlayerRemoving:Connect(function(player)
 	donationEffectService:onPlayerRemoving(player)
 	if streakController and type(streakController.onPlayerRemoving) == "function" then
 		streakController:onPlayerRemoving(player)
+	end
+	if joinGreetingService and type(joinGreetingService.onPlayerRemoving) == "function" then
+		joinGreetingService:onPlayerRemoving(player)
 	end
 end))
 local _sessionCommandController
