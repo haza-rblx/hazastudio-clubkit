@@ -13,6 +13,18 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ---
 
+## [2.4.6] - 2026-07-12
+
+### Changed
+- **Join Commun copy** - social strip no longer repeats the raw MemberCount on subtitle and body. Subtitle stays qualitative (`Players already in this community.`); body carries a compact count once (`Over 10.6M players already joined.` / light alt pool). VIP TITLE/SUBHEADLINE unchanged.
+- **Join Commun counts** - MemberCount / CounterLeft / body extras use compact `k`/`M`/`B` (e.g. `10589188` -> `10.6M`, `1200` -> `1.2k`).
+- **Join Commun thumbs** - server fetches one page of group members via `MEMBER_USERS_URL` (default `groups.roproxy.com/.../users?limit=40`), O(k) sample of 8, 300s cache; in-experience pool is secondary fill. Requires `HttpEnabled` (same as count). No Http to `*.roblox.com`.
+
+### Fixed
+- **Join Commun MemberCount log noise** - missing engine `MemberCount` is expected; log demoted to DEBUG once (fallback to `MEMBER_INFO_URL` unchanged).
+
+---
+
 ## [2.4.5] - 2026-07-12
 
 ### Changed
@@ -60,10 +72,10 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 
 ### Added
-- **Join greeting notifications** — when Owner, Leadership (category id 1), Content (category id 3), top-10 Robux, or top-10 cash spender joins, all clients see a `GreetingNotifications` / `GeneralGreetings` toast (once per session). Role eligibility follows `ROLE_TO_CATEGORY` (buyer-added Leadership/Content roles auto-greet). Toggle: `Features.JoinGreetings` (default on). Sequence: creative message → fade → `Welcome back, …` (Owner: `Welcome back, owner {DisplayName}`) → dismiss. Toast motion reuses **GenericBroadcast** enter/exit (`UIScale` 0.84→0.9 / 0.81, `GroupTransparency`, Quad 0.28/0.22) + linear **CountDownBar** with role accent; message swap uses `TextTransparency` crossfade (no abrupt `Visible` toggles). Template must be a `CanvasGroup`.
+- **Join greeting notifications** — when Owner, Leadership (category id 1), Content (category id 3), top-10 Robux, or top-10 cash spender joins, all clients see a `GreetingNotifications` / `GeneralGreetings` toast (once per session). Role eligibility follows `ROLE_TO_CATEGORY` (buyer-added Leadership/Content roles auto-greet). Toggle: `Features.JoinGreetings` (default on). Sequence: creative message -> fade -> `Welcome back, …` (Owner: `Welcome back, owner {DisplayName}`) -> dismiss. Toast motion reuses **GenericBroadcast** enter/exit (`UIScale` 0.84->0.9 / 0.81, `GroupTransparency`, Quad 0.28/0.22) + linear **CountDownBar** with role accent; message swap uses `TextTransparency` crossfade (no abrupt `Visible` toggles). Template must be a `CanvasGroup`.
 
 ### Changed
-- **Join community on load** — after loading/`enterGameplay`, wait 2s then show custom `16-JoinCommunPrompt` with **Shop/Gift/PaidBroadcast** center-modal motion (`AnimationHelper.presentCenterPanel` / `dismissCenterPanel`: UIScale 0.96→1 Sine, PanelBlur + FOV zoom). **Skip entirely if already in group** (no auto CoreGui). Join CTA dismisses modal first, then `GroupService:PromptJoinAsync`; Close dismisses only. Avatar strip clones up to 8 in-server member headshots; `CounterLeft` `+(total-8)` only when group member count > 8. Replaces v2.3.1 auto-`PromptJoinAsync` after 0.75s. Toggle / `GroupId` gates unchanged. Missing GUI → warn + skip (no CoreGui fallback).
+- **Join community on load** — after loading/`enterGameplay`, wait 2s then show custom `16-JoinCommunPrompt` with **Shop/Gift/PaidBroadcast** center-modal motion (`AnimationHelper.presentCenterPanel` / `dismissCenterPanel`: UIScale 0.96->1 Sine, PanelBlur + FOV zoom). **Skip entirely if already in group** (no auto CoreGui). Join CTA dismisses modal first, then `GroupService:PromptJoinAsync`; Close dismisses only. Avatar strip clones up to 8 in-server member headshots; `CounterLeft` `+(total-8)` only when group member count > 8. Replaces v2.3.1 auto-`PromptJoinAsync` after 0.75s. Toggle / `GroupId` gates unchanged. Missing GUI -> warn + skip (no CoreGui fallback).
 
 ---
 
@@ -89,8 +101,8 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 - **DataStore join storm** — live ~4-player joins no longer flood the request queue from boot LB pre-warm + parallel Settings/Stickers/MusicFavorites GetAsync + double SharedProfileLoader enqueue + streak UpdateAsync when already counted.
 
 ### Changed
-- **World VFX server queue** — `WORLD_EFFECT_DURATIONS` per effect (Nuke 90s / Smite4 180s / BlackHole 240s); `NUKE_DEFAULT_DURATION` 20→90. Worker always waits after broadcast. NukeEffectController stays disabled (would double VFX).
-- **LocalNuke fireworks** — `FIREWORK_COUNT` 140→40 (temp PlaceMemory spike).
+- **World VFX server queue** — `WORLD_EFFECT_DURATIONS` per effect (Nuke 90s / Smite4 180s / BlackHole 240s); `NUKE_DEFAULT_DURATION` 20->90. Worker always waits after broadcast. NukeEffectController stays disabled (would double VFX).
+- **LocalNuke fireworks** — `FIREWORK_COUNT` 140->40 (temp PlaceMemory spike).
 - **Leaderboard boot pre-warm** — paint empty/loading boards immediately; defer heavy `buildWorkspaceLeaderboardPayload` (~25s); likes metadata GetAsync capped at 20 (identity fallback beyond).
 - **Join reads** — Settings / Stickers / Music favorites fold into SharedProfileLoader; SyncDance favorites registered before first enqueue (no second enqueue).
 - **Studio DataStore** — default isolation again (reverses v2.2.2 “Studio = live” for safety). Opt into live keys explicitly via `USE_STUDIO_DATASTORE_ISOLATION = false`.
@@ -100,7 +112,7 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 ## [2.2.9] — 2026-07-11
 
 ### Changed
-- **Music topbar** — pindah ke strip kanan, order paling kiri (sebelah kiri Command): Music → Command → Admin → Menu.
+- **Music topbar** — pindah ke strip kanan, order paling kiri (sebelah kiri Command): Music -> Command -> Admin -> Menu.
 - **Community leaderboard credit** — donasi Robux pakai community efektif sama seperti badge: `/setcommun` **atau** primary Roblox group (kalau `PRIMARY_FALLBACK_ENABLED` dan belum `/clearcommun`).
 
 ---
@@ -112,8 +124,8 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 - **Duplicate role team/chat colors** — `RolesDomain` auto-remap `teamColor` + `roleColor.primary` yang bentrok (ClubKitConfig buyer) supaya PlayerList/leaderboard teams dan chat tags unik.
 
 ### Changed
-- **Default music volume** — 50% → **100%** (settings + music player store). Existing saves still on old default **50** are migrated once to **100**.
-- **Cinematic/freecam topbar icon** — `Icons.Topbar.Camera` → `rbxassetid://131545412033411` (menu cinematic + MobileFreecam HP).
+- **Default music volume** — 50% -> **100%** (settings + music player store). Existing saves still on old default **50** are migrated once to **100**.
+- **Cinematic/freecam topbar icon** — `Icons.Topbar.Camera` -> `rbxassetid://131545412033411` (menu cinematic + MobileFreecam HP).
 - **Carry template anim IDs** — `ClubKitConfig.Carry` kit template pakai anim buyer (6 style kit names; legacy CoupleHug/Pasakal/PiggyUpperBack dibuang dari template).
 
 ---
@@ -142,7 +154,7 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 ## [2.2.4] — 2026-07-11
 
 ### Fixed
-- **Dance favorites 1KB cap** — `Validator.favoritesUpdate` tidak lagi pakai `Security.MAX_PAYLOAD_BYTES` (1KB command); limit khusus `Config.Favorites.MAX_PAYLOAD_BYTES` = 32KB (kasus ~54 favorites mentok). Rate limit `FAVORITES_UPDATE` 5/5s → 15/5s.
+- **Dance favorites 1KB cap** — `Validator.favoritesUpdate` tidak lagi pakai `Security.MAX_PAYLOAD_BYTES` (1KB command); limit khusus `Config.Favorites.MAX_PAYLOAD_BYTES` = 32KB (kasus ~54 favorites mentok). Rate limit `FAVORITES_UPDATE` 5/5s -> 15/5s.
 - **Donation burst poll** — `getNotifPollDelay` (5s / 45s window) sekarang di-wire ke `BackgroundJobScheduler:setInterval` setelah tiap `donation_poll` (sebelumnya dead setelah migrasi scheduler).
 - **Cash LB overhead** — hapus `refreshAll` rutin setelah leaderboard sync; `assignPlayer`/`clearPlayer` sudah `refreshPlayer` (force path tetap).
 - **Donation notif queue** — backlog memendekkan display; saat penuh, evict amount terkecil di antrian (bukan drop donasi besar yang baru).
@@ -156,7 +168,7 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ### Fixed
 - **Gravity / Ungravity naming** — `/ungravity` (+ Shift+U) = float; `/gravity` (+ Shift+G) = restore. Sebelumnya keybind & `/gravity N` terbalik secara makna.
-- **Ungravity → gravity drop** — restore tidak lagi nol-kan Y (ngambang dulu); langsung kick ke bawah + Freefall supaya turun lebih cepat.
+- **Ungravity -> gravity drop** — restore tidak lagi nol-kan Y (ngambang dulu); langsung kick ke bawah + Freefall supaya turun lebih cepat.
 
 ---
 
@@ -223,8 +235,8 @@ Initial git baseline + rilis dev v2. Melanjutkan dari handover v1.3 dengan fix s
 - Circular require crash saat boot — `DonationProviderDomain` lazy-require `Config`
 
 ### Changed
-- Rate limit session command `/re` dll.: `3` → `10` per 30 detik (`Config.Session.RATE_MAX`)
-- Versi produk: `1.3.0` → `2.0.0` (semver baru untuk track upgrade via git)
+- Rate limit session command `/re` dll.: `3` -> `10` per 30 detik (`Config.Session.RATE_MAX`)
+- Versi produk: `1.3.0` -> `2.0.0` (semver baru untuk track upgrade via git)
 
 ---
 

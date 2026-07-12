@@ -205,6 +205,37 @@ local function clearThumbClones()
 	table.clear(thumbClones)
 end
 
+-- Compact social counts: 999 | 1k | 1.2k | 10.6M | 1.2B
+local function formatCompactCount(n: number): string
+	local value = math.floor(math.max(0, n))
+	if value < 1000 then
+		return tostring(value)
+	end
+
+	local div: number
+	local suffix: string
+	if value >= 1000000000 then
+		div = 1000000000
+		suffix = "B"
+	elseif value >= 1000000 then
+		div = 1000000
+		suffix = "M"
+	else
+		div = 1000
+		suffix = "k"
+	end
+
+	local scaled = value / div
+	if scaled >= 100 then
+		return string.format("%d%s", math.floor(scaled + 0.5), suffix)
+	end
+	local tenths = math.floor(scaled * 10 + 0.5) / 10
+	if tenths == math.floor(tenths) then
+		return string.format("%d%s", math.floor(tenths), suffix)
+	end
+	return string.format("%.1f%s", tenths, suffix)
+end
+
 local function setCounterVisible(visible: boolean, extra: number?)
 	local r = refs
 	if not r or not r.counterLeft then
@@ -212,7 +243,7 @@ local function setCounterVisible(visible: boolean, extra: number?)
 	end
 	if visible and type(extra) == "number" and extra > 0 then
 		if r.counterLabel then
-			r.counterLabel.Text = "+" .. tostring(extra)
+			r.counterLabel.Text = "+" .. formatCompactCount(extra)
 		end
 		r.counterLeft.Visible = true
 	else
@@ -225,24 +256,35 @@ local function joinPromptCfg(): any
 	return if type(cfg) == "table" then cfg else {}
 end
 
+local function pickBodyEmptyWithCountTemplate(cfg: any): string
+	local alts = cfg.BODY_EMPTY_WITH_COUNT_ALT
+	if type(alts) == "table" and #alts > 0 then
+		local pick = alts[math.random(1, #alts)]
+		if type(pick) == "string" and pick ~= "" then
+			return pick
+		end
+	end
+	return tostring(cfg.BODY_EMPTY_WITH_COUNT or "Over %s players already joined.")
+end
+
+-- Subtitle stays qualitative (no huge number). Count lives in body once when no names.
 local function formatSubtitle(memberCount: number, memberCountKnown: boolean, hasSampleNames: boolean): string
 	local cfg = joinPromptCfg()
 	if hasSampleNames then
 		return tostring(cfg.SUBTITLE_WITH_SAMPLE or "Players already in this community.")
 	end
 	if memberCountKnown and memberCount > 0 then
-		local template = tostring(cfg.SUBTITLE_WITH_COUNT or "Join with other %d players.")
-		return string.format(template, memberCount)
+		return tostring(cfg.SUBTITLE_WITH_COUNT or "Players already in this community.")
 	end
-	return tostring(cfg.SUBTITLE_FALLBACK or "Join with other players.")
+	return tostring(cfg.SUBTITLE_FALLBACK or "Join players already here.")
 end
 
 local function formatBody(names: { string }, memberCount: number, memberCountKnown: boolean): string
 	local cfg = joinPromptCfg()
 	if #names == 0 then
 		if memberCountKnown and memberCount > 0 then
-			local template = tostring(cfg.BODY_EMPTY_WITH_COUNT or "%d players already joined this community.")
-			return string.format(template, memberCount)
+			local template = pickBodyEmptyWithCountTemplate(cfg)
+			return string.format(template, formatCompactCount(memberCount))
 		end
 		-- Only claim "first to join" when the real total is known to be zero.
 		if memberCountKnown and memberCount == 0 then
@@ -272,8 +314,8 @@ local function formatBody(names: { string }, memberCount: number, memberCountKno
 	end
 
 	local listedJoined = table.concat(listed, ", ")
-	local template = tostring(cfg.BODY_WITH_EXTRA or "%s, and %d other players already joined this community.")
-	return string.format(template, listedJoined, remaining)
+	local template = tostring(cfg.BODY_WITH_EXTRA or "%s, and %s other players already joined.")
+	return string.format(template, listedJoined, formatCompactCount(remaining))
 end
 
 local function applyHeadlineCopy()

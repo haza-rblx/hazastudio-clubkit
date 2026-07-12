@@ -8,8 +8,9 @@
 --   (non-*.roblox.com worker) can supply the real count + optional samples.
 --
 -- AVATAR SAMPLES:
---   In-experience pool of community members seen in this place (bonus fill only).
---   Full random roster via groups.roblox.com is blocked from game servers.
+--   Primary: 1 page via MEMBER_USERS_URL (default groups.roproxy.com users API),
+--   O(k) random pick, CACHE_TTL. In-experience / MemoryStore pool is secondary fill.
+--   Http to groups.roblox.com is blocked from game servers.
 
 local GroupService = game:GetService("GroupService")
 local HttpService = game:GetService("HttpService")
@@ -130,6 +131,98 @@ local function groupIconThumbUrl(groupId: number): string
 	return ("rbxthumb://type=GroupIcon&id=%d&w=150&h=150"):format(groupId)
 end
 
+local function isBlockedRobloxHost(url: string): boolean
+	local lower = string.lower(url)
+	return string.find(lower, "groups.roblox.com", 1, true) ~= nil
+		or string.find(lower, "://roblox.com", 1, true) ~= nil
+		or string.find(lower, "://www.roblox.com", 1, true) ~= nil
+		or string.find(lower, "apis.roblox.com", 1, true) ~= nil
+end
+
+local function formatUrlTemplate(template: string, groupId: number): string?
+	if template == "" then
+		return nil
+	end
+	local url = template
+	if string.find(url, "{groupId}", 1, true) then
+		url = (string.gsub(url, "{groupId}", tostring(groupId)))
+	elseif string.find(url, "%", 1, true) then
+		local okFormat, formatted = pcall(function()
+			return string.format(template, groupId)
+		end)
+		if okFormat and type(formatted) == "string" and formatted ~= "" then
+			url = formatted
+		end
+	end
+	if isBlockedRobloxHost(url) then
+		return nil
+	end
+	return url
+end
+
+local function parseUserRowsFromProxy(decoded: any): { MemberSample }
+	local samples: { MemberSample } = {}
+	if type(decoded) ~= "table" then
+		return samples
+	end
+
+	local function pushUser(userId: number, displayName: any)
+		if userId <= 0 then
+			return
+		end
+		local name = displayName
+		if type(name) ~= "string" or name == "" then
+			name = "User " .. tostring(userId)
+		end
+		table.insert(samples, {
+			userId = userId,
+			displayName = name,
+		})
+	end
+
+	-- Flat members[] from custom workers / MEMBER_INFO_URL extras.
+	local membersRaw = (decoded :: any).members
+	if type(membersRaw) == "table" then
+		for _, row in ipairs(membersRaw) do
+			if type(row) == "table" then
+				local userId = tonumber((row :: any).userId) or 0
+				local displayName = (row :: any).displayName
+				if type(displayName) ~= "string" or displayName == "" then
+					displayName = (row :: any).username
+				end
+				pushUser(userId, displayName)
+			end
+		end
+	end
+
+	-- Official groups.v1 users page shape: { data: [ { user: { userId, displayName, username } } ] }
+	local dataRaw = (decoded :: any).data
+	if type(dataRaw) == "table" then
+		for _, row in ipairs(dataRaw) do
+			if type(row) == "table" then
+				local user = (row :: any).user
+				if type(user) == "table" then
+					local userId = tonumber((user :: any).userId) or 0
+					local displayName = (user :: any).displayName
+					if type(displayName) ~= "string" or displayName == "" then
+						displayName = (user :: any).username
+					end
+					pushUser(userId, displayName)
+				else
+					local userId = tonumber((row :: any).userId) or 0
+					local displayName = (row :: any).displayName
+					if type(displayName) ~= "string" or displayName == "" then
+						displayName = (row :: any).username
+					end
+					pushUser(userId, displayName)
+				end
+			end
+		end
+	end
+
+	return samples
+end
+
 local function createJoinCommunityMembersService(deps: {
 	remotes: Folder,
 	logger: any?,
@@ -160,6 +253,10 @@ local function createJoinCommunityMembersService(deps: {
 		-- Alias kept for older drafts.
 		memberInfoUrlTemplate = cfg.MEMBER_COUNT_URL
 	end
+	local memberUsersUrlTemplate = ""
+	if type(cfg.MEMBER_USERS_URL) == "string" then
+		memberUsersUrlTemplate = cfg.MEMBER_USERS_URL
+	end
 	local limiter = RateLimiter.new(
 		tonumber(cfg.REQUEST_RATE_MAX) or 4,
 		tonumber(cfg.REQUEST_RATE_WINDOW) or 30
@@ -170,14 +267,16 @@ local function createJoinCommunityMembersService(deps: {
 	local poolOrder: { number } = {}
 	local memberCountCache: { expiresAt: number, value: number, known: boolean }? = nil
 	local emblemCache: { expiresAt: number, value: string? }? = nil
+	local usersPageCache: { expiresAt: number, samples: { MemberSample } }? = nil
 	local memoryStore: any? = nil
 	local memoryStoreDirty = false
 	local memoryStoreWriteScheduled = false
 	local connections: { RBXScriptConnection } = {}
 	local destroyed = false
 	local warnedGetGroupInfoFail = false
-	local warnedMemberCountMissing = false
+	local loggedMemberCountMissing = false
 	local warnedProxyFail = false
+	local warnedUsersProxyFail = false
 
 	local function track(conn: RBXScriptConnection): RBXScriptConnection
 		table.insert(connections, conn)
@@ -252,35 +351,27 @@ local function createJoinCommunityMembersService(deps: {
 	end
 
 	local function buildMemberInfoUrl(groupId: number): string?
-		if memberInfoUrlTemplate == "" then
-			return nil
-		end
-		local url = memberInfoUrlTemplate
-		if string.find(url, "{groupId}", 1, true) then
-			url = (string.gsub(url, "{groupId}", tostring(groupId)))
-		elseif string.find(url, "%", 1, true) then
-			-- "%d" / other format templates (e.g. https://groups.roproxy.com/v1/groups/%d)
-			local okFormat, formatted = pcall(function()
-				return string.format(memberInfoUrlTemplate, groupId)
-			end)
-			if okFormat and type(formatted) == "string" and formatted ~= "" then
-				url = formatted
-			end
-		end
-		local lower = string.lower(url)
-		-- Block official Roblox hosts only (proxy hosts like roproxy.com are allowed).
-		if string.find(lower, "groups.roblox.com", 1, true)
-			or string.find(lower, "://roblox.com", 1, true)
-			or string.find(lower, "://www.roblox.com", 1, true)
-			or string.find(lower, "apis.roblox.com", 1, true)
-		then
+		local url = formatUrlTemplate(memberInfoUrlTemplate, groupId)
+		if memberInfoUrlTemplate ~= "" and url == nil and isBlockedRobloxHost(memberInfoUrlTemplate) then
 			if not warnedProxyFail then
 				warnedProxyFail = true
 				log:warn("JoinCommunityMembers MEMBER_INFO_URL points at roblox.com (blocked); use a non-roblox proxy/worker", {
 					groupId = groupId,
 				})
 			end
-			return nil
+		end
+		return url
+	end
+
+	local function buildMemberUsersUrl(groupId: number): string?
+		local url = formatUrlTemplate(memberUsersUrlTemplate, groupId)
+		if memberUsersUrlTemplate ~= "" and url == nil and isBlockedRobloxHost(memberUsersUrlTemplate) then
+			if not warnedUsersProxyFail then
+				warnedUsersProxyFail = true
+				log:warn("JoinCommunityMembers MEMBER_USERS_URL points at roblox.com (blocked); use a non-roblox proxy", {
+					groupId = groupId,
+				})
+			end
 		end
 		return url
 	end
@@ -318,26 +409,96 @@ local function createJoinCommunityMembersService(deps: {
 
 		local count = extractMemberCount(decoded)
 		local emblem = extractEmblemUrl(decoded)
-		local samples: { MemberSample } = {}
-		local membersRaw = (decoded :: any).members
-		if type(membersRaw) == "table" then
-			for _, row in ipairs(membersRaw) do
-				if type(row) == "table" then
-					local userId = tonumber((row :: any).userId) or 0
-					if userId > 0 then
-						local displayName = (row :: any).displayName
-						if type(displayName) ~= "string" or displayName == "" then
-							displayName = "User " .. tostring(userId)
-						end
-						table.insert(samples, {
-							userId = userId,
-							displayName = displayName,
-						})
-					end
-				end
+		local samples = parseUserRowsFromProxy(decoded)
+		return count, if #samples > 0 then samples else nil, emblem
+	end
+
+	-- One page of group members via roproxy (or buyer MEMBER_USERS_URL). Cached CACHE_TTL.
+	local function tryFetchGroupUsersPage(groupId: number): { MemberSample }?
+		local url = buildMemberUsersUrl(groupId)
+		if url == nil then
+			return nil
+		end
+		local okHttp, bodyOrErr = pcall(function()
+			return HttpService:GetAsync(url)
+		end)
+		if not okHttp then
+			if not warnedUsersProxyFail then
+				warnedUsersProxyFail = true
+				log:warn("JoinCommunityMembers MEMBER_USERS_URL request failed", {
+					groupId = groupId,
+					err = tostring(bodyOrErr),
+				})
+			end
+			return nil
+		end
+		local okJson, decoded = pcall(function()
+			return HttpService:JSONDecode(bodyOrErr :: string)
+		end)
+		if not okJson or type(decoded) ~= "table" then
+			if not warnedUsersProxyFail then
+				warnedUsersProxyFail = true
+				log:warn("JoinCommunityMembers MEMBER_USERS_URL returned invalid JSON", {
+					groupId = groupId,
+				})
+			end
+			return nil
+		end
+		local samples = parseUserRowsFromProxy(decoded)
+		if #samples == 0 then
+			return nil
+		end
+		return samples
+	end
+
+	local function resolveRemoteUsersPage(groupId: number): { MemberSample }
+		local now = os.clock()
+		if usersPageCache and usersPageCache.expiresAt > now then
+			return usersPageCache.samples
+		end
+
+		local fetched = tryFetchGroupUsersPage(groupId)
+		if fetched then
+			usersPageCache = {
+				expiresAt = now + memberCountTtl,
+				samples = fetched,
+			}
+			mergeSamplesIntoPool(fetched)
+			return fetched
+		end
+
+		-- Short negative cache so we do not hammer a dead proxy every request.
+		usersPageCache = {
+			expiresAt = now + failCacheTtl,
+			samples = {},
+		}
+		return {}
+	end
+
+	local function pickMembersForPayload(groupId: number, excludeUserId: number?): { MemberSample }
+		local remoteRoster = resolveRemoteUsersPage(groupId)
+		local fromRemote = pickRandomSamples(remoteRoster, sampleLimit, excludeUserId)
+		if #fromRemote >= sampleLimit then
+			return fromRemote
+		end
+
+		-- Secondary fill: in-experience / MemoryStore pool.
+		local seen: { [number]: boolean } = {}
+		for _, sample in ipairs(fromRemote) do
+			seen[sample.userId] = true
+		end
+		local need = sampleLimit - #fromRemote
+		local poolFill = pickRandomSamples(poolAsArray(), need + 4, excludeUserId)
+		for _, sample in ipairs(poolFill) do
+			if #fromRemote >= sampleLimit then
+				break
+			end
+			if not seen[sample.userId] then
+				seen[sample.userId] = true
+				table.insert(fromRemote, sample)
 			end
 		end
-		return count, if #samples > 0 then samples else nil, emblem
+		return fromRemote
 	end
 
 	local function resolveEmblemUrl(groupId: number): string?
@@ -415,13 +576,13 @@ local function createJoinCommunityMembersService(deps: {
 				}
 				return count, true
 			end
-			if not warnedMemberCountMissing then
-				warnedMemberCountMissing = true
-				log:warn(
+			-- Expected: engine docs omit MemberCount — not a buyer misconfig.
+			if not loggedMemberCountMissing then
+				loggedMemberCountMissing = true
+				log:debug(
 					"JoinCommunityMembers GetGroupInfoAsync has no MemberCount (engine often omits it); falling back to MEMBER_INFO_URL",
 					{
 						groupId = groupId,
-						hasName = type((infoOrErr :: any).Name) == "string",
 						memberInfoUrl = memberInfoUrlTemplate ~= "",
 					}
 				)
@@ -599,7 +760,7 @@ local function createJoinCommunityMembersService(deps: {
 			memberCount = memberCount,
 			memberCountKnown = known,
 			emblemUrl = emblemUrl,
-			members = pickRandomSamples(poolAsArray(), sampleLimit, excludeUserId),
+			members = pickMembersForPayload(groupId, excludeUserId),
 		}
 	end
 
@@ -700,6 +861,10 @@ local function createJoinCommunityMembersService(deps: {
 			loadPoolFromMemoryStore(groupId)
 		end)
 		seedFromOnlinePlayers(groupId)
+		local remoteUsers = 0
+		pcall(function()
+			remoteUsers = #resolveRemoteUsersPage(groupId)
+		end)
 		local memberCount, known = 0, false
 		pcall(function()
 			memberCount, known = resolveMemberCount(groupId)
@@ -707,6 +872,7 @@ local function createJoinCommunityMembersService(deps: {
 		log:info("JoinCommunityMembers pool warmed", {
 			groupId = groupId,
 			poolSize = #poolOrder,
+			remoteUsers = remoteUsers,
 			memberCount = memberCount,
 			memberCountKnown = known,
 		})
@@ -728,6 +894,7 @@ local function createJoinCommunityMembersService(deps: {
 		table.clear(poolOrder)
 		memberCountCache = nil
 		emblemCache = nil
+		usersPageCache = nil
 		limiter:destroy()
 	end
 
@@ -738,6 +905,7 @@ local function createJoinCommunityMembersService(deps: {
 		memberCountTtl = memberCountTtl,
 		memoryStore = memoryStoreEnabled,
 		memberInfoUrl = memberInfoUrlTemplate ~= "",
+		memberUsersUrl = memberUsersUrlTemplate ~= "",
 	})
 
 	return service
