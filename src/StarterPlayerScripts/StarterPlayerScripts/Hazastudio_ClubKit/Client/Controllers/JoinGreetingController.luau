@@ -71,6 +71,9 @@ type ActiveCard = {
 local activeCards = {} :: { ActiveCard }
 local presentQueue = {} :: { Payload }
 local presenting = false
+-- Hold until loading click + cinematic reveal finish (`enterGameplay` / notifyGameplayReady).
+local gameplayReady = false
+local heldUntilGameplay: { Payload } = {}
 
 local function avatarHeadshot(userId: number): string
 	return ("rbxthumb://type=AvatarHeadShot&id=%d&w=420&h=420"):format(userId)
@@ -454,7 +457,23 @@ local function pumpQueue()
 end
 
 local function presentPayload(payload: Payload)
+	if not gameplayReady then
+		table.insert(heldUntilGameplay, payload)
+		return
+	end
 	table.insert(presentQueue, payload)
+	task.spawn(pumpQueue)
+end
+
+local function flushHeldUntilGameplay()
+	if #heldUntilGameplay == 0 then
+		return
+	end
+	local held = heldUntilGameplay
+	heldUntilGameplay = {}
+	for _, payload in ipairs(held) do
+		table.insert(presentQueue, payload)
+	end
 	task.spawn(pumpQueue)
 end
 
@@ -467,9 +486,19 @@ local function clearActiveCards()
 		table.remove(activeCards, index)
 	end
 	table.clear(presentQueue)
+	table.clear(heldUntilGameplay)
 end
 
 local JoinGreetingController = {}
+
+-- Called from Main.client enterGameplay after loading dismiss + camera reveal.
+function JoinGreetingController.notifyGameplayReady()
+	if gameplayReady then
+		return
+	end
+	gameplayReady = true
+	flushHeldUntilGameplay()
+end
 
 function JoinGreetingController.init()
 	if Config.FeatureFlags.JoinGreetingsEnabled ~= true then
@@ -502,10 +531,17 @@ function JoinGreetingController.init()
 		if not payload then
 			return
 		end
-		task.spawn(presentPayload, payload)
+		presentPayload(payload)
 	end))
 
-	log:info("JoinGreetingController initialized")
+	-- If enterGameplay already ran before init (no loading / early finish), flush now.
+	if gameplayReady then
+		flushHeldUntilGameplay()
+	end
+
+	log:info("JoinGreetingController initialized", {
+		gameplayReady = gameplayReady,
+	})
 end
 
 function JoinGreetingController.destroy()

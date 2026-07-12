@@ -167,6 +167,7 @@ local clientBootScheduler = ClientBootScheduler.create({
 local PhoneLayout = require(script.Parent.Client.Utils.PhoneLayout)
 local AvatarPrewarmShared = require(script.Parent.Client.Utils.AvatarPrewarmShared)
 local JoinCommunityPromptController = require(script.Parent.Client.Controllers.JoinCommunityPromptController)
+local JoinGreetingController = require(script.Parent.Client.Controllers.JoinGreetingController)
 local syncDanceController: any = nil
 local syncLeadTopbarController: any = nil
 local giftController: any = nil
@@ -206,6 +207,7 @@ local function enterGameplay()
 		end
 	end
 	JoinCommunityPromptController.tryPromptAfterGameplay()
+	JoinGreetingController.notifyGameplayReady()
 end
 
 local function updateLoadingProgress()
@@ -482,7 +484,6 @@ local DonationNotificationController = require(script.Parent.Client.Controllers.
 local DonationSystemController = require(script.Parent.Client.Controllers.DonationSystemController)
 local DonationSystemBootstrap = require(script.Parent.Client.DonationSystemBootstrap)
 local GenericBroadcastController = require(script.Parent.Client.Controllers.GenericBroadcastController)
-local JoinGreetingController = require(script.Parent.Client.Controllers.JoinGreetingController)
 local PaidBroadcastController = require(script.Parent.Client.Controllers.PaidBroadcastController)
 local CinematicDockController = require(script.Parent.Client.Controllers.CinematicDockController)
 local TopMenuController = require(script.Parent.Client.Controllers.TopMenuController)

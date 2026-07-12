@@ -246,6 +246,17 @@ Config.JoinCommunityPrompt = {
 	CACHE_TTL = 120,
 	REQUEST_RATE_MAX = 4,
 	REQUEST_RATE_WINDOW = 30,
+	-- Copy (community-focused — not VIP). Applied at modal open so Studio placeholders get overwritten.
+	TITLE = "Join our community.",
+	SUBHEADLINE = "Stay connected with the club.",
+	SUBTITLE_WITH_COUNT = "Join with other %d players.",
+	SUBTITLE_FALLBACK = "Join with other players.",
+	BODY_EMPTY_WITH_COUNT = "%d players already joined this community.",
+	BODY_EMPTY = "Be among the first to join this community.",
+	BODY_ONE = "%s already joined this community.",
+	BODY_TWO = "%s and %s already joined this community.",
+	BODY_THREE = "%s, %s, and %s already joined this community.",
+	BODY_WITH_EXTRA = "%s, and %d other players already joined this community.",
 }
 
 Config.JoinGreeting = {
@@ -262,6 +273,8 @@ Config.JoinGreeting = {
 	-- EXIT/ENTER match GenericBroadcastController toast timings (0.22 / 0.28).
 	EXIT = 0.22,
 	ENTER = 0.28,
+	-- Client holds toast until Main enterGameplay (after loading click + camera reveal).
+	WAIT_FOR_GAMEPLAY = true,
 	MAX_VISIBLE_CARDS = 2,
 	WELCOME_OWNER_PREFIX = "owner",
 	CHIP_LABELS = {

@@ -52,6 +52,8 @@ type Refs = {
 	thumbnailTemplate: ImageLabel?,
 	counterLeft: GuiObject?,
 	counterLabel: TextLabel?,
+	titleLabel: TextLabel?,
+	subheadlineLabel: TextLabel?,
 	subtitleLabel: TextLabel?,
 	bodyLabel: TextLabel?,
 }
@@ -154,19 +156,28 @@ local function applyCommunityLogo(r: Refs)
 	end
 end
 
+local function joinPromptCfg(): any
+	local cfg = Config.JoinCommunityPrompt
+	return if type(cfg) == "table" then cfg else {}
+end
+
 local function formatSubtitle(memberCount: number): string
+	local cfg = joinPromptCfg()
 	if memberCount > 0 then
-		return string.format("Join with other %d players.", memberCount)
+		local template = tostring(cfg.SUBTITLE_WITH_COUNT or "Join with other %d players.")
+		return string.format(template, memberCount)
 	end
-	return "Join with other players."
+	return tostring(cfg.SUBTITLE_FALLBACK or "Join with other players.")
 end
 
 local function formatBody(names: { string }, memberCount: number): string
+	local cfg = joinPromptCfg()
 	if #names == 0 then
 		if memberCount > 0 then
-			return string.format("%d players are already VIP Members.", memberCount)
+			local template = tostring(cfg.BODY_EMPTY_WITH_COUNT or "%d players already joined this community.")
+			return string.format(template, memberCount)
 		end
-		return "Be among the first VIP Members."
+		return tostring(cfg.BODY_EMPTY or "Be among the first to join this community.")
 	end
 
 	local listed = {}
@@ -178,19 +189,34 @@ local function formatBody(names: { string }, memberCount: number): string
 	local remaining = math.max(0, memberCount - listedCount)
 	if remaining <= 0 then
 		if listedCount == 1 then
-			return listed[1] .. " is also a VIP Member."
+			local template = tostring(cfg.BODY_ONE or "%s already joined this community.")
+			return string.format(template, listed[1])
 		end
 		if listedCount == 2 then
-			return listed[1] .. " and " .. listed[2] .. " are also VIP Members."
+			local template = tostring(cfg.BODY_TWO or "%s and %s already joined this community.")
+			return string.format(template, listed[1], listed[2])
 		end
-		return table.concat(listed, ", ", 1, listedCount - 1)
-			.. ", and "
-			.. listed[listedCount]
-			.. " are also VIP Members."
+		local template = tostring(cfg.BODY_THREE or "%s, %s, and %s already joined this community.")
+		return string.format(template, listed[1], listed[2], listed[3])
 	end
 
-	return table.concat(listed, ", ")
-		.. string.format(", and %d other players also a VIP Member.", remaining)
+	local listedJoined = table.concat(listed, ", ")
+	local template = tostring(cfg.BODY_WITH_EXTRA or "%s, and %d other players already joined this community.")
+	return string.format(template, listedJoined, remaining)
+end
+
+local function applyHeadlineCopy()
+	local r = refs
+	if not r then
+		return
+	end
+	local cfg = joinPromptCfg()
+	if r.titleLabel then
+		r.titleLabel.Text = tostring(cfg.TITLE or "Join our community.")
+	end
+	if r.subheadlineLabel then
+		r.subheadlineLabel.Text = tostring(cfg.SUBHEADLINE or "Stay connected with the club.")
+	end
 end
 
 local function applyCopy(memberCount: number, displayNames: { string })
@@ -198,6 +224,7 @@ local function applyCopy(memberCount: number, displayNames: { string })
 	if not r then
 		return
 	end
+	applyHeadlineCopy()
 	if r.subtitleLabel then
 		r.subtitleLabel.Text = formatSubtitle(memberCount)
 	end
@@ -424,6 +451,8 @@ local function resolveRefs(): Refs?
 		counterLabel = counterLabel,
 		subtitleLabel = findTextLabel(mainWrapper, "Subtitle"),
 		bodyLabel = findTextLabel(mainWrapper, "Body"),
+		titleLabel = findTextLabel(mainWrapper, "1-Title"),
+		subheadlineLabel = findTextLabel(mainWrapper, "2-SubTitle"),
 	}
 end
 
