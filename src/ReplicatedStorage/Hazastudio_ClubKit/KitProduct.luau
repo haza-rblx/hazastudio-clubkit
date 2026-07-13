@@ -1,12 +1,12 @@
---!strict
--- Hazastudio Clubkit product fingerprint (read-only Ã¢â‚¬â€ do not edit in buyer places).
+﻿--!strict
+-- Hazastudio Clubkit product fingerprint (read-only ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â do not edit in buyer places).
 -- Venue branding lives in ReplicatedStorage.Hazastudio_ClubKitConfig.ClubKitConfig.
 
 local KitProduct = {
 	ProductId = "hazastudioclubkit",
 	ProductName = "Hazastudio Clubkit",
 	Vendor = "Hazastudio",
-	KitVersion = "2.4.23",
+	KitVersion = "2.4.24",
 	BuildId = "20260713",
 	LicenseApiProduct = "clubkit",
 	-- v1.3+: server polls donation-api /v2/license/verify. Older kit builds omit this flag.
@@ -19,7 +19,7 @@ local KitProduct = {
 		Website = "", -- contoh: "https://hazastudio.example"
 		Roblox = "Hazastudio",
 		Email = "",
-		Note = "Club Kit by Hazastudio — issues? contact club staff or Hazastudio support.",
+		Note = "Club Kit by Hazastudio â€” issues? contact club staff or Hazastudio support.",
 	},
 }
 

@@ -1,5 +1,6 @@
 local RunService = game:GetService("RunService");
 local SmartAssert = require(script.Parent.Util);
+local SharedTick = require(script.Parent.SharedTick);
 
 export type Dropshadow<T...> = {
 	UIInstance: GuiObject,
@@ -71,7 +72,7 @@ function Dropshadow.new<T...>(uiInstance: GuiObject | UIStroke, color: Color3?, 
 
 	self.Instance.Parent = self.UIInstance;
 
-	self.Connection = RunService.Heartbeat:Connect(function(dt)
+	local function onTick(dt)
 		if (self.IsPaused) then
 			return;
 		end;
@@ -94,7 +95,13 @@ function Dropshadow.new<T...>(uiInstance: GuiObject | UIStroke, color: Color3?, 
 		end;
 
 		self.Instance.ZIndex = self.UIInstance.ZIndex - 1;
-	end);
+	end
+
+	if SharedTick.shouldUseShared() then
+		SharedTick.register(self, onTick, uiInstance);
+	else
+		self.Connection = RunService.Heartbeat:Connect(onTick);
+	end
 
 	return setmetatable(self, Dropshadow);
 end
@@ -138,7 +145,11 @@ function Dropshadow:Resume()
 end
 
 function Dropshadow:Destroy()
-	self.Connection:Disconnect();
+	SharedTick.unregister(self);
+	if (self.Connection) then
+		self.Connection:Disconnect();
+		self.Connection = nil;
+	end
 	if (self.Instance) then
 		self.Instance:Destroy();
 		self.Instance = nil;

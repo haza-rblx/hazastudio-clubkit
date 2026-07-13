@@ -1,4 +1,4 @@
-# Changelog
+﻿# Changelog
 
 Semua perubahan penting Club Kit dicatat di sini.
 
@@ -11,78 +11,83 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.24] - 2026-07-14
+
+### Changed
+- **TitleColorPreset shared tick (Phase 3)** — Gradient / Stroke / Dropshadow use one ~30Hz shared Heartbeat instead of one per instance. `SKIP_HIDDEN` skips ticks when title/GUI ancestors are not visible. Kill switch: `Config.TitleColorPreset.USE_LEGACY_PER_INSTANCE_HEARTBEAT = true`.
+
 ## [2.4.23] - 2026-07-14
 
 ### Changed
-- **Interest radius (Phase 2)** — proximity subscribe enter default **80→55** studs, hysteresis buffer **20→15** (leave at 70). Cuts overhead/sync Recv at high CCU while still covering Medium nametag (48). Kill switch: `Config.Interest.USE_LEGACY_VIEW_RANGE = true` restores 80/20.
+- **Interest radius (Phase 2)** â€” proximity subscribe enter default **80â†’55** studs, hysteresis buffer **20â†’15** (leave at 70). Cuts overhead/sync Recv at high CCU while still covering Medium nametag (48). Kill switch: `Config.Interest.USE_LEGACY_VIEW_RANGE = true` restores 80/20.
 
 ## [2.4.22] - 2026-07-14
 
 ### Fixed
-- **Settings update rejected: payload too large** — SettingsUpdate uses `Config.Settings.MAX_PAYLOAD_BYTES` (8KB) instead of Security 1KB, so full settings saves (e.g. hide world effect) work.
-- **HTTP API throttle spiral** — `HttpApi` negative-caches failures, caps concurrent Roblox API calls (`MAX_CONCURRENT`), and waiters no longer fall through to retry after a failed leader fetch.
-- **LeaderboardIdentity double-API** — no immediate legacy `Players` UserInfos / `GetNameFromUserIdAsync` after UserService failure; negative-cache and retry later.
-- **Overhead getGroups** — respects negative cache; no wait-then-retry storm on failure.
+- **Settings update rejected: payload too large** â€” SettingsUpdate uses `Config.Settings.MAX_PAYLOAD_BYTES` (8KB) instead of Security 1KB, so full settings saves (e.g. hide world effect) work.
+- **HTTP API throttle spiral** â€” `HttpApi` negative-caches failures, caps concurrent Roblox API calls (`MAX_CONCURRENT`), and waiters no longer fall through to retry after a failed leader fetch.
+- **LeaderboardIdentity double-API** â€” no immediate legacy `Players` UserInfos / `GetNameFromUserIdAsync` after UserService failure; negative-cache and retry later.
+- **Overhead getGroups** â€” respects negative cache; no wait-then-retry storm on failure.
 
 ### Changed
-- **`Config.HttpApi`** — `ADMISSION_ENABLED`, `MAX_CONCURRENT=4`, `NEGATIVE_CACHE_TTL=30` (kill-switchable).
+- **`Config.HttpApi`** â€” `ADMISSION_ENABLED`, `MAX_CONCURRENT=4`, `NEGATIVE_CACHE_TTL=30` (kill-switchable).
 
 ## [2.4.21] - 2026-07-14
 
 ### Fixed
-- **Leaderboard UserService storm** — workspace enrich now slices to paint limits (20) before identity resolve; `LeaderboardIdentity` no longer treats DisplayName==Username as stale, batches UserService lookups, and caches success/failure. Likes/robux repos stop unconditional identity/thumbnail API calls (prefer `rbxthumb://`).
-- **Overhead GroupService storm** — proximity snapshot-on-enter reuses cached/S1 payload instead of full rebuild; `OverheadService.getGroups` self-caches even when HttpApi was previously off.
+- **Leaderboard UserService storm** â€” workspace enrich now slices to paint limits (20) before identity resolve; `LeaderboardIdentity` no longer treats DisplayName==Username as stale, batches UserService lookups, and caches success/failure. Likes/robux repos stop unconditional identity/thumbnail API calls (prefer `rbxthumb://`).
+- **Overhead GroupService storm** â€” proximity snapshot-on-enter reuses cached/S1 payload instead of full rebuild; `OverheadService.getGroups` self-caches even when HttpApi was previously off.
 
 ### Changed
-- **`Config.HttpApi.ENABLED = true`** — TTL cache + dedup for GroupService/Players wrappers; `getUserInfosByUserIdsAsync` uses a real multi-id batch.
-- **Dance preload cap** — `DANCE_PRELOAD_MAX_ASSETS = 32` applies to tier1/tier2/full ContentProvider preload (cuts client Animation RAM from full-catalog warmup). `SERVER_DANCE_TRACK_PREWARM_MAX` 10→8.
+- **`Config.HttpApi.ENABLED = true`** â€” TTL cache + dedup for GroupService/Players wrappers; `getUserInfosByUserIdsAsync` uses a real multi-id batch.
+- **Dance preload cap** â€” `DANCE_PRELOAD_MAX_ASSETS = 32` applies to tier1/tier2/full ContentProvider preload (cuts client Animation RAM from full-catalog warmup). `SERVER_DANCE_TRACK_PREWARM_MAX` 10â†’8.
 
 ## [2.4.20] - 2026-07-13
 
 ### Fixed
-- **Leaderboard LoadingOverlay double text** — client no longer starts a second loading-text animation when `CLIENT_PAINT_DATA` is false (server-only paint). Fixes stacked/ghost cycling messages on one overlay label.
+- **Leaderboard LoadingOverlay double text** â€” client no longer starts a second loading-text animation when `CLIENT_PAINT_DATA` is false (server-only paint). Fixes stacked/ghost cycling messages on one overlay label.
 
 ### Changed
-- **Music library scroll performance** — virtual track lists coalesce redraws to 1/frame, recycle rows by track id (free-list), use fixed single-line titles, debounce search (~180ms), skip playlist enter tweens on refresh, and normalize list covers to `rbxthumb` 150×150 (client + new server history writes).
+- **Music library scroll performance** â€” virtual track lists coalesce redraws to 1/frame, recycle rows by track id (free-list), use fixed single-line titles, debounce search (~180ms), skip playlist enter tweens on refresh, and normalize list covers to `rbxthumb` 150Ã—150 (client + new server history writes).
 
 ## [2.4.19] - 2026-07-13
 
 ### Added
-- **F9 console Hazastudio banner** — ASCII art + kit version + contact (`KitProduct.Support`) printed once on client/server boot.
-- **Workspace leaderboard setup checker** — `tools/CheckWorkspaceLeaderboardSetup.editmode.luau` audits board/poster/marquee names + GUI hierarchy (LoadingOverlay, cards, template) vs paint contract.
-- **Workspace leaderboard runtime probe** — `tools/ProbeWorkspaceLeaderboardRuntime.playmode.luau` (Play + Command Bar) dumps LoadingOverlay/MainContent visibility, which overlay TextLabel kit would pick, and top-card sample text after paint.
+- **F9 console Hazastudio banner** â€” ASCII art + kit version + contact (`KitProduct.Support`) printed once on client/server boot.
+- **Workspace leaderboard setup checker** â€” `tools/CheckWorkspaceLeaderboardSetup.editmode.luau` audits board/poster/marquee names + GUI hierarchy (LoadingOverlay, cards, template) vs paint contract.
+- **Workspace leaderboard runtime probe** â€” `tools/ProbeWorkspaceLeaderboardRuntime.playmode.luau` (Play + Command Bar) dumps LoadingOverlay/MainContent visibility, which overlay TextLabel kit would pick, and top-card sample text after paint.
 
 ### Changed
-- **Production logs quieter** — Logger gates DEBUG/INFO/WARN in live; ERROR emits as red (`TestService:Error`) without throwing. Client Main boot noise (`print`/`warn`) Studio-only.
+- **Production logs quieter** â€” Logger gates DEBUG/INFO/WARN in live; ERROR emits as red (`TestService:Error`) without throwing. Client Main boot noise (`print`/`warn`) Studio-only.
 
 ## [2.4.18] - 2026-07-13
 
 ### Fixed
-- **Music topbar setMenu crash** — stopped re-applying `setMenu` on every icon show (TopbarPlus was destroying menu children by stale UID → `attempt to index nil with 'destroy'` / `noticeChanged`). Added nil-guards in Icon Menu/Dropdown/toggled handlers.
+- **Music topbar setMenu crash** â€” stopped re-applying `setMenu` on every icon show (TopbarPlus was destroying menu children by stale UID â†’ `attempt to index nil with 'destroy'` / `noticeChanged`). Added nil-guards in Icon Menu/Dropdown/toggled handlers.
 
 ## [2.4.17] - 2026-07-13
 
 ### Added
-- **Music topbar Load Track** — music icon opens a horizontal TopbarPlus `setMenu` with **Music Player** (opens panel) and **Load Track** (hard `resyncPlayback` without rejoin). Honest toasts for muted Settings volume / still loading / idle.
+- **Music topbar Load Track** â€” music icon opens a horizontal TopbarPlus `setMenu` with **Music Player** (opens panel) and **Load Track** (hard `resyncPlayback` without rejoin). Honest toasts for muted Settings volume / still loading / idle.
 
 ### Changed
-- **TopbarPlus labels use Inter** — kit `styleTopbarPill` applies font asset `rbxassetid://12187365364` (including music menu children).
-- **Topbar Menu button shows "Menu" label** — uses `Config.TopbarMenu.LABEL` (was icon-only).
+- **TopbarPlus labels use Inter** â€” kit `styleTopbarPill` applies font asset `rbxassetid://12187365364` (including music menu children).
+- **Topbar Menu button shows "Menu" label** â€” uses `Config.TopbarMenu.LABEL` (was icon-only).
 
 ### Fixed
-- **Music Load Track / resync** — manual resync now force-stops tracked sounds before GetState + restart; fade-in completion re-asserts store volume so a stuck fade cannot leave Volume at 0.
-- **VIP on community join not applying mid-session** — after JoinCommun `PromptJoinAsync`, Roblox `IsInGroup` often lags past the old ~6s server wait, so Tier1 was only granted on place rejoin. Server now waits longer, schedules follow-up grants, invalidates group cache, and refreshes overhead in `recovery` mode; client fires delayed `CommunityVipRecheck` retries (and one recheck on "Already joined").
-- **OverheadGui full placeholders on respawn** — respawn briefly enabled the raw BillboardGui template before a payload paint, and proximity could drop self mid-respawn so recovery had zero recipients. Server keeps GUI disabled until clients apply data, always includes the subject in broadcast recipients, and client re-seeds pending payload from cache on `CharacterAdded`.
+- **Music Load Track / resync** â€” manual resync now force-stops tracked sounds before GetState + restart; fade-in completion re-asserts store volume so a stuck fade cannot leave Volume at 0.
+- **VIP on community join not applying mid-session** â€” after JoinCommun `PromptJoinAsync`, Roblox `IsInGroup` often lags past the old ~6s server wait, so Tier1 was only granted on place rejoin. Server now waits longer, schedules follow-up grants, invalidates group cache, and refreshes overhead in `recovery` mode; client fires delayed `CommunityVipRecheck` retries (and one recheck on "Already joined").
+- **OverheadGui full placeholders on respawn** â€” respawn briefly enabled the raw BillboardGui template before a payload paint, and proximity could drop self mid-respawn so recovery had zero recipients. Server keeps GUI disabled until clients apply data, always includes the subject in broadcast recipients, and client re-seeds pending payload from cache on `CharacterAdded`.
 
 ## [2.4.16] - 2026-07-12
 
 ### Changed
-- **Version bump for engine sync** � empty release; no feature or bugfix changes. Use plugin **Update Engine** to pull kit `2.4.16`.
+- **Version bump for engine sync** ï¿½ empty release; no feature or bugfix changes. Use plugin **Update Engine** to pull kit `2.4.16`.
 
 ## [2.4.15] - 2026-07-12
 
 ### Added
-- **VIP on community group join** � feature flag `Features.VipOnCommunityJoin` (default `false`). When enabled and `Group.GroupId > 0`, players who `IsInGroup` get Tier1 VIP (`membershipBadge`, same path as shop buy). Also re-checks after JoinCommun `PromptJoinAsync` via `CommunityVipRecheck` remote (server-authoritative). Buyer must set `Features.VipOnCommunityJoin = true` in `ClubKitConfig` (manual merge; source sync does not replace config).
+- **VIP on community group join** ï¿½ feature flag `Features.VipOnCommunityJoin` (default `false`). When enabled and `Group.GroupId > 0`, players who `IsInGroup` get Tier1 VIP (`membershipBadge`, same path as shop buy). Also re-checks after JoinCommun `PromptJoinAsync` via `CommunityVipRecheck` remote (server-authoritative). Buyer must set `Features.VipOnCommunityJoin = true` in `ClubKitConfig` (manual merge; source sync does not replace config).
 
 ## [2.4.14] - 2026-07-12
 

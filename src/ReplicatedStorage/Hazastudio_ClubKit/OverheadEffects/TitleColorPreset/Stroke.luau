@@ -1,5 +1,6 @@
 local RunService = game:GetService("RunService");
 local SmartAssert = require(script.Parent.Util);
+local SharedTick = require(script.Parent.SharedTick);
 
 -- Fingeroo was here ( ͡° ͜ʖ ͡°)
 
@@ -81,7 +82,7 @@ function Stroke.new<T...>(uiInstance: GuiObject | UIStroke, size: number, color:
 
 	self.Instance.Parent = self.UIInstance;
 
-	self.Connection = RunService.Heartbeat:Connect(function(dt)
+	local function onTick(dt)
 		if (self.IsPaused) then
 			return;
 		end;
@@ -98,7 +99,13 @@ function Stroke.new<T...>(uiInstance: GuiObject | UIStroke, size: number, color:
 		self.Instance.Transparency = self.Transparency;
 		self.Instance.Color = self.Color;
 		self.Instance.Thickness = self.Size;
-	end);
+	end
+
+	if SharedTick.shouldUseShared() then
+		SharedTick.register(self, onTick, uiInstance);
+	else
+		self.Connection = RunService.Heartbeat:Connect(onTick);
+	end
 
 	return setmetatable(self, Stroke);
 end
@@ -157,7 +164,11 @@ function Stroke:Resume()
 end
 
 function Stroke:Destroy()
-	self.Connection:Disconnect();
+	SharedTick.unregister(self);
+	if (self.Connection) then
+		self.Connection:Disconnect();
+		self.Connection = nil;
+	end
 	if (self.Instance) then
 		self.Instance:Destroy();
 		self.Instance = nil;

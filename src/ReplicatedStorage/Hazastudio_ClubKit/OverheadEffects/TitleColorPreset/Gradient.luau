@@ -1,5 +1,6 @@
 local RunService = game:GetService("RunService");
 local SmartAssert = require(script.Parent.Util);
+local SharedTick = require(script.Parent.SharedTick);
 
 type ColorSequenceKeypoints = typeof(ColorSequence.new(Color3.new()).Keypoints);
 type NumberSequenceKeypoints = typeof(NumberSequence.new(0).Keypoints);
@@ -176,7 +177,7 @@ function Gradient.new<T...>(uiInstance: GuiObject | UIStroke, colorSequence: Col
 		self.IsText = true;
 	end;
 
-	self.Connection = RunService.Heartbeat:Connect(function(dt)
+	local function onTick(dt)
 		if (self.IsPaused) then
 			return;
 		end;
@@ -189,7 +190,7 @@ function Gradient.new<T...>(uiInstance: GuiObject | UIStroke, colorSequence: Col
 		if (self.ColorSequenceBlendRate == 1) then
 			self.ColorSequence = self.ColorSequenceTarget;
 		else
-			self:EqualizeColorSequenceKeypoints();
+			self:equalizeColorSequenceKeypoints();
 		end;
 
 		if (self.TransparencySequenceBlendRate == 1) then
@@ -220,7 +221,13 @@ function Gradient.new<T...>(uiInstance: GuiObject | UIStroke, colorSequence: Col
 		self.Instance.Rotation = self.Rotation;
 		self.Instance.Color = self:CalculateTrueColorSequence();
 		self.Instance.Transparency = self:CalculateTrueTransparencySequence();
-	end);
+	end
+
+	if SharedTick.shouldUseShared() then
+		SharedTick.register(self, onTick, uiInstance);
+	else
+		self.Connection = RunService.Heartbeat:Connect(onTick);
+	end
 
 	self.Instance.Parent = self.UIInstance;
 	return setmetatable(self, Gradient);
@@ -442,7 +449,11 @@ function Gradient:Resume()
 end
 
 function Gradient:Destroy()
-	self.Connection:Disconnect();
+	SharedTick.unregister(self);
+	if (self.Connection) then
+		self.Connection:Disconnect();
+		self.Connection = nil;
+	end
 	if (self.Instance) then
 		self.Instance:Destroy();
 		self.Instance = nil;

@@ -3138,6 +3138,15 @@ Config.ProfileLoader = {
 	MAX_CONCURRENCY = 8, -- Scaling 100→200 CCU: increased from 4 to 8 for faster join storms (8×4 reads = 96 reads/min < 110 budget)
 	PER_PLAYER_CONCURRENCY = 1, -- R10.1: per-player reads run sequentially through one queue
 }
+-- TitleColorPreset animation tick (Phase 3): shared ~30Hz loop for Gradient/Stroke/Dropshadow.
+-- Kill switch: USE_LEGACY_PER_INSTANCE_HEARTBEAT = true → one Heartbeat per effect instance (pre-2.4.24).
+Config.TitleColorPreset = {
+	SHARED_TICK_ENABLED = true,
+	TICK_HZ = 30,
+	SKIP_HIDDEN = true, -- skip ticks when GuiObject/LayerCollector ancestor is hidden
+	USE_LEGACY_PER_INSTANCE_HEARTBEAT = false,
+}
+
 -- InterestManager / ProximityInterestService View_Range tuning (perf-scaling R1.9-R1.11).
 -- Phase 2: tighter default radius cuts overhead/sync Recv at high CCU. Enter covers
 -- Medium nametag distance (48 studs) with margin; leave = RADIUS + BUFFER (hysteresis).
