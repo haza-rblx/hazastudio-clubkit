@@ -1,4 +1,4 @@
-﻿--!nocheck
+--!nocheck
 -- Manifest aset Club Kit v1.3 untuk export / unpack otomatis.
 
 local ClubKitManifest = {}
@@ -6,7 +6,7 @@ local ClubKitManifest = {}
 ClubKitManifest.PACKAGE_NAME = "HazastudioClubKit_Package"
 ClubKitManifest.MANIFEST_NAME = "_ClubKitManifest"
 ClubKitManifest.PRODUCT_ID = "hazastudioclubkit"
-ClubKitManifest.KIT_VERSION = "2.4.25"
+ClubKitManifest.KIT_VERSION = "2.4.26"
 
 -- Folder engine per service (seluruh subtree di-clone).
 ClubKitManifest.SERVICE_ROOTS = {

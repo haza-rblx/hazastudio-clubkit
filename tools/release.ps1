@@ -74,6 +74,20 @@ if ($kitVersion -ne $version -or $manifestVersion -ne $version) {
     Write-Error "Version mismatch. Sync VERSION, KitProduct.KitVersion, and ClubKitManifest.KIT_VERSION before release."
 }
 
+# Luau rejects UTF-8 BOM (U+FEFF) - e.g. KitProduct parse crash cascading config/main.
+function Assert-NoUtf8Bom([string]$relPath) {
+    $full = Join-Path $root $relPath
+    if (-not (Test-Path $full)) {
+        return
+    }
+    $bytes = [System.IO.File]::ReadAllBytes($full)
+    if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) {
+        Write-Error "UTF-8 BOM found in $relPath - Luau will fail parse. Save as UTF-8 without BOM."
+    }
+}
+Assert-NoUtf8Bom "src\ReplicatedStorage\Hazastudio_ClubKit\KitProduct.luau"
+Assert-NoUtf8Bom "tools\ClubKitPackagerPlugin\plugin\ClubKitManifest.luau"
+
 if (-not $Tag) {
     $Tag = "v$version"
 }

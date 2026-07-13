@@ -11,6 +11,11 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.26] - 2026-07-14
+
+### Fixed
+- **KitProduct UTF-8 BOM crash** — `KitProduct.luau` had a BOM (`U+FEFF`) that made Luau fail parse (`Expected identifier… U+feff`), cascading ConfigBootstrap / Main / effects load errors. BOM stripped; Manifest cleaned the same way.
+
 ## [2.4.25] - 2026-07-14
 
 ### Changed
