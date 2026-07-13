@@ -3139,14 +3139,17 @@ Config.ProfileLoader = {
 	PER_PLAYER_CONCURRENCY = 1, -- R10.1: per-player reads run sequentially through one queue
 }
 -- InterestManager / ProximityInterestService View_Range tuning (perf-scaling R1.9-R1.11).
-
--- Radius covers the client's max overhead visibility (Medium = 48 studs) with margin so
--- nametags are subscribed before they become visible; the hysteresis buffer prevents
--- membership flapping at the boundary.
+-- Phase 2: tighter default radius cuts overhead/sync Recv at high CCU. Enter covers
+-- Medium nametag distance (48 studs) with margin; leave = RADIUS + BUFFER (hysteresis).
+-- Far (unlimited client cull) still only gets server subscribe within this radius.
+-- Kill switch: USE_LEGACY_VIEW_RANGE = true restores pre-2.4.23 80 / 20.
 Config.Interest = {
-	VIEW_RANGE_RADIUS = 80, -- R1.9: candidate subscribe radius (studs)
-	HYSTERESIS_BUFFER = 20, -- R1.10: unsubscribe only past RADIUS + BUFFER (studs)
+	USE_LEGACY_VIEW_RANGE = false,
+	VIEW_RANGE_RADIUS = 55, -- enter subscribe radius (studs); legacy was 80
+	HYSTERESIS_BUFFER = 15, -- leave only past RADIUS + BUFFER; legacy was 20
 	RECOMPUTE_INTERVAL = 0.5, -- R1.9: recompute cadence (seconds, must be <= 1.0)
+	LEGACY_VIEW_RANGE_RADIUS = 80,
+	LEGACY_HYSTERESIS_BUFFER = 20,
 }
 -- NetworkManager shared-flush scheduler (perf-scaling R9). Flip to false to roll back to
 

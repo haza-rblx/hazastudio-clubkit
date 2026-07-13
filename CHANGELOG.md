@@ -11,6 +11,11 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.23] - 2026-07-14
+
+### Changed
+- **Interest radius (Phase 2)** — proximity subscribe enter default **80→55** studs, hysteresis buffer **20→15** (leave at 70). Cuts overhead/sync Recv at high CCU while still covering Medium nametag (48). Kill switch: `Config.Interest.USE_LEGACY_VIEW_RANGE = true` restores 80/20.
+
 ## [2.4.22] - 2026-07-14
 
 ### Fixed

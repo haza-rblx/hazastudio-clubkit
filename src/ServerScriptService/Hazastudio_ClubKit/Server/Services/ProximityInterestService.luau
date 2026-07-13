@@ -80,8 +80,8 @@ local CHANNEL_PREFIXES = { "overhead:", "sync:" }
 
 -- Tunable defaults; overridable via Config.Interest. The cadence is clamped to
 -- the Requirement 1.9 ceiling of 1 second regardless of config.
-local DEFAULT_VIEW_RANGE_RADIUS = 120
-local DEFAULT_HYSTERESIS_BUFFER = 30
+local DEFAULT_VIEW_RANGE_RADIUS = 55
+local DEFAULT_HYSTERESIS_BUFFER = 15
 local DEFAULT_RECOMPUTE_INTERVAL = 0.5
 local MIN_RECOMPUTE_INTERVAL = 0.05
 local MAX_RECOMPUTE_INTERVAL = 1.0
@@ -106,8 +106,13 @@ function ProximityInterestService.create(deps: ProximityInterestDeps): Proximity
 	local log: ILogger = deps.logger or Logger.new("ProximityInterestService")
 
 	local cfg = deps.config or {}
-	local radius = tonumber(cfg.VIEW_RANGE_RADIUS) or DEFAULT_VIEW_RANGE_RADIUS
-	local buffer = tonumber(cfg.HYSTERESIS_BUFFER) or DEFAULT_HYSTERESIS_BUFFER
+	local useLegacy = cfg.USE_LEGACY_VIEW_RANGE == true
+	local radius = if useLegacy
+		then (tonumber(cfg.LEGACY_VIEW_RANGE_RADIUS) or 80)
+		else (tonumber(cfg.VIEW_RANGE_RADIUS) or DEFAULT_VIEW_RANGE_RADIUS)
+	local buffer = if useLegacy
+		then (tonumber(cfg.LEGACY_HYSTERESIS_BUFFER) or 20)
+		else (tonumber(cfg.HYSTERESIS_BUFFER) or DEFAULT_HYSTERESIS_BUFFER)
 	local recomputeInterval = math.clamp(
 		tonumber(cfg.RECOMPUTE_INTERVAL) or DEFAULT_RECOMPUTE_INTERVAL,
 		MIN_RECOMPUTE_INTERVAL,
@@ -121,6 +126,12 @@ function ProximityInterestService.create(deps: ProximityInterestDeps): Proximity
 			radius = radius,
 			buffer = buffer,
 			recomputeInterval = recomputeInterval,
+		})
+	elseif useLegacy then
+		log:info("ProximityInterest using legacy view range", {
+			radius = radius,
+			buffer = buffer,
+			leaveRadius = leaveRadius,
 		})
 	end
 
@@ -387,6 +398,8 @@ function ProximityInterestService.create(deps: ProximityInterestDeps): Proximity
 		log:info("ProximityInterestService started (spatial grid optimized)", {
 			radius = radius,
 			buffer = buffer,
+			leaveRadius = leaveRadius,
+			useLegacy = useLegacy,
 			recomputeInterval = recomputeInterval,
 			algorithm = "spatial_grid_partitioning",
 			cellSize = leaveRadius,
