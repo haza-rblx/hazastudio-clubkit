@@ -11,6 +11,14 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.20] - 2026-07-13
+
+### Fixed
+- **Leaderboard LoadingOverlay double text** — client no longer starts a second loading-text animation when `CLIENT_PAINT_DATA` is false (server-only paint). Fixes stacked/ghost cycling messages on one overlay label.
+
+### Changed
+- **Music library scroll performance** — virtual track lists coalesce redraws to 1/frame, recycle rows by track id (free-list), use fixed single-line titles, debounce search (~180ms), skip playlist enter tweens on refresh, and normalize list covers to `rbxthumb` 150×150 (client + new server history writes).
+
 ## [2.4.19] - 2026-07-13
 
 ### Added

@@ -585,7 +585,7 @@ local function createMusicService(deps: {
 			end
 		end
 
-		local coverValue = ("rbxthumb://type=Asset&id=%s&w=420&h=420"):format(assetId)
+		local coverValue = ("rbxthumb://type=Asset&id=%s&w=150&h=150"):format(assetId)
 		local now = os.time()
 		local trackId = HttpService:GenerateGUID(false)
 		local track: TrackInfo = MusicDomain.buildTrack({

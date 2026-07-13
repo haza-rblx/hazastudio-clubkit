@@ -3,6 +3,7 @@
 -- Safe on server (replicates) and client (optional fallback when CLIENT_PAINT_DATA).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
@@ -1167,6 +1168,13 @@ function WorkspaceLeaderboardRenderer.setAllBoardsReady()
 end
 
 function WorkspaceLeaderboardRenderer.bootstrapLoadingUntilRevision()
+	-- Default path: server paints SurfaceGui text (SERVER_PAINT_WORKSPACE).
+	-- Client must not start a second loading-text animation loop — dual writers
+	-- stack/ghost overlay labels (two cycling messages on one TextLabel).
+	if RunService:IsClient() and Config.Leaderboards.CLIENT_PAINT_DATA ~= true then
+		return
+	end
+
 	if tonumber(workspace:GetAttribute(Config.Leaderboards.REVISION_ATTRIBUTE)) ~= nil then
 		return
 	end

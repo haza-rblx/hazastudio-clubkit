@@ -9,6 +9,7 @@ type ManageFormCopy = {
 type PooledRow = {
 	instance: GuiObject,
 	connections: { RBXScriptConnection },
+	boundItemId: string?,
 }
 
 return function(MusicPlayerUIBinder: any, H: any)
@@ -17,6 +18,7 @@ return function(MusicPlayerUIBinder: any, H: any)
 	local Players = H.Players
 	local Workspace = H.Workspace
 	local scheduleTrackTitleHeight = H.scheduleTrackTitleHeight
+	local applyVirtualTrackTitle = H.applyVirtualTrackTitle
 	local ScrollIndicatorHelper = H.ScrollIndicatorHelper
 	local SliderSelectorUtil = H.SliderSelectorUtil
 	local Config = H.Config
@@ -25,11 +27,13 @@ return function(MusicPlayerUIBinder: any, H: any)
 	local REQUEST_PLAYLIST_USER_LAYOUT_BASE = H.REQUEST_PLAYLIST_USER_LAYOUT_BASE
 	local VIRTUAL_ROW_LAYOUT_BASE = H.VIRTUAL_ROW_LAYOUT_BASE
 	local QUEUE_SCROLLBAR_IDLE_DELAY = H.QUEUE_SCROLLBAR_IDLE_DELAY
+	local SEARCH_DEBOUNCE_SEC = H.SEARCH_DEBOUNCE_SEC or 0.18
 	local getMonthDropsLabel = H.getMonthDropsLabel
 	local getCoverGradientRotation = H.getCoverGradientRotation
 	local buildCoverGradientColorSequence = H.buildCoverGradientColorSequence
 	local getImageCoverKey = H.getImageCoverKey
 	local getImageCoverUri = H.getImageCoverUri
+	local normalizeListCoverUri = H.normalizeListCoverUri or getImageCoverUri
 	local resolveCoverSourceForTrack = H.resolveCoverSourceForTrack
 	local sampleImageCoverDarkestColor = H.sampleImageCoverDarkestColor
 	local getPlaylistCoverAccentColor = H.getPlaylistCoverAccentColor
@@ -48,7 +52,6 @@ return function(MusicPlayerUIBinder: any, H: any)
 	local disconnectVirtualList = H.disconnectVirtualList
 	local disconnectAllVirtualLists = H.disconnectAllVirtualLists
 	local renderVirtualList = H.renderVirtualList
-	local animateListRowIn = H.animateListRowIn
 	local hideIfGuiObject = H.hideIfGuiObject
 	local trackConnection = H.trackConnection
 	local trackUnsubscriber = H.trackUnsubscriber
@@ -788,12 +791,15 @@ return function(MusicPlayerUIBinder: any, H: any)
 			end
 		end
 	
-		-- Idle bounce animation on special playlist icons (smart cleanup to prevent leaks)
-		self:_refreshPlaylistIconBounce(refs.favoritesPlaylistButton, refs.newDropsPlaylistButton)
-	
+		-- Idle bounce animation on special playlist icons (once per panel session).
+		if not self._specialPlaylistBounceActive then
+			self:_refreshPlaylistIconBounce(refs.favoritesPlaylistButton, refs.newDropsPlaylistButton)
+			self._specialPlaylistBounceActive = true
+		end
+
 		local orderedPlaylists = buildOrderedPlaylistEntries(playlists, searchQuery)
 		hideUnusedPooledRows(self._requestPlaylistRowPool, 1)
-	
+
 		startListRenderJob(self, "requestPlaylists", #orderedPlaylists, function(index: number)
 			local entry = orderedPlaylists[index]
 			local id = entry.id
@@ -801,14 +807,14 @@ return function(MusicPlayerUIBinder: any, H: any)
 			local row = ensurePooledRow(self._requestPlaylistRowPool, index, normalTemplate, scroll)
 			disconnectPooledRowConnections(row)
 			local clone = row.instance
-	
+
 			local info = clone:FindFirstChild("PlaylistInformation")
 			if info then
 				local nameLabel = info:FindFirstChild("PlaylistName")
 				if nameLabel and nameLabel:IsA("TextLabel") then
 					(nameLabel :: TextLabel).Text = playlist.name or ""
 				end
-	
+
 				local totalTrackLabel = info:FindFirstChild("TotalTrack")
 				if totalTrackLabel and totalTrackLabel:IsA("TextLabel") then
 					local trackCount = type(playlist.trackIds) == "table" and #playlist.trackIds or 0
@@ -816,21 +822,20 @@ return function(MusicPlayerUIBinder: any, H: any)
 					(totalTrackLabel :: TextLabel).Text = string.format("%d %s", trackCount, suffix)
 				end
 			end
-	
+
 			local coverElement = clone:FindFirstChild("PlaylistCover") or clone:FindFirstChild("ImageLabel")
 			if coverElement then
-				self:applyCoverStyle(coverElement, playlist)
+				self:applyCoverStyle(coverElement, playlist, { listThumb = true })
 			end
-	
+
 			if clone:IsA("GuiObject") then
 				applyPlaylistRowState(clone, if selectedPlaylistId == id then selectedTemplate else normalTemplate)
 			end
-	
+
 			clone.Name = id
 			clone.LayoutOrder = REQUEST_PLAYLIST_USER_LAYOUT_BASE + index
 			clone.Visible = true
-			animateListRowIn(clone)
-	
+
 			if clone:IsA("TextButton") then
 				bindTrackedClickable(row.connections, clone, function()
 					if self._onPlaylistSelected then
@@ -900,8 +905,7 @@ return function(MusicPlayerUIBinder: any, H: any)
 						local titleLabel = details:FindFirstChild("TrackTitle")
 						if titleLabel and titleLabel:IsA("TextLabel") then
 							local label = titleLabel :: TextLabel
-							label.Text = track.name or ""
-							scheduleTrackTitleHeight(label)
+							applyVirtualTrackTitle(label, track.name or "")
 						end
 	
 						local creatorLabel = details:FindFirstChild("TrackCreator")
@@ -967,7 +971,7 @@ return function(MusicPlayerUIBinder: any, H: any)
 					or clone:FindFirstChild("TrackCover")
 					or clone:FindFirstChild("RelatedPlaylistCover")
 				if coverElement then
-					self:applyCoverStyle(coverElement, coverSource)
+					self:applyCoverStyle(coverElement, coverSource, { listThumb = true })
 				end
 			end
 	
@@ -1562,18 +1566,23 @@ return function(MusicPlayerUIBinder: any, H: any)
 		self._store:set({ selectedCoverType = if isImage then "image" else "gradient" })
 	end
 	
-	function MusicPlayerUIBinder:applyCoverStyle(coverElement: Instance, playlist: any)
+	function MusicPlayerUIBinder:applyCoverStyle(
+		coverElement: Instance,
+		playlist: any,
+		opts: { listThumb: boolean? }?
+	)
 		-- Apply cover style (gradient or image) to a playlist cover element
 		-- coverElement can be an ImageLabel (playlist cover) or a Frame container
 		-- that owns a background gradient (now playing wrapper).
-	
+
 		local imageLabel = if coverElement:IsA("ImageLabel") then coverElement else nil
-	
+		local useListThumb = opts ~= nil and opts.listThumb == true
+
 		local config = self._config
 		if not config then
 			return
 		end
-	
+
 		-- Default to gradient if no coverType specified
 		local coverType = playlist.coverType or "gradient"
 		local textLabel = if imageLabel then findCoverTextLabel(imageLabel) else nil
@@ -1583,20 +1592,20 @@ return function(MusicPlayerUIBinder: any, H: any)
 			else if backgroundGradient and backgroundGradient:IsA("UIGradient") then backgroundGradient else nil
 		local strokeTransparencyAttribute = "MusicCoverBaseStrokeTransparency"
 		local backgroundTransparencyAttribute = "MusicCoverBaseBackgroundTransparency"
-	
+
 		local function applyCoverText()
 			if not textLabel then
 				return
 			end
 			textLabel.Visible = coverType ~= "image"
 			textLabel.Text = playlist.name or ""
-	
+
 			local success = applyNamedFont(textLabel, tostring(playlist.fontFace or "Original"))
 			if not success then
 				textLabel.FontFace = Font.fromEnum(Enum.Font.SourceSans)
 			end
 		end
-	
+
 		-- Disable ALL UIGradient descendants when in image mode (CoverImageType rule)
 		local function setAllGradientsEnabled(enabled: boolean)
 			for _, descendant in ipairs(coverElement:GetDescendants()) do
@@ -1608,7 +1617,7 @@ return function(MusicPlayerUIBinder: any, H: any)
 				targetGradient.Enabled = enabled
 			end
 		end
-	
+
 		local function setImageCoverChromeVisible(root: Instance, visible: boolean)
 			for _, descendant in ipairs(root:GetDescendants()) do
 				if descendant:IsA("UIStroke") then
@@ -1622,7 +1631,7 @@ return function(MusicPlayerUIBinder: any, H: any)
 				end
 			end
 		end
-	
+
 		local function setImageCoverBackgroundVisible(label: ImageLabel, visible: boolean)
 			local baseTransparency = label:GetAttribute(backgroundTransparencyAttribute)
 			if type(baseTransparency) ~= "number" then
@@ -1631,14 +1640,23 @@ return function(MusicPlayerUIBinder: any, H: any)
 			end
 			label.BackgroundTransparency = if visible then baseTransparency else 1
 		end
-	
+
+		local function setCoverImage(label: ImageLabel, uri: string)
+			if label.Image ~= uri then
+				label.Image = uri
+			end
+		end
+
 		if coverType == "image" then
 			setAllGradientsEnabled(false)
 			if imageLabel then
 				local typedImageLabel = imageLabel :: ImageLabel
 				setImageCoverChromeVisible(typedImageLabel, false)
 				setImageCoverBackgroundVisible(typedImageLabel, false)
-				typedImageLabel.Image = getImageCoverUri(playlist.coverValue) or ""
+				local uri = if useListThumb
+					then (normalizeListCoverUri(playlist.coverValue) or "")
+					else (getImageCoverUri(playlist.coverValue) or "")
+				setCoverImage(typedImageLabel, uri)
 				applyCoverText()
 			elseif targetGradient and targetGradient:IsA("UIGradient") then
 				targetGradient.Color = ColorSequence.new(Color3.fromRGB(22, 22, 22), Color3.fromRGB(0, 0, 0))
@@ -1648,29 +1666,29 @@ return function(MusicPlayerUIBinder: any, H: any)
 			-- Gradient mode: enable UIGradient, set colors
 			local gradientIndex = playlist.coverValue or 1
 			local gradients = config.COVER_GRADIENTS
-	
+
 			if gradients and gradientIndex >= 1 and gradientIndex <= #gradients then
 				local gradient = gradients[gradientIndex]
-	
+
 				local uiGradient = targetGradient
 				if imageLabel and not uiGradient then
 					local created = Instance.new("UIGradient")
 					created.Parent = imageLabel
 					uiGradient = created
 				end
-	
+
 				if uiGradient and uiGradient:IsA("UIGradient") then
 					uiGradient.Enabled = true
 					uiGradient.Color = buildCoverGradientColorSequence(gradient)
 					uiGradient.Rotation = getCoverGradientRotation(gradient)
 				end
-	
+
 				if imageLabel then
 					-- Reset image to empty (show gradient only)
 					local typedImageLabel = imageLabel :: ImageLabel
 					setImageCoverChromeVisible(typedImageLabel, true)
 					setImageCoverBackgroundVisible(typedImageLabel, true)
-					typedImageLabel.Image = ""
+					setCoverImage(typedImageLabel, "")
 				end
 				applyCoverText()
 			end
@@ -2603,16 +2621,15 @@ return function(MusicPlayerUIBinder: any, H: any)
 				or (playlistInfo and playlistInfo:FindFirstChild("ImageLabel"))
 	
 			if coverElement then
-				self:applyCoverStyle(coverElement, playlist)
+				self:applyCoverStyle(coverElement, playlist, { listThumb = true })
 			end
-	
+
 			clone.Name = id
 			clone.LayoutOrder = index
 			clone.Visible = true
-			animateListRowIn(clone)
 		end)
 	end
-	
+
 	function MusicPlayerUIBinder:_populateManageTrackRow(
 		row: any,
 		track: any,
@@ -2623,7 +2640,7 @@ return function(MusicPlayerUIBinder: any, H: any)
 	)
 		local clone = row.instance
 		local parentPlaylist = trackData.playlist
-	
+
 		local trackInfo = clone:FindFirstChild("TrackInfo")
 		if trackInfo then
 			local detailed = trackInfo:FindFirstChild("TrackDetailed")
@@ -2632,9 +2649,7 @@ return function(MusicPlayerUIBinder: any, H: any)
 				if trackFrame then
 					local titleLabel = trackFrame:FindFirstChild("TrackTitle")
 					if titleLabel and titleLabel:IsA("TextLabel") then
-						local label = titleLabel :: TextLabel
-						label.Text = track.name or ""
-						scheduleTrackTitleHeight(label)
+						applyVirtualTrackTitle(titleLabel :: TextLabel, track.name or "")
 					end
 					setTextLabelByNames(
 						trackFrame,
@@ -2673,16 +2688,16 @@ return function(MusicPlayerUIBinder: any, H: any)
 				end
 			end
 		end
-	
+
 		if parentPlaylist then
 			local coverElement = clone:FindFirstChild("RelatedPlaylistCover")
 				or clone:FindFirstChild("PlaylistCover")
 				or clone:FindFirstChild("TrackCover")
 			if coverElement then
-				self:applyCoverStyle(coverElement, parentPlaylist)
+				self:applyCoverStyle(coverElement, parentPlaylist, { listThumb = true })
 			end
 		end
-	
+
 		clone.Name = id
 		clone.LayoutOrder = VIRTUAL_ROW_LAYOUT_BASE + index
 		clone.Visible = true
@@ -3123,18 +3138,25 @@ return function(MusicPlayerUIBinder: any, H: any)
 			bindScrollIdle(refs.scrollableTrackRight, TRACK_IDLE, TRACK_ACTIVE)
 		end
 	
-		-- Search box
+		-- Search box (debounced — avoid remount storm per keystroke)
 		trackConnection(
 			self,
 			refs.searchBox:GetPropertyChangedSignal("Text"):Connect(function()
 				local q = refs.searchBox.Text
 				store:set({ searchQuery = q })
-				if self._onSearchChanged then
-					self._onSearchChanged(q)
-				end
+				self._searchDebounceToken = (self._searchDebounceToken or 0) + 1
+				local token = self._searchDebounceToken
+				task.delay(SEARCH_DEBOUNCE_SEC, function()
+					if token ~= self._searchDebounceToken then
+						return
+					end
+					if self._onSearchChanged then
+						self._onSearchChanged(q)
+					end
+				end)
 			end)
 		)
-	
+
 		do
 			local managePlaylistSearch = refs.scrollableManagePlaylist:FindFirstChild("SearchPlaylist", true)
 			if managePlaylistSearch and managePlaylistSearch:IsA("TextBox") then
@@ -3143,11 +3165,18 @@ return function(MusicPlayerUIBinder: any, H: any)
 					(managePlaylistSearch :: TextBox):GetPropertyChangedSignal("Text"):Connect(function()
 						local q = (managePlaylistSearch :: TextBox).Text
 						store:set({ managePlaylistSearchQuery = q })
-						self:renderManagePlaylists(store:get().playlists or {}, q)
+						self._managePlaylistSearchToken = (self._managePlaylistSearchToken or 0) + 1
+						local token = self._managePlaylistSearchToken
+						task.delay(SEARCH_DEBOUNCE_SEC, function()
+							if token ~= self._managePlaylistSearchToken then
+								return
+							end
+							self:renderManagePlaylists(store:get().playlists or {}, q)
+						end)
 					end)
 				)
 			end
-	
+
 			local manageTrackSearch = refs.scrollableManageTrack:FindFirstChild("SearTrack", true)
 				or refs.scrollableManageTrack:FindFirstChild("SearchTrack", true)
 				or refs.scrollableManageTrack:FindFirstChild("SearchTracks", true)
@@ -3157,7 +3186,14 @@ return function(MusicPlayerUIBinder: any, H: any)
 					(manageTrackSearch :: TextBox):GetPropertyChangedSignal("Text"):Connect(function()
 						local q = (manageTrackSearch :: TextBox).Text
 						store:set({ manageTrackSearchQuery = q })
-						self:renderManageTracks(store:get().manageTracks or store:get().tracks or {}, q)
+						self._manageTrackSearchToken = (self._manageTrackSearchToken or 0) + 1
+						local token = self._manageTrackSearchToken
+						task.delay(SEARCH_DEBOUNCE_SEC, function()
+							if token ~= self._manageTrackSearchToken then
+								return
+							end
+							self:renderManageTracks(store:get().manageTracks or store:get().tracks or {}, q)
+						end)
 					end)
 				)
 			end

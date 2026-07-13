@@ -53,6 +53,17 @@ local function scheduleTrackTitleHeight(label: TextLabel)
 	end)
 end
 
+-- Fixed single-line title for virtualized rows (uniform rowStride; no TextBounds thrash).
+local function applyVirtualTrackTitle(label: TextLabel, text: string)
+	label.Text = text
+	label.TextWrapped = false
+	label.TextTruncate = Enum.TextTruncate.AtEnd
+	label.TextYAlignment = Enum.TextYAlignment.Center
+	label.AutomaticSize = Enum.AutomaticSize.None
+	local lineH = math.max(1, label.TextSize)
+	label.Size = UDim2.new(label.Size.X.Scale, label.Size.X.Offset, 0, lineH + 4)
+end
+
 local MusicPlayerGuiRefs = require(script.Parent.MusicPlayerGuiRefs)
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
 local ScrollIndicatorHelper = require(script.Parent.Parent.Utils.ScrollIndicatorHelper)
@@ -79,6 +90,7 @@ type PlaylistRowVisualState = {
 type PooledRow = {
 	instance: GuiObject,
 	connections: { RBXScriptConnection },
+	boundItemId: string?,
 }
 type VirtualListRenderOptions = {
 	key: string,
@@ -88,6 +100,15 @@ type VirtualListRenderOptions = {
 	template: GuiObject,
 	items: { any },
 	renderRow: (PooledRow, any, number) -> (),
+}
+type VirtualListRuntime = {
+	renderedById: { [string]: PooledRow },
+	freeRows: { PooledRow },
+	dirty: boolean,
+	flushConn: RBXScriptConnection?,
+	lastStart: number,
+	lastEnd: number,
+	lastWindowH: number,
 }
 type SuppressedOverheadEntry = {
 	gui: BillboardGui,
@@ -130,6 +151,8 @@ local DEFAULT_VIRTUAL_TRACK_MAX_RENDERED_ROWS = 60
 local VIRTUAL_ROW_LAYOUT_BASE = 100
 local VIRTUAL_TOP_SPACER_LAYOUT_ORDER = VIRTUAL_ROW_LAYOUT_BASE - 1
 local VIRTUAL_BOTTOM_SPACER_LAYOUT_ORDER = 1000000
+local LIST_COVER_THUMB_SIZE = 150
+local SEARCH_DEBOUNCE_SEC = 0.18
 local DISABLE_UI_SFX_ATTRIBUTE = "DisableUISFX"
 local LIST_ROW_ENTER_INFO = TweenInfo.new(0.16, Enum.EasingStyle.Cubic, Enum.EasingDirection.Out)
 local LIST_ROW_ENTER_SCALE = 0.985
@@ -369,6 +392,29 @@ local function getImageCoverUri(coverValue: any): string?
 	return nil
 end
 
+-- List cells: always prefer small Asset rbxthumb (covers legacy 420 + raw rbxassetid).
+local function normalizeListCoverUri(coverValue: any): string?
+	local text = getImageCoverKey(coverValue)
+	if not text then
+		return nil
+	end
+
+	local assetId = text:match("rbxthumb://type=Asset&id=(%d+)")
+		or text:match("rbxassetid://(%d+)")
+		or text:match("id=(%d+)")
+		or text:match("^(%d+)$")
+		or text:match("(%d+)")
+	if assetId then
+		return ("rbxthumb://type=Asset&id=%s&w=%d&h=%d"):format(
+			assetId,
+			LIST_COVER_THUMB_SIZE,
+			LIST_COVER_THUMB_SIZE
+		)
+	end
+
+	return getImageCoverUri(coverValue)
+end
+
 local function resolveCoverSourceForTrack(track: any, parentPlaylist: any?): any?
 	if type(track) ~= "table" then
 		return parentPlaylist
@@ -569,6 +615,11 @@ function MusicPlayerUIBinder.new(deps: {
 	self._listRenderJobs = {} :: { [string]: thread }
 	self._listRenderTokens = {} :: { [string]: number }
 	self._virtualListConnections = {} :: { [string]: { RBXScriptConnection } }
+	self._virtualListRuntimes = {} :: { [string]: VirtualListRuntime }
+	self._specialPlaylistBounceActive = false
+	self._searchDebounceToken = 0
+	self._managePlaylistSearchToken = 0
+	self._manageTrackSearchToken = 0
 	self._djSpeedPresetButtons = {} :: { [number]: GuiObject }
 	self._djSoundBoardConnections = {} :: { RBXScriptConnection }
 	self._djEffectConnections = {} :: { RBXScriptConnection }
@@ -849,7 +900,65 @@ local function cancelAllListRenderJobs(self: any)
 	end
 end
 
+local function getVirtualItemId(item: any, index: number): string
+	if type(item) == "table" then
+		local id = item.id
+		if id ~= nil then
+			local asString = tostring(id)
+			if asString ~= "" then
+				return asString
+			end
+		end
+	end
+	return "__i" .. tostring(index)
+end
+
+local function releaseVirtualRow(runtime: VirtualListRuntime, row: PooledRow)
+	disconnectPooledRowConnections(row)
+	row.boundItemId = nil
+	row.instance.Visible = false
+	table.insert(runtime.freeRows, row)
+end
+
+local function acquireVirtualRow(
+	runtime: VirtualListRuntime,
+	pool: { PooledRow },
+	template: GuiObject,
+	parent: Instance
+): PooledRow
+	local free = runtime.freeRows
+	if #free > 0 then
+		local row = table.remove(free) :: PooledRow
+		if row.instance.Parent ~= parent then
+			row.instance.Parent = parent
+		end
+		return row
+	end
+	return ensurePooledRow(pool, #pool + 1, template, parent)
+end
+
+local function clearVirtualListRuntime(self: any, key: string)
+	local runtime = self._virtualListRuntimes[key] :: VirtualListRuntime?
+	if not runtime then
+		return
+	end
+	if runtime.flushConn then
+		runtime.flushConn:Disconnect()
+		runtime.flushConn = nil
+	end
+	for _, row in pairs(runtime.renderedById) do
+		disconnectPooledRowConnections(row)
+		row.boundItemId = nil
+		row.instance.Visible = false
+	end
+	table.clear(runtime.renderedById)
+	table.clear(runtime.freeRows)
+	self._virtualListRuntimes[key] = nil
+end
+
 local function disconnectVirtualList(self: any, key: string)
+	clearVirtualListRuntime(self, key)
+
 	local connections = self._virtualListConnections[key]
 	if connections then
 		for _, connection in ipairs(connections) do
@@ -874,12 +983,20 @@ local function disconnectVirtualList(self: any, key: string)
 end
 
 local function disconnectAllVirtualLists(self: any)
-	for _, connections in pairs(self._virtualListConnections) do
-		for _, connection in ipairs(connections) do
-			connection:Disconnect()
+	local keys = {}
+	for key in pairs(self._virtualListRuntimes) do
+		table.insert(keys, key)
+	end
+	for key in pairs(self._virtualListConnections) do
+		if self._virtualListRuntimes[key] == nil then
+			table.insert(keys, key)
 		end
 	end
+	for _, key in ipairs(keys) do
+		disconnectVirtualList(self, key)
+	end
 	table.clear(self._virtualListConnections)
+	table.clear(self._virtualListRuntimes)
 end
 
 local function getVirtualListBuffer(config: any): number
@@ -956,11 +1073,39 @@ local function renderVirtualList(self: any, options: VirtualListRenderOptions)
 	options.template.Visible = false
 	scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
 
-	local function redraw()
+	local freeRows: { PooledRow } = {}
+	for _, row in ipairs(options.pool) do
+		row.boundItemId = nil
+		row.instance.Visible = false
+		table.insert(freeRows, row)
+	end
+
+	local runtime: VirtualListRuntime = {
+		renderedById = {},
+		freeRows = freeRows,
+		dirty = false,
+		flushConn = nil,
+		lastStart = 0,
+		lastEnd = 0,
+		lastWindowH = -1,
+	}
+	self._virtualListRuntimes[options.key] = runtime
+
+	local function redrawNow()
+		if self._virtualListRuntimes[options.key] ~= runtime then
+			return
+		end
+
 		if totalRows <= 0 then
 			setSpacerHeight(topSpacer, 0)
 			setSpacerHeight(bottomSpacer, 0)
-			hideUnusedPooledRows(options.pool, 1)
+			for id, row in pairs(runtime.renderedById) do
+				releaseVirtualRow(runtime, row)
+				runtime.renderedById[id] = nil
+			end
+			runtime.lastStart = 0
+			runtime.lastEnd = 0
+			runtime.lastWindowH = scroll.AbsoluteWindowSize.Y
 			return
 		end
 
@@ -969,27 +1114,88 @@ local function renderVirtualList(self: any, options: VirtualListRenderOptions)
 		local firstVisible = math.floor(math.max(0, scroll.CanvasPosition.Y) / rowStride) + 1
 		local startIndex = math.clamp(firstVisible - bufferRows, 1, math.max(1, totalRows - renderRows + 1))
 		local endIndex = math.min(totalRows, startIndex + renderRows - 1)
+		local windowH = scroll.AbsoluteWindowSize.Y
+
+		if
+			startIndex == runtime.lastStart
+			and endIndex == runtime.lastEnd
+			and windowH == runtime.lastWindowH
+			and next(runtime.renderedById) ~= nil
+		then
+			return
+		end
 
 		setSpacerHeight(topSpacer, (startIndex - 1) * rowStride)
 		setSpacerHeight(bottomSpacer, (totalRows - endIndex) * rowStride)
 
-		local poolIndex = 1
+		local nextIds: { [string]: boolean } = {}
+		local nextEntries: { { id: string, itemIndex: number, item: any } } = {}
 		for itemIndex = startIndex, endIndex do
-			local row = ensurePooledRow(options.pool, poolIndex, options.template, parent)
-			disconnectPooledRowConnections(row)
-			row.instance.LayoutOrder = VIRTUAL_ROW_LAYOUT_BASE + itemIndex
-			options.renderRow(row, items[itemIndex], itemIndex)
-			poolIndex += 1
+			local item = items[itemIndex]
+			local id = getVirtualItemId(item, itemIndex)
+			nextIds[id] = true
+			table.insert(nextEntries, {
+				id = id,
+				itemIndex = itemIndex,
+				item = item,
+			})
 		end
-		hideUnusedPooledRows(options.pool, poolIndex)
+
+		for id, row in pairs(runtime.renderedById) do
+			if not nextIds[id] then
+				releaseVirtualRow(runtime, row)
+				runtime.renderedById[id] = nil
+			end
+		end
+
+		for _, entry in ipairs(nextEntries) do
+			local layoutOrder = VIRTUAL_ROW_LAYOUT_BASE + entry.itemIndex
+			local existing = runtime.renderedById[entry.id]
+			if existing and existing.boundItemId == entry.id then
+				if existing.instance.LayoutOrder ~= layoutOrder then
+					existing.instance.LayoutOrder = layoutOrder
+				end
+				if not existing.instance.Visible then
+					existing.instance.Visible = true
+				end
+			else
+				local row = existing or acquireVirtualRow(runtime, options.pool, options.template, parent)
+				runtime.renderedById[entry.id] = row
+				disconnectPooledRowConnections(row)
+				row.boundItemId = entry.id
+				row.instance.LayoutOrder = layoutOrder
+				options.renderRow(row, entry.item, entry.itemIndex)
+				row.instance.Visible = true
+			end
+		end
+
+		runtime.lastStart = startIndex
+		runtime.lastEnd = endIndex
+		runtime.lastWindowH = windowH
 	end
 
-	redraw()
+	local function markDirty()
+		runtime.dirty = true
+	end
+
+	local function flush()
+		if not runtime.dirty then
+			return
+		end
+		if self._virtualListRuntimes[options.key] ~= runtime then
+			return
+		end
+		runtime.dirty = false
+		redrawNow()
+	end
+
+	redrawNow()
+	runtime.flushConn = RunService.Heartbeat:Connect(flush)
 	self._virtualListConnections[options.key] = {
-		scroll:GetPropertyChangedSignal("CanvasPosition"):Connect(redraw),
-		scroll:GetPropertyChangedSignal("AbsoluteWindowSize"):Connect(redraw),
+		scroll:GetPropertyChangedSignal("CanvasPosition"):Connect(markDirty),
+		scroll:GetPropertyChangedSignal("AbsoluteWindowSize"):Connect(markDirty),
 	}
-	task.defer(redraw)
+	markDirty()
 end
 
 local function animateListRowIn(row: GuiObject)
@@ -2656,6 +2862,7 @@ function MusicPlayerUIBinder:releaseLibraryListPools()
 	destroyPooledRows(self._managePlaylistRowPool)
 	destroyPooledRows(self._manageTrackRowPool)
 	destroyPooledRows(self._manageTrackRightRowPool)
+	self._specialPlaylistBounceActive = false
 	table.clear(self._userThumbnailCache)
 	table.clear(self._userThumbnailCacheOrder)
 end
@@ -4330,6 +4537,7 @@ applyPart2(MusicPlayerUIBinder, {
 	Players = Players,
 	Workspace = Workspace,
 	scheduleTrackTitleHeight = scheduleTrackTitleHeight,
+	applyVirtualTrackTitle = applyVirtualTrackTitle,
 	ScrollIndicatorHelper = ScrollIndicatorHelper,
 	SliderSelectorUtil = SliderSelectorUtil,
 	Config = Config,
@@ -4343,6 +4551,9 @@ applyPart2(MusicPlayerUIBinder, {
 	buildCoverGradientColorSequence = buildCoverGradientColorSequence,
 	getImageCoverKey = getImageCoverKey,
 	getImageCoverUri = getImageCoverUri,
+	normalizeListCoverUri = normalizeListCoverUri,
+	LIST_COVER_THUMB_SIZE = LIST_COVER_THUMB_SIZE,
+	SEARCH_DEBOUNCE_SEC = SEARCH_DEBOUNCE_SEC,
 	resolveCoverSourceForTrack = resolveCoverSourceForTrack,
 	sampleImageCoverDarkestColor = sampleImageCoverDarkestColor,
 	getPlaylistCoverAccentColor = getPlaylistCoverAccentColor,

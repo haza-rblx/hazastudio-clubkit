@@ -1368,7 +1368,11 @@ local function init(_deps: {}?)
 		return
 	end
 
-	WorkspaceLeaderboardRenderer.bootstrapLoadingUntilRevision()
+	-- Only bootstrap loading chrome when this peer paints SurfaceGui text.
+	-- Server already owns overlays when CLIENT_PAINT_DATA is false.
+	if Config.Leaderboards.CLIENT_PAINT_DATA == true then
+		WorkspaceLeaderboardRenderer.bootstrapLoadingUntilRevision()
+	end
 
 	local function applyWorkspaceLeaderboards(payload: any): boolean
 		local renderedAll = true
