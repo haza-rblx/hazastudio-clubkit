@@ -101,7 +101,9 @@ return function(icon)
 	icon.dropdownSet:Connect(function(arrayOfIcons)
 		for i, otherIconUID in pairs(icon.dropdownIcons) do
 			local otherIcon = Icon.getIconByUID(otherIconUID)
-			otherIcon:destroy()
+			if otherIcon then
+				otherIcon:destroy()
+			end
 		end
 		if type(arrayOfIcons) == "table" then
 			for i, otherIcon in pairs(arrayOfIcons) do

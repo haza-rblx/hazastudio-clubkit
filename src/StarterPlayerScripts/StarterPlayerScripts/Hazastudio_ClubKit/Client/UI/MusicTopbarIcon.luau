@@ -343,25 +343,11 @@ local function assertVisible(self: MusicTopbarIcon)
 
 	-- Re-align via caller styling so TopbarPlus reparents to alignmentHolder
 	-- even when our cached parent was lost (Parent was already nil when cached).
+	-- Do NOT re-call setMenu here: TopbarPlus destroys previous menuIcons by UID
+	-- and crashes (or destroys live children) when the same menu is re-applied.
 	safePcall(function()
 		self._applyStyling(instance)
 	end)
-
-	-- Re-assert setMenu so hide/show reparent races do not drop children.
-	if type(instance.setMenu) == "function" then
-		local items = {}
-		if self._openPlayerIcon then
-			table.insert(items, self._openPlayerIcon)
-		end
-		if self._loadTrackIcon then
-			table.insert(items, self._loadTrackIcon)
-		end
-		if #items > 0 then
-			safePcall(function()
-				instance:setMenu(items)
-			end)
-		end
-	end
 
 	local widget = self._widget or resolveWidget(instance)
 	if widget then

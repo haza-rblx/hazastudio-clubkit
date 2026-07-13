@@ -11,6 +11,11 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.18] - 2026-07-13
+
+### Fixed
+- **Music topbar setMenu crash** — stopped re-applying `setMenu` on every icon show (TopbarPlus was destroying menu children by stale UID → `attempt to index nil with 'destroy'` / `noticeChanged`). Added nil-guards in Icon Menu/Dropdown/toggled handlers.
+
 ## [2.4.17] - 2026-07-13
 
 ### Added

@@ -166,7 +166,9 @@ return function(icon)
 		-- Reset any previous icons
 		for i, otherIconUID in pairs(icon.menuIcons) do
 			local otherIcon = Icon.getIconByUID(otherIconUID)
-			otherIcon:destroy()
+			if otherIcon then
+				otherIcon:destroy()
+			end
 		end
 		-- Apply new icons
 		if type(arrayOfIcons) == "table" then

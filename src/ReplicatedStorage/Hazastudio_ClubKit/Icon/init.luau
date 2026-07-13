@@ -416,6 +416,9 @@ function Icon.new()
 		self.noticeChanged:Fire(self.totalNotices)
 		for childIconUID, _ in pairs(self.childIconsDict) do
 			local childIcon = Icon.getIconByUID(childIconUID)
+			if not childIcon then
+				continue
+			end
 			childIcon.noticeChanged:Fire(childIcon.totalNotices)
 			if not isSelected and childIcon.isSelected then
 				-- If an icon within a menu or dropdown is also
