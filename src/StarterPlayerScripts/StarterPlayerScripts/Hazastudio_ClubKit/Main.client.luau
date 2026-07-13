@@ -4,9 +4,24 @@
 -- Hot-reload safety: semua listener di luar Lifecycle di-track ke
 -- _clientConnections dan di-disconnect di script.Destroying.
 
+local RunService = game:GetService("RunService")
+local IS_STUDIO = RunService:IsStudio()
+
 local MAIN_BOOT_OWNER_KEY = "Hazastudio_ClubKit_ClientMain"
 local CLIENT_MAIN_BUILD_ID = "hazastudio-clubkit-client-main-v1"
 script:SetAttribute("ClientMainBuildId", CLIENT_MAIN_BUILD_ID)
+
+local function studioWarn(...: any)
+	if IS_STUDIO then
+		warn(...)
+	end
+end
+
+local function studioPrint(...: any)
+	if IS_STUDIO then
+		print(...)
+	end
+end
 
 local function mainHasSyncMarker(mainScript: LocalScript): boolean
 	if mainScript:GetAttribute("ClientMainBuildId") == CLIENT_MAIN_BUILD_ID then
@@ -51,18 +66,18 @@ local function claimClientMainOwnership(): boolean
 				local childIsCanonical = mainHasSyncMarker(child)
 				local selfIsCanonical = mainHasSyncMarker(script)
 				if selfIsCanonical and not childIsCanonical then
-					warn("[Main] Destroying stale duplicate Main:", child:GetFullName())
+					studioWarn("[Main] Destroying stale duplicate Main:", child:GetFullName())
 					child:Destroy()
 				elseif not selfIsCanonical and childIsCanonical then
-					warn("[Main] Stale Main exiting — canonical copy already running:", child:GetFullName())
+					studioWarn("[Main] Stale Main exiting — canonical copy already running:", child:GetFullName())
 					return false
 				elseif childIsCanonical and selfIsCanonical then
 					local preferred = preferMainScript(script, child)
 					if preferred == script then
-						warn("[Main] Destroying duplicate canonical Main:", child:GetFullName())
+						studioWarn("[Main] Destroying duplicate canonical Main:", child:GetFullName())
 						child:Destroy()
 					else
-						warn("[Main] Duplicate canonical Main exiting — prefer:", preferred:GetFullName())
+						studioWarn("[Main] Duplicate canonical Main exiting — prefer:", preferred:GetFullName())
 						return false
 					end
 				end
@@ -83,14 +98,14 @@ local function claimClientMainOwnership(): boolean
 			if selfIsCanonical and existingIsCanonical then
 				local preferred = preferMainScript(script, existing)
 				if preferred == script then
-					warn("[Main] Replacing duplicate canonical Main owner:", existing:GetFullName())
+					studioWarn("[Main] Replacing duplicate canonical Main owner:", existing:GetFullName())
 					existing:Destroy()
 				else
-					warn("[Main] Duplicate canonical Main suppressed — prefer:", preferred:GetFullName())
+					studioWarn("[Main] Duplicate canonical Main suppressed — prefer:", preferred:GetFullName())
 					return false
 				end
 			else
-				warn(
+				studioWarn(
 					"[Main] Duplicate client boot suppressed — hapus LocalScript Main duplikat di StarterPlayerScripts"
 				)
 				return false
@@ -99,7 +114,7 @@ local function claimClientMainOwnership(): boolean
 	end
 
 	shared[MAIN_BOOT_OWNER_KEY] = script
-	print("[Main] Client boot owner:", script:GetFullName(), "build:", CLIENT_MAIN_BUILD_ID)
+	studioPrint("[Main] Client boot owner:", script:GetFullName(), "build:", CLIENT_MAIN_BUILD_ID)
 	return true
 end
 
@@ -115,16 +130,31 @@ local HttpService = game:GetService("HttpService")
 local StarterGui = game:GetService("StarterGui")
 local kitRoot = ReplicatedStorage:WaitForChild("Hazastudio_ClubKit", 30)
 if not kitRoot then
-	warn("[Main] ReplicatedStorage.Hazastudio_ClubKit not found")
+	-- Critical: tetap merah di production supaya boot gagal terlihat di F9.
+	pcall(function()
+		game:GetService("TestService"):Error("[Main] ReplicatedStorage.Hazastudio_ClubKit not found")
+	end)
 	return
 end
 local Shared = kitRoot:WaitForChild("Shared")
 local SharedConstants = Shared:WaitForChild("Constants")
 local SharedDomain = Shared:WaitForChild("Domain")
 local SharedUI = Shared:WaitForChild("UI")
+local SharedUtilsEarly = Shared:WaitForChild("Utils")
 local Config = require(SharedConstants:WaitForChild("Config"))
 local PermissionDomain = require(SharedDomain:WaitForChild("PermissionDomain"))
 local LoadingScreenUI = require(SharedUI:WaitForChild("LoadingScreenUI"))
+do
+	local kitProductModule = kitRoot:FindFirstChild("KitProduct")
+	local bannerModule = SharedUtilsEarly:FindFirstChild("ConsoleBanner")
+	if kitProductModule and kitProductModule:IsA("ModuleScript") and bannerModule and bannerModule:IsA("ModuleScript") then
+		local okProduct, KitProduct = pcall(require, kitProductModule)
+		local okBanner, ConsoleBanner = pcall(require, bannerModule)
+		if okProduct and okBanner and ConsoleBanner and type(ConsoleBanner.printOnce) == "function" then
+			ConsoleBanner.printOnce(KitProduct)
+		end
+	end
+end
 
 do
 	local utilsFolder = Shared:FindFirstChild("Utils")
@@ -243,7 +273,7 @@ if LOADING_SCREEN_ENABLED then
 		end
 
 		if not ui then
-			warn("[LoadingScreenUI] bootstrap controller not ready")
+			studioWarn("[LoadingScreenUI] bootstrap controller not ready")
 			enterGameplay()
 			return
 		end
@@ -423,7 +453,7 @@ if
 	or not (Remotes and Remotes:IsA("Folder"))
 	or not (iconModule and iconModule:IsA("ModuleScript"))
 then
-	warn("[LoadingScreen] Critical client dependencies were not replicated in time")
+	studioWarn("[LoadingScreen] Critical client dependencies were not replicated in time")
 	finishLoadingScreen()
 	enterGameplay()
 	return
@@ -451,7 +481,7 @@ if LOADING_SCREEN_ENABLED then
 			task.wait(0.15)
 		end
 		if not loadingOverheadReady then
-			warn("[LoadingScreen] Local overhead payload timeout; continuing boot")
+			studioWarn("[LoadingScreen] Local overhead payload timeout; continuing boot")
 			loadingOverheadReady = true
 			updateLoadingProgress()
 			requestFinishLoadingScreen()
@@ -1038,7 +1068,7 @@ local attachOk, attachErr = pcall(function()
 	TopMenuController.blockTopbarPlusMenu(menuIcon)
 end)
 if not attachOk then
-	warn("[Main] TopMenuController hidden menu triggers failed:", attachErr)
+	studioWarn("[Main] TopMenuController hidden menu triggers failed:", attachErr)
 end
 
 local function roleCanUseCinematicDock(): boolean
@@ -1108,7 +1138,7 @@ local paidBroadcastOk, paidBroadcastErr = pcall(function()
 	})
 end)
 if not paidBroadcastOk then
-	warn("[Main] PaidBroadcastController.init failed:", paidBroadcastErr)
+	studioWarn("[Main] PaidBroadcastController.init failed:", paidBroadcastErr)
 end
 local cinematicOk, cinematicErr = pcall(function()
 	CinematicDockController.init({
@@ -1116,7 +1146,7 @@ local cinematicOk, cinematicErr = pcall(function()
 	})
 end)
 if not cinematicOk then
-	warn("[Main] CinematicDockController.init failed:", cinematicErr)
+	studioWarn("[Main] CinematicDockController.init failed:", cinematicErr)
 end
 -- Pakai custom freecam (bukan Roblox dev fly). Desktop = Shift+P; mobile = MobileFreecam GUI.
 pcall(function()
@@ -1245,7 +1275,7 @@ trackBootTask("GiftShopInit", function()
 	-- === Shop ===
 	local shopGui = Players.LocalPlayer.PlayerGui:WaitForChild("02-ShopGUI", 10)
 	if not shopGui then
-		warn("[LoadingScreen] Shop GUI not found; shop panel disabled")
+		studioWarn("[LoadingScreen] Shop GUI not found; shop panel disabled")
 		return
 	end
 	local shopCtrl = createShopController({
@@ -1890,7 +1920,7 @@ requestFinishLoadingScreen()
 if LOADING_SCREEN_ENABLED then
 	task.delay(LoadingConfig.FALLBACK_FINISH_DELAY, function()
 		if not loadingFinished then
-			warn("[LoadingScreen] Fallback finish triggered")
+			studioWarn("[LoadingScreen] Fallback finish triggered")
 			finishLoadingScreen()
 		end
 	end)

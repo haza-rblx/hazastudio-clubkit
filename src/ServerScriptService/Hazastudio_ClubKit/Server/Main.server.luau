@@ -83,6 +83,7 @@ local MusicRepository = require(script.Parent.Repositories.MusicRepository)
 local MusicFavoritesRepository = require(script.Parent.Repositories.MusicFavoritesRepository)
 local ProfileLoader = require(script.Parent.Repositories.ProfileLoader)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
+local ConsoleBanner = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.ConsoleBanner)
 local Lifecycle = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Lifecycle)
 local HttpApiCounter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.HttpApiCounter)
 local Result = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Result)
@@ -98,6 +99,7 @@ local provisionEarlyRemotes = require(script.Parent.Init.EarlyRemotes)
 local Cleaner = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Cleaner)
 local Cache = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Cache)
 local log = Logger.new(KitProduct.LogTag)
+ConsoleBanner.printOnce(KitProduct)
 -- Tracks top-level Players.PlayerAdded/PlayerRemoving connections so a Rojo
 -- hot-reload (which fires script.Destroying) can disconnect them. Without this
 -- each reload stacked duplicate handlers that leaked stale service closures.

@@ -36,6 +36,18 @@ if not (configModule and configModule:IsA("ModuleScript")) then
 end
 
 local Config = require(configModule)
+do
+	local kitProductModule = kitRoot:FindFirstChild("KitProduct")
+	local earlyUtils = sharedRoot:FindFirstChild("Utils")
+	local bannerModule = earlyUtils and earlyUtils:FindFirstChild("ConsoleBanner")
+	if kitProductModule and kitProductModule:IsA("ModuleScript") and bannerModule and bannerModule:IsA("ModuleScript") then
+		local okProduct, KitProduct = pcall(require, kitProductModule)
+		local okBanner, ConsoleBanner = pcall(require, bannerModule)
+		if okProduct and okBanner and ConsoleBanner and type(ConsoleBanner.printOnce) == "function" then
+			ConsoleBanner.printOnce(KitProduct)
+		end
+	end
+end
 local LoadingConfig = Config.Loading
 if Config.FeatureFlags.LoadingScreenEnabled ~= true then
 	ReplicatedFirst:RemoveDefaultLoadingScreen()

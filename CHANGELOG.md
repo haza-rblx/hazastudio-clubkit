@@ -11,6 +11,16 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.19] - 2026-07-13
+
+### Added
+- **F9 console Hazastudio banner** — ASCII art + kit version + contact (`KitProduct.Support`) printed once on client/server boot.
+- **Workspace leaderboard setup checker** — `tools/CheckWorkspaceLeaderboardSetup.editmode.luau` audits board/poster/marquee names + GUI hierarchy (LoadingOverlay, cards, template) vs paint contract.
+- **Workspace leaderboard runtime probe** — `tools/ProbeWorkspaceLeaderboardRuntime.playmode.luau` (Play + Command Bar) dumps LoadingOverlay/MainContent visibility, which overlay TextLabel kit would pick, and top-card sample text after paint.
+
+### Changed
+- **Production logs quieter** — Logger gates DEBUG/INFO/WARN in live; ERROR emits as red (`TestService:Error`) without throwing. Client Main boot noise (`print`/`warn`) Studio-only.
+
 ## [2.4.18] - 2026-07-13
 
 ### Fixed
