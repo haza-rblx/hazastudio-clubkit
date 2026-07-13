@@ -311,20 +311,9 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 	end
 
 	local function getUserThumbnail(userId: number): string
-		-- HTTP API telemetry counter (quota-efficiency-pass-2026-06, Phase 0)
-		if Config.HttpApi and Config.HttpApi.COUNTERS_ENABLED then
-			HttpApiCounter.record("leaderboard_getthumb_total")
-		end
-		local ok, thumbnail = pcall(function()
-			-- Size150x150 default. Top 1-3 posters fetch 420 client-side via rbxthumb URL.
-			local content =
-				Players:GetUserThumbnailAsync(userId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150)
-			return content
-		end)
-		if ok and type(thumbnail) == "string" then
-			return thumbnail
-		end
-		return ""
+		-- Prefer rbxthumb — avoids Players:GetUserThumbnailAsync storms on rebuild.
+		-- Top 1-3 posters can still use 420 client-side via rbxthumb URL.
+		return string.format("rbxthumb://type=AvatarHeadShot&id=%d&w=150&h=150", userId)
 	end
 
 	local function isHiddenRobuxUser(userId: number): boolean
@@ -996,7 +985,8 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 					username = "User " .. tostring(userId)
 				end
 			end
-			if not displayName or displayName == username then
+			-- DisplayName == Username is valid on Roblox; only resolve when missing.
+			if not displayName then
 				local userInfos = HttpApi.getUserInfosByUserIdsAsync({ userId })
 				local info = userInfos[userId]
 				if type(info) == "table" then

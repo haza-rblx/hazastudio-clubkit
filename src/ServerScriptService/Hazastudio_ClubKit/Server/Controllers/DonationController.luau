@@ -316,6 +316,28 @@ local function createDonationController(deps: {
 			end
 		end
 
+		-- Only enrich rows that will be painted. DS still fetched at ROBUX/LIKES_LIMIT
+		-- for rank lookups elsewhere; boards paint ROBUX_PAINT_LIMIT / LIKES_PAINT_LIMIT.
+		local function sliceForPaint(entries: any, paintLimit: number): any
+			if type(entries) ~= "table" then
+				return entries
+			end
+			local limit = math.max(0, math.floor(tonumber(paintLimit) or 0))
+			if limit <= 0 or #entries <= limit then
+				return entries
+			end
+			local sliced = table.create(limit)
+			for index = 1, limit do
+				sliced[index] = entries[index]
+			end
+			return sliced
+		end
+		payload.robux = sliceForPaint(payload.robux, Config.Leaderboards.ROBUX_PAINT_LIMIT)
+		payload.likes = sliceForPaint(payload.likes, Config.Leaderboards.LIKES_PAINT_LIMIT)
+		if Config.Leaderboards.DAILY_ROBUX_ENABLED == true then
+			payload.dailyRobux = sliceForPaint(payload.dailyRobux, Config.Leaderboards.ROBUX_PAINT_LIMIT)
+		end
+
 		-- Wrap enrichEntryList with pcall karena resolveUserIdentity bisa error (HTTP timeout dll)
 		local enrichSafe = function(entries)
 			local ok, result = pcall(LeaderboardIdentity.enrichEntryList, LeaderboardIdentity, entries)

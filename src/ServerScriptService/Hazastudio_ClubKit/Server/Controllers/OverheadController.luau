@@ -1438,8 +1438,12 @@ end
 				return
 			end
 
-			-- Build the current payload for the subject.
-			local payload = buildPayload(ev.subject)
+			-- Prefer cached / S1 path — full buildPayloadWithMeta on every View_Range
+			-- enter was the GroupService storm at dense CCU.
+			local payload = cachedPayloads[ev.subject.UserId]
+			if not payload then
+				payload = select(1, buildAndCachePayload(ev.subject))
+			end
 			if not payload then
 				log:warn("Snapshot-on-enter: buildPayload failed", {
 					subject = ev.subject.Name,
@@ -1447,8 +1451,6 @@ end
 				})
 				return
 			end
-			-- Note: usedFallback is ignored here; we still send the best snapshot we have.
-			-- The fallback payload itself will trigger a rebuild on the next broadcast cycle.
 
 			-- Ensure snapshot is fresh (mirrors broadcastPayload's synchronous update).
 			-- Snapshot-on-enter happens AFTER the initial broadcastPayload timeout/race,

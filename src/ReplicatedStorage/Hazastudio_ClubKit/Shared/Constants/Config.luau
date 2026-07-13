@@ -932,6 +932,9 @@ Config.Sync = {
 	WUTWUT_CLIENT_MIN_FIRE_INTERVAL = 0.04,
 	-- Phase 1: legacy feel — asset preload on, mass track warmup stays off.
 	DANCE_PRELOAD_ENABLED = true,
+	-- Cap ContentProvider PreloadAsync (tier1/tier2/full). Favorites + first N catalog
+	-- assets only — full-catalog preload was ~350MB Animation on dense emote kits.
+	DANCE_PRELOAD_MAX_ASSETS = 32,
 	-- Client: legacy DanceClientService-style LoadAnimation per asset ID (no mass trackCache).
 	-- Disabled for 100 CCU: replaced by single once-per-session ContentProvider batch (perf-scaling R11).
 	DANCE_CLIENT_LEGACY_STYLE_PRELOAD = false,
@@ -956,9 +959,8 @@ Config.Sync = {
 	DANCE_TRACK_WARMUP_MAX_AGGRESSIVE = 72,
 	DANCE_TRACK_WARMUP_MAX_BALANCED = 48,
 	DANCE_TRACK_WARMUP_MAX_CONSERVATIVE = 24,
-	-- Scaling 100→200 CCU: reduced from 16 to 10 tracks/character for memory optimization (3200→2000 instances = 37.5% reduction)
-	-- Tracks 11-16 load on-demand with 100-300ms first-play latency (acceptable for less-popular dances)
-	SERVER_DANCE_TRACK_PREWARM_MAX = 10,
+	-- Server headroom: 10→8 tracks/character (client Animation RAM is driven by DANCE_PRELOAD_MAX_ASSETS).
+	SERVER_DANCE_TRACK_PREWARM_MAX = 8,
 	SERVER_DANCE_TRACK_PREWARM_BATCH_DELAY = 0.03,
 	-- Dance panel UI selection. Use "v1" for DancePanelGUIWrapper or "v2" for DancePanelGUIWrapperv2.
 	-- Phone layout (short viewport + touch) uses DANCE_PANEL_UI_ROOTS.v2Mobile when USE_MOBILE_LAYOUT is true.
@@ -3102,7 +3104,9 @@ Config.Budget = {
 -- HTTP API wrapper — dedup + cache for GroupService/Players at 100 CCU.
 Config.HttpApi = {
 	COUNTERS_ENABLED = false,
-	ENABLED = false,
+	-- Enabled: in-flight dedup + TTL cache for GroupService/Players/UserService wrappers.
+	-- LeaderboardIdentity has its own cache (does not rely on this flag).
+	ENABLED = true,
 	GET_NAME_TTL = 600,
 	GET_USER_ID_TTL = 600,
 	GET_USER_INFOS_TTL = 600,

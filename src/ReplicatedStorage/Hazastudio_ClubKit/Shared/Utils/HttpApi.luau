@@ -100,45 +100,54 @@ function HttpApi.getUserIdFromNameAsync(username: string): number?
 	end)
 end
 
--- UserService:GetUserInfosByUserIdsAsync (per-userId cache + batch for miss)
--- Returns map: userId -> { Username, DisplayName } or nil
+-- UserService:GetUserInfosByUserIdsAsync — real multi-id batch for misses.
+-- Returns map: userId -> { Username, DisplayName } (partial OK)
 function HttpApi.getUserInfosByUserIdsAsync(userIds: { number }): { [number]: any }
 	local result: { [number]: any } = {}
 	local missing: { number } = {}
+	local missingSet: { [number]: boolean } = {}
+	local ttl = Config.HttpApi.GET_USER_INFOS_TTL
 
-	-- Cache check per userId
 	for _, userId in ipairs(userIds) do
-		local cached = Cache.get("userinfo:" .. tostring(userId))
-		if cached ~= nil then
-			result[userId] = cached
-		else
-			table.insert(missing, userId)
+		if type(userId) == "number" and userId > 0 and not missingSet[userId] then
+			local cacheKey = "userinfo:" .. tostring(userId)
+			if Config.HttpApi and Config.HttpApi.ENABLED then
+				local cached = Cache.get(cacheKey)
+				if cached ~= nil then
+					result[userId] = cached
+				else
+					missingSet[userId] = true
+					table.insert(missing, userId)
+				end
+			else
+				missingSet[userId] = true
+				table.insert(missing, userId)
+			end
 		end
 	end
 
-	-- If all cached, return early
 	if #missing == 0 then
 		return result
 	end
 
-	-- Direct call for missing (with in-flight dedup handled per call)
-	for _, userId in ipairs(missing) do
-		local info = withCache(
-			"httpapi_getuserinfos",
-			"userinfo:" .. tostring(userId),
-			Config.HttpApi.GET_USER_INFOS_TTL,
-			function()
-				local ok, infos = pcall(function()
-					return UserService:GetUserInfosByUserIdsAsync({ userId })
-				end)
-				if ok and type(infos) == "table" and infos[1] then
-					return infos[1]
+	if Config.HttpApi and Config.HttpApi.COUNTERS_ENABLED then
+		HttpApiCounter.record("httpapi_getuserinfos")
+	end
+
+	local ok, infos = pcall(function()
+		return UserService:GetUserInfosByUserIdsAsync(missing)
+	end)
+	if ok and type(infos) == "table" then
+		for _, info in ipairs(infos) do
+			if type(info) == "table" then
+				local id = tonumber(info.Id or info.UserId)
+				if id then
+					result[id] = info
+					if Config.HttpApi and Config.HttpApi.ENABLED then
+						Cache.set("userinfo:" .. tostring(id), info, ttl)
+					end
 				end
-				return nil
 			end
-		)
-		if info then
-			result[userId] = info
 		end
 	end
 

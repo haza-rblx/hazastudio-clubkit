@@ -214,6 +214,10 @@ local function createOverheadService(deps: {
 			log:warn("GroupService gagal, groups tidak di-cache", { userId = userId })
 			return nil, false
 		end
+		-- Self-cache even when Config.HttpApi.ENABLED=false (HttpApi only writes
+		-- this key when ENABLED). Keep key in sync with HttpApi.getGroupsAsync.
+		local groupsTtl = (Config.HttpApi and Config.HttpApi.GET_GROUPS_TTL) or 300
+		Cache.set(cacheKey, groupsResult, groupsTtl)
 		return groupsResult, true
 	end
 	local function getGroupRank(userId: number): number

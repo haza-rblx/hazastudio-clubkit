@@ -128,10 +128,28 @@ function createDanceWarmupService.create(deps: {
 	return self
 end
 
+function createDanceWarmupService:_getPreloadMaxAssets(): number
+	local maxAssets = math.floor(tonumber(self.config.DANCE_PRELOAD_MAX_ASSETS) or 32)
+	return math.max(1, maxAssets)
+end
+
+function createDanceWarmupService:_capAnimationList(animations: { Animation }): { Animation }
+	local maxAssets = self:_getPreloadMaxAssets()
+	if #animations <= maxAssets then
+		return animations
+	end
+	local capped = table.create(maxAssets)
+	for index = 1, maxAssets do
+		capped[index] = animations[index]
+	end
+	return capped
+end
+
 function createDanceWarmupService:_collectTier1Animations(): { Animation }
 	local readyAfter = math.max(1, math.floor(tonumber(self.config.DANCE_PRELOAD_READY_AFTER)
 		or tonumber(self.config.DANCE_LEGACY_PRELOAD_READY_AFTER)
 		or 24))
+	readyAfter = math.min(readyAfter, self:_getPreloadMaxAssets())
 	local favoriteNames = readFavoriteNames()
 	local selected = {} :: { Animation }
 	local seen = {} :: { [string]: boolean }
@@ -163,10 +181,22 @@ end
 
 function createDanceWarmupService:_collectTier2Animations(): { Animation }
 	local tier2 = {} :: { Animation }
+	local maxAssets = self:_getPreloadMaxAssets()
+	local already = 0
+	for _ in pairs(self.preloadedAnimations) do
+		already += 1
+	end
+	local remainingBudget = math.max(0, maxAssets - already)
+	if remainingBudget == 0 then
+		return tier2
+	end
 	for _, animation in ipairs(self.animations) do
 		local key = buildCacheKey(animation)
 		if not self.preloadedAnimations[key] then
 			table.insert(tier2, animation)
+			if #tier2 >= remainingBudget then
+				break
+			end
 		end
 	end
 	return tier2
@@ -513,7 +543,9 @@ function createDanceWarmupService:_startWarmup(character: Model, tier: WarmupTie
 		local markedReady = false
 
 		if tier == "tier1" or tier == "full" then
-			local tier1Animations = if tier == "tier1" then self:_collectTier1Animations() else self.animations
+			local tier1Animations = if tier == "tier1"
+				then self:_collectTier1Animations()
+				else self:_capAnimationList(self.animations)
 			markedReady = self:_preloadAnimationList(animator, generation, tier1Animations, readyAfter, tier)
 			self.tier1Complete = true
 			if not markedReady then

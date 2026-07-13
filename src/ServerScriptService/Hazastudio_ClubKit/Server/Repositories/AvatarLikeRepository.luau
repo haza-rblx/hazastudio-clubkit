@@ -115,20 +115,8 @@ local function createAvatarLikeRepository(deps: { logger: Types.ILogger? }?)
 	end
 
 	local function getUserThumbnail(userId: number): string
-		-- HTTP API telemetry counter (quota-efficiency-pass-2026-06, Phase 0).
-		-- Only fire when wrapper disabled (when enabled, wrapper's internal counter handles it).
-		if (not (Config.HttpApi and Config.HttpApi.ENABLED)) and Config.HttpApi and Config.HttpApi.COUNTERS_ENABLED then
-			HttpApiCounter.record("like_getthumb_total")
-		end
-		local content = HttpApi.getUserThumbnailAsync(
-			userId,
-			Enum.ThumbnailType.HeadShot,
-			Enum.ThumbnailSize.Size150x150
-		)
-		if type(content) == "string" then
-			return content
-		end
-		return ""
+		-- Prefer rbxthumb to avoid Players thumbnail API storms under leaderboard rebuilds.
+		return string.format("rbxthumb://type=AvatarHeadShot&id=%d&w=150&h=150", userId)
 	end
 
 	local function writeUserMetadata(userId: number, username: string, displayName: string, thumbnail: string): Result<nil>
@@ -684,31 +672,46 @@ local function createAvatarLikeRepository(deps: { logger: Types.ILogger? }?)
 				end
 			end
 
-			local fallbackUsername, fallbackDisplayName = getUserIdentity(userId)
-			local username = type(metadata) == "table" and type(metadata.username) == "string" and metadata.username
-				or fallbackUsername
-			local displayName = type(metadata) == "table" and type(metadata.displayName) == "string" and metadata.displayName
-				or fallbackDisplayName
-			-- Detect stale fallback names ("User 12345") persisted from earlier
-			-- writes when API was throttled. Re-resolve via getUserIdentity.
 			local function looksLikeFallback(name: string?): boolean
-				if not name then return true end
+				if not name then
+					return true
+				end
 				return name:match("^User%s*%d+$") ~= nil or name == ""
 			end
+			local username = type(metadata) == "table" and type(metadata.username) == "string" and metadata.username
+				or nil
+			local displayName = type(metadata) == "table" and type(metadata.displayName) == "string" and metadata.displayName
+				or nil
+			-- Only hit identity API when metadata is missing / fallback — not every row.
 			if looksLikeFallback(username) or looksLikeFallback(displayName) then
-				username = fallbackUsername
-				displayName = fallbackDisplayName
+				local fallbackUsername, fallbackDisplayName = getUserIdentity(userId)
+				if looksLikeFallback(username) then
+					username = fallbackUsername
+				end
+				if looksLikeFallback(displayName) then
+					displayName = fallbackDisplayName
+				end
 				-- Note: metadata write-back intentionally omitted from hot read path.
 				-- Writing 10+ entries simultaneously floods DataStore queue in Studio.
 				-- Metadata self-heals during backfillLeaderboardFromSummaries (throttled).
+			end
+			if not username then
+				username = "User " .. tostring(userId)
+			end
+			if not displayName then
+				displayName = username
+			end
+			local thumbnail = type(metadata) == "table" and type(metadata.thumbnail) == "string" and metadata.thumbnail
+				or nil
+			if not thumbnail or thumbnail == "" then
+				thumbnail = getUserThumbnail(userId)
 			end
 			table.insert(entries, {
 				rank = index,
 				userId = userId,
 				username = username,
 				displayName = displayName,
-				thumbnail = type(metadata) == "table" and type(metadata.thumbnail) == "string" and metadata.thumbnail
-					or getUserThumbnail(userId),
+				thumbnail = thumbnail,
 				total = tonumber(item.value) or 0,
 			})
 		end

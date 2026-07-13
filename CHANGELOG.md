@@ -11,6 +11,16 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.21] - 2026-07-14
+
+### Fixed
+- **Leaderboard UserService storm** — workspace enrich now slices to paint limits (20) before identity resolve; `LeaderboardIdentity` no longer treats DisplayName==Username as stale, batches UserService lookups, and caches success/failure. Likes/robux repos stop unconditional identity/thumbnail API calls (prefer `rbxthumb://`).
+- **Overhead GroupService storm** — proximity snapshot-on-enter reuses cached/S1 payload instead of full rebuild; `OverheadService.getGroups` self-caches even when HttpApi was previously off.
+
+### Changed
+- **`Config.HttpApi.ENABLED = true`** — TTL cache + dedup for GroupService/Players wrappers; `getUserInfosByUserIdsAsync` uses a real multi-id batch.
+- **Dance preload cap** — `DANCE_PRELOAD_MAX_ASSETS = 32` applies to tier1/tier2/full ContentProvider preload (cuts client Animation RAM from full-catalog warmup). `SERVER_DANCE_TRACK_PREWARM_MAX` 10→8.
+
 ## [2.4.20] - 2026-07-13
 
 ### Fixed
