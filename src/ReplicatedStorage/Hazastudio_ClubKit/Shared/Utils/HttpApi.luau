@@ -1,13 +1,11 @@
 --!strict
--- Server-side HTTP API wrapper (quota-efficiency-pass-2026-06, Phase 2).
--- Setiap fungsi Roblox API (GroupService:GetGroupsAsync, Players:GetNameFromUserIdAsync,
--- etc.) di-wrap dengan: in-flight dedup + cache check + counter + cache set.
+-- Server-side HTTP API wrapper (quota-efficiency-pass-2026-06, Phase 2 + Phase 1 admission).
+-- Setiap fungsi Roblox API di-wrap dengan: in-flight dedup + cache + negative-cache
+-- on failure + optional global concurrency cap.
 --
--- Kill switch: Config.HttpApi.ENABLED = false → semua call bypass wrapper dan call
--- direct Roblox API (zero behavior change, default).
--- Set ENABLED = true setelah 2.6 parallel-run verification passed.
---
--- Soft-defer + coalesce queue di-defer ke Phase 3. Phase 2 fokus: dedup + cache saja.
+-- Kill switch: Config.HttpApi.ENABLED = false → bypass wrapper (direct call).
+-- Admission kill switch: Config.HttpApi.ADMISSION_ENABLED = false → no concurrency gate.
+
 local Players = game:GetService("Players")
 local GroupService = game:GetService("GroupService")
 local UserService = game:GetService("UserService")
@@ -17,50 +15,94 @@ local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Con
 local Cache = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Cache)
 local HttpApiCounter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.HttpApiCounter)
 
--- Module-level state. Per-server, persists for server lifetime.
--- In-flight dedup: BindableEvent per cache key. Caller kedua wait on the event.
 local inFlight: { [string]: BindableEvent } = {}
+local activeCalls = 0
 
--- withCache: generic wrapper. If ENABLED=false, call direct. If ENABLED=true:
--- 1. Cache check (return cached if hit)
--- 2. In-flight dedup (wait if another caller is fetching same key)
--- 3. Counter record
--- 4. Direct call (pcall-wrapped)
--- 5. Cache set
--- 6. Resolve in-flight event so waiters can read the cached value
+local function negativeTtl(): number
+	return math.max(5, math.floor(tonumber(Config.HttpApi.NEGATIVE_CACHE_TTL) or 30))
+end
+
+local function maxConcurrent(): number
+	return math.max(1, math.floor(tonumber(Config.HttpApi.MAX_CONCURRENT) or 4))
+end
+
+local function admissionWaitMax(): number
+	return math.max(0.5, tonumber(Config.HttpApi.ADMISSION_WAIT_MAX) or 5)
+end
+
+local function acquireAdmission(): boolean
+	if not (Config.HttpApi and Config.HttpApi.ADMISSION_ENABLED) then
+		return true
+	end
+	local deadline = os.clock() + admissionWaitMax()
+	while activeCalls >= maxConcurrent() do
+		if os.clock() >= deadline then
+			return false
+		end
+		task.wait(0.05 + math.random() * 0.05)
+	end
+	activeCalls += 1
+	return true
+end
+
+local function releaseAdmission()
+	if not (Config.HttpApi and Config.HttpApi.ADMISSION_ENABLED) then
+		return
+	end
+	activeCalls = math.max(0, activeCalls - 1)
+end
+
+-- withCache: ENABLED=false → direct. ENABLED=true:
+-- 1. Negative cache → nil (no re-fire)
+-- 2. Positive cache hit
+-- 3. In-flight dedup (waiters return nil if leader failed — no fallthrough retry)
+-- 4. Admission slot (or negative-cache + nil)
+-- 5. Call + positive set / negative set on fail
 local function withCache<T>(bucket: string, cacheKey: string, cacheTtl: number, directCall: () -> T): T?
 	if not (Config.HttpApi and Config.HttpApi.ENABLED) then
 		return directCall()
 	end
 
-	-- Cache check
+	if Cache.getNegative(cacheKey) then
+		return nil
+	end
+
 	local cached = Cache.get(cacheKey)
 	if cached ~= nil then
 		return cached :: T
 	end
 
-	-- In-flight dedup: if another caller is fetching same key, wait + return cached
 	if inFlight[cacheKey] then
 		inFlight[cacheKey].Event:Wait()
+		if Cache.getNegative(cacheKey) then
+			return nil
+		end
 		local afterWait = Cache.get(cacheKey)
 		if afterWait ~= nil then
 			return afterWait :: T
 		end
-		-- Fallthrough if wait completed but cache empty (direct call failed)
+		-- Leader failed without leaving a usable value — do not retry in this waiter.
+		return nil
 	end
 
-	-- Register in-flight
 	local event = Instance.new("BindableEvent")
 	inFlight[cacheKey] = event
 
-	-- Counter: increments each time we actually call the API
+	if not acquireAdmission() then
+		Cache.setNegative(cacheKey, negativeTtl())
+		inFlight[cacheKey] = nil
+		event:Fire()
+		event:Destroy()
+		return nil
+	end
+
 	if Config.HttpApi.COUNTERS_ENABLED then
 		HttpApiCounter.record(bucket)
 	end
 
 	local ok, result = pcall(directCall)
+	releaseAdmission()
 
-	-- Clear in-flight BEFORE firing event (so waiters can re-check cache cleanly)
 	inFlight[cacheKey] = nil
 	event:Fire()
 	event:Destroy()
@@ -69,12 +111,13 @@ local function withCache<T>(bucket: string, cacheKey: string, cacheTtl: number, 
 		Cache.set(cacheKey, result, cacheTtl)
 		return result :: T
 	end
+
+	Cache.setNegative(cacheKey, negativeTtl())
 	return nil
 end
 
 local HttpApi = {}
 
--- Players:GetNameFromUserIdAsync
 function HttpApi.getNameFromUserIdAsync(userId: number): string?
 	return withCache("httpapi_getname", "name:" .. tostring(userId), Config.HttpApi.GET_NAME_TTL, function()
 		local ok, name = pcall(function()
@@ -87,7 +130,6 @@ function HttpApi.getNameFromUserIdAsync(userId: number): string?
 	end)
 end
 
--- Players:GetUserIdFromNameAsync
 function HttpApi.getUserIdFromNameAsync(username: string): number?
 	return withCache("httpapi_getuserid", "userid:" .. username, Config.HttpApi.GET_USER_ID_TTL, function()
 		local ok, id = pcall(function()
@@ -100,24 +142,26 @@ function HttpApi.getUserIdFromNameAsync(username: string): number?
 	end)
 end
 
--- UserService:GetUserInfosByUserIdsAsync — real multi-id batch for misses.
--- Returns map: userId -> { Username, DisplayName } (partial OK)
+-- UserService batch. On batch failure, negative-cache every miss id (no legacy fallback here).
 function HttpApi.getUserInfosByUserIdsAsync(userIds: { number }): { [number]: any }
 	local result: { [number]: any } = {}
 	local missing: { number } = {}
 	local missingSet: { [number]: boolean } = {}
 	local ttl = Config.HttpApi.GET_USER_INFOS_TTL
+	local useCache = Config.HttpApi and Config.HttpApi.ENABLED == true
 
 	for _, userId in ipairs(userIds) do
 		if type(userId) == "number" and userId > 0 and not missingSet[userId] then
 			local cacheKey = "userinfo:" .. tostring(userId)
-			if Config.HttpApi and Config.HttpApi.ENABLED then
-				local cached = Cache.get(cacheKey)
-				if cached ~= nil then
-					result[userId] = cached
-				else
-					missingSet[userId] = true
-					table.insert(missing, userId)
+			if useCache then
+				if not Cache.getNegative(cacheKey) then
+					local cached = Cache.get(cacheKey)
+					if cached ~= nil then
+						result[userId] = cached
+					else
+						missingSet[userId] = true
+						table.insert(missing, userId)
+					end
 				end
 			else
 				missingSet[userId] = true
@@ -130,6 +174,16 @@ function HttpApi.getUserInfosByUserIdsAsync(userIds: { number }): { [number]: an
 		return result
 	end
 
+	if not acquireAdmission() then
+		if useCache then
+			local failTtl = negativeTtl()
+			for _, userId in ipairs(missing) do
+				Cache.setNegative("userinfo:" .. tostring(userId), failTtl)
+			end
+		end
+		return result
+	end
+
 	if Config.HttpApi and Config.HttpApi.COUNTERS_ENABLED then
 		HttpApiCounter.record("httpapi_getuserinfos")
 	end
@@ -137,24 +191,40 @@ function HttpApi.getUserInfosByUserIdsAsync(userIds: { number }): { [number]: an
 	local ok, infos = pcall(function()
 		return UserService:GetUserInfosByUserIdsAsync(missing)
 	end)
+	releaseAdmission()
+
 	if ok and type(infos) == "table" then
+		local got: { [number]: boolean } = {}
 		for _, info in ipairs(infos) do
 			if type(info) == "table" then
 				local id = tonumber(info.Id or info.UserId)
 				if id then
+					got[id] = true
 					result[id] = info
-					if Config.HttpApi and Config.HttpApi.ENABLED then
+					if useCache then
 						Cache.set("userinfo:" .. tostring(id), info, ttl)
 					end
 				end
 			end
+		end
+		if useCache then
+			local failTtl = negativeTtl()
+			for _, userId in ipairs(missing) do
+				if not got[userId] and result[userId] == nil then
+					Cache.setNegative("userinfo:" .. tostring(userId), failTtl)
+				end
+			end
+		end
+	elseif useCache then
+		local failTtl = negativeTtl()
+		for _, userId in ipairs(missing) do
+			Cache.setNegative("userinfo:" .. tostring(userId), failTtl)
 		end
 	end
 
 	return result
 end
 
--- Players:GetFriendsAsync (returns count only; pagination handled internally)
 function HttpApi.getFriendsCountAsync(userId: number): number?
 	return withCache(
 		"httpapi_getfriendscount",
@@ -167,7 +237,6 @@ function HttpApi.getFriendsCountAsync(userId: number): number?
 			if not ok or not friendsList then
 				return nil
 			end
-			-- Iterate pages, return total count. Same MAX_PAGES as ProfileSocialService fallback.
 			local MAX_PAGES = 15
 			local total = 0
 			local pageCount = 0
@@ -190,8 +259,6 @@ function HttpApi.getFriendsCountAsync(userId: number): number?
 	)
 end
 
--- Players:GetUserThumbnailAsync
--- Return type: Content (table with string fields) or nil. Use any to avoid strict typing issues.
 function HttpApi.getUserThumbnailAsync(
 	userId: number,
 	thumbType: Enum.ThumbnailType,
@@ -213,7 +280,6 @@ function HttpApi.getUserThumbnailAsync(
 	)
 end
 
--- GroupService:GetGroupsAsync
 function HttpApi.getGroupsAsync(userId: number): { any }?
 	return withCache("httpapi_getgroups", "groups:" .. tostring(userId), Config.HttpApi.GET_GROUPS_TTL, function()
 		local ok, groups = pcall(function()
@@ -226,7 +292,6 @@ function HttpApi.getGroupsAsync(userId: number): { any }?
 	end)
 end
 
--- Players:GetHumanoidDescriptionFromUserIdAsync
 function HttpApi.getHumanoidDescriptionFromUserIdAsync(userId: number): HumanoidDescription?
 	return withCache("httpapi_gethd", "hd:" .. tostring(userId), Config.HttpApi.GET_HUMANOID_DESCRIPTION_TTL, function()
 		local ok, desc = pcall(function()

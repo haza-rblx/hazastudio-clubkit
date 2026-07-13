@@ -218,6 +218,11 @@ end
 -- ============================================================
 local MAX_PAYLOAD_BYTES = Config.Security.MAX_PAYLOAD_BYTES  -- dari Config, bukan magic number
 function Validator.checkSize(d: any): (boolean, number)
+	return Validator.checkSizeLimit(d, MAX_PAYLOAD_BYTES)
+end
+
+function Validator.checkSizeLimit(d: any, maxBytes: number): (boolean, number)
+	local limit = math.max(0, math.floor(tonumber(maxBytes) or MAX_PAYLOAD_BYTES))
 	local ok, encodedOrErr = pcall(function()
 		return HttpService:JSONEncode(d)
 	end)
@@ -228,7 +233,7 @@ function Validator.checkSize(d: any): (boolean, number)
 		return false, -1
 	end
 	local encoded = encodedOrErr
-	return #encoded <= MAX_PAYLOAD_BYTES, #encoded
+	return #encoded <= limit, #encoded
 end
 -- ============================================================
 -- SYNC DANCE

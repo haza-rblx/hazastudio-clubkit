@@ -2027,6 +2027,9 @@ Config.Settings = {
 	REMOTE_RESET = "SettingsReset",
 	UPDATE_RATE_MAX = 10,
 	UPDATE_RATE_WINDOW = 10,
+	-- Full settings blob (overhead maps + graphicsOverrides). Security.MAX_PAYLOAD_BYTES
+	-- is 1KB for short commands and rejects legitimate SettingsUpdate saves.
+	MAX_PAYLOAD_BYTES = 8 * 1024,
 }
 Config.ProfileMenu = {
 	REMOTE_REQUEST = "ProfileMenuRequest",
@@ -3107,6 +3110,11 @@ Config.HttpApi = {
 	-- Enabled: in-flight dedup + TTL cache for GroupService/Players/UserService wrappers.
 	-- LeaderboardIdentity has its own cache (does not rely on this flag).
 	ENABLED = true,
+	-- Phase 1 perf: negative-cache failures + global concurrency (kill switch ADMISSION_ENABLED).
+	ADMISSION_ENABLED = true,
+	MAX_CONCURRENT = 4,
+	NEGATIVE_CACHE_TTL = 30,
+	ADMISSION_WAIT_MAX = 5,
 	GET_NAME_TTL = 600,
 	GET_USER_ID_TTL = 600,
 	GET_USER_INFOS_TTL = 600,

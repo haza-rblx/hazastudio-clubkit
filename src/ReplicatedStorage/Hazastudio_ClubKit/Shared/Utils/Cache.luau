@@ -63,6 +63,10 @@ function CacheInstance:get(key: string): any?
 		self._store[key] = nil
 		return nil
 	end
+	-- Negative markers are only visible via getNegative — never treat as a value hit.
+	if e.value == NEGATIVE_MARKER then
+		return nil
+	end
 	return e.value
 end
 

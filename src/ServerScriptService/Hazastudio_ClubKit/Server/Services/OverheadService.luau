@@ -179,8 +179,12 @@ local function createOverheadService(deps: {
 	local inFlight: { [number]: boolean } = {}
 	local function getGroups(userId: number): ({ RobloxGroupEntry }?, boolean)
 		local cacheKey = GROUPS_PREFIX .. userId
+		-- Negative cache: recent failure — do not re-hit GroupService this window.
+		if Cache.getNegative(cacheKey) then
+			return nil, false
+		end
 		local cached = Cache.get(cacheKey)
-		if cached then
+		if type(cached) == "table" then
 			return cached :: { RobloxGroupEntry }, true
 		end
 		if inFlight[userId] then
@@ -189,29 +193,29 @@ local function createOverheadService(deps: {
 				task.wait(0.1)
 				waited += 0.1
 			end
-			local fresh = Cache.get(cacheKey)
-			if fresh then
-				return fresh :: { RobloxGroupEntry }, true
-			end
-			-- If the in-flight caller finished but cache is empty (fetch failed),
-			-- fall through to retry ourselves. Only return empty if another caller
-			-- is still fetching.
-			if inFlight[userId] then
-				log:debug("GroupService in-flight still running, return empty", { userId = userId })
+			if Cache.getNegative(cacheKey) then
 				return nil, false
 			end
-			-- Fall through to retry
+			local fresh = Cache.get(cacheKey)
+			if type(fresh) == "table" then
+				return fresh :: { RobloxGroupEntry }, true
+			end
+			-- Leader finished without a usable cache — do not fall through to retry.
+			if inFlight[userId] then
+				log:debug("GroupService in-flight still running, return empty", { userId = userId })
+			end
+			return nil, false
 		end
 		inFlight[userId] = true
-		-- HTTP API telemetry counter (quota-efficiency-pass-2026-06, Phase 0).
-		-- Only fire when wrapper disabled (when enabled, wrapper's internal counter handles it).
 		if (not (Config.HttpApi and Config.HttpApi.ENABLED)) and Config.HttpApi and Config.HttpApi.COUNTERS_ENABLED then
 			HttpApiCounter.record("overhead_getgroups_total")
 		end
 		local groupsResult = HttpApi.getGroupsAsync(userId)
 		inFlight[userId] = nil
 		if not groupsResult then
-			log:warn("GroupService gagal, groups tidak di-cache", { userId = userId })
+			local failTtl = (Config.HttpApi and Config.HttpApi.NEGATIVE_CACHE_TTL) or 30
+			Cache.setNegative(cacheKey, failTtl)
+			log:warn("GroupService gagal, negative-cached", { userId = userId, ttl = failTtl })
 			return nil, false
 		end
 		-- Self-cache even when Config.HttpApi.ENABLED=false (HttpApi only writes

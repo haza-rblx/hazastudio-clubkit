@@ -194,8 +194,14 @@ local function createSettingsController(deps: {
 			if type(payload) ~= "table" then
 				return
 			end
-			if not Validator.checkSize(payload) then
-				log:warn("Settings update rejected: payload too large", { player = player.Name })
+			local maxBytes = (Config.Settings and Config.Settings.MAX_PAYLOAD_BYTES) or (8 * 1024)
+			local sizeOk, encodedBytes = Validator.checkSizeLimit(payload, maxBytes)
+			if not sizeOk then
+				log:warn("Settings update rejected: payload too large", {
+					player = player.Name,
+					bytes = encodedBytes,
+					maxBytes = maxBytes,
+				})
 				return
 			end
 			if not limiter:check(player.UserId) then

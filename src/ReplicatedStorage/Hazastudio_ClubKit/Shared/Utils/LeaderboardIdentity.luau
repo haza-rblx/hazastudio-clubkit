@@ -50,18 +50,13 @@ function LeaderboardIdentity.fetchUserInfos(userIds: { number }): { any }
 		return {}
 	end
 
+	-- UserService only — never immediately fall through to Players legacy API after
+	-- a throttle/failure (that doubled Network "Players"/"UserService" storms).
 	local ok, infos = pcall(function()
 		return UserService:GetUserInfosByUserIdsAsync(userIds)
 	end)
 	if ok and type(infos) == "table" then
 		return infos
-	end
-
-	local legacyOk, legacyInfos = pcall(function()
-		return (Players :: any):GetUserInfosByUserIdsAsync(userIds)
-	end)
-	if legacyOk and type(legacyInfos) == "table" then
-		return legacyInfos
 	end
 
 	return {}
@@ -165,27 +160,26 @@ function LeaderboardIdentity.resolveUserIdentity(userId: number): ResolvedIdenti
 		resolvedOk = true
 	else
 		local infos = LeaderboardIdentity.fetchUserInfos({ userId })
+		local fetched = false
 		for _, info in ipairs(infos) do
 			if LeaderboardIdentity.readInfoUserId(info) == userId then
 				local fromInfo = identityFromInfo(userId, info)
 				username = fromInfo.username
 				displayName = fromInfo.displayName
 				resolvedOk = not LeaderboardIdentity.looksLikeFallbackName(username)
+				fetched = true
 				break
 			end
 		end
-	end
-
-	if LeaderboardIdentity.looksLikeFallbackName(username) then
-		local nameOk, resolvedName = pcall(function()
-			return Players:GetNameFromUserIdAsync(userId)
-		end)
-		if nameOk and type(resolvedName) == "string" and resolvedName ~= "" then
-			username = resolvedName
-			if LeaderboardIdentity.looksLikeFallbackName(displayName) then
-				displayName = resolvedName
-			end
-			resolvedOk = true
+		-- If UserService failed/empty, do NOT call GetNameFromUserIdAsync in the same
+		-- window — negative-cache and retry later instead of doubling API pressure.
+		if not fetched then
+			writeNegativeCache(userId)
+			return {
+				username = fallbackUsername,
+				displayName = fallbackUsername,
+				thumbnail = LeaderboardIdentity.getUserThumbnail(userId, 150),
+			}
 		end
 	end
 

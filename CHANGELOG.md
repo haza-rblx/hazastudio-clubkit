@@ -11,6 +11,17 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.22] - 2026-07-14
+
+### Fixed
+- **Settings update rejected: payload too large** — SettingsUpdate uses `Config.Settings.MAX_PAYLOAD_BYTES` (8KB) instead of Security 1KB, so full settings saves (e.g. hide world effect) work.
+- **HTTP API throttle spiral** — `HttpApi` negative-caches failures, caps concurrent Roblox API calls (`MAX_CONCURRENT`), and waiters no longer fall through to retry after a failed leader fetch.
+- **LeaderboardIdentity double-API** — no immediate legacy `Players` UserInfos / `GetNameFromUserIdAsync` after UserService failure; negative-cache and retry later.
+- **Overhead getGroups** — respects negative cache; no wait-then-retry storm on failure.
+
+### Changed
+- **`Config.HttpApi`** — `ADMISSION_ENABLED`, `MAX_CONCURRENT=4`, `NEGATIVE_CACHE_TTL=30` (kill-switchable).
+
 ## [2.4.21] - 2026-07-14
 
 ### Fixed
