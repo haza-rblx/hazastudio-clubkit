@@ -165,6 +165,12 @@ local function create(deps: {
 	-- Tracks which animation IDs were prewarmed per player (userId → set of animationId).
 	-- Used by executeAnimation to decide whether on-demand load is needed (R5.4, R5.5).
 	local prewarmSets: { [number]: { [string]: boolean } } = {}
+	-- Phase 4: cancel in-flight prewarm on leave / character swap.
+	local prewarmGeneration: { [number]: number } = {}
+	-- Global admission: max concurrent prewarming players + loads/sec across the server.
+	local activePrewarmSlots = 0
+	local prewarmLoadWindowStart = 0
+	local prewarmLoadsInWindow = 0
 
 	local onFollowersHardUnsyncedCallback: ((leaderName: string, followerNames: { string }) -> ())? = nil
 
@@ -471,56 +477,137 @@ local function create(deps: {
 		return selected
 	end
 
+	local function bumpPrewarmGeneration(userId: number): number
+		local nextGen = (prewarmGeneration[userId] or 0) + 1
+		prewarmGeneration[userId] = nextGen
+		return nextGen
+	end
+
+	local function acquirePrewarmSlot(userId: number, generation: number): boolean
+		local maxConcurrent = math.max(1, math.floor(tonumber(config.SERVER_DANCE_TRACK_PREWARM_MAX_CONCURRENT) or 2))
+		while activePrewarmSlots >= maxConcurrent do
+			if prewarmGeneration[userId] ~= generation then
+				return false
+			end
+			local player = Players:GetPlayerByUserId(userId)
+			if not player or not player.Parent then
+				return false
+			end
+			task.wait(0.05)
+		end
+		if prewarmGeneration[userId] ~= generation then
+			return false
+		end
+		activePrewarmSlots += 1
+		return true
+	end
+
+	local function releasePrewarmSlot()
+		activePrewarmSlots = math.max(0, activePrewarmSlots - 1)
+	end
+
+	local function admitPrewarmLoad(userId: number, generation: number): boolean
+		local maxPerSec = math.max(1, math.floor(tonumber(config.SERVER_DANCE_TRACK_PREWARM_MAX_LOADS_PER_SEC) or 24))
+		while true do
+			if prewarmGeneration[userId] ~= generation then
+				return false
+			end
+			local now = os.clock()
+			if now - prewarmLoadWindowStart >= 1 then
+				prewarmLoadWindowStart = now
+				prewarmLoadsInWindow = 0
+			end
+			if prewarmLoadsInWindow < maxPerSec then
+				prewarmLoadsInWindow += 1
+				return true
+			end
+			task.wait(0.05)
+		end
+	end
+
 	local function prewarmAnimatorTracks(player: Player)
 		if config.SERVER_DANCE_TRACK_PREWARM_ENABLED == false then
 			return
 		end
+		local userId = player.UserId
+		local generation = bumpPrewarmGeneration(userId)
 		task.spawn(function()
-			local animator = AnimatorUtils.getAnimator(player)
-			if not animator then
+			if not acquirePrewarmSlot(userId, generation) then
 				return
 			end
-			-- R5.1: clamp max prewarm to [1, SERVER_DANCE_TRACK_PREWARM_MAX].
-			local maxPrewarm = math.max(1, math.min(
-				math.floor(tonumber(config.SERVER_DANCE_TRACK_PREWARM_MAX) or 16),
-				16
-			))
-			local batchDelay = math.max(0, tonumber(config.SERVER_DANCE_TRACK_PREWARM_BATCH_DELAY) or 0.03)
-
-			-- R5.2, R5.3: select tracks using priority logic.
-			local selectedTracks = selectPrewarmTracks(player, prewarmAnimations, maxPrewarm)
-
-			-- Build a new prewarm set for this player (replaces any from a previous character).
-			local newPrewarmSet: { [string]: boolean } = {}
-
-			local warmed = 0
-			for _, animation in ipairs(selectedTracks) do
-				local track, loadError = AnimatorUtils.getOrCreateTrack(animator, animation)
-				if track then
-					pcall(function()
-						track.Priority = config.ANIM_PRIORITY
-						track.Looped = true
-						track:Stop(0)
-					end)
-					-- Record this animationId as prewarmed (R5.4: on-demand load check).
-					if animation.AnimationId ~= "" then
-						newPrewarmSet[animation.AnimationId] = true
-					end
-					newPrewarmSet[animation.Name] = true
-				else
-					assetReporter:recordInstanceFailure(
-						animation,
-						"SyncService.prewarmAnimatorTracks",
-						loadError or "Failed to load animation",
-						{ player = player.Name, userId = player.UserId }
-					)
+			local slotHeld = true
+			local function releaseSlot()
+				if slotHeld then
+					slotHeld = false
+					releasePrewarmSlot()
 				end
-				warmed += 1
-				task.wait(batchDelay)
 			end
 
-			prewarmSets[player.UserId] = newPrewarmSet
-			logger:debug("Prewarmed animation tracks", { player = player.Name, count = warmed })
+			local ok, err = pcall(function()
+				if prewarmGeneration[userId] ~= generation then
+					return
+				end
+				local animator = AnimatorUtils.getAnimator(player)
+				if not animator then
+					return
+				end
+				-- R5.1: clamp max prewarm to [1, SERVER_DANCE_TRACK_PREWARM_MAX].
+				local maxPrewarm = math.max(1, math.min(
+					math.floor(tonumber(config.SERVER_DANCE_TRACK_PREWARM_MAX) or 16),
+					16
+				))
+				local batchDelay = math.max(0, tonumber(config.SERVER_DANCE_TRACK_PREWARM_BATCH_DELAY) or 0.03)
+
+				-- R5.2, R5.3: select tracks using priority logic.
+				local selectedTracks = selectPrewarmTracks(player, prewarmAnimations, maxPrewarm)
+
+				-- Build a new prewarm set for this player (replaces any from a previous character).
+				local newPrewarmSet: { [string]: boolean } = {}
+
+				local warmed = 0
+				for _, animation in ipairs(selectedTracks) do
+					if prewarmGeneration[userId] ~= generation then
+						return
+					end
+					if not admitPrewarmLoad(userId, generation) then
+						return
+					end
+					local track, loadError = AnimatorUtils.getOrCreateTrack(animator, animation)
+					if track then
+						pcall(function()
+							track.Priority = config.ANIM_PRIORITY
+							track.Looped = true
+							track:Stop(0)
+						end)
+						-- Record this animationId as prewarmed (R5.4: on-demand load check).
+						if animation.AnimationId ~= "" then
+							newPrewarmSet[animation.AnimationId] = true
+						end
+						newPrewarmSet[animation.Name] = true
+					else
+						assetReporter:recordInstanceFailure(
+							animation,
+							"SyncService.prewarmAnimatorTracks",
+							loadError or "Failed to load animation",
+							{ player = player.Name, userId = userId }
+						)
+					end
+					warmed += 1
+					task.wait(batchDelay)
+				end
+
+				if prewarmGeneration[userId] == generation then
+					prewarmSets[userId] = newPrewarmSet
+					logger:debug("Prewarmed animation tracks", { player = player.Name, count = warmed })
+				end
+			end)
+			releaseSlot()
+			if not ok then
+				logger:warn("Prewarm animator tracks failed", {
+					player = player.Name,
+					error = tostring(err),
+				})
+			end
 		end)
 	end
 
@@ -1131,6 +1218,7 @@ local self = {} :: any
 		originalWalkSpeeds[player.UserId] = nil
 		pendingRefreshRestore[player.UserId] = nil
 		prewarmSets[player.UserId] = nil
+		bumpPrewarmGeneration(player.UserId)
 
 		if characterConnections[player.UserId] then
 			characterConnections[player.UserId]:Disconnect()

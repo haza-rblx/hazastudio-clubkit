@@ -935,10 +935,15 @@ Config.Sync = {
 	-- Cap ContentProvider PreloadAsync (tier1/tier2/full). Favorites + first N catalog
 	-- assets only — full-catalog preload was ~350MB Animation on dense emote kits.
 	DANCE_PRELOAD_MAX_ASSETS = 32,
+	-- Phase 4: per-tier budgets inside MAX_ASSETS (tier1 ready signal + tier2 remainder).
+	-- Kill switch: USE_LEGACY_FLAT_PRELOAD_BUDGET = true → flat MAX_ASSETS (pre-2.4.25).
+	DANCE_PRELOAD_TIER1_BUDGET = 12,
+	DANCE_PRELOAD_TIER2_BUDGET = 20,
+	USE_LEGACY_FLAT_PRELOAD_BUDGET = false,
 	-- Client: legacy DanceClientService-style LoadAnimation per asset ID (no mass trackCache).
 	-- Disabled for 100 CCU: replaced by single once-per-session ContentProvider batch (perf-scaling R11).
 	DANCE_CLIENT_LEGACY_STYLE_PRELOAD = false,
-	DANCE_PRELOAD_READY_AFTER = 24,
+	DANCE_PRELOAD_READY_AFTER = 12,
 	DANCE_LEGACY_PRELOAD_READY_AFTER = 24,
 	DANCE_LEGACY_PRELOAD_YIELD_EVERY = 5,
 	-- Sync join: snap follower phase from leader's live track (legacy SyncServerService).
@@ -962,6 +967,9 @@ Config.Sync = {
 	-- Server headroom: 10→8 tracks/character (client Animation RAM is driven by DANCE_PRELOAD_MAX_ASSETS).
 	SERVER_DANCE_TRACK_PREWARM_MAX = 8,
 	SERVER_DANCE_TRACK_PREWARM_BATCH_DELAY = 0.03,
+	-- Phase 4: global admission — join wave must not LoadAnimation every character at once.
+	SERVER_DANCE_TRACK_PREWARM_MAX_CONCURRENT = 2,
+	SERVER_DANCE_TRACK_PREWARM_MAX_LOADS_PER_SEC = 24,
 	-- Dance panel UI selection. Use "v1" for DancePanelGUIWrapper or "v2" for DancePanelGUIWrapperv2.
 	-- Phone layout (short viewport + touch) uses DANCE_PANEL_UI_ROOTS.v2Mobile when USE_MOBILE_LAYOUT is true.
 	DANCE_PANEL_UI_VERSION = "v2",
@@ -2392,6 +2400,14 @@ Config.Leaderboards = {
 	-- explicit invalidate in onLeaderboardUpdated). 10s caused near-constant
 	-- cold rebuilds on each client snapshot request.
 	WORKSPACE_CACHE_TTL = 60,
+	-- Phase 4: coalesce donation-driven rebuild+paint (trailing window).
+	-- Admin/manual refresh can still force immediate via scheduleWorkspace(immediate).
+	WORKSPACE_REBUILD_COALESCE_SEC = 5,
+	-- Skip paint when fingerprint unchanged (net was already skipped).
+	SKIP_PAINT_WHEN_FINGERPRINT_UNCHANGED = true,
+	-- Bound missing-board paint retries (board streamed late).
+	PAINT_MISSING_RETRY_MAX = 3,
+	PAINT_MISSING_RETRY_DELAY = 5,
 	-- Delay sebelum kick-off pertama leaderboard refresh saat server start.
 	-- Menghindari DataStore throttle dari burst reads di pre-warm + overhead init.
 	INITIAL_REFRESH_DELAY = 30,

@@ -133,23 +133,36 @@ function createDanceWarmupService:_getPreloadMaxAssets(): number
 	return math.max(1, maxAssets)
 end
 
-function createDanceWarmupService:_capAnimationList(animations: { Animation }): { Animation }
+function createDanceWarmupService:_useLegacyFlatBudget(): boolean
+	return self.config.USE_LEGACY_FLAT_PRELOAD_BUDGET == true
+end
+
+function createDanceWarmupService:_getTier1Budget(): number
 	local maxAssets = self:_getPreloadMaxAssets()
-	if #animations <= maxAssets then
-		return animations
+	if self:_useLegacyFlatBudget() then
+		return maxAssets
 	end
-	local capped = table.create(maxAssets)
-	for index = 1, maxAssets do
-		capped[index] = animations[index]
+	local tier1 = math.floor(tonumber(self.config.DANCE_PRELOAD_TIER1_BUDGET) or 12)
+	return math.max(1, math.min(tier1, maxAssets))
+end
+
+function createDanceWarmupService:_getTier2Budget(): number
+	local maxAssets = self:_getPreloadMaxAssets()
+	if self:_useLegacyFlatBudget() then
+		return maxAssets
 	end
-	return capped
+	local tier1 = self:_getTier1Budget()
+	local tier2 = math.floor(tonumber(self.config.DANCE_PRELOAD_TIER2_BUDGET) or 20)
+	local remainingEnvelope = math.max(0, maxAssets - tier1)
+	return math.max(0, math.min(tier2, remainingEnvelope))
 end
 
 function createDanceWarmupService:_collectTier1Animations(): { Animation }
+	local tier1Budget = self:_getTier1Budget()
 	local readyAfter = math.max(1, math.floor(tonumber(self.config.DANCE_PRELOAD_READY_AFTER)
 		or tonumber(self.config.DANCE_LEGACY_PRELOAD_READY_AFTER)
-		or 24))
-	readyAfter = math.min(readyAfter, self:_getPreloadMaxAssets())
+		or tier1Budget))
+	readyAfter = math.min(readyAfter, tier1Budget)
 	local favoriteNames = readFavoriteNames()
 	local selected = {} :: { Animation }
 	local seen = {} :: { [string]: boolean }
@@ -166,6 +179,9 @@ function createDanceWarmupService:_collectTier1Animations(): { Animation }
 	for _, animation in ipairs(self.animations) do
 		if favoriteNames[animation.Name] then
 			tryAdd(animation)
+			if #selected >= tier1Budget then
+				return selected
+			end
 		end
 	end
 
@@ -176,17 +192,27 @@ function createDanceWarmupService:_collectTier1Animations(): { Animation }
 		tryAdd(animation)
 	end
 
+	-- Fill remaining tier1 budget (readyAfter may be lower than budget).
+	for _, animation in ipairs(self.animations) do
+		if #selected >= tier1Budget then
+			break
+		end
+		tryAdd(animation)
+	end
+
 	return selected
 end
 
 function createDanceWarmupService:_collectTier2Animations(): { Animation }
 	local tier2 = {} :: { Animation }
-	local maxAssets = self:_getPreloadMaxAssets()
 	local already = 0
 	for _ in pairs(self.preloadedAnimations) do
 		already += 1
 	end
-	local remainingBudget = math.max(0, maxAssets - already)
+	local maxAssets = self:_getPreloadMaxAssets()
+	local envelopeLeft = math.max(0, maxAssets - already)
+	local tier2Budget = self:_getTier2Budget()
+	local remainingBudget = math.min(envelopeLeft, tier2Budget)
 	if remainingBudget == 0 then
 		return tier2
 	end
@@ -539,14 +565,13 @@ function createDanceWarmupService:_startWarmup(character: Model, tier: WarmupTie
 
 		local readyAfter = math.max(1, math.floor(tonumber(self.config.DANCE_PRELOAD_READY_AFTER)
 			or tonumber(self.config.DANCE_LEGACY_PRELOAD_READY_AFTER)
-			or 24))
+			or self:_getTier1Budget()))
+		readyAfter = math.min(readyAfter, self:_getTier1Budget())
 		local markedReady = false
 
 		if tier == "tier1" or tier == "full" then
-			local tier1Animations = if tier == "tier1"
-				then self:_collectTier1Animations()
-				else self:_capAnimationList(self.animations)
-			markedReady = self:_preloadAnimationList(animator, generation, tier1Animations, readyAfter, tier)
+			local tier1Animations = self:_collectTier1Animations()
+			markedReady = self:_preloadAnimationList(animator, generation, tier1Animations, readyAfter, "tier1")
 			self.tier1Complete = true
 			if not markedReady then
 				self:_setReadyState(false, true)
@@ -555,7 +580,17 @@ function createDanceWarmupService:_startWarmup(character: Model, tier: WarmupTie
 			if tier == "tier1" then
 				return
 			end
+			-- Phase 4: full path continues into tier2 budget (not one flat dump).
+			if self.destroyed or generation ~= self.warmGeneration then
+				return
+			end
+			local tier2Animations = self:_collectTier2Animations()
+			self:_preloadAnimationList(animator, generation, tier2Animations, readyAfter, "tier2")
 			self.catalogPreloaded = true
+			if not self.store:get().isDanceReady then
+				self:_setReadyState(false, true)
+				self:_flushReadyCallbacks()
+			end
 			return
 		end
 

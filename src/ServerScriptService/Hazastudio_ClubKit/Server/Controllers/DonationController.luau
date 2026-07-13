@@ -189,6 +189,10 @@ local function createDonationController(deps: {
 	-- broadcastWorkspaceLeaderboards). Coalesces donation-burst top-3 shifts.
 	local lastWorkspaceNetBroadcastAt = 0
 	local workspaceNetBroadcastPending = false
+	-- Phase 4: trailing rebuild+paint coalesce for donation-driven updates.
+	local workspaceRebuildPending = false
+	local workspaceRebuildToken = 0
+	local lastPaintedFingerprint: string? = nil
 
 	local function workspacePayloadFingerprint(payload: { [string]: any }): string
 		local parts = { tostring(payload.updatedAt or 0) }
@@ -387,9 +391,15 @@ local function createDonationController(deps: {
 		if fingerprintChanged then
 			stampLeaderboardRevision(payload)
 		end
-		local paintStart = os.clock()
-		paintWorkspaceLeaderboards(payload)
-		local paintMs = (os.clock() - paintStart) * 1000
+		local skipPaintUnchanged = Config.Leaderboards.SKIP_PAINT_WHEN_FINGERPRINT_UNCHANGED == true
+		local shouldPaint = fingerprintChanged or lastPaintedFingerprint == nil or not skipPaintUnchanged
+		local paintMs = 0
+		if shouldPaint then
+			local paintStart = os.clock()
+			paintWorkspaceLeaderboards(payload)
+			paintMs = (os.clock() - paintStart) * 1000
+			lastPaintedFingerprint = fingerprint
+		end
 		if leaderboardsNetwork and fingerprintChanged then
 			lastWorkspaceBroadcastFingerprint = fingerprint
 			-- Debounce the network fan-out: during a donation burst the top-3
@@ -418,6 +428,39 @@ local function createDonationController(deps: {
 		end
 		local metrics = LeaderboardScaleAudit.metricsFromPayload(payload, buildMs, paintMs)
 		LeaderboardScaleAudit.logBroadcast(metrics, not fingerprintChanged)
+	end
+
+	-- Donation bursts invalidate + rebuild often; coalesce to one trailing rebuild.
+	-- Admin / manual paths pass immediate=true to flush now.
+	local function scheduleWorkspaceLeaderboardRefresh(opts: { force: boolean?, immediate: boolean? }?)
+		local force = opts == nil or opts.force ~= false
+		local immediate = opts ~= nil and opts.immediate == true
+		invalidateWorkspaceLeaderboardCache()
+		if immediate then
+			workspaceRebuildToken += 1
+			workspaceRebuildPending = false
+			broadcastWorkspaceLeaderboards(force)
+			return
+		end
+		local coalesceSec = tonumber(Config.Leaderboards.WORKSPACE_REBUILD_COALESCE_SEC) or 5
+		coalesceSec = math.max(0, coalesceSec)
+		if coalesceSec <= 0 then
+			broadcastWorkspaceLeaderboards(force)
+			return
+		end
+		if workspaceRebuildPending then
+			return
+		end
+		workspaceRebuildPending = true
+		workspaceRebuildToken += 1
+		local token = workspaceRebuildToken
+		task.delay(coalesceSec, function()
+			if token ~= workspaceRebuildToken then
+				return
+			end
+			workspaceRebuildPending = false
+			broadcastWorkspaceLeaderboards(force)
+		end)
 	end
 	if leaderboardsSnapshotRemote then
 		leaderboardsSnapshotRemote.OnServerEvent:Connect(function(player: Player, raw: any)
@@ -464,8 +507,7 @@ local function createDonationController(deps: {
 	end
 	if donationService and type(donationService.onLeaderboardUpdated) == "function" then
 		donationService:onLeaderboardUpdated(function()
-			invalidateWorkspaceLeaderboardCache()
-			broadcastWorkspaceLeaderboards(true)
+			scheduleWorkspaceLeaderboardRefresh({ force = true, immediate = false })
 		end)
 	end
 

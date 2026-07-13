@@ -11,6 +11,13 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.25] - 2026-07-14
+
+### Changed
+- **Dance per-tier preload budget (Phase 4)** — tier1 / tier2 budgets inside `DANCE_PRELOAD_MAX_ASSETS` (`TIER1_BUDGET=12`, `TIER2_BUDGET=20`). Full warmup uses tier1 then tier2 instead of one flat dump. Kill switch: `Config.Sync.USE_LEGACY_FLAT_PRELOAD_BUDGET = true`.
+- **Server dance track prewarm admission** — max 2 concurrent characters + ~24 loads/sec globally; cancel on leave / character swap.
+- **Donation leaderboard rebuild coalesce** — trailing 5s rebuild/paint for donation updates; skip paint when fingerprint unchanged; missing-board paint retries capped at 3.
+
 ## [2.4.24] - 2026-07-14
 
 ### Changed
