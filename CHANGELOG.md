@@ -11,10 +11,24 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.17] - 2026-07-13
+
+### Added
+- **Music topbar Load Track** — music icon opens a horizontal TopbarPlus `setMenu` with **Music Player** (opens panel) and **Load Track** (hard `resyncPlayback` without rejoin). Honest toasts for muted Settings volume / still loading / idle.
+
+### Changed
+- **TopbarPlus labels use Inter** — kit `styleTopbarPill` applies font asset `rbxassetid://12187365364` (including music menu children).
+- **Topbar Menu button shows "Menu" label** — uses `Config.TopbarMenu.LABEL` (was icon-only).
+
+### Fixed
+- **Music Load Track / resync** — manual resync now force-stops tracked sounds before GetState + restart; fade-in completion re-asserts store volume so a stuck fade cannot leave Volume at 0.
+- **VIP on community join not applying mid-session** — after JoinCommun `PromptJoinAsync`, Roblox `IsInGroup` often lags past the old ~6s server wait, so Tier1 was only granted on place rejoin. Server now waits longer, schedules follow-up grants, invalidates group cache, and refreshes overhead in `recovery` mode; client fires delayed `CommunityVipRecheck` retries (and one recheck on "Already joined").
+- **OverheadGui full placeholders on respawn** — respawn briefly enabled the raw BillboardGui template before a payload paint, and proximity could drop self mid-respawn so recovery had zero recipients. Server keeps GUI disabled until clients apply data, always includes the subject in broadcast recipients, and client re-seeds pending payload from cache on `CharacterAdded`.
+
 ## [2.4.16] - 2026-07-12
 
 ### Changed
-- **Version bump for engine sync** � empty release; no feature or bugfix changes. Use plugin **Update Engine** to pull kit `2.4.16`.
+- **Version bump for engine sync** � empty release; no feature or bugfix changes. Use plugin **Update Engine** to pull kit `2.4.16`.
 
 ## [2.4.15] - 2026-07-12
 

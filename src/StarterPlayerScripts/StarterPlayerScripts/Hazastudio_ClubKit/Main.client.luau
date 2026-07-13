@@ -873,8 +873,24 @@ local function scheduleTopbarOutline(icon: any)
 		removeTopbarOutline(icon)
 	end)
 end
+local function applyTopbarInterFont(icon: any)
+	local fontId = tonumber(Config.TopbarMenu and Config.TopbarMenu.FONT_ASSET_ID) or 12187365364
+	if type(icon.setTextFont) == "function" then
+		icon:setTextFont(fontId, Enum.FontWeight.Bold, Enum.FontStyle.Normal)
+	elseif type(icon.modifyTheme) == "function" then
+		icon:modifyTheme({
+			{
+				"IconLabel",
+				"FontFace",
+				Font.fromId(fontId, Enum.FontWeight.Bold, Enum.FontStyle.Normal),
+			},
+		})
+	end
+end
+
 local function styleTopbarPill(icon: any)
 	setTopbarFill(icon, TOPBAR_FILL_COLOR)
+	applyTopbarInterFont(icon)
 	scheduleTopbarOutline(icon)
 end
 local function enlargeTopbarIcon(icon: any, _widgetWidth: number, iconSize: number)
@@ -938,10 +954,10 @@ ChatTagsController.init({})
 -- saat controller mencoba bind .selected/.deselected
 local menuIcon = Icon.new()
 menuIcon:setImage(Config.Icons.Topbar.Menu, "Deselected")
-menuIcon:setLabel("")
+menuIcon:setLabel(Config.TopbarMenu.LABEL or "Menu")
 placeTopbarIcon(menuIcon, Config.TopbarMenu.ORDER)
-setCompactTopbarWidth(menuIcon, 36)
-removeTopbarInnerPadding(menuIcon)
+setCompactTopbarWidth(menuIcon, 72)
+setTopbarHorizontalPadding(menuIcon, 8)
 styleTopbarPill(menuIcon)
 enlargeTopbarIcon(menuIcon, 36, 10)
 -- Admin + Command Center icons are placed early so they stay visible even if later boot steps fail.
@@ -1073,6 +1089,15 @@ if Config.FeatureFlags.MusicPlayerEnabled then
 			styleTopbarPill(icon)
 			enlargeTopbarIcon(icon, 36, 10)
 		end,
+		applyMenuChildStyling = function(icon: any)
+			styleTopbarPill(icon)
+			setTopbarHorizontalPadding(icon, 10)
+			if type(icon.setWidth) == "function" then
+				icon:setWidth(110)
+			end
+		end,
+		openPlayerLabel = Config.Music.TOPBAR_MENU_OPEN_PLAYER_LABEL or "Music Player",
+		loadTrackLabel = Config.Music.TOPBAR_MENU_LOAD_TRACK_LABEL or "Load Track",
 		logger = Logger.new("MusicTopbarIcon"),
 	})
 end
@@ -1183,11 +1208,12 @@ do
 		MobilePanelManager.register("music", Config.Music.GUI_NAME, function()
 			musicTopbarIcon:deselect()
 		end)
-		-- Mobile focus integration. Controller owns its own panel open/close logic
-		-- through a separate onSelected/onDeselected subscription on the same wrapper.
-		musicTopbarIcon:onSelected(function()
-			MobilePanelManager.open("music")
-		end)
+		-- Mobile focus when Music Player menu item opens the panel (not parent menu toggle).
+		if type(musicTopbarIcon.onOpenPlayer) == "function" then
+			musicTopbarIcon:onOpenPlayer(function()
+				MobilePanelManager.open("music")
+			end)
+		end
 		musicTopbarIcon:onDeselected(function()
 			MobilePanelManager.close("music")
 		end)

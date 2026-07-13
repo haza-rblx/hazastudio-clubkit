@@ -25,28 +25,35 @@ export type Service = {
 }
 
 local VIP_TIER = "Tier1"
-local MEMBERSHIP_PROPAGATION_RETRIES = 4
-local MEMBERSHIP_PROPAGATION_DELAY = 1.5
+-- Roblox group membership often lags several seconds after PromptJoinAsync.
+-- Keep polling long enough that a successful join still grants mid-session.
+local MEMBERSHIP_PROPAGATION_RETRIES = 12
+local MEMBERSHIP_PROPAGATION_DELAY = 2
+-- Extra grant attempts after the immediate wait window (seconds).
+local POST_JOIN_FOLLOWUP_DELAYS = { 10, 25, 45 }
 
 local function createCommunityVipService(deps: {
 	repo: IOverheadRepository,
 	overheadController: any,
+	overheadService: any?,
 	remotes: Folder,
 	logger: any?,
 }): Service
 	local repo = deps.repo
 	local overheadController = deps.overheadController
+	local overheadService = deps.overheadService
 	local remotes = deps.remotes
 	local log = deps.logger or Logger.new("CommunityVipService")
 
 	local promptCfg = Config.JoinCommunityPrompt or {}
 	local recheckRemoteName = tostring(promptCfg.REMOTE_VIP_RECHECK or "CommunityVipRecheck")
-	local rateMax = tonumber(promptCfg.VIP_RECHECK_RATE_MAX) or 4
+	local rateMax = tonumber(promptCfg.VIP_RECHECK_RATE_MAX) or 8
 	local rateWindow = tonumber(promptCfg.VIP_RECHECK_RATE_WINDOW) or 60
 
 	local limiter = RateLimiter.new(rateMax, rateWindow)
 	local connections: { RBXScriptConnection } = {}
 	local inFlight: { [number]: boolean } = {}
+	local followUpsScheduled: { [number]: boolean } = {}
 	local destroyed = false
 
 	local function track(conn: RBXScriptConnection): RBXScriptConnection
@@ -158,8 +165,14 @@ local function createCommunityVipService(deps: {
 			return "already"
 		end
 
+		-- Fresh group membership must not keep a stale groups:/rank cache, and
+		-- mid-session VIP needs a full Snapshot so OverheadUI + chat tags update
+		-- without requiring place rejoin.
+		if overheadService and type(overheadService.invalidateGroupCache) == "function" then
+			overheadService:invalidateGroupCache(player.UserId)
+		end
 		if overheadController and type(overheadController.refreshPlayer) == "function" then
-			overheadController:refreshPlayer(player)
+			overheadController:refreshPlayer(player, "recovery")
 		end
 		log:info("Community VIP granted", {
 			userId = player.UserId,
@@ -205,10 +218,47 @@ local function createCommunityVipService(deps: {
 		inFlight[userId] = true
 		task.spawn(function()
 			local ok, err = pcall(function()
-				if not waitUntilInGroup(player, groupId) then
+				if waitUntilInGroup(player, groupId) then
+					local outcome = service:tryGrantForPlayer(player)
+					if outcome == "granted" or outcome == "already" then
+						followUpsScheduled[userId] = nil
+					end
 					return
 				end
-				service:tryGrantForPlayer(player)
+				-- Membership still lagging after the primary wait window — keep
+				-- trying on a longer cadence so VIP still lands without rejoin.
+				if followUpsScheduled[userId] then
+					return
+				end
+				followUpsScheduled[userId] = true
+				log:debug("Community VIP recheck: not in group yet, scheduling follow-ups", {
+					userId = userId,
+					groupId = groupId,
+				})
+				for _, delaySec in ipairs(POST_JOIN_FOLLOWUP_DELAYS) do
+					task.delay(delaySec, function()
+						if destroyed or not player.Parent then
+							return
+						end
+						if inFlight[userId] then
+							return
+						end
+						inFlight[userId] = true
+						local followOk, followErr = pcall(function()
+							local outcome = service:tryGrantForPlayer(player)
+							if outcome == "granted" or outcome == "already" then
+								followUpsScheduled[userId] = nil
+							end
+						end)
+						inFlight[userId] = nil
+						if not followOk then
+							log:warn("Community VIP follow-up error", {
+								userId = userId,
+								error = tostring(followErr),
+							})
+						end
+					end)
+				end
 			end)
 			inFlight[userId] = nil
 			if not ok then
@@ -230,6 +280,7 @@ local function createCommunityVipService(deps: {
 
 	track(Players.PlayerRemoving:Connect(function(player: Player)
 		inFlight[player.UserId] = nil
+		followUpsScheduled[player.UserId] = nil
 	end))
 
 	log:info("CommunityVipService ready", {
@@ -245,6 +296,7 @@ local function createCommunityVipService(deps: {
 		end
 		table.clear(connections)
 		table.clear(inFlight)
+		table.clear(followUpsScheduled)
 		if type((limiter :: any).destroy) == "function" then
 			(limiter :: any):destroy()
 		end

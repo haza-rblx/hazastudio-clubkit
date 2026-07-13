@@ -718,11 +718,23 @@ function MusicPlayerController:_playFromPart(
 		sound:Play()
 		if (fadeInDuration or 0) > 0 then
 			local resolvedFadeInDuration = fadeInDuration or 0
-			TweenService
-				:Create(sound, TweenInfo.new(resolvedFadeInDuration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-					Volume = math.clamp(tonumber(self._store:get().volume) or volume, 0, 1),
-				})
-				:Play()
+			local targetVolume = math.clamp(tonumber(self._store:get().volume) or volume, 0, 1)
+			local fadeTween = TweenService:Create(
+				sound,
+				TweenInfo.new(resolvedFadeInDuration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+				{ Volume = targetVolume }
+			)
+			fadeTween.Completed:Once(function()
+				if self:_isStalePlayback(track, playbackEpoch) then
+					return
+				end
+				if self._activeSounds[partIndex] ~= sound or not sound.Parent then
+					return
+				end
+				-- Re-assert store volume so a interrupted/stuck fade cannot leave Volume=0.
+				sound.Volume = math.clamp(tonumber(self._store:get().volume) or targetVolume, 0, 1)
+			end)
+			fadeTween:Play()
 		end
 
 		-- Setelah ALL parts loaded pertama kali -> hitung total durasi -> report ke server
@@ -1802,9 +1814,9 @@ function MusicPlayerController:resyncPlayback(options: { silent: boolean? }?)
 	if now - lastAt < cooldown then
 		if not silent then
 			self:_showNotification({
-			message = "Wait a moment before loading again.",
-			title = "Music",
-			domain = "music",
+				message = tostring(self._config.MSG_RELOAD_COOLDOWN or "Wait a moment before loading again."),
+				title = "Music",
+				domain = "music",
 				dedupeKey = "music_resync_cooldown",
 			}, "warning")
 		end
@@ -1818,6 +1830,10 @@ function MusicPlayerController:resyncPlayback(options: { silent: boolean? }?)
 		self._lastResyncAt = now
 	end
 
+	-- Manual/self-heal must clear tracked zombies + forever-loading sounds first,
+	-- then orphans — same hard restart path as join bootstrap.
+	self:_stopAllSounds(0)
+	self._playbackStartKey = nil
 	local orphansRemoved = self:killOrphanMusicSounds()
 	local syncResult = self:_refreshStateFromServer(true)
 	if syncResult == "failed" then
@@ -1827,7 +1843,7 @@ function MusicPlayerController:resyncPlayback(options: { silent: boolean? }?)
 			return
 		end
 		self:_showNotification({
-			message = "Couldn't sync with the server. Try again in a moment.",
+			message = tostring(self._config.MSG_RELOAD_SYNC_FAILED or "Couldn't sync with the server. Try again in a moment."),
 			title = "Music",
 			domain = "music",
 			dedupeKey = "music_resync_failed",
@@ -1835,6 +1851,7 @@ function MusicPlayerController:resyncPlayback(options: { silent: boolean? }?)
 		return
 	end
 
+	local storeVolume = tonumber(self._store:get().volume) or 0
 	local started = self:_forceStartPlaybackFromStore()
 	if not started then
 		self._resyncInFlight = false
@@ -1843,7 +1860,7 @@ function MusicPlayerController:resyncPlayback(options: { silent: boolean? }?)
 			return
 		end
 		self:_showNotification({
-			message = "Nothing is playing on the server right now.",
+			message = tostring(self._config.MSG_RELOAD_IDLE or "Nothing is playing on the server right now."),
 			title = "Music",
 			domain = "music",
 			dedupeKey = "music_resync_idle",
@@ -1854,6 +1871,7 @@ function MusicPlayerController:resyncPlayback(options: { silent: boolean? }?)
 	self._log:warn(if silent then "Music self-heal resync" else "Music manual resync", {
 		trackId = tostring(self._currentTrackId),
 		orphansRemoved = orphansRemoved,
+		volume = storeVolume,
 	})
 
 	task.delay(0.6, function()
@@ -1861,9 +1879,23 @@ function MusicPlayerController:resyncPlayback(options: { silent: boolean? }?)
 		if silent then
 			return
 		end
-		if self:_hasActivePlayback() then
+		local volumeNow = tonumber(self._store:get().volume) or 0
+		if volumeNow <= 0.01 then
 			self:_showNotification({
-				message = "Track loaded.",
+				message = tostring(
+					self._config.MSG_RELOAD_VOLUME_MUTED
+						or "Music volume is at 0 in Settings. Raise it to hear the track."
+				),
+				title = "Music",
+				domain = "music",
+				dedupeKey = "music_resync_muted",
+			}, "warning")
+			return
+		end
+		if self:_hasActivePlayback() then
+			self:_applyVolume(volumeNow)
+			self:_showNotification({
+				message = tostring(self._config.MSG_RELOAD_OK or "Track loaded."),
 				title = "Music",
 				domain = "music",
 				dedupeKey = "music_resync_ok",
@@ -2667,17 +2699,33 @@ function MusicPlayerController:initPanel()
 	-- so they fire on controller destroy. Connections inside the icon itself are
 	-- automatically disconnected when the icon hides (recreate cycle).
 	if self._topbarIcon then
-		self:_trackUnsubscriber(self._topbarIcon:onSelected(function()
-			-- Central server mode: no zone guard, always open panel.
-			-- Open panel IMMEDIATELY with cached state. Refresh from server
-			-- in background — do NOT close panel on refresh failure.
-			-- Previous behavior: close panel on timeout → caused "panel suka
-			-- nutup sendiri" bug when server was slow to respond.
-			self:_openPanel()
-			task.spawn(function()
-				self:_refreshStateFromServer()
-			end)
-		end))
+		-- Parent select only opens the horizontal setMenu — panel opens from Music Player child.
+		if type(self._topbarIcon.onOpenPlayer) == "function" then
+			self:_trackUnsubscriber(self._topbarIcon:onOpenPlayer(function()
+				self:_openPanel()
+				task.spawn(function()
+					self:_refreshStateFromServer()
+				end)
+			end))
+		else
+			-- Legacy: parent select opened the panel before setMenu existed.
+			self:_trackUnsubscriber(self._topbarIcon:onSelected(function()
+				self:_openPanel()
+				task.spawn(function()
+					self:_refreshStateFromServer()
+				end)
+			end))
+		end
+		if type(self._topbarIcon.onLoadTrack) == "function" then
+			self:_trackUnsubscriber(self._topbarIcon:onLoadTrack(function()
+				task.spawn(function()
+					self:resyncPlayback({ silent = false })
+				end)
+				if type(self._topbarIcon.deselect) == "function" then
+					self._topbarIcon:deselect()
+				end
+			end))
+		end
 		self:_trackUnsubscriber(self._topbarIcon:onDeselected(function()
 			self:_closePanel()
 		end))

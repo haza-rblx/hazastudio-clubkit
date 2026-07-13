@@ -244,7 +244,8 @@ Config.JoinCommunityPrompt = {
 	REMOTE_RESPONSE = "JoinCommunityMembersResponse",
 	-- Client → server after PromptJoinAsync (or anytime): re-check IsInGroup + grant VIP if flag on.
 	REMOTE_VIP_RECHECK = "CommunityVipRecheck",
-	VIP_RECHECK_RATE_MAX = 4,
+	-- Client may fire immediate + delayed retries after PromptJoinAsync (group lag).
+	VIP_RECHECK_RATE_MAX = 8,
 	VIP_RECHECK_RATE_WINDOW = 60,
 	SAMPLE_LIMIT = 8,
 	POOL_SIZE = 40, -- in-experience / MemoryStore pool cap (bonus thumbs only — not the community total)
@@ -1972,6 +1973,8 @@ Config.TopbarMenu = {
 	PHONE_FRAME_NAME = "TopBarMenuPhone",
 	LABEL = "Menu",
 	ORDER = 4,
+	-- Inter (TopbarPlus IconLabel via styleTopbarPill / setTextFont)
+	FONT_ASSET_ID = 12187365364,
 	SHOP_LABEL = "Shop",
 	GIFT_LABEL = "Gift",
 	COUPLE_LABEL = "Couple",
@@ -2544,6 +2547,15 @@ Config.Music = {
 	TOPBAR_LABEL = "",
 	TOPBAR_ORDER = 1, -- Right strip: leftmost, immediately left of Command
 	TOPBAR_ICON = Config.Icons.Topbar.Music,
+	-- Horizontal setMenu children under the music topbar icon
+	TOPBAR_MENU_OPEN_PLAYER_LABEL = "Music Player",
+	TOPBAR_MENU_LOAD_TRACK_LABEL = "Load Track",
+	MSG_RELOAD_OK = "Track loaded.",
+	MSG_RELOAD_WAIT = "Still loading audio. Check music volume in Settings.",
+	MSG_RELOAD_VOLUME_MUTED = "Music volume is at 0 in Settings. Raise it to hear the track.",
+	MSG_RELOAD_COOLDOWN = "Wait a moment before loading again.",
+	MSG_RELOAD_SYNC_FAILED = "Couldn't sync with the server. Try again in a moment.",
+	MSG_RELOAD_IDLE = "Nothing is playing on the server right now.",
 	-- Header 2-SliderSelector tab buttons (Option1..4 fallback + legacy names)
 	TAB_LEGACY_BUTTON_NAMES = {
 		nowPlaying = "1-NowPlayingTab",

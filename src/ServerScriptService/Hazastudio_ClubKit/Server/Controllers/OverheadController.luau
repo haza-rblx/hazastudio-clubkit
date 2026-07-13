@@ -1008,6 +1008,23 @@ end
 
 		-- Route to proximity subscribers only (R1.1 — no fireAllClients).
 		local recipients = proximity:getSubscribers("overhead:", player)
+		-- Respawn race: ProximityInterestService drops self while Character/HRP is
+		-- missing, so recovery can fire with an empty recipient list and leave the
+		-- newly attached BillboardGui stuck on template placeholders. Always include
+		-- the subject so their own client receives the Snapshot.
+		local hasSelf = false
+		for _, viewer in ipairs(recipients) do
+			if viewer == player then
+				hasSelf = true
+				break
+			end
+		end
+		if not hasSelf and player.Parent then
+			local withSelf = table.create(#recipients + 1)
+			table.move(recipients, 1, #recipients, 1, withSelf)
+			withSelf[#withSelf + 1] = player
+			recipients = withSelf
+		end
 		local subjectUserId = player.UserId
 
 		for _, viewer in recipients do
@@ -1227,11 +1244,9 @@ end
 			return
 		end
 
-		-- Tampilkan segera saat respawn — data sudah di cache, tidak perlu tunggu wire.
-		if isRespawn and cachedPayloads[player.UserId] then
-			gui.Enabled = true
-		end
-
+		-- Keep GUI disabled until clients apply a real payload. Enabling the raw
+		-- template clone here showed Studio placeholders (full badge strip / stub
+		-- labels) whenever recovery missed recipients during the respawn proximity gap.
 		finishCharacterSetup(player, isRespawn)
 	end
 	local function onPlayerAdded(player: Player)

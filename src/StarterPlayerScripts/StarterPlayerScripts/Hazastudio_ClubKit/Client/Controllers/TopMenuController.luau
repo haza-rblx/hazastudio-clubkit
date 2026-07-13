@@ -125,12 +125,14 @@ function TopMenuController.configureMenuIcon(menuIcon: any)
 	end
 	if type(menuIcon.setLabel) == "function" then
 		pcall(function()
-			menuIcon:setLabel("", "Deselected")
+			local label = tostring((Config.TopbarMenu and Config.TopbarMenu.LABEL) or "Menu")
+			menuIcon:setLabel(label, "Deselected")
 		end)
 	end
 	if type(menuIcon.modifyTheme) == "function" then
 		pcall(function()
-			local fontFace = Font.new("rbxasset://fonts/families/FredokaOne.json", Enum.FontWeight.Light, Enum.FontStyle.Normal)
+			local fontId = tonumber(Config.TopbarMenu and Config.TopbarMenu.FONT_ASSET_ID) or 12187365364
+			local fontFace = Font.fromId(fontId, Enum.FontWeight.Bold, Enum.FontStyle.Normal)
 			menuIcon:modifyTheme({
 				{ "IconLabel", "FontFace", fontFace, "Selected" },
 				{ "IconLabel", "Text", "X", "Selected" },

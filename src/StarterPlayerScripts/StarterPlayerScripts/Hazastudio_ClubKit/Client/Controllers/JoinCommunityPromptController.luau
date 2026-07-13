@@ -802,6 +802,9 @@ end
 local function getVipRecheckRemote(): RemoteEvent?
 	local remotes = ReplicatedStorage:FindFirstChild("Remotes")
 	if not remotes then
+		remotes = ReplicatedStorage:WaitForChild("Remotes", 10)
+	end
+	if not remotes then
 		return nil
 	end
 	local name = tostring((Config.JoinCommunityPrompt and Config.JoinCommunityPrompt.REMOTE_VIP_RECHECK) or "CommunityVipRecheck")
@@ -809,8 +812,15 @@ local function getVipRecheckRemote(): RemoteEvent?
 	if remote and remote:IsA("RemoteEvent") then
 		return remote
 	end
+	local waited = remotes:WaitForChild(name, 5)
+	if waited and waited:IsA("RemoteEvent") then
+		return waited
+	end
 	return nil
 end
+
+-- Roblox IsInGroup often lags after PromptJoinAsync; fire immediate + delayed retries.
+local VIP_RECHECK_CLIENT_DELAYS = { 0, 3, 8, 15 }
 
 local function requestCommunityVipRecheck()
 	if Config.FeatureFlags.VipOnCommunityJoinEnabled ~= true then
@@ -825,12 +835,25 @@ local function requestCommunityVipRecheck()
 	end)
 end
 
+local function scheduleCommunityVipRechecks()
+	if Config.FeatureFlags.VipOnCommunityJoinEnabled ~= true then
+		return
+	end
+	for _, delaySec in ipairs(VIP_RECHECK_CLIENT_DELAYS) do
+		if delaySec <= 0 then
+			requestCommunityVipRecheck()
+		else
+			task.delay(delaySec, requestCommunityVipRecheck)
+		end
+	end
+end
+
 local function promptJoinCoreGui(groupId: number)
 	pcall(function()
 		GroupService:PromptJoinAsync(groupId)
 	end)
 	-- Prompt closed (joined or dismissed). Server re-checks IsInGroup and grants VIP if flag on.
-	requestCommunityVipRecheck()
+	scheduleCommunityVipRechecks()
 end
 
 local function wireButtons(groupId: number)
@@ -850,7 +873,11 @@ local function wireButtons(groupId: number)
 		end
 		if alreadyJoinedThisOpen then
 			-- Already a member: dismiss only (do not PromptJoinAsync / CoreGui).
-			dismissModal(nil)
+			-- Still ask server to grant VIP if Features.VipOnCommunityJoin is on
+			-- and onPlayerReady missed them (e.g. IsInGroup lag at join).
+			dismissModal(function()
+				requestCommunityVipRecheck()
+			end)
 			return
 		end
 		dismissModal(function()

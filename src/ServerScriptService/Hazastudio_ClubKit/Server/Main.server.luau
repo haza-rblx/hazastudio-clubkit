@@ -608,6 +608,7 @@ local communityVipService = trackLifecycle(
 	createCommunityVipService({
 		repo = repo,
 		overheadController = overheadController,
+		overheadService = overheadService,
 		remotes = Remotes,
 		logger = Logger.new("CommunityVipService"),
 	})

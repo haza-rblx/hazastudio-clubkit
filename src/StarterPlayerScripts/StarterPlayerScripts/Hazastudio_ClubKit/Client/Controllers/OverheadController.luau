@@ -233,7 +233,11 @@ local function init(_deps: {}?): ()
 				old:destroy()
 			end
 			uiCache[userId] = nil
-			pendingPayloads[userId] = nil
+			-- Re-seed pending from the last known snapshot. Clearing to nil raced with
+			-- recovery Broadcast (pending wiped before Head/GUI existed) and left the
+			-- new BillboardGui unpainted after mid-session VIP / respawn.
+			local cached = cachedPayloadsByUserId[userId]
+			pendingPayloads[userId] = if type(cached) == "table" then cached else nil
 			disconnectPendingFlush(userId)
 			bindOverheadGuiWatcher(player, character)
 		end)
