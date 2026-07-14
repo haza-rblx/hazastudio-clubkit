@@ -105,9 +105,47 @@ local function createDonationService(
 	local service = {}
 	local USER_ID_CACHE_TTL = 30 * 60
 	local MAX_USER_ID_CACHE = 512
+	-- Cold-start tip cursor: encode matches tools/donation-api encodeNotificationCursor
+	-- (base64url of {"t":ISO,"i":id}). Empty cursor makes the Worker walk from 1970 ASC and
+	-- would replay full donation history as "new" notifications on every server boot.
+	local BASE64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+	local function base64Char(index: number): string
+		return string.sub(BASE64_ALPHABET, index + 1, index + 1)
+	end
+	local function base64EncodeAscii(data: string): string
+		local out = table.create(math.ceil(#data / 3) * 4)
+		local n = 0
+		for i = 1, #data, 3 do
+			local a = string.byte(data, i) :: number
+			local b = string.byte(data, i + 1)
+			local c = string.byte(data, i + 2)
+			local bitmap = bit32.lshift(a, 16) + bit32.lshift(b or 0, 8) + (c or 0)
+			n += 1
+			out[n] = base64Char(bit32.rshift(bitmap, 18))
+			n += 1
+			out[n] = base64Char(bit32.band(bit32.rshift(bitmap, 12), 63))
+			n += 1
+			out[n] = if b == nil then "=" else base64Char(bit32.band(bit32.rshift(bitmap, 6), 63))
+			n += 1
+			out[n] = if c == nil then "=" else base64Char(bit32.band(bitmap, 63))
+		end
+		return table.concat(out)
+	end
+	local function buildColdStartNotificationCursor(unixTime: number): string
+		local iso = os.date("!%Y-%m-%dT%H:%M:%S.000Z", unixTime)
+		local payload = HttpService:JSONEncode({
+			t = iso,
+			i = 2147483647,
+		})
+		local encoded = base64EncodeAscii(payload)
+		return (encoded:gsub("+", "-"):gsub("/", "_"):gsub("=+$", ""))
+	end
 	-- State
-	local notificationCursor: string = ""
-	local notificationSkipBeforeUnix: number = os.time() -- cold start: skip backlog seperti v1 since=os.time()
+	local bootUnix = os.time()
+	local notificationCursor: string = buildColdStartNotificationCursor(bootUnix)
+	-- Defense in depth: never broadcast rows with received_at < boot, even if cursor slips.
+	-- Kept for the whole server lifetime (do not clear after first successful poll).
+	local notificationSkipBeforeUnix: number = bootUnix
 	local lastNotifReceivedAt: number = 0 -- os.time() saat terakhir ada donasi terdeteksi (burst mode)
 	local processedNotifIds: { [string]: boolean } = {}
 	local processedNotifIdOrder: { string } = {}
@@ -1265,8 +1303,10 @@ local function createDonationService(
 					continue
 				end
 				local notifId = tostring(item.id or "")
-				local ts = tonumber(item.unix_timestamp) or 0
-				if notificationSkipBeforeUnix > 0 and ts < notificationSkipBeforeUnix then
+				-- Prefer received_at (unix_timestamp) for cold-start skip — matches Worker cursor.
+				-- donation_unix_timestamp can be historical on late ingest; we still want live alerts.
+				local ts = tonumber(item.unix_timestamp) or tonumber(item.received_at) or 0
+				if notificationSkipBeforeUnix > 0 and ts > 0 and ts < notificationSkipBeforeUnix then
 					if notifId ~= "" then
 						markNotifProcessed(notifId)
 					end
@@ -1403,7 +1443,8 @@ local function createDonationService(
 			})
 		end
 		consecutiveFailures = 0
-		notificationSkipBeforeUnix = 0
+		-- Keep notificationSkipBeforeUnix for the server lifetime — clearing it used to
+		-- let subsequent cursor pages replay historical donations as live notifs.
 		-- Jika ada donasi baru: aktifkan burst mode + refresh leaderboard segera
 		if hadNewDonations then
 			lastNotifReceivedAt = os.time()
@@ -2620,6 +2661,8 @@ local function createDonationService(
 		leaderboardPollInterval = Config.Donation.POLL_INTERVAL,
 		httpTimeout = Config.Donation.HTTP_TIMEOUT,
 		retryEnabled = Config.Donation.NOTIF_RETRY_ENABLED,
+		coldStartCursorSeeded = notificationCursor ~= "",
+		skipBeforeUnix = notificationSkipBeforeUnix,
 		keepWarmEnabled = Config.Donation.KEEP_WARM_ENABLED,
 	})
 

@@ -11,6 +11,11 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.27] - 2026-07-14
+
+### Fixed
+- **Donation notif flood on boot** — empty v2 notification cursor replayed full cash history (ASC from 1970) each server start. Cold-start now seeds a tip cursor at boot time and keeps `notificationSkipBeforeUnix` for the server lifetime so backlog is not broadcast as live `[DONASI]` chat.
+
 ## [2.4.26] - 2026-07-14
 
 ### Fixed
