@@ -244,6 +244,12 @@ function DancePanelUIBinder.new(deps: {
 	self._poseAnims = {}
 	self._favoritedAnims = {}
 	self._currentCategory = "Dance"
+	self._scrollByCategory = {
+		Dance = 0,
+		Pose = 0,
+		Favorites = 0,
+	}
+	self._pendingRestoreScrollY = nil :: number?
 	self._currentSpeed = self.config.DEFAULT_SPEED
 	self._searchQuery = ""
 	self._currentAnimName = nil :: string?
@@ -551,6 +557,7 @@ end
 function DancePanelUIBinder:_bindSearch()
 	self.refs.searchBox:GetPropertyChangedSignal("Text"):Connect(function()
 		self._searchQuery = string.lower(self.refs.searchBox.Text)
+		self:_clearCategoryScrollMemory()
 		self:rebuildList(true)
 	end)
 end
@@ -1269,6 +1276,46 @@ function DancePanelUIBinder:_resetScrollPosition()
 	self.refs.mainContent.CanvasPosition = Vector2.new(0, 0)
 end
 
+function DancePanelUIBinder:_clearCategoryScrollMemory()
+	self._scrollByCategory.Dance = 0
+	self._scrollByCategory.Pose = 0
+	self._scrollByCategory.Favorites = 0
+	self._pendingRestoreScrollY = nil
+end
+
+function DancePanelUIBinder:_saveCurrentCategoryScroll()
+	local category = self._currentCategory
+	if self._scrollByCategory[category] == nil then
+		return
+	end
+	self._scrollByCategory[category] = self.refs.mainContent.CanvasPosition.Y
+end
+
+function DancePanelUIBinder:_applyScrollY(y: number)
+	local mainContent = self.refs.mainContent
+	local function apply()
+		if not mainContent.Parent then
+			return
+		end
+		local maxY = math.max(0, mainContent.AbsoluteCanvasSize.Y - mainContent.AbsoluteWindowSize.Y)
+		mainContent.CanvasPosition = Vector2.new(0, math.clamp(y, 0, maxY))
+	end
+	apply()
+	task.defer(apply)
+end
+
+function DancePanelUIBinder:_finishRebuildScroll(resetScroll: boolean?)
+	local pendingY = self._pendingRestoreScrollY
+	if pendingY ~= nil then
+		self._pendingRestoreScrollY = nil
+		self:_applyScrollY(pendingY)
+		return
+	end
+	if resetScroll then
+		self:_resetScrollPosition()
+	end
+end
+
 function DancePanelUIBinder:refreshRowStates()
 	for animationName, row in pairs(self._activeRowsByName) do
 		if row.Parent then
@@ -1298,7 +1345,8 @@ function DancePanelUIBinder:_ensureListBuilt()
 	if not self._listDirty then
 		return
 	end
-	self:rebuildListIncremental(true)
+	self._pendingRestoreScrollY = self._scrollByCategory[self._currentCategory] or 0
+	self:rebuildListIncremental(false)
 end
 
 function DancePanelUIBinder:rebuildListIncremental(resetScroll: boolean?)
@@ -1311,9 +1359,7 @@ function DancePanelUIBinder:rebuildListIncremental(resetScroll: boolean?)
 		self.refs.paginationWrapper.Visible = false
 	end
 	if #filtered == 0 then
-		if resetScroll then
-			self:_resetScrollPosition()
-		end
+		self:_finishRebuildScroll(resetScroll)
 		return
 	end
 
@@ -1346,9 +1392,7 @@ function DancePanelUIBinder:rebuildListIncremental(resetScroll: boolean?)
 		end
 		self._incrementalRebuildThread = nil
 		self:_setListLoadingPlaceholder(false)
-		if resetScroll then
-			self:_resetScrollPosition()
-		end
+		self:_finishRebuildScroll(resetScroll)
 	end)
 end
 
@@ -1364,12 +1408,17 @@ function DancePanelUIBinder:setCategory(category: string)
 	if category ~= "Dance" and category ~= "Pose" and category ~= "Favorites" then
 		return
 	end
+	if self._currentCategory == category then
+		return
+	end
 
+	self:_saveCurrentCategoryScroll()
 	self._currentCategory = category
 	self:_applyTabVisuals()
 	self._listDirty = true
 	if self._isOpen then
-		self:rebuildListIncremental(true)
+		self._pendingRestoreScrollY = self._scrollByCategory[category] or 0
+		self:rebuildListIncremental(false)
 	end
 end
 
@@ -1462,9 +1511,6 @@ function DancePanelUIBinder:setOpen(isOpen: boolean, immediate: boolean?)
 		panelRoot.AnchorPoint = self._openAnchorPoint
 		setPanelAlpha(panelRoot, if isOpen then 0 else 1)
 		animFrame.Visible = isOpen
-		if isOpen then
-			self:_resetScrollPosition()
-		end
 		restoreMobileBakedPanelScale(panelRoot, self.config)
 		return
 	end
@@ -1479,7 +1525,6 @@ function DancePanelUIBinder:setOpen(isOpen: boolean, immediate: boolean?)
 		self._anim:presentCenterPanel(animFrame, function()
 			restoreMobileBakedPanelScale(panelRoot, self.config)
 			if self._isOpen then
-				self:_resetScrollPosition()
 				self:_applyTabVisuals()
 			end
 		end)
@@ -1489,6 +1534,7 @@ function DancePanelUIBinder:setOpen(isOpen: boolean, immediate: boolean?)
 	if self._isClosing then
 		return
 	end
+	self:_saveCurrentCategoryScroll()
 	self._isClosing = true
 	animFrame.Visible = true
 	self._anim:dismissCenterPanel(animFrame, function()

@@ -11,6 +11,11 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.32] - 2026-07-14
+
+### Changed
+- **Dance panel remembers scroll per tab** — switching Dance ↔ Pose ↔ Favorites restores each tab's last scroll position; search still resets to top; close/reopen keeps last position.
+
 ## [2.4.31] - 2026-07-14
 
 ### Added
