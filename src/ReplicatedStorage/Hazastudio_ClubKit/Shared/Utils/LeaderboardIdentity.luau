@@ -211,10 +211,16 @@ local function entryNeedsResolve(entry: any): (boolean, number?)
 	local displayName = if type(entry.displayName) == "string" then entry.displayName else ""
 	local thumbnail = if type(entry.thumbnail) == "string" then entry.thumbnail else ""
 
-	-- Do NOT treat DisplayName == Username as stale (Roblox allows it).
+	-- DisplayName == Username is valid on Roblox, but also the fingerprint of bad metadata
+	-- (e.g. OneTimeLeaderboardSeeder writing username into both fields). Re-resolve via
+	-- UserService once; positive cache prevents repeat API hits when they truly match.
+	local displayMatchesUsername = username ~= ""
+		and displayName ~= ""
+		and username:lower() == displayName:lower()
 	local needsResolve = LeaderboardIdentity.looksLikeFallbackName(username)
 		or LeaderboardIdentity.looksLikeFallbackName(displayName)
 		or thumbnail == ""
+		or displayMatchesUsername
 
 	return needsResolve, userId
 end
@@ -227,7 +233,11 @@ local function applyResolved(entry: any, resolved: ResolvedIdentity)
 	if LeaderboardIdentity.looksLikeFallbackName(username) then
 		username = resolved.username
 	end
-	if LeaderboardIdentity.looksLikeFallbackName(displayName) then
+	-- Always take resolved displayName when current looks like fallback OR was copied from username.
+	local displayMatchesUsername = username ~= ""
+		and displayName ~= ""
+		and username:lower() == displayName:lower()
+	if LeaderboardIdentity.looksLikeFallbackName(displayName) or displayMatchesUsername then
 		displayName = resolved.displayName
 	end
 	if thumbnail == "" then

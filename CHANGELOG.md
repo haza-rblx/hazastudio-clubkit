@@ -11,6 +11,11 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.28] - 2026-07-14
+
+### Fixed
+- **Robux board displayName stuck as username** — `DonationController` called `enrichEntryList` with the module as 1st arg (dot-fn), so enrich was a no-op. Call fixed; when `displayName == username`, identity is re-resolved via UserService using existing `userId` (no re-seed). OneTimeLeaderboardSeeder now uses `UserService:GetUserInfosByUserIdsAsync` instead of non-existent `Players:GetUserDisplayNameAsync`.
+
 ## [2.4.27] - 2026-07-14
 
 ### Fixed

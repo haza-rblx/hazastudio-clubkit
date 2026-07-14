@@ -31,6 +31,7 @@
 local DataStoreService = game:GetService("DataStoreService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local UserService = game:GetService("UserService")
 
 -- =============================================================================
 -- CONFIG — matikan setelah dipakai
@@ -141,18 +142,31 @@ end
 local function getUserIdentity(userId: number): (string, string)
 	local username = "User" .. tostring(userId)
 	local displayName = username
+	-- Players:GetUserDisplayNameAsync does not exist — use UserService (same as Club Kit).
+	local okInfos, infos = pcall(function()
+		return UserService:GetUserInfosByUserIdsAsync({ userId })
+	end)
+	if okInfos and type(infos) == "table" then
+		for _, info in ipairs(infos) do
+			if type(info) == "table" and tonumber(info.Id) == userId then
+				if type(info.Username) == "string" and info.Username ~= "" then
+					username = info.Username
+				end
+				if type(info.DisplayName) == "string" and info.DisplayName ~= "" then
+					displayName = info.DisplayName
+				else
+					displayName = username
+				end
+				return username, displayName
+			end
+		end
+	end
 	local okName, resolvedName = pcall(function()
 		return Players:GetNameFromUserIdAsync(userId)
 	end)
 	if okName and type(resolvedName) == "string" and resolvedName ~= "" then
 		username = resolvedName
 		displayName = resolvedName
-	end
-	local okDisplay, resolvedDisplay = pcall(function()
-		return Players:GetUserDisplayNameAsync(userId)
-	end)
-	if okDisplay and type(resolvedDisplay) == "string" and resolvedDisplay ~= "" then
-		displayName = resolvedDisplay
 	end
 	return username, displayName
 end

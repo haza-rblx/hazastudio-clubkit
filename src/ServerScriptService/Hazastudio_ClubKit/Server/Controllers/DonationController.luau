@@ -342,9 +342,11 @@ local function createDonationController(deps: {
 			payload.dailyRobux = sliceForPaint(payload.dailyRobux, Config.Leaderboards.ROBUX_PAINT_LIMIT)
 		end
 
-		-- Wrap enrichEntryList with pcall karena resolveUserIdentity bisa error (HTTP timeout dll)
+		-- Wrap enrichEntryList with pcall karena resolveUserIdentity bisa error (HTTP timeout dll).
+		-- enrichEntryList is a dot-function (entries as 1st arg) — do NOT pass the module as self
+		-- or ipairs runs on the module table and enrich becomes a no-op.
 		local enrichSafe = function(entries)
-			local ok, result = pcall(LeaderboardIdentity.enrichEntryList, LeaderboardIdentity, entries)
+			local ok, result = pcall(LeaderboardIdentity.enrichEntryList, entries)
 			if not ok then
 				log:warn("enrichEntryList error", { error = tostring(result) })
 			end
