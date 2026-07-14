@@ -86,6 +86,9 @@ local function createDonationService(
 	local donorFailureCache: { [number]: { expiresAt: number } } = {}
 	local DONOR_PROFILE_FAILURE_CACHE_TTL = 120 -- detik
 
+	-- Block /setrobux (add) while Studio writes live keys — accidental inflation risk.
+	-- /removerobux is intentionally allowed so owners can clear live LB from Studio Play
+	-- when USE_STUDIO_DATASTORE_ISOLATION=false.
 	local function assertStudioManualDonationSafe(): (boolean, string?)
 		if Config.DataStoreScope.writesToLive() then
 			return false, Config.Donation.MSG_STUDIO_LIVE_DATASTORE_BLOCKED
@@ -2102,9 +2105,11 @@ local function createDonationService(
 		userId: number,
 		amountRobux: number?
 	): (boolean, string)
-		local safe, blockReason = assertStudioManualDonationSafe()
-		if not safe then
-			return false, blockReason or "studio_live_blocked"
+		-- Allowed even when Studio writes live (isolation=false); add stays blocked.
+		if Config.DataStoreScope.writesToLive() then
+			log:warn("[RemoveRobux] Studio → live DataStore keys. Confirm this is intentional.", {
+				userId = userId,
+			})
 		end
 		if userId <= 0 then
 			return false, "invalid_user"

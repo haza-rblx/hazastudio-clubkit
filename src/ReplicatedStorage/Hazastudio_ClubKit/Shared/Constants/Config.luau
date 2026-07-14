@@ -2166,7 +2166,7 @@ Config.Donation = {
 	-- Robux: increment OrderedDataStore (scoped via DataStoreScope — Studio_* when isolated).
 	MANUAL_ROBUX_ADJUSTMENTS = {} :: { [number]: number },
 	MANUAL_BAGIBAGI_ADJUSTMENTS = {} :: { [number]: number },
-	MSG_STUDIO_LIVE_DATASTORE_BLOCKED = "[Donation] Studio: set USE_STUDIO_DATASTORE_ISOLATION=false in Config only if you intentionally write production keys. Manual Robux/cash commands are blocked while Studio writes live.",
+	MSG_STUDIO_LIVE_DATASTORE_BLOCKED = "[Donation] Studio writes live DataStore keys (USE_STUDIO_DATASTORE_ISOLATION=false). /setrobux is blocked; use /removerobux to clear live totals, or set isolation=true for Studio_* sandbox.",
 	-- Owner-only manual donation commands (Studio bypass permission check).
 	CMD_ADD_ROBUX = "setrobux", -- /setrobux <username|userId> <robux amount>
 	CMD_REMOVE_ROBUX = "removerobux", -- /removerobux <username|userId|me> [robux]; `me` = clear self (Studio only)

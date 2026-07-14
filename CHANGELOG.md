@@ -11,6 +11,11 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.33] - 2026-07-14
+
+### Changed
+- **Studio live `/removerobux` allowed** — with `USE_STUDIO_DATASTORE_ISOLATION=false`, `/removerobux` can clear production Robux LB from Studio Play; `/setrobux` stays blocked. Warn log on live remove.
+
 ## [2.4.32] - 2026-07-14
 
 ### Changed
