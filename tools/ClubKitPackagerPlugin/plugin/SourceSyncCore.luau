@@ -219,6 +219,14 @@ local function pathAllowed(repoPath: string): boolean
 			return false
 		end
 	end
+	local excludes = Manifest.ENGINE_SOURCE_EXCLUDES
+	if type(excludes) == "table" then
+		for _, excluded in excludes do
+			if repoPath == excluded or string.sub(repoPath, 1, #excluded) == excluded then
+				return false
+			end
+		end
+	end
 	for _, prefix in Manifest.ENGINE_SOURCE_PREFIXES do
 		if string.sub(repoPath, 1, #prefix) == prefix then
 			return true
@@ -357,6 +365,17 @@ function SourceSyncCore.applyEngineUpdate(tag: string, onProgress)
 		if i % 5 == 0 then
 			task.wait()
 		end
+	end
+
+	-- Dev/demo showcase must not remain on buyer places after engine update.
+	local rs = game:GetService("ReplicatedStorage")
+	local kit = rs:FindFirstChild("Hazastudio_ClubKit")
+	local shared = kit and kit:FindFirstChild("Shared")
+	local cfg = shared and shared:FindFirstChild("Config")
+	local showcase = cfg and cfg:FindFirstChild("ClubKitShowcase")
+	if showcase then
+		showcase:Destroy()
+		table.insert(report.ok, "(removed) Shared/Config/ClubKitShowcase")
 	end
 
 	return report

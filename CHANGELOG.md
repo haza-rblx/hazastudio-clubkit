@@ -11,6 +11,12 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.30] - 2026-07-14
+
+### Changed
+- **Studio DataStore isolation off** — `USE_STUDIO_DATASTORE_ISOLATION = false` in kit Config (and OneTimeLeaderboardSeeder) so Studio Play uses live production keys.
+- **ClubKitShowcase excluded from releases** — not fetched by Update Engine; stripped from RBXM pack; removed from place on engine update if present.
+
 ## [2.4.29] - 2026-07-14
 
 ### Changed

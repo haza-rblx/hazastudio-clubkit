@@ -200,6 +200,16 @@ function PackagerCore.collect(options: ExportOptions): (Folder?, CollectReport)
 			continue
 		end
 		local clone = cloneInto(dest, src)
+		-- Strip buyer-unwanted demo modules from full kit clone.
+		if target.service == "ReplicatedStorage" and target.name == "Hazastudio_ClubKit" then
+			local shared = clone:FindFirstChild("Shared")
+			local configFolder = shared and shared:FindFirstChild("Config")
+			local showcase = configFolder and configFolder:FindFirstChild("ClubKitShowcase")
+			if showcase then
+				showcase:Destroy()
+				logWarn(report, "Stripped Shared/Config/ClubKitShowcase (not shipped to buyers)")
+			end
+		end
 		logOk(report, ("%s/%s [%d instances]"):format(target.service, target.name, countDescendants(clone)), clone)
 	end
 

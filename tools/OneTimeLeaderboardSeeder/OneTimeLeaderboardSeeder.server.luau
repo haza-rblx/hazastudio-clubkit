@@ -39,7 +39,8 @@ local UserService = game:GetService("UserService")
 local ENABLED = false -- true = jalankan seeder saat server boot
 local MODE = "dry_run" -- "dry_run" | "commit"
 
-local USE_STUDIO_DATASTORE_ISOLATION = true
+-- Studio isolation: keep false so seeder writes the same live keys as Config (production).
+local USE_STUDIO_DATASTORE_ISOLATION = false
 
 local SEED_CASH = true
 local SEED_ROBUX = true

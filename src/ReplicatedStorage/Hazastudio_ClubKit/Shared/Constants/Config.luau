@@ -1,9 +1,9 @@
 --!strict
 local RunService = game:GetService("RunService")
 local IS_STUDIO = RunService:IsStudio()
--- true = Studio Play pakai prefix Studio_* (terisolasi dari live). Default aman.
--- false = Studio & live pakai key production yang sama — HANYA sengaja untuk debug data asli.
-local USE_STUDIO_DATASTORE_ISOLATION = true
+-- false = Studio & live pakai key production yang sama (intentional for this kit workflow).
+-- true = Studio Play pakai prefix Studio_* (terisolasi dari live).
+local USE_STUDIO_DATASTORE_ISOLATION = false
 local DATASTORE_SCOPE_PREFIX = if IS_STUDIO and USE_STUDIO_DATASTORE_ISOLATION then "Studio_" else ""
 
 local function scopedDataStoreKey(baseKey: string): string

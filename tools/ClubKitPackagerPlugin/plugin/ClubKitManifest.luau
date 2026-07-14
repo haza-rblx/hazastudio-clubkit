@@ -6,7 +6,7 @@ local ClubKitManifest = {}
 ClubKitManifest.PACKAGE_NAME = "HazastudioClubKit_Package"
 ClubKitManifest.MANIFEST_NAME = "_ClubKitManifest"
 ClubKitManifest.PRODUCT_ID = "hazastudioclubkit"
-ClubKitManifest.KIT_VERSION = "2.4.29"
+ClubKitManifest.KIT_VERSION = "2.4.30"
 
 -- Folder engine per service (seluruh subtree di-clone).
 ClubKitManifest.SERVICE_ROOTS = {
@@ -106,6 +106,11 @@ ClubKitManifest.ENGINE_SOURCE_PREFIXES = {
 ClubKitManifest.PROTECTED_SOURCE_PREFIXES = {
 	"src/ReplicatedStorage/Hazastudio_ClubKitConfig/",
 	"src/ServerScriptService/Hazastudio_ClubKitSecrets/",
+}
+
+-- Engine paths under ENGINE_SOURCE_PREFIXES that must NOT ship to buyers (dev/demo only).
+ClubKitManifest.ENGINE_SOURCE_EXCLUDES = {
+	"src/ReplicatedStorage/Hazastudio_ClubKit/Shared/Config/ClubKitShowcase.luau",
 }
 
 return ClubKitManifest
