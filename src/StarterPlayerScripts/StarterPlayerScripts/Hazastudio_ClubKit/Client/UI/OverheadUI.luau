@@ -962,14 +962,49 @@ end
 --   RupiahRankWrapper > RupiahRank   -> "#N RUPIAH" (topSpenderRank / Saweria)
 -- Wrapper disembunyiin kalau rank-nya nil. Aman dipanggil di template
 -- yang gak punya "00-DonationLayers" (langsung return).
+-- UIGradient di wrapper (kalau ada di template) ikut shared gradient loop:
+--   Robux = sheen (flow/sweep), Rupiah = prism (offset + rotation).
 -- ============================================================
+local DONATION_CHIP_ANIM: { [string]: { mode: string, speed: number } } = {
+	RobuxRankWrapper = { mode = "sheen", speed = 0.9 },
+	RupiahRankWrapper = { mode = "prism", speed = 0.75 },
+}
+
+local function setChipGradientAnim(chip: GuiObject, wrapperName: string, active: boolean)
+	local grad = chip:FindFirstChildWhichIsA("UIGradient") :: UIGradient?
+	if not grad then
+		return
+	end
+	if active then
+		-- Jangan re-seed startTime / base Rotation tiap apply (biar animasi mulus).
+		if animatedGradients[grad] then
+			return
+		end
+		local preset = DONATION_CHIP_ANIM[wrapperName]
+		animatedGradients[grad] = {
+			animMode = if preset then preset.mode else "sheen",
+			animSpeed = if preset then preset.speed else 0.85,
+			textRotation = grad.Rotation,
+			startTime = os.clock(),
+		}
+		ensureSharedGradientLoop()
+	else
+		local data = animatedGradients[grad]
+		if data then
+			animatedGradients[grad] = nil
+			grad.Offset = Vector2.zero
+			grad.Rotation = data.textRotation
+		end
+	end
+end
+
 local function setDonationLayers(wrapper: GuiObject, payload: OverheadPayload)
 	local layers = wrapper:FindFirstChild("00-DonationLayers")
 	if not layers or not layers:IsA("GuiObject") then
 		return
 	end
 
-	local function applyChip(wrapperName: string, labelName: string, rank: number?, suffix: string)
+	local function applyChip(wrapperName: string, _labelName: string, rank: number?, suffix: string)
 		local chip = layers:FindFirstChild(wrapperName)
 		if not chip or not chip:IsA("GuiObject") then
 			return
@@ -982,6 +1017,8 @@ local function setDonationLayers(wrapper: GuiObject, payload: OverheadPayload)
 				(label :: TextLabel).Text = "#" .. tostring(rank) .. " " .. suffix
 			end
 		end
+		local animEnabled = Config.Overhead.ANIMATE_DONATION_RANK_GRADIENT == true
+		setChipGradientAnim(chip, wrapperName, hasRank and animEnabled)
 	end
 
 	-- Robux ranking = topDonateRank, Rupiah/Saweria ranking = topSpenderRank

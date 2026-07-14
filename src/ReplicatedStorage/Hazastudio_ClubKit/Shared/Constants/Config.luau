@@ -691,6 +691,9 @@ Config.Overhead = {
 	ENABLE_LAZY_ROWS = true,
 	-- R8: cache the per-nametag {label -> effectConfig} map at build time; delta updates never re-walk the tree.
 	ENABLE_EFFECT_CACHE = true,
+	-- Opt-in: animate UIGradient on 00-DonationLayers RobuxRankWrapper / RupiahRankWrapper.
+	-- Safe when wrappers lack UIGradient (no-op). Buyer toggle: ClubKitConfig.Features.DonationRankGradientAnim.
+	ANIMATE_DONATION_RANK_GRADIENT = false,
 	BATCH_MESSAGE_KIND = "overhead_batch",
 	DELTA_MESSAGE_KIND = "overhead_delta",
 	EXISTING_PAYLOAD_BATCH_SIZE = 25,

@@ -328,6 +328,10 @@ function ConfigBootstrap.apply(config: any)
 				config.FeatureFlags[targetKey] = features[sourceKey]
 			end
 		end
+		-- Overhead donation chip gradient anim (not a FeatureFlags module kill-switch).
+		if type(features.DonationRankGradientAnim) == "boolean" and type(config.Overhead) == "table" then
+			config.Overhead.ANIMATE_DONATION_RANK_GRADIENT = features.DonationRankGradientAnim
+		end
 	end
 
 	if type(donation) == "table" then

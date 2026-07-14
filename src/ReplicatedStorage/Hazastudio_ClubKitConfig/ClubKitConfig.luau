@@ -499,6 +499,9 @@ ClubKitConfig.Features = {
 	VipOnCommunityJoin = false,
 	-- Toast when Owner / Leadership / Content / top-10 Robux or cash spender joins (once per session).
 	JoinGreetings = true,
+	-- Animasi UIGradient chip #N ROBUX / #N RUPIAH di overhead (RobuxRankWrapper / RupiahRankWrapper).
+	-- Default false — place lama tanpa UIGradient di wrapper tetap aman; set true setelah tambah gradient di Studio.
+	DonationRankGradientAnim = false,
 }
 
 return ClubKitConfig
