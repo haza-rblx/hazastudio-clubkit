@@ -2,9 +2,15 @@
 -- Resolve Roblox username / display name / headshot for leaderboard rows.
 -- Hot path uses module cache + batched UserService lookups to avoid per-row
 -- 1-id storms on every workspace leaderboard rebuild.
+--
+-- Best approach (v2.4.29+): treat DN==username as needsResolve only when
+-- displayNameVerified is not set; after a successful resolve, optional write-back
+-- persists displayNameVerified into DonationLeaderboardMetadata_v1 (one-shot heal).
 
 local Players = game:GetService("Players")
-local UserService = game:GetService("UserService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local HttpApi = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.HttpApi)
 
 export type ResolvedIdentity = {
 	username: string,
@@ -21,6 +27,7 @@ type CacheEntry = {
 }
 
 local identityCache: { [number]: CacheEntry } = {}
+local writeBackHandler: ((userId: number, resolved: ResolvedIdentity) -> ())? = nil
 
 local LeaderboardIdentity = {}
 
@@ -38,11 +45,29 @@ function LeaderboardIdentity.looksLikeFallbackName(name: string?): boolean
 	return name:match("^User%s*%d+$") ~= nil
 end
 
--- Legacy helper kept for callers. DisplayName == Username is valid on Roblox and
--- must NOT force re-resolve on every rebuild (that caused UserService storms).
--- Returns false always; true-fallback detection uses looksLikeFallbackName.
+-- Legacy helper. Prefer entry.displayNameVerified for durable DN==UN handling.
 function LeaderboardIdentity.isStaleDisplayName(_displayName: string?, _username: string?): boolean
 	return false
+end
+
+function LeaderboardIdentity.setWriteBackHandler(handler: ((userId: number, resolved: ResolvedIdentity) -> ())?)
+	writeBackHandler = handler
+end
+
+local function maybeWriteBack(userId: number, resolved: ResolvedIdentity)
+	if not writeBackHandler then
+		return
+	end
+	if LeaderboardIdentity.looksLikeFallbackName(resolved.username) then
+		return
+	end
+	if LeaderboardIdentity.looksLikeFallbackName(resolved.displayName) then
+		return
+	end
+	local handler = writeBackHandler
+	task.defer(function()
+		handler(userId, resolved)
+	end)
 end
 
 function LeaderboardIdentity.fetchUserInfos(userIds: { number }): { any }
@@ -50,16 +75,19 @@ function LeaderboardIdentity.fetchUserInfos(userIds: { number }): { any }
 		return {}
 	end
 
-	-- UserService only — never immediately fall through to Players legacy API after
-	-- a throttle/failure (that doubled Network "Players"/"UserService" storms).
-	local ok, infos = pcall(function()
-		return UserService:GetUserInfosByUserIdsAsync(userIds)
-	end)
-	if ok and type(infos) == "table" then
+	-- Prefer HttpApi (admission + shared Cache when ENABLED). Returns map; normalize to list.
+	local byId = HttpApi.getUserInfosByUserIdsAsync(userIds)
+	local infos: { any } = {}
+	if type(byId) ~= "table" then
 		return infos
 	end
-
-	return {}
+	for _, userId in ipairs(userIds) do
+		local info = byId[userId]
+		if type(info) == "table" then
+			table.insert(infos, info)
+		end
+	end
+	return infos
 end
 
 function LeaderboardIdentity.readInfoUserId(info: any): number?
@@ -210,17 +238,17 @@ local function entryNeedsResolve(entry: any): (boolean, number?)
 	local username = if type(entry.username) == "string" then entry.username else ""
 	local displayName = if type(entry.displayName) == "string" then entry.displayName else ""
 	local thumbnail = if type(entry.thumbnail) == "string" then entry.thumbnail else ""
+	local verified = entry.displayNameVerified == true
 
-	-- DisplayName == Username is valid on Roblox, but also the fingerprint of bad metadata
-	-- (e.g. OneTimeLeaderboardSeeder writing username into both fields). Re-resolve via
-	-- UserService once; positive cache prevents repeat API hits when they truly match.
+	-- DN==UN is valid on Roblox AND also the fingerprint of poisoned seeder metadata.
+	-- Only re-resolve until metadata is marked displayNameVerified (one-shot heal).
 	local displayMatchesUsername = username ~= ""
 		and displayName ~= ""
 		and username:lower() == displayName:lower()
 	local needsResolve = LeaderboardIdentity.looksLikeFallbackName(username)
 		or LeaderboardIdentity.looksLikeFallbackName(displayName)
 		or thumbnail == ""
-		or displayMatchesUsername
+		or (displayMatchesUsername and not verified)
 
 	return needsResolve, userId
 end
@@ -233,11 +261,13 @@ local function applyResolved(entry: any, resolved: ResolvedIdentity)
 	if LeaderboardIdentity.looksLikeFallbackName(username) then
 		username = resolved.username
 	end
-	-- Always take resolved displayName when current looks like fallback OR was copied from username.
 	local displayMatchesUsername = username ~= ""
 		and displayName ~= ""
 		and username:lower() == displayName:lower()
-	if LeaderboardIdentity.looksLikeFallbackName(displayName) or displayMatchesUsername then
+	local verified = entry.displayNameVerified == true
+	if LeaderboardIdentity.looksLikeFallbackName(displayName)
+		or (displayMatchesUsername and not verified)
+	then
 		displayName = resolved.displayName
 	end
 	if thumbnail == "" then
@@ -247,6 +277,12 @@ local function applyResolved(entry: any, resolved: ResolvedIdentity)
 	entry.username = username
 	entry.displayName = displayName
 	entry.thumbnail = thumbnail
+	-- Only mark verified after a real identity (never persist "User N" as verified).
+	if not LeaderboardIdentity.looksLikeFallbackName(resolved.username)
+		and not LeaderboardIdentity.looksLikeFallbackName(resolved.displayName)
+	then
+		entry.displayNameVerified = true
+	end
 	return entry
 end
 
@@ -257,7 +293,11 @@ function LeaderboardIdentity.enrichPlayerEntry(entry: any): any
 	end
 
 	local resolved = LeaderboardIdentity.resolveUserIdentity(userId)
-	return applyResolved(entry, resolved)
+	local applied = applyResolved(entry, resolved)
+	if not LeaderboardIdentity.looksLikeFallbackName(resolved.username) then
+		maybeWriteBack(userId, resolved)
+	end
+	return applied
 end
 
 function LeaderboardIdentity.enrichEntryList(entries: any): any
@@ -268,6 +308,7 @@ function LeaderboardIdentity.enrichEntryList(entries: any): any
 	local needOfflineIds: { number } = {}
 	local needOfflineSet: { [number]: boolean } = {}
 	local pendingIndexes: { number } = {}
+	local writeBackIds: { [number]: ResolvedIdentity } = {}
 
 	for index, entry in ipairs(entries) do
 		local needsResolve, userId = entryNeedsResolve(entry)
@@ -275,6 +316,7 @@ function LeaderboardIdentity.enrichEntryList(entries: any): any
 			local cached = readPositiveCache(userId)
 			if cached then
 				entries[index] = applyResolved(entry, cached)
+				writeBackIds[userId] = cached
 			elseif isNegativeCached(userId) then
 				entries[index] = applyResolved(entry, {
 					username = "User " .. tostring(userId),
@@ -291,6 +333,7 @@ function LeaderboardIdentity.enrichEntryList(entries: any): any
 					}
 					writePositiveCache(userId, resolved)
 					entries[index] = applyResolved(entry, resolved)
+					writeBackIds[userId] = resolved
 				else
 					table.insert(pendingIndexes, index)
 					if not needOfflineSet[userId] then
@@ -303,6 +346,9 @@ function LeaderboardIdentity.enrichEntryList(entries: any): any
 	end
 
 	if #needOfflineIds == 0 then
+		for userId, resolved in pairs(writeBackIds) do
+			maybeWriteBack(userId, resolved)
+		end
 		return entries
 	end
 
@@ -321,6 +367,7 @@ function LeaderboardIdentity.enrichEntryList(entries: any): any
 			local resolved = identityFromInfo(userId, info)
 			if not LeaderboardIdentity.looksLikeFallbackName(resolved.username) then
 				writePositiveCache(userId, resolved)
+				writeBackIds[userId] = resolved
 			else
 				writeNegativeCache(userId)
 			end
@@ -344,6 +391,10 @@ function LeaderboardIdentity.enrichEntryList(entries: any): any
 				})
 			end
 		end
+	end
+
+	for userId, resolved in pairs(writeBackIds) do
+		maybeWriteBack(userId, resolved)
 	end
 
 	return entries

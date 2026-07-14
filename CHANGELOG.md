@@ -11,6 +11,11 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.29] - 2026-07-14
+
+### Changed
+- **Leaderboard displayName one-shot heal** — after UserService resolve, persist `displayNameVerified` to `DonationLeaderboardMetadata_v1` (BudgetGate write-back). DN==username only re-resolves until verified. `LeaderboardIdentity.fetchUserInfos` routes through `HttpApi` (admission/shared cache). Live donation/adjust/seeder writes set verified=true.
+
 ## [2.4.28] - 2026-07-14
 
 ### Fixed

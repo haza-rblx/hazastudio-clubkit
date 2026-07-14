@@ -128,6 +128,7 @@ local function createAvatarLikeRepository(deps: { logger: Types.ILogger? }?)
 						username = sanitizeText(username, 64),
 						displayName = sanitizeText(displayName, 64),
 						thumbnail = sanitizeText(thumbnail, 512),
+						displayNameVerified = true,
 						updatedAt = os.time(),
 					}
 				end)
@@ -706,12 +707,14 @@ local function createAvatarLikeRepository(deps: { logger: Types.ILogger? }?)
 			if not thumbnail or thumbnail == "" then
 				thumbnail = getUserThumbnail(userId)
 			end
+			local displayNameVerified = type(metadata) == "table" and metadata.displayNameVerified == true
 			table.insert(entries, {
 				rank = index,
 				userId = userId,
 				username = username,
 				displayName = displayName,
 				thumbnail = thumbnail,
+				displayNameVerified = displayNameVerified,
 				total = tonumber(item.value) or 0,
 			})
 		end

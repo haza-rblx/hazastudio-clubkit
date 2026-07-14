@@ -195,6 +195,7 @@ local function writeMetadata(metaStore: GlobalDataStore, userId: number): boolea
 				username = username,
 				displayName = displayName,
 				thumbnail = thumbnail,
+				displayNameVerified = true,
 				updatedAt = os.time(),
 			}
 		end)

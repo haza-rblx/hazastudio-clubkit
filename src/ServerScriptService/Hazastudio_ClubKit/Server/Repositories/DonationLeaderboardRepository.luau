@@ -557,7 +557,7 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 		local cacheKey = string.format("%s:%d", kind, id)
 		local result = budgetGate:executeAsync(Enum.DataStoreRequestType.UpdateAsync, function()
 			return Result.withRetry(function()
-				metadataStore:UpdateAsync(mk, function(_current: any): any
+				metadataStore:UpdateAsync(mk, function(current: any): any
 					if kind == "community" then
 						return {
 							communityId = id,
@@ -567,11 +567,20 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 						}
 					end
 
+					local existing = if type(current) == "table" then current else {}
+					local verified = existing.displayNameVerified == true
+					if data.displayNameVerified == true then
+						verified = true
+					elseif data.displayNameVerified == false then
+						verified = false
+					end
+
 					return {
 						userId = id,
-						username = sanitizeText(data.username, 64),
-						displayName = sanitizeText(data.displayName, 64),
-						thumbnail = sanitizeText(data.thumbnail, 512),
+						username = sanitizeText(data.username or existing.username, 64),
+						displayName = sanitizeText(data.displayName or existing.displayName, 64),
+						thumbnail = sanitizeText(data.thumbnail or existing.thumbnail, 512),
+						displayNameVerified = verified,
 						updatedAt = tonumber(data.updatedAt) or os.time(),
 					}
 				end)
@@ -781,6 +790,7 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 			username = record.username,
 			displayName = record.displayName,
 			thumbnail = record.thumbnail,
+			displayNameVerified = true,
 			updatedAt = os.time(),
 		})
 
@@ -881,6 +891,7 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 			username = username,
 			displayName = displayName,
 			thumbnail = thumbnail,
+			displayNameVerified = true,
 			updatedAt = os.time(),
 		})
 
@@ -1003,12 +1014,14 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 			end
 			local thumbnail = type(metadata) == "table" and type(metadata.thumbnail) == "string" and metadata.thumbnail
 				or getUserThumbnail(userId)
+			local displayNameVerified = type(metadata) == "table" and metadata.displayNameVerified == true
 			table.insert(entries, {
 				rank = #entries + 1,
 				userId = userId,
 				username = username,
 				displayName = displayName,
 				thumbnail = thumbnail,
+				displayNameVerified = displayNameVerified,
 				total = tonumber(item.value) or 0,
 			})
 		end
@@ -1182,6 +1195,38 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 			username = username,
 			displayName = displayName,
 			thumbnail = thumbnail or getUserThumbnail(userId),
+			displayNameVerified = true,
+			updatedAt = os.time(),
+		})
+	end
+
+	-- One-shot paint-path heal: persist UserService-resolved identity so DN==username
+	-- metadata from bad seeders stops needing resolve every rebuild/TTL.
+	function repo:healUserDisplayName(
+		userId: number,
+		username: string,
+		displayName: string,
+		thumbnail: string?
+	): Result<nil>
+		local uid = math.floor(tonumber(userId) or 0)
+		if uid <= 0 then
+			return Result.Err("invalid userId")
+		end
+		local function looksLikeFallback(name: string?): boolean
+			if type(name) ~= "string" or name == "" then
+				return true
+			end
+			return name:match("^User%s*%d+$") ~= nil
+		end
+		if looksLikeFallback(username) or looksLikeFallback(displayName) then
+			return Result.Ok(nil)
+		end
+		return writeMetadata("user", uid, {
+			userId = uid,
+			username = username,
+			displayName = displayName,
+			thumbnail = thumbnail or getUserThumbnail(uid),
+			displayNameVerified = true,
 			updatedAt = os.time(),
 		})
 	end

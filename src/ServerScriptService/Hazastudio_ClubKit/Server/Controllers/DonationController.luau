@@ -73,6 +73,41 @@ local function createDonationController(deps: {
 		})
 	end
 	local donorProfileNetwork: any = nil
+	-- One-shot metadata heal: persist UserService identity so DN==username stops
+	-- re-resolving every rebuild. Deduped per server session.
+	local healedDisplayNames: { [number]: boolean } = {}
+	LeaderboardIdentity.setWriteBackHandler(function(userId: number, resolved: any)
+		if healedDisplayNames[userId] then
+			return
+		end
+		if not leaderboardRepository or type(leaderboardRepository.healUserDisplayName) ~= "function" then
+			return
+		end
+		healedDisplayNames[userId] = true
+		task.spawn(function()
+			local ok, result = pcall(function()
+				return leaderboardRepository:healUserDisplayName(
+					userId,
+					resolved.username,
+					resolved.displayName,
+					resolved.thumbnail
+				)
+			end)
+			if not ok then
+				healedDisplayNames[userId] = nil
+				log:warn("healUserDisplayName failed", {
+					userId = userId,
+					error = tostring(result),
+				})
+			elseif type(result) == "table" and result.ok == false then
+				healedDisplayNames[userId] = nil
+				log:warn("healUserDisplayName rejected", {
+					userId = userId,
+					error = tostring(result.error),
+				})
+			end
+		end)
+	end)
 	local processedSnapshotReqs = TTLSet.create({
 		ttl = Config.Security.REQUEST_DEDUPE_WINDOW,
 		maxSize = Config.Security.MAX_REQUEST_CACHE or 500,
