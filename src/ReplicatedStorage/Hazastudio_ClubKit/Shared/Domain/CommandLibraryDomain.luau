@@ -77,7 +77,8 @@ local function rolePassesGate(gate: PermissionGate, role: RoleKey, effectiveMemb
 		return true
 	end
 	if gate == "owner" then
-		return RolesDomain.normalizeRoleKey(role) == "Owner"
+		local key = RolesDomain.normalizeRoleKey(role)
+		return key == "Owner" or key == "CoOwner"
 	end
 	if gate == "admin" then
 		return PermissionDomain.canUseAdminPanel(role, nil)

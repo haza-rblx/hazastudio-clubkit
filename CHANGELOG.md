@@ -11,6 +11,11 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.38] - 2026-07-15
+
+### Added
+- **Co-Owner role (kit default)** — Owner-tier badge (`01-OwnerCoOwnerBadge`) + Owner-like permissions; assign only via `/setrole` / aliases `coowner` / `co-owner`. Injected by `RoleCategoryBuilder` even if buyer `RoleCategories` omit it. No group-rank auto-assign.
+
 ## [2.4.37] - 2026-07-15
 
 ### Changed

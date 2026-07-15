@@ -34,6 +34,7 @@ local Roles = {}
 
 Roles.ORDER = {
 	"Owner",
+	"CoOwner",
 	"Staff",
 	"Moderator",
 	"DJ",
@@ -50,8 +51,9 @@ Roles.ORDER = {
 }
 
 Roles.EXTRA_TOOL_FOLDERS = { "DONOR" }
-Roles.STAFF_PLUS = { "Owner", "Staff" }
+Roles.STAFF_PLUS = { "Owner", "CoOwner", "Staff" }
 Roles.SETROLE_ONLY = {
+	"CoOwner",
 	"Staff",
 	"Moderator",
 	"DJ",
@@ -77,6 +79,20 @@ Roles.DEFINITIONS = {
 		teamColor = "Gold",
 		badgeFrames = { "01-OwnerCoOwnerBadge" },
 		canGift = true,
+	},
+	-- Owner-tier privileges + badge; assigned only via /setrole (no groupRanks).
+	CoOwner = {
+		label = "Co-Owner",
+		chatTag = "CO-OWNER",
+		priority = 14900,
+		setroleOnly = true,
+		specialRank = { text = "CO-OWNER", gradient = true },
+		roleColor = { primary = "#FBBF24", secondary = "#FDE68A" },
+		teamColor = "New Yeller",
+		badgeFrames = { "01-OwnerCoOwnerBadge" },
+		giftable = true,
+		canGift = true,
+		toolFolder = "STAFF",
 	},
 	Staff = {
 		label = "Staff",
@@ -214,7 +230,6 @@ Roles.DEFINITIONS = {
 }
 
 Roles.LEGACY_ALIASES = {
-	CoOwner = "Staff",
 	AfterTeam = "Staff",
 	Developer = "Staff",
 	Admin = "Staff",
@@ -242,6 +257,9 @@ Roles.LEGACY_ALIASES = {
 	donor = "Donatur",
 	["Royale Spender"] = "RoyaleSpender",
 	["royale spender"] = "RoyaleSpender",
+	["Co-Owner"] = "CoOwner",
+	["co-owner"] = "CoOwner",
+	coowner = "CoOwner",
 }
 
 Roles.COMMAND_ALIASES = {
@@ -269,8 +287,8 @@ Roles.COMMAND_ALIASES = {
 	vvip = "VVIP",
 	vip = "VIP",
 	guest = "Guest",
-	coowner = "Staff",
-	["co-owner"] = "Staff",
+	coowner = "CoOwner",
+	["co-owner"] = "CoOwner",
 	afterteam = "Staff",
 	["after-team"] = "Staff",
 	after = "Staff",

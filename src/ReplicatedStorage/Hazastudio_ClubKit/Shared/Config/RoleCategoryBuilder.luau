@@ -76,6 +76,15 @@ function RoleCategoryBuilder.build(clubKit: any): BuiltRoles
 	local extraToolFolders: { string } = {}
 	local legacyAliases = cloneTable(clubKit.LegacyAliases or {})
 	local commandAliases = cloneTable(clubKit.CommandAliases or {})
+	-- Co-Owner is a first-class kit role (not a Staff alias).
+	if legacyAliases.CoOwner == "Staff" then
+		legacyAliases.CoOwner = nil
+	end
+	legacyAliases["Co-Owner"] = "CoOwner"
+	legacyAliases["co-owner"] = "CoOwner"
+	legacyAliases.coowner = "CoOwner"
+	commandAliases.coowner = "CoOwner"
+	commandAliases["co-owner"] = "CoOwner"
 
 	local systemRoles = clubKit.SystemRoles or {}
 	for roleKey, definition in pairs(systemRoles) do
@@ -141,6 +150,47 @@ function RoleCategoryBuilder.build(clubKit: any): BuiltRoles
 					addUnique(staffPlus, roleKey)
 				end
 			end
+		end
+	end
+
+	-- Kit default: Co-Owner (Owner-tier badge/perms, /setrole only — no groupRanks).
+	if definitions["CoOwner"] == nil then
+		local leadershipId: number? = nil
+		if type(categories) == "table" then
+			for _, category in ipairs(categories) do
+				if category.enabled ~= false and type(category.id) == "number" and category.label == "Leadership" then
+					leadershipId = category.id
+					break
+				end
+			end
+			if leadershipId == nil then
+				for _, category in ipairs(categories) do
+					if category.enabled ~= false and type(category.id) == "number" then
+						leadershipId = category.id
+						break
+					end
+				end
+			end
+		end
+		definitions["CoOwner"] = {
+			label = "Co-Owner",
+			chatTag = "CO-OWNER",
+			priority = 14099,
+			setroleOnly = true,
+			giftable = true,
+			canGift = true,
+			roleColor = { primary = "#FBBF24", secondary = "#FDE68A" },
+			teamColor = "New Yeller",
+			badgeFrames = { "01-OwnerCoOwnerBadge" },
+			specialRank = { text = "CO-OWNER", gradient = true },
+			toolFolder = "STAFF",
+			categoryId = leadershipId,
+		}
+		addUnique(order, "CoOwner")
+		addUnique(setroleOnly, "CoOwner")
+		addUnique(staffPlus, "CoOwner")
+		if type(leadershipId) == "number" then
+			roleToCategory["CoOwner"] = leadershipId
 		end
 	end
 
@@ -215,9 +265,27 @@ function RoleCategoryBuilder.build(clubKit: any): BuiltRoles
 	addUnique(order, "Owner")
 	addUnique(order, "Guest")
 	addUnique(staffPlus, "Owner")
+	addUnique(staffPlus, "CoOwner")
+
+	-- Prefer Owner → CoOwner near top of ORDER when CoOwner was injected late.
+	local preferredOrder = { "Owner", "CoOwner" }
+	local reordered: { string } = {}
+	local seen: { [string]: boolean } = {}
+	for _, key in ipairs(preferredOrder) do
+		if definitions[key] then
+			table.insert(reordered, key)
+			seen[key] = true
+		end
+	end
+	for _, key in ipairs(order) do
+		if not seen[key] then
+			table.insert(reordered, key)
+			seen[key] = true
+		end
+	end
 
 	return {
-		ORDER = order,
+		ORDER = reordered,
 		DEFINITIONS = definitions,
 		SETROLE_ONLY = setroleOnly,
 		STAFF_PLUS = staffPlus,

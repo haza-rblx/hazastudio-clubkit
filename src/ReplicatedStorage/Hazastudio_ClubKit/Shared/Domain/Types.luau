@@ -18,6 +18,7 @@ export type Result<T> =
 -- ============================================================
 export type RoleKey =
 	"Owner"
+	| "CoOwner"
 	| "Investor"
 	| "Staff"
 	| "LeadDance"
@@ -30,7 +31,6 @@ export type RoleKey =
 	| "VIP"
 	| "Guest"
 	-- Legacy keys (DataStore / old saves); normalize via Config.Roles.LEGACY_ALIASES.
-	| "CoOwner"
 	| "AfterTeam"
 	| "Developer"
 	| "Admin"

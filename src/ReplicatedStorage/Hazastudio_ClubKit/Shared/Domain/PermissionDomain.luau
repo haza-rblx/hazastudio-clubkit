@@ -62,11 +62,10 @@ function PermissionDomain.hasPermission(roleKey: string?, permissionId: string):
 	local permission = PERMISSION_ALIASES[permissionId] or permissionId
 	local canonical = RolesDomain.normalizeRoleKey(roleKey) or roleKey
 
-	if canonical == "Owner" and permission == "canGift" then
-		return true
-	end
-	if canonical == "Owner" and permission == "adminPanel" then
-		return true
+	if canonical == "Owner" or canonical == "CoOwner" then
+		if permission == "canGift" or permission == "adminPanel" then
+			return true
+		end
 	end
 
 	local definition = getRoleDefinition(canonical)

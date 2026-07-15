@@ -205,6 +205,17 @@ ClubKitConfig.RoleCategories = {
 		},
 		roles = {
 			{
+				key = "CoOwner",
+				label = "Co-Owner",
+				chatTag = "CO-OWNER",
+				toolFolder = "STAFF",
+				teamColor = "New Yeller",
+				enabled = true,
+				specialRank = { text = "CO-OWNER", gradient = true },
+				badgeFrames = { "01-OwnerCoOwnerBadge" }, -- same badge frame as Owner
+				roleColor = { primary = "#FBBF24", secondary = "#FDE68A" },
+			},
+			{
 				key = "Staff",
 				label = "Staff",
 				chatTag = "STAFF",
@@ -382,7 +393,6 @@ ClubKitConfig.SystemRoles = {
 -- ALIAS (update kalau rename role/membership — untuk command & data lama)
 -- =============================================================================
 ClubKitConfig.LegacyAliases = {
-	CoOwner = "Staff",
 	AfterTeam = "Staff",
 	Developer = "Staff",
 	Admin = "Staff",
@@ -411,6 +421,9 @@ ClubKitConfig.LegacyAliases = {
 	Donor = "Donatur",
 	donor = "Donatur",
 	donatur = "Donatur",
+	["Co-Owner"] = "CoOwner",
+	["co-owner"] = "CoOwner",
+	coowner = "CoOwner",
 }
 
 ClubKitConfig.CommandAliases = {
@@ -438,8 +451,8 @@ ClubKitConfig.CommandAliases = {
 	vvip = "VVIP",
 	vip = "VIP",
 	guest = "Guest",
-	coowner = "Staff",
-	["co-owner"] = "Staff",
+	coowner = "CoOwner",
+	["co-owner"] = "CoOwner",
 	afterteam = "Staff",
 	["after-team"] = "Staff",
 	after = "Staff",

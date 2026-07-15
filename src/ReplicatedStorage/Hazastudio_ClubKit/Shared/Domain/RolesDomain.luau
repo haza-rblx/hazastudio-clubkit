@@ -715,12 +715,15 @@ end
 
 function RolesDomain.isStaffPlus(role: string): boolean
 	local canonical = RolesDomain.normalizeRoleKey(role) or role
+	if canonical == "Owner" or canonical == "CoOwner" then
+		return true
+	end
 	for _, allowed in ipairs(getRoles().STAFF_PLUS) do
 		if canonical == allowed then
 			return true
 		end
 	end
-	local legacyStaff = { CoOwner = "Staff", AfterTeam = "Staff", Developer = "Staff", Admin = "Staff", Investor = "Staff" }
+	local legacyStaff = { AfterTeam = "Staff", Developer = "Staff", Admin = "Staff", Investor = "Staff" }
 	return legacyStaff[canonical] ~= nil or legacyStaff[role] ~= nil
 end
 
