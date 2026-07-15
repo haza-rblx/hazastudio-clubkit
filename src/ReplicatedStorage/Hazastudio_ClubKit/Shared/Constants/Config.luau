@@ -2103,6 +2103,8 @@ Config.Donation = {
 	-- Optional explicit Robux donation products (ClubKitConfig.Donation.RobuxProducts).
 	-- When empty, server auto-loads Developer Products except shop membership IDs.
 	ROBUX_PRODUCTS = {} :: { { ProductId: number, Name: string?, Price: number? } },
+	-- Hide creator Developer Products that are offsale (IsForSale ~= true) from donation panel.
+	HIDE_OFFSALE_ROBUX_PRODUCTS = true,
 	-- Donation API base URL (Cloudflare Worker v2): https://host/game/{gameKey}
 	-- REST routes live under {ApiUrl}/v2/*. Secret in Server/Secrets.luau only.
 	SHEETS_WEB_APP_URL = "",

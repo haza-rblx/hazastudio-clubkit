@@ -11,6 +11,11 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.40] - 2026-07-15
+
+### Changed
+- **Donation Robux panel** — auto/catalog list hides Developer Products that are offsale (`IsForSale ~= true`). Kill switch: `Config.Donation.HIDE_OFFSALE_ROBUX_PRODUCTS = false`. PaidBroadcast product ID also excluded from the donation catalog.
+
 ## [2.4.39] - 2026-07-15
 
 ### Added

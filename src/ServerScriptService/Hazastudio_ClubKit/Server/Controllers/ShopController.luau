@@ -174,7 +174,45 @@ local function createShopController(
 				end
 			end
 		end
+		local paidBroadcastId = tonumber(Config.PaidBroadcast and Config.PaidBroadcast.PRODUCT_ID)
+		if paidBroadcastId and paidBroadcastId > 0 then
+			excluded[paidBroadcastId] = true
+		end
 		return excluded
+	end
+
+	-- Cache IsForSale lookups across refresh cycles (same TTL as product refresh).
+	local forSaleCache: { [number]: { forSale: boolean, checkedAt: number } } = {}
+
+	local function isDeveloperProductForSale(productId: number, rawHint: any?): boolean
+		local donationCfg = Config.Donation
+		if donationCfg and donationCfg.HIDE_OFFSALE_ROBUX_PRODUCTS == false then
+			return true
+		end
+		if type(rawHint) == "table" and type(rawHint.IsForSale) == "boolean" then
+			forSaleCache[productId] = { forSale = rawHint.IsForSale == true, checkedAt = os.clock() }
+			return rawHint.IsForSale == true
+		end
+		local cached = forSaleCache[productId]
+		local now = os.clock()
+		if cached and (now - cached.checkedAt) < DONATION_PRODUCT_REFRESH_INTERVAL then
+			return cached.forSale
+		end
+		local ok, info = pcall(function()
+			return MarketplaceService:GetProductInfo(productId, Enum.InfoType.Product)
+		end)
+		-- Fail-open on API errors so a blip does not wipe the donation list.
+		local forSale = true
+		if ok and type(info) == "table" then
+			forSale = info.IsForSale == true
+		elseif not ok then
+			log:warn("GetProductInfo failed for donation product sale check", {
+				productId = productId,
+				error = tostring(info),
+			})
+		end
+		forSaleCache[productId] = { forSale = forSale, checkedAt = now }
+		return forSale
 	end
 
 	local function syncOwnedGamePasses(player: Player)
@@ -247,7 +285,11 @@ local function createShopController(
 				continue
 			end
 			local product = normalizeDeveloperProduct(entry)
-			if product and not excludedIds[product.productId] then
+			if
+				product
+				and not excludedIds[product.productId]
+				and isDeveloperProductForSale(product.productId, entry)
+			then
 				byId[product.productId] = product
 				table.insert(products, product)
 			end
@@ -288,6 +330,7 @@ local function createShopController(
 		local excludedIds = getShopProductIdSet()
 		local nextProducts: { DonationProduct } = {}
 		local nextProductsById: { [number]: DonationProduct } = {}
+		local skippedOffsale = 0
 		local configuredProducts, configuredById = loadConfiguredDonationProducts(excludedIds)
 		for _, product in ipairs(configuredProducts) do
 			nextProductsById[product.productId] = product
@@ -333,8 +376,12 @@ local function createShopController(
 			for _, rawProduct in ipairs(page) do
 				local product = normalizeDeveloperProduct(rawProduct)
 				if product and not excludedIds[product.productId] and not nextProductsById[product.productId] then
-					nextProductsById[product.productId] = product
-					table.insert(nextProducts, product)
+					if isDeveloperProductForSale(product.productId, rawProduct) then
+						nextProductsById[product.productId] = product
+						table.insert(nextProducts, product)
+					else
+						skippedOffsale += 1
+					end
 				end
 			end
 
@@ -373,6 +420,7 @@ local function createShopController(
 		donationProductsLastRefresh = os.clock()
 		log:info("Donation Robux products refreshed", {
 			count = #donationProducts,
+			skippedOffsale = skippedOffsale,
 			excludedShopProducts = table.concat(
 				(function()
 					local ids = {}
