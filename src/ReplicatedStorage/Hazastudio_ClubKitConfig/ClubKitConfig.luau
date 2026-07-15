@@ -15,8 +15,8 @@
   │ 8. Secrets.luau       → API secret (folder Hazastudio_ClubKitSecrets) │
   └─────────────────────────────────────────────────────────────────┘
 
-  Live mode: hapus ClubKitShowcase.luau dari engine (auto real mode).
-  Demo mode: biarkan ClubKitShowcase.luau ada (auto showcase leaderboard).
+  Live mode: default (ClubKitShowcase not in engine tree).
+  Demo mode: manually inject ModuleScript Shared/Config/ClubKitShowcase (from tools/dev/).
 ]]
 
 local ClubKitConfig = {}

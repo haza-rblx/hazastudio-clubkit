@@ -2,7 +2,7 @@
 
 Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
 
-**Versi saat ini:** `2.4.41` (lihat [`VERSION`](VERSION))  
+**Versi saat ini:** `2.4.42` (lihat [`VERSION`](VERSION))  
 **Target rilis berikutnya:** _(belum ditetapkan)_
 
 ---
@@ -11,7 +11,7 @@ Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
 
 | Area | Status |
 |------|--------|
-| _(kosong — siap development berikutnya)_ | |
+| _(kosong — siap development)_ | |
 
 ---
 
@@ -32,3 +32,4 @@ Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
 5. [ ] Generate `docs/releases/<version>/UPGRADE.md`
 6. [ ] Reset tabel unreleased di file ini
 7. [ ] Tag git: `git tag vX.Y.Z`
+8. [ ] **Rebuild / reinstall Studio plugin** dari `tools/ClubKitPackagerPlugin` (plugin-build sync saja tidak cukup jika place Tool pakai binary lama)

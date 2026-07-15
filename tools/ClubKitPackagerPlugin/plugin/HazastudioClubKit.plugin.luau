@@ -1,46 +1,35 @@
 --!nocheck
--- Hazastudio Club Kit Packager — export / import RBXM + Git source sync.
--- Install: copy folder ini ke %LOCALAPPDATA%\Roblox\Plugins\
--- atau build rbxm dari Studio lalu drag ke folder Plugins.
+-- Hazastudio Club Kit Packager — Update Engine dock + Gen Tools.
+-- Install: .\tools\ClubKitPackagerPlugin\build-plugin-rbxm.ps1
 
-local Selection = game:GetService("Selection")
-local ServerStorage = game:GetService("ServerStorage")
+-- Nested .rbxm: modules are children of this Script (Parent = Plugin container).
+-- Folder plugin-build: modules are siblings under the Folder (Parent = Folder).
+local function requirePluginModule(name: string)
+	local mod = script:FindFirstChild(name) or (script.Parent and script.Parent:FindFirstChild(name))
+	if not mod then
+		error(("[ClubKitPackager] Missing module %s (child of Script or sibling Folder)"):format(name))
+	end
+	return require(mod)
+end
 
-local Manifest = require(script.Parent.ClubKitManifest)
-local PackagerCore = require(script.Parent.PackagerCore)
-local PackagerPanel = require(script.Parent.PackagerPanel)
-local UpdaterPanel = require(script.Parent.UpdaterPanel)
+local Manifest = requirePluginModule("ClubKitManifest")
+local UpdaterPanel = requirePluginModule("UpdaterPanel")
 
 local toolbar = plugin:CreateToolbar("Hazastudio Club Kit")
-local exportButton = toolbar:CreateButton(
-	"Export RBXM",
-	"Kumpulkan semua aset Club Kit lalu simpan sebagai .rbxm",
-	"rbxassetid://6035193736"
+local openPanelButton = toolbar:CreateButton(
+	"Open Panel",
+	"Buka panel Update Engine + auto check update",
+	"rbxassetid://99832044843928"
 )
-local importButton = toolbar:CreateButton(
-	"Unpack RBXM",
-	"Import file .rbxm Club Kit lalu unpack ke service yang benar",
-	"rbxassetid://6035193736"
-)
-local unpackSelButton = toolbar:CreateButton(
-	"Unpack Pilihan",
-	"Unpack package yang sedang dipilih di Explorer",
-	"rbxassetid://6035193736"
-)
-local checkUpdateButton = toolbar:CreateButton(
-	"Check Update",
-	"Cek versi engine terbaru dari GitHub tag",
-	"rbxassetid://6035193736"
-)
-local updateEngineButton = toolbar:CreateButton(
-	"Update Engine",
-	"Download .luau engine dari tag terbaru dan tulis Source",
-	"rbxassetid://6035193736"
+local genToolsButton = toolbar:CreateButton(
+	"Gen Tools",
+	"generate_tools_folder() — buat folder kosong ServerStorage.Tools dari role config",
+	"rbxassetid://96030964846916"
 )
 
 local widgetInfo = DockWidgetPluginGuiInfo.new(
 	Enum.InitialDockState.Float,
-	true,
+	false,
 	false,
 	380,
 	580,
@@ -49,146 +38,24 @@ local widgetInfo = DockWidgetPluginGuiInfo.new(
 )
 local widget = plugin:CreateDockWidgetPluginGui("HazastudioClubKitPackagerOpts", widgetInfo)
 widget.Title = "Hazastudio Club Kit"
+widget.Name = "HazastudioClubKitPackagerOpts"
 
 local function openPanel()
 	widget.Enabled = true
 end
 
-local DovetailUI = require(script.Parent.DovetailUI)
-local _, content = DovetailUI.scrollRoot(widget)
+local updaterApi = UpdaterPanel.create(widget, {
+	onDismiss = function()
+		widget.Enabled = false
+	end,
+})
 
-DovetailUI.brandHeader(content, Manifest.KIT_VERSION, 0)
-
-local updaterApi = UpdaterPanel.create(content)
-local packagerApi = PackagerPanel.create(content)
-
-local busy = false
-
-local function runExport()
-	if busy then
-		return
-	end
-	busy = true
-
-	local ok, err = pcall(function()
-		local packageRoot, report = PackagerCore.collect(packagerApi.getExportOptions())
-		PackagerCore.printCollectReport(report)
-
-		if not packageRoot then
-			warn("[ClubKitPackager] Export gagal — tidak ada package.")
-			return
-		end
-
-		Selection:Set({ packageRoot })
-		plugin:PromptSaveSelection(("HazastudioClubKit_v%s.rbxm"):format(Manifest.KIT_VERSION))
-
-		print(("[ClubKitPackager] Package siap disimpan: ServerStorage > %s"):format(Manifest.PACKAGE_NAME))
+openPanelButton.Click:Connect(function()
+	openPanel()
+	task.defer(function()
+		updaterApi.checkForUpdates()
 	end)
-
-	if not ok then
-		warn("[ClubKitPackager] Export error: " .. tostring(err))
-	end
-
-	busy = false
-end
-
-local function runUnpackFromPackage(packageRoot: Instance)
-	local ok, err = pcall(function()
-		local report = PackagerCore.unpack(packageRoot, packagerApi.getUnpackOptions())
-		PackagerCore.printUnpackReport(report)
-		print("[ClubKitPackager] Unpack selesai. Cek Explorer + Output untuk item yang missing.")
-	end)
-	if not ok then
-		warn("[ClubKitPackager] Unpack error: " .. tostring(err))
-	end
-end
-
-local function runImportUnpack()
-	if busy then
-		return
-	end
-	busy = true
-
-	local ok, err = pcall(function()
-		local imported = plugin:PromptImportFile("rbxm")
-		if not imported or #imported == 0 then
-			print("[ClubKitPackager] Import dibatalkan.")
-			return
-		end
-
-		local packageRoot = PackagerCore.findPackageRoot(imported)
-		if not packageRoot then
-			warn("[ClubKitPackager] File bukan package Club Kit yang valid.")
-			return
-		end
-
-		packageRoot.Parent = ServerStorage
-		runUnpackFromPackage(packageRoot)
-		packageRoot:Destroy()
-	end)
-
-	if not ok then
-		warn("[ClubKitPackager] Import error: " .. tostring(err))
-	end
-
-	busy = false
-end
-
-local function runUnpackSelection()
-	if busy then
-		return
-	end
-	busy = true
-
-	local ok, err = pcall(function()
-		local selected = Selection:Get()
-		if #selected == 0 then
-			warn("[ClubKitPackager] Pilih folder " .. Manifest.PACKAGE_NAME .. " di Explorer.")
-			return
-		end
-
-		local packageRoot = PackagerCore.findPackageRoot(selected)
-		if not packageRoot then
-			warn("[ClubKitPackager] Selection bukan package Club Kit.")
-			return
-		end
-
-		runUnpackFromPackage(packageRoot)
-	end)
-
-	if not ok then
-		warn("[ClubKitPackager] Unpack selection error: " .. tostring(err))
-	end
-
-	busy = false
-end
-
-exportButton.Click:Connect(function()
-	openPanel()
-	runExport()
 end)
-importButton.Click:Connect(function()
-	openPanel()
-	runImportUnpack()
-end)
-unpackSelButton.Click:Connect(function()
-	openPanel()
-	runUnpackSelection()
-end)
-checkUpdateButton.Click:Connect(function()
-	openPanel()
-	updaterApi.checkForUpdates()
-end)
-updateEngineButton.Click:Connect(function()
-	openPanel()
-	updaterApi.runUpdate()
-end)
-
-local genToolsButton = toolbar:CreateButton(
-	"Gen Tools",
-	"generate_tools_folder() — buat folder kosong ServerStorage.Tools dari role config",
-	"rbxassetid://6035193736"
-)
 
 local function runGenerateToolsFolder()
 	local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -216,5 +83,5 @@ end
 genToolsButton.Click:Connect(runGenerateToolsFolder)
 
 print("[ClubKitPackager] Loaded v" .. Manifest.KIT_VERSION .. " - Hazastudio Club Kit")
-print("[ClubKitPackager] Panel: View > Hazastudio Club Kit, or click any toolbar button")
+print("[ClubKitPackager] Toolbar: Open Panel · Gen Tools")
 print("[ClubKitPackager] Command Bar: generate_tools_folder()")

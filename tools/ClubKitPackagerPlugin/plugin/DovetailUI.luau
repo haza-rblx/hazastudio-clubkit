@@ -332,6 +332,37 @@ function DovetailUI.ghostButton(parent: Instance, text: string, layoutOrder: num
 	return makeButton(parent, text, "ghost", layoutOrder)
 end
 
+-- Full-width iOS-style pill CTA (Update Now).
+function DovetailUI.pillPrimaryButton(parent: Instance, text: string, layoutOrder: number?): TextButton
+	local button = Instance.new("TextButton")
+	button.Size = UDim2.new(1, 0, 0, Theme.sizes.pillButtonHeight)
+	button.Font = Theme.fonts.bodyBold
+	button.TextSize = Theme.sizes.body + 1
+	button.Text = text
+	button.AutoButtonColor = true
+	button.BackgroundColor3 = Theme.colors.softIndigo
+	button.TextColor3 = Theme.colors.bone
+	button.LayoutOrder = layoutOrder or 0
+	button.Parent = parent
+	applyCorner(button, Theme.sizes.pillCorner)
+	return button
+end
+
+-- Text-only secondary action (Remind Me Later / Check for Updates).
+function DovetailUI.textLinkButton(parent: Instance, text: string, layoutOrder: number?): TextButton
+	local button = Instance.new("TextButton")
+	button.BackgroundTransparency = 1
+	button.Size = UDim2.new(1, 0, 0, 28)
+	button.Font = Theme.fonts.body
+	button.TextSize = Theme.sizes.body
+	button.Text = text
+	button.TextColor3 = Theme.colors.softIndigo
+	button.AutoButtonColor = false
+	button.LayoutOrder = layoutOrder or 0
+	button.Parent = parent
+	return button
+end
+
 function DovetailUI.checkboxRow(parent: Instance, label: string, default: boolean, layoutOrder: number?): BoolValue
 	local row = Instance.new("Frame")
 	row.BackgroundTransparency = 1

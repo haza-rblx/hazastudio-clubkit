@@ -569,61 +569,20 @@ if Config.FeatureFlags.SyncDanceEnabled then
 		return ServerMods.Result.Ok(true)
 	end)
 end
-local OVERHEAD_JOIN_RETRY_DELAYS = { 2, 5, 10 }
-
-local function isRetryableOverheadLoadError(err: string?): boolean
-	if type(err) ~= "string" or err == "" then
-		return false
-	end
-	return err == "budget_exhausted"
-		or err == "ds_throttled"
-		or string.find(err, "Timeout") ~= nil
-		or string.find(err, "InternalError") ~= nil
-		or string.find(err, "ServiceUnavailable") ~= nil
-		or string.find(err, "RequestThrottled") ~= nil
-end
-
-local function scheduleOverheadJoinRetry(player: Player)
-	task.spawn(function()
-		for _, delaySec in ipairs(OVERHEAD_JOIN_RETRY_DELAYS) do
-			task.wait(delaySec)
-			if not player.Parent then
-				return
-			end
-			local retry = repo:loadStrict(player.UserId)
-			if retry.ok then
-				overheadController:onPlayerDataReady(player)
-				overheadController:refreshPlayer(player, "recovery")
-				streakController:processLoginForPlayer(player)
-				if joinGreetingService and type(joinGreetingService.onPlayerReady) == "function" then
-					joinGreetingService:onPlayerReady(player)
-				end
-				if communityVipService and type(communityVipService.onPlayerReady) == "function" then
-					communityVipService:onPlayerReady(player)
-				end
-				log:info("Overhead join retry succeeded", {
-					userId = player.UserId,
-					delaySec = delaySec,
-				})
-				return
-			end
-			if not isRetryableOverheadLoadError(retry.error) then
-				log:warn("Overhead join retry stopped (non-retryable)", {
-					userId = player.UserId,
-					error = retry.error,
-				})
-				return
-			end
-		end
-		log:warn("Overhead join retry exhausted", { userId = player.UserId })
-	end)
-end
+-- Overhead join recovery: re-enqueue through ProfileLoader only (no parallel
+-- repo:loadStrict). ProfileLoader already retries transient errors with delays
+-- >= NEGATIVE_CACHE_TTL; this path covers a final deferred requeue after those
+-- in-job retries are exhausted.
+local OVERHEAD_JOIN_REQUEUE_DELAY_SEC = 10
+local overheadJoinRequeueCount: { [number]: number } = {}
+local OVERHEAD_JOIN_REQUEUE_MAX = 2
 
 sharedProfileLoader:onLoaded(function(event)
 	if event.kind ~= "overhead" or not event.player.Parent then
 		return
 	end
 	if event.result.ok then
+		overheadJoinRequeueCount[event.player.UserId] = nil
 		overheadController:onPlayerDataReady(event.player)
 		streakController:processLoginForPlayer(event.player)
 		if joinGreetingService and type(joinGreetingService.onPlayerReady) == "function" then
@@ -632,16 +591,58 @@ sharedProfileLoader:onLoaded(function(event)
 		if communityVipService and type(communityVipService.onPlayerReady) == "function" then
 			communityVipService:onPlayerReady(event.player)
 		end
-	else
-		scheduleOverheadJoinRetry(event.player)
+		return
 	end
+
+	local userId = event.player.UserId
+	local attempts = overheadJoinRequeueCount[userId] or 0
+	if attempts >= OVERHEAD_JOIN_REQUEUE_MAX then
+		log:warn("Overhead join requeue exhausted", {
+			userId = userId,
+			error = event.result.error,
+		})
+		return
+	end
+	overheadJoinRequeueCount[userId] = attempts + 1
+	local player = event.player
+	task.delay(OVERHEAD_JOIN_REQUEUE_DELAY_SEC, function()
+		if not player.Parent then
+			overheadJoinRequeueCount[userId] = nil
+			return
+		end
+		log:info("Overhead join requeue via ProfileLoader", {
+			userId = userId,
+			attempt = overheadJoinRequeueCount[userId],
+			error = event.result.error,
+		})
+		sharedProfileLoader:enqueueKind(player, "overhead")
+	end)
 end)
--- Enqueue players already in the game and all future joiners.
+-- Critical join kinds only (overhead + profile). Secondary kinds
+-- (likes_summary, favorites, settings, stickers, music_favorites) are deferred
+-- so join storms do not saturate DataStoreScheduler GetAsync slots.
+local function enqueueCriticalJoinLoads(player: Player)
+	sharedProfileLoader:enqueueKind(player, "overhead")
+	sharedProfileLoader:enqueueKind(player, "profile")
+end
+
+local function enqueueSecondaryJoinLoads(player: Player)
+	sharedProfileLoader:enqueueKindDeferred(player, "likes_summary")
+	if Config.FeatureFlags.SyncDanceEnabled then
+		sharedProfileLoader:enqueueKindDeferred(player, "favorites")
+	end
+end
+
 for _, player in ipairs(Players:GetPlayers()) do
-	sharedProfileLoader:enqueue(player)
+	enqueueCriticalJoinLoads(player)
+	enqueueSecondaryJoinLoads(player)
 end
 connectionCleaner:add(Players.PlayerAdded:Connect(function(player)
-	sharedProfileLoader:enqueue(player)
+	enqueueCriticalJoinLoads(player)
+	enqueueSecondaryJoinLoads(player)
+end))
+connectionCleaner:add(Players.PlayerRemoving:Connect(function(player)
+	overheadJoinRequeueCount[player.UserId] = nil
 end))
 -- warmPlayerSocialSnapshot is defined after AvatarContextController (needs pushContextUpdate).
 local shopService = ServerMods.createShopService({

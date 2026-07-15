@@ -60,10 +60,10 @@ function MusicBootstrap.start(deps: MusicBootstrapDeps): MusicBootstrapResult
 		return Result.Ok(true)
 	end)
 	for _, existingPlayer in ipairs(Players:GetPlayers()) do
-		sharedProfileLoader:enqueueKind(existingPlayer, "music_favorites")
+		sharedProfileLoader:enqueueKindDeferred(existingPlayer, "music_favorites")
 	end
 	connectionCleaner:add(Players.PlayerAdded:Connect(function(player)
-		sharedProfileLoader:enqueueKind(player, "music_favorites")
+		sharedProfileLoader:enqueueKindDeferred(player, "music_favorites")
 	end))
 
 	local musicService = createMusicService({

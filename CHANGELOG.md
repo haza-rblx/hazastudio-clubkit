@@ -11,6 +11,21 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.42] - 2026-07-15
+
+### Fixed
+- **Join DataStore `budget_exhausted` storm** — join GetAsync no longer runs multi-second `withRetry` backoff inside the shared scheduler slot (`JOIN_READ_RETRY_ATTEMPTS = 1`). Secondary join kinds (settings/stickers/music favorites/likes/favorites) defer `SECONDARY_JOIN_DELAY_SEC` (default 4s). Overhead recovery requeues via ProfileLoader instead of parallel `loadStrict`. Reduces FailedCount / nametag load fails at ~15–25 CCU join storms.
+- **Plugin toolbar Check Update / Update Engine** — `plugin-build` previously ran sync via Output only without enabling the DockWidget (`widget.Enabled`), so the panel looked like it only appeared during Play. Toolbar clicks now always `openPanel()` (plus Open Panel button); work is deferred so the dock can paint.
+
+### Added
+- **ClubKitConfig fill-forward** — new engine `ClubKitConfigSchema` + runtime merge: buyer keys win; missing keys (Features, JoinCommunity, nested safe sections) filled from schema. `ARRAY_REPLACE_KEYS` keeps buyer lists wholesale (`AuraTiers`, `WorldEffectTiers`, `RoleCategories`, `StyleOrder`, etc.).
+- **Update Engine config patch** — after successful engine sync, plugin additively inserts missing `Features` keys and missing top-level sections into buyer `ClubKitConfig` Source (never overwrites existing values); status reports `Config patch: added N key(s)`.
+
+### Changed
+- **ClubKitShowcase = dev-only** — moved out of engine tree to `tools/dev/ClubKitShowcase.luau` (not Rojo-synced / not fetched by Update Engine). Demo place: inject ModuleScript under `Shared/Config` manually. Update Engine / Packager destroy any `ClubKitShowcase` under `Hazastudio_ClubKit`.
+- **Update Engine UI** — DockWidget uses Studio design `UpdatePluginGUI`/`UpdatePage` (embedded rbxmx): compact dock fonts, **Update engine** / **Stay on this version**. RBXM Packager options card removed from panel (toolbar Export/Unpack keep safe defaults).
+- **ProfileLoader join tuning** — `SECONDARY_JOIN_DELAY_SEC`, `RETRY_DELAYS` (aligned with negative-cache TTL); `budget_exhausted` fails the job without holding concurrency for long waits.
+
 ## [2.4.41] - 2026-07-15
 
 ### Changed

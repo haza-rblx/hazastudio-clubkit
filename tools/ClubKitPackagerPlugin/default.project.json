@@ -1,7 +1,6 @@
 {
   "name": "HazastudioClubKitPackager",
   "tree": {
-    "$className": "Script",
     "$path": "plugin/HazastudioClubKit.plugin.luau",
     "ClubKitManifest": {
       "$path": "plugin/ClubKitManifest.luau"
@@ -15,6 +14,9 @@
     "SourceSyncCore": {
       "$path": "plugin/SourceSyncCore.luau"
     },
+    "ConfigPatchCore": {
+      "$path": "plugin/ConfigPatchCore.luau"
+    },
     "DovetailTheme": {
       "$path": "plugin/DovetailTheme.luau"
     },
@@ -26,6 +28,9 @@
     },
     "PackagerPanel": {
       "$path": "plugin/PackagerPanel.luau"
+    },
+    "UpdatePluginGUI": {
+      "$path": "UpdatePluginGUI.rbxmx"
     }
   }
 }

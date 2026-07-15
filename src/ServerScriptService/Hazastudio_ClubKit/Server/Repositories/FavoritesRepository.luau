@@ -57,7 +57,7 @@ function FavoritesRepository.onPlayerAdded(self: FavoritesRepositoryImpl, player
 	local loadResult = self._budgetGate:executeAsync(Enum.DataStoreRequestType.GetAsync, function()
 		return Result.withRetry(function()
 			return self._store:GetAsync(self:_key(player.UserId))
-		end, Config.DataStore.RETRY_ATTEMPTS)
+		end, Config.DataStore.JOIN_READ_RETRY_ATTEMPTS or 1)
 	end)
 
 	if not loadResult.ok then

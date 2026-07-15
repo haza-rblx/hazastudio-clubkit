@@ -6,6 +6,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Manifest = require(script.Parent.ClubKitManifest)
 local RojoPathMap = require(script.Parent.RojoPathMap)
+local ConfigPatchCore = require(script.Parent.ConfigPatchCore)
 
 local SourceSyncCore = {}
 
@@ -15,6 +16,7 @@ export type ApplyReport = {
 	errors: { string },
 	tag: string?,
 	version: string?,
+	configPatch: string?,
 }
 
 export type CheckResult = {
@@ -40,7 +42,6 @@ local function requestAsync(url: string, method: string?): (boolean, any)
 			Url = url,
 			Method = method or "GET",
 			Headers = {
-				["User-Agent"] = "HazastudioClubKit-Updater",
 				["Accept"] = "application/vnd.github+json",
 			},
 		})
@@ -72,9 +73,6 @@ local function requestText(url: string): (boolean, string)
 		return HttpService:RequestAsync({
 			Url = url,
 			Method = "GET",
-			Headers = {
-				["User-Agent"] = "HazastudioClubKit-Updater",
-			},
 		})
 	end)
 
@@ -87,7 +85,7 @@ local function requestText(url: string): (boolean, string)
 	return true, response.Body or ""
 end
 
-local function parseSemver(version: string): (number, number, number)?
+local function parseSemver(version: string)
 	local cleaned = string.gsub(version, "^[vV]", "")
 	local major, minor, patch = string.match(cleaned, "^(%d+)%.(%d+)%.(%d+)")
 	if not major then
@@ -223,6 +221,14 @@ local function pathAllowed(repoPath: string): boolean
 			return false
 		end
 	end
+	local excludes = Manifest.ENGINE_SOURCE_EXCLUDES
+	if type(excludes) == "table" then
+		for _, excluded in excludes do
+			if repoPath == excluded or string.sub(repoPath, 1, #excluded) == excluded then
+				return false
+			end
+		end
+	end
 	for _, prefix in Manifest.ENGINE_SOURCE_PREFIXES do
 		if string.sub(repoPath, 1, #prefix) == prefix then
 			return true
@@ -267,12 +273,24 @@ function SourceSyncCore.listEngineFilesAtTag(tag: string): ({ string }?, string?
 		end
 	end
 
-	table.sort(files)
+	-- init.luau first within each folder so ModuleScript containers exist before children.
+	table.sort(files, function(a, b)
+		local aInit = string.match(a, "/init%.[^/]+$") ~= nil
+		local bInit = string.match(b, "/init%.[^/]+$") ~= nil
+		if aInit ~= bInit then
+			return aInit
+		end
+		return a < b
+	end)
 	return files, nil
 end
 
 function SourceSyncCore.downloadFileAtTag(tag: string, path: string): (string?, string?)
-	return requestText(rawUrl(tag, path))
+	local ok, body = requestText(rawUrl(tag, path))
+	if not ok then
+		return nil, body
+	end
+	return body, nil
 end
 
 function SourceSyncCore.applyFile(repoPath: string, source: string): (boolean, string?)
@@ -302,10 +320,7 @@ function SourceSyncCore.applyFile(repoPath: string, source: string): (boolean, s
 	return true, nil
 end
 
-function SourceSyncCore.applyEngineUpdate(
-	tag: string,
-	onProgress: ((string, number, number) -> ())?
-): ApplyReport
+function SourceSyncCore.applyEngineUpdate(tag: string, onProgress)
 	local report: ApplyReport = {
 		ok = {},
 		skipped = {},
@@ -333,7 +348,7 @@ function SourceSyncCore.applyEngineUpdate(
 		end
 
 		local source, dlErr = SourceSyncCore.downloadFileAtTag(tag, repoPath)
-		if dlErr or not source then
+		if not source then
 			table.insert(report.errors, repoPath .. ": " .. tostring(dlErr))
 			continue
 		end
@@ -342,7 +357,52 @@ function SourceSyncCore.applyEngineUpdate(
 		if applied then
 			table.insert(report.ok, repoPath)
 		else
-			table.insert(report.errors, repoPath .. ": " .. tostring(applyErr))
+			local errText = tostring(applyErr)
+			if #errText > 200 then
+				errText = string.sub(errText, 1, 200) .. "..."
+			end
+			table.insert(report.errors, repoPath .. ": " .. errText)
+		end
+
+		if i % 5 == 0 then
+			task.wait()
+		end
+	end
+
+	-- Dev/demo showcase must not remain on buyer places after engine update.
+	-- Destroy ANY ClubKitShowcase under Hazastudio_ClubKit (not only Config path).
+	local rs = game:GetService("ReplicatedStorage")
+	local kit = rs:FindFirstChild("Hazastudio_ClubKit")
+	if kit then
+		local removed = 0
+		for _, desc in kit:GetDescendants() do
+			if desc.Name == "ClubKitShowcase" and desc:IsA("ModuleScript") then
+				desc:Destroy()
+				removed += 1
+			end
+		end
+		if removed > 0 then
+			table.insert(report.ok, ("(removed) ClubKitShowcase x%d under Hazastudio_ClubKit"):format(removed))
+		end
+	end
+
+	-- Additive ClubKitConfig fill-forward (Features + missing top-level sections).
+	if #report.errors == 0 then
+		local patchOk, patchResult = pcall(ConfigPatchCore.patchBuyerConfig)
+		if not patchOk then
+			local err = tostring(patchResult)
+			table.insert(report.errors, "Config patch: " .. err)
+			report.configPatch = "Config patch failed: " .. err
+		else
+			local patch = patchResult
+			report.configPatch = patch.message
+			if patch.error then
+				table.insert(report.errors, "Config patch: " .. patch.error)
+			elseif #patch.added > 0 then
+				table.insert(report.ok, "(config) " .. patch.message)
+			else
+				table.insert(report.ok, "(config) " .. patch.message)
+			end
 		end
 	end
 

@@ -200,6 +200,19 @@ function PackagerCore.collect(options: ExportOptions): (Folder?, CollectReport)
 			continue
 		end
 		local clone = cloneInto(dest, src)
+		-- Strip buyer-unwanted demo modules from full kit clone (any depth).
+		if target.service == "ReplicatedStorage" and target.name == "Hazastudio_ClubKit" then
+			local stripped = 0
+			for _, desc in clone:GetDescendants() do
+				if desc.Name == "ClubKitShowcase" and desc:IsA("ModuleScript") then
+					desc:Destroy()
+					stripped += 1
+				end
+			end
+			if stripped > 0 then
+				logWarn(report, ("Stripped ClubKitShowcase x%d (not shipped to buyers)"):format(stripped))
+			end
+		end
 		logOk(report, ("%s/%s [%d instances]"):format(target.service, target.name, countDescendants(clone)), clone)
 	end
 
@@ -441,6 +454,22 @@ function PackagerCore.unpack(packageRoot: Instance, options: UnpackOptions): Unp
 		end
 		for _, child in ipairs(bucket:GetChildren()) do
 			placeChild(targetService, child, serviceName, options, report)
+		end
+	end
+
+	-- Never leave demo ClubKitShowcase on buyer places after unpack.
+	local rs = getService("ReplicatedStorage")
+	local kit = rs and rs:FindFirstChild("Hazastudio_ClubKit")
+	if kit then
+		local stripped = 0
+		for _, desc in kit:GetDescendants() do
+			if desc.Name == "ClubKitShowcase" and desc:IsA("ModuleScript") then
+				desc:Destroy()
+				stripped += 1
+			end
+		end
+		if stripped > 0 then
+			logWarn(report, ("Stripped ClubKitShowcase x%d after unpack"):format(stripped))
 		end
 	end
 

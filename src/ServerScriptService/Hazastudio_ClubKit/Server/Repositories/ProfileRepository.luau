@@ -69,7 +69,7 @@ function ProfileRepository:load(userId: number): Result<ProfileStoredData>
 	local result = self._budgetGate:executeAsync(Enum.DataStoreRequestType.GetAsync, function()
 		return Result.withRetry(function()
 			return self._store:GetAsync(key)
-		end, 3)
+		end, Config.DataStore.JOIN_READ_RETRY_ATTEMPTS or 1)
 	end)
 
 	if not result.ok then

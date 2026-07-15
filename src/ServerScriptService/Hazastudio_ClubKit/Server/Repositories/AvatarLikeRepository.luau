@@ -395,7 +395,7 @@ local function createAvatarLikeRepository(deps: { logger: Types.ILogger? }?)
 		local result = budgetGate:executeAsync(Enum.DataStoreRequestType.GetAsync, function()
 			return Result.withRetry(function()
 				return store:GetAsync(storeKey)
-			end, Config.DataStore.RETRY_ATTEMPTS)
+			end, Config.DataStore.JOIN_READ_RETRY_ATTEMPTS or 1)
 		end)
 
 		-- Clear in-flight BEFORE firing (same pattern as HttpApi.luau wrapper)

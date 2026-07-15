@@ -1,6 +1,10 @@
 --!strict
 --[[
-  SHOWCASE SWITCH — file ini mengontrol demo vs live mode.
+  SHOWCASE SWITCH — DEV ONLY (not shipped via Update Engine / Rojo default).
+
+  Path in repo: tools/dev/ClubKitShowcase.luau
+  To enable demo in a Studio place: copy ModuleScript into
+  ReplicatedStorage.Hazastudio_ClubKit.Shared.Config.ClubKitShowcase
 
   File ADA     → showcase ON  (leaderboard demo untuk screenshot)
   File DIHAPUS → real mode   (tanpa demo leaderboard)

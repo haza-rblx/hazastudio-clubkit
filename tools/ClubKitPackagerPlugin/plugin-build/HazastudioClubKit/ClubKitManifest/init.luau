@@ -6,7 +6,7 @@ local ClubKitManifest = {}
 ClubKitManifest.PACKAGE_NAME = "HazastudioClubKit_Package"
 ClubKitManifest.MANIFEST_NAME = "_ClubKitManifest"
 ClubKitManifest.PRODUCT_ID = "hazastudioclubkit"
-ClubKitManifest.KIT_VERSION = "2.2.9"
+ClubKitManifest.KIT_VERSION = "2.4.42"
 
 -- Folder engine per service (seluruh subtree di-clone).
 ClubKitManifest.SERVICE_ROOTS = {
@@ -17,7 +17,7 @@ ClubKitManifest.SERVICE_ROOTS = {
 	{ service = "StarterPlayerScripts", name = "Hazastudio_ClubKit" },
 }
 
--- Opsional — buyer config & secrets (bisa di-skip saat export update).
+-- Opsional ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â buyer config & secrets (bisa di-skip saat export update).
 ClubKitManifest.OPTIONAL_ROOTS = {
 	{ service = "ReplicatedStorage", name = "Hazastudio_ClubKitConfig", key = "config" },
 	{ service = "ServerScriptService", name = "Hazastudio_ClubKitSecrets", key = "secrets" },
@@ -84,7 +84,7 @@ ClubKitManifest.SERVICE_ALIASES = {
 	Workspace = "Workspace",
 }
 
--- Source-sync updater (GitHub tag → set Script.Source in place).
+-- Source-sync updater (GitHub tag ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ set Script.Source in place).
 ClubKitManifest.UPDATER = {
 	githubOwner = "haza-rblx",
 	githubRepo = "hazastudio-clubkit",
@@ -106,6 +106,13 @@ ClubKitManifest.ENGINE_SOURCE_PREFIXES = {
 ClubKitManifest.PROTECTED_SOURCE_PREFIXES = {
 	"src/ReplicatedStorage/Hazastudio_ClubKitConfig/",
 	"src/ServerScriptService/Hazastudio_ClubKitSecrets/",
+}
+
+-- Engine paths under ENGINE_SOURCE_PREFIXES that must NOT ship to buyers (dev/demo only).
+-- ClubKitShowcase lives under tools/dev/ (outside ENGINE_SOURCE_PREFIXES); keep exclude
+-- for any legacy path still present on older tags / stale places.
+ClubKitManifest.ENGINE_SOURCE_EXCLUDES = {
+	"src/ReplicatedStorage/Hazastudio_ClubKit/Shared/Config/ClubKitShowcase.luau",
 }
 
 return ClubKitManifest

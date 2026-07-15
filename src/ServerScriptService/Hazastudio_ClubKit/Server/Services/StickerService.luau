@@ -442,14 +442,14 @@ function StickerService:onStart()
 			return Result.Ok(true)
 		end)
 		self:_track(Players.PlayerAdded:Connect(function(player: Player)
-			profileLoader:enqueueKind(player, "stickers")
+			profileLoader:enqueueKindDeferred(player, "stickers")
 			connectCharacterAdded(player)
 			if player.Character then
 				self:_hookCharacter(player, player.Character)
 			end
 		end))
 		for _, player in ipairs(Players:GetPlayers()) do
-			profileLoader:enqueueKind(player, "stickers")
+			profileLoader:enqueueKindDeferred(player, "stickers")
 			connectCharacterAdded(player)
 			if player.Character then
 				self:_hookCharacter(player, player.Character)

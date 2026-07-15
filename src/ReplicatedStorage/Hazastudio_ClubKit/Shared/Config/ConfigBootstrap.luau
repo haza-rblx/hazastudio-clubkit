@@ -4,6 +4,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local ClubKitDefaults = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Config.ClubKitDefaults)
+local ClubKitConfigSchema = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Config.ClubKitConfigSchema)
 local ClubKitConfig = require(ReplicatedStorage.Hazastudio_ClubKitConfig.ClubKitConfig)
 local DonationProviderDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.DonationProviderDomain)
 local RoleCategoryBuilder = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Config.RoleCategoryBuilder)
@@ -76,6 +77,8 @@ local function deepMerge(base: any, override: any): any
 end
 
 local function loadShowcaseOverlay(): any?
+	-- Optional ModuleScript: inject manually under Shared/Config for demo places only.
+	-- Not shipped via Update Engine / Rojo default tree (lives under tools/dev/).
 	local showcaseModule = script.Parent:FindFirstChild("ClubKitShowcase")
 	if not showcaseModule or not showcaseModule:IsA("ModuleScript") then
 		return nil
@@ -104,8 +107,13 @@ local function applyShowcaseMode(state: any, showcaseOverlay: any?)
 end
 
 local function buildClubKitState(): any
-	-- Defaults → ClubKitConfig (buyer). ClubKitShowcase = demo switch + data demo.
-	local state = deepMerge(ClubKitDefaults, ClubKitConfig)
+	-- Schema fill-forward (buyer wins) → ClubKitDefaults → optional ClubKitShowcase overlay.
+	local filledPaths: { string } = {}
+	local buyerFilled = ClubKitConfigSchema.fillForward(ClubKitConfigSchema.defaults, ClubKitConfig, filledPaths)
+	if #filledPaths > 0 then
+		print("[ConfigBootstrap] fillForward filled " .. tostring(#filledPaths) .. " path(s): " .. table.concat(filledPaths, ", "))
+	end
+	local state = deepMerge(ClubKitDefaults, buyerFilled)
 	local showcaseOverlay = loadShowcaseOverlay()
 	if showcaseOverlay then
 		state = deepMerge(state, showcaseOverlay)

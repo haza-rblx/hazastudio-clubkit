@@ -94,7 +94,7 @@ local function createSettingsRepository(datastoreKey: string?): any
 		local result = budgetGate:executeAsync(Enum.DataStoreRequestType.GetAsync, function()
 			return Result.withRetry(function()
 				return store:GetAsync(tostring(userId))
-			end, Config.DataStore.RETRY_ATTEMPTS)
+			end, Config.DataStore.JOIN_READ_RETRY_ATTEMPTS or 1)
 		end, mutexFor(userId))
 
 		if not result.ok then

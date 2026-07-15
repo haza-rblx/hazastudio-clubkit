@@ -225,7 +225,7 @@ function StickerRepository.load(userId: number): any
 	local result = budgetGate:executeAsync(Enum.DataStoreRequestType.GetAsync, function()
 		return Result.withRetry(function()
 			return store:GetAsync(key(userId))
-		end, Config.DataStore.RETRY_ATTEMPTS)
+		end, Config.DataStore.JOIN_READ_RETRY_ATTEMPTS or 1)
 	end)
 
 	if not result.ok then

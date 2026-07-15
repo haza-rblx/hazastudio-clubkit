@@ -89,7 +89,9 @@ Atau manual:
 
 **Buyer / dev di Studio:** Plugin → **Check Update** → **Update Engine** → Save place.
 
-Plugin fetch dari **public GitHub repo** (`ClubKitManifest.UPDATER.githubOwner` / `githubRepo`). Config `ClubKitConfig` dan `Secrets` tidak pernah disentuh. StarterGui, Workspace boards, ServerStorage assets **tidak** ikut source sync — deploy manual / RBXM jika berubah.
+Plugin fetch dari **public GitHub repo** (`ClubKitManifest.UPDATER.githubOwner` / `githubRepo`). Config `ClubKitConfig` dan `Secrets` tidak pernah di-replace utuh. Setelah Update Engine sukses, plugin **fill-forward** key config yang hilang (additive Sources patch) dari `ClubKitConfigSchema`; nilai buyer yang sudah ada tetap. Runtime juga fill-forward di memori via `ConfigBootstrap`. Field config baru → update **schema + template** `ClubKitConfig`. `ClubKitShowcase` = **dev-only** (`tools/dev/`); tidak ikut engine sync / Rojo default; inject manual untuk demo place.
+
+StarterGui, Workspace boards, ServerStorage assets **tidak** ikut source sync — deploy manual / RBXM jika berubah.
 
 Set `UPDATER.githubOwner` / `githubRepo` di `tools/ClubKitPackagerPlugin/ClubKitManifest.luau` sebelum publish repo.
 

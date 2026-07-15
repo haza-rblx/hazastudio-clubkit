@@ -257,10 +257,10 @@ local function createSettingsController(deps: {
 				return Result.Ok(true)
 			end)
 			track(Players.PlayerAdded:Connect(function(player)
-				profileLoader:enqueueKind(player, "settings")
+				profileLoader:enqueueKindDeferred(player, "settings")
 			end))
 			for _, player in ipairs(Players:GetPlayers()) do
-				profileLoader:enqueueKind(player, "settings")
+				profileLoader:enqueueKindDeferred(player, "settings")
 			end
 		else
 			track(Players.PlayerAdded:Connect(function(player)

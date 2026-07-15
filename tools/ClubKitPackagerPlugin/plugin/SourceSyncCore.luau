@@ -6,6 +6,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Manifest = require(script.Parent.ClubKitManifest)
 local RojoPathMap = require(script.Parent.RojoPathMap)
+local ConfigPatchCore = require(script.Parent.ConfigPatchCore)
 
 local SourceSyncCore = {}
 
@@ -15,6 +16,7 @@ export type ApplyReport = {
 	errors: { string },
 	tag: string?,
 	version: string?,
+	configPatch: string?,
 }
 
 export type CheckResult = {
@@ -115,6 +117,15 @@ function SourceSyncCore.getLocalVersion(): string?
 	local mod = kit and kit:FindFirstChild("KitProduct")
 	if not mod or not mod:IsA("ModuleScript") then
 		return nil
+	end
+	-- Prefer Source parse — Studio caches require(ModuleScript); after Update Engine
+	-- Source may already be vX.Y.Z while require still returns the old table.
+	local source = mod.Source
+	if type(source) == "string" then
+		local fromSource = string.match(source, 'KitVersion%s*=%s*"(%d+%.%d+%.%d+)"')
+		if fromSource then
+			return fromSource
+		end
 	end
 	local ok, product = pcall(require, mod)
 	if not ok or type(product) ~= "table" then
@@ -368,14 +379,39 @@ function SourceSyncCore.applyEngineUpdate(tag: string, onProgress)
 	end
 
 	-- Dev/demo showcase must not remain on buyer places after engine update.
+	-- Destroy ANY ClubKitShowcase under Hazastudio_ClubKit (not only Config path).
 	local rs = game:GetService("ReplicatedStorage")
 	local kit = rs:FindFirstChild("Hazastudio_ClubKit")
-	local shared = kit and kit:FindFirstChild("Shared")
-	local cfg = shared and shared:FindFirstChild("Config")
-	local showcase = cfg and cfg:FindFirstChild("ClubKitShowcase")
-	if showcase then
-		showcase:Destroy()
-		table.insert(report.ok, "(removed) Shared/Config/ClubKitShowcase")
+	if kit then
+		local removed = 0
+		for _, desc in kit:GetDescendants() do
+			if desc.Name == "ClubKitShowcase" and desc:IsA("ModuleScript") then
+				desc:Destroy()
+				removed += 1
+			end
+		end
+		if removed > 0 then
+			table.insert(report.ok, ("(removed) ClubKitShowcase x%d under Hazastudio_ClubKit"):format(removed))
+		end
+	end
+
+	-- Additive ClubKitConfig fill-forward (Features + missing top-level sections).
+	if #report.errors == 0 then
+		local patchOk, patchResult = pcall(ConfigPatchCore.patchBuyerConfig)
+		if not patchOk then
+			local err = tostring(patchResult)
+			table.insert(report.errors, "Config patch: " .. err)
+			report.configPatch = "Config patch failed: " .. err
+		else
+			local patch = patchResult
+			report.configPatch = patch.message
+			if patch.error then
+				-- Soft: buyer config patch must not mark an otherwise successful engine sync as failed.
+				table.insert(report.ok, "(config warn) " .. patch.error)
+			else
+				table.insert(report.ok, "(config) " .. patch.message)
+			end
+		end
 	end
 
 	return report

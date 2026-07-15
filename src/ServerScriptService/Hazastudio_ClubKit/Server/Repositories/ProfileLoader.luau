@@ -39,6 +39,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Cleaner = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Cleaner)
+local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local Result = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Result)
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
@@ -68,6 +69,7 @@ export type ProfileLoader = {
 	register: (self: ProfileLoader, kind: string, loadFn: LoadFn) -> (),
 	enqueue: (self: ProfileLoader, player: Player) -> (),
 	enqueueKind: (self: ProfileLoader, player: Player, kind: string) -> (),
+	enqueueKindDeferred: (self: ProfileLoader, player: Player, kind: string, delaySec: number?) -> (),
 	cancel: (self: ProfileLoader, player: Player) -> (),
 	onLoaded: (self: ProfileLoader, listener: LoadListener) -> (() -> ()),
 	pendingCount: (self: ProfileLoader) -> number,
@@ -128,9 +130,13 @@ local function processJob(self: any, job: Job)
 		return
 	end
 
-	-- Scaling 100→200 CCU Phase 3: retry with exponential backoff for transient errors
-	local maxRetries = 3
-	local backoffDelays = {0.5, 1, 2} -- seconds
+	-- Retries outside DataStoreScheduler slot. First delay aligns with
+	-- Config.Budget.NEGATIVE_CACHE_TTL so budget_exhausted negative-cache can expire.
+	local backoffDelays = Config.ProfileLoader.RETRY_DELAYS
+	if type(backoffDelays) ~= "table" or #backoffDelays < 1 then
+		backoffDelays = { 10, 15, 25 }
+	end
+	local maxRetries = #backoffDelays
 	local result: Result<any>
 	local latencyMs = 0
 	local loadStartedAt = os.clock()
@@ -155,6 +161,11 @@ local function processJob(self: any, job: Job)
 		elseif type(valueOrError) == "table" and valueOrError.ok ~= nil then
 			result = valueOrError :: any
 			if not result.ok and isRetryableResultError(result.error) and attempt < maxRetries then
+				-- budget_exhausted is negative-cached; do not hold a concurrency
+				-- slot for 10s+. Caller (Main) requeues overhead after TTL.
+				if result.error == "budget_exhausted" then
+					break
+				end
 				if self._logger then
 					self._logger:warn("ProfileLoader retrying Result error", {
 						kind = job.kind,
@@ -163,7 +174,7 @@ local function processJob(self: any, job: Job)
 						error = result.error,
 					})
 				end
-				task.wait(backoffDelays[attempt] or 1)
+				task.wait(backoffDelays[attempt] or 10)
 			else
 				break
 			end
@@ -319,6 +330,27 @@ function ProfileLoader:enqueueKind(player: Player, kind: string)
 	})
 	self._pending[userId] = (self._pending[userId] or 0) + 1
 	startWorker(self)
+end
+
+--- Enqueue after delay (secondary join kinds). Skips if player left.
+function ProfileLoader:enqueueKindDeferred(player: Player, kind: string, delaySec: number?)
+	local waitSec = delaySec
+	if type(waitSec) ~= "number" then
+		waitSec = Config.ProfileLoader.SECONDARY_JOIN_DELAY_SEC
+	end
+	if type(waitSec) ~= "number" or waitSec < 0 then
+		waitSec = 4
+	end
+	if waitSec <= 0 then
+		(self :: any):enqueueKind(player, kind)
+		return
+	end
+	task.delay(waitSec, function()
+		if player.Parent == nil or not self._alive then
+			return
+		end
+		(self :: any):enqueueKind(player, kind)
+	end)
 end
 
 --- Cancel pending jobs for a player. Called automatically on PlayerRemoving.

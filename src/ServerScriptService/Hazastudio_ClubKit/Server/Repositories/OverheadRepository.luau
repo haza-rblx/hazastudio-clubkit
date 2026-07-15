@@ -104,7 +104,7 @@ local function createOverheadRepository(datastoreKey: string?): IOverheadReposit
 		local result = budgetGate:executeAsync(Enum.DataStoreRequestType.GetAsync, function()
 			return ResultUtil.withRetry(function()
 				return Store:GetAsync(tostring(userId))
-			end, Config.DataStore.RETRY_ATTEMPTS)
+			end, Config.DataStore.JOIN_READ_RETRY_ATTEMPTS or 1)
 		end, mutexFor(userId))
 		if not result.ok then
 			log:error("Load gagal", { userId = userId, err = result.error })

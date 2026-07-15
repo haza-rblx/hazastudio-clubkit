@@ -36,7 +36,9 @@ DovetailTheme.sizes = {
 	gap = 10,
 	rowHeight = 28,
 	buttonHeight = 34,
+	pillButtonHeight = 44,
 	corner = 8,
+	pillCorner = 22,
 	brandHeight = 72,
 	changelogHeight = 130,
 }

@@ -619,6 +619,10 @@ Config.DataStore = {
 	-- Reduces DataStore GetAsync burst at 30 CCU refreshAll (30 concurrent reads → 1 per TTL window).
 	LIKE_SUMMARY_CACHE_TTL = 300, -- 5 min (was 60s via CACHE_TTL fallback)
 	RETRY_ATTEMPTS = 3,
+	-- Join/load GetAsync: keep 1 attempt inside DataStoreScheduler slot so throttle
+	-- backoff (2s/4s/8s) does not hold MAX_INFLIGHT. ProfileLoader retries outside the slot.
+	-- Writes/UpdateAsync keep RETRY_ATTEMPTS. Set to 3 to A/B the pre-fix behavior.
+	JOIN_READ_RETRY_ATTEMPTS = 1,
 }
 -- ============================================================
 -- BADGE VISIBILITY PER ROLE
@@ -3186,6 +3190,10 @@ Config.ClientHttpApi = {
 Config.ProfileLoader = {
 	MAX_CONCURRENCY = 4,
 	PER_PLAYER_CONCURRENCY = 1, -- R10.1: per-player reads run sequentially through one queue
+	-- Critical join kinds (overhead/profile) enqueue immediately; secondary kinds wait this long.
+	SECONDARY_JOIN_DELAY_SEC = 4,
+	-- Retries outside the DS scheduler slot; first delay >= Budget.NEGATIVE_CACHE_TTL.
+	RETRY_DELAYS = { 10, 15, 25 },
 }
 -- TitleColorPreset animation tick (Phase 3): shared ~30Hz loop for Gradient/Stroke/Dropshadow.
 -- Kill switch: USE_LEGACY_PER_INSTANCE_HEARTBEAT = true → one Heartbeat per effect instance (pre-2.4.24).
