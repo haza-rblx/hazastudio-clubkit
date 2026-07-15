@@ -489,64 +489,8 @@ if LOADING_SCREEN_ENABLED then
 	end)
 end
 
-local NotifController = require(script.Parent.Client.Controllers.NotifController)
-local ChatTagsController = require(script.Parent.Client.Controllers.ChatTagsController)
-local CoupleController = require(script.Parent.Client.Controllers.CoupleController)
-local createShopController = require(script.Parent.Client.Controllers.ShopController)
-local createShopService = require(script.Parent.Client.Services.ShopService)
-local createDonationRobuxService = require(script.Parent.Client.Services.DonationRobuxService)
-local createCommandLibraryService = require(script.Parent.Client.Services.CommandLibraryService)
-local createDanceWarmupService = require(script.Parent.Client.Services.DanceWarmupService)
-local StreakController = require(script.Parent.Client.Controllers.StreakController)
-local AfkGuardController = require(script.Parent.Client.Controllers.AfkGuardController)
-local GiftController = require(script.Parent.Client.Controllers.GiftController)
-local AdminController = require(script.Parent.Client.Controllers.AdminController)
-local createAvatarContextController = require(script.Parent.Client.Controllers.AvatarContextController)
-local createCarryController = require(script.Parent.Client.Controllers.CarryController)
-local createCommandLibraryController = require(script.Parent.Client.Controllers.CommandLibraryController)
-local createSettingsController = require(script.Parent.Client.Controllers.SettingsController)
-local createSyncController = require(script.Parent.Client.Controllers.SyncController)
-local createSyncPanelTriggerController = require(script.Parent.Client.Controllers.SyncPanelTriggerController)
-local HotbarController = require(script.Parent.Client.Controllers.HotbarController)
-local StickerController = require(script.Parent.Client.Controllers.StickerController)
-local DonationLeaderboardController = require(script.Parent.Client.Controllers.DonationLeaderboardController)
-local DonationNotificationController = require(script.Parent.Client.Controllers.DonationNotificationController)
-local DonationSystemController = require(script.Parent.Client.Controllers.DonationSystemController)
-local DonationSystemBootstrap = require(script.Parent.Client.DonationSystemBootstrap)
-local GenericBroadcastController = require(script.Parent.Client.Controllers.GenericBroadcastController)
-local PaidBroadcastController = require(script.Parent.Client.Controllers.PaidBroadcastController)
-local CinematicDockController = require(script.Parent.Client.Controllers.CinematicDockController)
-local TopMenuController = require(script.Parent.Client.Controllers.TopMenuController)
-local createFreecamController = require(script.Parent.Client.Controllers.FreecamController)
-local createGravityController = require(script.Parent.Client.Controllers.GravityController)
-local createMobileFreecamController = require(script.Parent.Client.Controllers.MobileFreecamController)
-local createSyncLeadTopbarController = require(script.Parent.Client.Controllers.SyncLeadTopbarController)
-local createAvatarContextUI = require(script.Parent.Client.UI.AvatarContextUI)
-local createCarryUI = require(script.Parent.Client.UI.CarryUI)
-local createCommandLibraryUI = require(script.Parent.Client.UI.CommandLibraryUI)
-local createSettingsMenuUI = require(script.Parent.Client.UI.SettingsMenuUI)
-local HotbarGuiRefs = require(script.Parent.Client.UI.HotbarGuiRefs)
-local HotbarUIBinder = require(script.Parent.Client.UI.HotbarUIBinder)
-local BackpackGuiRefs = require(script.Parent.Client.UI.BackpackGuiRefs)
-local BackpackUIBinder = require(script.Parent.Client.UI.BackpackUIBinder)
-local InventoryDragController = require(script.Parent.Client.UI.InventoryDragController)
-local DancePanelGuiRefs = require(script.Parent.Client.UI.DancePanelGuiRefs)
-local DancePanelUIBinder = require(script.Parent.Client.UI.DancePanelUIBinder)
-local UISoundHelper = require(script.Parent.Client.Utils.UISoundHelper)
-local AvatarLikeWorldEffect = require(script.Parent.Client.Utils.AvatarLikeWorldEffect)
-local _NukeEffectController = require(script.Parent.Client.Utils.NukeEffectController)
-local StickerBillboardAnimator = require(script.Parent.Client.Utils.StickerBillboardAnimator)
-local CommandLibraryStore = require(script.Parent.Client.State.CommandLibraryStore)
-local CarryStore = require(script.Parent.Client.State.CarryStore)
-local InventoryStore = require(script.Parent.Client.State.InventoryStore)
-local SyncStore = require(script.Parent.Client.State.SyncStore)
-local MusicPlayerStore = require(script.Parent.Client.State.MusicPlayerStore)
-local MusicPlayerController = require(script.Parent.Client.Controllers.MusicPlayerController)
-local MusicPlayerGuiRefs = require(script.Parent.Client.UI.MusicPlayerGuiRefs)
-local MusicPlayerUIBinder = require(script.Parent.Client.UI.MusicPlayerUIBinder)
-local MusicTopbarIcon = require(script.Parent.Client.UI.MusicTopbarIcon)
-local HotbarInventoryService = require(script.Parent.Client.Services.HotbarInventoryService)
-local NotifService = require(script.Parent.Client.Services.NotifService)
+-- Late-boot modules bag: keeps Main under Luau 200-local register limit.
+local ClientMods = require(script.Parent.Client.Init.ClientModuleBag)
 local AnimationLoader = require(SharedContextModule:WaitForChild("AnimationLoader"))
 local CarryDomain = require(SharedDomain:WaitForChild("CarryDomain"))
 -- TopbarPlus
@@ -562,22 +506,22 @@ end
 
 -- Register modules with destroy() for hot-reload teardown (init may run later).
 trackClientLifecycle("OverheadController", OverheadController)
-trackClientLifecycle("NotifController", NotifController)
-trackClientLifecycle("GenericBroadcastController", GenericBroadcastController)
+trackClientLifecycle("NotifController", ClientMods.NotifController)
+trackClientLifecycle("GenericBroadcastController", ClientMods.GenericBroadcastController)
 trackClientLifecycle("JoinGreetingController", JoinGreetingController)
-trackClientLifecycle("ChatTagsController", ChatTagsController)
-trackClientLifecycle("StreakController", StreakController)
-trackClientLifecycle("AfkGuardController", AfkGuardController)
-trackClientLifecycle("CoupleController", CoupleController)
-trackClientLifecycle("CinematicDockController", CinematicDockController)
-trackClientLifecycle("DonationLeaderboardController", DonationLeaderboardController)
-trackClientLifecycle("DonationNotificationController", DonationNotificationController)
-trackClientLifecycle("DonationSystemController", DonationSystemController)
-trackClientLifecycle("PaidBroadcastController", PaidBroadcastController)
-trackClientLifecycle("AdminController", AdminController)
-trackClientLifecycle("AvatarLikeWorldEffect", AvatarLikeWorldEffect)
-trackClientLifecycle("TopMenuController", TopMenuController)
-trackClientLifecycle("StickerBillboardAnimator", StickerBillboardAnimator)
+trackClientLifecycle("ChatTagsController", ClientMods.ChatTagsController)
+trackClientLifecycle("StreakController", ClientMods.StreakController)
+trackClientLifecycle("AfkGuardController", ClientMods.AfkGuardController)
+trackClientLifecycle("CoupleController", ClientMods.CoupleController)
+trackClientLifecycle("CinematicDockController", ClientMods.CinematicDockController)
+trackClientLifecycle("DonationLeaderboardController", ClientMods.DonationLeaderboardController)
+trackClientLifecycle("DonationNotificationController", ClientMods.DonationNotificationController)
+trackClientLifecycle("DonationSystemController", ClientMods.DonationSystemController)
+trackClientLifecycle("PaidBroadcastController", ClientMods.PaidBroadcastController)
+trackClientLifecycle("AdminController", ClientMods.AdminController)
+trackClientLifecycle("AvatarLikeWorldEffect", ClientMods.AvatarLikeWorldEffect)
+trackClientLifecycle("TopMenuController", ClientMods.TopMenuController)
+trackClientLifecycle("StickerBillboardAnimator", ClientMods.StickerBillboardAnimator)
 
 local function createSubscriptionGroup(name: string): any
 	local groupLog = Logger.new(name)
@@ -935,34 +879,34 @@ local function _disableTopbarHoverLabel(icon: any)
 	end
 end
 -- NOTE: _disableTopbarHoverLabel tersedia untuk topbar icon future usage
--- ShopService shared - satu instance, dipakai oleh GiftController & ShopController
+-- ShopService shared - satu instance, dipakai oleh ClientMods.GiftController & ShopController
 local sharedShopService = trackClientLifecycle(
 	"ShopService",
-	createShopService({ remotes = Remotes })
+	ClientMods.createShopService({ remotes = Remotes })
 )
 local donationLog = Logger.new("DonationSystem")
 local donationRobuxService = trackClientLifecycle(
 	"DonationRobuxService",
-	createDonationRobuxService({
+	ClientMods.createDonationRobuxService({
 		remotes = Remotes,
 		logger = donationLog,
 	})
 )
 local uiSoundHelper = trackClientLifecycle(
 	"UISoundHelper",
-	UISoundHelper.new({
+	ClientMods.UISoundHelper.new({
 		config = Config.UISFX,
 	})
 )
 -- === Notif ===
-NotifController.init({
+ClientMods.NotifController.init({
 	notifyRemote = Remotes:WaitForChild("Notify") :: RemoteEvent,
 })
-GenericBroadcastController.init()
+ClientMods.GenericBroadcastController.init()
 JoinGreetingController.init()
 -- === UI SFX ===
 uiSoundHelper:init()
-AvatarLikeWorldEffect.init({
+ClientMods.AvatarLikeWorldEffect.init({
 	logger = Logger.new("AvatarLikeWorldEffect"),
 	remote = Remotes:WaitForChild(Config.AvatarContext.REMOTE_LIKE_EFFECT) :: RemoteEvent,
 })
@@ -974,11 +918,11 @@ AvatarLikeWorldEffect.init({
 -- })
 -- === Sticker Billboard Animations ===
 if Config.FeatureFlags.StickersEnabled ~= false then
-	StickerBillboardAnimator.init({
+	ClientMods.StickerBillboardAnimator.init({
 		logger = Logger.new("StickerBillboardAnimator"),
 	})
 end
-ChatTagsController.init({})
+ClientMods.ChatTagsController.init({})
 -- === Shared Topbar Icons ===
 -- Dibuat SEBELUM controller init agar icon sudah ada
 -- saat controller mencoba bind .selected/.deselected
@@ -1056,7 +1000,7 @@ paidBroadcastIcon:setOrder(Config.PaidBroadcast.TOPBAR_ORDER)
 
 -- Keep trigger icons off the topbar strip; they only fire panel logic via select().
 local attachOk, attachErr = pcall(function()
-	TopMenuController.hideTopbarTriggerIcons({
+	ClientMods.TopMenuController.hideTopbarTriggerIcons({
 		shopIcon,
 		donationIcon,
 		giftIcon,
@@ -1065,7 +1009,7 @@ local attachOk, attachErr = pcall(function()
 		cinematicIcon,
 		paidBroadcastIcon,
 	})
-	TopMenuController.blockTopbarPlusMenu(menuIcon)
+	ClientMods.TopMenuController.blockTopbarPlusMenu(menuIcon)
 end)
 if not attachOk then
 	studioWarn("[Main] TopMenuController hidden menu triggers failed:", attachErr)
@@ -1078,7 +1022,7 @@ local function roleCanUseCinematicDock(): boolean
 end
 
 task.defer(function()
-	TopMenuController.init({
+	ClientMods.TopMenuController.init({
 		menuIcon = menuIcon,
 		icons = {
 			shop = shopIcon,
@@ -1104,7 +1048,7 @@ if Config.FeatureFlags.MusicPlayerEnabled then
 	-- not work consistently on every build, and widget-resolver hides depend on
 	-- internal property names that vary. The controller calls show()/hide()
 	-- through this wrapper as a single source of truth.
-	musicTopbarIcon = MusicTopbarIcon.new({
+	musicTopbarIcon = ClientMods.MusicTopbarIcon.new({
 		iconFactory = function()
 			return Icon.new()
 		end,
@@ -1132,7 +1076,7 @@ if Config.FeatureFlags.MusicPlayerEnabled then
 	})
 end
 local paidBroadcastOk, paidBroadcastErr = pcall(function()
-	PaidBroadcastController.init({
+	ClientMods.PaidBroadcastController.init({
 		icon = paidBroadcastIcon,
 		remotes = Remotes,
 	})
@@ -1141,7 +1085,7 @@ if not paidBroadcastOk then
 	studioWarn("[Main] PaidBroadcastController.init failed:", paidBroadcastErr)
 end
 local cinematicOk, cinematicErr = pcall(function()
-	CinematicDockController.init({
+	ClientMods.CinematicDockController.init({
 		icon = cinematicIcon,
 	})
 end)
@@ -1155,13 +1099,13 @@ pcall(function()
 end)
 local _freecamController = trackClientLifecycle(
 	"FreecamController",
-	createFreecamController({
+	ClientMods.createFreecamController({
 		icon = freecamIcon,
 		iconApi = Icon,
 	})
 )
 if Config.FeatureFlags.GravityEnabled ~= false then
-	local gravityController = createGravityController({
+	local gravityController = ClientMods.createGravityController({
 		freecamScript = script.Parent.Client.Controllers.FreecamController,
 	})
 	trackClientLifecycle("GravityController", gravityController)
@@ -1169,7 +1113,7 @@ if Config.FeatureFlags.GravityEnabled ~= false then
 end
 local _mobileFreecamController = trackClientLifecycle(
 	"MobileFreecamController",
-	createMobileFreecamController({
+	ClientMods.createMobileFreecamController({
 	icon = nil,
 	iconFactory = function()
 		return Icon.new()
@@ -1183,8 +1127,8 @@ local _mobileFreecamController = trackClientLifecycle(
 	end,
 	})
 )
--- Music topbar visibility is owned end-to-end by MusicPlayerController via the
--- MusicTopbarIcon wrapper. No store subscriber is needed here — the previous
+-- Music topbar visibility is owned end-to-end by ClientMods.MusicPlayerController via the
+-- ClientMods.MusicTopbarIcon wrapper. No store subscriber is needed here — the previous
 -- `applyMusicTopbarVisibility` retry pattern relied on `setEnabled(false)` and
 -- a heuristic widget resolver, neither of which fully removed the icon on this
 -- TopbarPlus build. Create/destroy via the wrapper is the reliable contract.
@@ -1224,7 +1168,7 @@ do
 	bindPanelIcon(donationIcon, "donation")
 	bindPanelIcon(paidBroadcastIcon, "broadcast")
 	trackBootTask("Donation.bootstrap", function()
-		DonationSystemBootstrap.start({
+		ClientMods.DonationSystemBootstrap.start({
 			icon = donationIcon,
 			service = donationRobuxService,
 			logger = donationLog,
@@ -1252,7 +1196,7 @@ end
 -- === Couple ===
 if Config.FeatureFlags.CouplesEnabled ~= false then
 	trackBootTask("CoupleController.init", function()
-		CoupleController.init({
+		ClientMods.CoupleController.init({
 			icon = coupleIcon,
 		})
 	end)
@@ -1262,7 +1206,7 @@ end
 -- agar WaitForChild di dalam tidak blocking icon setup topbar
 trackBootTask("GiftShopInit", function()
 	-- === Gift ===
-	local giftCtrl = GiftController.init({
+	local giftCtrl = ClientMods.GiftController.init({
 		shopService = sharedShopService,
 		remotes = Remotes,
 		icon = giftIcon,
@@ -1278,7 +1222,7 @@ trackBootTask("GiftShopInit", function()
 		studioWarn("[LoadingScreen] Shop GUI not found; shop panel disabled")
 		return
 	end
-	local shopCtrl = createShopController({
+	local shopCtrl = ClientMods.createShopController({
 		gui = shopGui :: ScreenGui,
 		remotes = Remotes,
 		shopService = sharedShopService,
@@ -1290,16 +1234,16 @@ trackBootTask("GiftShopInit", function()
 end)
 -- === Streak ===
 trackBootTask("StreakController.init", function()
-	StreakController.init({ remotes = Remotes })
+	ClientMods.StreakController.init({ remotes = Remotes })
 end)
 trackBootTask("AfkGuardController.init", function()
 	if Config.FeatureFlags.AfkGuardEnabled ~= false and Config.AfkGuard.ENABLED == true then
-		AfkGuardController.init({ remotes = Remotes })
+		ClientMods.AfkGuardController.init({ remotes = Remotes })
 	end
 end)
 -- === Admin Panel ===
 trackBootTask("AdminController.init", function()
-	AdminController.init({
+	ClientMods.AdminController.init({
 		remotes = Remotes,
 		icon = adminIcon,
 	})
@@ -1307,13 +1251,13 @@ end)
 trackBootTask("CommandLibraryController.init", function()
 	local commandLibraryService = trackClientLifecycle(
 		"CommandLibraryService",
-		createCommandLibraryService()
+		ClientMods.createCommandLibraryService()
 	)
-	local commandLibraryUI = createCommandLibraryUI({ logger = Logger.new("CommandLibraryUI") })
-	local commandLibraryCtrl = createCommandLibraryController({
+	local commandLibraryUI = ClientMods.createCommandLibraryUI({ logger = Logger.new("CommandLibraryUI") })
+	local commandLibraryCtrl = ClientMods.createCommandLibraryController({
 		logger = Logger.new("CommandLibraryController"),
 		ui = commandLibraryUI,
-		store = CommandLibraryStore,
+		store = ClientMods.CommandLibraryStore,
 		executeCommand = function(commandText: string)
 			commandLibraryService:execute(commandText)
 		end,
@@ -1326,11 +1270,11 @@ trackBootTask("SettingsController.init", function()
 		settingsIcon:setEnabled(false)
 		return
 	end
-	local settingsUI = createSettingsMenuUI({})
-	TopMenuController.setSettingsUI(settingsUI)
+	local settingsUI = ClientMods.createSettingsMenuUI({})
+	ClientMods.TopMenuController.setSettingsUI(settingsUI)
 	local settingsCtrl = trackClientLifecycle(
 		"SettingsController",
-		createSettingsController({
+		ClientMods.createSettingsController({
 			logger = Logger.new("SettingsController"),
 			ui = settingsUI,
 			icon = settingsIcon,
@@ -1339,7 +1283,7 @@ trackBootTask("SettingsController.init", function()
 	)
 	settingsCtrl:init()
 end)
--- Hotbar + backpack: InventoryStore, HotbarInventoryService, InventoryDragController, binders.
+-- Hotbar + backpack: ClientMods.InventoryStore, ClientMods.HotbarInventoryService, ClientMods.InventoryDragController, binders.
 -- Slot cap from PhoneLayout.getHotbarMaxSlots() (Config.Hotbar.MAX_SLOTS_MOBILE on phone).
 trackBootTask("HotbarController.init", function()
 	if not Config.FeatureFlags.HotbarEnabled then
@@ -1348,10 +1292,10 @@ trackBootTask("HotbarController.init", function()
 
 	MobilePanelManager.setInventoryChromeCallbacks({
 		onHiddenChanged = function(hidden: boolean)
-			InventoryStore:set({ inventoryChromeHidden = hidden })
+			ClientMods.InventoryStore:set({ inventoryChromeHidden = hidden })
 		end,
 		isBackpackOpen = function(): boolean
-			return InventoryStore:get().isBackpackOpen
+			return ClientMods.InventoryStore:get().isBackpackOpen
 		end,
 	})
 
@@ -1372,7 +1316,7 @@ trackBootTask("HotbarController.init", function()
 		return
 	end
 
-	local refsResult = HotbarGuiRefs.resolve(playerGui)
+	local refsResult = ClientMods.HotbarGuiRefs.resolve(playerGui)
 	if not refsResult.ok then
 		hotbarLog:error("Hotbar GUI resolve failed", {
 			error = refsResult.error,
@@ -1380,14 +1324,14 @@ trackBootTask("HotbarController.init", function()
 		return
 	end
 
-	local service = HotbarInventoryService.new({
-		store = InventoryStore,
+	local service = ClientMods.HotbarInventoryService.new({
+		store = ClientMods.InventoryStore,
 		logger = Logger.new("HotbarInventoryService"),
 		slotCount = PhoneLayout.getHotbarMaxSlots(),
 	})
 
 	ensurePlayerGuiChild(playerGui, Config.Backpack.GUI_NAME, 10, hotbarLog)
-	local backpackRefsResult = BackpackGuiRefs.resolve(playerGui)
+	local backpackRefsResult = ClientMods.BackpackGuiRefs.resolve(playerGui)
 	local backpackBinder = nil
 	if backpackRefsResult.ok then
 		MobileScaleService.applyBackpackLayout(backpackRefsResult.value.root)
@@ -1397,15 +1341,15 @@ trackBootTask("HotbarController.init", function()
 		})
 	end
 
-	local inventoryDrag = InventoryDragController.new({
+	local inventoryDrag = ClientMods.InventoryDragController.new({
 		root = refsResult.value.root,
 		hotbarWrapper = refsResult.value.hotbarWrapper,
 		backpackScroll = if backpackRefsResult.ok then backpackRefsResult.value.scrollFrame else nil,
 		getHotbarSlots = function()
-			return InventoryStore:get().hotbarSlots
+			return ClientMods.InventoryStore:get().hotbarSlots
 		end,
 		getBackpackSlots = function()
-			return InventoryStore:get().backpackSlots
+			return ClientMods.InventoryStore:get().backpackSlots
 		end,
 		onReorderHotbar = function(toolKey: string, toIndex: number)
 			service:reorder(toolKey, toIndex)
@@ -1427,7 +1371,7 @@ trackBootTask("HotbarController.init", function()
 		end,
 		onHotbarAssignRejected = function()
 			local maxSlots = PhoneLayout.getHotbarMaxSlots()
-			NotifService.warn(("Hotbar holds at most %d items"):format(maxSlots), {
+			ClientMods.NotifService.warn(("Hotbar holds at most %d items"):format(maxSlots), {
 				dedupeKey = "hotbar-full",
 			})
 		end,
@@ -1443,30 +1387,30 @@ trackBootTask("HotbarController.init", function()
 		end,
 	})
 
-	local binder = HotbarUIBinder.new({
+	local binder = ClientMods.HotbarUIBinder.new({
 		refs = refsResult.value,
-		store = InventoryStore,
+		store = ClientMods.InventoryStore,
 		logger = Logger.new("HotbarUIBinder"),
 		inventoryDrag = inventoryDrag,
 	})
 
 	if inventoryDrag then
 		inventoryDrag:setHotbarPreviewCallback(function(slots)
-			binder:renderHotbarSlots(slots, InventoryStore:get().hasTools)
+			binder:renderHotbarSlots(slots, ClientMods.InventoryStore:get().hasTools)
 		end)
 	end
 
 	if inventoryDrag then
 		-- Track backpack open/close for reorder mode
-		InventoryStore:subscribe("isBackpackOpen", function(isOpen: boolean)
+		ClientMods.InventoryStore:subscribe("isBackpackOpen", function(isOpen: boolean)
 			inventoryDrag:setBackpackOpen(isOpen)
 		end)
 	end
 
 	if backpackRefsResult.ok then
-		backpackBinder = BackpackUIBinder.new({
+		backpackBinder = ClientMods.BackpackUIBinder.new({
 			refs = backpackRefsResult.value,
-			store = InventoryStore,
+			store = ClientMods.InventoryStore,
 			logger = Logger.new("BackpackUIBinder"),
 			inventoryDrag = inventoryDrag,
 		})
@@ -1480,7 +1424,7 @@ trackBootTask("HotbarController.init", function()
 	if Config.FeatureFlags.StickersEnabled ~= false then
 		stickerCtrl = trackClientLifecycle(
 			"StickerController",
-			StickerController.create({
+			ClientMods.StickerController.create({
 				remotes = Remotes,
 				logger = Logger.new("StickerController"),
 			})
@@ -1505,7 +1449,7 @@ trackBootTask("HotbarController.init", function()
 	end)
 	local controller = trackClientLifecycle(
 		"HotbarController",
-		HotbarController.new({
+		ClientMods.HotbarController.new({
 			logger = Logger.new("HotbarController"),
 			service = service,
 			binder = binder,
@@ -1536,8 +1480,8 @@ if Config.FeatureFlags.SyncDanceEnabled then
 		local deferDanceWarmup = ClientBootConfig.DEFER_DANCE_WARMUP ~= false
 		danceWarmupService = trackClientLifecycle(
 			"DanceWarmupService",
-			createDanceWarmupService.create({
-				store = SyncStore,
+			ClientMods.createDanceWarmupService.create({
+				store = ClientMods.SyncStore,
 				config = Config,
 				logger = Logger.new("DanceWarmupService"),
 				animationLoader = AnimationLoader,
@@ -1546,8 +1490,8 @@ if Config.FeatureFlags.SyncDanceEnabled then
 		)
 		syncDanceController = trackClientLifecycle(
 			"SyncController",
-			createSyncController.create({
-				store = SyncStore,
+			ClientMods.createSyncController.create({
+				store = ClientMods.SyncStore,
 				config = Config,
 				logger = Logger.new("SyncController"),
 				danceWarmupService = danceWarmupService,
@@ -1586,7 +1530,7 @@ if Config.FeatureFlags.SyncDanceEnabled then
 
 		syncLeadTopbarController = trackClientLifecycle(
 			"SyncLeadTopbarController",
-			createSyncLeadTopbarController({
+			ClientMods.createSyncLeadTopbarController({
 				icon = syncLeadIcon,
 				iconFactory = function()
 					return Icon.new()
@@ -1595,10 +1539,10 @@ if Config.FeatureFlags.SyncDanceEnabled then
 			})
 		)
 		local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
-		local refs = DancePanelGuiRefs.resolve(playerGui, Config)
+		local refs = ClientMods.DancePanelGuiRefs.resolve(playerGui, Config)
 		local emotePanel = trackClientLifecycle(
 			"DancePanelUIBinder",
-			DancePanelUIBinder.new({
+			ClientMods.DancePanelUIBinder.new({
 				refs = refs,
 				config = Config,
 			})
@@ -1617,7 +1561,7 @@ if Config.FeatureFlags.SyncDanceEnabled then
 		end)
 		emotePanel:bindFavoriteToggle(function(animationName)
 			syncDanceController:onFavoriteToggled(animationName)
-			emotePanel:setFavorites(SyncStore:get().favoritedAnims)
+			emotePanel:setFavorites(ClientMods.SyncStore:get().favoritedAnims)
 		end)
 		emotePanel:bindSpeedChanged(function(speed)
 			syncDanceController:onSpeedChanged(speed)
@@ -1630,7 +1574,7 @@ if Config.FeatureFlags.SyncDanceEnabled then
 				return HttpService:JSONDecode(raw)
 			end)
 			if ok and type(decoded) == "table" then
-				SyncStore:set({ favoritedAnims = decoded })
+				ClientMods.SyncStore:set({ favoritedAnims = decoded })
 				emotePanel:setFavorites(decoded, true)
 			end
 		end
@@ -1649,40 +1593,40 @@ if Config.FeatureFlags.SyncDanceEnabled then
 			AnimationLoader.getAnimationsByCategory("Dance"),
 			AnimationLoader.getAnimationsByCategory("Pose")
 		)
-		emotePanel:setFavorites(SyncStore:get().favoritedAnims, true)
+		emotePanel:setFavorites(ClientMods.SyncStore:get().favoritedAnims, true)
 		local syncDanceSubscriptions =
 			trackClientLifecycle("SyncDanceSubscriptions", createSubscriptionGroup("SyncDanceSubscriptions"))
 		local function refreshSyncOverlay()
-			local state = SyncStore:get()
+			local state = ClientMods.SyncStore:get()
 			emotePanel:setSyncOverlay(state.isSyncing, state.leaderDisplay, state.visualAnim)
 		end
 		-- Dance panel stays above other UI; it does not use MobilePanelManager focus hiding.
-		syncDanceSubscriptions:subscribe(SyncStore, "isPanelOpen", function(isOpen)
+		syncDanceSubscriptions:subscribe(ClientMods.SyncStore, "isPanelOpen", function(isOpen)
 			emotePanel:setOpen(isOpen)
 		end)
-		syncDanceSubscriptions:subscribe(SyncStore, "favoritedAnims", function(favorites)
+		syncDanceSubscriptions:subscribe(ClientMods.SyncStore, "favoritedAnims", function(favorites)
 			emotePanel:setFavorites(favorites, true)
 		end)
-		syncDanceSubscriptions:subscribe(SyncStore, "isDancePreparing", function(isPreparing)
+		syncDanceSubscriptions:subscribe(ClientMods.SyncStore, "isDancePreparing", function(isPreparing)
 			emotePanel:setPreparingState(isPreparing)
 		end)
-		syncDanceSubscriptions:subscribe(SyncStore, "isSyncing", refreshSyncOverlay)
-		syncDanceSubscriptions:subscribe(SyncStore, "syncTargetUserId", refreshSyncOverlay)
-		emotePanel:setPreparingState(SyncStore:get().isDancePreparing)
-		emotePanel:setCurrentSpeed(SyncStore:get().currentSpeed, true)
-		emotePanel:setOpen(SyncStore:get().isPanelOpen, true)
+		syncDanceSubscriptions:subscribe(ClientMods.SyncStore, "isSyncing", refreshSyncOverlay)
+		syncDanceSubscriptions:subscribe(ClientMods.SyncStore, "syncTargetUserId", refreshSyncOverlay)
+		emotePanel:setPreparingState(ClientMods.SyncStore:get().isDancePreparing)
+		emotePanel:setCurrentSpeed(ClientMods.SyncStore:get().currentSpeed, true)
+		emotePanel:setOpen(ClientMods.SyncStore:get().isPanelOpen, true)
 		refreshSyncOverlay()
-		syncDanceSubscriptions:subscribe(SyncStore, "visualAnim", function(animName)
+		syncDanceSubscriptions:subscribe(ClientMods.SyncStore, "visualAnim", function(animName)
 			emotePanel:updateSyncAnimName(animName)
 		end)
-		syncDanceSubscriptions:subscribe(SyncStore, "leaderDisplay", function(leaderDisplay)
-			if SyncStore:get().isSyncing then
-				emotePanel:setSyncOverlay(true, leaderDisplay, SyncStore:get().visualAnim)
+		syncDanceSubscriptions:subscribe(ClientMods.SyncStore, "leaderDisplay", function(leaderDisplay)
+			if ClientMods.SyncStore:get().isSyncing then
+				emotePanel:setSyncOverlay(true, leaderDisplay, ClientMods.SyncStore:get().visualAnim)
 			end
 		end)
 		local triggerController = trackClientLifecycle(
 			"SyncPanelTriggerController",
-			createSyncPanelTriggerController.create({
+			ClientMods.createSyncPanelTriggerController.create({
 				config = Config,
 				logger = Logger.new("SyncPanelTriggerController"),
 				onTriggered = function()
@@ -1703,14 +1647,14 @@ trackBootTask("CarryController.init", function()
 		return
 	end
 
-	local carryUI = trackClientLifecycle("CarryUI", createCarryUI({ logger = Logger.new("CarryUI") }))
+	local carryUI = trackClientLifecycle("CarryUI", ClientMods.createCarryUI({ logger = Logger.new("CarryUI") }))
 	carryController = trackClientLifecycle(
 		"CarryController",
-		createCarryController.create({
+		ClientMods.createCarryController.create({
 			config = Config,
 			logger = Logger.new("CarryController"),
 			ui = carryUI,
-			store = CarryStore,
+			store = ClientMods.CarryStore,
 			domain = CarryDomain,
 		})
 	)
@@ -1718,10 +1662,10 @@ trackBootTask("CarryController.init", function()
 end)
 
 trackBootTask("AvatarContextController.init", function()
-	local avatarContextUI = createAvatarContextUI({ logger = Logger.new("AvatarContextUI") })
+	local avatarContextUI = ClientMods.createAvatarContextUI({ logger = Logger.new("AvatarContextUI") })
 	local avatarContextCtrl = trackClientLifecycle(
 		"AvatarContextController",
-		createAvatarContextController({
+		ClientMods.createAvatarContextController({
 			logger = Logger.new("AvatarContextController"),
 			ui = avatarContextUI,
 			getCachedOverheadPayload = OverheadController.getCachedPayload,
@@ -1739,7 +1683,7 @@ trackBootTask("AvatarContextController.init", function()
 		local localPlayer = Players.LocalPlayer
 		local character = localPlayer and localPlayer.Character
 		local isLeader = character and character:GetAttribute("IsLeader") == true
-		local state = SyncStore:get()
+		local state = ClientMods.SyncStore:get()
 		if isLeader and not state.isSyncing
 			and type(syncDanceController.requestTransferLeadByUserId) == "function"
 		then
@@ -1778,11 +1722,11 @@ trackBootTask("AvatarContextController.init", function()
 			createSubscriptionGroup("AvatarContextSyncSubscriptions")
 		)
 		local function refreshAvatarSyncState()
-			local state = SyncStore:get()
+			local state = ClientMods.SyncStore:get()
 			avatarContextUI:setSyncState(state.isSyncing, state.syncTargetUserId)
 		end
-		avatarSyncSubscriptions:subscribe(SyncStore, "isSyncing", refreshAvatarSyncState)
-		avatarSyncSubscriptions:subscribe(SyncStore, "syncTargetUserId", refreshAvatarSyncState)
+		avatarSyncSubscriptions:subscribe(ClientMods.SyncStore, "isSyncing", refreshAvatarSyncState)
+		avatarSyncSubscriptions:subscribe(ClientMods.SyncStore, "syncTargetUserId", refreshAvatarSyncState)
 		refreshAvatarSyncState()
 
 		-- Mirror Character.IsLeader so Avatar Context sync action switches to Transfer Lead when followers exist.
@@ -1815,7 +1759,7 @@ end)
 -- Leaderboard tidak blocking loading screen — diinisialisasi di background
 if Config.FeatureFlags.LeaderboardEnabled ~= false then
 	task.spawn(function()
-		DonationLeaderboardController.init({})
+		ClientMods.DonationLeaderboardController.init({})
 	end)
 end
 
@@ -1829,17 +1773,17 @@ if Config.FeatureFlags.MusicPlayerEnabled then
 			_musicLog:warn("GUI tidak ditemukan — panel disabled", { name = Config.Music.GUI_NAME })
 			return nil
 		end
-		local refs = MusicPlayerGuiRefs.resolve(playerGui)
-		local binder = MusicPlayerUIBinder.new({
+		local refs = ClientMods.MusicPlayerGuiRefs.resolve(playerGui)
+		local binder = ClientMods.MusicPlayerUIBinder.new({
 			refs = refs,
-			store = MusicPlayerStore,
+			store = ClientMods.MusicPlayerStore,
 			config = Config.Music,
 		})
 		return trackClientLifecycle(
 			"MusicPlayerController",
-			MusicPlayerController.create({
+			ClientMods.MusicPlayerController.create({
 				refs = refs,
-				store = MusicPlayerStore,
+				store = ClientMods.MusicPlayerStore,
 				binder = binder,
 				remotes = Remotes,
 				config = Config.Music,

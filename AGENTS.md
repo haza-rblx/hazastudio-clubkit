@@ -157,6 +157,15 @@ Untuk fresh install atau kirim GUI/board/models ke buyer tanpa Rojo: Studio → 
 - Match style file sekitar
 - Jangan commit kecuali user minta
 
+### Luau local-register budget (~200)
+
+Luau crashes with `Out of local registers` if a function/chunk exceeds ~200 locals. **Main.server / Main.client** and fat UI binders are hottest.
+
+- Prefer `Client/Init/*` or `Server/Init/*` bags (one `require` → table of modules) over adding more top-level `local X = require(...)` to Main.
+- Do **not** unpack bag fields back into many top-level `local`s — that defeats the point.
+- Treat ≥170 top-level `^local` as freeze; ≥185 as treat-as-blocker before merge.
+- Check: `.\tools\count-locals.ps1` (optional `-FailAt 185`).
+
 ## Area sensitif
 
 - `Config.luau` — shared constants; buyer biasanya pakai `ClubKitConfig.luau`

@@ -8,88 +8,11 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local KitProduct = require(ReplicatedStorage.Hazastudio_ClubKit.KitProduct)
 
--- Services
-local createOverheadService = require(script.Parent.Services.OverheadService)
-local createGiftService = require(script.Parent.Services.GiftService)
-local createStreakService = require(script.Parent.Services.StreakService)
-local createLevelService = require(script.Parent.Services.LevelService)
-local createCoupleService = require(script.Parent.Services.CoupleService)
-local createShopService = require(script.Parent.Services.ShopService)
-local createPlayerLookupService = require(script.Parent.Services.PlayerLookupService)
-local createChatCommandService = require(script.Parent.Services.ChatCommandService)
-local createMembershipCommandService = require(script.Parent.Services.MembershipCommandService)
-local createCommunityCommandService = require(script.Parent.Services.CommunityCommandService)
-local createProfileSocialService = require(script.Parent.Services.ProfileSocialService)
-local createAvatarContextService = require(script.Parent.Services.AvatarContextService)
-local createAvatarLikeService = require(script.Parent.Services.AvatarLikeService)
-local createCarryService = require(script.Parent.Services.CarryService)
-local createGravityService = require(script.Parent.Services.GravityService)
-local createProfileCommandService = require(script.Parent.Services.ProfileCommandService)
-local createProfileMenuService = require(script.Parent.Services.ProfileMenuService)
-local createSessionCommandService = require(script.Parent.Services.SessionCommandService)
-local createAfkGuardService = require(script.Parent.Services.AfkGuardService)
-local createCommandExecutionService = require(script.Parent.Services.CommandExecutionService)
-local createSyncService = require(script.Parent.Services.SyncService)
-local createDonationService = require(script.Parent.Services.DonationService)
-local LicenseService = require(script.Parent.Services.LicenseService)
-local createDonationEffectService = require(script.Parent.Services.DonationEffectService)
-local createStickerService = require(script.Parent.Services.StickerService)
-local createSettingsService = require(script.Parent.Services.SettingsService)
-local RoleToolService = require(script.Parent.Services.RoleToolService)
-local createPlayerSnapshotService = require(script.Parent.Services.PlayerSnapshotService)
-local createBackgroundJobScheduler = require(script.Parent.Services.BackgroundJobScheduler)
--- Interest management (P0-1: wires up the pre-built but previously dead InterestManager)
-local InterestManager = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.InterestManager)
-local createProximityInterestService = require(script.Parent.Services.ProximityInterestService)
--- Controllers
-local createOverheadController = require(script.Parent.Controllers.OverheadController)
-local createCoupleController = require(script.Parent.Controllers.CoupleController)
-local createShopController = require(script.Parent.Controllers.ShopController)
-local createStreakController = require(script.Parent.Controllers.StreakController)
-local createLevelController = require(script.Parent.Controllers.LevelController)
-local createAdminController = require(script.Parent.Controllers.AdminController)
-local createAvatarContextController = require(script.Parent.Controllers.AvatarContextController)
-local createAvatarLikeController = require(script.Parent.Controllers.AvatarLikeController)
-local createCarryController = require(script.Parent.Controllers.CarryController)
-local createGravityController = require(script.Parent.Controllers.GravityController)
-local createProfileMenuController = require(script.Parent.Controllers.ProfileMenuController)
-local createCommandLibraryController = require(script.Parent.Controllers.CommandLibraryController)
-local createChatCommandController = require(script.Parent.Controllers.ChatCommandController)
-local createSyncController = require(script.Parent.Controllers.SyncController)
-local createDonationController = require(script.Parent.Controllers.DonationController)
-local createStickerController = require(script.Parent.Controllers.StickerController)
-local createSettingsController = require(script.Parent.Controllers.SettingsController)
-local createGenericBroadcastService = require(script.Parent.Services.GenericBroadcastService)
-local createJoinGreetingService = require(script.Parent.Services.JoinGreetingService)
-local createJoinCommunityMembersService = require(script.Parent.Services.JoinCommunityMembersService)
-local createCommunityVipService = require(script.Parent.Services.CommunityVipService)
-local createPaidBroadcastController = require(script.Parent.Controllers.PaidBroadcastController)
-local createCinematicDockController = require(script.Parent.Controllers.CinematicDockController)
--- Repository
-local OverheadRepository = require(script.Parent.Repositories.OverheadRepository)
-local ProfileRepository = require(script.Parent.Repositories.ProfileRepository)
-local createAboutRosterRepository = require(script.Parent.Repositories.AboutRosterRepository)
-local AvatarLikeRepository = require(script.Parent.Repositories.AvatarLikeRepository)
-local DonationLeaderboardRepository = require(script.Parent.Repositories.DonationLeaderboardRepository)
-local GiftPendingRepository = require(script.Parent.Repositories.GiftPendingRepository)
-local ManualBagibagiRepository = require(script.Parent.Repositories.ManualBagibagiRepository)
-local StickerRepository = require(script.Parent.Repositories.StickerRepository)
-local SettingsRepository = require(script.Parent.Repositories.SettingsRepository)
-local FavoritesRepository = require(script.Parent.Repositories.FavoritesRepository)
-local ProfileLoader = require(script.Parent.Repositories.ProfileLoader)
+-- Module bag: keeps Main under Luau 200-local register limit.
+local ServerMods = require(script.Parent.Init.ServerModuleBag)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local ConsoleBanner = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.ConsoleBanner)
 local Lifecycle = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Lifecycle)
-local HttpApiCounter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.HttpApiCounter)
-local Result = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Result)
-local Validator = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Validator)
-local RateLimiter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.RateLimiter)
-local TaskQueue = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.TaskQueue)
-local EventBus = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.EventBus)
-local CarryDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.CarryDomain)
-local SyncDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.SyncDomain)
-local NetworkManager = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.NetworkManager)
-local AnimationLoader = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.ContextModule.AnimationLoader)
 local provisionEarlyRemotes = require(script.Parent.Init.EarlyRemotes)
 local Cleaner = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Cleaner)
 local Cache = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Cache)
@@ -177,12 +100,12 @@ local donationApiReady = type(donationApiUrl) == "string"
 	and Secrets.DonationApiSecret ~= ""
 
 if KitProduct.LicenseEnforcementEnabled == true then
-	LicenseService.start({
+	ServerMods.LicenseService.start({
 		apiUrl = donationApiUrl,
 		secret = Secrets.DonationApiSecret,
 	})
-	LicenseService.awaitInitialCheck(10)
-	local licenseState = LicenseService.getState()
+	ServerMods.LicenseService.awaitInitialCheck(10)
+	local licenseState = ServerMods.LicenseService.getState()
 	if licenseState.lastError then
 		log:warn("License verify on boot", {
 			status = licenseState.status,
@@ -194,7 +117,7 @@ if KitProduct.LicenseEnforcementEnabled == true then
 end
 
 local serverLifecycle = Lifecycle.new(Logger.new("ServerLifecycle"))
-local eventBus = EventBus.new()
+local eventBus = ServerMods.EventBus.new()
 
 local function trackLifecycle(name: string, module: any): any
 	return serverLifecycle:register(name, module)
@@ -373,11 +296,11 @@ local function normalizeNotifyPayload(
 	return payload
 end
 
--- ── NetworkManager — per-frame batched transport ─────────────
+-- ── ServerMods.NetworkManager — per-frame batched transport ─────────────
 -- Batches all outbound FireClient calls within a frame into a
 -- single Heartbeat flush. Reduces per-call overhead at high CCU.
 -- See: Guidelines/REF_ARCHITECTURE.md (Network Transport section)
-local networkManager = NetworkManager.create({
+local networkManager = ServerMods.NetworkManager.create({
 	reliable = NotifyRemote,
 	unreliable = CosmeticRemote,
 	logger = Logger.new("NetworkManager"),
@@ -390,7 +313,7 @@ local Notify: INotify = {
 		if not payload then
 			return
 		end
-		-- v2.1: batched via NetworkManager
+		-- v2.1: batched via ServerMods.NetworkManager
 		networkManager:fireClient(player, payload)
 	end,
 	all = function(messageOrPayload: NotifyInput, notifType: string?)
@@ -398,47 +321,47 @@ local Notify: INotify = {
 		if not payload then
 			return
 		end
-		-- v2.1: batched via NetworkManager
+		-- v2.1: batched via ServerMods.NetworkManager
 		networkManager:fireAllClients(payload)
 	end,
 }
 -- ============================================================
 -- WIRING DEPENDENCIES
 -- ============================================================
-local repo = OverheadRepository
-local aboutRosterRepository = createAboutRosterRepository()
-local profileRepo = ProfileRepository.new({ logger = Logger.new("ProfileRepository") })
-local avatarLikeRepository = AvatarLikeRepository.new({ logger = Logger.new("AvatarLikeRepository") })
+local repo = ServerMods.OverheadRepository
+local aboutRosterRepository = ServerMods.createAboutRosterRepository()
+local profileRepo = ServerMods.ProfileRepository.new({ logger = Logger.new("ProfileRepository") })
+local avatarLikeRepository = ServerMods.AvatarLikeRepository.new({ logger = Logger.new("AvatarLikeRepository") })
 local donationLeaderboardRepository =
-	DonationLeaderboardRepository.new({ logger = Logger.new("DonationLeaderboardRepository") })
-local giftPendingRepository = GiftPendingRepository.create({
+	ServerMods.DonationLeaderboardRepository.new({ logger = Logger.new("DonationLeaderboardRepository") })
+local giftPendingRepository = ServerMods.GiftPendingRepository.create({
 	logger = Logger.new("GiftPendingRepository"),
 })
-local manualBagibagiRepository = ManualBagibagiRepository.create({
+local manualBagibagiRepository = ServerMods.ManualBagibagiRepository.create({
 	logger = Logger.new("ManualBagibagiRepository"),
 })
 
 -- DonationEffectService is constructed after CinematicDockController so the
 -- camera trigger callback can be wired in.
-local profileSocialService = createProfileSocialService({ logger = Logger.new("ProfileSocialService") })
-local settingsRepo = SettingsRepository
-local settingsService = createSettingsService({
+local profileSocialService = ServerMods.createProfileSocialService({ logger = Logger.new("ProfileSocialService") })
+local settingsRepo = ServerMods.SettingsRepository
+local settingsService = ServerMods.createSettingsService({
 	logger = Logger.new("SettingsService"),
 	repo = settingsRepo,
 })
-local profileCommandService = createProfileCommandService({
+local profileCommandService = ServerMods.createProfileCommandService({
 	logger = Logger.new("ProfileCommandService"),
 	profileRepository = profileRepo,
 })
 -- PlayerSnapshotService: in-memory cache for fast ACM lookups
-local playerSnapshotService = createPlayerSnapshotService.create({
+local playerSnapshotService = ServerMods.createPlayerSnapshotService.create({
 	logger = Logger.new("PlayerSnapshotService"),
 })
 -- BackgroundJobScheduler: centralized periodic job management
-local backgroundJobScheduler = createBackgroundJobScheduler.create({
+local backgroundJobScheduler = ServerMods.createBackgroundJobScheduler.create({
 	logger = Logger.new("BackgroundJobScheduler"),
 })
-local overheadService = createOverheadService({
+local overheadService = ServerMods.createOverheadService({
 	repo = repo,
 	avatarLikeRepository = avatarLikeRepository,
 	profileRepository = profileRepo,
@@ -447,13 +370,13 @@ local overheadService = createOverheadService({
 	donationLeaderboardRepository = donationLeaderboardRepository,
 	donationService = nil :: any, -- assigned post-init via overheadService:setDonationService
 })
-local profileMenuService = createProfileMenuService({
+local profileMenuService = ServerMods.createProfileMenuService({
 	logger = Logger.new("ProfileMenuService"),
 	profileRepository = profileRepo,
 	overheadRepository = repo,
 	profileCommandService = profileCommandService,
 })
-local avatarContextService = createAvatarContextService({
+local avatarContextService = ServerMods.createAvatarContextService({
 	logger = Logger.new("AvatarContextService"),
 	overheadService = overheadService,
 	profileSocialService = profileSocialService,
@@ -462,15 +385,15 @@ local avatarContextService = createAvatarContextService({
 	avatarLikeRepository = avatarLikeRepository,
 	playerSnapshotService = playerSnapshotService,
 })
-local avatarLikeService = createAvatarLikeService({
+local avatarLikeService = ServerMods.createAvatarLikeService({
 	logger = Logger.new("AvatarLikeService"),
 	avatarLikeRepository = avatarLikeRepository,
 })
 local carryService = trackLifecycle(
 	"CarryService",
-	createCarryService({
+	ServerMods.createCarryService({
 		config = Config,
-		domain = CarryDomain,
+		domain = ServerMods.CarryDomain,
 		logger = Logger.new("CarryService"),
 	})
 )
@@ -478,7 +401,7 @@ local gravityService: any = nil
 if Config.FeatureFlags.GravityEnabled ~= false then
 	gravityService = trackLifecycle(
 		"GravityService",
-		createGravityService({
+		ServerMods.createGravityService({
 			carryService = carryService,
 			notify = Notify,
 		})
@@ -486,50 +409,50 @@ if Config.FeatureFlags.GravityEnabled ~= false then
 end
 local stickerService = trackLifecycle(
 	"StickerService",
-	createStickerService.new({
+	ServerMods.createStickerService.new({
 		logger = Logger.new("StickerService"),
-		repository = StickerRepository,
+		repository = ServerMods.StickerRepository,
 		-- profileLoader wired after SharedProfileLoader is created (before startAll).
 	})
 )
 trackLifecycle(
 	"RoleToolService",
-	RoleToolService.new({
+	ServerMods.RoleToolService.new({
 		logger = Logger.new("RoleToolService"),
 		eventBus = eventBus,
 		overheadService = overheadService,
 	})
 )
-local _giftService = createGiftService({
+local _giftService = ServerMods.createGiftService({
 	repo = repo,
 	overheadService = overheadService,
 })
-local streakService = createStreakService({ repo = repo })
+local streakService = ServerMods.createStreakService({ repo = repo })
 local levelService: any = nil
 if Config.FeatureFlags.LevelSystemEnabled then
-	levelService = createLevelService({ repo = repo })
+	levelService = ServerMods.createLevelService({ repo = repo })
 end
-local coupleService = trackLifecycle("CoupleService", createCoupleService({ repo = repo }))
-local playerLookupService = createPlayerLookupService()
-local chatCommandService = createChatCommandService()
-local genericBroadcastNetwork = NetworkManager.create({
+local coupleService = trackLifecycle("CoupleService", ServerMods.createCoupleService({ repo = repo }))
+local playerLookupService = ServerMods.createPlayerLookupService()
+local chatCommandService = ServerMods.createChatCommandService()
+local genericBroadcastNetwork = ServerMods.NetworkManager.create({
 	reliable = GenericBroadcastRemote,
 	logger = Logger.new("GenericBroadcastNetwork"),
 	isServer = true,
 })
-local genericBroadcastService = createGenericBroadcastService({
+local genericBroadcastService = ServerMods.createGenericBroadcastService({
 	broadcastNetwork = genericBroadcastNetwork,
 	overheadService = overheadService,
 	logger = Logger.new("GenericBroadcastService"),
 })
-local joinGreetingNetwork = NetworkManager.create({
+local joinGreetingNetwork = ServerMods.NetworkManager.create({
 	reliable = JoinGreetingRemote,
 	logger = Logger.new("JoinGreetingNetwork"),
 	isServer = true,
 })
 local joinGreetingService = trackLifecycle(
 	"JoinGreetingService",
-	createJoinGreetingService({
+	ServerMods.createJoinGreetingService({
 		broadcastNetwork = joinGreetingNetwork,
 		overheadService = overheadService,
 		logger = Logger.new("JoinGreetingService"),
@@ -537,36 +460,36 @@ local joinGreetingService = trackLifecycle(
 )
 trackLifecycle(
 	"JoinCommunityMembersService",
-	createJoinCommunityMembersService({
+	ServerMods.createJoinCommunityMembersService({
 		remotes = Remotes,
 		logger = Logger.new("JoinCommunityMembersService"),
 	})
 )
-local giftGrantNetwork = NetworkManager.create({
+local giftGrantNetwork = ServerMods.NetworkManager.create({
 	reliable = ShopGrantRemote,
 	logger = Logger.new("GiftGrantNetwork"),
 	isServer = true,
 })
-local paidBroadcastResultNetwork = NetworkManager.create({
+local paidBroadcastResultNetwork = ServerMods.NetworkManager.create({
 	reliable = _PaidBroadcastResultRemote,
 	logger = Logger.new("PaidBroadcastResultNetwork"),
 	isServer = true,
 })
-local _paidBroadcastController = createPaidBroadcastController({
+local _paidBroadcastController = ServerMods.createPaidBroadcastController({
 	remotes = Remotes,
 	notify = Notify,
 	genericBroadcastService = genericBroadcastService,
 	resultNetwork = paidBroadcastResultNetwork,
 })
 _paidBroadcastController:init()
-local _cinematicDockController = createCinematicDockController({
+local _cinematicDockController = ServerMods.createCinematicDockController({
 	remotes = Remotes,
 	notify = Notify,
 	overheadService = overheadService,
 })
 -- DonationEffectService relies on CinematicDockController for the camera
 -- trigger. The callback runs whenever a tier has `cameraDuration > 0`.
-local donationEffectService = createDonationEffectService({
+local donationEffectService = ServerMods.createDonationEffectService({
 	logger = Logger.new("DonationEffectService"),
 	cameraTrigger = function(targetPlayer: Player, durationSeconds: number)
 		if _cinematicDockController and type(_cinematicDockController.focusOnPlayer) == "function" then
@@ -586,25 +509,25 @@ local _musicService = nil
 -- Exactly ONE shared instance injected into both OverheadController
 -- and SyncService (composition-root rule — never instantiated elsewhere).
 -- ============================================================
-local interestManager = InterestManager.create({
+local interestManager = ServerMods.InterestManager.create({
 	logger = Logger.new("InterestManager"),
 })
-local proximityService = createProximityInterestService.create({
+local proximityService = ServerMods.createProximityInterestService.create({
 	interest = interestManager,
 	config = Config.Interest,
 	logger = Logger.new("ProximityInterestService"),
 })
-local overheadController = createOverheadController({
+local overheadController = ServerMods.createOverheadController({
 	service = overheadService,
 	remotes = Remotes, -- inject Remotes folder ke factory
 	eventBus = eventBus,
 	proximity = proximityService,   -- R1.3: shared ProximityInterestService
-	interest = interestManager,     -- R1.3: shared InterestManager
+	interest = interestManager,     -- R1.3: shared ServerMods.InterestManager
 	playerSnapshotService = playerSnapshotService,
 })
 local communityVipService = trackLifecycle(
 	"CommunityVipService",
-	createCommunityVipService({
+	ServerMods.createCommunityVipService({
 		repo = repo,
 		overheadController = overheadController,
 		overheadService = overheadService,
@@ -612,7 +535,7 @@ local communityVipService = trackLifecycle(
 		logger = Logger.new("CommunityVipService"),
 	})
 )
-local streakController = createStreakController({
+local streakController = ServerMods.createStreakController({
 	streakService = streakService,
 	overheadController = overheadController,
 	remotes = Remotes,
@@ -620,7 +543,7 @@ local streakController = createStreakController({
 -- Join-time DataStore read serialization. All heavy per-player reads that run on
 -- PlayerAdded go through this single queue so a join storm does not fan out
 -- hundreds of concurrent DataStore requests and saturate the per-server budget.
-local sharedProfileLoader = ProfileLoader.create({
+local sharedProfileLoader = ServerMods.ProfileLoader.create({
 	logger = Logger.new("SharedProfileLoader"),
 	concurrency = Config.ProfileLoader.MAX_CONCURRENCY,
 	perPlayerConcurrency = Config.ProfileLoader.PER_PLAYER_CONCURRENCY,
@@ -637,13 +560,13 @@ end)
 -- Dance favorites must be registered before the first enqueue so SyncDance join
 -- does not need a second sharedProfileLoader:enqueue (which duplicated reads).
 if Config.FeatureFlags.SyncDanceEnabled then
-	syncFavoritesRepo = FavoritesRepository.new({
+	syncFavoritesRepo = ServerMods.FavoritesRepository.new({
 		config = Config.Favorites,
 		logger = Logger.new("FavoritesRepository"),
 	})
 	sharedProfileLoader:register("favorites", function(player: Player)
 		syncFavoritesRepo:onPlayerAdded(player)
-		return Result.Ok(true)
+		return ServerMods.Result.Ok(true)
 	end)
 end
 local OVERHEAD_JOIN_RETRY_DELAYS = { 2, 5, 10 }
@@ -721,16 +644,16 @@ connectionCleaner:add(Players.PlayerAdded:Connect(function(player)
 	sharedProfileLoader:enqueue(player)
 end))
 -- warmPlayerSocialSnapshot is defined after AvatarContextController (needs pushContextUpdate).
-local shopService = createShopService({
+local shopService = ServerMods.createShopService({
 	repo = repo,
 	logger = Logger.new("ShopService"),
 	giftPendingRepository = giftPendingRepository,
 })
-local membershipCommandService = createMembershipCommandService({
+local membershipCommandService = ServerMods.createMembershipCommandService({
 	repo = repo,
 	overheadService = overheadService,
 })
-local communityCommandService = createCommunityCommandService({
+local communityCommandService = ServerMods.createCommunityCommandService({
 	repo = repo,
 	overheadService = overheadService,
 })
@@ -738,7 +661,7 @@ local communityCommandService = createCommunityCommandService({
 -- after it mutates overhead-backed profile fields (e.g. specialTitle). The
 -- ProfileMenuController is constructed later; we populate `syncPlayer` then.
 local profileMenuSync: { syncPlayer: ((Player) -> ())? } = { syncPlayer = nil }
-local _adminController = createAdminController({
+local _adminController = ServerMods.createAdminController({
 	repo = repo,
 	overheadService = overheadService,
 	overheadController = overheadController,
@@ -750,7 +673,7 @@ local _adminController = createAdminController({
 	profileMenuSync = profileMenuSync,
 })
 if Config.FeatureFlags.CouplesEnabled ~= false then
-	createCoupleController({
+	ServerMods.createCoupleController({
 		coupleService = coupleService,
 		overheadController = overheadController,
 		repo = repo,
@@ -761,17 +684,17 @@ end
 -- DonationService is constructed before ShopController because ShopController
 -- needs `recordRobuxDonationDaily()` to update the daily Robux leaderboard.
 local workspaceLeaderboardRefresh: { refresh: (() -> ())? } = { refresh = nil }
-local donationLeaderboardNetwork = NetworkManager.create({
+local donationLeaderboardNetwork = ServerMods.NetworkManager.create({
 	reliable = DonationLeaderboardRemote,
 	logger = Logger.new("DonationLeaderboardNetwork"),
 	isServer = true,
 })
-local donationNotifNetwork = NetworkManager.create({
+local donationNotifNetwork = ServerMods.NetworkManager.create({
 	reliable = DonationNotifRemote,
 	logger = Logger.new("DonationNotifNetwork"),
 	isServer = true,
 })
-local donationService = createDonationService({
+local donationService = ServerMods.createDonationService({
 		repo = repo,
 		overheadController = overheadController,
 		overheadService = overheadService,
@@ -884,7 +807,7 @@ if backgroundJobScheduler then
 		backgroundJobScheduler:register({
 			name = "httpapi_snapshot",
 			callback = function()
-				log:info("HttpApi counter snapshot", HttpApiCounter.snapshot())
+				log:info("HttpApi counter snapshot", ServerMods.HttpApiCounter.snapshot())
 			end,
 			intervalMin = 60,
 			intervalMax = 60,
@@ -894,7 +817,7 @@ if backgroundJobScheduler then
 end
 do
 	if Config.FeatureFlags.ShopEnabled ~= false then
-		local shopController = createShopController({
+		local shopController = ServerMods.createShopController({
 				shopService = shopService,
 				overheadController = overheadController,
 				logger = Logger.new("ShopController"),
@@ -914,16 +837,16 @@ do
 	end
 end
 -- Level system gated by FeatureFlag. Default off; opt-in per game.
--- Persists XP/level via OverheadRepository (schema already supports level/xp fields).
+-- Persists XP/level via ServerMods.OverheadRepository (schema already supports level/xp fields).
 if Config.FeatureFlags.LevelSystemEnabled and levelService then
-	createLevelController({
+	ServerMods.createLevelController({
 		levelService = levelService,
 		overheadService = overheadService,
 		overheadController = overheadController,
 		repo = repo,
 	})
 end
-local _avatarContextController = createAvatarContextController({
+local _avatarContextController = ServerMods.createAvatarContextController({
 	logger = Logger.new("AvatarContextController"),
 	avatarContextService = avatarContextService,
 	profileUpdatedRemote = ProfileUpdatedRemote,
@@ -974,7 +897,7 @@ connectionCleaner:add(Players.PlayerAdded:Connect(function(player)
 end))
 
 do
-	local avatarLikeController = createAvatarLikeController({
+	local avatarLikeController = ServerMods.createAvatarLikeController({
 		logger = Logger.new("AvatarLikeController"),
 		avatarLikeService = avatarLikeService,
 		avatarContextController = _avatarContextController,
@@ -986,17 +909,17 @@ do
 	})
 	avatarLikeController:init()
 end
-createCarryController({
+ServerMods.createCarryController({
 	service = carryService,
 	config = Config,
-	validator = Validator,
-	taskQueue = TaskQueue.new(),
+	validator = ServerMods.Validator,
+	taskQueue = ServerMods.TaskQueue.new(),
 	logger = Logger.new("CarryController"),
 	rateLimiters = {
-		REQUEST = RateLimiter.new(Config.Carry.RATE_LIMITS.REQUEST.max, Config.Carry.RATE_LIMITS.REQUEST.window),
-		ACCEPT = RateLimiter.new(Config.Carry.RATE_LIMITS.ACCEPT.max, Config.Carry.RATE_LIMITS.ACCEPT.window),
-		REJECT = RateLimiter.new(Config.Carry.RATE_LIMITS.REJECT.max, Config.Carry.RATE_LIMITS.REJECT.window),
-		END = RateLimiter.new(Config.Carry.RATE_LIMITS.END.max, Config.Carry.RATE_LIMITS.END.window),
+		REQUEST = ServerMods.RateLimiter.new(Config.Carry.RATE_LIMITS.REQUEST.max, Config.Carry.RATE_LIMITS.REQUEST.window),
+		ACCEPT = ServerMods.RateLimiter.new(Config.Carry.RATE_LIMITS.ACCEPT.max, Config.Carry.RATE_LIMITS.ACCEPT.window),
+		REJECT = ServerMods.RateLimiter.new(Config.Carry.RATE_LIMITS.REJECT.max, Config.Carry.RATE_LIMITS.REJECT.window),
+		END = ServerMods.RateLimiter.new(Config.Carry.RATE_LIMITS.END.max, Config.Carry.RATE_LIMITS.END.window),
 	},
 })
 for _, player in ipairs(Players:GetPlayers()) do
@@ -1020,7 +943,7 @@ if gravityService then
 	end))
 end
 do
-	local profileMenuController = createProfileMenuController({
+	local profileMenuController = ServerMods.createProfileMenuController({
 		logger = Logger.new("ProfileMenuController"),
 		remotes = Remotes,
 		profileMenuService = profileMenuService,
@@ -1038,7 +961,7 @@ end
 do
 	local settingsController = trackLifecycle(
 		"SettingsController",
-		createSettingsController({
+		ServerMods.createSettingsController({
 			logger = Logger.new("SettingsController"),
 			remotes = Remotes,
 			settingsService = settingsService,
@@ -1055,15 +978,15 @@ if Config.FeatureFlags.StickersEnabled ~= false then
 	stickerService._profileLoader = sharedProfileLoader
 	trackLifecycle(
 		"StickerController",
-		createStickerController.new({
+		ServerMods.createStickerController.new({
 			logger = Logger.new("StickerController"),
 			remotes = Remotes,
 			service = stickerService,
 			rateLimiters = {
-				SET = RateLimiter.new(Config.Sticker.RATE_LIMITS.SET.max, Config.Sticker.RATE_LIMITS.SET.window),
-				CLEAR = RateLimiter.new(Config.Sticker.RATE_LIMITS.CLEAR.max, Config.Sticker.RATE_LIMITS.CLEAR.window),
-				ADD = RateLimiter.new(Config.Sticker.RATE_LIMITS.ADD.max, Config.Sticker.RATE_LIMITS.ADD.window),
-				REQUEST = RateLimiter.new(
+				SET = ServerMods.RateLimiter.new(Config.Sticker.RATE_LIMITS.SET.max, Config.Sticker.RATE_LIMITS.SET.window),
+				CLEAR = ServerMods.RateLimiter.new(Config.Sticker.RATE_LIMITS.CLEAR.max, Config.Sticker.RATE_LIMITS.CLEAR.window),
+				ADD = ServerMods.RateLimiter.new(Config.Sticker.RATE_LIMITS.ADD.max, Config.Sticker.RATE_LIMITS.ADD.window),
+				REQUEST = ServerMods.RateLimiter.new(
 					Config.Sticker.RATE_LIMITS.REQUEST.max,
 					Config.Sticker.RATE_LIMITS.REQUEST.window
 				),
@@ -1076,7 +999,7 @@ end
 -- Panggil onStart() untuk semua module yang terdaftar via trackLifecycle.
 -- StickerService dan StickerController ikut di-start di sini.
 serverLifecycle:startAll()
--- Start the proximity recompute loop (drives InterestManager channel membership).
+-- Start the proximity recompute loop (drives ServerMods.InterestManager channel membership).
 -- Must be called AFTER serverLifecycle:startAll() so all other services are live.
 -- The loop connects its own RunService.Heartbeat and Players.PlayerRemoving inside
 -- onStart; the PlayerRemoving wire below also forwards the call for ordering safety.
@@ -1124,36 +1047,36 @@ end))
 local _sessionCommandController
 if Config.FeatureFlags.SyncDanceEnabled then
 	-- syncFavoritesRepo + "favorites" kind already registered before first enqueue.
-	syncService = createSyncService({
+	syncService = ServerMods.createSyncService({
 		config = Config.Sync,
-		domain = SyncDomain,
+		domain = ServerMods.SyncDomain,
 		logger = Logger.new("SyncService"),
-		animationLoader = AnimationLoader,
+		animationLoader = ServerMods.AnimationLoader,
 		proximity = proximityService,  -- R1.3: shared ProximityInterestService
-		interest = interestManager,    -- R1.3: shared InterestManager
+		interest = interestManager,    -- R1.3: shared ServerMods.InterestManager
 	})
-	local syncController = createSyncController({
+	local syncController = ServerMods.createSyncController({
 		service = syncService,
 		config = Config,
-		validator = Validator,
-		taskQueue = TaskQueue.new(),
+		validator = ServerMods.Validator,
+		taskQueue = ServerMods.TaskQueue.new(),
 		logger = Logger.new("SyncController"),
 		favoritesRepository = syncFavoritesRepo,
 		rateLimiters = {
-			ANIM_START = RateLimiter.new(Config.SyncRateLimit.ANIM_START.max, Config.SyncRateLimit.ANIM_START.window),
-			WUTWUT_RESTART = RateLimiter.new(
+			ANIM_START = ServerMods.RateLimiter.new(Config.SyncRateLimit.ANIM_START.max, Config.SyncRateLimit.ANIM_START.window),
+			WUTWUT_RESTART = ServerMods.RateLimiter.new(
 				Config.SyncRateLimit.WUTWUT_RESTART.max,
 				Config.SyncRateLimit.WUTWUT_RESTART.window
 			),
-			SYNC_REQUEST = RateLimiter.new(
+			SYNC_REQUEST = ServerMods.RateLimiter.new(
 				Config.SyncRateLimit.SYNC_REQUEST.max,
 				Config.SyncRateLimit.SYNC_REQUEST.window
 			),
-			SPEED_CHANGE = RateLimiter.new(
+			SPEED_CHANGE = ServerMods.RateLimiter.new(
 				Config.SyncRateLimit.SPEED_CHANGE.max,
 				Config.SyncRateLimit.SPEED_CHANGE.window
 			),
-			FAVORITES_UPDATE = RateLimiter.new(
+			FAVORITES_UPDATE = ServerMods.RateLimiter.new(
 				Config.SyncRateLimit.FAVORITES_UPDATE.max,
 				Config.SyncRateLimit.FAVORITES_UPDATE.window
 			),
@@ -1200,14 +1123,14 @@ if Config.FeatureFlags.SyncDanceEnabled and syncService then
 		then syncRemotesFolder:FindFirstChild(Config.Sync.REMOTE_NOTIFICATION)
 		else nil
 	if syncNotificationRemote and syncNotificationRemote:IsA("RemoteEvent") then
-		syncNotificationNetwork = NetworkManager.create({
+		syncNotificationNetwork = ServerMods.NetworkManager.create({
 			reliable = syncNotificationRemote,
 			logger = Logger.new("AfkSyncNotificationNetwork"),
 			isServer = true,
 		})
 	end
 end
-sessionCommandService = createSessionCommandService({
+sessionCommandService = ServerMods.createSessionCommandService({
 	notify = Notify,
 	syncService = syncService,
 	eventBus = eventBus,
@@ -1222,7 +1145,7 @@ local afkGuardService: any = nil
 if Config.FeatureFlags.AfkGuardEnabled ~= false and Config.AfkGuard.ENABLED == true then
 	afkGuardService = trackLifecycle(
 		"AfkGuardService",
-		createAfkGuardService({
+		ServerMods.createAfkGuardService({
 			notify = Notify,
 			sessionCommandService = sessionCommandService,
 			carryService = carryService,
@@ -1231,7 +1154,7 @@ if Config.FeatureFlags.AfkGuardEnabled ~= false and Config.AfkGuard.ENABLED == t
 	)
 	afkGuardService:init()
 end
-commandExecutionService = createCommandExecutionService({
+commandExecutionService = ServerMods.createCommandExecutionService({
 	profileCommandService = profileCommandService,
 	communityCommandService = communityCommandService,
 	membershipCommandService = membershipCommandService,
@@ -1246,17 +1169,17 @@ commandExecutionService = createCommandExecutionService({
 	grantNetwork = giftGrantNetwork,
 })
 if gravityService then
-	local gravityController = createGravityController({
+	local gravityController = ServerMods.createGravityController({
 		service = gravityService,
 		commandExecutionService = commandExecutionService,
 		overheadService = overheadService,
 		notify = Notify,
 		logger = Logger.new("GravityController"),
-		rateLimiter = RateLimiter.new(Config.Gravity.RATE_MAX, Config.Gravity.RATE_WINDOW),
+		rateLimiter = ServerMods.RateLimiter.new(Config.Gravity.RATE_MAX, Config.Gravity.RATE_WINDOW),
 	})
 	gravityController:init()
 end
-_commandLibraryController = createCommandLibraryController({
+_commandLibraryController = ServerMods.createCommandLibraryController({
 	service = commandExecutionService,
 	remotes = Remotes,
 })
@@ -1264,7 +1187,7 @@ _commandLibraryController:init()
 -- ============================================================
 -- DONATION SERVICE + CONTROLLER
 -- ============================================================
-createDonationController({
+ServerMods.createDonationController({
 	donationService = donationService,
 	overheadService = overheadService,
 	commandExecutionService = commandExecutionService,
@@ -1297,14 +1220,14 @@ if Config.FeatureFlags.MusicPlayerEnabled then
 		sharedProfileLoader = sharedProfileLoader,
 		connectionCleaner = connectionCleaner,
 		trackLifecycle = trackLifecycle,
-		Result = Result,
+		Result = ServerMods.Result,
 		Logger = Logger,
 		log = log,
 	})
 	musicFavoritesRepo = musicBoot.musicFavoritesRepo
 	_musicService = musicBoot.musicService
 end
-local _chatCommandController = createChatCommandController({
+local _chatCommandController = ServerMods.createChatCommandController({
 	chatCommandService = chatCommandService,
 	commandExecutionService = commandExecutionService,
 })
@@ -1356,11 +1279,11 @@ task.spawn(function()
 end)
 -- ============================================================
 -- SCRIPT DESTROYING - cleanup saat Rojo hot-reload di Studio
--- Mencegah accumulation NetworkManager + scheduler di Studio
+-- Mencegah accumulation ServerMods.NetworkManager + scheduler di Studio
 -- ============================================================
 script.Destroying:Connect(function()
 	log:info("Server script destroying — cleaning up resources...")
-	LicenseService.stop()
+	ServerMods.LicenseService.stop()
 	-- Stop the autosave loop so it doesn't keep firing against tearing-down services.
 	autosaveActive = false
 	-- Disconnect top-level Players.PlayerAdded/PlayerRemoving handlers so a
@@ -1374,7 +1297,7 @@ script.Destroying:Connect(function()
 			sharedProfileLoader:destroy()
 		end)
 	end
-	-- Tear down MusicService (poll loop, EventBus sub, PlayerRemoving, sessions).
+	-- Tear down MusicService (poll loop, ServerMods.EventBus sub, PlayerRemoving, sessions).
 	-- Not registered via trackLifecycle, so destroyed here explicitly.
 	if _musicService and type(_musicService.destroy) == "function" then
 		pcall(function()
@@ -1387,7 +1310,7 @@ script.Destroying:Connect(function()
 			syncService:destroy()
 		end)
 	end
-	-- Stop DonationService polling threads sebelum NetworkManager destroy,
+	-- Stop DonationService polling threads sebelum ServerMods.NetworkManager destroy,
 	-- agar loop tidak melanjutkan HTTP request saat resource sudah invalid.
 	if donationService and type(donationService.stopPolling) == "function" then
 		donationService:stopPolling()
@@ -1405,7 +1328,7 @@ script.Destroying:Connect(function()
 			playerSnapshotService:destroy()
 		end)
 	end
-	-- Stop proximity recompute loop and release all InterestManager subscriptions.
+	-- Stop proximity recompute loop and release all ServerMods.InterestManager subscriptions.
 	proximityService:onDestroy()
 	interestManager:destroy()
 	networkManager:destroy()

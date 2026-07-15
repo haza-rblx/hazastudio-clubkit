@@ -1,0 +1,71 @@
+--!strict
+--[[
+	Bundles late-boot client requires so Main.client stays under Luau's
+	200-local register limit. Main holds one local (`ClientMods`) and
+	indexes this table — no behavior change, load order unchanged vs
+	sequential requires (ModuleScripts still cache on first require).
+]]
+
+local Client = script.Parent.Parent
+
+return {
+	NotifController = require(Client.Controllers.NotifController),
+	ChatTagsController = require(Client.Controllers.ChatTagsController),
+	CoupleController = require(Client.Controllers.CoupleController),
+	createShopController = require(Client.Controllers.ShopController),
+	createShopService = require(Client.Services.ShopService),
+	createDonationRobuxService = require(Client.Services.DonationRobuxService),
+	createCommandLibraryService = require(Client.Services.CommandLibraryService),
+	createDanceWarmupService = require(Client.Services.DanceWarmupService),
+	StreakController = require(Client.Controllers.StreakController),
+	AfkGuardController = require(Client.Controllers.AfkGuardController),
+	GiftController = require(Client.Controllers.GiftController),
+	AdminController = require(Client.Controllers.AdminController),
+	createAvatarContextController = require(Client.Controllers.AvatarContextController),
+	createCarryController = require(Client.Controllers.CarryController),
+	createCommandLibraryController = require(Client.Controllers.CommandLibraryController),
+	createSettingsController = require(Client.Controllers.SettingsController),
+	createSyncController = require(Client.Controllers.SyncController),
+	createSyncPanelTriggerController = require(Client.Controllers.SyncPanelTriggerController),
+	HotbarController = require(Client.Controllers.HotbarController),
+	StickerController = require(Client.Controllers.StickerController),
+	DonationLeaderboardController = require(Client.Controllers.DonationLeaderboardController),
+	DonationNotificationController = require(Client.Controllers.DonationNotificationController),
+	DonationSystemController = require(Client.Controllers.DonationSystemController),
+	DonationSystemBootstrap = require(Client.DonationSystemBootstrap),
+	GenericBroadcastController = require(Client.Controllers.GenericBroadcastController),
+	PaidBroadcastController = require(Client.Controllers.PaidBroadcastController),
+	CinematicDockController = require(Client.Controllers.CinematicDockController),
+	TopMenuController = require(Client.Controllers.TopMenuController),
+	createFreecamController = require(Client.Controllers.FreecamController),
+	createGravityController = require(Client.Controllers.GravityController),
+	createMobileFreecamController = require(Client.Controllers.MobileFreecamController),
+	createSyncLeadTopbarController = require(Client.Controllers.SyncLeadTopbarController),
+	createAvatarContextUI = require(Client.UI.AvatarContextUI),
+	createCarryUI = require(Client.UI.CarryUI),
+	createCommandLibraryUI = require(Client.UI.CommandLibraryUI),
+	createSettingsMenuUI = require(Client.UI.SettingsMenuUI),
+	HotbarGuiRefs = require(Client.UI.HotbarGuiRefs),
+	HotbarUIBinder = require(Client.UI.HotbarUIBinder),
+	BackpackGuiRefs = require(Client.UI.BackpackGuiRefs),
+	BackpackUIBinder = require(Client.UI.BackpackUIBinder),
+	InventoryDragController = require(Client.UI.InventoryDragController),
+	DancePanelGuiRefs = require(Client.UI.DancePanelGuiRefs),
+	DancePanelUIBinder = require(Client.UI.DancePanelUIBinder),
+	UISoundHelper = require(Client.Utils.UISoundHelper),
+	AvatarLikeWorldEffect = require(Client.Utils.AvatarLikeWorldEffect),
+	-- Side-effect load (legacy): keep so NukeEffectController still registers listeners.
+	_NukeEffectController = require(Client.Utils.NukeEffectController),
+	StickerBillboardAnimator = require(Client.Utils.StickerBillboardAnimator),
+	CommandLibraryStore = require(Client.State.CommandLibraryStore),
+	CarryStore = require(Client.State.CarryStore),
+	InventoryStore = require(Client.State.InventoryStore),
+	SyncStore = require(Client.State.SyncStore),
+	MusicPlayerStore = require(Client.State.MusicPlayerStore),
+	MusicPlayerController = require(Client.Controllers.MusicPlayerController),
+	MusicPlayerGuiRefs = require(Client.UI.MusicPlayerGuiRefs),
+	MusicPlayerUIBinder = require(Client.UI.MusicPlayerUIBinder),
+	MusicTopbarIcon = require(Client.UI.MusicTopbarIcon),
+	HotbarInventoryService = require(Client.Services.HotbarInventoryService),
+	NotifService = require(Client.Services.NotifService),
+}

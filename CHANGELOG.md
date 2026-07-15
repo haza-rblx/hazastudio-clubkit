@@ -11,6 +11,14 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.36] - 2026-07-15
+
+### Changed
+- **Client Main register headroom** — late-boot `require`s moved to `Client/Init/ClientModuleBag` so `Main.client` stays under the Luau 200-local limit (~184 → ~127 top-level locals).
+- **Server Main register headroom** — services/controllers/repos + shared helpers moved to `Server/Init/ServerModuleBag` (`Main.server` ~189 → ~115). MusicBootstrap + PersistenceFabricHooks unchanged.
+- **MusicPlayerUIBinder headroom** — cover/title helpers extracted to `MusicPlayerCoverHelpers` (~191 → ~158 top-level locals). Behavior unchanged.
+- **Tooling** — `tools/count-locals.ps1` + AGENTS guardrail for the register budget.
+
 ## [2.4.35] - 2026-07-15
 
 ### Fixed
