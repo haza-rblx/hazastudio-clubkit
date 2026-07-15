@@ -13,10 +13,12 @@ Gunakan sebelum rilis patch yang berisi Persistence Fabric.
 
 ## Studio
 
-1. [ ] 1 player idle 5 menit — **0** `DataStore request was added to queue`
-2. [ ] 8–12 clients join staggered — steadystate tanpa queue warn; `budget_exhausted` dari kit boleh
-3. [ ] Edit settings lalu leave — flush sekali; leave tanpa edit settings/favorites — **0** save favorit
-4. [ ] F9 Server: tidak spam `Too many publish requests` / `OverheadInvalidate` (coalesce)
+1. [ ] Kit **2.4.35+** + Music ON — **0** `Out of local registers` (Main boot penuh)
+2. [ ] DonationEffect remotes ada (bukan cascade `remote not found`)
+3. [ ] 1 player idle 5 menit — **0** `DataStore request was added to queue`
+4. [ ] 8–12 clients join staggered — steadystate tanpa queue warn; `budget_exhausted` dari kit boleh
+5. [ ] Edit settings lalu leave — flush sekali; leave tanpa edit settings/favorites — **0** save favorit
+6. [ ] F9 Server: tidak spam `Too many publish requests` / `OverheadInvalidate` (coalesce)
 
 ## Live
 

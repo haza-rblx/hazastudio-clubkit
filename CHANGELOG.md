@@ -11,6 +11,11 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.35] - 2026-07-15
+
+### Fixed
+- **Server Main boot crash (`Out of local registers`)** — Luau 200-local limit hit in `Main.server` when Music enabled (failed at `musicControllerErr`). Persistence Fabric hooks moved to `Init/PersistenceFabricHooks`; Music wiring moved to `Init/MusicBootstrap` so those locals no longer inflate Main's register peak. Restores server boot + remotes (DonationEffect, etc.).
+
 ## [2.4.34] - 2026-07-15
 
 ### Changed

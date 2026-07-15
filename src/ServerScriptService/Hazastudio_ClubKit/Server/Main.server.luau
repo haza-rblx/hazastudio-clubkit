@@ -34,8 +34,6 @@ local createDonationService = require(script.Parent.Services.DonationService)
 local LicenseService = require(script.Parent.Services.LicenseService)
 local createDonationEffectService = require(script.Parent.Services.DonationEffectService)
 local createStickerService = require(script.Parent.Services.StickerService)
-local createMusicService = require(script.Parent.Services.MusicService)
-local createZoneTrackerService = require(script.Parent.Services.ZoneTrackerService)
 local createSettingsService = require(script.Parent.Services.SettingsService)
 local RoleToolService = require(script.Parent.Services.RoleToolService)
 local createPlayerSnapshotService = require(script.Parent.Services.PlayerSnapshotService)
@@ -60,7 +58,6 @@ local createChatCommandController = require(script.Parent.Controllers.ChatComman
 local createSyncController = require(script.Parent.Controllers.SyncController)
 local createDonationController = require(script.Parent.Controllers.DonationController)
 local createStickerController = require(script.Parent.Controllers.StickerController)
-local createMusicController = require(script.Parent.Controllers.MusicController)
 local createSettingsController = require(script.Parent.Controllers.SettingsController)
 local createGenericBroadcastService = require(script.Parent.Services.GenericBroadcastService)
 local createJoinGreetingService = require(script.Parent.Services.JoinGreetingService)
@@ -79,8 +76,6 @@ local ManualBagibagiRepository = require(script.Parent.Repositories.ManualBagiba
 local StickerRepository = require(script.Parent.Repositories.StickerRepository)
 local SettingsRepository = require(script.Parent.Repositories.SettingsRepository)
 local FavoritesRepository = require(script.Parent.Repositories.FavoritesRepository)
-local MusicRepository = require(script.Parent.Repositories.MusicRepository)
-local MusicFavoritesRepository = require(script.Parent.Repositories.MusicFavoritesRepository)
 local ProfileLoader = require(script.Parent.Repositories.ProfileLoader)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local ConsoleBanner = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.ConsoleBanner)
@@ -98,9 +93,8 @@ local AnimationLoader = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Cont
 local provisionEarlyRemotes = require(script.Parent.Init.EarlyRemotes)
 local Cleaner = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Cleaner)
 local Cache = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Cache)
-local PlayerSessionStore = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.PlayerSessionStore)
-local DataStoreScheduler = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DataStoreScheduler)
-local CrossServerCache = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.CrossServerCache)
+-- Persistence Fabric: one Main local only (Luau register limit). Internals live in Init/.
+local PersistenceFabricHooks = require(script.Parent.Init.PersistenceFabricHooks)
 local log = Logger.new(KitProduct.LogTag)
 ConsoleBanner.printOnce(KitProduct)
 -- Tracks top-level Players.PlayerAdded/PlayerRemoving connections so a Rojo
@@ -871,21 +865,7 @@ if backgroundJobScheduler then
 	end
 	-- Persistence Fabric metrics (DEBUG). Interval 0 disables.
 	local metricsInterval = (Config.Persistence and Config.Persistence.METRICS_LOG_INTERVAL) or 60
-	if metricsInterval > 0 then
-		backgroundJobScheduler:register({
-			name = "persistence_fabric_snapshot",
-			callback = function()
-				log:debug("PersistenceFabric snapshot", {
-					scheduler = DataStoreScheduler.getMetrics(),
-					invalidateBus = CrossServerCache.getMetrics(),
-					session = PlayerSessionStore.getMetrics(),
-					openSessions = PlayerSessionStore.openSessionCount(),
-				})
-			end,
-			intervalMin = metricsInterval,
-			intervalMax = metricsInterval,
-		})
-	end
+	PersistenceFabricHooks.registerMetricsJob(backgroundJobScheduler, log, metricsInterval)
 	-- Start the scheduler
 	backgroundJobScheduler:start()
 	log:info("BackgroundJobScheduler started with registered jobs")
@@ -1116,10 +1096,7 @@ connectionCleaner:add(Players.PlayerRemoving:Connect(function(player)
 	end
 	-- Persistence Fabric: flush dirty Overhead/Settings session docs before drop.
 	pcall(function()
-		PlayerSessionStore.flushNow("overhead", player.UserId)
-		PlayerSessionStore.flushNow("settings", player.UserId)
-		PlayerSessionStore.clear("overhead", player.UserId)
-		PlayerSessionStore.clear("settings", player.UserId)
+		PersistenceFabricHooks.onPlayerRemoving(player)
 	end)
 	-- Cancel any outgoing couple requests from this player so they don't
 	-- linger in the pending table (self-healing via 30s expiry, but clearing
@@ -1306,87 +1283,26 @@ connectionCleaner:add(Players.PlayerAdded:Connect(function(player)
 end))
 -- ============================================================
 -- MUSIC SERVICE + CONTROLLER
+-- Bootstrapped in Init/MusicBootstrap so Music locals do not inflate
+-- Main.server's Luau register peak (limit 200).
 -- ============================================================
 if Config.FeatureFlags.MusicPlayerEnabled then
-	do
-		local musicRepo = MusicRepository.new({
-			config = Config.Music,
-			logger = Logger.new("MusicRepository"),
-		})
-		musicFavoritesRepo = MusicFavoritesRepository.new({
-			config = Config.Music,
-			logger = Logger.new("MusicFavoritesRepository"),
-		})
-		-- Fold music favorites GetAsync into SharedProfileLoader (separate from
-		-- SyncDance FavoritesRepository). MusicService.onPlayerAdded still runs
-		-- for session/rank; repo onPlayerAdded is idempotent if already loaded.
-		sharedProfileLoader:register("music_favorites", function(player: Player)
-			musicFavoritesRepo:onPlayerAdded(player)
-			return Result.Ok(true)
-		end)
-		for _, existingPlayer in ipairs(Players:GetPlayers()) do
-			sharedProfileLoader:enqueueKind(existingPlayer, "music_favorites")
-		end
-		connectionCleaner:add(Players.PlayerAdded:Connect(function(player)
-			sharedProfileLoader:enqueueKind(player, "music_favorites")
-		end))
-		local musicService = createMusicService({
-			repo = musicRepo,
-			favoritesRepository = musicFavoritesRepo,
-			overheadRepository = repo,
-			eventBus = eventBus,
-			logger = Logger.new("MusicService"),
-			config = Config.Music,
-			groupId = Config.Group.GROUP_ID,
-			loadFavoritesOnJoin = false,
-		})
-		_musicService = musicService
-		local musicInitOk, musicInitErr = pcall(function()
-			musicService:init()
-		end)
-		if not musicInitOk then
-			log:error("MusicService init failed", { error = tostring(musicInitErr) })
-		end
-		local musicController = createMusicController({
-			service = musicService,
-			remotes = Remotes,
-			logger = Logger.new("MusicController"),
-			config = Config.Music,
-			notify = Notify,
-		})
-		local musicControllerOk, musicControllerErr = pcall(function()
-			musicController:init()
-		end)
-		if not musicControllerOk then
-			log:error("MusicController init failed", { error = tostring(musicControllerErr) })
-		end
-
-		-- Zone tracker: detects which tagged BasePart each player is inside and
-		-- routes them to the matching MusicSession. No-op when Music.MODE = "global".
-		trackLifecycle(
-			"ZoneTrackerService",
-			createZoneTrackerService.create({
-				musicService = musicService,
-				logger = Logger.new("ZoneTrackerService"),
-			})
-		)
-		-- Session/rank sync only — favorites load via SharedProfileLoader above.
-		connectionCleaner:add(Players.PlayerAdded:Connect(function(player)
-			task.defer(function()
-				if player and player.Parent then
-					musicService:onPlayerAdded(player)
-				end
-			end)
-		end))
-		-- Sync state ke player yang sudah ada saat server start
-		for _, existingPlayer in Players:GetPlayers() do
-			task.defer(function()
-				if existingPlayer and existingPlayer.Parent then
-					musicService:onPlayerAdded(existingPlayer)
-				end
-			end)
-		end
-	end
+	local musicBoot = require(script.Parent.Init.MusicBootstrap).start({
+		musicConfig = Config.Music,
+		groupId = Config.Group.GROUP_ID,
+		overheadRepository = repo,
+		eventBus = eventBus,
+		remotes = Remotes,
+		notify = Notify,
+		sharedProfileLoader = sharedProfileLoader,
+		connectionCleaner = connectionCleaner,
+		trackLifecycle = trackLifecycle,
+		Result = Result,
+		Logger = Logger,
+		log = log,
+	})
+	musicFavoritesRepo = musicBoot.musicFavoritesRepo
+	_musicService = musicBoot.musicService
 end
 local _chatCommandController = createChatCommandController({
 	chatCommandService = chatCommandService,
@@ -1433,7 +1349,7 @@ task.spawn(function()
 				end)
 			end
 			pcall(function()
-				PlayerSessionStore.flushAll()
+				PersistenceFabricHooks.flushAll()
 			end)
 		end)
 	end
@@ -1578,7 +1494,7 @@ game:BindToClose(function()
 			end)
 		end
 		launchRepo(function()
-			remaining += PlayerSessionStore.flushAll()
+			remaining += PersistenceFabricHooks.flushAll()
 		end)
 		if syncFavoritesRepo then
 			launchRepo(function()
