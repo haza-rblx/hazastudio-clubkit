@@ -1,85 +1,262 @@
 --!strict
 -- Shared/Utils/CrossServerCache.luau
--- Wrapper tipis di atas MessagingService untuk invalidate cache antar server.
+-- InvalidateBus (Persistence Fabric Phase 3): coalesced MessagingService invalidation.
 --
--- Pattern:
---   - Kalau Server A nulis perubahan ke DataStore (admin set title, couple,
---     gift, dll), broadcast { topic, userId } via MessagingService.
---   - Semua server (termasuk publisher) subscribe topic yang sama dan
---     panggil callback yang clear cache lokal untuk userId itu.
+-- Public API unchanged for repos:
+--   CrossServerCache.publish(topic, userId)
+--   CrossServerCache.subscribe(topic, onMessage: (userId) -> ())
 --
--- Kenapa perlu:
---   - Cache.luau punya TTL 60s. Kalau Server B punya cached overhead lama
---     dan user-nya kebetulan online di B saat admin set title di A, B akan
---     terus serve data lama sampai TTL expired -> "title ilang" report.
---   - Roblox DataStore sendiri ada eventual consistency window 4-6s.
---     Invalidation message biasanya sampai dalam 1-3s, jadi kita delay
---     read di subscriber sedikit untuk hindari race read-before-replicate.
+-- Fabric behavior (default):
+--   - Coalesce many userIds into one publish per topic / window
+--   - Payload: { originJobId, userIds, t } (also accepts legacy { userId, t })
+--   - Skip callbacks when originJobId == this server (publisher already Cache.set)
+--   - Local token bucket soft-caps publish rate
 --
--- Catatan reliability:
---   - MessagingService punya rate limit per topic. Kita debounce per userId
---     supaya burst write (misal admin set title 5x cepat) cuma fire 1 publish.
---   - PublishAsync bisa throw saat throttled. Selalu di-pcall, kegagalan
---     publish bukan blocker (cache akhirnya ke-evict via TTL).
+-- Kill switch: Config.Persistence.USE_LEGACY_CROSS_SERVER_CACHE = true
 
 local MessagingService = game:GetService("MessagingService")
+local MemoryStoreService = game:GetService("MemoryStoreService")
 local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 
 local CrossServerCache = {}
 
--- Debounce untuk hindari spam publish ke MessagingService.
--- Key: topic .. ":" .. userId, value: os.clock() saat terakhir publish.
-local DEBOUNCE_WINDOW = 1.0 -- detik
+local LEGACY_DEBOUNCE_WINDOW = 1.0
 local lastPublishedAt: { [string]: number } = {}
 
--- Kalau dijalankan di studio tanpa publish API real, log saja.
+local pendingByTopic: { [string]: { [number]: boolean } } = {}
+local flushScheduled: { [string]: boolean } = {}
+
+local tokens = 0
+local lastTokenRefill = os.clock()
+local metrics = {
+	published = 0,
+	coalesced = 0,
+	throttled = 0,
+	skippedOrigin = 0,
+	subscribeFanout = 0,
+}
+
 local function isPublishAvailable(): boolean
 	return RunService:IsServer()
 end
 
---- Publish invalidation ke semua server.
---- Aman dipanggil berulang dengan userId sama dalam 1 detik (debounced).
-function CrossServerCache.publish(topic: string, userId: number)
-	if not isPublishAvailable() then
-		return
+local function persistenceConfig()
+	local p = Config.Persistence
+	if type(p) ~= "table" then
+		return {
+			USE_LEGACY_CROSS_SERVER_CACHE = false,
+			INVALIDATE_COALESCE_SEC = 0.75,
+			INVALIDATE_TOKEN_BUCKET_RATE = 8,
+			INVALIDATE_TOKEN_BUCKET_BURST = 12,
+			INVALIDATE_SKIP_ORIGIN = true,
+		}
 	end
-	local key = topic .. ":" .. tostring(userId)
-	local now = os.clock()
-	local lastAt = lastPublishedAt[key]
-	if lastAt and (now - lastAt) < DEBOUNCE_WINDOW then
-		return
-	end
-	lastPublishedAt[key] = now
+	return p
+end
 
-	-- Cleanup debounce map secara opportunistic supaya nggak grow tak terbatas
-	if math.random() < 0.05 then
-		local cutoff = now - 60
-		for k, v in pairs(lastPublishedAt) do
-			if v < cutoff then
-				lastPublishedAt[k] = nil
-			end
+local function useLegacy(): boolean
+	return persistenceConfig().USE_LEGACY_CROSS_SERVER_CACHE == true
+end
+
+local function refillTokens()
+	local cfg = persistenceConfig()
+	local rate = cfg.INVALIDATE_TOKEN_BUCKET_RATE or 8
+	local burst = cfg.INVALIDATE_TOKEN_BUCKET_BURST or 12
+	local now = os.clock()
+	local elapsed = now - lastTokenRefill
+	lastTokenRefill = now
+	tokens = math.min(burst, tokens + elapsed * rate)
+end
+
+local function tryConsumeToken(): boolean
+	refillTokens()
+	if tokens >= 1 then
+		tokens -= 1
+		return true
+	end
+	return false
+end
+
+--- Soft universe lease via MemoryStore (best-effort). Failure = allow publish.
+local function tryUniverseLease(topic: string): boolean
+	local ok, allowed = pcall(function()
+		local map = MemoryStoreService:GetSortedMap("ClubKit_InvalidateBus_v1")
+		local key = topic .. ":" .. tostring(math.floor(os.time()))
+		local current = map:GetAsync(key)
+		local count = if type(current) == "number" then current else 0
+		local cfg = persistenceConfig()
+		local maxPerSec = (cfg.INVALIDATE_TOKEN_BUCKET_RATE or 8) * 2 -- soft multi-server share
+		if count >= maxPerSec then
+			return false
 		end
+		map:SetAsync(key, count + 1, 2)
+		return true
+	end)
+	if not ok then
+		return true
+	end
+	return allowed == true
+end
+
+local function publishRaw(topic: string, payload: { [string]: any })
+	if not tryConsumeToken() then
+		metrics.throttled += 1
+		-- Re-queue userIds for a later coalesce flush
+		local userIds = payload.userIds
+		if type(userIds) == "table" then
+			local pending = pendingByTopic[topic]
+			if not pending then
+				pending = {}
+				pendingByTopic[topic] = pending
+			end
+			for _, id in ipairs(userIds) do
+				local n = tonumber(id)
+				if n then
+					pending[n] = true
+				end
+			end
+			CrossServerCache._scheduleFlush(topic)
+		end
+		return
+	end
+	if not tryUniverseLease(topic) then
+		metrics.throttled += 1
+		local userIds = payload.userIds
+		if type(userIds) == "table" then
+			local pending = pendingByTopic[topic]
+			if not pending then
+				pending = {}
+				pendingByTopic[topic] = pending
+			end
+			for _, id in ipairs(userIds) do
+				local n = tonumber(id)
+				if n then
+					pending[n] = true
+				end
+			end
+			CrossServerCache._scheduleFlush(topic)
+		end
+		return
 	end
 
 	task.spawn(function()
 		local ok, err = pcall(function()
-			MessagingService:PublishAsync(topic, { userId = userId, t = os.time() })
+			MessagingService:PublishAsync(topic, payload)
 		end)
-		if not ok then
-			-- Throttled atau service down. Cache akhirnya evict via TTL,
-			-- jadi ini non-fatal.
+		if ok then
+			metrics.published += 1
+		else
+			metrics.throttled += 1
 			warn(string.format(
-				"[CrossServerCache] publish gagal topic=%s userId=%d err=%s",
+				"[CrossServerCache] publish gagal topic=%s err=%s",
 				topic,
-				userId,
 				tostring(err)
 			))
 		end
 	end)
 end
 
---- Subscribe topic. Callback dipanggil dengan userId saat ada invalidation.
---- Kalau onMessage error, error di-log saja, tidak menghentikan subscription.
+function CrossServerCache._scheduleFlush(topic: string)
+	if flushScheduled[topic] then
+		return
+	end
+	flushScheduled[topic] = true
+	local coalesce = persistenceConfig().INVALIDATE_COALESCE_SEC or 0.75
+	task.delay(coalesce, function()
+		flushScheduled[topic] = nil
+		local pending = pendingByTopic[topic]
+		pendingByTopic[topic] = nil
+		if not pending then
+			return
+		end
+		local userIds = {}
+		for userId in pairs(pending) do
+			table.insert(userIds, userId)
+		end
+		if #userIds == 0 then
+			return
+		end
+		metrics.coalesced += #userIds
+		publishRaw(topic, {
+			originJobId = game.JobId,
+			userIds = userIds,
+			-- Legacy single-id for mixed-fleet: first id
+			userId = userIds[1],
+			t = os.time(),
+		})
+	end)
+end
+
+function CrossServerCache.getMetrics()
+	return {
+		published = metrics.published,
+		coalesced = metrics.coalesced,
+		throttled = metrics.throttled,
+		skippedOrigin = metrics.skippedOrigin,
+		subscribeFanout = metrics.subscribeFanout,
+		tokens = tokens,
+	}
+end
+
+function CrossServerCache.resetMetrics()
+	metrics.published = 0
+	metrics.coalesced = 0
+	metrics.throttled = 0
+	metrics.skippedOrigin = 0
+	metrics.subscribeFanout = 0
+end
+
+--- Publish invalidation (coalesced unless legacy kill-switch).
+function CrossServerCache.publish(topic: string, userId: number)
+	if not isPublishAvailable() then
+		return
+	end
+
+	if useLegacy() then
+		local key = topic .. ":" .. tostring(userId)
+		local now = os.clock()
+		local lastAt = lastPublishedAt[key]
+		if lastAt and (now - lastAt) < LEGACY_DEBOUNCE_WINDOW then
+			return
+		end
+		lastPublishedAt[key] = now
+		if math.random() < 0.05 then
+			local cutoff = now - 60
+			for k, v in pairs(lastPublishedAt) do
+				if v < cutoff then
+					lastPublishedAt[k] = nil
+				end
+			end
+		end
+		task.spawn(function()
+			local ok, err = pcall(function()
+				MessagingService:PublishAsync(topic, { userId = userId, t = os.time() })
+			end)
+			if not ok then
+				warn(string.format(
+					"[CrossServerCache] publish gagal topic=%s userId=%d err=%s",
+					topic,
+					userId,
+					tostring(err)
+				))
+			end
+		end)
+		return
+	end
+
+	local pending = pendingByTopic[topic]
+	if not pending then
+		pending = {}
+		pendingByTopic[topic] = pending
+	end
+	pending[userId] = true
+	CrossServerCache._scheduleFlush(topic)
+end
+
+--- Subscribe. Callback receives each userId (batch fan-out). Skips origin server.
 function CrossServerCache.subscribe(topic: string, onMessage: (userId: number) -> ()): RBXScriptConnection?
 	if not isPublishAvailable() then
 		return nil
@@ -89,22 +266,44 @@ function CrossServerCache.subscribe(topic: string, onMessage: (userId: number) -
 			if type(message) ~= "table" or type(message.Data) ~= "table" then
 				return
 			end
-			local userId = tonumber(message.Data.userId)
-			if not userId then
+			local data = message.Data
+			local cfg = persistenceConfig()
+			local skipOrigin = cfg.INVALIDATE_SKIP_ORIGIN ~= false
+			if skipOrigin and type(data.originJobId) == "string" and data.originJobId == game.JobId then
+				metrics.skippedOrigin += 1
 				return
 			end
-			-- Delay kecil untuk biarin DataStore replicate dulu.
-			-- Tanpa delay, subscriber bisa read-before-replicate dan re-cache
-			-- data lama.
+
+			local ids: { number } = {}
+			if type(data.userIds) == "table" then
+				for _, id in ipairs(data.userIds) do
+					local n = tonumber(id)
+					if n then
+						table.insert(ids, n)
+					end
+				end
+			else
+				local userId = tonumber(data.userId)
+				if userId then
+					table.insert(ids, userId)
+				end
+			end
+			if #ids == 0 then
+				return
+			end
+
 			task.delay(2, function()
-				local successCb, errCb = pcall(onMessage, userId)
-				if not successCb then
-					warn(string.format(
-						"[CrossServerCache] subscriber callback error topic=%s userId=%d err=%s",
-						topic,
-						userId,
-						tostring(errCb)
-					))
+				for _, userId in ipairs(ids) do
+					metrics.subscribeFanout += 1
+					local successCb, errCb = pcall(onMessage, userId)
+					if not successCb then
+						warn(string.format(
+							"[CrossServerCache] subscriber callback error topic=%s userId=%d err=%s",
+							topic,
+							userId,
+							tostring(errCb)
+						))
+					end
 				end
 			end)
 		end)
@@ -115,5 +314,8 @@ function CrossServerCache.subscribe(topic: string, onMessage: (userId: number) -
 	end
 	return conn
 end
+
+-- Seed token bucket at burst capacity.
+tokens = (persistenceConfig().INVALIDATE_TOKEN_BUCKET_BURST or 12)
 
 return CrossServerCache

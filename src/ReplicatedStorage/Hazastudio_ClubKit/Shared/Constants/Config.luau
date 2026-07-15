@@ -3115,13 +3115,34 @@ Config.Server = {
 	CCU_TARGET = 100,
 }
 -- DataStore budget allocation re-tuned from the old 70-80 CCU targets to 100 CCU
--- (perf-scaling R3.2, R3.3, R3.6). Consumed by BudgetGate.
+-- (perf-scaling R3.2, R3.3, R3.6). Consumed by BudgetGate / DataStoreScheduler.
 Config.Budget = {
 	WRITE_PER_MIN_TARGET = 110, -- R3.2: >=110 writes/min/server at 100 CCU
 	READ_PER_MIN_TARGET = 80, -- R3.3: >=80 reads/min/server at 100 CCU
 	DEFER_SECONDS = 8, -- Scaling 100→200 CCU: extended from 5s to 8s to give budget more time to recover during load spikes
 	POLL_INTERVAL = 0.5, -- budget replenishment poll cadence (seconds)
 	NEGATIVE_CACHE_TTL = 10, -- seconds to skip retrying a DataStore read after budget_exhausted
+}
+-- Persistence Fabric (DataStoreScheduler + session write-behind + InvalidateBus).
+-- Kill switch: USE_LEGACY_PER_REPO_BUDGET_GATE = true restores pre-fabric BudgetGate races.
+Config.Persistence = {
+	USE_LEGACY_PER_REPO_BUDGET_GATE = false,
+	HEADROOM = 2, -- keep this many spare credits beyond minBudget before dispatch
+	MAX_INFLIGHT_PER_TYPE = 4, -- concurrent DS ops per RequestType across all repos
+	KEY_MUTEX_ENABLED = true, -- serialize UpdateAsync/GetAsync on same store::key
+	DEFER_SECONDS = 8, -- scheduler wait window (falls back to Config.Budget.DEFER_SECONDS)
+	POLL_INTERVAL = 0.5,
+	-- PlayerSessionStore write-behind
+	SESSION_FLUSH_DEBOUNCE = 3, -- seconds coalesce dirty Overhead/Settings writes
+	SESSION_WRITE_BEHIND_ENABLED = true,
+	USE_LEGACY_IMMEDIATE_OVERHEAD_WRITES = false, -- true → skip session store (direct UpdateAsync)
+	-- InvalidateBus (CrossServerCache upgrade)
+	USE_LEGACY_CROSS_SERVER_CACHE = false, -- true → 1s per-user debounce only
+	INVALIDATE_COALESCE_SEC = 0.75,
+	INVALIDATE_TOKEN_BUCKET_RATE = 8, -- publishes/sec soft cap per server
+	INVALIDATE_TOKEN_BUCKET_BURST = 12,
+	INVALIDATE_SKIP_ORIGIN = true,
+	METRICS_LOG_INTERVAL = 60, -- server DEBUG summary interval (0 = off)
 }
 -- HTTP API wrapper — dedup + cache for GroupService/Players at 100 CCU.
 Config.HttpApi = {
@@ -3153,8 +3174,9 @@ Config.ClientHttpApi = {
 	GET_USER_ID_TTL = 600,
 }
 -- Join-time DataStore read serialization (perf-scaling R3.7 / R10.1). Consumed by ProfileLoader.
+-- Persistence Fabric: default 4 (safer with global scheduler HEADROOM); was 8 for 100→200 join storms.
 Config.ProfileLoader = {
-	MAX_CONCURRENCY = 8, -- Scaling 100→200 CCU: increased from 4 to 8 for faster join storms (8×4 reads = 96 reads/min < 110 budget)
+	MAX_CONCURRENCY = 4,
 	PER_PLAYER_CONCURRENCY = 1, -- R10.1: per-player reads run sequentially through one queue
 }
 -- TitleColorPreset animation tick (Phase 3): shared ~30Hz loop for Gradient/Stroke/Dropshadow.

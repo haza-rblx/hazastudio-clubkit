@@ -11,6 +11,16 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.34] - 2026-07-15
+
+### Changed
+- **Persistence Fabric** — production DataStore admission + session write-behind + InvalidateBus:
+  - Global `DataStoreScheduler` (reserve budget + key mutex); `BudgetGate` adapts to it (`USE_LEGACY_PER_REPO_BUDGET_GATE` kill-switch).
+  - Overhead write-behind via `PlayerSessionStore` (debounce flush; skip no-op fingerprints); Settings skip unchanged saves; Favorites/Music leave dirty-only.
+  - `CrossServerCache` coalesces `userIds`, skips origin `JobId`, token bucket + MemoryStore soft lease (`USE_LEGACY_CROSS_SERVER_CACHE` kill-switch).
+  - AvatarLike skips unchanged OrderedDataStore score / metadata; backfill `ListKeysAsync` gated.
+  - `Config.ProfileLoader.MAX_CONCURRENCY` default 8→4. QA: [`docs/PERSISTENCE_FABRIC_QA.md`](docs/PERSISTENCE_FABRIC_QA.md).
+
 ## [2.4.33] - 2026-07-14
 
 ### Changed

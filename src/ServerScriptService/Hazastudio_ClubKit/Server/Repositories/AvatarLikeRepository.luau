@@ -44,6 +44,9 @@ local function createAvatarLikeRepository(deps: { logger: Types.ILogger? }?)
 	local shardCount = Config.AvatarContext.LIKE_SHARD_COUNT
 	local lastBackfillAt = 0
 	local budgetGate = BudgetGate.create({ logger = log, name = "AvatarLikeRepository" })
+	-- Skip unchanged OrderedDataStore / metadata writes (Persistence Fabric Phase 4).
+	local lastLeaderboardScore: { [number]: number } = {}
+	local lastMetadataFingerprint: { [number]: string } = {}
 
 	-- Server-side TTL cache untuk top leaderboard.
 	-- Tanpa cache ini, getTopLeaderboard memicu syncOnlineLeaderboard
@@ -120,21 +123,36 @@ local function createAvatarLikeRepository(deps: { logger: Types.ILogger? }?)
 	end
 
 	local function writeUserMetadata(userId: number, username: string, displayName: string, thumbnail: string): Result<nil>
+		local sanitizedUsername = sanitizeText(username, 64)
+		local sanitizedDisplay = sanitizeText(displayName, 64)
+		local sanitizedThumb = sanitizeText(thumbnail, 512)
+		local fp = sanitizedUsername .. "\0" .. sanitizedDisplay .. "\0" .. sanitizedThumb
+		if lastMetadataFingerprint[userId] == fp then
+			return Result.Ok(nil)
+		end
+
 		local result = budgetGate:executeAsync(Enum.DataStoreRequestType.UpdateAsync, function()
 			return Result.withRetry(function()
-				metadataStore:UpdateAsync(getUserMetadataStoreKey(userId), function(_current: any): any
+				metadataStore:UpdateAsync(getUserMetadataStoreKey(userId), function(current: any): any
+					if type(current) == "table"
+						and current.username == sanitizedUsername
+						and current.displayName == sanitizedDisplay
+						and current.thumbnail == sanitizedThumb
+					then
+						return nil -- abort: identity unchanged
+					end
 					return {
 						userId = userId,
-						username = sanitizeText(username, 64),
-						displayName = sanitizeText(displayName, 64),
-						thumbnail = sanitizeText(thumbnail, 512),
+						username = sanitizedUsername,
+						displayName = sanitizedDisplay,
+						thumbnail = sanitizedThumb,
 						displayNameVerified = true,
 						updatedAt = os.time(),
 					}
 				end)
 				return nil
 			end, Config.DataStore.RETRY_ATTEMPTS)
-		end)
+		end, "likes-meta::" .. tostring(userId))
 		if not result.ok then
 			log:warn("AvatarLikeRepository metadata write failed", {
 				targetUserId = userId,
@@ -142,20 +160,22 @@ local function createAvatarLikeRepository(deps: { logger: Types.ILogger? }?)
 			})
 			return Result.Err(result.error)
 		end
+		lastMetadataFingerprint[userId] = fp
 		return Result.Ok(nil)
 	end
 
 	local function writeLikesLeaderboardScore(userId: number, totalLikes: number): Result<nil>
 		local score = math.max(0, math.floor(totalLikes))
+		if lastLeaderboardScore[userId] == score then
+			return Result.Ok(nil)
+		end
 		-- OrderedDataStore: SetIncrementSortedAsync budget covers SetAsync calls.
-		-- Production debounce (max 1× per 30s per key) is a separate concern; see
-		-- AUDIT_V1_FINDINGS.md F2.1.
 		local result = budgetGate:executeAsync(Enum.DataStoreRequestType.SetIncrementSortedAsync, function()
 			return Result.withRetry(function()
 				leaderboardStore:SetAsync(tostring(userId), score)
 				return nil
 			end, Config.DataStore.RETRY_ATTEMPTS)
-		end)
+		end, "likes-lb::" .. tostring(userId))
 		if not result.ok then
 			log:warn("AvatarLikeRepository leaderboard write failed", {
 				targetUserId = userId,
@@ -164,6 +184,7 @@ local function createAvatarLikeRepository(deps: { logger: Types.ILogger? }?)
 			})
 			return Result.Err(result.error)
 		end
+		lastLeaderboardScore[userId] = score
 		return Result.Ok(nil)
 	end
 
@@ -561,18 +582,19 @@ local function createAvatarLikeRepository(deps: { logger: Types.ILogger? }?)
 		-- metadata, Set leaderboard). Without per-iteration pacing the queue warns
 		-- even with BudgetGate. 0.1s/iter caps the burst at ~30 ops/sec, well under
 		-- per-server quota at 70 CCU.
-		local BACKFILL_ITER_DELAY = 0.1
-		local ok, pagesOrError = pcall(function()
+		local BACKFILL_ITER_DELAY = 0.15
+		-- Gate ListKeysAsync through scheduler (uses GetAsync budget as proxy — no dedicated enum).
+		local listResult = budgetGate:executeAsync(Enum.DataStoreRequestType.GetAsync, function()
 			return store:ListKeysAsync("likes:summary:", 100)
-		end)
-		if not ok then
+		end, "likes-backfill-list")
+		if not listResult.ok then
 			log:warn("AvatarLikeRepository likes backfill could not list keys", {
-				error = tostring(pagesOrError),
+				error = tostring(listResult.error),
 			})
 			return
 		end
 
-		local pages = pagesOrError
+		local pages = listResult.value
 		while true do
 			for _, keyInfo in ipairs(pages:GetCurrentPage()) do
 				if scanned >= maxKeys then

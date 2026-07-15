@@ -1,33 +1,25 @@
 --!strict
 -- Shared/Utils/BudgetGate.lua
 --
--- Wrap every DataStoreService request behind a per-request-type budget check.
+-- Repository-facing admission wrapper. By default delegates to the process-wide
+-- DataStoreScheduler (Persistence Fabric) so concurrent BudgetGate.create()
+-- callers cannot race on GetRequestBudget snapshots.
 --
--- Why this exists:
--- Roblox publishes a per-server quota for each DataStoreRequestType. Calls
--- issued past the quota are queued or dropped, surfacing in production as
--- "DataStore request was added to queue. If request queue fills, further
--- requests will be dropped." Repository layers MUST funnel every call through
--- a BudgetGate so the gate can defer or refuse before Roblox queues it.
+-- Kill switch: Config.Persistence.USE_LEGACY_PER_REPO_BUDGET_GATE = true
+-- restores the pre-fabric per-instance snapshot loop.
 --
--- Contract (see Guidelines_v3/refs/REF_PERSISTENCE.md):
---   - executeAsync polls budget; if below minBudget it waits up to deferSeconds
---   - on recovery it executes the wrapped function
---   - on timeout it returns Result.Err("budget_exhausted")
+-- Contract:
+--   - executeAsync polls/reserves budget; refuses with budget_exhausted
+--   - optional 3rd arg keyMutex serializes same-key writes via the scheduler
 --   - if the wrapped function returns a Result, it is passed through
---   - otherwise the raw return value is wrapped in Result.Ok
---
--- Composes with RetryUtils.retryAsync and Result.withRetry. Typical pattern:
---   budgetGate:executeAsync(Enum.DataStoreRequestType.UpdateAsync, function()
---       return Result.withRetry(function()
---           return store:UpdateAsync(key, mergeFn)
---       end, RETRY_ATTEMPTS)
---   end)
 
 local DataStoreService = game:GetService("DataStoreService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Result = require(script.Parent.Result)
 local Types = require(script.Parent.Parent.Domain.Types)
+local DataStoreScheduler = require(script.Parent.DataStoreScheduler)
 
 type Result<T> = Types.Result<T>
 type ILogger = Types.ILogger
@@ -41,14 +33,17 @@ export type BudgetGateOptions = {
 }
 
 export type BudgetGate = {
-	executeAsync: <T>(self: BudgetGate, requestType: Enum.DataStoreRequestType, fn: () -> T) -> Result<T>,
+	executeAsync: <T>(
+		self: BudgetGate,
+		requestType: Enum.DataStoreRequestType,
+		fn: () -> T,
+		keyMutex: string?
+	) -> Result<T>,
 	canProceed: (self: BudgetGate, requestType: Enum.DataStoreRequestType) -> (boolean, number),
 	getBudget: (self: BudgetGate, requestType: Enum.DataStoreRequestType) -> number,
 	destroy: (self: BudgetGate) -> (),
 }
 
--- Per-RequestType minimum budget. Reads stay at 1; writes need 2 because
--- UpdateAsync internally consumes Get + Set credits.
 local DEFAULT_MIN_BUDGET: { [Enum.DataStoreRequestType]: number } = {
 	[Enum.DataStoreRequestType.GetAsync] = 1,
 	[Enum.DataStoreRequestType.SetIncrementAsync] = 2,
@@ -77,15 +72,19 @@ local function isResultShape(value: any): boolean
 	return type(value) == "table" and value.ok ~= nil and (value.ok == true or value.ok == false)
 end
 
---- Construct a BudgetGate. Options are all optional; defaults are tuned for
---- the 100 CCU target (perf-scaling R3.8: ~110 writes/min, ~80 reads/min,
---- 5s defer window — see Config.Budget).
+local function useLegacyGate(): boolean
+	local p = Config.Persistence
+	return type(p) == "table" and p.USE_LEGACY_PER_REPO_BUDGET_GATE == true
+end
+
 function BudgetGate.create(options: BudgetGateOptions?): BudgetGate
 	local opts = options or {}
+	local deferDefault = (Config.Budget and Config.Budget.DEFER_SECONDS) or DEFAULT_DEFER_SECONDS
+	local pollDefault = (Config.Budget and Config.Budget.POLL_INTERVAL) or DEFAULT_POLL_INTERVAL
 	local self = setmetatable({
 		_minBudgetOverride = opts.minBudget,
-		_deferSeconds = opts.deferSeconds or DEFAULT_DEFER_SECONDS,
-		_pollInterval = opts.pollInterval or DEFAULT_POLL_INTERVAL,
+		_deferSeconds = opts.deferSeconds or deferDefault,
+		_pollInterval = opts.pollInterval or pollDefault,
 		_logger = opts.logger,
 		_name = opts.name or "BudgetGate",
 	}, BudgetGate)
@@ -99,26 +98,35 @@ function BudgetGate:_minBudget(requestType: Enum.DataStoreRequestType): number
 	return DEFAULT_MIN_BUDGET[requestType] or 1
 end
 
---- Read the current budget. Useful for diagnostics; prefer executeAsync for
---- actual gating logic.
 function BudgetGate:getBudget(requestType: Enum.DataStoreRequestType): number
 	return getBudgetSafe(requestType)
 end
 
---- Snapshot check: is there enough budget right now? Returns the boolean and
---- the current budget so callers can log without a second pcall.
 function BudgetGate:canProceed(requestType: Enum.DataStoreRequestType): (boolean, number)
+	if not useLegacyGate() then
+		return DataStoreScheduler.canProceed(requestType, self:_minBudget(requestType))
+	end
 	local budget = getBudgetSafe(requestType)
 	return budget >= self:_minBudget(requestType), budget
 end
 
---- Wait for budget, then execute the wrapped function.
---- Returns Result<T>. If the wrapped function itself returns a Result, that
---- Result is returned as-is (no double-wrap).
 function BudgetGate:executeAsync<T>(
 	requestType: Enum.DataStoreRequestType,
-	fn: () -> T
+	fn: () -> T,
+	keyMutex: string?
 ): Result<T>
+	if not useLegacyGate() then
+		return DataStoreScheduler.executeAsync(requestType, fn, {
+			minBudget = self:_minBudget(requestType),
+			deferSeconds = self._deferSeconds,
+			pollInterval = self._pollInterval,
+			logger = self._logger,
+			name = self._name,
+			keyMutex = keyMutex,
+		})
+	end
+
+	-- Legacy per-instance snapshot loop (kill-switch path).
 	local minBudget = self:_minBudget(requestType)
 	local startedAt = os.clock()
 	local deferred = false
@@ -179,8 +187,6 @@ function BudgetGate:executeAsync<T>(
 		return Result.Err(tostring(valueOrError))
 	end
 
-	-- Pass-through: the wrapped function already returned a Result. Avoid
-	-- double-wrapping so callers do not have to unwrap result.value.value.
 	if isResultShape(valueOrError) then
 		return valueOrError :: any
 	end
@@ -189,7 +195,6 @@ function BudgetGate:executeAsync<T>(
 end
 
 function BudgetGate:destroy()
-	-- BudgetGate holds no connections; symmetric API for Lifecycle integration.
 end
 
 return BudgetGate

@@ -88,15 +88,26 @@ function FavoritesRepository.onPlayerAdded(self: FavoritesRepositoryImpl, player
 end
 
 function FavoritesRepository.onPlayerRemoving(self: FavoritesRepositoryImpl, player: Player)
-	local jsonData = player:GetAttribute(self._config.ATTRIBUTE_KEY)
-	if type(jsonData) == "string" and self._loaded[player.UserId] then
-		local result = self:save(player.UserId, jsonData)
-		if not result.ok then
-			self._dirtyPlayers[player.UserId] = true
-			self._dirtyPayloads[player.UserId] = jsonData
+	-- Dirty-only leave: successful in-session saves already cleared _dirtyPlayers.
+	-- Only retry failed persists here (avoids UpdateAsync storm on every leave).
+	local userId = player.UserId
+	if self._dirtyPlayers[userId] and self._loaded[userId] then
+		local jsonData = self._dirtyPayloads[userId]
+		if type(jsonData) ~= "string" then
+			local attributeData = player:GetAttribute(self._config.ATTRIBUTE_KEY)
+			if type(attributeData) == "string" then
+				jsonData = attributeData
+			end
+		end
+		if type(jsonData) == "string" then
+			local result = self:save(userId, jsonData)
+			if not result.ok then
+				self._dirtyPlayers[userId] = true
+				self._dirtyPayloads[userId] = jsonData
+			end
 		end
 	end
-	self._loaded[player.UserId] = nil
+	self._loaded[userId] = nil
 end
 
 function FavoritesRepository.save(self: FavoritesRepositoryImpl, userId: number, jsonData: string): Result<nil>

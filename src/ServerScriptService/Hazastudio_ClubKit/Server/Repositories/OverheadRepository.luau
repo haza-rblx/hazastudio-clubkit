@@ -1,14 +1,10 @@
 --!strict
 -- Server/Repositories/OverheadRepository.lua
--- Diubah dari singleton menjadi factory function untuk konsistensi
--- dengan pola DI di seluruh project (CORE.md). Singleton lama dibiarkan
--- sebagai default export via createOverheadRepository() agar Main.server.lua
--- cukup panggil require sekali tanpa perubahan besar.
--- HANYA boleh diakses dari Service layer.
--- Zero business logic di sini.
+-- HANYA boleh diakses dari Service layer. Zero business logic di sini.
+-- Persistence Fabric: PlayerSessionStore write-behind when enabled.
 local DataStoreService = game:GetService("DataStoreService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
--- Gunakan ReplicatedStorage local variable, bukan game.ReplicatedStorage
+
 local Config         = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Types          = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local OverheadDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.OverheadDomain)
@@ -17,12 +13,15 @@ local Cache          = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils
 local Logger         = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local BudgetGate     = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.BudgetGate)
 local CrossServerCache = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.CrossServerCache)
+local PlayerSessionStore = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.PlayerSessionStore)
 
 local OVERHEAD_INVALIDATE_TOPIC = "OverheadInvalidate"
+local SESSION_NS = "overhead"
+
 type Result<T> = Types.Result<T>
 type OverheadStoredData = Types.OverheadStoredData
 type IOverheadRepository = Types.IOverheadRepository
--- Factory function - memungkinkan injeksi DataStore key untuk testability
+
 local function createOverheadRepository(datastoreKey: string?): IOverheadRepository
 	local key   = datastoreKey or Config.DataStore.OVERHEAD_KEY
 	local log   = Logger.new("OverheadRepository")
@@ -31,37 +30,82 @@ local function createOverheadRepository(datastoreKey: string?): IOverheadReposit
 	local budgetGate = BudgetGate.create({ logger = log, name = "OverheadRepository" })
 	local repo = {} :: IOverheadRepository
 
-	-- Subscribe untuk cache invalidation lintas server.
-	-- Saat server lain nulis perubahan ke userId X, kita evict cache lokal
-	-- supaya read berikutnya hit DataStore (bukan serve data lama 60s).
-	-- Idempotent kalau dipanggil lebih dari sekali (cuma 1 subscription yang aktif).
+	local function mutexFor(userId: number): string
+		return key .. "::" .. tostring(userId)
+	end
+
+	local function useSession(): boolean
+		return PlayerSessionStore.isEnabled()
+	end
+
 	CrossServerCache.subscribe(OVERHEAD_INVALIDATE_TOPIC, function(userId)
 		Cache.invalidate(KEY_PREFIX .. userId)
+		PlayerSessionStore.clear(SESSION_NS, userId)
 		log:debug("Cross-server cache invalidated", { userId = userId })
 	end)
 
-	-- Helper internal: panggil ini setiap kali write sukses ke DataStore
-	-- agar server lain tahu cache mereka stale.
 	local function publishInvalidation(userId: number)
 		CrossServerCache.publish(OVERHEAD_INVALIDATE_TOPIC, userId)
 	end
-	-- ============================================================
-	-- LOAD
-	-- ============================================================
+
+	local function durableWrite(userId: number, data: OverheadStoredData): Result<nil>
+		local versionConflict = false
+		local result = budgetGate:executeAsync(Enum.DataStoreRequestType.UpdateAsync, function()
+			return ResultUtil.withRetry(function(): boolean
+				versionConflict = false
+				Store:UpdateAsync(tostring(userId), function(oldData: any): any
+					local base = oldData or {}
+					if base._version and data._version and base._version > data._version then
+						versionConflict = true
+						return nil
+					end
+					return data
+				end)
+				return true
+			end, Config.DataStore.RETRY_ATTEMPTS)
+		end, mutexFor(userId))
+		if versionConflict then
+			Cache.invalidate(KEY_PREFIX .. userId)
+			PlayerSessionStore.clear(SESSION_NS, userId)
+			return ResultUtil.Err("version_conflict")
+		end
+		if not result.ok then
+			return ResultUtil.Err(result.error or "write_failed")
+		end
+		Cache.set(KEY_PREFIX .. userId, data, Config.DataStore.CACHE_TTL)
+		publishInvalidation(userId)
+		return ResultUtil.Ok(nil)
+	end
+
+	PlayerSessionStore.registerFlush(SESSION_NS, function(userId: number, data: any)
+		return durableWrite(userId, data :: OverheadStoredData)
+	end)
+
 	function repo:loadStrict(userId: number): Result<OverheadStoredData>
+		if useSession() then
+			local sessionData = PlayerSessionStore.get(SESSION_NS, userId)
+			if sessionData ~= nil then
+				return ResultUtil.Ok(sessionData :: OverheadStoredData)
+			end
+		end
+
 		local cacheKey = KEY_PREFIX .. userId
 		if Cache.getNegative(cacheKey) then
 			return ResultUtil.Err("budget_exhausted")
 		end
-		local cached   = Cache.get(cacheKey)
+		local cached = Cache.get(cacheKey)
 		if cached then
-			return ResultUtil.Ok(cached :: OverheadStoredData)
+			local data = cached :: OverheadStoredData
+			if useSession() then
+				PlayerSessionStore.hydrate(SESSION_NS, userId, data)
+			end
+			return ResultUtil.Ok(data)
 		end
 		local result = budgetGate:executeAsync(Enum.DataStoreRequestType.GetAsync, function()
 			return ResultUtil.withRetry(function()
 				return Store:GetAsync(tostring(userId))
 			end, Config.DataStore.RETRY_ATTEMPTS)
-		end)
+		end, mutexFor(userId))
 		if not result.ok then
 			log:error("Load gagal", { userId = userId, err = result.error })
 			if result.error == "budget_exhausted" then
@@ -69,36 +113,59 @@ local function createOverheadRepository(datastoreKey: string?): IOverheadReposit
 			end
 			return ResultUtil.Err(result.error)
 		end
-		local raw  = result.value
+		local raw = result.value
 		local data = raw and OverheadDomain.sanitize(raw) or OverheadDomain.defaultStoredData()
 		Cache.set(cacheKey, data, Config.DataStore.CACHE_TTL)
+		if useSession() then
+			PlayerSessionStore.hydrate(SESSION_NS, userId, data)
+		end
 		log:debug("Load OK", { userId = userId })
 		return ResultUtil.Ok(data)
 	end
-	-- load() tidak lagi silent fallback ke default data.
-	-- Caller yang decide policy fallback - repository hanya report error.
-	-- Kalau loadStrict gagal, return Err agar caller tahu data asli tidak bisa dibaca.
+
 	function repo:load(userId: number): Result<OverheadStoredData>
 		return self:loadStrict(userId)
 	end
-	-- ============================================================
-	-- UPDATE (atomic merge on latest server state)
-	-- ============================================================
+
 	function repo:update(
 		userId: number,
 		mutator: (current: OverheadStoredData) -> OverheadStoredData
 	): Result<OverheadStoredData>
+		if useSession() then
+			if PlayerSessionStore.get(SESSION_NS, userId) == nil then
+				local loaded = self:loadStrict(userId)
+				if not loaded.ok then
+					return loaded
+				end
+			end
+			local nextData, changed = PlayerSessionStore.applyMutator(SESSION_NS, userId, function(current)
+				return OverheadDomain.sanitize(mutator(current :: OverheadStoredData))
+			end)
+			if nextData == nil then
+				return ResultUtil.Err("session_missing")
+			end
+			local finalData = nextData :: OverheadStoredData
+			Cache.set(KEY_PREFIX .. userId, finalData, Config.DataStore.CACHE_TTL)
+			if not changed then
+				log:debug("Update no-op (session fingerprint)", { userId = userId })
+				return ResultUtil.Ok(finalData)
+			end
+			PlayerSessionStore.scheduleFlush(SESSION_NS, userId)
+			log:debug("Update deferred to session flush", { userId = userId })
+			return ResultUtil.Ok(finalData)
+		end
+
 		local updatedData: OverheadStoredData? = nil
 		local result = budgetGate:executeAsync(Enum.DataStoreRequestType.UpdateAsync, function()
 			return ResultUtil.withRetry(function()
 				return Store:UpdateAsync(tostring(userId), function(oldData: any): any
 					local current = oldData and OverheadDomain.sanitize(oldData) or OverheadDomain.defaultStoredData()
-					local nextData = mutator(current)
-					updatedData = OverheadDomain.sanitize(nextData)
-					return updatedData
+					local nextData = OverheadDomain.sanitize(mutator(current))
+					updatedData = nextData
+					return nextData
 				end)
 			end, Config.DataStore.RETRY_ATTEMPTS)
-		end)
+		end, mutexFor(userId))
 		if not result.ok then
 			log:error("Update gagal", { userId = userId, err = result.error })
 			return ResultUtil.Err(result.error)
@@ -113,53 +180,32 @@ local function createOverheadRepository(datastoreKey: string?): IOverheadReposit
 		log:debug("Update OK", { userId = userId })
 		return ResultUtil.Ok(finalData)
 	end
-	-- ============================================================
-	-- SAVE
-	-- ============================================================
+
 	function repo:save(userId: number, data: OverheadStoredData): Result<nil>
-		local versionConflict = false
-		local result = budgetGate:executeAsync(Enum.DataStoreRequestType.UpdateAsync, function()
-			return ResultUtil.withRetry(function(): boolean
-				versionConflict = false
-				Store:UpdateAsync(tostring(userId), function(oldData: any): any
-					local base = oldData or {}
-					if base._version and data._version and base._version > data._version then
-						log:warn("UpdateAsync conflict: server version newer, aborting write", {
-							userId = userId,
-							serverV = base._version,
-							localV = data._version,
-						})
-						versionConflict = true
-						return nil -- abort UpdateAsync
-					end
-					return data
-				end)
-				return true
-			end, Config.DataStore.RETRY_ATTEMPTS)
-		end)
-		if versionConflict then
-			Cache.invalidate(KEY_PREFIX .. userId)
-			return ResultUtil.Err("version_conflict")
+		local sanitized = OverheadDomain.sanitize(data)
+		if useSession() then
+			local writeResult = durableWrite(userId, sanitized)
+			if writeResult.ok then
+				PlayerSessionStore.markClean(SESSION_NS, userId, sanitized)
+			end
+			return writeResult
 		end
-		if result.ok then
-			Cache.set(KEY_PREFIX .. userId, data, Config.DataStore.CACHE_TTL)
-			publishInvalidation(userId)
-			log:debug("Save OK", { userId = userId })
-			return ResultUtil.Ok(nil)
-		else
-			log:error("Save gagal", { userId = userId, err = result.error })
-			return ResultUtil.Err(result.error)
-		end
+		return durableWrite(userId, sanitized)
 	end
 
-	-- ============================================================
-	-- INVALIDATE CACHE
-	-- ============================================================
+	function repo:flushSession(userId: number): Result<nil>
+		if not useSession() then
+			return ResultUtil.Ok(nil)
+		end
+		return PlayerSessionStore.flushNow(SESSION_NS, userId)
+	end
+
 	function repo:invalidateCache(userId: number)
 		Cache.invalidate(KEY_PREFIX .. userId)
+		PlayerSessionStore.clear(SESSION_NS, userId)
 	end
+
 	return repo
 end
--- Default instance - Main.server.lua tetap cukup panggil require()
--- dan langsung dapat repo yang sudah dikonfigurasi dengan key production.
+
 return createOverheadRepository()

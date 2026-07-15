@@ -483,6 +483,7 @@ export type IOverheadRepository = {
 		mutator: (current: OverheadStoredData) -> OverheadStoredData
 	) -> Result<OverheadStoredData>,
 	save: (self: IOverheadRepository, userId: number, data: OverheadStoredData) -> Result<nil>,
+	flushSession: ((self: IOverheadRepository, userId: number) -> Result<nil>)?,
 	invalidateCache: (self: IOverheadRepository, userId: number) -> (),
 }
 export type IAboutRosterRepository = {

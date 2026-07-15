@@ -98,6 +98,9 @@ local AnimationLoader = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Cont
 local provisionEarlyRemotes = require(script.Parent.Init.EarlyRemotes)
 local Cleaner = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Cleaner)
 local Cache = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Cache)
+local PlayerSessionStore = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.PlayerSessionStore)
+local DataStoreScheduler = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DataStoreScheduler)
+local CrossServerCache = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.CrossServerCache)
 local log = Logger.new(KitProduct.LogTag)
 ConsoleBanner.printOnce(KitProduct)
 -- Tracks top-level Players.PlayerAdded/PlayerRemoving connections so a Rojo
@@ -866,6 +869,23 @@ if backgroundJobScheduler then
 			deferThreshold = 15,
 		})
 	end
+	-- Persistence Fabric metrics (DEBUG). Interval 0 disables.
+	local metricsInterval = (Config.Persistence and Config.Persistence.METRICS_LOG_INTERVAL) or 60
+	if metricsInterval > 0 then
+		backgroundJobScheduler:register({
+			name = "persistence_fabric_snapshot",
+			callback = function()
+				log:debug("PersistenceFabric snapshot", {
+					scheduler = DataStoreScheduler.getMetrics(),
+					invalidateBus = CrossServerCache.getMetrics(),
+					session = PlayerSessionStore.getMetrics(),
+					openSessions = PlayerSessionStore.openSessionCount(),
+				})
+			end,
+			intervalMin = metricsInterval,
+			intervalMax = metricsInterval,
+		})
+	end
 	-- Start the scheduler
 	backgroundJobScheduler:start()
 	log:info("BackgroundJobScheduler started with registered jobs")
@@ -1094,6 +1114,13 @@ connectionCleaner:add(Players.PlayerRemoving:Connect(function(player)
 	if overheadService and type(overheadService.onPlayerRemoving) == "function" then
 		overheadService:onPlayerRemoving(player)
 	end
+	-- Persistence Fabric: flush dirty Overhead/Settings session docs before drop.
+	pcall(function()
+		PlayerSessionStore.flushNow("overhead", player.UserId)
+		PlayerSessionStore.flushNow("settings", player.UserId)
+		PlayerSessionStore.clear("overhead", player.UserId)
+		PlayerSessionStore.clear("settings", player.UserId)
+	end)
 	-- Cancel any outgoing couple requests from this player so they don't
 	-- linger in the pending table (self-healing via 30s expiry, but clearing
 	-- on leave frees the target's UI immediately and avoids stale accepts).
@@ -1405,6 +1432,9 @@ task.spawn(function()
 					musicFavoritesRepo:flushAll()
 				end)
 			end
+			pcall(function()
+				PlayerSessionStore.flushAll()
+			end)
 		end)
 	end
 end)
@@ -1547,6 +1577,9 @@ game:BindToClose(function()
 				remaining += settingsService:flushShutdown()
 			end)
 		end
+		launchRepo(function()
+			remaining += PlayerSessionStore.flushAll()
+		end)
 		if syncFavoritesRepo then
 			launchRepo(function()
 				remaining += syncFavoritesRepo:flushAll()
