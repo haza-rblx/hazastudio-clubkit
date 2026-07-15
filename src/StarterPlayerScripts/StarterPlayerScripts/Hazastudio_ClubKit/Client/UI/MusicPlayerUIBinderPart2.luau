@@ -368,6 +368,7 @@ return function(MusicPlayerUIBinder: any, H: any)
 				end
 			end
 		end
+		self:_syncDjSwitchInputForActiveTab()
 	end
 	
 	local function rememberRequesterThumbnail(self: any, requesterUserId: number, thumbnail: string)
@@ -3546,7 +3547,11 @@ return function(MusicPlayerUIBinder: any, H: any)
 		local function updateDjTabState(enabled: boolean)
 			setButtonDisplayText(refs.tabs.dj, "DJ")
 			setSwitchToggleVisual(self._djModeToggle, enabled == true)
-			task.defer(setSwitchToggleVisual, self._djModeToggle, enabled == true)
+			task.defer(function()
+				setSwitchToggleVisual(self._djModeToggle, enabled == true)
+				self:_syncDjSwitchInputForActiveTab()
+			end)
+			self:_syncDjSwitchInputForActiveTab()
 		end
 		self._onUpdateManageTab = updateManageTab
 		self._onUpdateDjTabAccess = updateDjTabAccess

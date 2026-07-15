@@ -5,7 +5,9 @@
 
 local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local MusicDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicDomain)
+local NetworkPerfCounters = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.NetworkPerfCounters)
 local MusicAssetValidator = require(script.Parent.MusicAssetValidator)
 
 type TrackInfo = MusicDomain.TrackInfo
@@ -466,9 +468,86 @@ local function createMusicSession(deps: {
 		if not _onStateSync then
 			return
 		end
+		NetworkPerfCounters.record("music_state_sync_full")
 		for _, player in ipairs(getMembers()) do
 			syncStateToPlayer(player)
 		end
+	end
+
+	local function cloneDjEffectState(): any
+		local enabledClone: { [string]: boolean } = {}
+		for effectId, enabled in pairs(djEffectState.enabled) do
+			enabledClone[effectId] = enabled
+		end
+		local valuesClone: { [string]: { [string]: number } } = {}
+		for effectId, values in pairs(djEffectState.values) do
+			if type(values) == "table" then
+				local inner: { [string]: number } = {}
+				for itemId, value in pairs(values) do
+					inner[itemId] = value
+				end
+				valuesClone[effectId] = inner
+			end
+		end
+		return {
+			enabled = enabledClone,
+			values = valuesClone,
+			playbackSpeed = djEffectState.playbackSpeed,
+		}
+	end
+
+	local djEffectsSyncPending = false
+	local djEffectsSyncScheduled = false
+	local lastDjEffectsSyncAt = 0
+
+	local function flushDjEffectsSync()
+		if not _onStateSync then
+			return
+		end
+		djEffectsSyncPending = false
+		lastDjEffectsSyncAt = os.clock()
+		local np = Config.NetworkPerf
+		local kind = if type(np) == "table" and type(np.MUSIC_STATE_KIND_DJ_EFFECTS) == "string"
+			then np.MUSIC_STATE_KIND_DJ_EFFECTS
+			else "djEffects"
+		local payload = {
+			kind = kind,
+			isDjMode = state.isDjMode == true,
+			djEffects = cloneDjEffectState(),
+		}
+		NetworkPerfCounters.record("music_state_sync_dj_effects")
+		for _, player in ipairs(getMembers()) do
+			_onStateSync(player, payload)
+		end
+	end
+
+	-- Effects-only (+ playbackSpeed) packet; optional trailing coalesce (~12/s).
+	local function syncDjEffectsToAllMembers()
+		local np = Config.NetworkPerf
+		local deltaOnly = type(np) ~= "table" or np.DJ_EFFECTS_DELTA_ONLY ~= false
+		if not deltaOnly then
+			syncStateToAllMembers()
+			return
+		end
+		djEffectsSyncPending = true
+		local throttle = type(np) ~= "table" or np.DJ_STATE_SYNC_THROTTLE ~= false
+		if not throttle then
+			flushDjEffectsSync()
+			return
+		end
+		if djEffectsSyncScheduled then
+			return
+		end
+		djEffectsSyncScheduled = true
+		local hz = if type(np) == "table" then tonumber(np.DJ_EFFECTS_SYNC_HZ) else nil
+		local interval = 1 / math.clamp(hz or 12, 4, 30)
+		local delaySec = math.max(0, interval - (os.clock() - lastDjEffectsSyncAt))
+		task.delay(delaySec, function()
+			djEffectsSyncScheduled = false
+			if djEffectsSyncPending then
+				flushDjEffectsSync()
+			end
+		end)
 	end
 
 	local function stopPlayback()
@@ -1135,7 +1214,7 @@ local function createMusicSession(deps: {
 		else
 			return false, "invalid_action"
 		end
-		syncStateToAllMembers()
+		syncDjEffectsToAllMembers()
 		return true, ""
 	end
 
@@ -1146,7 +1225,7 @@ local function createMusicSession(deps: {
 		local safeMultiplier = math.clamp(tonumber(speed) or 1, 0.25, 2)
 		djEffectState.playbackSpeed = safeMultiplier
 		rescheduleTimingForSpeedChange()
-		syncStateToAllMembers()
+		syncDjEffectsToAllMembers()
 		return true, ""
 	end
 

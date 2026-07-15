@@ -515,8 +515,17 @@ local function createMobileFreecamController(deps: {
 		if savedCameraCFrame ~= nil then camera.CFrame = savedCameraCFrame end
 		if savedCameraFocus ~= nil then camera.Focus = savedCameraFocus end
 		camera:SetAttribute(FREECAM_ACTIVE_ATTRIBUTE, false)
-		if savedMouseIconEnabled ~= nil then UserInputService.MouseIconEnabled = savedMouseIconEnabled end
-		if savedMouseBehavior ~= nil then UserInputService.MouseBehavior = savedMouseBehavior end
+		-- Always unlock after freecam (do not restore LockCenter from push / shift-lock).
+		UserInputService.MouseIconEnabled = true
+		UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+		task.defer(function()
+			UserInputService.MouseIconEnabled = true
+			UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+		end)
+		task.delay(0.05, function()
+			UserInputService.MouseIconEnabled = true
+			UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+		end)
 
 		savedCameraFov = nil
 		savedCameraType = nil

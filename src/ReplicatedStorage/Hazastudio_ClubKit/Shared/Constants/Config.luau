@@ -600,7 +600,7 @@ Config.CinematicDock = {
 		{ value = "CCTV360Pulse", label = "360 Atmosphere Pulse", targetType = "part360" },
 		{ value = "CCTV360StaticWide", label = "360 Static Wide", targetType = "part360" },
 	},
-	MSG_NO_PERM = "[Cinematic] Admin-only.",
+	MSG_NO_PERM = "You don't have permission to use this feature.",
 	MSG_INVALID_TARGET = "[Cinematic] Invalid target.",
 	MSG_INVALID_MOVEMENT = "[Cinematic] Invalid movement.",
 	MSG_SENT = "[Cinematic] Broadcast started.",
@@ -3206,11 +3206,35 @@ Config.Interest = {
 	LEGACY_HYSTERESIS_BUFFER = 20,
 }
 -- NetworkManager shared-flush scheduler (perf-scaling R9). Flip to false to roll back to
-
 -- one RunService.Heartbeat connection per NetworkManager instance.
-
 Config.Network = {
 	ENABLE_SHARED_FLUSH = true,
+	-- Per-frame coalesce: same (target, optional data.kind) keep last payload before flush.
+	-- Immediate paths still flushNow(); coalesce only merges duplicate keys within that flush.
+	ENABLE_FRAME_COALESCE = true,
+}
+
+-- Network + client FPS stabilization (Recv/ping/FPS). Kill switches for A/B; real fixes default ON.
+-- Counters are no-op when ENABLE_COUNTERS = false (hot path must stay cheap).
+Config.NetworkPerf = {
+	ENABLE_COUNTERS = false,
+	-- Debug: skip OverheadUI:apply (caches/bridges still update) — isolate FPS vs Recv.
+	SKIP_OVERHEAD_UI_APPLY = false,
+	-- Join: send nearby overhead payloads only; distant covered by Snapshot-on-enter.
+	OVERHEAD_JOIN_PROXIMITY_ONLY = true,
+	-- DJ knob: effects-only MusicStateSync (no full getState fan-out).
+	DJ_EFFECTS_DELTA_ONLY = true,
+	-- Coalesce S→C DJ effect packets (~DJ_EFFECTS_SYNC_HZ trailing keep-last).
+	DJ_STATE_SYNC_THROTTLE = true,
+	DJ_EFFECTS_SYNC_HZ = 12,
+	-- Kind field on MusicStateSync for effects-only packets.
+	MUSIC_STATE_KIND_DJ_EFFECTS = "djEffects",
+	-- Cap concurrent world nuke/aura VFX (0 = disable world VFX enqueue).
+	DONATION_VFX_MAX_CONCURRENT = 1,
+	-- Debug: pause workspace SurfaceGui LB paint (net fingerprint path unchanged).
+	WORKSPACE_LB_PAINT_PAUSE = false,
+	-- DeltaCompressor: deep-equal nested tables (visibleBadges, title style, etc.).
+	DEEP_DELTA_NESTED = true,
 }
 -- ============================================================
 -- CONFIG VALIDATION

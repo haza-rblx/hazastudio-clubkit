@@ -1142,7 +1142,7 @@ local function setSwitchToggleVisual(toggle: Instance?, enabled: boolean)
 
 	local toggleGui = toggle :: GuiObject
 	toggleGui:SetAttribute("ToggleEnabled", enabled == true)
-	toggleGui.Active = true
+	-- Do not force Active=true — input Active is synced to DJ tab visibility.
 
 	local track = findFirstGuiObjectChild(toggleGui, { "Track", "Background", "Frame" }) or toggleGui
 	local thumb = findFirstGuiObjectChild(track, { "Thumb", "Knob", "Handle", "Frame" })
@@ -1184,17 +1184,23 @@ local function getSwitchToggleParts(toggle: Instance?): (GuiObject?, GuiObject?)
 	return track, thumb
 end
 
-local function isPointInsideGui(gui: GuiObject?, point: Vector2): boolean
-	if not gui or not gui.Visible then
-		return false
+local function setSwitchToggleInputEnabled(toggle: GuiObject?, enabled: boolean)
+	if not (toggle and toggle:IsA("GuiObject")) then
+		return
 	end
-
-	local position = gui.AbsolutePosition
-	local size = gui.AbsoluteSize
-	return point.X >= position.X
-		and point.X <= position.X + size.X
-		and point.Y >= position.Y
-		and point.Y <= position.Y + size.Y
+	local toggleGui = toggle :: GuiObject
+	toggleGui.Active = enabled
+	pcall(function()
+		(toggleGui :: any).Interactable = enabled
+	end)
+	local hitbox = toggleGui:FindFirstChild("RuntimeSwitchHitbox")
+	if hitbox and hitbox:IsA("GuiButton") then
+		hitbox.Active = enabled
+		hitbox.Visible = enabled
+		pcall(function()
+			(hitbox :: any).Interactable = enabled
+		end)
+	end
 end
 
 local function ensureSwitchToggleHitbox(toggle: GuiObject, track: GuiObject?): TextButton
@@ -1280,6 +1286,8 @@ local function bindMainDragSuppression(
 	end
 end
 
+-- Single click path: GuiButton.Activated or one RuntimeSwitchHitbox.Activated.
+-- No UserInputService global hit-tests (those fired through hidden overlapping tabs).
 local function bindSwitchToggleClick(
 	connections: { RBXScriptConnection },
 	target: Instance?,
@@ -1318,79 +1326,21 @@ local function bindSwitchToggleClick(
 		callback()
 	end
 
-	local function tryFire(input: InputObject)
-		if
-			input.UserInputType ~= Enum.UserInputType.MouseButton1
-			and input.UserInputType ~= Enum.UserInputType.Touch
-		then
-			return
-		end
-
-		fire()
-	end
-
-	local function bindGui(gui: GuiObject)
-		gui.Active = true
-		table.insert(connections, gui.MouseEnter:Connect(suppressDrag))
-		table.insert(connections, gui.MouseLeave:Connect(restoreDrag))
-		table.insert(connections, gui.InputBegan:Connect(tryFire))
-		table.insert(
-			connections,
-			gui.InputEnded:Connect(function(input)
-				if
-					input.UserInputType == Enum.UserInputType.MouseButton1
-					or input.UserInputType == Enum.UserInputType.Touch
-				then
-					restoreDrag()
-				end
-			end)
-		)
-	end
-
 	local targetGui = target :: GuiObject
-	local track, thumb = getSwitchToggleParts(targetGui)
-	table.insert(
-		connections,
-		UserInputService.InputBegan:Connect(function(input)
-			if
-				input.UserInputType ~= Enum.UserInputType.MouseButton1
-				and input.UserInputType ~= Enum.UserInputType.Touch
-			then
-				return
-			end
-
-			local point = Vector2.new(input.Position.X, input.Position.Y)
-			if
-				isPointInsideGui(targetGui, point)
-				or isPointInsideGui(track, point)
-				or isPointInsideGui(thumb, point)
-			then
-				fire()
-			end
-		end)
-	)
-
+	local track = getSwitchToggleParts(targetGui)
+	local clickTarget: GuiButton
 	if targetGui:IsA("GuiButton") then
-		local button = targetGui :: GuiButton
-		button.Active = true
-		button.AutoButtonColor = false
-		button.Selectable = false
-		table.insert(connections, button.MouseEnter:Connect(suppressDrag))
-		table.insert(connections, button.MouseLeave:Connect(restoreDrag))
-		table.insert(connections, button.Activated:Connect(fire))
-		return
+		clickTarget = targetGui :: GuiButton
+		clickTarget.AutoButtonColor = false
+		clickTarget.Selectable = false
 	else
-		local hitbox = ensureSwitchToggleHitbox(targetGui, track)
-		bindGui(hitbox)
-		table.insert(connections, hitbox.Activated:Connect(fire))
+		clickTarget = ensureSwitchToggleHitbox(targetGui, track)
 	end
-	bindGui(targetGui)
-	if track then
-		bindGui(track)
-	end
-	if thumb then
-		bindGui(thumb)
-	end
+
+	clickTarget.Active = true
+	table.insert(connections, clickTarget.MouseEnter:Connect(suppressDrag))
+	table.insert(connections, clickTarget.MouseLeave:Connect(restoreDrag))
+	table.insert(connections, clickTarget.Activated:Connect(fire))
 end
 
 local function formatDjNumberText(value: number): string
@@ -2307,6 +2257,15 @@ function MusicPlayerUIBinder:_syncMainDragForActiveTab()
 	end
 end
 
+-- Only accept switch Activated while the DJ tab canvas is the active page.
+function MusicPlayerUIBinder:_syncDjSwitchInputForActiveTab()
+	local inputEnabled = self._store:get().activeTab == "dj"
+	setSwitchToggleInputEnabled(self._djModeToggle, inputEnabled)
+	for _, toggle in pairs(self._djEffectToggleButtons) do
+		setSwitchToggleInputEnabled(toggle, inputEnabled)
+	end
+end
+
 function MusicPlayerUIBinder:_releaseIdleBlockingOverlays()
 	local localPlayer = Players.LocalPlayer
 	local playerGui = localPlayer and localPlayer:FindFirstChildOfClass("PlayerGui")
@@ -2341,6 +2300,7 @@ function MusicPlayerUIBinder:switchTab(newTab: string)
 	self._store:set({ activeTab = newTab })
 	self:_releaseIdleBlockingOverlays()
 	self:_syncMainDragForActiveTab()
+	self:_syncDjSwitchInputForActiveTab()
 	self:_resetTabFrames(frames, newFrameKey)
 	self:_updateTabButtonVisuals(newTab)
 
@@ -2377,6 +2337,7 @@ function MusicPlayerUIBinder:openPanel()
 	local activeFrameKey = TAB_FRAME_KEY[activeTab] or TAB_FRAME_KEY.nowplaying
 	self:_releaseIdleBlockingOverlays()
 	self:_syncMainDragForActiveTab()
+	self:_syncDjSwitchInputForActiveTab()
 	self:_resetTabFrames(getTabFrames(self._refs), activeFrameKey)
 	self:_updateTabButtonVisuals(activeTab)
 	self._anim:presentCenterPanel(self._refs.mainWrapper, nil, MAIN_PANEL_BLUR_OPTIONS)
@@ -4166,6 +4127,7 @@ applyPart2(MusicPlayerUIBinder, {
 	setTextDisplay = setTextDisplay,
 	setButtonDisplayText = setButtonDisplayText,
 	setSwitchToggleVisual = setSwitchToggleVisual,
+	setSwitchToggleInputEnabled = setSwitchToggleInputEnabled,
 	bindSwitchToggleClick = bindSwitchToggleClick,
 	formatDjSpeedText = formatDjSpeedText,
 	formatDjEffectValueText = formatDjEffectValueText,

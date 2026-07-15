@@ -20,6 +20,7 @@ local Validator = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Vali
 local DeltaCompressor = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DeltaCompressor)
 local OverheadPremiumBadge = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.OverheadPremiumBadge)
 local HttpApiCounter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.HttpApiCounter)
+local NetworkPerfCounters = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.NetworkPerfCounters)
 type OverheadPayload = Types.OverheadPayload
 -- Structural type for the optional ProximityInterestService dependency injected by
 -- Main.server.luau (task 2.2). We declare only the subset of the API used here so that
@@ -1035,6 +1036,7 @@ end
 			end
 			local delta = deltaCompressor:computeDelta(key, payload :: any)
 			if delta then
+				NetworkPerfCounters.record("overhead_update_delta")
 				overheadNetwork:fireClient(viewer, {
 					kind = Config.Overhead.DELTA_MESSAGE_KIND,
 					userId = subjectUserId,
@@ -1088,17 +1090,60 @@ end
 	-- ----------------------------------------------------------
 	-- Kirim payload semua player yang sudah ada ke satu client baru
 	-- Dipanggil saat player baru join agar bisa lihat overhead orang lain
+	-- OVERHEAD_JOIN_PROXIMITY_ONLY: nearby only; distant via Snapshot-on-enter.
 	-- ----------------------------------------------------------
+	local function getJoinInterestRadius(): number
+		local interest = Config.Interest
+		if type(interest) == "table" and interest.USE_LEGACY_VIEW_RANGE == true then
+			return tonumber(interest.LEGACY_VIEW_RANGE_RADIUS) or 80
+		end
+		if type(interest) == "table" then
+			return tonumber(interest.VIEW_RANGE_RADIUS) or 55
+		end
+		return 55
+	end
+
+	local function isNearbyForJoin(viewer: Player, subject: Player): boolean
+		if viewer == subject then
+			return true
+		end
+		-- Prefer InterestManager membership when available.
+		if proximity then
+			local recipients = proximity:getSubscribers("overhead:", subject)
+			for _, recipient in ipairs(recipients) do
+				if recipient == viewer then
+					return true
+				end
+			end
+		end
+		local viewerChar = viewer.Character
+		local subjectChar = subject.Character
+		if not viewerChar or not subjectChar then
+			return false
+		end
+		local viewerRoot = viewerChar:FindFirstChild("HumanoidRootPart")
+		local subjectRoot = subjectChar:FindFirstChild("HumanoidRootPart")
+		if not (viewerRoot and viewerRoot:IsA("BasePart") and subjectRoot and subjectRoot:IsA("BasePart")) then
+			return false
+		end
+		local radius = getJoinInterestRadius()
+		local delta = (viewerRoot :: BasePart).Position - (subjectRoot :: BasePart).Position
+		return delta.Magnitude <= radius
+	end
+
 	local function sendAllExistingTo(newPlayer: Player)
 		local batchSize = math.max(1, Config.Overhead.EXISTING_PAYLOAD_BATCH_SIZE)
 		local batchDelay = math.max(0, Config.Overhead.EXISTING_PAYLOAD_BATCH_DELAY)
 		local batch = table.create(batchSize)
+		local np = Config.NetworkPerf
+		local proximityOnly = type(np) ~= "table" or np.OVERHEAD_JOIN_PROXIMITY_ONLY ~= false
 
 		local function flushBatch()
 			if #batch == 0 then
 				return
 			end
 
+			NetworkPerfCounters.record("overhead_update_batch")
 			overheadNetwork:fireClient(newPlayer, {
 				kind = Config.Overhead.BATCH_MESSAGE_KIND,
 				payloads = batch,
@@ -1108,6 +1153,9 @@ end
 
 		for _, existingPlayer in ipairs(Players:GetPlayers()) do
 			if existingPlayer.Character and dataReadyPlayers[existingPlayer.UserId] then
+				if proximityOnly and not isNearbyForJoin(newPlayer, existingPlayer) then
+					continue
+				end
 				local payload: OverheadPayload? = cachedPayloads[existingPlayer.UserId]
 				if not payload then
 					local builtPayload = select(1, buildAndCachePayload(existingPlayer))
@@ -1125,7 +1173,10 @@ end
 			end
 		end
 		flushBatch()
-		log:debug("Existing payloads sent to new player", { player = newPlayer.Name })
+		log:debug("Existing payloads sent to new player", {
+			player = newPlayer.Name,
+			proximityOnly = proximityOnly,
+		})
 	end
 	-- ----------------------------------------------------------
 	-- PlayerAdded flow

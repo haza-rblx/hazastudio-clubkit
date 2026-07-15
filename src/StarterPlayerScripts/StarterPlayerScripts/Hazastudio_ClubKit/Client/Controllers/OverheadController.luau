@@ -3,6 +3,7 @@
 
 local Players           = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService        = game:GetService("RunService")
 
 local Types      = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local Config     = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
@@ -11,6 +12,7 @@ local OverheadUI = require(script.Parent.Parent.UI.OverheadUI)
 local OverheadDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.OverheadDomain)
 local Logger     = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local DeltaCompressor = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DeltaCompressor)
+local NetworkPerfCounters = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.NetworkPerfCounters)
 
 type OverheadPayload = Types.OverheadPayload
 
@@ -323,6 +325,45 @@ local function init(_deps: {}?): ()
 		return copy
 	end
 
+	-- Keep-last OverheadUI:apply per userId per Heartbeat (Recv fan-in → 1 apply/frame).
+	local pendingUiApplies: { [number]: OverheadPayload } = {}
+	local uiApplyFlushConn: RBXScriptConnection? = nil
+
+	local function flushPendingUiApplies()
+		uiApplyFlushConn = nil
+		local skipApply = type(Config.NetworkPerf) == "table" and Config.NetworkPerf.SKIP_OVERHEAD_UI_APPLY == true
+		for userId, payload in pendingUiApplies do
+			pendingUiApplies[userId] = nil
+			if skipApply then
+				NetworkPerfCounters.record("overhead_ui_apply_skipped")
+				continue
+			end
+			local ui = getUI(userId)
+			if not ui then
+				pendingPayloads[userId] = payload
+				continue
+			end
+			pendingPayloads[userId] = nil
+			NetworkPerfCounters.record("overhead_ui_apply")
+			ui:apply(payload)
+		end
+	end
+
+	local function queueUiApply(userId: number, payload: OverheadPayload)
+		pendingUiApplies[userId] = payload
+		if uiApplyFlushConn then
+			return
+		end
+		uiApplyFlushConn = RunService.Heartbeat:Connect(function()
+			local conn = uiApplyFlushConn
+			uiApplyFlushConn = nil
+			if conn then
+				conn:Disconnect()
+			end
+			flushPendingUiApplies()
+		end)
+	end
+
 	local function applyPayload(payload: any)
 		if type(payload) ~= "table" then
 			log:warn("Payload invalid")
@@ -337,13 +378,6 @@ local function init(_deps: {}?): ()
 		-- v2.3: keep a local snapshot so subsequent deltas can merge.
 		cachedPayloadsByUserId[userId] = payload
 		DonationPanelBridge.notifyLocalPayload(payload)
-		local ui = getUI(userId)
-		if not ui then
-			pendingPayloads[userId] = payload
-			return
-		end
-		pendingPayloads[userId] = nil
-		ui:apply(payload :: OverheadPayload)
 		-- Cache role for cross-controller lookup (canonical key)
 		if type(payload.role) == "string" then
 			local normalizedRole = OverheadDomain.normalizeRoleKey(payload.role) or payload.role
@@ -357,6 +391,8 @@ local function init(_deps: {}?): ()
 		if type(payload.effectiveMembership) == "string" then
 			membershipCache[payload.userId] = payload.effectiveMembership
 		end
+		-- Coalesce dense apply storm; SKIP_OVERHEAD_UI_APPLY still updates caches above.
+		queueUiApply(userId, payload :: OverheadPayload)
 	end
 
 	-- v2.3: apply server-sent delta on top of the cached snapshot.
@@ -404,6 +440,7 @@ local function init(_deps: {}?): ()
 	applyLocalPayloadPatchImpl = applyLocalPayloadPatch
 
 	track(RemoteOverheadUpdate.OnClientEvent:Connect(function(payload: any)
+		NetworkPerfCounters.record("overhead_update_recv")
 		if type(payload) == "table" and payload.kind == Config.Overhead.BATCH_MESSAGE_KIND then
 			local payloads = payload.payloads
 			if type(payloads) ~= "table" then

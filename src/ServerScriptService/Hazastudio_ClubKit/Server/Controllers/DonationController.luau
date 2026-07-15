@@ -412,6 +412,10 @@ local function createDonationController(deps: {
 		return payload
 	end
 	local function paintWorkspaceLeaderboards(payload: any)
+		local np = Config.NetworkPerf
+		if type(np) == "table" and np.WORKSPACE_LB_PAINT_PAUSE == true then
+			return
+		end
 		if Config.Leaderboards.SERVER_PAINT_WORKSPACE == true then
 			WorkspaceLeaderboardRenderService.apply(payload)
 			-- Board paint can touch ImageLabels; re-assert brand logo after paint.

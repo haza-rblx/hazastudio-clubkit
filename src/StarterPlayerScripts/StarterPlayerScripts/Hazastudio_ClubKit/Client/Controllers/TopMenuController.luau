@@ -30,7 +30,8 @@ type InitDeps = {
 	menuIcon: any,
 	icons: IconsMap,
 	settingsUI: any,
-	isCinematicVisible: () -> boolean,
+	-- Kept for API compat; cinematic button stays visible — access gated on click.
+	isCinematicVisible: (() -> boolean)?,
 }
 
 local MENU_SLIDE_IN = TweenInfo.new(0.28, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
@@ -44,7 +45,6 @@ local BLUR_OPTIONS = {
 local menuIconRef: any = nil
 local iconsRef: IconsMap? = nil
 local settingsUIRef: any = nil
-local isCinematicVisibleFn: (() -> boolean)? = nil
 local refs: TopMenuGuiRefs.Refs? = nil
 local animHelper: AnimationHelper.AnimationHelper? = nil
 local desktopRestingPosition: UDim2? = nil
@@ -280,20 +280,6 @@ local function getMenuHiddenPosition(frame: GuiObject, shownPosition: UDim2): UD
 	)
 end
 
-local function applyGatedButtonVisibility()
-	if not refs or not isCinematicVisibleFn then
-		return
-	end
-
-	local showCinematic = isCinematicVisibleFn()
-	for _, buttonMap in ipairs({ refs.desktopButtons, refs.phoneButtons }) do
-		local cinematicButton = buttonMap[BUTTONS.CINEMATIC_DOCK]
-		if cinematicButton then
-			cinematicButton.Visible = showCinematic
-		end
-	end
-end
-
 local function applyLayoutVisibility()
 	if not refs then
 		return
@@ -302,7 +288,13 @@ local function applyLayoutVisibility()
 	local isPhone = PhoneLayout.isPhoneLayout()
 	refs.desktopMenu.Visible = (isOpen or isAnimating) and not isPhone
 	refs.phoneMenu.Visible = (isOpen or isAnimating) and isPhone
-	applyGatedButtonVisibility()
+	-- CinematicDock stays Visible for all ranks; open is denied with a server toast.
+	for _, buttonMap in ipairs({ refs.desktopButtons, refs.phoneButtons }) do
+		local cinematicButton = buttonMap[BUTTONS.CINEMATIC_DOCK]
+		if cinematicButton then
+			cinematicButton.Visible = true
+		end
+	end
 end
 
 local function setMenuFrameHiddenState(frame: GuiObject, shownPosition: UDim2)
@@ -600,9 +592,7 @@ local function wireButtons(buttonMap: TopMenuGuiRefs.ButtonMap)
 		openSettingsTab("settings")
 	end)
 	bindButton(buttonMap[BUTTONS.CINEMATIC_DOCK], function()
-		if isCinematicVisibleFn and not isCinematicVisibleFn() then
-			return
-		end
+		-- Permission / toast: CinematicDockController (server-gated authorize).
 		safeSelect(icons.cinematic)
 	end)
 	bindButton(buttonMap[BUTTONS.PROFILE], function()
@@ -616,7 +606,6 @@ function TopMenuController.init(deps: InitDeps)
 	if deps.settingsUI ~= nil then
 		settingsUIRef = deps.settingsUI
 	end
-	isCinematicVisibleFn = deps.isCinematicVisible
 	animHelper = AnimationHelper.new()
 
 	local player = Players.LocalPlayer
@@ -654,7 +643,7 @@ function TopMenuController.init(deps: InitDeps)
 
 	refs.desktopMenu.Visible = false
 	refs.phoneMenu.Visible = false
-	applyGatedButtonVisibility()
+	applyLayoutVisibility()
 
 	wireButtons(refs.desktopButtons)
 	wireButtons(refs.phoneButtons)

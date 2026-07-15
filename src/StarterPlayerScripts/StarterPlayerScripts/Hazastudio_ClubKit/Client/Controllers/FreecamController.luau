@@ -557,12 +557,37 @@ local function createFreecamController(_deps)
 			end
 			if playerGuiConnection then playerGuiConnection:Disconnect(); playerGuiConnection = nil end
 			screenGuis = {}
-			Camera.FieldOfView = cameraFieldOfView
-			Camera.CameraType = cameraType
-			Camera.CFrame = cameraCFrame
-			Camera.Focus = cameraFocus
-			UserInputService.MouseIconEnabled = mouseIconEnabled
-			UserInputService.MouseBehavior = mouseBehavior
+			if cameraFieldOfView ~= nil then
+				Camera.FieldOfView = cameraFieldOfView
+			end
+			if cameraType ~= nil then
+				Camera.CameraType = cameraType
+			end
+			if cameraCFrame ~= nil then
+				Camera.CFrame = cameraCFrame
+			end
+			if cameraFocus ~= nil then
+				Camera.Focus = cameraFocus
+			end
+			-- Club UX: unlock cursor after freecam. Blind restore of LockCenter is wrong when
+			-- toggle is Shift+P (Shift still held / shift-lock) or Push ran while locked.
+			-- Defer re-assert so PlayerModule cannot re-lock on the same frame.
+			UserInputService.MouseIconEnabled = true
+			UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+			task.defer(function()
+				UserInputService.MouseIconEnabled = true
+				UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+			end)
+			task.delay(0.05, function()
+				UserInputService.MouseIconEnabled = true
+				UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+			end)
+			mouseIconEnabled = nil
+			mouseBehavior = nil
+			cameraType = nil
+			cameraFieldOfView = nil
+			cameraCFrame = nil
+			cameraFocus = nil
 		end
 
 		function PlayerState.getScreenGuis()
@@ -667,7 +692,6 @@ local function createFreecamController(_deps)
 
 	local function StartFreecam()
 		if FFlagUserFreecamPlayerLock then initializePlayerList() end
-		script:SetAttribute(FREECAM_ENABLED_ATTRIBUTE_NAME, true)
 		Camera:SetAttribute("FreecamActive", true)
 		local cameraCFrame = Camera.CFrame
 		cameraRot = Vector3.new(cameraCFrame:ToEulerAnglesYXZ())
@@ -715,7 +739,6 @@ local function createFreecamController(_deps)
 	end
 
 	local function StopFreecam()
-		script:SetAttribute(FREECAM_ENABLED_ATTRIBUTE_NAME, false)
 		Camera:SetAttribute("FreecamActive", false)
 		if playerAddedConnection then playerAddedConnection:Disconnect(); playerAddedConnection = nil end
 		if playerRemovingConnection then playerRemovingConnection:Disconnect(); playerRemovingConnection = nil end
@@ -748,10 +771,28 @@ local function createFreecamController(_deps)
 	end
 
 	local enabled = false
-	local function ToggleFreecam()
-		if enabled then StopFreecam() else StartFreecam() end
-		enabled = not enabled
+	local suppressAttributeSync = false
+
+	-- Single owner for FreecamEnabled attribute. Start/Stop must NOT SetAttribute
+	-- FreecamEnabled — that used to re-enter Stop mid-Toggle (double Pop) then flip
+	-- enabled back to true while camera already exited, leaving MouseBehavior locked.
+	local function setFreecamEnabled(nextEnabled: boolean)
+		if nextEnabled == enabled then
+			return
+		end
+		if nextEnabled then
+			StartFreecam()
+		else
+			StopFreecam()
+		end
+		enabled = nextEnabled
+		suppressAttributeSync = true
 		script:SetAttribute(FREECAM_ENABLED_ATTRIBUTE_NAME, enabled)
+		suppressAttributeSync = false
+	end
+
+	local function ToggleFreecam()
+		setFreecamEnabled(not enabled)
 	end
 
 	local function CheckMacro(macro)
@@ -771,22 +812,21 @@ local function createFreecamController(_deps)
 	end
 
 	ContextActionService:BindActionAtPriority("FreecamToggle", HandleActivationInput, false, TOGGLE_INPUT_PRIORITY, FREECAM_MACRO_KB[#FREECAM_MACRO_KB])
+	suppressAttributeSync = true
 	script:SetAttribute(FREECAM_ENABLED_ATTRIBUTE_NAME, enabled)
+	suppressAttributeSync = false
 	table.insert(moduleConnections, script:GetAttributeChangedSignal(FREECAM_ENABLED_ATTRIBUTE_NAME):Connect(function()
-		local attributeValue = script:GetAttribute(FREECAM_ENABLED_ATTRIBUTE_NAME)
-		if typeof(attributeValue) ~= "boolean" then
-			script:SetAttribute(FREECAM_ENABLED_ATTRIBUTE_NAME, enabled)
+		if suppressAttributeSync then
 			return
 		end
-		if attributeValue ~= enabled then
-			if attributeValue then
-				StartFreecam()
-				enabled = true
-			else
-				StopFreecam()
-				enabled = false
-			end
+		local attributeValue = script:GetAttribute(FREECAM_ENABLED_ATTRIBUTE_NAME)
+		if typeof(attributeValue) ~= "boolean" then
+			suppressAttributeSync = true
+			script:SetAttribute(FREECAM_ENABLED_ATTRIBUTE_NAME, enabled)
+			suppressAttributeSync = false
+			return
 		end
+		setFreecamEnabled(attributeValue)
 	end))
 
 	return {
@@ -794,8 +834,7 @@ local function createFreecamController(_deps)
 		isActive = function() return enabled end,
 		destroy = function()
 			if enabled then
-				StopFreecam()
-				enabled = false
+				setFreecamEnabled(false)
 			end
 			ContextActionService:UnbindAction("FreecamToggle")
 			for _, conn in ipairs(moduleConnections) do

@@ -319,6 +319,11 @@ local function createCinematicDockController(deps: {
 		if type(raw) ~= "table" then
 			return
 		end
+		-- Soft open-check from custom topbar: toast-only path for non-admins already
+		-- handled above; admins get a no-op ACK so the dock can open client-side.
+		if raw.action == "authorize" then
+			return
+		end
 		if raw.action == "stop" then
 			activeTargetUserId = nil
 			broadcastNetwork:fireAllClients({

@@ -11,6 +11,24 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.39] - 2026-07-15
+
+### Added
+- **NetworkPerf** — `Config.NetworkPerf` kill switches + lightweight 1s counters (`NetworkPerfCounters`) for OverheadUpdate / MusicStateSync / OverheadUI apply rates (`ENABLE_COUNTERS` default off).
+- **NetworkManager frame coalesce** — `Config.Network.ENABLE_FRAME_COALESCE` (default on): same target + message kind (+ optional `userId`) keep-last per Heartbeat flush. Immediate paths still `flushNow()`.
+
+### Changed
+- **Music DJ sync** — effect / playbackSpeed knobs send effects-only `MusicStateSync` (`kind = djEffects`) with ~12/s trailing coalesce instead of full `getState()` fan-out (`DJ_EFFECTS_DELTA_ONLY`, `DJ_STATE_SYNC_THROTTLE`).
+- **Overhead join** — `sendAllExistingTo` proximity-only by default (`OVERHEAD_JOIN_PROXIMITY_ONLY`); distant players still get Snapshot-on-enter.
+- **DeltaCompressor** — nested deep-equal when `DEEP_DELTA_NESTED` (default on) so badge/style tables do not inflate deltas.
+- **OverheadUI apply** — per-userId keep-last coalesce each Heartbeat; `SKIP_OVERHEAD_UI_APPLY` debug skip.
+- **Donation world VFX** — concurrent cap via `DONATION_VFX_MAX_CONCURRENT` (default 1; `0` disables). `WORKSPACE_LB_PAINT_PAUSE` skips workspace SurfaceGui paint for A/B.
+- **Cinematic dock topbar** — button stays visible for all ranks; non-admin click does not open the dock and shows a server Notify toast (`You don't have permission to use this feature.`). Broadcast/actions remain server-gated.
+
+### Fixed
+- **Freecam cursor lock after exit** — Shift+P toggle raced `FreecamEnabled` attribute (double Stop / wrong `enabled`), then `PlayerState.Pop` restored `MouseBehavior.LockCenter` while Shift still held. Exit now owns attribute sync once and force-unlocks mouse (`Default` + icon) with short re-assert. Same unlock on MobileFreecam stop.
+- **Music DJ toggles** — removed global `UserInputService` hit-tests that could toggle DJ mode / FX switches while another music tab was open (overlapping AbsolutePosition). Switches now use a single `Activated` path; input `Active` only while the DJ tab is active.
+
 ## [2.4.38] - 2026-07-15
 
 ### Added

@@ -390,10 +390,26 @@ local function bindIcon(icon: any?, onOpen: () -> (), onClose: () -> ())
 	end
 end
 
+local DENY_TOAST_COOLDOWN = 2.5
+local lastDenyToastAt = 0
+
 local function roleCanUseDock(): boolean
 	local player = Players.LocalPlayer
 	local role = OverheadController.getPlayerRole(player.UserId)
 	return PermissionDomain.canUseAdminPanel(role, player.UserId)
+end
+
+-- Server-authoritative deny toast (Notify). Local check only avoids opening the dock.
+local function denyDockAccess(requestRemote: RemoteEvent?, topbarIcon: any?)
+	deselectIcon(topbarIcon)
+	local now = os.clock()
+	if now - lastDenyToastAt < DENY_TOAST_COOLDOWN then
+		return
+	end
+	lastDenyToastAt = now
+	if requestRemote then
+		requestRemote:FireServer({ action = "authorize" })
+	end
 end
 
 local function pathToInstance(path: { string }?): Instance?
@@ -1314,6 +1330,7 @@ local function init(_deps: {}?)
 
 	local function openOperatorSession()
 		if not roleCanUseDock() then
+			denyDockAccess(requestRemote, topbarIcon)
 			return
 		end
 		setupActive = true
@@ -1322,9 +1339,14 @@ local function init(_deps: {}?)
 	end
 
 	if trigger then
-		trigger.MouseEnter:Connect(openOperatorSession)
+		trigger.MouseEnter:Connect(function()
+			if roleCanUseDock() then
+				openOperatorSession()
+			end
+		end)
 		trigger.Activated:Connect(function()
 			if not roleCanUseDock() then
+				denyDockAccess(requestRemote, topbarIcon)
 				return
 			end
 			if setupActive then
@@ -1342,6 +1364,7 @@ local function init(_deps: {}?)
 	if broadcastButton then
 		broadcastButton.Activated:Connect(function()
 			if not roleCanUseDock() then
+				denyDockAccess(requestRemote, topbarIcon)
 				return
 			end
 			if startedThisSetup then
@@ -1360,7 +1383,7 @@ local function init(_deps: {}?)
 
 	bindIcon(topbarIcon, function()
 		if not roleCanUseDock() then
-			deselectIcon(topbarIcon)
+			denyDockAccess(requestRemote, topbarIcon)
 			return
 		end
 		if not startedThisSetup then

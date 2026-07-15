@@ -15,6 +15,8 @@ local MusicAssetLoadService = require(script.Parent.Parent.Services.MusicAssetLo
 local MusicAssetCache = require(script.Parent.Parent.Services.MusicAssetCache)
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local MusicDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicDomain)
+local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
+local NetworkPerfCounters = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.NetworkPerfCounters)
 
 type NotifType = NotifService.NotifType
 type NotificationPayload = {
@@ -1614,6 +1616,17 @@ function MusicPlayerController:_applyServerState(data: any, options: { forcePlay
 		return
 	end
 
+	local np = Config.NetworkPerf
+	local djEffectsKind = if type(np) == "table" and type(np.MUSIC_STATE_KIND_DJ_EFFECTS) == "string"
+		then np.MUSIC_STATE_KIND_DJ_EFFECTS
+		else "djEffects"
+	if data.kind == djEffectsKind then
+		NetworkPerfCounters.record("music_client_dj_effects_apply")
+		local isDjMode = if data.isDjMode ~= nil then data.isDjMode == true else self._store:get().isDjMode == true
+		self:_applyDjEffectsFromServer(data.djEffects, isDjMode)
+		return
+	end
+
 	local incomingTrack = data.track
 	local timingPatch = self:_buildStoreTimingPatch(data)
 	local incomingStartServerTime = timingPatch.startServerTime
@@ -1652,7 +1665,24 @@ function MusicPlayerController:_applyServerState(data: any, options: { forcePlay
 	})
 	self:_setMusicIconVisible(self:_computeIconVisible())
 	self._binder:setDjModeEnabled(self._store:get().isDjMode == true)
-	self._binder:renderQueue(self._store:get().queue)
+	-- Skip full queue rebind when queue length + identity unchanged (DJ StateSync hitch).
+	local queueUnchanged = #newQueue == #previousQueue
+	if queueUnchanged then
+		for i = 1, #newQueue do
+			local nextEntry = newQueue[i]
+			local prevEntry = previousQueue[i]
+			local nextId = if type(nextEntry) == "table" then nextEntry.id else nil
+			local prevId = if type(prevEntry) == "table" then prevEntry.id else nil
+			if nextId ~= prevId then
+				queueUnchanged = false
+				break
+			end
+		end
+	end
+	if not queueUnchanged then
+		NetworkPerfCounters.record("music_client_render_queue")
+		self._binder:renderQueue(self._store:get().queue)
+	end
 	self:_schedulePrefetch(
 		if type(incomingTrack) == "table" then incomingTrack else self._store:get().currentTrack,
 		newQueue,

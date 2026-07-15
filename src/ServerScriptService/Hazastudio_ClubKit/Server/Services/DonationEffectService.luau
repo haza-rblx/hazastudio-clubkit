@@ -39,14 +39,21 @@ local function createDonationEffectService(deps: {
 	local MAX_QUEUE_DEPTH = 16
 	local QUEUE_BUFFER = 0.5 -- extra gap between cycles for clean transitions
 
-	-- Global nuke queue: serialize world-position Nuke/Smite/BlackHole VFX
-	-- supaya donations gantian (full serialize — tunggu nuke selesai DULU
-	-- sebelum mulai berikutnya). Duration = WORLD_EFFECT_DURATIONS[effect]
-	-- (Nuke 90 / Smite4 180 / BlackHole 240) matching client EffectDonate
+	-- Global nuke queue: cap concurrent world-position Nuke/Smite/BlackHole VFX
+	-- via Config.NetworkPerf.DONATION_VFX_MAX_CONCURRENT (0 = disable enqueue).
+	-- Duration = WORLD_EFFECT_DURATIONS[effect] matching client EffectDonate
 	-- lifetimes; fallback NUKE_DEFAULT_DURATION. Client also single-flights.
 	-- Do NOT enable NukeEffectController alongside EffectDonate (double VFX).
 	local nukeQueue: { { player: Player, source: string, amount: number } } = {}
-	local nukeWorkerThread: thread? = nil
+	local activeWorldVfx = 0
+
+	local function getWorldVfxMaxConcurrent(): number
+		local np = Config.NetworkPerf
+		if type(np) == "table" and type(np.DONATION_VFX_MAX_CONCURRENT) == "number" then
+			return math.max(0, math.floor(np.DONATION_VFX_MAX_CONCURRENT))
+		end
+		return 1
+	end
 
 	local function getWorldEffectDuration(effectName: string): number
 		local donation = Config.Donation :: any
@@ -339,9 +346,8 @@ local function createDonationEffectService(deps: {
 		return DonationEffectTierResolver.resolveWorldByIdr(amount)
 	end
 
-	-- Fires the world-position nuke VFX to all clients. Independent from the
-	-- per-player aura pipeline; the queue is not used here so multiple donors
-	-- can stack nuke VFX concurrently.
+	-- Fires the world-position nuke VFX to all clients. Queued via enqueueNuke
+	-- with DONATION_VFX_MAX_CONCURRENT budget (default 1).
 	local function getWorldVfxRecipientLabel(): string
 		if type(Config.Branding) == "table" and type(Config.Branding.GAME_NAME) == "string" and Config.Branding.GAME_NAME ~= "" then
 			return Config.Branding.GAME_NAME
@@ -373,36 +379,50 @@ local function createDonationEffectService(deps: {
 			source = source,
 			amount = amount,
 			effect = effect,
+			activeWorldVfx = activeWorldVfx,
 		})
 	end
 
-	-- Nuke queue worker: dequeue satu per satu, tunggu WORLD_EFFECT_DURATIONS
-	-- untuk effect yang baru di-broadcast sebelum mulai berikutnya.
-	local function processNukeQueue()
-		while #nukeQueue > 0 do
+	local drainNukeQueue: () -> ()
+
+	drainNukeQueue = function()
+		local maxConcurrent = getWorldVfxMaxConcurrent()
+		if maxConcurrent <= 0 then
+			table.clear(nukeQueue)
+			return
+		end
+		while #nukeQueue > 0 and activeWorldVfx < maxConcurrent do
 			local item = table.remove(nukeQueue, 1)
+			if not item then
+				break
+			end
 			local player = item.player
 			local effect = resolveNukeEffect(item.source, item.amount)
-			if player and player.Parent and effect then
-				broadcastNuke(player, item.source, item.amount)
-				-- Always wait the real client lifetime so a late enqueue during
-				-- this wait is still serialized (worker stays alive).
-				task.wait(getWorldEffectDuration(effect))
+			if not (player and player.Parent and effect) then
+				continue
 			end
+			activeWorldVfx += 1
+			task.spawn(function()
+				broadcastNuke(player, item.source, item.amount)
+				task.wait(getWorldEffectDuration(effect))
+				activeWorldVfx = math.max(0, activeWorldVfx - 1)
+				drainNukeQueue()
+			end)
 		end
-		nukeWorkerThread = nil
 	end
 
 	local function enqueueNuke(player: Player, source: string, amount: number)
+		local maxConcurrent = getWorldVfxMaxConcurrent()
+		if maxConcurrent <= 0 then
+			return
+		end
 		-- Skip kalau tidak ada effect untuk amount ini (resolveNukeEffect returns nil)
 		local effect = resolveNukeEffect(source, amount)
 		if not effect then
 			return
 		end
 		table.insert(nukeQueue, { player = player, source = source, amount = amount })
-		if not nukeWorkerThread then
-			nukeWorkerThread = task.spawn(processNukeQueue)
-		end
+		drainNukeQueue()
 	end
 
 	local service = {} :: DonationEffectService
