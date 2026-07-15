@@ -159,8 +159,26 @@ local function createShopController(
 			fromName = fromName or "",
 		})
 	end
+	local function resolvePaidBroadcastProductId(): number?
+		local fromConfig = tonumber(Config.PaidBroadcast and Config.PaidBroadcast.PRODUCT_ID)
+		if fromConfig and fromConfig > 0 then
+			return fromConfig
+		end
+		-- Fallback: read buyer ClubKitConfig directly (string IDs / late bootstrap).
+		local ok, clubKit = pcall(function()
+			return require(ReplicatedStorage.Hazastudio_ClubKitConfig.ClubKitConfig)
+		end)
+		if ok and type(clubKit) == "table" and type(clubKit.PaidBroadcast) == "table" then
+			local fromBuyer = tonumber(clubKit.PaidBroadcast.ProductId)
+			if fromBuyer and fromBuyer > 0 then
+				return fromBuyer
+			end
+		end
+		return nil
+	end
+
 	local function getShopProductIdSet(): { [number]: boolean }
-		-- Exclude gift + legacy buy Developer Products from auto donation catalog.
+		-- Exclude gift + legacy buy + PaidBroadcast Developer Products from donation catalog.
 		local excluded: { [number]: boolean } = {}
 		for _, product in pairs(Config.Shop.PRODUCTS) do
 			if type(product) == "table" then
@@ -174,9 +192,19 @@ local function createShopController(
 				end
 			end
 		end
-		local paidBroadcastId = tonumber(Config.PaidBroadcast and Config.PaidBroadcast.PRODUCT_ID)
-		if paidBroadcastId and paidBroadcastId > 0 then
+		local paidBroadcastId = resolvePaidBroadcastProductId()
+		if paidBroadcastId then
 			excluded[paidBroadcastId] = true
+		end
+		local donationCfg = Config.Donation
+		local extraExcluded = donationCfg and donationCfg.EXCLUDED_ROBUX_PRODUCT_IDS
+		if type(extraExcluded) == "table" then
+			for _, rawId in ipairs(extraExcluded) do
+				local id = tonumber(rawId)
+				if id and id > 0 then
+					excluded[id] = true
+				end
+			end
 		end
 		return excluded
 	end
@@ -257,7 +285,9 @@ local function createShopController(
 			return nil
 		end
 
-		local productId = tonumber(raw.ProductId or raw.productId or raw.Id or raw.id)
+		local productId = tonumber(
+			raw.ProductId or raw.productId or raw.DeveloperProductId or raw.developerProductId or raw.Id or raw.id
+		)
 		if not productId or productId <= 0 then
 			return nil
 		end
@@ -408,6 +438,19 @@ local function createShopController(
 			return
 		end
 
+		-- Final sweep: never ship PaidBroadcast / shop IDs even if excluded set was stale at insert.
+		local stripIds = getShopProductIdSet()
+		local filteredProducts: { DonationProduct } = {}
+		local filteredById: { [number]: DonationProduct } = {}
+		for _, product in ipairs(nextProducts) do
+			if not stripIds[product.productId] then
+				table.insert(filteredProducts, product)
+				filteredById[product.productId] = product
+			end
+		end
+		nextProducts = filteredProducts
+		nextProductsById = filteredById
+
 		table.sort(nextProducts, function(a, b)
 			if a.price ~= b.price then
 				return a.price < b.price
@@ -418,14 +461,21 @@ local function createShopController(
 		donationProducts = nextProducts
 		donationProductsById = nextProductsById
 		donationProductsLastRefresh = os.clock()
+		local paidBroadcastId = resolvePaidBroadcastProductId()
 		log:info("Donation Robux products refreshed", {
 			count = #donationProducts,
 			skippedOffsale = skippedOffsale,
+			paidBroadcastExcluded = paidBroadcastId,
 			excludedShopProducts = table.concat(
 				(function()
 					local ids = {}
 					for id in pairs(excludedIds) do
 						table.insert(ids, tostring(id))
+					end
+					for id in pairs(stripIds) do
+						if not excludedIds[id] then
+							table.insert(ids, tostring(id))
+						end
 					end
 					table.sort(ids)
 					return ids

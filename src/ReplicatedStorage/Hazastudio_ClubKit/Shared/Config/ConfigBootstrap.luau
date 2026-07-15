@@ -50,8 +50,8 @@ local function validateClubKitState(state: any)
 	end
 	local paidBroadcast = state.PaidBroadcast
 	if type(paidBroadcast) == "table" then
-		local productId = paidBroadcast.ProductId
-		if type(productId) ~= "number" or productId <= 0 then
+		local productId = tonumber(paidBroadcast.ProductId)
+		if not productId or productId <= 0 then
 			warn("[ConfigBootstrap] PaidBroadcast.ProductId belum diisi (Creator Dashboard)")
 		end
 	end
@@ -305,8 +305,9 @@ function ConfigBootstrap.apply(config: any)
 
 	local paidBroadcast = clubKit.PaidBroadcast
 	if type(config.PaidBroadcast) == "table" and type(paidBroadcast) == "table" then
-		if type(paidBroadcast.ProductId) == "number" and paidBroadcast.ProductId > 0 then
-			config.PaidBroadcast.PRODUCT_ID = paidBroadcast.ProductId
+		local productId = tonumber(paidBroadcast.ProductId)
+		if productId and productId > 0 then
+			config.PaidBroadcast.PRODUCT_ID = productId
 		end
 	end
 

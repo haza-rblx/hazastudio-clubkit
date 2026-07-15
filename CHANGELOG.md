@@ -11,6 +11,14 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.41] - 2026-07-15
+
+### Changed
+- **Donation cash tab brand** — `ClubKitConfig.Donation.Provider` drives Saweria vs Bagibagi illustration (asset + height + `UIGradient-Gold`), title (`Support us on Saweria!` / `Bagibagi!`), and fixes ScreenGui typo `BagiBagi`.
+
+### Fixed
+- **Donation Robux panel** — PaidBroadcast Developer Product ID reliably excluded (tonumber bootstrap + ClubKitConfig fallback + final strip). Optional `Donation.EXCLUDED_ROBUX_PRODUCT_IDS` for extra hides.
+
 ## [2.4.40] - 2026-07-15
 
 ### Changed

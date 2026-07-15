@@ -502,6 +502,7 @@ function DonationSystemUI.new(refs: Refs): DonationSystemUI
 		refs.notFoundCard.Visible = true
 	end
 	applyExternalProviderText(refs.root)
+	DonationProviderDomain.applyCashTabBrand(refs.saweriaTab)
 
 	if refs.saweriaLink then
 		configureReadOnlySelectableLink(refs.saweriaLink, getExternalProviderLink)

@@ -2105,6 +2105,8 @@ Config.Donation = {
 	ROBUX_PRODUCTS = {} :: { { ProductId: number, Name: string?, Price: number? } },
 	-- Hide creator Developer Products that are offsale (IsForSale ~= true) from donation panel.
 	HIDE_OFFSALE_ROBUX_PRODUCTS = true,
+	-- Extra ProductIds to hide from donation panel (PaidBroadcast is always excluded separately).
+	EXCLUDED_ROBUX_PRODUCT_IDS = {} :: { number },
 	-- Donation API base URL (Cloudflare Worker v2): https://host/game/{gameKey}
 	-- REST routes live under {ApiUrl}/v2/*. Secret in Server/Secrets.luau only.
 	SHEETS_WEB_APP_URL = "",
