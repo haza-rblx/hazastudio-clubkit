@@ -63,19 +63,20 @@ AdminUserIds = {
 
 ### 2. Shop membership (Developer Products)
 
-Creator Dashboard → Monetization → Developer Products → buat VIP / VVIP / Supreme (+ gift).
+Creator Dashboard → Monetization → **Game Passes** (self-buy VIP/VVIP/Supreme) + **Developer Products** (gift versions).
 
 ```lua
 Shop = {
     Products = {
-        Tier1 = { BuyId = 123, GiftId = 456, Price = 1 },  -- VIP
-        Tier2 = { BuyId = 789, GiftId = 101, Price = 1 },  -- VVIP
-        Tier3 = { BuyId = 112, GiftId = 131, Price = 1 },  -- Supreme
+        -- BuyGamePassId = one-time self-buy; GiftId = gift Dev Product; BuyId = legacy (optional)
+        Tier1 = { BuyGamePassId = 123, GiftId = 456, Price = 1 },  -- VIP
+        Tier2 = { BuyGamePassId = 789, GiftId = 101, Price = 1 },  -- VVIP
+        Tier3 = { BuyGamePassId = 112, GiftId = 131, Price = 1 },  -- Supreme
     },
 },
 ```
 
-Aktifkan product di dashboard. `Price` = harga tampil di UI.
+Aktifkan pass/product di dashboard. `Price` = harga tampil di UI.
 
 ### 2b. Paid broadcast (Developer Product)
 
@@ -91,7 +92,7 @@ PaidBroadcast = {
 
 Path: `ReplicatedStorage/Hazastudio_ClubKitConfig/ClubKitConfig` → `PaidBroadcast.ProductId`.
 
-**Penting:** ini product terpisah dari `Shop.Products` — jangan pakai BuyId/GiftId membership.
+**Penting:** ini product terpisah dari `Shop.Products` — jangan pakai BuyGamePassId/GiftId membership.
 
 Verifikasi: Play test → ikon Broadcast → prompt Robux muncul. Jika `ProductId` masih `0`, Output: `[ConfigBootstrap] PaidBroadcast.ProductId belum diisi`.
 
@@ -227,7 +228,7 @@ Gunakan `/testcash` / `/testrobux` untuk uji notif + VFX tanpa mengubah leaderbo
 ### Live production
 
 - [ ] `GroupId` + `OwnerUserId` terisi
-- [ ] `Shop.Products` BuyId/GiftId terisi & product aktif di dashboard
+- [ ] `Shop.Products` BuyGamePassId + GiftId terisi & aktif di dashboard
 - [ ] `PaidBroadcast.ProductId` terisi & product aktif di dashboard
 - [ ] `Donation.ApiUrl` + `Secrets.DonationApiSecret` (jika donasi cash aktif)
 - [ ] `ClubKitShowcase.luau` **dihapus** (atau `ACTIVE = false`)
@@ -248,7 +249,7 @@ Gunakan `/testcash` / `/testrobux` untuk uji notif + VFX tanpa mengubah leaderbo
 
 | Masalah | Solusi |
 |---------|--------|
-| Shop warning BuyId `0` | Isi ID di `Shop.Products` |
+| Shop warning BuyGamePassId `0` | Isi ID di `Shop.Products` |
 | `PaidBroadcast.PRODUCT_ID masih 0` | Buat Developer Product broadcast → isi `PaidBroadcast.ProductId` |
 | Saweria "API not configured" | Isi `ApiUrl` + `DonationApiSecret` |
 | Robux/Likes "No … yet" | Normal — belum ada donasi/like di DataStore |

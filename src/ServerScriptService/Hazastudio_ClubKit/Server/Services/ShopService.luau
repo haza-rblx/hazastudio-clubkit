@@ -15,6 +15,8 @@ type ILogger             = Types.ILogger
 type ShopMembershipTier  = Types.ShopMembershipTier
 export type IShopService = {
 	grantMembership   : (self: IShopService, userId: number, tier: ShopMembershipTier) -> Result<nil>,
+	-- Grant only when new tier is higher than stored membershipBadge (Game Pass sync / upgrade).
+	grantMembershipIfHigher: (self: IShopService, userId: number, tier: ShopMembershipTier) -> Result<boolean>,
 	storePendingGift  : (self: IShopService, fromId: number, toId: number) -> Result<nil>,
 	-- Peek only — does not delete pending. Call consumePendingGift after grant succeeds.
 	resolvePendingGift: (self: IShopService, fromId: number) -> (number?),
@@ -62,6 +64,35 @@ local function createShopService(deps: {
 			log:info("Membership granted", { userId = userId, tier = parsedTier })
 			return ResultUtil.Ok(nil)
 		end
+	end
+
+	function self:grantMembershipIfHigher(userId: number, tier: ShopMembershipTier): Result<boolean>
+		if not LicenseService.isFeatureEnabled("shop_grant") then
+			log:warn("grantMembershipIfHigher blocked — license inactive", { userId = userId, tier = tier })
+			return ResultUtil.Err("license_inactive")
+		end
+		local parsedTier = ShopDomain.parseShopTier(tier)
+		if not parsedTier then
+			return { ok = false, error = "Invalid tier: " .. tier }
+		end
+		local didUpgrade = false
+		local updated = repo:update(userId, function(current)
+			local currentBadge = OverheadDomain.normalizeMembershipTier(current.membershipBadge)
+			local higher = OverheadDomain.getHigherMembership(currentBadge, parsedTier)
+			if higher == nil or higher == currentBadge then
+				return current
+			end
+			didUpgrade = true
+			return OverheadDomain.mergeStored(current, { membershipBadge = higher })
+		end)
+		if not updated.ok then
+			log:error("grantMembershipIfHigher update fail", { userId = userId, error = updated.error })
+			return ResultUtil.Err(updated.error)
+		end
+		if didUpgrade then
+			log:info("Membership upgraded from Game Pass / sync", { userId = userId, tier = parsedTier })
+		end
+		return ResultUtil.Ok(didUpgrade)
 	end
 	function self:storePendingGift(fromId: number, toId: number): Result<nil>
 		cleanupPending()

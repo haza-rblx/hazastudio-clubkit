@@ -1,6 +1,7 @@
 --!strict
 -- Client/Services/ShopService.lua
--- Trigger MarketplaceService purchase, listen untuk ShopGrantNotif dari server.
+-- Trigger MarketplaceService purchase (Game Pass buy / Developer Product gift),
+-- listen untuk ShopGrantNotif dari server.
 
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players            = game:GetService("Players")
@@ -78,21 +79,20 @@ local function createShopService(deps: {
 		end))
 	end)
 
-	-- Beli untuk diri sendiri
+	-- Beli untuk diri sendiri (Game Pass — one-time)
 	function self:promptBuy(tier: string)
 		local parsedTier = ShopDomain.parseShopTier(tier)
 		if not parsedTier then return end
 
 		local product = Config.Shop.PRODUCTS[parsedTier]
 		if type(product) ~= "table" then return end
-		local productId = product.BUY_ID
-		if productId == 0 then
-			-- Stub: product belum di-setup
-			log:warn("BUY_ID belum diisi", { tier = parsedTier })
+		local gamePassId = tonumber(product.BUY_GAMEPASS_ID)
+		if not gamePassId or gamePassId <= 0 then
+			log:warn("BUY_GAMEPASS_ID belum diisi", { tier = parsedTier })
 			return
 		end
 
-		MarketplaceService:PromptProductPurchase(localPlayer, productId)
+		MarketplaceService:PromptGamePassPurchase(localPlayer, gamePassId)
 	end
 
 	-- Beli sebagai gift untuk player lain

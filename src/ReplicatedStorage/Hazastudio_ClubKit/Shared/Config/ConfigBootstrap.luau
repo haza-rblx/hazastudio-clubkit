@@ -37,9 +37,13 @@ local function validateClubKitState(state: any)
 	if type(shop) == "table" and type(shop.Products) == "table" then
 		for tierKey, product in pairs(shop.Products) do
 			if type(product) == "table" then
-				local buyId = product.BuyId
-				if type(buyId) ~= "number" or buyId <= 0 then
-					warn("[ConfigBootstrap] Shop.Products." .. tierKey .. ".BuyId belum diisi (Creator Dashboard)")
+				local buyPassId = product.BuyGamePassId
+				if type(buyPassId) ~= "number" or buyPassId <= 0 then
+					warn("[ConfigBootstrap] Shop.Products." .. tierKey .. ".BuyGamePassId belum diisi (Creator Dashboard → Game Passes)")
+				end
+				local giftId = product.GiftId
+				if type(giftId) ~= "number" or giftId <= 0 then
+					warn("[ConfigBootstrap] Shop.Products." .. tierKey .. ".GiftId belum diisi (Developer Product)")
 				end
 			end
 		end
@@ -276,6 +280,10 @@ function ConfigBootstrap.apply(config: any)
 	if type(config.Shop) == "table" and type(shop) == "table" and type(shop.Products) == "table" then
 		for tierKey, product in pairs(shop.Products) do
 			if type(config.Shop.PRODUCTS[tierKey]) == "table" and type(product) == "table" then
+				-- Prefer BuyGamePassId (self-buy). BuyId kept as legacy Dev Product for ProcessReceipt.
+				if type(product.BuyGamePassId) == "number" and product.BuyGamePassId > 0 then
+					config.Shop.PRODUCTS[tierKey].BUY_GAMEPASS_ID = product.BuyGamePassId
+				end
 				if type(product.BuyId) == "number" and product.BuyId > 0 then
 					config.Shop.PRODUCTS[tierKey].BUY_ID = product.BuyId
 				end

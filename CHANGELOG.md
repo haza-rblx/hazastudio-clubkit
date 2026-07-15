@@ -11,6 +11,11 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.37] - 2026-07-15
+
+### Changed
+- **Shop self-buy → Game Pass** — `BUY_GAMEPASS_ID` / `BuyGamePassId` for one-time membership buy (`PromptGamePassPurchase` + join `UserOwnsGamePassAsync` sync via `grantMembershipIfHigher`). Gift stays Developer Product (`GIFT_ID`). Legacy `BUY_ID` / `BuyId` still honored in `ProcessReceipt` so existing `membershipBadge` buyers and in-flight receipts are safe. Config placeholders `0` until buyer fills ClubKitConfig.
+
 ## [2.4.36] - 2026-07-15
 
 ### Changed

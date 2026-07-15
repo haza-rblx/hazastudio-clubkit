@@ -51,10 +51,31 @@ function ShopDomain.getCatalogEntry(tier: string): MembershipCatalogEntry?
 	}
 end
 
--- Cari tier berdasarkan BUY_ID
+-- Self-buy Game Pass ID → tier
+function ShopDomain.tierFromBuyGamePassId(gamePassId: number): ShopMembershipTier?
+	for tier, cfg in pairs(Config.Shop.PRODUCTS) do
+		if type(cfg) == "table" then
+			local passId = tonumber(cfg.BUY_GAMEPASS_ID)
+			if passId and passId > 0 and passId == gamePassId then
+				local parsedTier: ShopMembershipTier? = ShopDomain.parseShopTier(tier)
+				if parsedTier then
+					return parsedTier
+				end
+			end
+		end
+	end
+	return nil
+end
+
+function ShopDomain.isBuyGamePass(gamePassId: number): (boolean, ShopMembershipTier?)
+	local tier: ShopMembershipTier? = ShopDomain.tierFromBuyGamePassId(gamePassId)
+	return tier ~= nil, tier
+end
+
+-- Legacy: self-buy Developer Product ID (ProcessReceipt only)
 function ShopDomain.tierFromBuyId(productId: number): ShopMembershipTier?
 	for tier, cfg in pairs(Config.Shop.PRODUCTS) do
-		if cfg.BUY_ID ~= 0 and cfg.BUY_ID == productId then
+		if type(cfg) == "table" and cfg.BUY_ID ~= 0 and cfg.BUY_ID == productId then
 			local parsedTier: ShopMembershipTier? = ShopDomain.parseShopTier(tier)
 			if parsedTier then
 				return parsedTier
@@ -64,10 +85,10 @@ function ShopDomain.tierFromBuyId(productId: number): ShopMembershipTier?
 	return nil
 end
 
--- Cari tier berdasarkan GIFT_ID
+-- Gift Developer Product ID → tier
 function ShopDomain.tierFromGiftId(productId: number): ShopMembershipTier?
 	for tier, cfg in pairs(Config.Shop.PRODUCTS) do
-		if cfg.GIFT_ID ~= 0 and cfg.GIFT_ID == productId then
+		if type(cfg) == "table" and cfg.GIFT_ID ~= 0 and cfg.GIFT_ID == productId then
 			local parsedTier: ShopMembershipTier? = ShopDomain.parseShopTier(tier)
 			if parsedTier then
 				return parsedTier

@@ -8,7 +8,7 @@
   │ 1. Group.GroupId      → angka ID group Roblox kamu              │
   │ 2. Group.OwnerUserId  → userId owner (rank 255 / owner cmds)    │
   │ 3. Donation.ApiUrl    → URL worker Bagi-Bagi (kosong = no live) │
-  │ 4. Shop.Products      → Developer Product ID (Creator Dashboard)│
+  │ 4. Shop.Products      → BuyGamePassId (buy) + GiftId (gift Dev Product) │
   │ 5. PaidBroadcast      → ProductId broadcast berbayar (Robux)    │
   │ 6. Membership           → nama tier VIP/VVIP/Supreme (section bawah)│
   │ 7. RoleCategories       → role group, rank, warna, privilege    │
@@ -156,13 +156,15 @@ ClubKitConfig.Loading = {
 }
 
 -- =============================================================================
--- SHOP MEMBERSHIP (Developer Products — aktifkan di Creator Dashboard)
+-- SHOP MEMBERSHIP
+-- BuyGamePassId = self-buy (Game Pass, one-time). GiftId = gift (Developer Product).
+-- BuyId = legacy self-buy Developer Product (optional; ProcessReceipt still honors).
 -- =============================================================================
 ClubKitConfig.Shop = {
 	Products = {
-		Tier1 = { BuyId = 3608406407, GiftId = 3608406587, Price = 1 }, -- VIP
-		Tier2 = { BuyId = 3608406452, GiftId = 3608406626, Price = 1 }, -- VVIP
-		Tier3 = { BuyId = 3608406486, GiftId = 3608406664, Price = 1 }, -- Supreme
+		Tier1 = { BuyGamePassId = 0, GiftId = 3608406587, BuyId = 3608406407, Price = 1 }, -- VIP
+		Tier2 = { BuyGamePassId = 0, GiftId = 3608406626, BuyId = 3608406452, Price = 1 }, -- VVIP
+		Tier3 = { BuyGamePassId = 0, GiftId = 3608406664, BuyId = 3608406486, Price = 1 }, -- Supreme
 	},
 }
 

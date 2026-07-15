@@ -1413,21 +1413,25 @@ Config.PanelBlur = {
 -- SHOP SYSTEM
 -- ============================================================
 Config.Shop = {
-	-- Developer Product IDs - isi dari Roblox Creator Dashboard
-	-- BUY_ID = player beli untuk diri sendiri
-	-- GIFT_ID = player beli untuk gifting ke orang lain
+	-- Self-buy = Game Pass (one-time). Gift = Developer Product (can repurchase).
+	-- BUY_GAMEPASS_ID — PromptGamePassPurchase + UserOwnsGamePassAsync sync
+	-- GIFT_ID         — PromptProductPurchase + ProcessReceipt
+	-- BUY_ID          — legacy Developer Product self-buy (ProcessReceipt only; optional)
 	PRODUCTS = {
 		Tier1 = {
-			BUY_ID = 0,
+			BUY_GAMEPASS_ID = 0,
 			GIFT_ID = 0,
+			BUY_ID = 0,
 		},
 		Tier2 = {
-			BUY_ID = 0,
+			BUY_GAMEPASS_ID = 0,
 			GIFT_ID = 0,
+			BUY_ID = 0,
 		},
 		Tier3 = {
-			BUY_ID = 0,
+			BUY_GAMEPASS_ID = 0,
 			GIFT_ID = 0,
+			BUY_ID = 0,
 		},
 	},
 	-- Source of truth katalog membership untuk Shop + Admin Giftcard
@@ -3212,20 +3216,21 @@ Config.Network = {
 -- CONFIG VALIDATION
 -- ============================================================
 local function validateConfig()
-	-- Shop product IDs tidak boleh 0 (belum diganti dari placeholder)
+	-- Shop IDs: Game Pass (buy) + Developer Product (gift); placeholder 0 until ClubKitConfig filled
 	if Config.Shop and Config.Shop.PRODUCTS then
 		for tier, product in pairs(Config.Shop.PRODUCTS) do
 			if type(product) == "table" then
-				if product.BUY_ID == 0 or product.BUY_ID == nil then
+				if product.BUY_GAMEPASS_ID == 0 or product.BUY_GAMEPASS_ID == nil then
 					warn(
-						("[Config] Shop.PRODUCTS.%s.BUY_ID masih 0/nil — ganti dengan Product ID aktual."):format(
+						("[Config] Shop.PRODUCTS.%s.BUY_GAMEPASS_ID masih 0/nil — isi ClubKitConfig.Shop.Products.%s.BuyGamePassId."):format(
+							tostring(tier),
 							tostring(tier)
 						)
 					)
 				end
 				if product.GIFT_ID == 0 or product.GIFT_ID == nil then
 					warn(
-						("[Config] Shop.PRODUCTS.%s.GIFT_ID masih 0/nil — ganti dengan Product ID aktual."):format(
+						("[Config] Shop.PRODUCTS.%s.GIFT_ID masih 0/nil — ganti dengan Developer Product ID aktual."):format(
 							tostring(tier)
 						)
 					)

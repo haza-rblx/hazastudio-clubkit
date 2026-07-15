@@ -1,6 +1,8 @@
 --!strict
 -- Server/Controllers/ShopController.lua
--- Handles: MarketplaceService.ProcessReceipt, ShopGiftPending remote.
+-- Handles: MarketplaceService.ProcessReceipt (gift + legacy buy product + donations),
+-- Game Pass self-buy (PromptGamePassPurchaseFinished + join ownership sync),
+-- ShopGiftPending remote.
 -- ProcessReceipt dibuat di sini - hanya satu script boleh set ini per game.
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
@@ -158,13 +160,14 @@ local function createShopController(
 		})
 	end
 	local function getShopProductIdSet(): { [number]: boolean }
+		-- Exclude gift + legacy buy Developer Products from auto donation catalog.
 		local excluded: { [number]: boolean } = {}
 		for _, product in pairs(Config.Shop.PRODUCTS) do
 			if type(product) == "table" then
-				local buyId = tonumber(product.BUY_ID)
+				local legacyBuyId = tonumber(product.BUY_ID)
 				local giftId = tonumber(product.GIFT_ID)
-				if buyId and buyId > 0 then
-					excluded[buyId] = true
+				if legacyBuyId and legacyBuyId > 0 then
+					excluded[legacyBuyId] = true
 				end
 				if giftId and giftId > 0 then
 					excluded[giftId] = true
@@ -172,6 +175,44 @@ local function createShopController(
 			end
 		end
 		return excluded
+	end
+
+	local function syncOwnedGamePasses(player: Player)
+		local shopTiers = Config.Membership.SHOP_TIERS
+		if type(shopTiers) ~= "table" then
+			return
+		end
+		local grantedAny = false
+		for _, tierKey in ipairs(shopTiers) do
+			local product = Config.Shop.PRODUCTS[tierKey]
+			if type(product) == "table" then
+				local passId = tonumber(product.BUY_GAMEPASS_ID)
+				if passId and passId > 0 then
+					local ok, owns = pcall(function()
+						return MarketplaceService:UserOwnsGamePassAsync(player.UserId, passId)
+					end)
+					if ok and owns == true then
+						local parsed = ShopDomain.parseShopTier(tierKey)
+						if parsed then
+							local result = shopService:grantMembershipIfHigher(player.UserId, parsed)
+							if result.ok and result.value == true then
+								grantedAny = true
+							end
+						end
+					elseif not ok then
+						log:warn("UserOwnsGamePassAsync failed", {
+							player = player.Name,
+							gamePassId = passId,
+							error = owns,
+						})
+					end
+				end
+			end
+		end
+		if grantedAny then
+			overheadController:refreshPlayer(player)
+			log:info("Game Pass membership synced", { userId = player.UserId })
+		end
 	end
 	local function normalizeDeveloperProduct(raw: any): DonationProduct?
 		if type(raw) ~= "table" then
@@ -559,22 +600,21 @@ local function createShopController(
 			return decision
 		end
 
-		-- Buy
+		-- Legacy self-buy Developer Product (kept so in-flight / old BuyId still grant)
 		local isBuy, buyTier = ShopDomain.isBuyProduct(productId)
 		if isBuy and buyTier then
 			local result = shopService:grantMembership(userId, buyTier)
 			if result.ok then
 				notifyClient(userId, buyTier, false, nil)
-				-- Refresh overhead player agar badge membership update langsung
 				local player = Players:GetPlayerByUserId(userId)
 				if player then
 					overheadController:refreshPlayer(player)
 				end
-				log:info("Buy processed", { userId = userId, tier = buyTier })
+				log:info("Legacy buy product processed", { userId = userId, tier = buyTier, productId = productId })
 				markPurchaseProcessed()
 				return Enum.ProductPurchaseDecision.PurchaseGranted
 			else
-				log:error("Buy grant fail", { userId = userId, error = result.error })
+				log:error("Legacy buy grant fail", { userId = userId, error = result.error })
 				return Enum.ProductPurchaseDecision.NotProcessedYet
 			end
 		end
@@ -796,6 +836,37 @@ local function createShopController(
 		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
 	function controller.init(_self: IShopController)
+		-- Game Pass self-buy completion + join ownership sync (does not wipe legacy membershipBadge)
+		MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player: Player, gamePassId: number, wasPurchased: boolean)
+			if not wasPurchased then
+				return
+			end
+			local isPass, tier = ShopDomain.isBuyGamePass(gamePassId)
+			if not isPass or not tier then
+				return
+			end
+			local result = shopService:grantMembershipIfHigher(player.UserId, tier)
+			if result.ok then
+				notifyClient(player.UserId, tier, false, nil)
+				overheadController:refreshPlayer(player)
+				log:info("Game Pass buy processed", { userId = player.UserId, tier = tier, gamePassId = gamePassId })
+			else
+				log:error("Game Pass buy grant fail", { userId = player.UserId, tier = tier, error = result.error })
+			end
+		end)
+
+		local function onPlayerForGamePassSync(player: Player)
+			task.defer(function()
+				if player.Parent then
+					syncOwnedGamePasses(player)
+				end
+			end)
+		end
+		Players.PlayerAdded:Connect(onPlayerForGamePassSync)
+		for _, player in ipairs(Players:GetPlayers()) do
+			onPlayerForGamePassSync(player)
+		end
+
 		-- ShopGiftPending: Client memberi tahu server siapa yang akan di-gift
 		-- sebelum PromptProductPurchase dipanggil di client
 		local giftRemote = remotes:FindFirstChild(REMOTE_GIFT_INIT)
