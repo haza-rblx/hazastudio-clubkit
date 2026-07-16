@@ -11,6 +11,13 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.46] - 2026-07-17
+
+### Fixed
+- **Couple accept → Taken** — after a proposal is accepted, both players' profile `relationshipMode` is forced to `Taken` (overrides prior Single / Fun) so overhead shows Taken + partner display name. Profile menu syncs for online players. (`showCoupleName` + public CoupleName layer already forced in `CoupleDomain.applyCouple`.)
+- **Couple breakup not persisting** — flush session write-behind before `invalidateCache` on accept/breakup/open panel (cache clear was dropping dirty couple clears before DataStore write). `breakupBoth` now returns Err if initiator save fails or player is not coupled.
+- **Music queue wipe on long-run poll** — library `loadAll` no longer replaces in-memory tracks with `{}` on failed/incomplete DataStore reads (returns Err, keeps prior snapshot). Poll `onLibraryReloaded` no longer hard-prunes user queue when tracks are temporarily missing; explicit admin delete still uses `pruneDeletedTracks`.
+
 ## [2.4.45] - 2026-07-16
 
 ### Fixed

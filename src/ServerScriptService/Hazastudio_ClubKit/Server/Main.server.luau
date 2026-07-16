@@ -695,6 +695,8 @@ if Config.FeatureFlags.CouplesEnabled ~= false then
 		repo = repo,
 		notify = Notify,
 		remotes = Remotes,
+		profileRepository = profileRepo,
+		profileMenuSync = profileMenuSync,
 	})
 end
 -- DonationService is constructed before ShopController because ShopController

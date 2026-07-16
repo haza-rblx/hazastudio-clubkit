@@ -456,7 +456,10 @@ local function createMusicService(deps: {
 		local result = repo:loadAll()
 		isLibraryReloadInFlight = false
 		if not result.ok then
-			log:warn("Music library reload failed", { reason = reason, error = result.error })
+			log:warn("Music library reload failed — session queues left untouched", {
+				reason = reason,
+				error = result.error,
+			})
 			return false, result.error
 		end
 		for _, sess in pairs(sessions) do

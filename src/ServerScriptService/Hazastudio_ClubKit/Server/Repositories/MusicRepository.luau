@@ -279,13 +279,52 @@ function MusicRepository:_setAsync(key: string, data: any): Result<nil>
 end
 
 function MusicRepository:loadAll(): Result<nil>
+	local prevPlaylistCount = self:_countTable(self._playlists)
+	local prevTrackCount = self:_countTable(self._tracks)
+
 	local loadedPlaylists = {} :: { [string]: PlaylistInfo }
 	local loadedTracks = {} :: { [string]: TrackInfo }
 	local loadedPlaylistTombstones = {} :: { [string]: PlaylistInfo }
 	local loadedTrackTombstones = {} :: { [string]: TrackInfo }
 
 	local okP, rawPlaylists = self:_getAsync(self._config.PLAYLIST_KEY)
-	if okP and type(rawPlaylists) == "table" then
+	local okT, rawTracks = self:_getAsync(self._config.TRACK_KEY)
+
+	-- Incomplete / failed reads must NOT wipe the in-memory library.
+	-- Previously a failed GetAsync still replaced _tracks with {} and returned Ok,
+	-- which caused MusicSession:onLibraryReloaded to prune the entire user queue.
+	local playlistsReadable = okP and (rawPlaylists == nil or type(rawPlaylists) == "table")
+	local tracksReadable = okT and (rawTracks == nil or type(rawTracks) == "table")
+	if not playlistsReadable or not tracksReadable then
+		self._logger:warn("Music library reload incomplete — keeping prior snapshot", {
+			playlistsOk = okP,
+			tracksOk = okT,
+			playlistsReadable = playlistsReadable,
+			tracksReadable = tracksReadable,
+			prevPlaylists = prevPlaylistCount,
+			prevTracks = prevTrackCount,
+		})
+		return Result.Err("library_reload_incomplete")
+	end
+
+	-- After first successful load, a sudden nil blob (missing key) while we still
+	-- have live entries is treated as incomplete — do not clobber memory.
+	if self._loaded then
+		if rawPlaylists == nil and prevPlaylistCount > 0 then
+			self._logger:warn("Music playlists blob missing while local library non-empty — keeping prior snapshot", {
+				prevPlaylists = prevPlaylistCount,
+			})
+			return Result.Err("playlists_blob_missing")
+		end
+		if rawTracks == nil and prevTrackCount > 0 then
+			self._logger:warn("Music tracks blob missing while local library non-empty — keeping prior snapshot", {
+				prevTracks = prevTrackCount,
+			})
+			return Result.Err("tracks_blob_missing")
+		end
+	end
+
+	if type(rawPlaylists) == "table" then
 		for id, data in pairs(rawPlaylists) do
 			if type(data) == "table" then
 				data.id = id
@@ -297,12 +336,9 @@ function MusicRepository:loadAll(): Result<nil>
 				end
 			end
 		end
-	elseif not okP then
-		self._logger:warn("Gagal load playlists dari DataStore")
 	end
 
-	local okT, rawTracks = self:_getAsync(self._config.TRACK_KEY)
-	if okT and type(rawTracks) == "table" then
+	if type(rawTracks) == "table" then
 		for id, data in pairs(rawTracks) do
 			if type(data) == "table" then
 				data.id = id
@@ -314,8 +350,6 @@ function MusicRepository:loadAll(): Result<nil>
 				end
 			end
 		end
-	elseif not okT then
-		self._logger:warn("Gagal load tracks dari DataStore")
 	end
 
 	self._playlists = loadedPlaylists
@@ -329,6 +363,8 @@ function MusicRepository:loadAll(): Result<nil>
 		tracks = self:_countTable(self._tracks),
 		playlistTombstones = self:_countTable(self._playlistTombstones),
 		trackTombstones = self:_countTable(self._trackTombstones),
+		prevPlaylists = prevPlaylistCount,
+		prevTracks = prevTrackCount,
 	})
 
 	return Result.Ok(nil)

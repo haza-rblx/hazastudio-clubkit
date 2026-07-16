@@ -874,20 +874,24 @@ local function createMusicSession(deps: {
 
 	function session:pruneDeletedTracks(deletedLookup: { [string]: true })
 		local queueChanged = false
+		local prunedQueueCount = 0
 		local newQueue: { QueueEntry } = {}
 		for _, entry in ipairs(state.queue) do
 			if deletedLookup[entry.trackId] then
 				queueChanged = true
+				prunedQueueCount += 1
 			else
 				table.insert(newQueue, entry)
 			end
 		end
 		state.queue = newQueue
 		local bufferChanged = false
+		local prunedBufferCount = 0
 		local newBuffer: { QueueEntry } = {}
 		for _, entry in ipairs(autoBuffer) do
 			if deletedLookup[entry.trackId] then
 				bufferChanged = true
+				prunedBufferCount += 1
 			else
 				table.insert(newBuffer, entry)
 			end
@@ -895,6 +899,14 @@ local function createMusicSession(deps: {
 		autoBuffer = newBuffer
 		local currentTrackDeleted = state.currentTrackId ~= nil
 			and deletedLookup[state.currentTrackId :: string] == true
+		if prunedQueueCount > 0 or prunedBufferCount > 0 or currentTrackDeleted then
+			log:info("Pruned deleted tracks from session", {
+				zoneId = zoneId,
+				prunedQueueCount = prunedQueueCount,
+				prunedBufferCount = prunedBufferCount,
+				currentTrackDeleted = currentTrackDeleted,
+			})
+		end
 		if currentTrackDeleted then
 			session:advanceQueue("track_deleted")
 		elseif queueChanged or bufferChanged then
@@ -903,36 +915,14 @@ local function createMusicSession(deps: {
 		end
 	end
 
+	--- Poll/cross-server library reload: refresh metadata for members only.
+	--- Do NOT hard-prune queue entries when a track is temporarily missing from
+	--- the repo (failed/empty DataStore read). Explicit deletes use pruneDeletedTracks.
 	function session:onLibraryReloaded()
-		local queueChanged = false
-		local nextQueue: { QueueEntry } = {}
-		for _, entry in ipairs(state.queue) do
-			if repo:getTrack(entry.trackId) then
-				table.insert(nextQueue, entry)
-			else
-				queueChanged = true
-			end
-		end
-		state.queue = nextQueue
-		local bufferChanged = false
-		local nextBuffer: { QueueEntry } = {}
-		for _, entry in ipairs(autoBuffer) do
-			if repo:getTrack(entry.trackId) then
-				table.insert(nextBuffer, entry)
-			else
-				bufferChanged = true
-			end
-		end
-		autoBuffer = nextBuffer
-		if not resolveZombieCurrentTrack("onLibraryReloaded") then
-			return
-		end
 		if state.currentTrackId then
 			broadcastTrackChanged()
 		end
-		if queueChanged or bufferChanged then
-			broadcastQueueUpdated()
-		end
+		broadcastQueueUpdated()
 		syncStateToAllMembers()
 	end
 

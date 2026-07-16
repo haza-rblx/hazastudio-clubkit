@@ -21,12 +21,16 @@ local function createCoupleController(deps: {
 	repo               : any,
 	notify             : INotify,
 	remotes            : Folder,   -- injected dari Main.server.lua
+	profileRepository  : any?,
+	profileMenuSync    : { syncPlayer: ((Player) -> ())? }?,
 })
 	local coupleService      = deps.coupleService
 	local overheadController = deps.overheadController
 	local repo               = deps.repo
 	local notify             = deps.notify
 	local remotesFolder      = deps.remotes
+	local profileRepository  = deps.profileRepository
+	local profileMenuSync    = deps.profileMenuSync
 	local log                = Logger.new("CoupleController")
 	local sendLimiter        = RateLimiter.new(Config.Couple.RATE_MAX, Config.Couple.RATE_WINDOW)
 	local openLimiter        = RateLimiter.new(Config.Couple.RATE_MAX, Config.Couple.RATE_WINDOW)
@@ -47,6 +51,54 @@ local function createCoupleController(deps: {
 		end
 		processedReqs[requestId] = now + Config.Security.REQUEST_DEDUPE_WINDOW
 		return true
+	end
+
+	--- After a new couple forms, force profile relationshipMode to Taken so
+	--- overhead/settings no longer show a prior Single / Fun choice.
+	local function forceTakenRelationshipMode(userId: number): boolean
+		if not profileRepository or type(profileRepository.update) ~= "function" then
+			return false
+		end
+		local saved = profileRepository:update(userId, function(current: any)
+			local nextProfile = table.clone(current)
+			nextProfile.relationshipMode = "Taken"
+			return nextProfile
+		end)
+		if not saved.ok then
+			log:warn("Failed to force Taken after couple accept", {
+				userId = userId,
+				error = tostring(saved.error),
+			})
+			return false
+		end
+		if type(profileRepository.invalidateCache) == "function" then
+			profileRepository:invalidateCache(userId)
+		end
+		return true
+	end
+
+	local function syncProfileMenuIfOnline(player: Player?)
+		if not player then
+			return
+		end
+		if profileMenuSync and type(profileMenuSync.syncPlayer) == "function" then
+			profileMenuSync.syncPlayer(player)
+		end
+	end
+
+	--- Persist session write-behind BEFORE invalidateCache. Invalidating clears
+	--- the dirty session and would drop couple accept/breakup before DataStore flush.
+	local function flushThenInvalidate(userId: number)
+		if type(repo.flushSession) == "function" then
+			local flushed = repo:flushSession(userId)
+			if not flushed.ok then
+				log:warn("Couple session flush failed before invalidate", {
+					userId = userId,
+					error = tostring(flushed.error),
+				})
+			end
+		end
+		repo:invalidateCache(userId)
 	end
 	-- ============================================================
 	-- Setup Remotes - dari injected folder, bukan WaitForChild
@@ -118,7 +170,7 @@ local function createCoupleController(deps: {
 		if not openLimiter:check(player.UserId) then
 			return
 		end
-		repo:invalidateCache(player.UserId)
+		flushThenInvalidate(player.UserId)
 		local storedResult  = repo:load(player.UserId)
 		local isCoupled     = false
 		local partnerName   = ""
@@ -189,15 +241,20 @@ local function createCoupleController(deps: {
 				end
 				local senderUserId = result.value.senderUserId
 				local senderName   = result.value.senderName
+				-- Force Taken + display couple name already set in CoupleDomain.applyCouple.
+				forceTakenRelationshipMode(player.UserId)
+				forceTakenRelationshipMode(senderUserId)
 				notifyResultNetwork:fireClient(player, { accepted = true, partnerName = senderName })
 				local sender = findPlayerById(senderUserId)
 				if sender then
 					notifyResultNetwork:fireClient(sender, { accepted = true, partnerName = player.DisplayName })
-					repo:invalidateCache(senderUserId)
+					flushThenInvalidate(senderUserId)
 					overheadController:refreshPlayer(sender)
+					syncProfileMenuIfOnline(sender)
 				end
-				repo:invalidateCache(player.UserId)
+				flushThenInvalidate(player.UserId)
 				overheadController:refreshPlayer(player)
+				syncProfileMenuIfOnline(player)
 				announceToAll(Config.Couple.ANNOUNCE_COUPLED:format(senderName, player.DisplayName))
 			else
 				local result = coupleService:rejectRequest(player, raw.requestId)
@@ -235,7 +292,7 @@ local function createCoupleController(deps: {
 				return
 			end
 			notify.player(player, Config.Couple.MSG_BREAKUP_DONE:format(partnerName or "your partner"), "WARNING")
-			repo:invalidateCache(player.UserId)
+			flushThenInvalidate(player.UserId)
 			overheadController:refreshPlayer(player)
 			-- Gunakan hanya partnerId (unik) untuk resolve partner.
 			-- Tidak fallback ke DisplayName (tidak unik - bisa salah target).
@@ -243,7 +300,7 @@ local function createCoupleController(deps: {
 			-- akan di-refresh saat mereka login kembali.
 			local resolvedPartner: Player? = partnerPlayer
 			if resolvedPartner then
-				repo:invalidateCache(resolvedPartner.UserId)
+				flushThenInvalidate(resolvedPartner.UserId)
 				overheadController:refreshPlayer(resolvedPartner)
 				notifyResultNetwork:fireClient(resolvedPartner, {
 					accepted    = false,

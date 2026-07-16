@@ -337,6 +337,9 @@ local function createCoupleService(deps: {
 			log:error("Gagal load data breakup", { err = storedA.error })
 			return ResultUtil.Err("[Couple] I could not load your couple data. Try again.")
 		end
+		if not CoupleDomain.isCoupled(storedA.value) then
+			return ResultUtil.Err(Config.Couple.MSG_NO_COUPLE)
+		end
 		local partnerIdFromStore   = storedA.value.couplePartnerId
 		local partnerNameFromStore = storedA.value.couplePartner
 		-- Hapus couple dari player A
@@ -345,6 +348,7 @@ local function createCoupleService(deps: {
 		end)
 		if not saveA.ok then
 			log:error("Gagal save breakup playerA", { err = saveA.error })
+			return ResultUtil.Err("[Couple] Breakup could not be saved. Try again.")
 		end
 		-- Cari partnerId - prioritaskan couplePartnerId dari DataStore (primary key)
 		-- Fallback ke pencarian nama hanya jika couplePartnerId nil (data lama)
