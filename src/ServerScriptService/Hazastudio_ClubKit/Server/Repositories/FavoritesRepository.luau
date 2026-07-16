@@ -13,6 +13,7 @@ local BudgetGate = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Bud
 type Result<T> = Types.Result<T>
 type FavoriteAnimations = Types.FavoriteAnimations
 type ILogger = Types.ILogger
+type OwnerSyncFn = (player: Player, jsonData: string) -> ()
 
 local FavoritesRepository = {}
 FavoritesRepository.__index = FavoritesRepository
@@ -24,13 +25,21 @@ type FavoritesRepositoryImpl = {
 	_budgetGate: any,
 	_dirtyPlayers: { [number]: boolean },
 	_dirtyPayloads: { [number]: string },
+	_memoryJson: { [number]: string },
+	_saveScheduled: { [number]: boolean },
 	_loaded: { [number]: boolean },
+	_ownerSync: OwnerSyncFn?,
 	_key: (self: FavoritesRepositoryImpl, userId: number) -> string,
+	_setMemoryJson: (self: FavoritesRepositoryImpl, userId: number, jsonData: string) -> (),
+	_notifyOwner: (self: FavoritesRepositoryImpl, player: Player) -> (),
+	_scheduleDebouncedSave: (self: FavoritesRepositoryImpl, userId: number) -> (),
 	onPlayerAdded: (self: FavoritesRepositoryImpl, player: Player) -> (),
 	onPlayerRemoving: (self: FavoritesRepositoryImpl, player: Player) -> (),
 	save: (self: FavoritesRepositoryImpl, userId: number, jsonData: string) -> Result<nil>,
 	loadDecoded: (self: FavoritesRepositoryImpl, player: Player) -> FavoriteAnimations,
+	storeOwnerJson: (self: FavoritesRepositoryImpl, player: Player, jsonData: string) -> Result<nil>,
 	flushAll: (self: FavoritesRepositoryImpl) -> number,
+	setOwnerSync: (self: FavoritesRepositoryImpl, fn: OwnerSyncFn) -> (),
 }
 
 function FavoritesRepository.new(deps: { config: any, logger: ILogger })
@@ -41,13 +50,54 @@ function FavoritesRepository.new(deps: { config: any, logger: ILogger })
 		_budgetGate = BudgetGate.create({ logger = deps.logger, name = "FavoritesRepository" }),
 		_dirtyPlayers = {} :: { [number]: boolean },
 		_dirtyPayloads = {} :: { [number]: string },
+		_memoryJson = {} :: { [number]: string },
+		_saveScheduled = {} :: { [number]: boolean },
 		_loaded = {} :: { [number]: boolean },
+		_ownerSync = nil,
 	}, FavoritesRepository) :: any
 	return self
 end
 
+function FavoritesRepository.setOwnerSync(self: FavoritesRepositoryImpl, fn: OwnerSyncFn)
+	self._ownerSync = fn
+end
+
 function FavoritesRepository._key(self: FavoritesRepositoryImpl, userId: number): string
 	return self._config.KEY_PREFIX .. tostring(userId)
+end
+
+function FavoritesRepository._setMemoryJson(self: FavoritesRepositoryImpl, userId: number, jsonData: string)
+	self._memoryJson[userId] = jsonData
+end
+
+function FavoritesRepository._notifyOwner(self: FavoritesRepositoryImpl, player: Player)
+	if not self._ownerSync then
+		return
+	end
+	local jsonData = self._memoryJson[player.UserId]
+	if type(jsonData) ~= "string" then
+		jsonData = HttpService:JSONEncode({})
+	end
+	self._ownerSync(player, jsonData)
+end
+
+function FavoritesRepository._scheduleDebouncedSave(self: FavoritesRepositoryImpl, userId: number)
+	if self._saveScheduled[userId] then
+		return
+	end
+	self._saveScheduled[userId] = true
+	local debounce = Config.DataStore.FAVORITES_SAVE_DEBOUNCE_SEC or 8
+	task.delay(debounce, function()
+		self._saveScheduled[userId] = nil
+		if not self._dirtyPlayers[userId] then
+			return
+		end
+		local jsonData = self._dirtyPayloads[userId]
+		if type(jsonData) ~= "string" then
+			return
+		end
+		self:save(userId, jsonData)
+	end)
 end
 
 function FavoritesRepository.onPlayerAdded(self: FavoritesRepositoryImpl, player: Player)
@@ -65,40 +115,31 @@ function FavoritesRepository.onPlayerAdded(self: FavoritesRepositoryImpl, player
 			userId = player.UserId,
 			error = loadResult.error,
 		})
-		-- Do NOT set _loaded; save() will refuse to write so a failed load can
-		-- never seed an empty snapshot that clobbers the real stored favorites.
 		self._loaded[player.UserId] = nil
 		return
 	end
 
-	-- Load succeeded (including the empty/new-player case).
 	self._loaded[player.UserId] = true
 
+	local jsonData = HttpService:JSONEncode({})
 	local savedData = loadResult.value
-	if type(savedData) ~= "string" then
-		return
+	if type(savedData) == "string" then
+		local decodeOk, decoded = pcall(function()
+			return HttpService:JSONDecode(savedData)
+		end)
+		if decodeOk and type(decoded) == "table" then
+			jsonData = savedData
+		end
 	end
 
-	local decodeOk, decoded = pcall(function()
-		return HttpService:JSONDecode(savedData)
-	end)
-	if decodeOk and type(decoded) == "table" then
-		player:SetAttribute(self._config.ATTRIBUTE_KEY, savedData)
-	end
+	self:_setMemoryJson(player.UserId, jsonData)
+	self:_notifyOwner(player)
 end
 
 function FavoritesRepository.onPlayerRemoving(self: FavoritesRepositoryImpl, player: Player)
-	-- Dirty-only leave: successful in-session saves already cleared _dirtyPlayers.
-	-- Only retry failed persists here (avoids UpdateAsync storm on every leave).
 	local userId = player.UserId
 	if self._dirtyPlayers[userId] and self._loaded[userId] then
-		local jsonData = self._dirtyPayloads[userId]
-		if type(jsonData) ~= "string" then
-			local attributeData = player:GetAttribute(self._config.ATTRIBUTE_KEY)
-			if type(attributeData) == "string" then
-				jsonData = attributeData
-			end
-		end
+		local jsonData = self._dirtyPayloads[userId] or self._memoryJson[userId]
 		if type(jsonData) == "string" then
 			local result = self:save(userId, jsonData)
 			if not result.ok then
@@ -108,12 +149,11 @@ function FavoritesRepository.onPlayerRemoving(self: FavoritesRepositoryImpl, pla
 		end
 	end
 	self._loaded[userId] = nil
+	self._memoryJson[userId] = nil
+	self._saveScheduled[userId] = nil
 end
 
 function FavoritesRepository.save(self: FavoritesRepositoryImpl, userId: number, jsonData: string): Result<nil>
-	-- Refuse to write until the player's stored favorites have loaded. Without
-	-- this gate, a failed load leaves an empty attribute; the caller would build
-	-- a partial map and save() would clobber the player's real favorites.
 	if not self._loaded[userId] then
 		return Result.Err("favorites_not_loaded")
 	end
@@ -135,6 +175,7 @@ function FavoritesRepository.save(self: FavoritesRepositoryImpl, userId: number,
 
 	if not saveResult.ok then
 		self._dirtyPlayers[userId] = true
+		self._dirtyPayloads[userId] = jsonData
 		self._logger:error("Favorites save failed", {
 			userId = userId,
 			error = saveResult.error,
@@ -148,7 +189,7 @@ function FavoritesRepository.save(self: FavoritesRepositoryImpl, userId: number,
 end
 
 function FavoritesRepository.loadDecoded(self: FavoritesRepositoryImpl, player: Player): FavoriteAnimations
-	local jsonData = player:GetAttribute(self._config.ATTRIBUTE_KEY)
+	local jsonData = self._memoryJson[player.UserId]
 	if type(jsonData) ~= "string" then
 		return {}
 	end
@@ -163,26 +204,27 @@ function FavoritesRepository.loadDecoded(self: FavoritesRepositoryImpl, player: 
 	return {}
 end
 
+function FavoritesRepository.storeOwnerJson(self: FavoritesRepositoryImpl, player: Player, jsonData: string): Result<nil>
+	if not self._loaded[player.UserId] then
+		return Result.Err("favorites_not_loaded")
+	end
+	self:_setMemoryJson(player.UserId, jsonData)
+	self._dirtyPlayers[player.UserId] = true
+	self._dirtyPayloads[player.UserId] = jsonData
+	self:_notifyOwner(player)
+	self:_scheduleDebouncedSave(player.UserId)
+	return Result.Ok(nil)
+end
+
 function FavoritesRepository.flushAll(self: FavoritesRepositoryImpl): number
 	local remaining = 0
 	for userId in pairs(self._dirtyPlayers) do
-		-- Skip players that never loaded successfully; we have no trustworthy
-		-- snapshot to persist and writing would risk clobbering real data.
 		if not self._loaded[userId] then
 			self._dirtyPlayers[userId] = nil
 			self._dirtyPayloads[userId] = nil
 			continue
 		end
-		local jsonData = self._dirtyPayloads[userId]
-		if type(jsonData) ~= "string" then
-			local player = Players:GetPlayerByUserId(userId)
-			if player then
-				local attributeData = player:GetAttribute(self._config.ATTRIBUTE_KEY)
-				if type(attributeData) == "string" then
-					jsonData = attributeData
-				end
-			end
-		end
+		local jsonData = self._dirtyPayloads[userId] or self._memoryJson[userId]
 		if type(jsonData) == "string" then
 			local result = self:save(userId, jsonData)
 			if not result.ok then

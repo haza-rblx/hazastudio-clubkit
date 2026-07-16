@@ -52,6 +52,16 @@ function MusicBootstrap.start(deps: MusicBootstrapDeps): MusicBootstrapResult
 		logger = Logger.new("MusicFavoritesRepository"),
 	})
 
+	local favoritesSyncRE = deps.remotes:FindFirstChild(musicConfig.REMOTE_FAVORITES_SYNC)
+	if not favoritesSyncRE or not favoritesSyncRE:IsA("RemoteEvent") then
+		favoritesSyncRE = Instance.new("RemoteEvent")
+		favoritesSyncRE.Name = musicConfig.REMOTE_FAVORITES_SYNC
+		favoritesSyncRE.Parent = deps.remotes
+	end
+	musicFavoritesRepo:setOwnerSync(function(player: Player, jsonData: string)
+		(favoritesSyncRE :: RemoteEvent):FireClient(player, jsonData)
+	end)
+
 	-- Fold music favorites GetAsync into SharedProfileLoader (separate from
 	-- SyncDance FavoritesRepository). MusicService.onPlayerAdded still runs
 	-- for session/rank; repo onPlayerAdded is idempotent if already loaded.

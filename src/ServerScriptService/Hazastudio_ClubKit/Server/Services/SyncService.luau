@@ -99,12 +99,14 @@ local function create(deps: {
 	-- Optional: injected by Main.server.luau (task 2.2) for R1.2 proximity filtering.
 	proximity: ProximityInterestService?,
 	interest: any?,
+	favoritesRepository: any?,
 }): SyncService
 	local config = deps.config
 	local logger = deps.logger
 	local animLoader = deps.animationLoader
 	local proximity = deps.proximity
 	local interest = deps.interest
+	local favoritesRepository = deps.favoritesRepository
 	local assetReporter = AssetHealthReporter.new(logger)
 
 	-- ============================================================
@@ -423,19 +425,13 @@ local function create(deps: {
 			return defaultList
 		end
 
-		-- Read player's favorited animations (stored as JSON attribute on the player, R5.2).
+		-- Read player's favorited animations from server memory (owner-only sync remote).
 		local favoritedSet: { [string]: boolean } = {}
-		local favAttributeKey = (Config.Favorites and Config.Favorites.ATTRIBUTE_KEY) or "SavedFavoritedAnimations"
-		local rawFavJson = player:GetAttribute(favAttributeKey)
-		if type(rawFavJson) == "string" and rawFavJson ~= "" then
-			local ok, decoded = pcall(function()
-				return HttpService:JSONDecode(rawFavJson)
-			end)
-			if ok and type(decoded) == "table" then
-				for animName, isFav in pairs(decoded) do
-					if isFav == true and type(animName) == "string" then
-						favoritedSet[animName] = true
-					end
+		if favoritesRepository and type(favoritesRepository.loadDecoded) == "function" then
+			local decoded = favoritesRepository:loadDecoded(player)
+			for animName, isFav in pairs(decoded) do
+				if isFav == true and type(animName) == "string" then
+					favoritedSet[animName] = true
 				end
 			end
 		end

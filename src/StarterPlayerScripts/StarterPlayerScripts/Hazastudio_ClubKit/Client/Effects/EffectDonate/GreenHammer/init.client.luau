@@ -922,6 +922,12 @@ local donationEffectConn = DonationEffect.OnClientEvent:Connect(function(effectN
 	if not DonationExperiencePrefs.shouldShowWorldEffect() then
 		return
 	end
+	local DonationVfxClientGate = require(
+		script.Parent.Parent.Parent.Utils.DonationVfxClientGate
+	)
+	if not DonationVfxClientGate.shouldPlayWorldEffect() then
+		return
+	end
 	pcall(createNatureEffect, donatorName, recipientName, donationAmount, userId)
 end)
 script.Destroying:Connect(function()

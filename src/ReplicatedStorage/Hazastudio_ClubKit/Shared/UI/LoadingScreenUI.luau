@@ -25,7 +25,9 @@ local FINAL_HOLD_DURATION = LoadingConfig.FINAL_HOLD_DURATION
 local WATCHDOG_BUFFER = LoadingConfig.WATCHDOG_BUFFER
 local PROGRESS_SMOOTH_SPEED = LoadingConfig.PROGRESS_SMOOTH_SPEED
 local LOADING_COLOR_CORRECTION_NAME = "LoadingScreenColorCorrection"
+local LOADING_BLUR_NAME = "LoadingScreenBlur"
 local OVERHEAD_GUI_NAME = Config.Template.TEMPLATE_NAME
+local INTRO_FRAME_NAME = "HazastudioLoadingIntro"
 
 local NEUTRAL_COLOR = {
 	Brightness = 0,
@@ -177,6 +179,34 @@ local function createColorCorrection(): ColorCorrectionEffect
 	effect.Name = LOADING_COLOR_CORRECTION_NAME
 	effect.Parent = Lighting
 	return effect
+end
+
+local function createLoadingBlur(size: number): BlurEffect
+	for _, child in ipairs(Lighting:GetChildren()) do
+		if child.Name == LOADING_BLUR_NAME then
+			pcall(function()
+				child:Destroy()
+			end)
+		end
+	end
+
+	local blur = Instance.new("BlurEffect")
+	blur.Name = LOADING_BLUR_NAME
+	blur.Size = size
+	blur.Enabled = true
+	blur.Parent = Lighting
+	return blur
+end
+
+local function resolveLogoImage(): string
+	local branding = (Config :: any).Branding
+	if type(branding) == "table" then
+		local logo = branding.LOGO_IMAGE or branding.DEFAULT_LOGO_IMAGE
+		if type(logo) == "string" and logo ~= "" then
+			return logo
+		end
+	end
+	return "rbxassetid://79426970537296"
 end
 
 local function findDescendant(parent: Instance, name: string): Instance?
@@ -360,6 +390,13 @@ local function buildController(root: ScreenGui, options: Options?)
 	self._progressRenderConn = nil :: RBXScriptConnection?
 	self._playerGuiVisibilityState = nil :: GuiVisibilityState?
 	self._cinematicCamera = LoadingCinematicCamera.new()
+	self._cinematicStarted = false
+	self._introActive = false
+	self._introEnded = false
+	self._introFrame = nil :: Frame?
+	self._introLogo = nil :: ImageLabel?
+	self._blurEffect = nil :: BlurEffect?
+	self._pendingDisplayName = nil :: string?
 	self._colorCorrectionTween = nil :: Tween?
 	self._finishDelay = nil :: thread?
 	self._fadeDelay = nil :: thread?
@@ -668,6 +705,230 @@ function LoadingScreenUI:_restorePlayerGuiVisibility()
 	end)
 end
 
+function LoadingScreenUI:_destroyIntroLayer()
+	if self._introFrame then
+		pcall(function()
+			self._introFrame:Destroy()
+		end)
+		self._introFrame = nil
+		self._introLogo = nil
+	end
+	if self._blurEffect then
+		pcall(function()
+			self._blurEffect:Destroy()
+		end)
+		self._blurEffect = nil
+	else
+		for _, child in ipairs(Lighting:GetChildren()) do
+			if child.Name == LOADING_BLUR_NAME then
+				pcall(function()
+					child:Destroy()
+				end)
+			end
+		end
+	end
+end
+
+function LoadingScreenUI:_applyIntroBlackout()
+	if not self._colorCorrection then
+		return
+	end
+	if self._colorCorrectionTween then
+		self._colorCorrectionTween:Cancel()
+		self._colorCorrectionTween = nil
+	end
+	local cc = self._colorCorrection
+	cc.Enabled = true
+	cc.Brightness = BLACKOUT_COLOR.Brightness
+	cc.Contrast = BLACKOUT_COLOR.Contrast
+	cc.Saturation = BLACKOUT_COLOR.Saturation
+	cc.TintColor = BLACKOUT_COLOR.TintColor
+end
+
+function LoadingScreenUI:_updateBlurFromProgress(progress: number)
+	if not self._blurEffect then
+		return
+	end
+	local maxBlur = math.max(0, tonumber(LoadingConfig.INTRO_BLUR_SIZE) or 28)
+	local clamped = clamp(progress, 0, 1)
+	self._blurEffect.Size = maxBlur * (1 - clamped)
+	if clamped >= 0.98 then
+		self._blurEffect.Enabled = false
+	else
+		self._blurEffect.Enabled = true
+	end
+end
+
+function LoadingScreenUI:_beginMainLoadingPhase(displayName: string?)
+	if self._cinematicStarted then
+		return
+	end
+	self._cinematicStarted = true
+
+	self:_applyLoadingColor()
+	self:_startCinematicCamera()
+
+	local name = displayName or self._pendingDisplayName or self._displayName
+	self:_startTextCycles(name)
+
+	task.delay(LoadingConfig.TIPS_FADE_DELAY, function()
+		if not self._available or not self._started or not self._refs then
+			return
+		end
+		if self._bootFinished or self._dismissed then
+			return
+		end
+		TweenService:Create(
+			self._refs.tipsLabel,
+			TweenInfo.new(LoadingConfig.TIPS_FADE_DURATION, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			{ TextTransparency = 0 }
+		):Play()
+	end)
+end
+
+function LoadingScreenUI:_endIntro(instant: boolean?)
+	if self._introEnded then
+		return
+	end
+	self._introEnded = true
+	self._introActive = false
+
+	local fadeDuration = if instant then 0 else math.max(0, tonumber(LoadingConfig.INTRO_FADE_OUT_DURATION) or 0.55)
+	local introFrame = self._introFrame
+	local introLogo = self._introLogo
+
+	local function afterFade()
+		if introFrame and introFrame.Parent then
+			pcall(function()
+				introFrame:Destroy()
+			end)
+		end
+		if self._introFrame == introFrame then
+			self._introFrame = nil
+			self._introLogo = nil
+		end
+		if self._available and self._started and not self._bootFinished and not self._dismissed then
+			self:_beginMainLoadingPhase(self._pendingDisplayName)
+		end
+	end
+
+	if not introFrame or fadeDuration <= 0 then
+		afterFade()
+		return
+	end
+
+	local fadeInfo = TweenInfo.new(fadeDuration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	local tweensFinished = 0
+	local totalTweens = if introLogo then 2 else 1
+	local function onTweenDone()
+		tweensFinished += 1
+		if tweensFinished >= totalTweens then
+			afterFade()
+		end
+	end
+
+	local frameTween = TweenService:Create(introFrame, fadeInfo, { BackgroundTransparency = 1 })
+	frameTween.Completed:Connect(onTweenDone)
+	frameTween:Play()
+	if introLogo then
+		local logoTween = TweenService:Create(introLogo, fadeInfo, {
+			ImageTransparency = 1,
+			Size = UDim2.fromOffset(
+				math.floor((tonumber(LoadingConfig.INTRO_LOGO_SIZE_PX) or 160) * 1.08),
+				math.floor((tonumber(LoadingConfig.INTRO_LOGO_SIZE_PX) or 160) * 1.08)
+			),
+		})
+		logoTween.Completed:Connect(onTweenDone)
+		logoTween:Play()
+	end
+end
+
+function LoadingScreenUI:_tryEndIntro()
+	if not self._introActive or self._introEnded then
+		return
+	end
+	if LoadingConfig.INTRO_ENABLED == false then
+		self:_endIntro(true)
+		return
+	end
+
+	local minDuration = math.max(0, tonumber(LoadingConfig.INTRO_MIN_DURATION) or 1.25)
+	local endProgress = clamp(tonumber(LoadingConfig.INTRO_END_PROGRESS) or 0.28, 0, 1)
+	local elapsed = if self._startClock then os.clock() - self._startClock else 0
+
+	if self._finishRequested or (elapsed >= minDuration and self._progressDisplay >= endProgress) then
+		self:_endIntro(false)
+	end
+end
+
+function LoadingScreenUI:_startIntroLayer()
+	if not self._refs then
+		self:_beginMainLoadingPhase(self._pendingDisplayName)
+		return
+	end
+
+	if LoadingConfig.INTRO_ENABLED == false then
+		self._introEnded = true
+		self._introActive = false
+		self:_beginMainLoadingPhase(self._pendingDisplayName)
+		return
+	end
+
+	-- Tear down any leftover intro from a previous session.
+	local existing = self._refs.root:FindFirstChild(INTRO_FRAME_NAME)
+	if existing then
+		pcall(function()
+			existing:Destroy()
+		end)
+	end
+
+	self._introActive = true
+	self._introEnded = false
+
+	local maxBlur = math.max(0, tonumber(LoadingConfig.INTRO_BLUR_SIZE) or 28)
+	self._blurEffect = createLoadingBlur(maxBlur)
+
+	local frame = Instance.new("Frame")
+	frame.Name = INTRO_FRAME_NAME
+	frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+	frame.BackgroundTransparency = 0
+	frame.BorderSizePixel = 0
+	frame.Size = UDim2.fromScale(1, 1)
+	frame.Position = UDim2.fromScale(0, 0)
+	frame.ZIndex = 100
+	frame.Parent = self._refs.root
+	self._introFrame = frame
+
+	local logoSize = math.max(64, math.floor(tonumber(LoadingConfig.INTRO_LOGO_SIZE_PX) or 160))
+	local logo = Instance.new("ImageLabel")
+	logo.Name = "LoadingLogo"
+	logo.BackgroundTransparency = 1
+	logo.AnchorPoint = Vector2.new(0.5, 0.5)
+	logo.Position = UDim2.fromScale(0.5, 0.5)
+	logo.Size = UDim2.fromOffset(math.floor(logoSize * 0.88), math.floor(logoSize * 0.88))
+	logo.Image = resolveLogoImage()
+	logo.ScaleType = Enum.ScaleType.Fit
+	logo.ImageTransparency = 1
+	logo.ZIndex = 101
+	logo.Parent = frame
+	self._introLogo = logo
+
+	-- Keep greetings/tips hidden under the blank intro; bar stays visible above via ZIndex on template.
+	self._refs.titleLabel.TextTransparency = 1
+	self._refs.tipsLabel.TextTransparency = 1
+	-- Keep progress bar readable above the blank intro plate.
+	self._refs.loadingBarWrapper.ZIndex = math.max(self._refs.loadingBarWrapper.ZIndex, 110)
+	self._refs.barFill.ZIndex = math.max(self._refs.barFill.ZIndex, 111)
+	self._refs.loadingMark.ZIndex = math.max(self._refs.loadingMark.ZIndex, 112)
+
+	local fadeIn = math.max(0.05, tonumber(LoadingConfig.INTRO_LOGO_FADE_IN_DURATION) or 0.45)
+	local fadeInfo = TweenInfo.new(fadeIn, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	TweenService:Create(logo, fadeInfo, {
+		ImageTransparency = 0,
+		Size = UDim2.fromOffset(logoSize, logoSize),
+	}):Play()
+end
+
 function LoadingScreenUI:_startCinematicCamera()
 	if not self._cinematicCamera then
 		return
@@ -924,6 +1185,9 @@ function LoadingScreenUI:_applyProgressDisplay(progress: number)
 	if self._refs.progressLabel and self._refs.progressLabel.Visible then
 		self._refs.progressLabel.Text = string.format("%d%%", math.floor(clamped * 100 + 0.5))
 	end
+
+	self:_updateBlurFromProgress(clamped)
+	self:_tryEndIntro()
 end
 
 function LoadingScreenUI:_runProgressAnimation()
@@ -1028,12 +1292,16 @@ function LoadingScreenUI:_finalizeDismissal()
 	self:_fireGameplayEntered()
 
 	self:_restoreColorCorrection()
+	self:_destroyIntroLayer()
 
 	if self._refs then
 		self._refs.root.Enabled = false
 	end
 
 	self:_restoreCinematicCamera()
+	self._cinematicStarted = false
+	self._introActive = false
+	self._introEnded = false
 	self:_restoreOverheads()
 	self:_restoreOtherPlayersLocally()
 	self:_restorePlayerGuiVisibility()
@@ -1352,7 +1620,7 @@ function LoadingScreenUI:start(displayName: string?, tipText: string?)
 		self._refs.barFill.Visible = true
 		self._refs.loadingMark.Visible = true
 
-		-- Start content as invisible — will fade in shortly
+		-- Start content as invisible — intro / main phase fade them in.
 		self._refs.titleLabel.TextTransparency = 1
 		self._refs.tipsLabel.TextTransparency = 1
 	end
@@ -1363,6 +1631,10 @@ function LoadingScreenUI:start(displayName: string?, tipText: string?)
 	self._dismissing = false
 	self._finishRequested = false
 	self._startClock = os.clock()
+	self._cinematicStarted = false
+	self._introActive = false
+	self._introEnded = false
+	self._pendingDisplayName = displayName
 
 	if not self._colorCorrection then
 		self._colorCorrection = createColorCorrection()
@@ -1370,24 +1642,11 @@ function LoadingScreenUI:start(displayName: string?, tipText: string?)
 
 	self:setTitle(displayName)
 	self:setTip(tipText)
-	self:_startTextCycles(displayName) -- greeting cycle handles titleLabel fade-in
-	self:_applyLoadingColor()
-	self:_startCinematicCamera()
+	self:_applyIntroBlackout()
+	self:_startIntroLayer()
 	self:_suppressOverheads()
 	self:_hideOtherPlayersLocally()
 	self:setProgress(LoadingConfig.INITIAL_PROGRESS)
-
-	-- Fade in tips label after a short intro delay
-	task.delay(LoadingConfig.TIPS_FADE_DELAY, function()
-		if not self._available or not self._started or not self._refs then
-			return
-		end
-		TweenService:Create(
-			self._refs.tipsLabel,
-			TweenInfo.new(LoadingConfig.TIPS_FADE_DURATION, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-			{ TextTransparency = 0 }
-		):Play()
-	end)
 
 	self:_cancelWatchdogDelay()
 	self:_cancelSkipPromptDelay()
@@ -1410,6 +1669,12 @@ function LoadingScreenUI:finish()
 	end
 
 	self._finishRequested = true
+	-- Ensure cinematic/main phase exists before welcome dismiss if intro is still up.
+	if self._introActive and not self._introEnded then
+		self:_endIntro(true)
+	elseif not self._cinematicStarted then
+		self:_beginMainLoadingPhase(self._pendingDisplayName)
+	end
 	self:setProgress(1)
 	self:_scheduleFinish()
 end

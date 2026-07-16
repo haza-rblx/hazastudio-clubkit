@@ -34,6 +34,7 @@ export type AvatarPrewarmPool = {
 	isLoading: (self: AvatarPrewarmPool, userId: number) -> boolean,
 	prewarmOnDemand: (self: AvatarPrewarmPool, userId: number) -> boolean,
 	getPoolSize: (self: AvatarPrewarmPool) -> number,
+	setActive: (self: AvatarPrewarmPool, active: boolean) -> (),
 	destroy: (self: AvatarPrewarmPool) -> (),
 	-- Event: fires once when model untuk userId selesai di-load ke pool.
 	-- Digunakan UI untuk upgrade thumbnail → 3D seamless saat pool miss
@@ -75,6 +76,7 @@ function AvatarPrewarmPool.create(config: PoolConfig?): AvatarPrewarmPool
 	local poolSize = 0
 	local lastLoadAt = 0
 	local alive = true
+	local scanActive = false
 	local tickAccum = 0
 	-- Per-userId list of callbacks. Dipanggil sekali saat model siap.
 	-- Setelah fire, callback di-remove agar tidak bocor memori untuk player
@@ -273,6 +275,9 @@ function AvatarPrewarmPool.create(config: PoolConfig?): AvatarPrewarmPool
 	end
 
 	local function onTick()
+		if not scanActive then
+			return
+		end
 		local now = os.clock()
 		if (now - lastLoadAt) < loadCooldown then
 			return
@@ -382,6 +387,10 @@ function AvatarPrewarmPool.create(config: PoolConfig?): AvatarPrewarmPool
 
 	function self:getPoolSize(): number
 		return poolSize
+	end
+
+	function self:setActive(active: boolean)
+		scanActive = active == true
 	end
 
 	-- ── Lifecycle ─────────────────────────────────────────────

@@ -1455,8 +1455,25 @@ function DancePanelUIBinder:setCurrentAnimName(animName: string?)
 	if animName == "" then
 		animName = nil
 	end
+	local previous = self._currentAnimName
+	if previous == animName then
+		return
+	end
 	self._currentAnimName = animName
-	self:refreshRowStates()
+	-- Dirty-row update only (prev + current). Instant — no full-list tween spam.
+	-- Full refreshRowStates still used for favorites / rebuild paths.
+	if previous then
+		local prevRow = self._activeRowsByName[previous]
+		if prevRow and prevRow.Parent then
+			self:_syncRowVisualState(prevRow, previous, false)
+		end
+	end
+	if animName then
+		local nextRow = self._activeRowsByName[animName]
+		if nextRow and nextRow.Parent then
+			self:_syncRowVisualState(nextRow, animName, false)
+		end
+	end
 end
 
 function DancePanelUIBinder:setCurrentSpeed(speed: number, suppressCallback: boolean?)

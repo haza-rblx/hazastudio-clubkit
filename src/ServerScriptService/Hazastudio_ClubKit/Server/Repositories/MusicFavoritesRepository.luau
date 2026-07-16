@@ -4,6 +4,7 @@
 
 local DataStoreService = game:GetService("DataStoreService")
 local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -15,6 +16,7 @@ local BudgetGate = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Bud
 type Result<T> = Types.Result<T>
 type ILogger = Types.ILogger
 type FavoriteTrackIds = { [string]: boolean }
+type OwnerSyncFn = (player: Player, jsonData: string) -> ()
 
 local MusicFavoritesRepository = {}
 MusicFavoritesRepository.__index = MusicFavoritesRepository
@@ -26,10 +28,15 @@ type MusicFavoritesRepositoryImpl = {
 	_budgetGate: any,
 	_dirtyPlayers: { [number]: boolean },
 	_dirtyPayloads: { [number]: string },
+	_memoryJson: { [number]: string },
+	_saveScheduled: { [number]: boolean },
 	_loaded: { [number]: boolean },
+	_ownerSync: OwnerSyncFn?,
 	_key: (self: MusicFavoritesRepositoryImpl, userId: number) -> string,
-	_attributeKey: (self: MusicFavoritesRepositoryImpl) -> string,
 	_encode: (self: MusicFavoritesRepositoryImpl, decoded: FavoriteTrackIds) -> Result<string>,
+	_setMemoryJson: (self: MusicFavoritesRepositoryImpl, userId: number, jsonData: string) -> (),
+	_notifyOwner: (self: MusicFavoritesRepositoryImpl, player: Player) -> (),
+	_scheduleDebouncedSave: (self: MusicFavoritesRepositoryImpl, userId: number) -> (),
 	save: (self: MusicFavoritesRepositoryImpl, userId: number, jsonData: string) -> Result<nil>,
 	onPlayerAdded: (self: MusicFavoritesRepositoryImpl, player: Player) -> (),
 	onPlayerRemoving: (self: MusicFavoritesRepositoryImpl, player: Player) -> (),
@@ -37,6 +44,7 @@ type MusicFavoritesRepositoryImpl = {
 	addTrack: (self: MusicFavoritesRepositoryImpl, player: Player, trackId: string) -> Result<boolean>,
 	removeTrack: (self: MusicFavoritesRepositoryImpl, player: Player, trackId: string) -> Result<boolean>,
 	flushAll: (self: MusicFavoritesRepositoryImpl) -> number,
+	setOwnerSync: (self: MusicFavoritesRepositoryImpl, fn: OwnerSyncFn) -> (),
 }
 
 function MusicFavoritesRepository.new(deps: { config: any, logger: ILogger })
@@ -47,17 +55,20 @@ function MusicFavoritesRepository.new(deps: { config: any, logger: ILogger })
 		_budgetGate = BudgetGate.create({ logger = deps.logger, name = "MusicFavoritesRepository" }),
 		_dirtyPlayers = {} :: { [number]: boolean },
 		_dirtyPayloads = {} :: { [number]: string },
+		_memoryJson = {} :: { [number]: string },
+		_saveScheduled = {} :: { [number]: boolean },
 		_loaded = {} :: { [number]: boolean },
+		_ownerSync = nil,
 	}, MusicFavoritesRepository) :: any
 	return self
 end
 
-function MusicFavoritesRepository._key(self: MusicFavoritesRepositoryImpl, userId: number): string
-	return self._config.FAVORITES_KEY_PREFIX .. tostring(userId)
+function MusicFavoritesRepository.setOwnerSync(self: MusicFavoritesRepositoryImpl, fn: OwnerSyncFn)
+	self._ownerSync = fn
 end
 
-function MusicFavoritesRepository._attributeKey(self: MusicFavoritesRepositoryImpl): string
-	return self._config.FAVORITES_ATTRIBUTE_KEY
+function MusicFavoritesRepository._key(self: MusicFavoritesRepositoryImpl, userId: number): string
+	return self._config.FAVORITES_KEY_PREFIX .. tostring(userId)
 end
 
 function MusicFavoritesRepository._encode(self: MusicFavoritesRepositoryImpl, decoded: FavoriteTrackIds): Result<string>
@@ -68,6 +79,40 @@ function MusicFavoritesRepository._encode(self: MusicFavoritesRepositoryImpl, de
 		return Result.Err("Failed to encode music favorites")
 	end
 	return Result.Ok(encoded)
+end
+
+function MusicFavoritesRepository._setMemoryJson(self: MusicFavoritesRepositoryImpl, userId: number, jsonData: string)
+	self._memoryJson[userId] = jsonData
+end
+
+function MusicFavoritesRepository._notifyOwner(self: MusicFavoritesRepositoryImpl, player: Player)
+	if not self._ownerSync then
+		return
+	end
+	local jsonData = self._memoryJson[player.UserId]
+	if type(jsonData) ~= "string" then
+		jsonData = HttpService:JSONEncode({})
+	end
+	self._ownerSync(player, jsonData)
+end
+
+function MusicFavoritesRepository._scheduleDebouncedSave(self: MusicFavoritesRepositoryImpl, userId: number)
+	if self._saveScheduled[userId] then
+		return
+	end
+	self._saveScheduled[userId] = true
+	local debounce = Config.DataStore.FAVORITES_SAVE_DEBOUNCE_SEC or 8
+	task.delay(debounce, function()
+		self._saveScheduled[userId] = nil
+		if not self._dirtyPlayers[userId] then
+			return
+		end
+		local jsonData = self._dirtyPayloads[userId]
+		if type(jsonData) ~= "string" then
+			return
+		end
+		self:save(userId, jsonData)
+	end)
 end
 
 function MusicFavoritesRepository.save(self: MusicFavoritesRepositoryImpl, userId: number, jsonData: string): Result<nil>
@@ -89,6 +134,7 @@ function MusicFavoritesRepository.save(self: MusicFavoritesRepositoryImpl, userI
 
 	if not saveResult.ok then
 		self._dirtyPlayers[userId] = true
+		self._dirtyPayloads[userId] = jsonData
 		self._logger:error("Music favorites save failed", {
 			userId = userId,
 			error = saveResult.error,
@@ -102,8 +148,6 @@ function MusicFavoritesRepository.save(self: MusicFavoritesRepositoryImpl, userI
 end
 
 function MusicFavoritesRepository.onPlayerAdded(self: MusicFavoritesRepositoryImpl, player: Player)
-	-- Idempotent: SharedProfileLoader may call this; MusicService.onPlayerAdded
-	-- must not re-GetAsync if already loaded for this session.
 	if self._loaded[player.UserId] == true then
 		return
 	end
@@ -118,45 +162,31 @@ function MusicFavoritesRepository.onPlayerAdded(self: MusicFavoritesRepositoryIm
 			userId = player.UserId,
 			error = loadResult.error,
 		})
-		-- Do NOT set _loaded; addTrack/removeTrack will refuse to write so a
-		-- failed load can never seed an empty snapshot that clobbers the real
-		-- stored favorites on the next save.
 		self._loaded[player.UserId] = nil
 		return
 	end
 
-	-- Load succeeded (including the empty/new-player case). Mark loaded so
-	-- writes are allowed.
 	self._loaded[player.UserId] = true
 
 	local savedData = loadResult.value
-	if type(savedData) ~= "string" then
-		player:SetAttribute(self:_attributeKey(), HttpService:JSONEncode({}))
-		return
+	local jsonData = HttpService:JSONEncode({})
+	if type(savedData) == "string" then
+		local decodeOk, decoded = pcall(function()
+			return HttpService:JSONDecode(savedData)
+		end)
+		if decodeOk and type(decoded) == "table" then
+			jsonData = savedData
+		end
 	end
 
-	local decodeOk, decoded = pcall(function()
-		return HttpService:JSONDecode(savedData)
-	end)
-	if decodeOk and type(decoded) == "table" then
-		player:SetAttribute(self:_attributeKey(), savedData)
-		return
-	end
-
-	player:SetAttribute(self:_attributeKey(), HttpService:JSONEncode({}))
+	self:_setMemoryJson(player.UserId, jsonData)
+	self:_notifyOwner(player)
 end
 
 function MusicFavoritesRepository.onPlayerRemoving(self: MusicFavoritesRepositoryImpl, player: Player)
-	-- Dirty-only leave: skip UpdateAsync when nothing failed/changed since last save.
 	local userId = player.UserId
 	if self._dirtyPlayers[userId] and self._loaded[userId] then
-		local jsonData = self._dirtyPayloads[userId]
-		if type(jsonData) ~= "string" then
-			local attributeData = player:GetAttribute(self:_attributeKey())
-			if type(attributeData) == "string" then
-				jsonData = attributeData
-			end
-		end
+		local jsonData = self._dirtyPayloads[userId] or self._memoryJson[userId]
 		if type(jsonData) == "string" then
 			local result = self:save(userId, jsonData)
 			if not result.ok then
@@ -165,13 +195,13 @@ function MusicFavoritesRepository.onPlayerRemoving(self: MusicFavoritesRepositor
 			end
 		end
 	end
-	-- Clear the loaded flag so a later flushAll can't write a stale snapshot
-	-- for a player whose load had failed.
 	self._loaded[userId] = nil
+	self._memoryJson[userId] = nil
+	self._saveScheduled[userId] = nil
 end
 
 function MusicFavoritesRepository.loadDecoded(self: MusicFavoritesRepositoryImpl, player: Player): FavoriteTrackIds
-	local jsonData = player:GetAttribute(self:_attributeKey())
+	local jsonData = self._memoryJson[player.UserId]
 	if type(jsonData) ~= "string" then
 		return {}
 	end
@@ -193,9 +223,6 @@ function MusicFavoritesRepository.loadDecoded(self: MusicFavoritesRepositoryImpl
 end
 
 function MusicFavoritesRepository.addTrack(self: MusicFavoritesRepositoryImpl, player: Player, trackId: string): Result<boolean>
-	-- Refuse writes until the player's stored favorites have loaded. Without
-	-- this gate, a failed load leaves an empty attribute; addTrack would build
-	-- a single-entry map and save() would clobber the player's real favorites.
 	if not self._loaded[player.UserId] then
 		return Result.Err("favorites_not_loaded")
 	end
@@ -212,19 +239,16 @@ function MusicFavoritesRepository.addTrack(self: MusicFavoritesRepositoryImpl, p
 	end
 
 	local encoded = encodedResult.value
-	player:SetAttribute(self:_attributeKey(), encoded)
+	self:_setMemoryJson(player.UserId, encoded)
 	self._dirtyPlayers[player.UserId] = true
-
-	local saveResult = self:save(player.UserId, encoded)
-	if not saveResult.ok then
-		return Result.Err(saveResult.error)
-	end
+	self._dirtyPayloads[player.UserId] = encoded
+	self:_notifyOwner(player)
+	self:_scheduleDebouncedSave(player.UserId)
 
 	return Result.Ok(true)
 end
 
 function MusicFavoritesRepository.removeTrack(self: MusicFavoritesRepositoryImpl, player: Player, trackId: string): Result<boolean>
-	-- Refuse writes until loaded; see addTrack.
 	if not self._loaded[player.UserId] then
 		return Result.Err("favorites_not_loaded")
 	end
@@ -241,38 +265,24 @@ function MusicFavoritesRepository.removeTrack(self: MusicFavoritesRepositoryImpl
 	end
 
 	local encoded = encodedResult.value
-	player:SetAttribute(self:_attributeKey(), encoded)
+	self:_setMemoryJson(player.UserId, encoded)
 	self._dirtyPlayers[player.UserId] = true
-
-	local saveResult = self:save(player.UserId, encoded)
-	if not saveResult.ok then
-		return Result.Err(saveResult.error)
-	end
+	self._dirtyPayloads[player.UserId] = encoded
+	self:_notifyOwner(player)
+	self:_scheduleDebouncedSave(player.UserId)
 
 	return Result.Ok(true)
 end
 
 function MusicFavoritesRepository.flushAll(self: MusicFavoritesRepositoryImpl): number
 	local remaining = 0
-	local players = game:GetService("Players")
 	for userId in pairs(self._dirtyPlayers) do
-		-- Skip players that never loaded successfully; we have no trustworthy
-		-- snapshot to persist and writing would risk clobbering real data.
 		if not self._loaded[userId] then
 			self._dirtyPlayers[userId] = nil
 			self._dirtyPayloads[userId] = nil
 			continue
 		end
-		local jsonData = self._dirtyPayloads[userId]
-		if type(jsonData) ~= "string" then
-			local player = players:GetPlayerByUserId(userId)
-			if player then
-				local attributeData = player:GetAttribute(self:_attributeKey())
-				if type(attributeData) == "string" then
-					jsonData = attributeData
-				end
-			end
-		end
+		local jsonData = self._dirtyPayloads[userId] or self._memoryJson[userId]
 		if type(jsonData) == "string" then
 			local result = self:save(userId, jsonData)
 			if not result.ok then

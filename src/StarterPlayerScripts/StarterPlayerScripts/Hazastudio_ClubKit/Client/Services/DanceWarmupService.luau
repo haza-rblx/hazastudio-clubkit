@@ -37,34 +37,18 @@ local function collectAnimations(animationLoader: any): { Animation }
 	return collected
 end
 
-local function readFavoriteNames(): { [string]: boolean }
+local function readFavoriteNames(store: any): { [string]: boolean }
 	local favorites: { [string]: boolean } = {}
-	local localPlayer = Players.LocalPlayer
-	if not localPlayer then
-		return favorites
-	end
-
-	local attributeKey = SharedConfig.Favorites and SharedConfig.Favorites.ATTRIBUTE_KEY
-	if type(attributeKey) ~= "string" then
-		return favorites
-	end
-
-	local raw = localPlayer:GetAttribute(attributeKey)
-	if type(raw) ~= "string" or raw == "" then
-		return favorites
-	end
-
-	local ok, decoded = pcall(function()
-		return HttpService:JSONDecode(raw)
-	end)
-	if ok and type(decoded) == "table" then
-		for animationName, isFavorite in pairs(decoded) do
-			if isFavorite == true and type(animationName) == "string" then
-				favorites[animationName] = true
+	if store and type(store.get) == "function" then
+		local state = store:get()
+		if type(state) == "table" and type(state.favoritedAnims) == "table" then
+			for animationName, isFavorite in pairs(state.favoritedAnims) do
+				if isFavorite == true and type(animationName) == "string" then
+					favorites[animationName] = true
+				end
 			end
 		end
 	end
-
 	return favorites
 end
 
@@ -163,7 +147,7 @@ function createDanceWarmupService:_collectTier1Animations(): { Animation }
 		or tonumber(self.config.DANCE_LEGACY_PRELOAD_READY_AFTER)
 		or tier1Budget))
 	readyAfter = math.min(readyAfter, tier1Budget)
-	local favoriteNames = readFavoriteNames()
+	local favoriteNames = readFavoriteNames(self.store)
 	local selected = {} :: { Animation }
 	local seen = {} :: { [string]: boolean }
 
@@ -205,6 +189,19 @@ end
 
 function createDanceWarmupService:_collectTier2Animations(): { Animation }
 	local tier2 = {} :: { Animation }
+	local fullCatalog = self.config.DANCE_PRELOAD_FULL_CATALOG == true
+	if fullCatalog then
+		-- ContentProvider only: warm the entire remaining catalog into asset cache.
+		-- Does not LoadAnimation / create AnimationTrack instances.
+		for _, animation in ipairs(self.animations) do
+			local key = buildCacheKey(animation)
+			if not self.preloadedAnimations[key] then
+				table.insert(tier2, animation)
+			end
+		end
+		return tier2
+	end
+
 	local already = 0
 	for _ in pairs(self.preloadedAnimations) do
 		already += 1
@@ -226,6 +223,31 @@ function createDanceWarmupService:_collectTier2Animations(): { Animation }
 		end
 	end
 	return tier2
+end
+
+function createDanceWarmupService:isPreloaded(animation: Animation): boolean
+	if typeof(animation) ~= "Instance" or not animation:IsA("Animation") then
+		return false
+	end
+	return self.preloadedAnimations[buildCacheKey(animation)] == true
+end
+
+--- On-demand ContentProvider warm for a single animation (click path).
+--- Yields. Returns true if marked preloaded after this call.
+function createDanceWarmupService:warmAnimation(animation: Animation): boolean
+	if self.destroyed then
+		return false
+	end
+	if typeof(animation) ~= "Instance" or not animation:IsA("Animation") then
+		return false
+	end
+	local key = buildCacheKey(animation)
+	if self.preloadedAnimations[key] then
+		return true
+	end
+	local generation = self.warmGeneration
+	local ok = self:_preloadAnimationBatch({ animation }, generation)
+	return ok and self.preloadedAnimations[key] == true
 end
 
 function createDanceWarmupService:beginWarmup(character: Model?, tier: WarmupTier?)
@@ -580,11 +602,16 @@ function createDanceWarmupService:_startWarmup(character: Model, tier: WarmupTie
 			if tier == "tier1" then
 				return
 			end
-			-- Phase 4: full path continues into tier2 budget (not one flat dump).
+			-- Phase 4: full path continues into tier2 / full-catalog remainder.
 			if self.destroyed or generation ~= self.warmGeneration then
 				return
 			end
 			local tier2Animations = self:_collectTier2Animations()
+			self.logger:info("DanceWarmup catalog remainder starting", {
+				remaining = #tier2Animations,
+				fullCatalog = self.config.DANCE_PRELOAD_FULL_CATALOG == true,
+				totalCatalog = #self.animations,
+			})
 			self:_preloadAnimationList(animator, generation, tier2Animations, readyAfter, "tier2")
 			self.catalogPreloaded = true
 			if not self.store:get().isDanceReady then
@@ -595,6 +622,11 @@ function createDanceWarmupService:_startWarmup(character: Model, tier: WarmupTie
 		end
 
 		local tier2Animations = self:_collectTier2Animations()
+		self.logger:info("DanceWarmup catalog remainder starting", {
+			remaining = #tier2Animations,
+			fullCatalog = self.config.DANCE_PRELOAD_FULL_CATALOG == true,
+			totalCatalog = #self.animations,
+		})
 		self:_preloadAnimationList(animator, generation, tier2Animations, readyAfter, "tier2")
 		self.catalogPreloaded = true
 		if not self.store:get().isDanceReady then

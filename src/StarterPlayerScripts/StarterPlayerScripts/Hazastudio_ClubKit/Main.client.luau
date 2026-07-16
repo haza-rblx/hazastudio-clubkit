@@ -203,6 +203,7 @@ local syncLeadTopbarController: any = nil
 local giftController: any = nil
 local carryController: any = nil
 local danceWarmupService: any = nil
+local loadingDanceHoldHooked = false
 local musicPlayerController: any = nil
 local loadingScreen: any? = nil
 local loadingBootReady = false
@@ -251,10 +252,73 @@ local function updateLoadingProgress()
 	if loadingOverheadReady then
 		progress = math.max(progress, 0.88)
 	end
+	if
+		danceWarmupService
+		and (
+			danceWarmupService.tier1Complete == true
+			or (type(danceWarmupService.isReady) == "function" and danceWarmupService:isReady())
+		)
+	then
+		progress = math.max(progress, 0.72)
+	end
 	loadingScreen:setProgress(progress)
 end
 
-local function requestFinishLoadingScreen()
+local function isDanceTier1WarmReady(): boolean
+	if ClientBootConfig.HOLD_LOADING_FOR_DANCE_TIER1 == false then
+		return true
+	end
+	if ClientBootConfig.DANCE_WARMUP_DURING_LOADING == false then
+		return true
+	end
+	if Config.FeatureFlags.SyncDanceEnabled ~= true then
+		return true
+	end
+	if not danceWarmupService then
+		-- Warm service not created yet — don't block forever before SyncDanceBootstrap.
+		return true
+	end
+	if danceWarmupService.tier1Complete == true then
+		return true
+	end
+	if type(danceWarmupService.isReady) == "function" and danceWarmupService:isReady() then
+		return true
+	end
+	return false
+end
+
+local requestFinishLoadingScreen: () -> ()
+
+local function ensureDanceTier1FinishHook()
+	if loadingDanceHoldHooked or not danceWarmupService then
+		return
+	end
+	loadingDanceHoldHooked = true
+	if type(danceWarmupService.whenReady) == "function" then
+		danceWarmupService:whenReady(function()
+			updateLoadingProgress()
+			requestFinishLoadingScreen()
+		end)
+	end
+	task.spawn(function()
+		local deadline = os.clock() + 25
+		while os.clock() < deadline do
+			if loadingFinished then
+				return
+			end
+			if isDanceTier1WarmReady() then
+				updateLoadingProgress()
+				requestFinishLoadingScreen()
+				return
+			end
+			task.wait(0.2)
+		end
+		-- Soft fail open: don't trap players on loading if warm hangs.
+		requestFinishLoadingScreen()
+	end)
+end
+
+requestFinishLoadingScreen = function()
 	local finish = maybeFinishLoadingScreen
 	if finish then
 		finish()
@@ -326,6 +390,11 @@ maybeFinishLoadingScreen = function()
 		return
 	end
 
+	if not isDanceTier1WarmReady() then
+		ensureDanceTier1FinishHook()
+		return
+	end
+
 	loadingMilestonesReadyAt = loadingMilestonesReadyAt or os.clock()
 	if loadingScreen and type((loadingScreen :: any).setSkipAvailable) == "function" then
 		(loadingScreen :: any):setSkipAvailable(true)
@@ -343,6 +412,10 @@ maybeFinishLoadingScreen = function()
 					return
 				end
 				if not loadingBootReady or loadingBootPending > 0 or not loadingOverheadReady then
+					return
+				end
+				if not isDanceTier1WarmReady() then
+					ensureDanceTier1FinishHook()
 					return
 				end
 				finishLoadingScreen()
@@ -1488,6 +1561,14 @@ if Config.FeatureFlags.SyncDanceEnabled then
 				autoStart = not deferDanceWarmup,
 			})
 		)
+		-- A: warm dance assets during loading (tier1), before cinematic dismiss.
+		if ClientBootConfig.DANCE_WARMUP_DURING_LOADING ~= false then
+			if type(danceWarmupService.beginWarmup) == "function" then
+				danceWarmupService:beginWarmup(nil, "tier1")
+			end
+			ensureDanceTier1FinishHook()
+			updateLoadingProgress()
+		end
 		syncDanceController = trackClientLifecycle(
 			"SyncController",
 			ClientMods.createSyncController.create({
@@ -1566,29 +1647,6 @@ if Config.FeatureFlags.SyncDanceEnabled then
 		emotePanel:bindSpeedChanged(function(speed)
 			syncDanceController:onSpeedChanged(speed)
 		end)
-		local function applySavedFavoritesAttribute(raw: any)
-			if type(raw) ~= "string" then
-				return
-			end
-			local ok, decoded = pcall(function()
-				return HttpService:JSONDecode(raw)
-			end)
-			if ok and type(decoded) == "table" then
-				ClientMods.SyncStore:set({ favoritedAnims = decoded })
-				emotePanel:setFavorites(decoded, true)
-			end
-		end
-
-		local localPlayer = Players.LocalPlayer
-		applySavedFavoritesAttribute(localPlayer:GetAttribute(Config.Favorites.ATTRIBUTE_KEY))
-		local favoritesAttrConn = localPlayer:GetAttributeChangedSignal(Config.Favorites.ATTRIBUTE_KEY):Connect(function()
-			applySavedFavoritesAttribute(localPlayer:GetAttribute(Config.Favorites.ATTRIBUTE_KEY))
-		end)
-		trackClientLifecycle("FavoritesAttribute", {
-			destroy = function()
-				favoritesAttrConn:Disconnect()
-			end,
-		})
 		emotePanel:setEmotes(
 			AnimationLoader.getAnimationsByCategory("Dance"),
 			AnimationLoader.getAnimationsByCategory("Pose")
@@ -1838,15 +1896,18 @@ if Config.FeatureFlags.SyncDanceEnabled then
 	local deferDanceWarmup = ClientBootConfig.POST_GAMEPLAY_DANCE_WARMUP ~= false
 		and ClientBootConfig.DEFER_DANCE_WARMUP ~= false
 	if deferDanceWarmup then
-		trackPostGameplayBootTask("DanceWarmup.tier1", function()
-			local delaySeconds = math.max(0, tonumber(ClientBootConfig.DANCE_TIER1_DELAY_AFTER_GAMEPLAY) or 0.5)
-			if delaySeconds > 0 then
-				task.wait(delaySeconds)
-			end
-			if danceWarmupService and type(danceWarmupService.beginWarmup) == "function" then
-				danceWarmupService:beginWarmup(nil, "tier1")
-			end
-		end)
+		local warmDuringLoading = ClientBootConfig.DANCE_WARMUP_DURING_LOADING ~= false
+		if not warmDuringLoading then
+			trackPostGameplayBootTask("DanceWarmup.tier1", function()
+				local delaySeconds = math.max(0, tonumber(ClientBootConfig.DANCE_TIER1_DELAY_AFTER_GAMEPLAY) or 0.5)
+				if delaySeconds > 0 then
+					task.wait(delaySeconds)
+				end
+				if danceWarmupService and type(danceWarmupService.beginWarmup) == "function" then
+					danceWarmupService:beginWarmup(nil, "tier1")
+				end
+			end)
+		end
 		trackPostGameplayBootTask("DanceWarmup.tier2", function()
 			local deadline = os.clock() + 30
 			while danceWarmupService and danceWarmupService.tier1Complete ~= true and os.clock() < deadline do

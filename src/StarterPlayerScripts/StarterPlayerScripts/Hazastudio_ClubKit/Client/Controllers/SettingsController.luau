@@ -17,6 +17,7 @@ local DeltaCompressor = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Util
 local GraphicsQuality = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.GraphicsQuality)
 local NotifService = require(script.Parent.Parent.Services.NotifService)
 local OverheadController = require(script.Parent.OverheadController)
+local PhoneLayout = require(script.Parent.Parent.Utils.PhoneLayout)
 
 type SettingsPayload = Types.SettingsPayload
 type SettingsStoredData = Types.SettingsStoredData
@@ -165,12 +166,13 @@ local function createSettingsController(deps: {
 	local appliedTexturesEnabled: boolean? = nil
 	local appliedWorkspaceVfxMode: string? = nil
 	local appliedPostProcessing: string? = nil
+	local provisionalPreset = if PhoneLayout.isPhoneLayout() then "Low" else "Balanced"
 	local effectiveGraphics: EffectiveGraphics = GraphicsQuality.getEffective({
-		graphicsPreset = "Balanced",
+		graphicsPreset = provisionalPreset,
 		textures = 2,
 		depthOfField = 0,
-		hideAllParticles = false,
-		shadowQuality = "Balanced",
+		hideAllParticles = provisionalPreset == "Low",
+		shadowQuality = if provisionalPreset == "Low" then "Off" else "Balanced",
 		graphicsOverrides = {},
 	})
 	local HOTBAR_STATE_B_BASE_SCALE = 1.12
@@ -1376,6 +1378,7 @@ local function createSettingsController(deps: {
 		setAttr("SettingsGraphicsTier", effectiveGraphics.graphicsTier)
 		setAttr("SettingsDonationVfxScale", effectiveGraphics.donationVfxScale)
 		setAttr("SettingsCinematicExtras", effectiveGraphics.cinematicExtras)
+		setAttr("SettingsHideAllParticles", effectiveGraphics.hideAllParticles == true)
 
 		-- Only set Lighting properties if values actually changed
 		-- to avoid triggering engine re-render unnecessarily.

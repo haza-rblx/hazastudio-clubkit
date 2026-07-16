@@ -11,6 +11,32 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.43] - 2026-07-16
+
+### Fixed
+- **PlayerSessionStore flush race** — generation guard + single-flight flush; stale in-flight writes reschedule instead of overwriting newer session data.
+- **Favorites recv leak** — dance + music favorites no longer replicate via Player Attributes; owner-only `REMOTE_SYNC_FAVORITES` / `REMOTE_FAVORITES_SYNC` push JSON to the owning client.
+- **Favorites DataStore churn** — write-behind debounce (`FAVORITES_SAVE_DEBOUNCE_SEC`, default 8s); flush on leave/shutdown via existing session store.
+
+### Added
+- **`DonationVfxClientGate`** — client gate for legacy EffectDonate scripts (`SettingsHideAllParticles`, `SettingsGraphicsTier`, `SettingsDonationVfxScale`).
+- **`SettingsHideAllParticles` player attribute** — mirrors graphics preset for VFX gates.
+- **AvatarPrewarmPool `setActive`** — proximity tick scan pauses while ACM panel is closed.
+- **Loading intro frame** — script-built blank + centered `Branding.LOGO_IMAGE` + `BlurEffect` before cinematic camera/dance; blur clears with progress (`Config.Loading.INTRO_*`).
+- **Dance warm during loading** — tier1 `PreloadAsync` starts in boot; finish can hold until tier1 ready (`DANCE_WARMUP_DURING_LOADING`, `HOLD_LOADING_FOR_DANCE_TIER1`).
+
+### Changed
+- **Dance full-catalog PreloadAsync** — `DANCE_PRELOAD_FULL_CATALOG` (default on): after tier1 ready, background `ContentProvider:PreloadAsync` continues for the rest of the dance/pose catalog (content cache only; no mass `LoadAnimation`). Kill switch: set `false` to restore 32-asset envelope.
+- **Dance click path** — optimistic row selection + `FireServer` immediately (no warmup gate); predictive local Play after per-click preload; reconcile on `anim_result`.
+- **Dance panel selection UI** — update previous + current row only (instant, no full-list 0.5s tweens).
+- **Phone graphics boot** — provisional `Low` preset via `PhoneLayout` until Settings sync arrives (was `Balanced`).
+- **DonationEffect remote** — world nuke VFX broadcast uses `UnreliableRemoteEvent` (cosmetic-only; may drop under congestion).
+- **Donation aura clones** — `CollectionService:AddTag(..., "DonationEffect")` so `SettingsController` scale/hide applies.
+- **TitleColorPreset SharedTick** — skips billboard entries beyond `MaxDistance` from camera.
+- **Cinematic dock magnifier** — disabled on phone layout and graphics tier ≤ 0.
+- **Donation notification marquee** — position updates throttled to ~30 Hz.
+- **EffectDonate** — GreenHammer / BlackHole / Blossom / LocalNuke respect `DonationVfxClientGate` after world-effect prefs.
+
 ## [2.4.42] - 2026-07-15
 
 ### Fixed

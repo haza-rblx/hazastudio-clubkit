@@ -132,7 +132,7 @@ end
 
 function NukeEffectController.init(deps: {
 	logger: any?,
-	remote: RemoteEvent?,
+	remote: (RemoteEvent | UnreliableRemoteEvent)?,
 })
 	if initialized then
 		return
@@ -154,16 +154,16 @@ function NukeEffectController.init(deps: {
 		if not resolved then
 			resolved = ReplicatedStorage:WaitForChild(remoteName, 30)
 		end
-		if not resolved or not resolved:IsA("RemoteEvent") then
+		if not resolved or (not resolved:IsA("RemoteEvent") and not resolved:IsA("UnreliableRemoteEvent")) then
 			if logger and type(logger.warn) == "function" then
 				logger:warn("NukeEffectController: remote not found", { name = remoteName })
 			end
 			return
 		end
-		remote = resolved :: RemoteEvent
+		remote = resolved :: RemoteEvent | UnreliableRemoteEvent
 	end
 
-	local nukeRemote = remote :: RemoteEvent
+	local nukeRemote = remote :: RemoteEvent | UnreliableRemoteEvent
 	if connection then
 		connection:Disconnect()
 	end

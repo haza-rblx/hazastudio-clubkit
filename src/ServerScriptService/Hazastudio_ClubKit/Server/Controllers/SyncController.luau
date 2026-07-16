@@ -61,7 +61,12 @@ local function createSyncController(deps: {
 	local startSyncRE = getOrCreateRemote(config.REMOTE_START_SYNC, "RemoteEvent") :: RemoteEvent
 	local changeSpeedRE = getOrCreateRemote(config.REMOTE_CHANGE_SPEED, "RemoteEvent") :: RemoteEvent
 	local updateFavoritesRE = getOrCreateRemote(config.REMOTE_UPDATE_FAVORITES, "RemoteEvent") :: RemoteEvent
+	local syncFavoritesRE = getOrCreateRemote(config.REMOTE_SYNC_FAVORITES, "RemoteEvent") :: RemoteEvent
 	local syncNotificationRE = getOrCreateRemote(config.REMOTE_NOTIFICATION, "RemoteEvent") :: RemoteEvent
+
+	favoritesRepository:setOwnerSync(function(player: Player, jsonData: string)
+		syncFavoritesRE:FireClient(player, jsonData)
+	end)
 
 	-- Clean up legacy visual state remote left behind from the dual-render era.
 	local staleVisual = syncRemotes:FindFirstChild(config.REMOTE_VISUAL_STATE)
@@ -278,8 +283,7 @@ local function createSyncController(deps: {
 			return
 		end
 
-		player:SetAttribute(deps.config.Favorites.ATTRIBUTE_KEY, encoded)
-		local result = favoritesRepository:save(player.UserId, encoded)
+		local result = favoritesRepository:storeOwnerJson(player, encoded)
 		if not result.ok then
 			logger:error("Favorites update failed", { player = player.Name, error = result.error })
 		end

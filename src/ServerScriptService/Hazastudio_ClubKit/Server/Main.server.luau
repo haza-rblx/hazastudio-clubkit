@@ -147,6 +147,21 @@ local function ensureRemoteEvent(parent: Instance, name: string): RemoteEvent
 	remote.Parent = parent
 	return remote
 end
+
+local function ensureUnreliableRemoteEvent(parent: Instance, name: string): UnreliableRemoteEvent
+	local existing = parent:FindFirstChild(name)
+	if existing then
+		if existing:IsA("UnreliableRemoteEvent") then
+			return existing
+		end
+		existing:Destroy()
+	end
+
+	local remote = Instance.new("UnreliableRemoteEvent")
+	remote.Name = name
+	remote.Parent = parent
+	return remote
+end
 -- ============================================================
 -- SETUP REMOTE: Notify
 -- FireClient = side effect, bukan pure util -> wire di entry point.
@@ -192,9 +207,8 @@ ensureRemoteEvent(Remotes, Config.Donation.REMOTE_ROBUX_PRODUCTS)
 ensureRemoteEvent(Remotes, Config.Donation.REMOTE_ROBUX_PRODUCTS_RESPONSE)
 ensureRemoteEvent(Remotes, Config.Donation.REMOTE_DONOR_PROFILE)
 ensureRemoteEvent(Remotes, Config.Donation.REMOTE_DONOR_PROFILE_RESPONSE)
--- World-position nuke VFX (Nuke/Smite/BlackHole). Pre-created here so client-side
--- NukeEffectController can :WaitForChild() without yielding during gameplay.
-ensureRemoteEvent(Remotes, (Config.Donation :: any).NUKE_REMOTE or "DonationEffect")
+-- World-position nuke VFX (Nuke/Smite/BlackHole). Unreliable — cosmetic-only, may drop under congestion.
+ensureUnreliableRemoteEvent(Remotes, (Config.Donation :: any).NUKE_REMOTE or "DonationEffect")
 local WorkspaceLeaderboardsRemote = ensureRemoteEvent(Remotes, Config.Leaderboards.REMOTE_UPDATED)
 local WorkspaceLeaderboardsSnapshotRemote = ensureRemoteEvent(Remotes, Config.Leaderboards.REMOTE_SNAPSHOT)
 local WorkspaceLeaderboardsSnapshotResponseRemote =
@@ -239,6 +253,7 @@ if Config.FeatureFlags.MusicPlayerEnabled then
 	ensureRemoteEvent(Remotes, musicConfig.REMOTE_GET_PLAYLISTS)
 	ensureRemoteEvent(Remotes, musicConfig.REMOTE_GET_TRACKS)
 	ensureRemoteEvent(Remotes, musicConfig.REMOTE_FAVORITE_TRACK)
+	ensureRemoteEvent(Remotes, musicConfig.REMOTE_FAVORITES_SYNC)
 	ensureRemoteEvent(Remotes, musicConfig.REMOTE_SET_DJ_MODE)
 	ensureRemoteEvent(Remotes, musicConfig.REMOTE_DJ_EFFECT)
 	ensureRemoteEvent(Remotes, musicConfig.REMOTE_MANAGE_PLAYLIST)
@@ -1055,6 +1070,7 @@ if Config.FeatureFlags.SyncDanceEnabled then
 		animationLoader = ServerMods.AnimationLoader,
 		proximity = proximityService,  -- R1.3: shared ProximityInterestService
 		interest = interestManager,    -- R1.3: shared ServerMods.InterestManager
+		favoritesRepository = syncFavoritesRepo,
 	})
 	local syncController = ServerMods.createSyncController({
 		service = syncService,

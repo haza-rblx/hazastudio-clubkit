@@ -1311,6 +1311,8 @@ local function startRunningTextMarquee(refs: WorkspaceSurfaceRefs, isTokenCurren
 		local y = 0
 		local lastLayoutKey = ""
 		local debugAccum = 0
+		local marqueeAccum = 0
+		local MARQUEE_INTERVAL = 0.033
 		local suspendedLayouts: { SuspendedWrapperLayout } = {}
 
 		while isTokenCurrent() and content.Parent and textLabel.Parent and gui.Parent and wrapper.Parent do
@@ -1381,6 +1383,11 @@ local function startRunningTextMarquee(refs: WorkspaceSurfaceRefs, isTokenCurren
 			end
 
 			local dt = RunService.Heartbeat:Wait()
+			marqueeAccum += dt
+			if marqueeAccum < MARQUEE_INTERVAL then
+				continue
+			end
+			marqueeAccum = 0
 			for index, strip in ipairs(strips) do
 				if not strip.Parent then
 					continue

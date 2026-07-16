@@ -78,6 +78,7 @@ local function provisionSyncRemotes(replicatedStorage: ReplicatedStorage, config
 	ensureRemoteEvent(syncFolder, syncConfig.REMOTE_START_SYNC)
 	ensureRemoteEvent(syncFolder, syncConfig.REMOTE_CHANGE_SPEED)
 	ensureRemoteEvent(syncFolder, syncConfig.REMOTE_UPDATE_FAVORITES)
+	ensureRemoteEvent(syncFolder, syncConfig.REMOTE_SYNC_FAVORITES)
 	ensureRemoteEvent(syncFolder, syncConfig.REMOTE_NOTIFICATION)
 end
 

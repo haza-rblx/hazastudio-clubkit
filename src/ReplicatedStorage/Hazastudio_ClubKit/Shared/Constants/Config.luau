@@ -623,6 +623,8 @@ Config.DataStore = {
 	-- backoff (2s/4s/8s) does not hold MAX_INFLIGHT. ProfileLoader retries outside the slot.
 	-- Writes/UpdateAsync keep RETRY_ATTEMPTS. Set to 3 to A/B the pre-fix behavior.
 	JOIN_READ_RETRY_ATTEMPTS = 1,
+	-- Owner-only favorites write-behind (music + dance).
+	FAVORITES_SAVE_DEBOUNCE_SEC = 8,
 }
 -- ============================================================
 -- BADGE VISIBILITY PER ROLE
@@ -915,6 +917,7 @@ Config.Sync = {
 	REMOTE_START_SYNC = "startSync",
 	REMOTE_CHANGE_SPEED = "changeSpeed",
 	REMOTE_UPDATE_FAVORITES = "updateFavoritedAnimationsEvent",
+	REMOTE_SYNC_FAVORITES = "syncFavoritedAnimationsToClient",
 	REMOTE_NOTIFICATION = "SyncNotification",
 	REMOTE_VISUAL_STATE = "SyncVisualState",
 	MAX_CHAIN_DEPTH = 100,
@@ -939,8 +942,13 @@ Config.Sync = {
 	WUTWUT_CLIENT_MIN_FIRE_INTERVAL = 0.04,
 	-- Phase 1: legacy feel — asset preload on, mass track warmup stays off.
 	DANCE_PRELOAD_ENABLED = true,
-	-- Cap ContentProvider PreloadAsync (tier1/tier2/full). Favorites + first N catalog
-	-- assets only — full-catalog preload was ~350MB Animation on dense emote kits.
+	-- When false: Cap ContentProvider PreloadAsync to MAX_ASSETS (tier1+tier2).
+	-- When true: tier1 still uses budgets below for early isDanceReady; tier2/background
+	-- PreloadAsync continues for the remainder of the catalog (content cache only —
+	-- never mass LoadAnimation). Dense kits use more join bandwidth; batch/queue
+	-- watermarks still throttle. Kill switch: set false to restore 32-asset envelope.
+	DANCE_PRELOAD_FULL_CATALOG = true,
+	-- Caps tier1/tier2 when FULL_CATALOG is false. With FULL_CATALOG, still clamps tier1 budget.
 	DANCE_PRELOAD_MAX_ASSETS = 32,
 	-- Phase 4: per-tier budgets inside MAX_ASSETS (tier1 ready signal + tier2 remainder).
 	-- Kill switch: USE_LEGACY_FLAT_PRELOAD_BUDGET = true → flat MAX_ASSETS (pre-2.4.25).
@@ -1337,6 +1345,15 @@ Config.Loading = {
 	COLOR_FADE_IN_DURATION = 1.5,
 	COLOR_FADE_OUT_DURATION = 0.4,
 	BLACKOUT_TO_LOADING_DELAY = 0.2,
+	-- Soft intro before cinematic camera/dance (lighter join feel).
+	-- Blank + centered Branding.LOGO_IMAGE + BlurEffect that clears with progress.
+	INTRO_ENABLED = true,
+	INTRO_MIN_DURATION = 1.25,
+	INTRO_END_PROGRESS = 0.28,
+	INTRO_BLUR_SIZE = 28,
+	INTRO_LOGO_SIZE_PX = 160,
+	INTRO_FADE_OUT_DURATION = 0.55,
+	INTRO_LOGO_FADE_IN_DURATION = 0.45,
 	TIPS_FADE_DELAY = 0.6,
 	TIPS_FADE_DURATION = 0.7,
 	GREETING_FADE_IN_DURATION = 0.45,
@@ -1379,6 +1396,10 @@ Config.ClientBoot = {
 	POST_GAMEPLAY_DANCE_WARMUP = true,
 	MUSIC_ENGINE_DELAY_AFTER_GAMEPLAY = 4,
 	DANCE_TIER1_DELAY_AFTER_GAMEPLAY = 0.5,
+	-- Start dance ContentProvider warm during loading (tier1), not only after dismiss.
+	DANCE_WARMUP_DURING_LOADING = true,
+	-- Keep loading finish gated until tier1 warm marks ready (with existing boot/overhead gates).
+	HOLD_LOADING_FOR_DANCE_TIER1 = true,
 	-- Backward-compat aliases (pre-lifecycle-gate names).
 	DEFER_MUSIC_PLAYER = true,
 	DEFER_DANCE_WARMUP = true,
@@ -2664,6 +2685,7 @@ Config.Music = {
 	REMOTE_GET_PLAYLISTS = "MusicGetPlaylists", -- C->S (RE)
 	REMOTE_GET_TRACKS = "MusicGetTracks", -- C->S (RE)
 	REMOTE_FAVORITE_TRACK = "MusicFavoriteTrack", -- C->S (RE)
+	REMOTE_FAVORITES_SYNC = "MusicFavoritesSync", -- S->C owner-only
 	REMOTE_SET_DJ_MODE = "MusicSetDjMode", -- C->S (RE)
 	REMOTE_DJ_EFFECT = "MusicDjEffect", -- C->S (DJ effect change)
 	REMOTE_MANAGE_PLAYLIST = "MusicManagePlaylist", -- C->S (admin only, RE)

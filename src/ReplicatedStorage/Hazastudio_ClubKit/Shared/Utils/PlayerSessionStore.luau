@@ -26,6 +26,8 @@ type SessionEntry = {
 	fingerprint: string,
 	dirty: boolean,
 	flushScheduled: boolean,
+	generation: number,
+	flushing: boolean,
 }
 
 local sessions: { [string]: SessionEntry } = {}
@@ -91,6 +93,8 @@ function PlayerSessionStore.hydrate(namespace: string, userId: number, data: any
 		fingerprint = fingerprintOf(data),
 		dirty = false,
 		flushScheduled = false,
+		generation = 0,
+		flushing = false,
 	}
 end
 
@@ -132,6 +136,7 @@ function PlayerSessionStore.applyMutator(
 	end
 	entry.data = nextData
 	entry.dirty = true
+	entry.generation += 1
 	-- fingerprint stays as last *flushed* fingerprint until flush succeeds
 	return nextData, true
 end
@@ -163,15 +168,25 @@ local function flushOne(namespace: string, userId: number): Result<nil>
 	if not entry or not entry.dirty then
 		return Result.Ok(nil)
 	end
+	if entry.flushing then
+		return Result.Err("flush_in_flight")
+	end
 	local flushFn = flushFns[namespace]
 	if not flushFn then
 		return Result.Err("no_flush_fn")
 	end
-	local result = flushFn(userId, entry.data)
+	entry.flushing = true
+	local flushGeneration = entry.generation
+	local snapshot = entry.data
+	local result = flushFn(userId, snapshot)
+	entry.flushing = false
 	if result.ok then
-		entry.fingerprint = fingerprintOf(entry.data)
-		entry.dirty = false
-		metrics.flushed += 1
+		if entry.generation == flushGeneration then
+			entry.fingerprint = fingerprintOf(entry.data)
+			entry.dirty = false
+			metrics.flushed += 1
+		end
+		-- Newer mutations during yield keep dirty=true for a follow-up flush.
 		return Result.Ok(nil)
 	end
 	metrics.flushFailed += 1
@@ -199,7 +214,10 @@ function PlayerSessionStore.scheduleFlush(namespace: string, userId: number)
 		if current then
 			current.flushScheduled = false
 		end
-		flushOne(namespace, userId)
+		local flushResult = flushOne(namespace, userId)
+		if not flushResult.ok and flushResult.error == "flush_in_flight" then
+			PlayerSessionStore.scheduleFlush(namespace, userId)
+		end
 	end)
 end
 

@@ -48,20 +48,16 @@ local function getFavoriteAttributeKey(config: any): string
 	return tostring(config.FAVORITES_ATTRIBUTE_KEY or FALLBACK_FAVORITES_ATTRIBUTE_KEY)
 end
 
-local function readFavoriteTrackIdsFromPlayer(config: any): { [string]: boolean }
-	local player = Players.LocalPlayer
-	local raw = player and player:GetAttribute(getFavoriteAttributeKey(config))
+local function decodeFavoriteTrackIds(raw: any): { [string]: boolean }
 	if type(raw) ~= "string" or raw == "" then
 		return {}
 	end
-
 	local ok, decoded = pcall(function()
 		return HttpService:JSONDecode(raw)
 	end)
 	if not ok or type(decoded) ~= "table" then
 		return {}
 	end
-
 	local favorites = {} :: { [string]: boolean }
 	for trackId, isFavorited in pairs(decoded) do
 		if type(trackId) == "string" and isFavorited == true then
@@ -69,6 +65,10 @@ local function readFavoriteTrackIdsFromPlayer(config: any): { [string]: boolean 
 		end
 	end
 	return favorites
+end
+
+local function readFavoriteTrackIdsFromPlayer(config: any): { [string]: boolean }
+	return {}
 end
 
 local function trimNotificationText(text: string): string
@@ -2365,15 +2365,17 @@ function MusicPlayerController:initEngine()
 	self:_bindSettingsVolumeControls()
 
 	store:set({
-		favoriteTrackIds = readFavoriteTrackIdsFromPlayer(config),
+		favoriteTrackIds = {},
 	})
-	self:_trackConnection(
-		Players.LocalPlayer:GetAttributeChangedSignal(getFavoriteAttributeKey(config)):Connect(function()
+
+	local favoritesSyncRemote = remotes:FindFirstChild(config.REMOTE_FAVORITES_SYNC)
+	if favoritesSyncRemote and favoritesSyncRemote:IsA("RemoteEvent") then
+		self:_trackConnection((favoritesSyncRemote :: RemoteEvent).OnClientEvent:Connect(function(jsonData: any)
 			store:set({
-				favoriteTrackIds = readFavoriteTrackIdsFromPlayer(config),
+				favoriteTrackIds = decodeFavoriteTrackIds(jsonData),
 			})
-		end)
-	)
+		end))
+	end
 
 	-- RemoteEvent listeners
 

@@ -832,6 +832,12 @@ local function collectDockButtons(dock: GuiObject): { DockButtonState }
 end
 
 local function startDockMagnifier(dock: GuiObject): () -> ()
+	local PhoneLayout = require(script.Parent.Parent.Utils.PhoneLayout)
+	local localPlayer = Players.LocalPlayer
+	local tier = if localPlayer then tonumber(localPlayer:GetAttribute("SettingsGraphicsTier")) or 1 else 1
+	if PhoneLayout.isPhoneLayout() or tier <= 0 then
+		return function() end
+	end
 	local states = collectDockButtons(dock)
 	local alive = true
 	local conn = RunService.RenderStepped:Connect(function(dt)

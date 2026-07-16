@@ -512,6 +512,12 @@ local function handleNukeEffect(donatorName, recipientName, donationAmount)
 	if not DonationExperiencePrefs.shouldShowWorldEffect() then
 		return
 	end
+	local DonationVfxClientGate = require(
+		script.Parent.Parent.Parent.Parent.Utils.DonationVfxClientGate
+	)
+	if not DonationVfxClientGate.shouldPlayWorldEffect() then
+		return
+	end
 	createNukeEffect(ReplicatedStorage.WorldEffects.Nuke, donatorName, recipientName, donationAmount)
 end
 

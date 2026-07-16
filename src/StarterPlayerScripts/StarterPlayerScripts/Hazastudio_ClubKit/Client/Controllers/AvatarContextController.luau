@@ -11,6 +11,7 @@ local StarterGui = game:GetService("StarterGui")
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local LoadingScreenUI = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.UI.LoadingScreenUI)
+local AvatarPrewarmShared = require(script.Parent.Parent.Utils.AvatarPrewarmShared)
 
 type AvatarContextRequest = Types.AvatarContextRequest
 type AvatarContextResponse = Types.AvatarContextResponse
@@ -616,6 +617,7 @@ local function createAvatarContextController(deps: {
 		isOpen = true
 		isLoading = true
 		currentTargetUserId = targetUserId
+		AvatarPrewarmShared.getPool():setActive(true)
 		currentPayload = nil
 		likePendingRequestId = nil
 		instantPaintApplied = false
@@ -675,6 +677,7 @@ local function createAvatarContextController(deps: {
 
 	function controller:closePanel()
 		controller:_notifyContextClosed()
+		AvatarPrewarmShared.getPool():setActive(false)
 		isOpen = false
 		panelReady = false
 		isLoading = false

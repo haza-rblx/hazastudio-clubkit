@@ -11,6 +11,7 @@
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ContentProvider = game:GetService("ContentProvider")
 
 local NotifService = require(script.Parent.Parent.Services.NotifService)
 local LoadingScreenUI = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.UI.LoadingScreenUI)
@@ -36,6 +37,8 @@ function SyncController.create(deps: {
 	self._loadingLocalTracks = {} :: { AnimationTrack }
 	self._loadingCleanupGeneration = 0
 	self._hasLoadingLocalDance = false
+	self._predictiveLocalTracks = {} :: { AnimationTrack }
+	self._predictiveGeneration = 0
 	self._knownDanceAnimationIds = {} :: { [string]: boolean }
 	self._knownDanceAnimationNames = {} :: { [string]: boolean }
 
@@ -63,6 +66,7 @@ function SyncController.create(deps: {
 	self.startSyncRE = syncRemotes:WaitForChild(self.config.REMOTE_START_SYNC, 15) :: RemoteEvent
 	self.changeSpeedRE = syncRemotes:WaitForChild(self.config.REMOTE_CHANGE_SPEED, 15) :: RemoteEvent
 	self.updateFavoritesRE = syncRemotes:WaitForChild(self.config.REMOTE_UPDATE_FAVORITES, 15) :: RemoteEvent
+	self.syncFavoritesRE = syncRemotes:WaitForChild(self.config.REMOTE_SYNC_FAVORITES, 15) :: RemoteEvent
 	self.notificationRemote = syncRemotes:WaitForChild(self.config.REMOTE_NOTIFICATION, 15) :: RemoteEvent
 
 	if
@@ -89,7 +93,28 @@ function SyncController.create(deps: {
 		end)
 	)
 
+	if self.syncFavoritesRE then
+		table.insert(
+			self.connections,
+			self.syncFavoritesRE.OnClientEvent:Connect(function(jsonData: any)
+				self:_applyFavoritesJson(jsonData)
+			end)
+		)
+	end
+
 	return self
+end
+
+function SyncController:_applyFavoritesJson(jsonData: any)
+	if type(jsonData) ~= "string" or jsonData == "" then
+		return
+	end
+	local ok, decoded = pcall(function()
+		return HttpService:JSONDecode(jsonData)
+	end)
+	if ok and type(decoded) == "table" then
+		self.store:set({ favoritedAnims = decoded })
+	end
 end
 
 function SyncController:_fireAnimationAction(animation: Animation, shouldPlay: boolean)
@@ -100,7 +125,79 @@ function SyncController:_fireAnimationAction(animation: Animation, shouldPlay: b
 	self.animationStartRE:FireServer(animation, shouldPlay, self.store:get().currentSpeed, "play")
 end
 
+function SyncController:_stopPredictiveLocal()
+	self._predictiveGeneration += 1
+	for _, track in ipairs(self._predictiveLocalTracks) do
+		pcall(function()
+			track:Stop(0)
+			track:Destroy()
+		end)
+	end
+	table.clear(self._predictiveLocalTracks)
+end
+
+--- Preload (if needed) + Play locally for instant self feedback. Server still
+--- owns replication for others; stop predictive when anim_result arrives.
+function SyncController:_startPredictiveLocal(animation: Animation)
+	self:_stopPredictiveLocal()
+	local generation = self._predictiveGeneration
+	local animationName = animation.Name
+
+	task.spawn(function()
+		local warmed = false
+		if self.danceWarmupService and type(self.danceWarmupService.warmAnimation) == "function" then
+			warmed = self.danceWarmupService:warmAnimation(animation) == true
+		else
+			local ok = pcall(function()
+				ContentProvider:PreloadAsync({ animation })
+			end)
+			warmed = ok
+		end
+
+		if generation ~= self._predictiveGeneration then
+			return
+		end
+		if self.store:get().visualAnim ~= animationName then
+			return
+		end
+
+		local animator = self:_getLocalAnimator()
+		if not animator then
+			return
+		end
+
+		local ok, trackOrErr = pcall(function()
+			return animator:LoadAnimation(animation)
+		end)
+		if not ok or not trackOrErr then
+			self.logger:warn("Predictive local LoadAnimation failed", {
+				animation = animationName,
+				warmed = warmed,
+				error = tostring(trackOrErr),
+			})
+			return
+		end
+		if generation ~= self._predictiveGeneration then
+			pcall(function()
+				trackOrErr:Destroy()
+			end)
+			return
+		end
+
+		local track = trackOrErr :: AnimationTrack
+		track.Looped = true
+		track.Priority = self.config.ANIM_PRIORITY
+		track:Play(self.config.FADE_IN or 0.14)
+		local speed = tonumber(self.store:get().currentSpeed) or 1
+		pcall(function()
+			track:AdjustSpeed(speed)
+		end)
+		table.insert(self._predictiveLocalTracks, track)
+	end)
+end
+
 function SyncController:_queuePendingAnimation(animation: Animation)
+	-- Kept for compatibility; play path no longer gates on warmup.
 	self.store:set({
 		isDancePreparing = true,
 		isPanelOpen = true,
@@ -108,24 +205,6 @@ function SyncController:_queuePendingAnimation(animation: Animation)
 		pendingAnimationName = animation.Name,
 		pendingAnimationObject = animation,
 	})
-
-	if not self.danceWarmupService or self._waitingForWarmup then
-		return
-	end
-
-	self._waitingForWarmup = true
-	self.danceWarmupService:whenReady(function()
-		self._waitingForWarmup = false
-		local pendingAnimation = self.store:get().pendingAnimationObject
-		if pendingAnimation then
-			self:onEmoteSelected(pendingAnimation)
-		else
-			self.store:set({
-				isDancePreparing = false,
-				visualAnim = self.store:get().currentAnim,
-			})
-		end
-	end)
 end
 
 function SyncController:_handleNotification(payload: any)
@@ -135,6 +214,7 @@ function SyncController:_handleNotification(payload: any)
 
 	local notifType = payload.type
 	if notifType == "sync_success" or notifType == "transfer_success" then
+		self:_stopPredictiveLocal()
 		local currentAnim = if type(payload.currentAnim) == "string" then payload.currentAnim else ""
 		self.store:set({
 			isSyncing = true,
@@ -235,6 +315,18 @@ function SyncController:_handleNotification(payload: any)
 		local result = payload.result
 		local animName = payload.animationName
 		if result == "playing" then
+			local state = self.store:get()
+			-- Ignore stale ack if user already selected a different dance.
+			if type(animName) == "string"
+				and type(state.visualAnim) == "string"
+				and state.visualAnim ~= ""
+				and state.visualAnim ~= animName
+			then
+				return
+			end
+			-- Server track is authoritative for replication; drop predictive local
+			-- to avoid double-weight on self.
+			self:_stopPredictiveLocal()
 			self.store:set({
 				currentAnim = animName,
 				visualAnim = animName,
@@ -244,6 +336,7 @@ function SyncController:_handleNotification(payload: any)
 				pendingAnimationObject = nil,
 			})
 		elseif result == "stopped" then
+			self:_stopPredictiveLocal()
 			self.store:set({
 				currentAnim = "",
 				visualAnim = "",
@@ -253,6 +346,7 @@ function SyncController:_handleNotification(payload: any)
 			})
 		else
 			-- error / rate_limited — revert preparing state
+			self:_stopPredictiveLocal()
 			self.store:set({
 				isDancePreparing = false,
 				visualAnim = self.store:get().currentAnim,
@@ -409,16 +503,28 @@ function SyncController:onEmoteSelected(animation: Animation)
 		and not state.isDancePreparing
 		and not state.isSyncing
 	if isSameActive then
+		self:_stopPredictiveLocal()
+		self.store:set({
+			currentAnim = "",
+			visualAnim = "",
+			isDancePreparing = false,
+			pendingAnimationName = nil,
+			pendingAnimationObject = nil,
+		})
 		self:_fireAnimationAction(animation, false)
 		return
 	end
 
-	if self.danceWarmupService and not self.danceWarmupService:isReady() then
-		self:_queuePendingAnimation(animation)
-		return
-	end
-
+	-- Optimistic UI + FireServer immediately (do not gate on catalog warmup).
+	self.store:set({
+		visualAnim = animationName,
+		isDancePreparing = true,
+		isPanelOpen = true,
+		pendingAnimationName = animationName,
+		pendingAnimationObject = animation,
+	})
 	self:_fireAnimationAction(animation, true)
+	self:_startPredictiveLocal(animation)
 end
 
 -- Apply speed locally for instant slider responsiveness; server still gets
@@ -494,8 +600,6 @@ function SyncController:onFavoriteToggled(animationName: string)
 		return HttpService:JSONEncode(favorites)
 	end)
 	if ok then
-		local player = Players.LocalPlayer
-		player:SetAttribute(self.favoritesConfig.ATTRIBUTE_KEY, encoded)
 		self.updateFavoritesRE:FireServer({
 			requestId = HttpService:GenerateGUID(false),
 			data = encoded,
@@ -504,6 +608,7 @@ function SyncController:onFavoriteToggled(animationName: string)
 end
 
 function SyncController:onUnsync()
+	self:_stopPredictiveLocal()
 	self.startSyncRE:FireServer(nil, false)
 	self.store:set({
 		isSyncing = false,
@@ -542,6 +647,7 @@ function SyncController:requestTransferLeadByUserId(targetUserId: number): boole
 end
 
 function SyncController:destroy()
+	self:_stopPredictiveLocal()
 	self:stopLoadingLocalDances()
 	for _, connection in ipairs(self.connections or {}) do
 		connection:Disconnect()

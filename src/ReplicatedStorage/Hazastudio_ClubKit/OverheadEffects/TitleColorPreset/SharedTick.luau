@@ -64,6 +64,34 @@ local function readOpts()
 	return cachedOpts
 end
 
+local function isWithinViewDistance(uiInstance: Instance?): boolean
+	if not uiInstance then
+		return true
+	end
+	local cur: Instance? = uiInstance
+	while cur do
+		if cur:IsA("BillboardGui") then
+			local billboard = cur :: BillboardGui
+			local maxDistance = billboard.MaxDistance
+			if maxDistance > 0 then
+				local adornee = billboard.Adornee
+				if adornee and adornee:IsA("BasePart") then
+					local camera = workspace.CurrentCamera
+					if camera then
+						local dist = (camera.CFrame.Position - (adornee :: BasePart).Position).Magnitude
+						if dist > maxDistance then
+							return false
+						end
+					end
+				end
+			end
+			break
+		end
+		cur = cur.Parent
+	end
+	return true
+end
+
 local function isGuiTreeVisible(inst: Instance?): boolean
 	local cur: Instance? = inst
 	while cur do
@@ -112,6 +140,9 @@ local function ensureConn()
 			local entry = entries[owner]
 			if entry then
 				if opts.skipHidden and entry.uiInstance and not isGuiTreeVisible(entry.uiInstance) then
+					continue
+				end
+				if opts.skipHidden and entry.uiInstance and not isWithinViewDistance(entry.uiInstance) then
 					continue
 				end
 				entry.tick(step)

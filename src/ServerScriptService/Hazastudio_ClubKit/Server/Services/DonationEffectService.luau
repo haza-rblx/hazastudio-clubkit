@@ -1,6 +1,7 @@
 --!strict
 
 local Debris = game:GetService("Debris")
+local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ServerStorage = game:GetService("ServerStorage")
 
@@ -298,11 +299,11 @@ local function createDonationEffectService(deps: {
 		return Result.Ok(nil)
 	end
 
-	-- Nuke broadcast RemoteEvent (global world-position VFX). Created here so
+	-- Nuke broadcast UnreliableRemoteEvent (global world-position VFX). Created here so
 	-- the service is self-contained: it works whether or not Main.server
 	-- pre-created the remote. Lookup order matches where Main.server puts
 	-- it (ReplicatedStorage.Remotes.<name>), with a root-level fallback.
-	local nukeRemote: RemoteEvent
+	local nukeRemote: UnreliableRemoteEvent
 	do
 		local remoteName = getStringConfig("NUKE_REMOTE", "DonationEffect")
 		local remotesFolder = ReplicatedStorage:FindFirstChild("Remotes")
@@ -313,13 +314,13 @@ local function createDonationEffectService(deps: {
 		if not existing then
 			existing = ReplicatedStorage:FindFirstChild(remoteName)
 		end
-		if existing and existing:IsA("RemoteEvent") then
+		if existing and existing:IsA("UnreliableRemoteEvent") then
 			nukeRemote = existing
 		else
 			if existing then
 				existing:Destroy()
 			end
-			nukeRemote = Instance.new("RemoteEvent")
+			nukeRemote = Instance.new("UnreliableRemoteEvent")
 			nukeRemote.Name = remoteName
 			-- Default to ReplicatedStorage.Remotes so the convention matches
 			-- other remotes; create the folder if absent.
@@ -474,6 +475,7 @@ local function createDonationEffectService(deps: {
 		SoundAssetSanitizer.removeBlockedSounds(effect)
 		-- Clients scale/disable emitters locally via Settings (SettingsDonationVfxScale).
 		effect.Name = "HazastudioDonationEffect_" .. tier.effect
+		CollectionService:AddTag(effect, "DonationEffect")
 		positionEffect(effect, character, attachPart)
 		Debris:AddItem(effect, duration)
 
