@@ -11,6 +11,11 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.45] - 2026-07-16
+
+### Fixed
+- **Carry physics** — carried parts (including `HumanoidRootPart`) are fully `Massless` + `CanCollide = false` while welded, so the carrier is not drag-loaded. Carrier keeps normal WalkSpeed/JumpPower (jump allowed). Carrier carry anim priority lowered to `Action` so Sync dance (`Action4`) can play; carried stays `Action4` + `PlatformStand` so they remain stuck/limp on the weld.
+
 ## [2.4.44] - 2026-07-16
 
 ### Fixed

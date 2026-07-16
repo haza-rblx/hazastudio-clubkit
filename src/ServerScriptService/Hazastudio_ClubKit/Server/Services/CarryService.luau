@@ -147,12 +147,13 @@ local function create(deps: {
 	end
 
 	local function applyCarriedPartState(character: Model): ()
+		-- Full Massless (including HRP) + no world collision so the weld does not
+		-- drag the carrier assembly. Carried stays visually stuck via Weld + PlatformStand.
 		for _, descendant in ipairs(character:GetDescendants()) do
 			if descendant:IsA("BasePart") then
 				descendant.CollisionGroup = CARRY_COLLISION_GROUP
-				if descendant.Name ~= "HumanoidRootPart" then
-					descendant.Massless = true
-				end
+				descendant.Massless = true
+				descendant.CanCollide = false
 			end
 		end
 	end
@@ -214,8 +215,10 @@ local function create(deps: {
 			if activeCarries[player.UserId] ~= nil then
 				descendant.CollisionGroup = CARRY_COLLISION_GROUP
 				local humanoid = character:FindFirstChildOfClass("Humanoid")
-				if humanoid and humanoid.PlatformStand and descendant.Name ~= "HumanoidRootPart" then
+				-- Carried = PlatformStand; keep late-added parts massless + non-colliding.
+				if humanoid and humanoid.PlatformStand then
 					descendant.Massless = true
+					descendant.CanCollide = false
 				end
 			else
 				descendant.CollisionGroup = PLAYER_COLLISION_GROUP
@@ -350,7 +353,13 @@ local function create(deps: {
 		end
 
 		local track = trackOrErr :: AnimationTrack
-		track.Priority = config.Sync.ANIM_PRIORITY
+		-- Carrier: keep priority below Sync dance (Action4) so carrier can dance freely.
+		-- Carried: Action4 so the limp/stick pose stays glued while welded.
+		if role == "carrier" then
+			track.Priority = Enum.AnimationPriority.Action
+		else
+			track.Priority = config.Sync.ANIM_PRIORITY
+		end
 		track.Looped = true
 		track:Play(0)
 		logger:info("Carry animation started", {
@@ -536,11 +545,11 @@ local function create(deps: {
 		savePartStates(carrier.UserId, carrierCharacter)
 		savePartStates(targetPlayer.UserId, targetCharacter)
 
-		carrierHumanoid.WalkSpeed = config.Sync.DANCE_WALK_SPEED
-		carrierHumanoid.JumpPower = 0
+		-- Carrier keeps normal WalkSpeed / JumpPower / JumpHeight so jump + dance feel free.
 		carrierHumanoid.AutoRotate = true
 		targetHumanoid.WalkSpeed = 0
 		targetHumanoid.JumpPower = 0
+		targetHumanoid.JumpHeight = 0
 		targetHumanoid.AutoRotate = false
 		applyCarryCollisionGroup(carrierCharacter)
 		applyCarryCollisionGroup(targetCharacter)

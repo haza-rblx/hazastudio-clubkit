@@ -1045,6 +1045,8 @@ Config.Carry = {
 	PHYSICS = {
 		SET_NETWORK_OWNER = true,
 		ATTACH_PART = "UpperTorso",
+		-- Carried BaseParts (incl. HRP): Massless + CanCollide false while welded.
+		-- Carrier JumpPower/WalkSpeed left unchanged so jump/dance stay normal.
 	},
 	DISPLAY_ORDER = 70,
 	PANEL_TWEEN_TIME = 0.22,
