@@ -579,11 +579,6 @@ function RolesDomain.buildFolderPriority(): { [string]: number }
 			map[folder] = definition.priority
 		end
 	end
-	for _, folderName in ipairs(roles.EXTRA_TOOL_FOLDERS) do
-		if folderName == "DONOR" or folderName == "DONATUR" then
-			map[folderName] = 15
-		end
-	end
 	map.ADMIN = map.STAFF or 75
 	map.MODERATOR = map.Moderator or 70
 	map.COOWNER = map.STAFF or 95
@@ -592,8 +587,10 @@ function RolesDomain.buildFolderPriority(): { [string]: number }
 	map.ELITE = map.Supreme or 60
 	map.LEAD = map["LEAD DANCE"] or map.LeadDance or 68
 	map["TOP DONOR"] = map.TopSpender or 55
+	map["TOP RUPIAH SPENDER"] = map.TopSpender or 55
 	map["TOP DONATE"] = map.RoyaleSpender or map.TopSpender or 55
 	map["TOP SUPPORTER"] = map.RoyaleSpender or 55
+	map["TOP ROBUX DONATOR"] = map.RoyaleSpender or 55
 	map["ROYALE SPENDER"] = map.RoyaleSpender or 55
 	map["TOP SPENDER"] = map.TopSpender or 55
 	return map
@@ -695,13 +692,18 @@ function RolesDomain.resolveDynamicChatRole(
 		tryPromote(robuxKey, topDonateRank)
 	end
 
+	-- Only ranks that passed MaxRank may influence greeting / list score rank.
+	local cashRankOk = isWithinMaxRank("CashSpender", topSpenderRank)
+	local robuxRankOk = isWithinMaxRank("RobuxSpender", topDonateRank)
 	if chatRole == cashKey or chatRole == robuxKey or chatRole == "Spender" then
-		if topSpenderRank and topDonateRank then
-			bestLeaderboardRank = math.min(topSpenderRank, topDonateRank)
-		elseif topSpenderRank then
+		if cashRankOk and robuxRankOk then
+			bestLeaderboardRank = math.min(topSpenderRank :: number, topDonateRank :: number)
+		elseif cashRankOk then
 			bestLeaderboardRank = topSpenderRank
-		elseif topDonateRank then
+		elseif robuxRankOk then
 			bestLeaderboardRank = topDonateRank
+		else
+			bestLeaderboardRank = nil
 		end
 	end
 
@@ -787,10 +789,6 @@ function RolesDomain.applyDerivedConfig(config: any)
 			local cash = spenderRoles.CashSpender
 			if type(cash) == "table" and cash.Enabled ~= false then
 				top = cash.ToolFolder or top
-			end
-			local donatur = spenderRoles.Donatur
-			if type(donatur) == "table" and donatur.Enabled ~= false then
-				config.RoleTools.DONOR_FOLDER = donatur.ToolFolder or config.RoleTools.DONOR_FOLDER
 			end
 		end
 		if royale then

@@ -147,9 +147,9 @@ local function resolveChip(match: Match): string
 			return fillPlaceholders(template, rank)
 		end
 		if kind == "SpenderRobux" then
-			return ("Top Supporter #%d"):format(rank or 0)
+			return ("Top Robux Donator #%d"):format(rank or 0)
 		end
-		return ("Top Donor #%d"):format(rank or 0)
+		return ("Top Rupiah Spender #%d"):format(rank or 0)
 	end
 
 	local labeled = labels[roleKey]
@@ -226,9 +226,9 @@ local function spenderGelarFromConfig(kind: CategoryKind, rank: number?): string
 	end
 
 	if kind == "SpenderRobux" then
-		return ("Top Spender #%d"):format(rank or 0)
+		return ("Top Robux Donator #%d"):format(rank or 0)
 	end
-	return ("Top Donor #%d"):format(rank or 0)
+	return ("Top Rupiah Spender #%d"):format(rank or 0)
 end
 
 -- Short public title for the entered-the-space second line (not the chip label).

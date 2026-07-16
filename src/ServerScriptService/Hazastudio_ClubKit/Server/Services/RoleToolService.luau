@@ -132,15 +132,6 @@ function RoleToolService:_resolveFolderNames(payload: OverheadPayload): { string
 	addFolders(folderNames, cfg.FOLDERS_BY_ROLE[payload.role])
 	addFolders(folderNames, cfg.FOLDERS_BY_MEMBERSHIP[payload.effectiveMembership])
 
-	local donaturConfig = if type(spenderRoles) == "table" then spenderRoles.Donatur else nil
-	local donaturEnabled = type(donaturConfig) ~= "table" or donaturConfig.Enabled ~= false
-	if donaturEnabled and ((tonumber(payload.robuxDonated) or 0) > 0 or (tonumber(payload.cashDonated) or 0) > 0) then
-		local donorFolder = if type(donaturConfig) == "table" and type(donaturConfig.ToolFolder) == "string"
-			then donaturConfig.ToolFolder
-			else cfg.DONOR_FOLDER
-		addFolders(folderNames, { donorFolder })
-	end
-
 	local function withinMaxRank(spenderType: string, rank: number?): boolean
 		if rank == nil then
 			return false
@@ -160,14 +151,14 @@ function RoleToolService:_resolveFolderNames(payload: OverheadPayload): { string
 		local robuxConfig = if type(spenderRoles) == "table" then spenderRoles.RobuxSpender else nil
 		local folder = if type(robuxConfig) == "table" and type(robuxConfig.ToolFolder) == "string"
 			then robuxConfig.ToolFolder
-			else (cfg.ROYALE_SPENDER_FOLDER or cfg.TOP_DONATE_FOLDER or "ROYALE SPENDER")
+			else (cfg.ROYALE_SPENDER_FOLDER or cfg.TOP_DONATE_FOLDER or "TOP ROBUX DONATOR")
 		addFolders(folderNames, { folder })
 	end
 	if withinMaxRank("CashSpender", payload.topSpenderRank) then
 		local cashConfig = if type(spenderRoles) == "table" then spenderRoles.CashSpender else nil
 		local folder = if type(cashConfig) == "table" and type(cashConfig.ToolFolder) == "string"
 			then cashConfig.ToolFolder
-			else (cfg.TOP_SPENDER_FOLDER or "TOP SPENDER")
+			else (cfg.TOP_SPENDER_FOLDER or "TOP RUPIAH SPENDER")
 		addFolders(folderNames, { folder })
 	end
 

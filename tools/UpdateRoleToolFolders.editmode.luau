@@ -36,7 +36,8 @@ local function emit(line: string)
 	print(line)
 end
 
--- Nama lama di legacy place → folder canonical (sesuai Roles.luau / chat tag).
+-- Nama lama di legacy place → folder canonical (sesuai SpenderRoles chatTag):
+--   TOP ROBUX DONATOR / TOP RUPIAH SPENDER. DONATUR/DONOR dihapus sebagai role.
 local RENAME_TO_CANONICAL: { [string]: string } = {
 	["CO-OWNER"] = "INVESTOR",
 	["CoOwner"] = "INVESTOR",
@@ -51,13 +52,15 @@ local RENAME_TO_CANONICAL: { [string]: string } = {
 	["MODERATOR"] = "STAFF",
 	["ADMIN"] = "STAFF",
 	["INFLUENCER"] = "STREAMER",
-	["TOP DONOR"] = "ROYALE SPENDER",
-	["TOPDONATE"] = "ROYALE SPENDER",
-	["TOP DONATION"] = "ROYALE SPENDER",
-	["TOP DONATOR"] = "ROYALE SPENDER",
-	["TOP DONATE"] = "ROYALE SPENDER",
-	["DONOR"] = "DONATUR",
-	["DONATE"] = "DONATUR",
+	["TOP DONOR"] = "TOP RUPIAH SPENDER",
+	["TOPDONATE"] = "TOP ROBUX DONATOR",
+	["TOP DONATION"] = "TOP ROBUX DONATOR",
+	["TOP DONATOR"] = "TOP ROBUX DONATOR",
+	["TOP DONATE"] = "TOP ROBUX DONATOR",
+	["TOP SUPPORTER"] = "TOP ROBUX DONATOR",
+	["ROYALE SPENDER"] = "TOP ROBUX DONATOR",
+	["TOP SPENDER"] = "TOP RUPIAH SPENDER",
+	-- DONOR / DONATUR: role dihapus — biarkan ARCHIVE_OBSOLETE pindah ke _Archive
 	["ELITE MEMBER"] = "EXCLUSIVE",
 	["ELITEMEMBER"] = "EXCLUSIVE",
 	["ELITE"] = "EXCLUSIVE",

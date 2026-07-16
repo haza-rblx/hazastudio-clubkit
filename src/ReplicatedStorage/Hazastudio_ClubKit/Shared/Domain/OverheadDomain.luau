@@ -447,14 +447,21 @@ end
 
 local ELITE_MEMBER_BADGE_FRAME = "07-ELITEMemberBadge"
 
-local function getLeaderboardBadgeLimit(): number
+local function getLeaderboardBadgeLimit(spenderType: string?): number
 	local maxRank = 0
 	local spenderRoles = Config.SpenderRoles
 	if type(spenderRoles) == "table" then
-		for _, key in ipairs({ "CashSpender", "RobuxSpender" }) do
-			local spender = spenderRoles[key]
+		if type(spenderType) == "string" then
+			local spender = spenderRoles[spenderType]
 			if type(spender) == "table" and spender.Enabled ~= false then
-				maxRank = math.max(maxRank, tonumber(spender.MaxRank) or 0)
+				maxRank = tonumber(spender.MaxRank) or 0
+			end
+		else
+			for _, key in ipairs({ "CashSpender", "RobuxSpender" }) do
+				local spender = spenderRoles[key]
+				if type(spender) == "table" and spender.Enabled ~= false then
+					maxRank = math.max(maxRank, tonumber(spender.MaxRank) or 0)
+				end
 			end
 		end
 	end
@@ -468,13 +475,13 @@ local function getLeaderboardBadgeLimit(): number
 	return limit
 end
 
-local function isActiveLeaderboardRank(rank: number?): boolean
-	return type(rank) == "number" and rank >= 1 and rank <= getLeaderboardBadgeLimit()
+local function isActiveLeaderboardRank(rank: number?, spenderType: string?): boolean
+	return type(rank) == "number" and rank >= 1 and rank <= getLeaderboardBadgeLimit(spenderType)
 end
 
 function OverheadDomain.shouldShowEliteMemberBadge(stored: OverheadStoredData, role: RoleKey): boolean
 	-- Elite/Tier3 badge is granted ONLY by an actual Tier3 membership (stored) or
-	-- the equivalent Exclusive/Supreme role. Top Donor/Spender leaderboard rank
+	-- the equivalent Exclusive/Supreme role. Top Robux/Rupiah leaderboard rank
 	-- (topDonateRank/topSpenderRank) intentionally does NOT grant this badge.
 	if role == "Supreme" or role == "Exclusive" then
 		return true
@@ -482,8 +489,8 @@ function OverheadDomain.shouldShowEliteMemberBadge(stored: OverheadStoredData, r
 	return OverheadDomain.hasStoredMembershipAtLeast(stored, "Tier3")
 end
 
-function OverheadDomain.normalizeLeaderboardRank(rank: any): number?
-	if isActiveLeaderboardRank(rank) then
+function OverheadDomain.normalizeLeaderboardRank(rank: any, spenderType: string?): number?
+	if isActiveLeaderboardRank(rank, spenderType) then
 		return rank :: number
 	end
 	return nil
@@ -794,7 +801,7 @@ function OverheadDomain.buildPayload(
 		end
 	end
 
-	-- Elite badge: membership Tier3 (stored / role Exclusive) atau Top Donor/Spender (#1–#N).
+	-- Elite badge: membership Tier3 (stored / role Exclusive) only — not from top Robux/Rupiah rank.
 	-- Selalu strip dulu dari resolveVisibleBadges/BadgeVisibility supaya tidak bocor ke rank lain.
 	do
 		local filtered: { string } = {}
@@ -980,9 +987,9 @@ function OverheadDomain.sanitize(raw: any): OverheadStoredData
 		showCoupleName = if type(raw.showCoupleName) == "boolean" then raw.showCoupleName else true,
 		publicOverheadLayerVisible = sanitizeBoolMap(raw.publicOverheadLayerVisible, DEFAULT_PUBLIC_LAYER_VISIBLE),
 		publicOverheadBadgeVisible = sanitizeBoolMap(raw.publicOverheadBadgeVisible, DEFAULT_PUBLIC_BADGE_VISIBLE),
-		topDonateRank = OverheadDomain.normalizeLeaderboardRank(raw.topDonateRank),
+		topDonateRank = OverheadDomain.normalizeLeaderboardRank(raw.topDonateRank, "RobuxSpender"),
 		topDonateText = type(raw.topDonateText) == "string" and raw.topDonateText or nil,
-		topSpenderRank = OverheadDomain.normalizeLeaderboardRank(raw.topSpenderRank),
+		topSpenderRank = OverheadDomain.normalizeLeaderboardRank(raw.topSpenderRank, "CashSpender"),
 		topSpenderText = type(raw.topSpenderText) == "string" and raw.topSpenderText or nil,
 		communityId = type(raw.communityId) == "number" and raw.communityId > 0 and math.floor(raw.communityId) or nil,
 		suppressCommunityBadge = raw.suppressCommunityBadge == true,

@@ -295,7 +295,7 @@ local function createOverheadService(deps: {
 		end
 		local current = storedResult.value
 		local merge: { [string]: any } = {}
-		local activeRobuxRank = OverheadDomain.normalizeLeaderboardRank(robuxRank)
+		local activeRobuxRank = OverheadDomain.normalizeLeaderboardRank(robuxRank, "RobuxSpender")
 		if activeRobuxRank then
 			if current.topDonateRank ~= activeRobuxRank then
 				merge.topDonateRank = activeRobuxRank
@@ -319,7 +319,7 @@ local function createOverheadService(deps: {
 				merge.topDonateText = OverheadDomain.NIL
 			end
 		end
-		local activeSaweriaRank = OverheadDomain.normalizeLeaderboardRank(saweriaRank)
+		local activeSaweriaRank = OverheadDomain.normalizeLeaderboardRank(saweriaRank, "CashSpender")
 		if activeSaweriaRank then
 			if current.topSpenderRank ~= activeSaweriaRank then
 				merge.topSpenderRank = activeSaweriaRank
@@ -404,7 +404,7 @@ local function createOverheadService(deps: {
 			if cached == false then
 				return nil, true
 			end
-			return OverheadDomain.normalizeLeaderboardRank(cached), true
+			return OverheadDomain.normalizeLeaderboardRank(cached, "RobuxSpender"), true
 		end
 
 		local result = donationLeaderboardRepository:getRobuxLeaderboard(Config.Leaderboards.ROBUX_LIMIT)
@@ -437,7 +437,7 @@ local function createOverheadService(deps: {
 			end
 		end
 
-		local normalizedRank = OverheadDomain.normalizeLeaderboardRank(resolvedRank)
+		local normalizedRank = OverheadDomain.normalizeLeaderboardRank(resolvedRank, "RobuxSpender")
 		if normalizedRank then
 			Cache.set(cacheKey, normalizedRank, Config.Leaderboards.WORKSPACE_CACHE_TTL)
 		else
@@ -450,7 +450,7 @@ local function createOverheadService(deps: {
 		if type(overrides) == "table" then
 			local manualRank = overrides[userId]
 			if type(manualRank) == "number" then
-				return OverheadDomain.normalizeLeaderboardRank(manualRank)
+				return OverheadDomain.normalizeLeaderboardRank(manualRank, "CashSpender")
 			end
 		end
 		return nil
@@ -474,7 +474,7 @@ local function createOverheadService(deps: {
 			if cached == false then
 				return nil, true
 			end
-			return OverheadDomain.normalizeLeaderboardRank(cached), true
+			return OverheadDomain.normalizeLeaderboardRank(cached, "CashSpender"), true
 		end
 
 		local ok, entriesOrErr = pcall(function()
@@ -508,7 +508,7 @@ local function createOverheadService(deps: {
 			end
 		end
 
-		local normalizedRank = OverheadDomain.normalizeLeaderboardRank(resolvedRank)
+		local normalizedRank = OverheadDomain.normalizeLeaderboardRank(resolvedRank, "CashSpender")
 		if normalizedRank then
 			Cache.set(cacheKey, normalizedRank, Config.Leaderboards.WORKSPACE_CACHE_TTL)
 		else
@@ -750,7 +750,7 @@ local function createOverheadService(deps: {
 			if cashDonated <= 0 then
 				saweriaTopSpenderRank = nil
 			end
-			local activeRobuxRank = OverheadDomain.normalizeLeaderboardRank(robuxTopDonateRank)
+			local activeRobuxRank = OverheadDomain.normalizeLeaderboardRank(robuxTopDonateRank, "RobuxSpender")
 			if activeRobuxRank then
 				stored = OverheadDomain.mergeStored(stored, {
 					topDonateRank = activeRobuxRank,
@@ -762,7 +762,7 @@ local function createOverheadService(deps: {
 					topDonateText = OverheadDomain.NIL,
 				})
 			end
-			local activeSaweriaRank = OverheadDomain.normalizeLeaderboardRank(saweriaTopSpenderRank)
+			local activeSaweriaRank = OverheadDomain.normalizeLeaderboardRank(saweriaTopSpenderRank, "CashSpender")
 			if activeSaweriaRank then
 				local saweriaMerge: { [string]: any } = { topSpenderRank = activeSaweriaRank }
 				if Config.Donation.SHOW_LEGACY_TOP_SPENDER_ROW == true then

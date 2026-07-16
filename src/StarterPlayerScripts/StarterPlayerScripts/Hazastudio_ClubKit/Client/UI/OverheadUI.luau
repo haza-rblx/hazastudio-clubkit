@@ -11,6 +11,7 @@ local LoadingScreenUI = require(game.ReplicatedStorage.Hazastudio_ClubKit.Shared
 local UIShadowHelper = require(script.Parent.Parent.Utils.UIShadowHelper)
 local SpecialTitleRenderer = require(game.ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.SpecialTitleRenderer)
 local TitleFontUtil = require(game.ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.TitleFontUtil)
+local ChatBubbleAdornee = require(script.Parent.Parent.Services.ChatBubbleAdornee)
 
 type OverheadPayload = Types.OverheadPayload
 
@@ -1381,6 +1382,7 @@ function OverheadUI:apply(payload: OverheadPayload)
 	end
 
 	if not overheadVisible then
+		ChatBubbleAdornee.scheduleSync(payload.userId, self._gui, wrapper, false)
 		return
 	end
 
@@ -1640,6 +1642,8 @@ function OverheadUI:apply(payload: OverheadPayload)
 		playPopIn(wrapper, overheadSelf._popScale)
 		overheadSelf._wasEnabled = true
 	end
+
+	ChatBubbleAdornee.scheduleSync(payload.userId, self._gui, wrapper, shouldBeEnabled == true)
 end
 
 -- Hapus semua animated gradients yang dimiliki GUI ini dari shared pool.
@@ -1711,6 +1715,10 @@ function OverheadUI:destroy()
 	end
 	-- Disconnect semua koneksi (AttributeChanged, Destroying)
 	disconnectConnections(overheadSelf)
+	local lastPayload = overheadSelf._lastPayload
+	if type(lastPayload) == "table" and type(lastPayload.userId) == "number" then
+		ChatBubbleAdornee.clear(lastPayload.userId)
+	end
 	overheadSelf._lastPayload = nil
 end
 

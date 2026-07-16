@@ -11,6 +11,15 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.47] - 2026-07-17
+
+### Added
+- **Dynamic chat bubble offset** — bubble chat follows overhead stack height via per-character `ClubKitChatBubble` Attachment + `BubbleChatConfiguration.AdorneeName` (event-driven after OverheadUI apply; kill switch `Config.ChatBubble.ENABLED`).
+
+### Changed
+- **Chat bubble style** — background `#111111`, text color soft/pastel from speaker role (`toLightPastel` of chat primary tag color).
+- **Donation roles cleanup** — removed giftable `Donatur`/`DONOR` role. Leaderboard auto-roles renamed: Robux → **Top Robux Donator** (`TOP ROBUX DONATOR`), Rupiah → **Top Rupiah Spender** (`TOP RUPIAH SPENDER`). Both capped at **top 10** for overhead chips + PlayerList/chat team (rank `#11+` no longer grants top role). Tool folders and join-greeting labels updated; legacy aliases (`Top Supporter`, `Top Donor`) still map to the new roles. Dynamic top roles are not giftable.
+
 ## [2.4.46] - 2026-07-17
 
 ### Fixed

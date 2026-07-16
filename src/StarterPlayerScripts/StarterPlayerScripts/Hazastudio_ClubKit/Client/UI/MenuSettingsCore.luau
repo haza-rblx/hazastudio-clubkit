@@ -358,14 +358,14 @@ local SECTION_DEFS: { SettingsSectionDef } = {
 			{
 				kind = "toggle",
 				field = "overheadLayerVisible.TopSpender",
-				label = "Top Spender",
+				label = "Top Rupiah",
 				localOnly = true,
 				requiresOverheadFeature = "TopSpender",
 			},
 			{
 				kind = "toggle",
 				field = "overheadLayerVisible.TopDonate",
-				label = "Top Donor",
+				label = "Top Robux",
 				localOnly = true,
 				requiresOverheadFeature = "TopDonate",
 			},

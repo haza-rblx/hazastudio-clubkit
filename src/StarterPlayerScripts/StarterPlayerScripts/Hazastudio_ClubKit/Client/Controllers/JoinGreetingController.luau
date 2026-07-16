@@ -258,9 +258,9 @@ local function resolveGelarFromPayload(payload: Payload): string
 			return text
 		end
 		if kind == "SpenderRobux" then
-			return ("Top Spender #%d"):format(rank or 0)
+			return ("Top Robux Donator #%d"):format(rank or 0)
 		end
-		return ("Top Donor #%d"):format(rank or 0)
+		return ("Top Rupiah Spender #%d"):format(rank or 0)
 	end
 
 	local roleKey = tostring(payload.roleKey or "")

@@ -319,8 +319,8 @@ Config.JoinGreeting = {
 	ENTERED_SPACE_TEMPLATE = "{Gelar} {DisplayName} has entered the space!",
 	-- Spender gelar templates only (#{N}/{N}). Role-based gelar uses Roles DEFINITIONS.label.
 	GELAR_TITLES = {
-		SpenderRobux = "Top Spender #{N}",
-		SpenderCash = "Top Donor #{N}",
+		SpenderRobux = "Top Robux Donator #{N}",
+		SpenderCash = "Top Rupiah Spender #{N}",
 	},
 	CHIP_LABELS = {
 		Owner = "The Owner",
@@ -331,8 +331,8 @@ Config.JoinGreeting = {
 		Influencer = "Influencer",
 		_Leadership = "Staff",
 		_Content = "Content",
-		RoyaleSpender = "Top Supporter #{N}",
-		TopSpender = "Top Donor #{N}",
+		RoyaleSpender = "Top Robux Donator #{N}",
+		TopSpender = "Top Rupiah Spender #{N}",
 	},
 	MESSAGE_POOLS = {
 		Owner = {
@@ -414,34 +414,34 @@ Config.JoinGreeting = {
 			"The feed just got a new guest.",
 		},
 		RoyaleSpender = {
-			"Top Supporter #{N}, the room noticed.",
+			"Top Robux Donator #{N}, the room noticed.",
 			"Wallet royalty #{N} just rolled in.",
 			"#{N} on the Robux board just arrived.",
-			"Supporter #{N} pulled up with that bag energy.",
+			"Robux donator #{N} pulled up with that bag energy.",
 			"The Robux board's #{N} is in the club.",
-			"Top Supporter #{N} just lit up the lobby.",
+			"Top Robux Donator #{N} just lit up the lobby.",
 			"Board rank #{N} just walked in with Robux vibes.",
 		},
 		["RoyaleSpender#1"] = {
 			"The Robux throne just sat down.",
 			"Number one on the Robux board just arrived.",
-			"Top Supporter #1 pulled up, the room noticed.",
+			"Top Robux Donator #1 pulled up, the room noticed.",
 			"The Robux crown just entered the club.",
 		},
 		TopSpender = {
 			"Cash crown #{N} just entered.",
-			"Top Donor #{N}, VIP energy unlocked.",
-			"#{N} on the donor board just walked in.",
-			"Donor #{N} just made the lobby richer.",
-			"The cash board's #{N} is here.",
-			"Top Donor #{N} just checked into the house.",
-			"Board rank #{N} just arrived with donor energy.",
+			"Top Rupiah Spender #{N}, VIP energy unlocked.",
+			"#{N} on the Rupiah board just walked in.",
+			"Rupiah spender #{N} just made the lobby richer.",
+			"The Rupiah board's #{N} is here.",
+			"Top Rupiah Spender #{N} just checked into the house.",
+			"Board rank #{N} just arrived with Rupiah energy.",
 		},
 		["TopSpender#1"] = {
-			"The house's biggest donor just landed.",
-			"Number one on the donor board just arrived.",
+			"The house's biggest Rupiah spender just landed.",
+			"Number one on the Rupiah board just arrived.",
 			"Cash crown #1 just entered.",
-			"Top Donor #1 just made the lobby richer.",
+			"Top Rupiah Spender #1 just made the lobby richer.",
 		},
 	},
 }
@@ -1194,10 +1194,9 @@ Config.RoleTools = {
 	FOLDERS_BY_ROLE = {} :: { [string]: { string } },
 	FOLDERS_BY_MEMBERSHIP = {} :: { [string]: { string } },
 	FOLDER_PRIORITY = {} :: { [string]: number },
-	DONOR_FOLDER = "DONOR",
-	ROYALE_SPENDER_FOLDER = "ROYALE SPENDER",
-	TOP_SPENDER_FOLDER = "TOP SPENDER",
-	TOP_DONATE_FOLDER = "ROYALE SPENDER",
+	ROYALE_SPENDER_FOLDER = "TOP ROBUX DONATOR",
+	TOP_SPENDER_FOLDER = "TOP RUPIAH SPENDER",
+	TOP_DONATE_FOLDER = "TOP ROBUX DONATOR",
 }
 -- ============================================================
 -- STICKER SYSTEM
@@ -1621,6 +1620,19 @@ Config.Gift = {
 }
 Config.Chat = {
 	COUPLE_TAG_EMOJI = "💕",
+}
+-- Dynamic bubble offset above overhead (Attachment + BubbleChatConfiguration.AdorneeName).
+Config.ChatBubble = {
+	ENABLED = true,
+	ADORNEE_NAME = "ClubKitChatBubble",
+	-- Extra gap above measured overhead stack (studs).
+	EXTRA_STUDS = 0.4,
+	-- Fallback when AbsoluteSize not ready yet: contentPx * PX_TO_STUDS.
+	PX_TO_STUDS = 0.02,
+	MIN_STUDS = 1.2,
+	MAX_STUDS = 10,
+	-- Skip Attachment write when delta below this (studs).
+	SKIP_DELTA_STUDS = 0.05,
 }
 Config.Community = {
 	CMD_ALIAS_SET = "setcommun",

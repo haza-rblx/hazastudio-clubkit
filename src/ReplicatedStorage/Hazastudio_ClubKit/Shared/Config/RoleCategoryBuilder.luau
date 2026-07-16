@@ -226,12 +226,6 @@ function RoleCategoryBuilder.build(clubKit: any): BuiltRoles
 
 	local spenderRoles = clubKit.SpenderRoles
 	if type(spenderRoles) == "table" then
-		local donatur = spenderRoles.Donatur
-		if type(donatur) == "table" and donatur.Enabled ~= false then
-			local folder = donatur.ToolFolder or "DONOR"
-			addUnique(extraToolFolders, folder)
-		end
-
 		local function addSpenderRole(configKey: string, fallbackKey: string)
 			local spender = spenderRoles[configKey]
 			if type(spender) ~= "table" or spender.Enabled == false then
@@ -257,7 +251,6 @@ function RoleCategoryBuilder.build(clubKit: any): BuiltRoles
 			addUnique(setroleOnly, roleKey)
 		end
 
-		addSpenderRole("Donatur", "Donatur")
 		addSpenderRole("CashSpender", "TopSpender")
 		addSpenderRole("RobuxSpender", "RoyaleSpender")
 	end
@@ -289,7 +282,7 @@ function RoleCategoryBuilder.build(clubKit: any): BuiltRoles
 		DEFINITIONS = definitions,
 		SETROLE_ONLY = setroleOnly,
 		STAFF_PLUS = staffPlus,
-		EXTRA_TOOL_FOLDERS = if #extraToolFolders > 0 then extraToolFolders else { "DONOR" },
+		EXTRA_TOOL_FOLDERS = if #extraToolFolders > 0 then extraToolFolders else {},
 		LEGACY_ALIASES = legacyAliases,
 		COMMAND_ALIASES = commandAliases,
 		ROLE_TO_CATEGORY = roleToCategory,

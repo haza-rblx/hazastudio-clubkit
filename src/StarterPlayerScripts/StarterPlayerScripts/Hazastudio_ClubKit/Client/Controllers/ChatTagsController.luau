@@ -28,11 +28,9 @@ local function destroy()
 	table.clear(_connections)
 end
 
--- Bubble styling constants kept for re-enable convenience (currently unused
--- because OnBubbleAdded returns nil; see DISABLED comment below).
-local _DEFAULT_BUBBLE_TEXT_COLOR = Color3.fromRGB(235, 173, 173)
-local _BUBBLE_BACKGROUND_COLOR = Color3.fromRGB(31, 31, 31)
-local _BUBBLE_BACKGROUND_TRANSPARENCY = 0.08
+local DEFAULT_BUBBLE_TEXT_COLOR = Color3.fromRGB(235, 235, 235)
+local BUBBLE_BACKGROUND_COLOR = Color3.fromRGB(17, 17, 17) -- #111111
+local BUBBLE_BACKGROUND_TRANSPARENCY = 0.08
 
 local function escapeRichText(text: string): string
 	return text:gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;"):gsub('"', "&quot;"):gsub("'", "&apos;")
@@ -98,11 +96,11 @@ local function resolveTagColorKey(primaryTag: string?): string?
 	return nil
 end
 
-local function _resolveBubbleTextColor(role: string?, effectiveMembership: string?): Color3
+local function resolveBubbleTextColor(role: string?, effectiveMembership: string?): Color3
 	local primaryKey = resolvePrimaryKey(role, effectiveMembership)
 	local rawColor = Config.ChatPrimaryTagColor[primaryKey] or Config.ChatPrimaryTagColor.Guest
 	local color = color3FromHex(rawColor)
-	return if color then toLightPastel(color) else _DEFAULT_BUBBLE_TEXT_COLOR
+	return if color then toLightPastel(color) else DEFAULT_BUBBLE_TEXT_COLOR
 end
 
 local function getBubbleChatConfiguration(): BubbleChatConfiguration?
@@ -125,7 +123,7 @@ local function copyProperty(target: Instance, source: Instance, propertyName: st
 	end)
 end
 
-local function _preserveConfiguredBubbleStyle(props: BubbleChatMessageProperties)
+local function preserveConfiguredBubbleStyle(props: BubbleChatMessageProperties)
 	local bubbleConfig = getBubbleChatConfiguration()
 	if not bubbleConfig then
 		return
@@ -134,6 +132,24 @@ local function _preserveConfiguredBubbleStyle(props: BubbleChatMessageProperties
 	copyProperty(props, bubbleConfig, "FontFace")
 	copyProperty(props, bubbleConfig, "TextSize")
 	copyProperty(props, bubbleConfig, "TailVisible")
+end
+
+local function applyBubbleAdorneeName()
+	local chatBubbleCfg = Config.ChatBubble
+	if type(chatBubbleCfg) ~= "table" or chatBubbleCfg.ENABLED ~= true then
+		return
+	end
+	local adorneeName = chatBubbleCfg.ADORNEE_NAME
+	if type(adorneeName) ~= "string" or adorneeName == "" then
+		return
+	end
+	local bubbleConfig = getBubbleChatConfiguration()
+	if not bubbleConfig then
+		return
+	end
+	pcall(function()
+		(bubbleConfig :: any).AdorneeName = adorneeName
+	end)
 end
 
 local function init(_deps: {}?): ()
@@ -292,39 +308,28 @@ local function init(_deps: {}?): ()
 		return props
 	end
 
-	-- DISABLED 2026-05-23: custom chat bubble styling di-revert ke Roblox
-	-- default. Return nil dari OnBubbleAdded artinya engine pakai default
-	-- bubble (font, color, background bawaan). Chat prefix tag (OnIncomingMessage
-	-- di atas) tetep aktif — itu fitur beda dari styling bubble.
-	-- Re-enable: hapus blok ini dan restore handler asli yang di-comment di bawah.
+	applyBubbleAdorneeName()
+
 	TextChatService.OnBubbleAdded = function(
-		_message: TextChatMessage,
+		message: TextChatMessage,
 		_adornee: Instance?
 	): BubbleChatMessageProperties?
-		return nil
-	end
+		local textSource = message.TextSource
+		if not textSource then
+			return nil
+		end
 
-	-- Original (re-enable kalau perlu):
-	-- TextChatService.OnBubbleAdded = function(
-	-- 	message: TextChatMessage,
-	-- 	_adornee: Instance?
-	-- ): BubbleChatMessageProperties?
-	-- 	local textSource = message.TextSource
-	-- 	if not textSource then
-	-- 		return nil
-	-- 	end
-	--
-	-- 	local cached = tagCache[textSource.UserId]
-	-- 	local props = Instance.new("BubbleChatMessageProperties")
-	-- 	preserveConfiguredBubbleStyle(props)
-	-- 	props.BackgroundColor3 = BUBBLE_BACKGROUND_COLOR
-	-- 	props.BackgroundTransparency = BUBBLE_BACKGROUND_TRANSPARENCY
-	-- 	props.TextColor3 = resolveBubbleTextColor(
-	-- 		if cached then cached.role else "Guest",
-	-- 		if cached then cached.effectiveMembership else "Guest"
-	-- 	)
-	-- 	return props
-	-- end
+		local cached = tagCache[textSource.UserId]
+		local props = Instance.new("BubbleChatMessageProperties")
+		preserveConfiguredBubbleStyle(props)
+		props.BackgroundColor3 = BUBBLE_BACKGROUND_COLOR
+		props.BackgroundTransparency = BUBBLE_BACKGROUND_TRANSPARENCY
+		props.TextColor3 = resolveBubbleTextColor(
+			if cached then cached.role else "Guest",
+			if cached then cached.effectiveMembership else "Guest"
+		)
+		return props
+	end
 
 	log:info("Client ChatTagsController initialized")
 end
