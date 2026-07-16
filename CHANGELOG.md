@@ -11,6 +11,11 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.48] - 2026-07-17
+
+### Fixed
+- **Chat bubble too high** — attachment Y used billboard center + full stack height (double-count). Now `center + height*0.5 + small pad` (`Config.ChatBubble.HEIGHT_FACTOR` / `EXTRA_STUDS`).
+
 ## [2.4.47] - 2026-07-17
 
 ### Added

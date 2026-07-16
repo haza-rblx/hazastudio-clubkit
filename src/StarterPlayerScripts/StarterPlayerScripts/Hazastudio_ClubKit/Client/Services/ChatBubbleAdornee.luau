@@ -64,11 +64,15 @@ end
 
 local function measureStuds(gui: BillboardGui, wrapper: GuiObject?, overheadVisible: boolean): number
 	local cfg = getCfg()
-	local minStuds = if cfg and type(cfg.MIN_STUDS) == "number" then cfg.MIN_STUDS else 1.2
-	local maxStuds = if cfg and type(cfg.MAX_STUDS) == "number" then cfg.MAX_STUDS else 10
-	local extra = if cfg and type(cfg.EXTRA_STUDS) == "number" then cfg.EXTRA_STUDS else 0.4
-	local pxToStuds = if cfg and type(cfg.PX_TO_STUDS) == "number" then cfg.PX_TO_STUDS else 0.02
+	local minStuds = if cfg and type(cfg.MIN_STUDS) == "number" then cfg.MIN_STUDS else 0.8
+	local maxStuds = if cfg and type(cfg.MAX_STUDS) == "number" then cfg.MAX_STUDS else 6
+	local extra = if cfg and type(cfg.EXTRA_STUDS) == "number" then cfg.EXTRA_STUDS else 0.12
+	local pxToStuds = if cfg and type(cfg.PX_TO_STUDS) == "number" then cfg.PX_TO_STUDS else 0.018
+	local heightFactor = if cfg and type(cfg.HEIGHT_FACTOR) == "number" then cfg.HEIGHT_FACTOR else 0.5
 
+	-- BillboardGui.StudsOffset is the center of the billboard, not the bottom.
+	-- Top of stack ≈ center + (contentHeight * HEIGHT_FACTOR). Old formula used
+	-- center + full height and floated the bubble roughly one stack too high.
 	local baseY = gui.StudsOffset.Y + gui.StudsOffsetWorldSpace.Y
 	if not overheadVisible or not wrapper then
 		return math.clamp(baseY + extra, minStuds, maxStuds)
@@ -85,7 +89,7 @@ local function measureStuds(gui: BillboardGui, wrapper: GuiObject?, overheadVisi
 		contentStuds = contentY * pxToStuds
 	end
 
-	return math.clamp(baseY + contentStuds + extra, minStuds, maxStuds)
+	return math.clamp(baseY + contentStuds * heightFactor + extra, minStuds, maxStuds)
 end
 
 local function applyNow(userId: number, gui: BillboardGui, wrapper: GuiObject?, overheadVisible: boolean)
