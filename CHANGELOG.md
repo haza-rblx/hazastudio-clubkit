@@ -11,6 +11,11 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.44] - 2026-07-16
+
+### Fixed
+- **Dance predictive local play** — removed client `LoadAnimation`+`Play` on click (was causing double-weight, stale row jumps, toggle race, sync fights). Keep optimistic row UI + `FireServer` + click `PreloadAsync` warm only; server remains sole playback authority. Stale `anim_result` stop/error ignored while a newer selection is pending.
+
 ## [2.4.43] - 2026-07-16
 
 ### Fixed

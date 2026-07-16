@@ -37,8 +37,7 @@ function SyncController.create(deps: {
 	self._loadingLocalTracks = {} :: { AnimationTrack }
 	self._loadingCleanupGeneration = 0
 	self._hasLoadingLocalDance = false
-	self._predictiveLocalTracks = {} :: { AnimationTrack }
-	self._predictiveGeneration = 0
+	self._clickWarmGeneration = 0
 	self._knownDanceAnimationIds = {} :: { [string]: boolean }
 	self._knownDanceAnimationNames = {} :: { [string]: boolean }
 
@@ -125,75 +124,48 @@ function SyncController:_fireAnimationAction(animation: Animation, shouldPlay: b
 	self.animationStartRE:FireServer(animation, shouldPlay, self.store:get().currentSpeed, "play")
 end
 
-function SyncController:_stopPredictiveLocal()
-	self._predictiveGeneration += 1
-	for _, track in ipairs(self._predictiveLocalTracks) do
-		pcall(function()
-			track:Stop(0)
-			track:Destroy()
-		end)
-	end
-	table.clear(self._predictiveLocalTracks)
+function SyncController:_cancelClickWarm()
+	self._clickWarmGeneration += 1
 end
 
---- Preload (if needed) + Play locally for instant self feedback. Server still
---- owns replication for others; stop predictive when anim_result arrives.
-function SyncController:_startPredictiveLocal(animation: Animation)
-	self:_stopPredictiveLocal()
-	local generation = self._predictiveGeneration
+--- ContentProvider warm only (no local LoadAnimation/Play). Server remains sole
+--- playback authority — avoids double-weight / sync fights from predictive local.
+function SyncController:_warmClickedAnimation(animation: Animation)
+	self:_cancelClickWarm()
+	local generation = self._clickWarmGeneration
 	local animationName = animation.Name
 
 	task.spawn(function()
-		local warmed = false
 		if self.danceWarmupService and type(self.danceWarmupService.warmAnimation) == "function" then
-			warmed = self.danceWarmupService:warmAnimation(animation) == true
+			self.danceWarmupService:warmAnimation(animation)
 		else
-			local ok = pcall(function()
+			pcall(function()
 				ContentProvider:PreloadAsync({ animation })
 			end)
-			warmed = ok
 		end
-
-		if generation ~= self._predictiveGeneration then
+		if generation ~= self._clickWarmGeneration then
 			return
 		end
 		if self.store:get().visualAnim ~= animationName then
 			return
 		end
-
-		local animator = self:_getLocalAnimator()
-		if not animator then
-			return
-		end
-
-		local ok, trackOrErr = pcall(function()
-			return animator:LoadAnimation(animation)
-		end)
-		if not ok or not trackOrErr then
-			self.logger:warn("Predictive local LoadAnimation failed", {
-				animation = animationName,
-				warmed = warmed,
-				error = tostring(trackOrErr),
-			})
-			return
-		end
-		if generation ~= self._predictiveGeneration then
-			pcall(function()
-				trackOrErr:Destroy()
-			end)
-			return
-		end
-
-		local track = trackOrErr :: AnimationTrack
-		track.Looped = true
-		track.Priority = self.config.ANIM_PRIORITY
-		track:Play(self.config.FADE_IN or 0.14)
-		local speed = tonumber(self.store:get().currentSpeed) or 1
-		pcall(function()
-			track:AdjustSpeed(speed)
-		end)
-		table.insert(self._predictiveLocalTracks, track)
 	end)
+end
+
+function SyncController:_isStaleAnimAck(animName: any): boolean
+	if type(animName) ~= "string" or animName == "" then
+		return false
+	end
+	local state = self.store:get()
+	local pending = state.pendingAnimationName
+	if type(pending) == "string" and pending ~= "" and pending ~= animName then
+		return true
+	end
+	local visual = state.visualAnim
+	if type(visual) == "string" and visual ~= "" and visual ~= animName then
+		return true
+	end
+	return false
 end
 
 function SyncController:_queuePendingAnimation(animation: Animation)
@@ -214,7 +186,7 @@ function SyncController:_handleNotification(payload: any)
 
 	local notifType = payload.type
 	if notifType == "sync_success" or notifType == "transfer_success" then
-		self:_stopPredictiveLocal()
+		self:_cancelClickWarm()
 		local currentAnim = if type(payload.currentAnim) == "string" then payload.currentAnim else ""
 		self.store:set({
 			isSyncing = true,
@@ -222,6 +194,9 @@ function SyncController:_handleNotification(payload: any)
 			leaderDisplay = payload.leaderDisplay or payload.leaderName,
 			currentAnim = currentAnim,
 			visualAnim = currentAnim,
+			isDancePreparing = false,
+			pendingAnimationName = nil,
+			pendingAnimationObject = nil,
 			syncTargetUserId = payload.targetUserId,
 		})
 		local leaderLabel = payload.leaderDisplay or payload.leaderName or "target"
@@ -315,18 +290,9 @@ function SyncController:_handleNotification(payload: any)
 		local result = payload.result
 		local animName = payload.animationName
 		if result == "playing" then
-			local state = self.store:get()
-			-- Ignore stale ack if user already selected a different dance.
-			if type(animName) == "string"
-				and type(state.visualAnim) == "string"
-				and state.visualAnim ~= ""
-				and state.visualAnim ~= animName
-			then
+			if self:_isStaleAnimAck(animName) then
 				return
 			end
-			-- Server track is authoritative for replication; drop predictive local
-			-- to avoid double-weight on self.
-			self:_stopPredictiveLocal()
 			self.store:set({
 				currentAnim = animName,
 				visualAnim = animName,
@@ -336,19 +302,36 @@ function SyncController:_handleNotification(payload: any)
 				pendingAnimationObject = nil,
 			})
 		elseif result == "stopped" then
-			self:_stopPredictiveLocal()
+			-- Ignore stop ack while a newer play selection is in flight.
+			local state = self.store:get()
+			if state.isDancePreparing
+				and type(state.pendingAnimationName) == "string"
+				and state.pendingAnimationName ~= ""
+				and (type(animName) ~= "string" or animName == "" or animName ~= state.pendingAnimationName)
+			then
+				return
+			end
+			if self:_isStaleAnimAck(animName) then
+				return
+			end
+			self:_cancelClickWarm()
 			self.store:set({
 				currentAnim = "",
 				visualAnim = "",
 				isDancePreparing = false,
-				pendingAnimationName = "",
+				pendingAnimationName = nil,
 				pendingAnimationObject = nil,
 			})
 		else
-			-- error / rate_limited — revert preparing state
-			self:_stopPredictiveLocal()
+			-- error / rate_limited — revert preparing only if still on that request
+			if type(animName) == "string" and animName ~= "" and self:_isStaleAnimAck(animName) then
+				return
+			end
+			self:_cancelClickWarm()
 			self.store:set({
 				isDancePreparing = false,
+				pendingAnimationName = nil,
+				pendingAnimationObject = nil,
 				visualAnim = self.store:get().currentAnim,
 			})
 		end
@@ -497,13 +480,15 @@ function SyncController:onEmoteSelected(animation: Animation)
 	local state = self.store:get()
 	local animationName = animation.Name
 
-	-- Toggle off when same animation is the active one (and not currently
-	-- mid-prepare or syncing to someone else).
-	local isSameActive = state.currentAnim == animationName
-		and not state.isDancePreparing
-		and not state.isSyncing
-	if isSameActive then
-		self:_stopPredictiveLocal()
+	-- Toggle off when this row is the selected one (playing OR preparing), unless syncing.
+	local isSameSelected = not state.isSyncing
+		and (
+			state.visualAnim == animationName
+			or state.currentAnim == animationName
+			or state.pendingAnimationName == animationName
+		)
+	if isSameSelected then
+		self:_cancelClickWarm()
 		self.store:set({
 			currentAnim = "",
 			visualAnim = "",
@@ -515,7 +500,7 @@ function SyncController:onEmoteSelected(animation: Animation)
 		return
 	end
 
-	-- Optimistic UI + FireServer immediately (do not gate on catalog warmup).
+	-- Optimistic UI + FireServer immediately. Warm asset cache only — no local Play.
 	self.store:set({
 		visualAnim = animationName,
 		isDancePreparing = true,
@@ -524,7 +509,7 @@ function SyncController:onEmoteSelected(animation: Animation)
 		pendingAnimationObject = animation,
 	})
 	self:_fireAnimationAction(animation, true)
-	self:_startPredictiveLocal(animation)
+	self:_warmClickedAnimation(animation)
 end
 
 -- Apply speed locally for instant slider responsiveness; server still gets
@@ -608,7 +593,7 @@ function SyncController:onFavoriteToggled(animationName: string)
 end
 
 function SyncController:onUnsync()
-	self:_stopPredictiveLocal()
+	self:_cancelClickWarm()
 	self.startSyncRE:FireServer(nil, false)
 	self.store:set({
 		isSyncing = false,
@@ -618,6 +603,7 @@ function SyncController:onUnsync()
 		visualAnim = nil,
 		pendingAnimationName = nil,
 		pendingAnimationObject = nil,
+		isDancePreparing = false,
 		syncTargetUserId = nil,
 	})
 end
@@ -647,7 +633,7 @@ function SyncController:requestTransferLeadByUserId(targetUserId: number): boole
 end
 
 function SyncController:destroy()
-	self:_stopPredictiveLocal()
+	self:_cancelClickWarm()
 	self:stopLoadingLocalDances()
 	for _, connection in ipairs(self.connections or {}) do
 		connection:Disconnect()
