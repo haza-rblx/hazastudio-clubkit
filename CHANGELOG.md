@@ -11,6 +11,15 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.50] - 2026-07-17
+
+### Added
+- **Bubble height tune commands** — `/height`, `/bh`, `/bubbleheight` (local client): `/height` status, `/height -0.5` nudge, `/height factor 0.25`, `/height reset`.
+
+### Changed
+- **Loading intro hold** — black screen + centered logo intro now stays for at least 5 seconds, and fast boot no longer skips it early.
+- **Chat bubble default lower** — `HEIGHT_FACTOR` 0.38→0.25, `EXTRA_STUDS` 0, `NUDGE_STUDS` 0.
+
 ## [2.4.49] - 2026-07-17
 
 ### Fixed

@@ -856,7 +856,11 @@ function LoadingScreenUI:_tryEndIntro()
 	local endProgress = clamp(tonumber(LoadingConfig.INTRO_END_PROGRESS) or 0.28, 0, 1)
 	local elapsed = if self._startClock then os.clock() - self._startClock else 0
 
-	if self._finishRequested or (elapsed >= minDuration and self._progressDisplay >= endProgress) then
+	if elapsed < minDuration then
+		return
+	end
+
+	if self._finishRequested or self._progressDisplay >= endProgress then
 		self:_endIntro(false)
 	end
 end
@@ -927,6 +931,15 @@ function LoadingScreenUI:_startIntroLayer()
 		ImageTransparency = 0,
 		Size = UDim2.fromOffset(logoSize, logoSize),
 	}):Play()
+
+	local minDuration = math.max(0, tonumber(LoadingConfig.INTRO_MIN_DURATION) or 1.25)
+	if minDuration > 0 then
+		task.delay(minDuration, function()
+			if self._available and self._introActive and not self._introEnded then
+				self:_tryEndIntro()
+			end
+		end)
+	end
 end
 
 function LoadingScreenUI:_startCinematicCamera()
@@ -1671,7 +1684,20 @@ function LoadingScreenUI:finish()
 	self._finishRequested = true
 	-- Ensure cinematic/main phase exists before welcome dismiss if intro is still up.
 	if self._introActive and not self._introEnded then
-		self:_endIntro(true)
+		self:setProgress(1)
+		local minDuration = math.max(0, tonumber(LoadingConfig.INTRO_MIN_DURATION) or 1.25)
+		local elapsed = if self._startClock then os.clock() - self._startClock else minDuration
+		local remainingIntro = math.max(0, minDuration - elapsed)
+		task.delay(remainingIntro, function()
+			if not (self._available and self._finishRequested) then
+				return
+			end
+			if self._introActive and not self._introEnded then
+				self:_endIntro(false)
+			end
+			self:_scheduleFinish()
+		end)
+		return
 	elseif not self._cinematicStarted then
 		self:_beginMainLoadingPhase(self._pendingDisplayName)
 	end

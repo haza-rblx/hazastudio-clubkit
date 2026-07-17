@@ -9,6 +9,7 @@ local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Con
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local DeltaCompressor = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DeltaCompressor)
+local ChatBubbleAdornee = require(script.Parent.Parent.Services.ChatBubbleAdornee)
 
 type OverheadPayload = Types.OverheadPayload
 
@@ -309,6 +310,7 @@ local function init(_deps: {}?): ()
 	end
 
 	applyBubbleAdorneeName()
+	ChatBubbleAdornee.bindTuneCommands()
 
 	TextChatService.OnBubbleAdded = function(
 		message: TextChatMessage,

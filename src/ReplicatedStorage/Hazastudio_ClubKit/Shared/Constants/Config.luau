@@ -1349,7 +1349,7 @@ Config.Loading = {
 	-- Soft intro before cinematic camera/dance (lighter join feel).
 	-- Blank + centered Branding.LOGO_IMAGE + BlurEffect that clears with progress.
 	INTRO_ENABLED = true,
-	INTRO_MIN_DURATION = 1.25,
+	INTRO_MIN_DURATION = 5,
 	INTRO_END_PROGRESS = 0.28,
 	INTRO_BLUR_SIZE = 28,
 	INTRO_LOGO_SIZE_PX = 160,
@@ -1626,16 +1626,19 @@ Config.ChatBubble = {
 	ENABLED = true,
 	ADORNEE_NAME = "ClubKitChatBubble",
 	-- Small gap above top of overhead stack (studs). Bubble sits on Attachment.
-	EXTRA_STUDS = 0.02,
+	EXTRA_STUDS = 0,
 	-- StudsOffset is billboard center; multiply measured height by this (0.5 = geometric top).
-	-- Slightly under 0.5 — bubble still sits above stack without a large air gap.
-	HEIGHT_FACTOR = 0.38,
+	HEIGHT_FACTOR = 0.25,
+	-- Additive studs after formula (negative lowers bubble). Tunable live via /height nudge.
+	NUDGE_STUDS = 0,
 	-- Fallback when AbsoluteSize not ready yet: contentPx * PX_TO_STUDS.
 	PX_TO_STUDS = 0.018,
-	MIN_STUDS = 0.8,
+	MIN_STUDS = 0.5,
 	MAX_STUDS = 6,
 	-- Skip Attachment write when delta below this (studs).
 	SKIP_DELTA_STUDS = 0.05,
+	-- Client tune commands: /bh /height /bubbleheight (local preview only).
+	TUNE_COMMAND_ENABLED = true,
 }
 Config.Community = {
 	CMD_ALIAS_SET = "setcommun",
