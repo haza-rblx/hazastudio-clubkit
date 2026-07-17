@@ -1,17 +1,23 @@
 --!strict
 -- Format chat general menjadi [Membership][Couple] DisplayName.
+--
+-- v2.4.52 fix: jangan maintain cache OverheadUpdate duplikat di sini.
+-- ChatTagsController init telat (setelah batch awal server terkirim), jadi
+-- listener lokalnya sering miss batch itu dan delta parsial berikutnya
+-- di-drop tanpa baseline → chat tag jatuh ke Guest secara acak.
+-- Sumber kebenaran sekarang OverheadController.getCachedPayload (subscribe
+-- paling awal di boot, merge delta lengkap) + last-known-good lokal supaya
+-- tag tidak pernah downgrade ke Guest saat payload transien hilang.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TextChatService = game:GetService("TextChatService")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
-local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
+local OverheadDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.OverheadDomain)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
-local DeltaCompressor = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DeltaCompressor)
+local OverheadController = require(script.Parent.OverheadController)
 local ChatBubbleAdornee = require(script.Parent.Parent.Services.ChatBubbleAdornee)
-
-type OverheadPayload = Types.OverheadPayload
 
 local log = Logger.new("Client.ChatTagsController")
 
@@ -22,11 +28,29 @@ local function track(conn: RBXScriptConnection): RBXScriptConnection
 	return conn
 end
 
+type TagRecord = {
+	displayName: string,
+	primaryTag: string,
+	coupleTag: string?,
+	role: string?,
+	effectiveMembership: string?,
+}
+
+-- Last-known-good per userId: dipakai kalau cache payload transien kosong
+-- (respawn / race) supaya tag tidak flip ke Guest.
+local lastGoodByUserId: { [number]: TagRecord } = {}
+local unsubscribeCacheUpdated: (() -> ())? = nil
+
 local function destroy()
 	for _, conn in ipairs(_connections) do
 		conn:Disconnect()
 	end
 	table.clear(_connections)
+	table.clear(lastGoodByUserId)
+	if unsubscribeCacheUpdated then
+		unsubscribeCacheUpdated()
+		unsubscribeCacheUpdated = nil
+	end
 end
 
 local DEFAULT_BUBBLE_TEXT_COLOR = Color3.fromRGB(235, 235, 235)
@@ -104,6 +128,54 @@ local function resolveBubbleTextColor(role: string?, effectiveMembership: string
 	return if color then toLightPastel(color) else DEFAULT_BUBBLE_TEXT_COLOR
 end
 
+-- Bangun TagRecord dari payload overhead. Kalau chatPrimaryTag hilang
+-- (delta parsial diperlakukan sebagai full di joiner race), derive dari
+-- role/effectiveMembership via OverheadDomain — logika sama dengan server.
+local function tagRecordFromPayload(payload: any): TagRecord?
+	if type(payload) ~= "table" then
+		return nil
+	end
+	local displayName = payload.displayName
+	if type(displayName) ~= "string" or displayName == "" then
+		return nil
+	end
+
+	local primaryTag = payload.chatPrimaryTag
+	if type(primaryTag) ~= "string" or primaryTag == "" then
+		local role = if type(payload.role) == "string" then payload.role else "Guest"
+		local membership = if type(payload.effectiveMembership) == "string"
+			then payload.effectiveMembership
+			else "Guest"
+		local ok, derived = pcall(OverheadDomain.getChatPrimaryTag, role :: any, membership :: any)
+		if ok and type(derived) == "string" and derived ~= "" then
+			primaryTag = derived
+		else
+			return nil
+		end
+	end
+
+	return {
+		displayName = displayName,
+		primaryTag = primaryTag,
+		coupleTag = if type(payload.chatCoupleTag) == "string" then payload.chatCoupleTag else nil,
+		role = if type(payload.role) == "string" then payload.role else nil,
+		effectiveMembership = if type(payload.effectiveMembership) == "string"
+			then payload.effectiveMembership
+			else nil,
+	}
+end
+
+local function getTagRecord(userId: number): TagRecord?
+	local payload = OverheadController.getCachedPayload(userId)
+	local record = tagRecordFromPayload(payload)
+	if record then
+		lastGoodByUserId[userId] = record
+		return record
+	end
+	-- Payload belum ada / incomplete → pakai last-known-good, jangan downgrade.
+	return lastGoodByUserId[userId]
+end
+
 local function getBubbleChatConfiguration(): BubbleChatConfiguration?
 	local byClass = TextChatService:FindFirstChildOfClass("BubbleChatConfiguration")
 	if byClass and byClass:IsA("BubbleChatConfiguration") then
@@ -154,125 +226,22 @@ local function applyBubbleAdorneeName()
 end
 
 local function init(_deps: {}?): ()
-	local remotes = ReplicatedStorage:WaitForChild("Remotes", 10)
-	if not remotes then
-		log:warn("Remotes folder tidak ditemukan untuk chat tags")
-		return
-	end
-
-	local overheadRemote = remotes:WaitForChild("OverheadUpdate", 10) :: RemoteEvent?
-	if not overheadRemote then
-		log:warn("OverheadUpdate remote tidak ditemukan untuk chat tags")
-		return
-	end
-
-	local tagCache: {
-		[number]: {
-			displayName: string,
-			primaryTag: string,
-			coupleTag: string?,
-			role: string?,
-			effectiveMembership: string?,
-		},
-	} =
-		{}
-
-	-- v2.3 fix: ChatTagsController harus handle wire format DELTA_MESSAGE_KIND
-	-- yang dipakai server. Tanpa baseline tracking + merge, delta partial
-	-- (cuma 1–2 field) bakal nuke cache jadi nil dan chat tag flip-flop.
-	local payloadBaselines: { [number]: any } = {}
-	local NIL_SENTINEL = DeltaCompressor.NIL_SENTINEL
-
-	local function mergeDelta(base: any, delta: any): any
-		local result: any = if base then table.clone(base) else {}
-		for field, value in delta do
-			if value == NIL_SENTINEL then
-				result[field] = nil
-			else
-				result[field] = value
-			end
-		end
-		return result
-	end
-
-	local function cachePayload(payload: any)
-		if type(payload) ~= "table" or type(payload.userId) ~= "number" then
-			return
-		end
-
-		-- Guard: kalau merged payload masih incomplete (missing displayName /
-		-- chatPrimaryTag), skip overwrite biar cache lama tetep dipake.
-		if type(payload.displayName) ~= "string" or type(payload.chatPrimaryTag) ~= "string" then
-			return
-		end
-
-		local overheadPayload = payload :: OverheadPayload
-		tagCache[overheadPayload.userId] = {
-			displayName = overheadPayload.displayName,
-			primaryTag = overheadPayload.chatPrimaryTag,
-			coupleTag = overheadPayload.chatCoupleTag,
-			role = overheadPayload.role,
-			effectiveMembership = overheadPayload.effectiveMembership,
-		}
-	end
-
-	local function ingestFullPayload(payload: any)
-		if type(payload) ~= "table" or type(payload.userId) ~= "number" then
-			return
-		end
-		payloadBaselines[payload.userId] = payload
-		cachePayload(payload)
-	end
-
-	local function ingestDelta(message: any)
-		local userId = if type(message) == "table" then message.userId else nil
-		local delta = if type(message) == "table" then message.delta else nil
-		if type(userId) ~= "number" or type(delta) ~= "table" then
-			return
-		end
-		local base = payloadBaselines[userId]
-		if not base then
-			-- First delta untuk userId ini biasanya full state (force broadcast).
-			if type(delta.userId) == "number" and type(delta.displayName) == "string" then
-				ingestFullPayload(delta)
-			end
-			return
-		end
-		local merged = mergeDelta(base, delta)
-		merged.userId = userId
-		payloadBaselines[userId] = merged
-		cachePayload(merged)
-	end
-
 	track(Players.PlayerRemoving:Connect(function(player)
-		payloadBaselines[player.UserId] = nil
-		tagCache[player.UserId] = nil
+		lastGoodByUserId[player.UserId] = nil
 	end))
 
-	track(overheadRemote.OnClientEvent:Connect(function(payload: any)
-		if type(payload) ~= "table" then
-			return
-		end
-
-		if payload.kind == Config.Overhead.BATCH_MESSAGE_KIND then
-			local payloads = payload.payloads
-			if type(payloads) ~= "table" then
-				return
+	-- Pre-warm last-known-good setiap kali cache overhead berubah, supaya
+	-- pesan pertama setelah join/respawn sudah punya tag benar.
+	if type(OverheadController.subscribeOverheadCacheUpdated) == "function" then
+		unsubscribeCacheUpdated = OverheadController.subscribeOverheadCacheUpdated(function(userId: number?)
+			if type(userId) == "number" then
+				local record = tagRecordFromPayload(OverheadController.getCachedPayload(userId))
+				if record then
+					lastGoodByUserId[userId] = record
+				end
 			end
-			for _, item in ipairs(payloads) do
-				ingestFullPayload(item)
-			end
-			return
-		end
-
-		if payload.kind == Config.Overhead.DELTA_MESSAGE_KIND then
-			ingestDelta(payload)
-			return
-		end
-
-		-- Legacy / non-delta full payload path.
-		ingestFullPayload(payload)
-	end))
+		end)
+	end
 
 	TextChatService.OnIncomingMessage = function(message: TextChatMessage): TextChatMessageProperties?
 		local textSource = message.TextSource
@@ -280,7 +249,7 @@ local function init(_deps: {}?): ()
 			return nil
 		end
 
-		local cached = tagCache[textSource.UserId]
+		local cached = getTagRecord(textSource.UserId)
 		if not cached then
 			local player = Players:GetPlayerByUserId(textSource.UserId)
 			if not player then
@@ -321,7 +290,7 @@ local function init(_deps: {}?): ()
 			return nil
 		end
 
-		local cached = tagCache[textSource.UserId]
+		local cached = getTagRecord(textSource.UserId)
 		local props = Instance.new("BubbleChatMessageProperties")
 		preserveConfiguredBubbleStyle(props)
 		props.BackgroundColor3 = BUBBLE_BACKGROUND_COLOR
@@ -333,7 +302,7 @@ local function init(_deps: {}?): ()
 		return props
 	end
 
-	log:info("Client ChatTagsController initialized")
+	log:info("Client ChatTagsController initialized (overhead cache source)")
 end
 
 return { init = init, destroy = destroy }

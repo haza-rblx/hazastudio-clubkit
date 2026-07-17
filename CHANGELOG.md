@@ -11,6 +11,18 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.52] - 2026-07-17
+
+### Fixed
+- **Chat tag intermittently Guest** — `ChatTagsController` no longer keeps its own duplicate `OverheadUpdate` cache (it initialized after the server's initial batch, so the batch was missed and partial deltas were dropped without a baseline → tags randomly fell back to Guest). Chat tags now read from `OverheadController.getCachedPayload` (always-complete merged cache) with a last-known-good fallback so tags never downgrade to Guest once resolved.
+
+### Added
+- **CarryAnimUploaderPlugin** (`tools/CarryAnimUploaderPlugin/`) — local Studio plugin: bulk-upload `ReplicatedStorage.Carry` KeyframeSequences (`Name 1/2` → carrier/carried) via `CreateAssetAsync` Animation, then patch `ClubKitConfig.Carry.Styles.*.animations`.
+
+### Changed
+- **Chat bubble calmer on head movement** — `ClubKitChatBubble` attachment parented to `HumanoidRootPart` instead of `Head` (no neck pitch / look-down drift). Height still derived from overhead stack + `NUDGE_STUDS -0.5`.
+- **Music panel tab** — selector label `Request` → `Library` (`Config.Music.TAB_LABELS.reqSong`).
+
 ## [2.4.51] - 2026-07-17
 
 ### Changed

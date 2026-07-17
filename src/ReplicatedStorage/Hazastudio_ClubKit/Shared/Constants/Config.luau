@@ -1625,6 +1625,8 @@ Config.Chat = {
 Config.ChatBubble = {
 	ENABLED = true,
 	ADORNEE_NAME = "ClubKitChatBubble",
+	-- Parent part for ClubKitChatBubble (HRP = stable, no head pitch; Head = legacy).
+	ADORNEE_PART = "HumanoidRootPart",
 	-- Small gap above top of overhead stack (studs). Bubble sits on Attachment.
 	EXTRA_STUDS = 0,
 	-- StudsOffset is billboard center; multiply measured height by this (0.5 = geometric top).
@@ -2643,7 +2645,7 @@ Config.Music = {
 	},
 	TAB_LABELS = {
 		nowPlaying = "Now Playing",
-		reqSong = "Request",
+		reqSong = "Library",
 		dj = "DJ",
 		manage = "Manage",
 	},

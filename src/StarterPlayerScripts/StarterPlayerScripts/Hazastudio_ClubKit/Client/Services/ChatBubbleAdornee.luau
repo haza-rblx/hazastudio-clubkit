@@ -61,8 +61,34 @@ local function resolveHead(gui: BillboardGui): BasePart?
 	return nil
 end
 
-local function ensureAttachment(head: BasePart, name: string): Attachment
-	local existing = head:FindFirstChild(name)
+local function resolveAdorneePart(head: BasePart): BasePart
+	local cfg = getCfg()
+	local partName = if cfg and type(cfg.ADORNEE_PART) == "string" and cfg.ADORNEE_PART ~= ""
+		then cfg.ADORNEE_PART
+		else "HumanoidRootPart"
+	local model = head:FindFirstAncestorOfClass("Model")
+	if model then
+		local part = model:FindFirstChild(partName)
+		if part and part:IsA("BasePart") then
+			return part
+		end
+	end
+	return head
+end
+
+local function ensureAttachment(part: BasePart, name: string, cleanupFrom: { BasePart }?)
+	if cleanupFrom then
+		for _, other in ipairs(cleanupFrom) do
+			if other ~= part then
+				local stale = other:FindFirstChild(name)
+				if stale then
+					stale:Destroy()
+				end
+			end
+		end
+	end
+
+	local existing = part:FindFirstChild(name)
 	if existing and existing:IsA("Attachment") then
 		return existing
 	end
@@ -71,7 +97,7 @@ local function ensureAttachment(head: BasePart, name: string): Attachment
 	end
 	local attachment = Instance.new("Attachment")
 	attachment.Name = name
-	attachment.Parent = head
+	attachment.Parent = part
 	return attachment
 end
 
@@ -130,6 +156,21 @@ local function measureStuds(gui: BillboardGui, wrapper: GuiObject?, overheadVisi
 	return math.clamp(baseY + contentStuds * heightFactor + extra + nudge, minStuds, maxStuds)
 end
 
+-- Offset above Head center (same space as when attachment lived on Head).
+local function measureHeadRelativeStuds(gui: BillboardGui, wrapper: GuiObject?, overheadVisible: boolean): number
+	return measureStuds(gui, wrapper, overheadVisible)
+end
+
+local function measureAdorneeStuds(head: BasePart, adorneePart: BasePart, gui: BillboardGui, wrapper: GuiObject?, overheadVisible: boolean): number
+	local headRelative = measureHeadRelativeStuds(gui, wrapper, overheadVisible)
+	if adorneePart == head then
+		return headRelative
+	end
+	-- HRP (or torso): lift by head position in adornee local space — bubble won't pitch with neck.
+	local headLocalY = adorneePart.CFrame:PointToObjectSpace(head.Position).Y
+	return headLocalY + headRelative
+end
+
 local function applyNow(userId: number, gui: BillboardGui, wrapper: GuiObject?, overheadVisible: boolean, force: boolean?)
 	local cfg = getCfg()
 	if not cfg or cfg.ENABLED ~= true then
@@ -144,17 +185,20 @@ local function applyNow(userId: number, gui: BillboardGui, wrapper: GuiObject?, 
 		return
 	end
 
+	local adorneePart = resolveAdorneePart(head)
+
 	local name = if type(cfg.ADORNEE_NAME) == "string" and cfg.ADORNEE_NAME ~= ""
 		then cfg.ADORNEE_NAME
 		else "ClubKitChatBubble"
-	local studs = measureStuds(gui, wrapper, overheadVisible)
+	local studs = measureAdorneeStuds(head, adorneePart, gui, wrapper, overheadVisible)
 	local skipDelta = if type(cfg.SKIP_DELTA_STUDS) == "number" then cfg.SKIP_DELTA_STUDS else 0.05
 	local last = lastStudsByUserId[userId]
 	if not force and last and math.abs(last - studs) < skipDelta then
 		return
 	end
 
-	local attachment = ensureAttachment(head, name)
+	local cleanupFrom: { BasePart }? = if adorneePart ~= head then { head } else nil
+	local attachment = ensureAttachment(adorneePart, name, cleanupFrom)
 	attachment.Position = Vector3.new(0, studs, 0)
 	lastStudsByUserId[userId] = studs
 	lastSyncByUserId[userId] = {
