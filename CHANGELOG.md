@@ -11,6 +11,11 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.49] - 2026-07-17
+
+### Fixed
+- **Chat bubble still slightly high** — `HEIGHT_FACTOR` 0.5→0.38, `EXTRA_STUDS` 0.12→0.02.
+
 ## [2.4.48] - 2026-07-17
 
 ### Fixed

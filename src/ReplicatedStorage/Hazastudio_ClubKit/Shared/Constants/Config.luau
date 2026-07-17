@@ -1626,9 +1626,10 @@ Config.ChatBubble = {
 	ENABLED = true,
 	ADORNEE_NAME = "ClubKitChatBubble",
 	-- Small gap above top of overhead stack (studs). Bubble sits on Attachment.
-	EXTRA_STUDS = 0.12,
-	-- StudsOffset is billboard center; multiply measured height by this (0.5 = top of stack).
-	HEIGHT_FACTOR = 0.5,
+	EXTRA_STUDS = 0.02,
+	-- StudsOffset is billboard center; multiply measured height by this (0.5 = geometric top).
+	-- Slightly under 0.5 — bubble still sits above stack without a large air gap.
+	HEIGHT_FACTOR = 0.38,
 	-- Fallback when AbsoluteSize not ready yet: contentPx * PX_TO_STUDS.
 	PX_TO_STUDS = 0.018,
 	MIN_STUDS = 0.8,
