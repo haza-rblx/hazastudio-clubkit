@@ -2,7 +2,9 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local DonationExperiencePrefs = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DonationExperiencePrefs)
+-- EffectDonate/<Effect>/init → Client = Parent×3 (same as BlackHole / Blossom / GreenHammer).
 local WorldEffectFlight = require(script.Parent.Parent.Parent.Utils.WorldEffectFlight)
+local DonationVfxClientGate = require(script.Parent.Parent.Parent.Utils.DonationVfxClientGate)
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local LocalPlayer = game.Players.LocalPlayer
 local Debris = game:GetService("Debris")
@@ -512,28 +514,19 @@ local function handleNukeEffect(donatorName, recipientName, donationAmount)
 	if not DonationExperiencePrefs.shouldShowWorldEffect() then
 		return
 	end
-	local DonationVfxClientGate = require(
-		script.Parent.Parent.Parent.Parent.Utils.DonationVfxClientGate
-	)
 	if not DonationVfxClientGate.shouldPlayWorldEffect() then
 		return
 	end
 	createNukeEffect(ReplicatedStorage.WorldEffects.Nuke, donatorName, recipientName, donationAmount)
 end
 
-
-local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
-	or ReplicatedStorage:WaitForChild("Remotes", 30)
-local DonationEffect = Remotes and Remotes:FindFirstChild("DonationEffect")
-	or Remotes and Remotes:WaitForChild("DonationEffect", 30)
-if not DonationEffect then
-	warn("LocalNuke effect: DonationEffect remote not found")
-	return
-end
-local donationEffectConn = DonationEffect.OnClientEvent:Connect(function(effectName, donatorName, recipientName, donationAmount)
-	if effectName ~= "Nuke" then return end
+local WorldEffectDispatch = require(script.Parent.Parent.Parent.Utils.WorldEffectDispatch)
+local dispatchConn = WorldEffectDispatch.connect(function(effectName, donatorName, recipientName, donationAmount)
+	if effectName ~= "Nuke" then
+		return
+	end
 	handleNukeEffect(donatorName, recipientName, donationAmount)
 end)
 script.Destroying:Connect(function()
-	donationEffectConn:Disconnect()
+	dispatchConn:Disconnect()
 end)

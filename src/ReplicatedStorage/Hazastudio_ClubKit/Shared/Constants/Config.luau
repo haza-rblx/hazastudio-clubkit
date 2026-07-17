@@ -2287,7 +2287,7 @@ Config.Donation = {
 	ROBUX_EFFECT_SOUNDS_FOLDER = "DonationSounds",
 	-- World-position VFX (Rocket/Hammer/Blackhole) for Bagi-Bagi/Saweria only (WORLD_EFFECT_TIERS).
 	-- Robux donations use per-player aura (AURA_TIERS) — no world VFX.
-	-- Fired via DonationEffect remote; client handlers in EffectDonate/*.
+	-- Client plays via WorldEffectDispatch when donation notif starts showing.
 	NUKE_REMOTE = "DonationEffect",
 	-- Folder in ReplicatedStorage that holds the world-position VFX models
 	-- (one Model per effect name: Nuke / Smite / BlackHole).
@@ -2295,13 +2295,10 @@ Config.Donation = {
 	-- Stage world position for Nuke / Smite / BlackHole EffectDonate VFX.
 	-- Buyer override: ClubKitConfig.Donation.NukeWorldPosition → ConfigBootstrap.
 	NUKE_WORLD_POSITION = Vector3.new(-262.2, 1.285, 64.9),
-	-- Fallback duration (seconds) when WORLD_EFFECT_DURATIONS lacks an effect key.
-	-- Raised from 20 → 90: LocalNuke client lifetime is ~85s; 20s caused overlap.
+	-- Legacy: was used for server serial world-VFX queue pacing. Unused now —
+	-- world effects follow donation notif show cadence (client WorldEffectDispatch).
 	NUKE_DEFAULT_DURATION = 90,
-	-- Per-effect server queue wait (seconds) after broadcasting world VFX.
-	-- Conservative covers client EffectDonate main path (+ buffer). Client also
-	-- single-flights via WorldEffectFlight — server wait is belt-and-suspenders.
-	-- Nuke≈85s → 90; Smite4/Blossom multi-minute → 180; BlackHole long path → 240.
+	-- Legacy per-effect durations (unused for queue pacing).
 	WORLD_EFFECT_DURATIONS = {
 		Nuke = 90,
 		Smite4 = 180,

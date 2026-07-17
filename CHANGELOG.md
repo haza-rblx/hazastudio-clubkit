@@ -11,6 +11,14 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.53] - 2026-07-17
+
+### Fixed
+- **Nuke world effect crash** — `LocalNuke` required `DonationVfxClientGate` with one extra `.Parent` (`Utils` under kit root instead of `Client/Utils`), so rocket VFX errored on every play while the server still held the world-VFX queue slot for ~90s.
+
+### Changed
+- **World VFX follows donation notif queue** — Nuke/Smite4/BlackHole start when that donation's notification starts showing (client `WorldEffectDispatch`), instead of a server serial wait of 90–240s. Previous world effect is aborted when the next notif begins. Spam `/testcash` no longer delays world FX by minutes.
+
 ## [2.4.52] - 2026-07-17
 
 ### Fixed

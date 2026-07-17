@@ -25,6 +25,7 @@ local DataStoreThrottleLockout = require(ReplicatedStorage.Hazastudio_ClubKit.Sh
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local OverheadDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.OverheadDomain)
 local StreakDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.StreakDomain)
+local DonationEffectTierResolver = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DonationEffectTierResolver)
 type DonationEntry = Types.DonationEntry
 type DonationNotifPayload = Types.DonationNotifPayload
 type DonationLeaderboardPayload = Types.DonationLeaderboardPayload
@@ -1129,6 +1130,7 @@ local function createDonationService(
 			robloxDisplayName = args.robloxDisplayName,
 			totalDonationAmount = args.totalDonationAmount,
 			source = "cash",
+			worldEffect = DonationEffectTierResolver.resolveWorldByIdr(amount),
 		}
 		-- Stagger broadcast: delay between notifications to prevent client queue flood.
 		-- At high CCU, multiple donations arrive in one poll cycle. Without staggering,

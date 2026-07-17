@@ -1026,28 +1026,21 @@ local function createDonationEffect(donorName, recipientName, donationAmount, do
 end
 
 
--- Connect the donation effect to the remote event
-local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
-	or ReplicatedStorage:WaitForChild("Remotes", 30)
-local DonationEffect = Remotes and Remotes:FindFirstChild("DonationEffect")
-	or Remotes and Remotes:WaitForChild("DonationEffect", 30)
-if not DonationEffect then
-	warn("Blossom effect: DonationEffect remote not found")
-	return
-end
-local donationEffectConn = DonationEffect.OnClientEvent:Connect(function(effectName, donorName, recipientName, donationAmount, userId)
-	if effectName ~= "Smite4" then return end
+-- Connect to WorldEffectDispatch (notif-queue synced)
+local WorldEffectDispatch = require(script.Parent.Parent.Parent.Utils.WorldEffectDispatch)
+local dispatchConn = WorldEffectDispatch.connect(function(effectName, donorName, recipientName, donationAmount, userId)
+	if effectName ~= "Smite4" then
+		return
+	end
 	if not DonationExperiencePrefs.shouldShowWorldEffect() then
 		return
 	end
-	local DonationVfxClientGate = require(
-		script.Parent.Parent.Parent.Utils.DonationVfxClientGate
-	)
+	local DonationVfxClientGate = require(script.Parent.Parent.Parent.Utils.DonationVfxClientGate)
 	if not DonationVfxClientGate.shouldPlayWorldEffect() then
 		return
 	end
 	createDonationEffect(donorName, recipientName, donationAmount, userId)
 end)
 script.Destroying:Connect(function()
-	donationEffectConn:Disconnect()
+	dispatchConn:Disconnect()
 end)

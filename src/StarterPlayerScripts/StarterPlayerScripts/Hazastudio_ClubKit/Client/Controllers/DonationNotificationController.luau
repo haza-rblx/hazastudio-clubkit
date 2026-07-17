@@ -17,6 +17,8 @@ local DonationEffectTierResolver = require(ReplicatedStorage.Hazastudio_ClubKit.
 local DonationExperiencePrefs = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DonationExperiencePrefs)
 local HttpApiCounter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.HttpApiCounter)
 local ClientThumbnailCache = require(script.Parent.Parent.Utils.ClientThumbnailCache)
+local WorldEffectDispatch = require(script.Parent.Parent.Utils.WorldEffectDispatch)
+local DonationVfxClientGate = require(script.Parent.Parent.Utils.DonationVfxClientGate)
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local OverheadController = require(script.Parent.OverheadController)
 local GenericBroadcastLayoutBridge = require(script.Parent.Parent.Services.GenericBroadcastLayoutBridge)
@@ -1661,6 +1663,30 @@ local function init(_deps: {}?)
 		end
 		isShowingNotif = true
 		syncDonationBroadcastLayout()
+
+		-- World VFX follows notif show cadence (abort previous via WorldEffectFlight).
+		local worldEffect = payload.worldEffect
+		if type(worldEffect) == "string" and worldEffect ~= "" then
+			if DonationExperiencePrefs.shouldShowWorldEffect() and DonationVfxClientGate.shouldPlayWorldEffect() then
+				local donorName = if type(payload.robloxUsername) == "string" and payload.robloxUsername ~= ""
+					then payload.robloxUsername
+					elseif type(payload.robloxDisplayName) == "string" and payload.robloxDisplayName ~= ""
+					then payload.robloxDisplayName
+					else payload.saweriaName
+				local recipientName = "Club"
+				if type(Config.Branding) == "table" and type(Config.Branding.GAME_NAME) == "string" and Config.Branding.GAME_NAME ~= "" then
+					recipientName = Config.Branding.GAME_NAME
+				end
+				WorldEffectDispatch.fire(
+					worldEffect,
+					donorName,
+					recipientName,
+					tonumber(payload.amount) or 0,
+					payload.robloxUserId
+				)
+			end
+		end
+
 		animToken += 1
 		runningTextToken += 1
 		workspaceRestoreToken += 1

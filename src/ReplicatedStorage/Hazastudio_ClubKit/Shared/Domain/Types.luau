@@ -532,6 +532,9 @@ export type DonationNotifPayload = {
 	robloxDisplayName: string?,
 	totalDonationAmount: number?,
 	source: string?, -- "cash" | "robux" | legacy provider keys | nil
+	-- Cash world VFX name (Nuke / Smite4 / BlackHole); nil = no world effect / robux.
+	-- Client plays this when the notif actually shows (synced to notif queue).
+	worldEffect: string?,
 }
 export type DonationLeaderboardPayload = {
 	daily: { DonationEntry },
