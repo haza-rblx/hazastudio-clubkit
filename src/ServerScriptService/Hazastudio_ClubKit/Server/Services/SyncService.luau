@@ -236,6 +236,20 @@ local function create(deps: {
 		processingRequests[player.UserId] = false
 	end
 
+	local function isBeingCarried(player: Player): boolean
+		local character = player.Character
+		if not character then
+			return false
+		end
+		local weldName = (Config.Carry and Config.Carry.WELD_NAME) or "CarryWeld"
+		for _, inst in ipairs(character:GetDescendants()) do
+			if inst:IsA("Weld") and inst.Name == weldName then
+				return true
+			end
+		end
+		return false
+	end
+
 	-- ============================================================
 	-- SYNC MAP MAINTENANCE
 	-- ============================================================
@@ -384,14 +398,16 @@ local function create(deps: {
 		if not leaderAnimator then
 			return nil
 		end
-		local leaderTrack = AnimatorUtils.getPlayingDanceTrack(leaderAnimator, prewarmAnimations)
+		-- Prefer the authoritative active dance id so mid-crossfade never samples the fading-out track.
+		local expectedId = activeAnimationIds[leader.Name]
+		local leaderTrack = AnimatorUtils.getPlayingDanceTrack(leaderAnimator, prewarmAnimations, expectedId)
 		if not leaderTrack or not leaderTrack.IsPlaying then
 			return nil
 		end
 		local ok, timePosition = pcall(function()
 			return leaderTrack.TimePosition
 		end)
-		if not ok or not timePosition then
+		if not ok or type(timePosition) ~= "number" then
 			return nil
 		end
 		return timePosition
@@ -745,7 +761,9 @@ local function create(deps: {
 					track:AdjustSpeed(leaderSpeed)
 				end
 
-				-- Snap follower to leader's current phase on sync join (once, no retry loop)
+				-- Snap follower to leader's current phase on sync join.
+				-- Immediate when Length is ready (no defer → no phase-0 delay).
+				-- If Length is still 0 on a cold LoadAnimation, one-frame defer only.
 				if syncedPlayer ~= leader and isSyncJoin then
 					local snapTime: number? = nil
 					if config.SYNC_JOIN_USE_LEADER_TRACK_TIME ~= false then
@@ -757,14 +775,25 @@ local function create(deps: {
 							snapTime = leaderTime
 						end
 					end
-					if snapTime and track.Length > 0 then
-						task.defer(function()
-							if track.IsPlaying then
+					if snapTime then
+						local function applySnap(targetTrack: AnimationTrack, phase: number)
+							if not targetTrack.IsPlaying then
+								return
+							end
+							local length = targetTrack.Length
+							if type(length) == "number" and length > 0 then
 								pcall(function()
-									track.TimePosition = snapTime % track.Length
+									targetTrack.TimePosition = phase % length
 								end)
 							end
-						end)
+						end
+						if track.Length > 0 then
+							applySnap(track, snapTime)
+						else
+							task.defer(function()
+								applySnap(track, snapTime :: number)
+							end)
+						end
 					end
 				end
 
@@ -809,6 +838,12 @@ local self = {} :: any
 		if not animator then
 			endProcessing(player)
 			return ResultModule.Err("error")
+		end
+
+		-- Carried players keep limp Action4 pose; starting a dance would blend same-priority tracks.
+		if shouldPlay ~= false and isBeingCarried(player) then
+			endProcessing(player)
+			return ResultModule.Err("carrying")
 		end
 
 		-- Detach from any leader if currently syncing (so we become our own root)
@@ -892,10 +927,13 @@ local self = {} :: any
 		activeAnimationIds[player.Name] = animation.AnimationId
 		activeSpeeds[player.Name] = clampedSpeed
 		if isSwitch then
+			-- Hard-stop outgoing dance on switch. SWITCH_FADE_OUT (0.28s) was longer than
+			-- MIN_REQUEST_INTERVAL (0.10s), so rapid switches blended 2–3 Action4 tracks
+			-- ("broken arms"). New track still fades in via SWITCH_FADE_IN.
 			replicateAnimation(player, animation, {
 				speed = clampedSpeed,
 				fade = SWITCH_FADE_IN,
-				stopFade = SWITCH_FADE_OUT,
+				stopFade = 0,
 			})
 		else
 			replicateAnimation(player, animation, {

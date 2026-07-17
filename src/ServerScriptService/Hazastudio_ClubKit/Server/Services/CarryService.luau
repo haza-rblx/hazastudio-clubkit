@@ -355,6 +355,23 @@ local function create(deps: {
 		local track = trackOrErr :: AnimationTrack
 		-- Carrier: keep priority below Sync dance (Action4) so carrier can dance freely.
 		-- Carried: Action4 so the limp/stick pose stays glued while welded.
+		-- Hard-stop any existing Action4 tracks first — otherwise a looping dance at the
+		-- same priority blends with the carry pose for ~fade window ("broken arms").
+		if role == "carried" then
+			local playing
+			local listOk = pcall(function()
+				playing = animator:GetPlayingAnimationTracks()
+			end)
+			if listOk and type(playing) == "table" then
+				for _, existing in ipairs(playing) do
+					if existing.Priority == Enum.AnimationPriority.Action4 then
+						pcall(function()
+							existing:Stop(0)
+						end)
+					end
+				end
+			end
+		end
 		if role == "carrier" then
 			track.Priority = Enum.AnimationPriority.Action
 		else

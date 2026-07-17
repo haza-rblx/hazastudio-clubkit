@@ -355,7 +355,20 @@ local function createOverheadService(deps: {
 			return
 		end
 		rankResolutionScheduled[userId] = true
-		task.delay(2, function()
+		local overheadCfg = Config.Overhead
+		local resolveDelay = if type(overheadCfg) == "table" and type(overheadCfg.RANK_RESOLVE_DELAY_SEC) == "number"
+			then overheadCfg.RANK_RESOLVE_DELAY_SEC
+			else 30
+		local resolveJitter = if type(overheadCfg) == "table" and type(overheadCfg.RANK_RESOLVE_JITTER_SEC) == "number"
+			then overheadCfg.RANK_RESOLVE_JITTER_SEC
+			else 5
+		if resolveDelay < 0 then
+			resolveDelay = 0
+		end
+		if resolveJitter < 0 then
+			resolveJitter = 0
+		end
+		task.delay(resolveDelay + math.random() * resolveJitter, function()
 			-- Always clear the scheduling flag when this task finishes so a
 			-- later scheduleRankResolution can run again. Previously the flag
 			-- was set to true and never reset, so (a) rank resolution could

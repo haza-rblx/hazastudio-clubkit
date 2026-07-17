@@ -669,7 +669,7 @@ local function createAvatarLikeRepository(deps: { logger: Types.ILogger? }?)
 		local sortedResult = budgetGate:executeAsync(Enum.DataStoreRequestType.GetSortedAsync, function()
 			return Result.withRetry(function()
 				return leaderboardStore:GetSortedAsync(false, resolvedLimit)
-			end, Config.DataStore.RETRY_ATTEMPTS)
+			end, Config.DataStore.LB_READ_RETRY_ATTEMPTS or 1)
 		end)
 		if not sortedResult.ok then
 			return Result.Err(sortedResult.error)

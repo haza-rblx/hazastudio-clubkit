@@ -11,6 +11,17 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.57] - 2026-07-18
+
+### Fixed
+- **OrderedList cold-start throttle (live low CCU)** — Fable A+B+C: leaderboard cache/last-known-good served before throttle lockout; `GetSortedAsync` uses `LB_READ_RETRY_ATTEMPTS = 1`; overhead live rank resolve deferred until after LB pre-warm (`RANK_RESOLVE_DELAY_SEC`).
+- **Dance broken-arm blend on switch** — dance-to-dance switch hard-stops the outgoing track (`stopFade = 0`) so Action4 weights no longer overlap during rapid clicks.
+- **Carry × dance Action4 clash** — starting carry on the carried player hard-stops existing Action4 tracks; dance start is refused while `CarryWeld` is present; `Carry_*` tracks are excluded from dance classification.
+- **Sync-join phase delay** — follower `TimePosition` snap uses leader `activeAnimationIds` (not first fading track) and applies immediately after `Play` when `Length` is ready.
+
+### Changed
+- **Paid Broadcast free for canAnnounce** — staff/moderator (and anyone with `canAnnounce`) see button **"Send broadcast"** and send without Robux; regular players keep the paid product prompt. Server re-checks permission so UI spoof cannot free-send.
+
 ## [2.4.56] - 2026-07-17
 
 ### Changed

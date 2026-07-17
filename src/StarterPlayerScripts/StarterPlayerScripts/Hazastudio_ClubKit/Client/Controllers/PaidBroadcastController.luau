@@ -6,12 +6,21 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui = game:GetService("StarterGui")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
+local PermissionDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.PermissionDomain)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
+local OverheadController = require(script.Parent.OverheadController)
 local PaidBroadcastGuiRefs = require(script.Parent.Parent.UI.PaidBroadcastGuiRefs)
 local PaidBroadcastUI = require(script.Parent.Parent.UI.PaidBroadcastUI)
 
 local PaidBroadcastController = {}
 local log = Logger.new("PaidBroadcastController")
+
+local function localPlayerCanAnnounce(): boolean
+	local localPlayer = Players.LocalPlayer
+	local role = OverheadController.getPlayerRole(localPlayer.UserId)
+	local membership = OverheadController.getPlayerEffectiveMembership(localPlayer.UserId)
+	return PermissionDomain.canAnnounce(role, membership)
+end
 
 local ui: PaidBroadcastUI.UI? = nil
 local iconRef: any = nil
@@ -60,7 +69,8 @@ local function handleResult(raw: any)
 	end
 
 	local mode = raw.mode
-	if mode == "purchased" then
+	-- "sent" = free canAnnounce path; "purchased" = after Robux receipt.
+	if mode == "purchased" or mode == "sent" then
 		local bound = ui
 		if bound and type((bound :: any).hide) == "function" then
 			bound:hide()
@@ -163,9 +173,10 @@ local function showPanel()
 		return
 	end
 
+	local bypassPayment = localPlayerCanAnnounce()
 	PaidBroadcastUI.show(bound, {
-		bypassPayment = false,
-		priceRobux = fetchProductPrice(Config.PaidBroadcast.PRODUCT_ID),
+		bypassPayment = bypassPayment,
+		priceRobux = if bypassPayment then nil else fetchProductPrice(Config.PaidBroadcast.PRODUCT_ID),
 		player = Players.LocalPlayer,
 	})
 end

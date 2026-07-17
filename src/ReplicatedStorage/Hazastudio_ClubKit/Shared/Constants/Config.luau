@@ -623,6 +623,8 @@ Config.DataStore = {
 	-- backoff (2s/4s/8s) does not hold MAX_INFLIGHT. ProfileLoader retries outside the slot.
 	-- Writes/UpdateAsync keep RETRY_ATTEMPTS. Set to 3 to A/B the pre-fix behavior.
 	JOIN_READ_RETRY_ATTEMPTS = 1,
+	-- Leaderboard GetSortedAsync only: 1 attempt inside BudgetGate slot (no 2s/4s/8s storm).
+	LB_READ_RETRY_ATTEMPTS = 1,
 	-- Owner-only favorites write-behind (music + dance).
 	FAVORITES_SAVE_DEBOUNCE_SEC = 8,
 }
@@ -717,6 +719,10 @@ Config.Overhead = {
 	-- cukup jauh dari join storm (default 4s tumpang tindih dengan peak load).
 	-- Revert to 4 via Config if UX requires faster settle.
 	GROUP_RANK_SETTLE_DELAY = 5,
+	-- Live rank resolve via getRobuxLeaderboard: defer until DonationController LB pre-warm
+	-- (~25s) has populated robux cache. Stored topDonateRank still shows at join.
+	RANK_RESOLVE_DELAY_SEC = 30,
+	RANK_RESOLVE_JITTER_SEC = 5,
 	-- Client tunggu OverheadUpdate (detik). Server boot berat bisa >10s di Studio.
 	REMOTE_READY_TIMEOUT = 45,
 	-- Timeout WaitForChild saat attach GUI ke Head (detik)

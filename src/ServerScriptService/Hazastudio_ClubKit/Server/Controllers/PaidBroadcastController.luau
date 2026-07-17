@@ -1,5 +1,6 @@
 --!strict
--- Paid broadcast: menu modal submit, Robux purchase required -> GenericBroadcast.
+-- Paid broadcast: menu modal submit.
+-- canAnnounce senders broadcast free; others require Robux purchase -> GenericBroadcast.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -119,6 +120,21 @@ local function createPaidBroadcastController(deps: {
 			if not paidLimiter:check(player.UserId) then
 				notify.player(player, cfg.MSG_RATE_LIMIT, "WARNING")
 				fireResult(player, { ok = false, error = "rate_limited" })
+				return
+			end
+
+			-- Staff / canAnnounce: free send (server authority — client UI is cosmetic only).
+			local freeOk, freeErr = broadcastService:broadcastFiltered(player, filtered)
+			if freeOk then
+				pendingPaid[player.UserId] = nil
+				notify.player(player, cfg.MSG_SENT, "SUCCESS")
+				fireResult(player, { ok = true, mode = "sent" })
+				log:info("Paid broadcast sent free (canAnnounce)", { player = player.Name })
+				return
+			end
+			if freeErr ~= "no_perm" then
+				notify.player(player, cfg.MSG_FILTER_FAILED, "ERROR")
+				fireResult(player, { ok = false, error = freeErr or "broadcast_failed" })
 				return
 			end
 

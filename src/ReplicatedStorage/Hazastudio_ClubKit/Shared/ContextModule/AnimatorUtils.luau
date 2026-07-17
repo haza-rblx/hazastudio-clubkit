@@ -38,6 +38,11 @@ end
 local function isDanceTrack(track, loadedAnimations)
 	if not track then return false end
 	if not track.Animation then return false end
+	-- Carry poses reuse Action4 on the carried role; never treat them as dances.
+	local animName = track.Animation.Name
+	if type(animName) == "string" and string.sub(animName, 1, 6) == "Carry_" then
+		return false
+	end
 	if track.Priority == DANCE_PRIORITY then
 		return true
 	end
@@ -165,33 +170,52 @@ function module.getOrCreateTrack(animator, animation)
 end
 -- ============================================
 -- Get Currently Playing Dance Track
+-- Optional expectedAnimationId prefers that track; otherwise highest WeightCurrent wins.
 -- ============================================
-function module.getPlayingDanceTrack(animator, loadedAnimations)
+function module.getPlayingDanceTrack(animator, loadedAnimations, expectedAnimationId)
 	if not animator or not animator.Parent then return nil end
 	local tracks
 	local success = pcall(function()
 		tracks = animator:GetPlayingAnimationTracks()
 	end)
 	if not success or not tracks then return nil end
+
+	local bestTrack = nil
+	local bestName = nil
+	local bestWeight = -1
+	local expectedId = if type(expectedAnimationId) == "string" and expectedAnimationId ~= ""
+		then expectedAnimationId
+		else nil
+
 	for _, t in ipairs(tracks) do
 		if isDanceTrack(t, loadedAnimations) then
-			-- Important: Only return tracks that are ACTUALLY playing
-			-- Check IsPlaying first, then check weight is not near zero (fading out)
 			if t.IsPlaying and t.WeightCurrent > 0.01 then
-				-- Try to find name from map
+				local trackAnimation = t.Animation
+				local trackId = if trackAnimation then trackAnimation.AnimationId else ""
 				local hit = nil
 				for name, animObj in pairs(loadedAnimations or {}) do
 					if typeof(animObj) == "Instance" and animObj:IsA("Animation") then
-						local trackAnimation = t.Animation
-						if trackAnimation and (trackAnimation == animObj or trackAnimation.AnimationId == animObj.AnimationId) then
+						if trackAnimation and (trackAnimation == animObj or trackId == animObj.AnimationId) then
 							hit = name
 							break
 						end
 					end
 				end
-				return t, (hit or t.Name)
+				local nameOrDefault = hit or t.Name
+				if expectedId and trackId == expectedId then
+					return t, nameOrDefault
+				end
+				local weight = t.WeightCurrent
+				if weight > bestWeight then
+					bestWeight = weight
+					bestTrack = t
+					bestName = nameOrDefault
+				end
 			end
 		end
+	end
+	if bestTrack then
+		return bestTrack, bestName
 	end
 	return nil
 end

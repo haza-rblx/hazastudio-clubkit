@@ -44,7 +44,41 @@ local LEADERBOARD_CACHE_TTL = 60 -- detik
 local PLAYER_TOTAL_CACHE_TTL = 90 -- detik
 local METADATA_CACHE_TTL = 300 -- detik (R10.2, R10.3)
 local leaderboardCache: { [string]: { value: any, exp: number } } = {}
+-- Last-known-good snapshots (no TTL). Served when DS throttle/lockout and TTL cache miss.
+local lastGoodLeaderboard: { [string]: any } = {}
 local metadataCache: { [string]: { value: any, exp: number } } = {}
+
+local function lbReadRetryAttempts(): number
+	local n = Config.DataStore.LB_READ_RETRY_ATTEMPTS
+	if type(n) == "number" and n >= 1 then
+		return math.floor(n)
+	end
+	return 1
+end
+
+local function lastGoodGet(key: string): any?
+	return lastGoodLeaderboard[key]
+end
+
+local function lastGoodSet(key: string, value: any)
+	lastGoodLeaderboard[key] = value
+end
+
+local function lastGoodInvalidatePrefix(prefix: string)
+	for key in pairs(lastGoodLeaderboard) do
+		if string.sub(key, 1, #prefix) == prefix then
+			lastGoodLeaderboard[key] = nil
+		end
+	end
+end
+
+local function tryReturnLastGood<T>(cacheKey: string): Result<T>?
+	local last = lastGoodGet(cacheKey)
+	if last ~= nil then
+		return Result.Ok(last :: T)
+	end
+	return nil
+end
 
 local function cacheGet(key: string): any?
 	local entry = leaderboardCache[key]
@@ -60,6 +94,7 @@ end
 
 local function cacheSet(key: string, value: any, ttl: number)
 	leaderboardCache[key] = { value = value, exp = os.clock() + ttl }
+	lastGoodSet(key, value)
 end
 
 local function cacheInvalidatePrefix(prefix: string)
@@ -68,6 +103,7 @@ local function cacheInvalidatePrefix(prefix: string)
 			leaderboardCache[key] = nil
 		end
 	end
+	lastGoodInvalidatePrefix(prefix)
 end
 
 -- Patch #2 R3: Coalesce leaderboard cache invalidation per detik.
@@ -93,7 +129,9 @@ local function flushDirtyCaches()
 	end
 	if next(playerTotalDirty) ~= nil then
 		for userId in pairs(playerTotalDirty) do
-			leaderboardCache["playerTotal:" .. tostring(userId)] = nil
+			local key = "playerTotal:" .. tostring(userId)
+			leaderboardCache[key] = nil
+			lastGoodLeaderboard[key] = nil
 		end
 		playerTotalDirty = {}
 	end
@@ -904,11 +942,6 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 	end
 
 	function repo:getRobuxLeaderboard(limit: number?): Result<{ PlayerLeaderboardEntry }>
-		-- P0: Short-circuit kalau global throttle lockout aktif. Caller fall
-		-- back ke TTL cache (LEADERBOARD_CACHE_TTL=60s) atau empty leaderboard.
-		if DataStoreThrottleLockout.isLocked() then
-			return Result.Err("ds_throttled")
-		end
 		local resolvedLimit = sanitizeLimit(limit)
 		local cacheKey = "robux:" .. tostring(resolvedLimit)
 		local cached = cacheGet(cacheKey)
@@ -926,17 +959,30 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 			return Result.Ok(msCached :: { PlayerLeaderboardEntry })
 		end
 
+		-- P0-a: cache/last-good before lockout — warm data must not be refused.
+		if DataStoreThrottleLockout.isLocked() then
+			local lastGood = tryReturnLastGood<{ PlayerLeaderboardEntry }>(cacheKey)
+			if lastGood then
+				return lastGood
+			end
+			return Result.Err("ds_throttled")
+		end
+
 		local fetchLimit = cfg.MAX_LIMIT
 		-- Patch #2 R4: Wrap read with defer/retry on budget_exhausted.
 		local result = executeWithDeferRetryRead(function()
 			return budgetGate:executeAsync(Enum.DataStoreRequestType.GetSortedAsync, function()
 				return Result.withRetry(function()
 					return robuxStore:GetSortedAsync(false, fetchLimit)
-				end, Config.DataStore.RETRY_ATTEMPTS)
+				end, lbReadRetryAttempts())
 			end)
 		end, "getRobuxLeaderboard")
 		if not result.ok then
 			maybeMarkThrottledFromError(result.error)
+			local lastGood = tryReturnLastGood<{ PlayerLeaderboardEntry }>(cacheKey)
+			if lastGood then
+				return lastGood
+			end
 			return Result.Err(result.error)
 		end
 
@@ -1036,15 +1082,19 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 		if isHiddenRobuxUser(userId) then
 			return Result.Ok(0)
 		end
-		-- P0: Short-circuit kalau global throttle lockout aktif.
-		if DataStoreThrottleLockout.isLocked() then
-			return Result.Err("ds_throttled")
-		end
 
 		local cacheKey = "playerTotal:" .. tostring(userId)
 		local cached = cacheGet(cacheKey)
 		if cached ~= nil then
 			return Result.Ok(cached)
+		end
+
+		if DataStoreThrottleLockout.isLocked() then
+			local lastGood = tryReturnLastGood<number>(cacheKey)
+			if lastGood then
+				return lastGood
+			end
+			return Result.Err("ds_throttled")
 		end
 
 		-- Patch #2 R4: Wrap read with defer/retry on budget_exhausted.
@@ -1057,6 +1107,10 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 		end, "getPlayerRobuxTotal")
 		if not result.ok then
 			maybeMarkThrottledFromError(result.error)
+			local lastGood = tryReturnLastGood<number>(cacheKey)
+			if lastGood then
+				return lastGood
+			end
 			return Result.Err(result.error)
 		end
 		local total = tonumber(result.value) or 0
@@ -1112,10 +1166,6 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 	end
 
 	function repo:getCommunityLeaderboard(limit: number?): Result<{ CommunityLeaderboardEntry }>
-		-- P0: Short-circuit kalau global throttle lockout aktif.
-		if DataStoreThrottleLockout.isLocked() then
-			return Result.Err("ds_throttled")
-		end
 		local resolvedLimit = sanitizeLimit(limit)
 		local cacheKey = "community:" .. tostring(resolvedLimit)
 		local cached = cacheGet(cacheKey)
@@ -1132,16 +1182,28 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 			return Result.Ok(msCached :: { CommunityLeaderboardEntry })
 		end
 
+		if DataStoreThrottleLockout.isLocked() then
+			local lastGood = tryReturnLastGood<{ CommunityLeaderboardEntry }>(cacheKey)
+			if lastGood then
+				return lastGood
+			end
+			return Result.Err("ds_throttled")
+		end
+
 		-- Patch #2 R4: Wrap read with defer/retry on budget_exhausted.
 		local result = executeWithDeferRetryRead(function()
 			return budgetGate:executeAsync(Enum.DataStoreRequestType.GetSortedAsync, function()
 				return Result.withRetry(function()
 					return communityStore:GetSortedAsync(false, resolvedLimit)
-				end, Config.DataStore.RETRY_ATTEMPTS)
+				end, lbReadRetryAttempts())
 			end)
 		end, "getCommunityLeaderboard")
 		if not result.ok then
 			maybeMarkThrottledFromError(result.error)
+			local lastGood = tryReturnLastGood<{ CommunityLeaderboardEntry }>(cacheKey)
+			if lastGood then
+				return lastGood
+			end
 			return Result.Err(result.error)
 		end
 
