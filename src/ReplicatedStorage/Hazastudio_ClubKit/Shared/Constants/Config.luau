@@ -1630,7 +1630,8 @@ Config.ChatBubble = {
 	-- StudsOffset is billboard center; multiply measured height by this (0.5 = geometric top).
 	HEIGHT_FACTOR = 0.25,
 	-- Additive studs after formula (negative lowers bubble). Tunable live via /height nudge.
-	NUDGE_STUDS = 0,
+	-- Locked from live tune: /height -0.5 felt right above overhead stack.
+	NUDGE_STUDS = -0.5,
 	-- Fallback when AbsoluteSize not ready yet: contentPx * PX_TO_STUDS.
 	PX_TO_STUDS = 0.018,
 	MIN_STUDS = 0.5,

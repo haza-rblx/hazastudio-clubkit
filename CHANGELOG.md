@@ -11,6 +11,11 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.51] - 2026-07-17
+
+### Changed
+- **Chat bubble nudge default** — `NUDGE_STUDS` 0→`-0.5` (locked from live `/height -0.5` tune).
+
 ## [2.4.50] - 2026-07-17
 
 ### Added
