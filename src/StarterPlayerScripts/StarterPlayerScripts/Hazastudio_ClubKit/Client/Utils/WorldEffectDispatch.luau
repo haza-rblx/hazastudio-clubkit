@@ -9,12 +9,14 @@ local bindable: BindableEvent? = nil
 
 local function getEvent(): BindableEvent
 	local existing = bindable
-	if existing and existing.Parent then
+	-- Must reuse the same instance for connect + fire. Do NOT require Parent:
+	-- a parentless BindableEvent has Parent=nil, and recreating on each call
+	-- meant EffectDonate listened on event A while notif fired event B.
+	if existing then
 		return existing
 	end
 	local created = Instance.new("BindableEvent")
 	created.Name = "ClubKitWorldEffectDispatch"
-	-- Parentless BindableEvent is fine for same-VM listeners.
 	bindable = created
 	return created
 end

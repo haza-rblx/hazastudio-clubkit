@@ -11,6 +11,11 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.55] - 2026-07-17
+
+### Fixed
+- **World VFX dispatch never reached EffectDonate** — `WorldEffectDispatch` recreated a new parentless `BindableEvent` on every `connect`/`fire` (reuse required `Parent`, which is always nil for parentless instances), so notif fired event B while LocalNuke/Blossom/BlackHole listened on event A.
+
 ## [2.4.54] - 2026-07-17
 
 ### Fixed
