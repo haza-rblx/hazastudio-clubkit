@@ -14,12 +14,12 @@ function DonationVfxClientGate.shouldPlayWorldEffect(): boolean
 	if not player then
 		return false
 	end
-	if player:GetAttribute("SettingsHideAllParticles") == true then
-		return false
-	end
-	local tier = tonumber(player:GetAttribute("SettingsGraphicsTier")) or 1
+	-- World FX has its own SettingsHideDonationWorldEffect (DonationExperiencePrefs).
+	-- Do not gate on Graphics Low / HideAllParticles — those mute ambient particles;
+	-- signature donation world VFX (Nuke/Smite/BlackHole) should still play unless
+	-- the player explicitly hides them or donation VFX scale is effectively off.
 	local vfxScale = tonumber(player:GetAttribute("SettingsDonationVfxScale")) or 1
-	if tier <= 0 or vfxScale <= 0.05 then
+	if vfxScale <= 0.05 then
 		return false
 	end
 	return true

@@ -11,6 +11,11 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.54] - 2026-07-17
+
+### Fixed
+- **World VFX blocked on Graphics Low** — donation Nuke/Smite/BlackHole no longer gated by `SettingsHideAllParticles` / graphics tier 0 (Low). Only explicit hide-world-effect toggle or near-zero donation VFX scale skips them. Added client/server log lines for dispatch vs skip.
+
 ## [2.4.53] - 2026-07-17
 
 ### Fixed

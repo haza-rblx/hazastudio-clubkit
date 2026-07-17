@@ -1667,7 +1667,9 @@ local function init(_deps: {}?)
 		-- World VFX follows notif show cadence (abort previous via WorldEffectFlight).
 		local worldEffect = payload.worldEffect
 		if type(worldEffect) == "string" and worldEffect ~= "" then
-			if DonationExperiencePrefs.shouldShowWorldEffect() and DonationVfxClientGate.shouldPlayWorldEffect() then
+			local prefsOk = DonationExperiencePrefs.shouldShowWorldEffect()
+			local gateOk = DonationVfxClientGate.shouldPlayWorldEffect()
+			if prefsOk and gateOk then
 				local donorName = if type(payload.robloxUsername) == "string" and payload.robloxUsername ~= ""
 					then payload.robloxUsername
 					elseif type(payload.robloxDisplayName) == "string" and payload.robloxDisplayName ~= ""
@@ -1677,6 +1679,11 @@ local function init(_deps: {}?)
 				if type(Config.Branding) == "table" and type(Config.Branding.GAME_NAME) == "string" and Config.Branding.GAME_NAME ~= "" then
 					recipientName = Config.Branding.GAME_NAME
 				end
+				log:info("World effect dispatch", {
+					effect = worldEffect,
+					amount = tonumber(payload.amount) or 0,
+					donor = donorName,
+				})
 				WorldEffectDispatch.fire(
 					worldEffect,
 					donorName,
@@ -1684,7 +1691,20 @@ local function init(_deps: {}?)
 					tonumber(payload.amount) or 0,
 					payload.robloxUserId
 				)
+			else
+				log:info("World effect skipped", {
+					effect = worldEffect,
+					prefsOk = prefsOk,
+					gateOk = gateOk,
+					hideWorld = not prefsOk,
+					vfxScale = DonationVfxClientGate.getVfxScale(),
+				})
 			end
+		else
+			log:debug("World effect none on payload", {
+				amount = tonumber(payload.amount) or 0,
+				worldEffect = worldEffect,
+			})
 		end
 
 		animToken += 1

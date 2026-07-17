@@ -1149,6 +1149,7 @@ local function createDonationService(
 				donor = args.logDonor or args.filteredDonatorName,
 				amount = amount,
 				rank = args.newRank,
+				worldEffect = payload.worldEffect,
 				staggerMs = math.floor(staggerDelay * 1000),
 			})
 
