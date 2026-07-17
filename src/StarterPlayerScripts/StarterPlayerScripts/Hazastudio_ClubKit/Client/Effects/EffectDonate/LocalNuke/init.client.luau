@@ -504,7 +504,7 @@ local function createNukeEffect(nukeModel, donatorName, recipientName, donationA
 
 	cleanup()
 	WorldEffectFlight:finish(gen)
-	if not ok and tostring(err) ~= "WorldEffectAborted" then
+	if not ok and not WorldEffectFlight.isAbortError(err) then
 		warn("LocalNuke effect failed:", err)
 	end
 end

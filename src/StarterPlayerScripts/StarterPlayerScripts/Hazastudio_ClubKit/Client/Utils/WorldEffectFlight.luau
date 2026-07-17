@@ -9,12 +9,19 @@ export type WorldEffectFlight = {
 	setCleanup: (self: WorldEffectFlight, generation: number, cleanup: () -> ()) -> (),
 	finish: (self: WorldEffectFlight, generation: number) -> (),
 	wait: (self: WorldEffectFlight, generation: number, seconds: number) -> boolean,
+	isAbortError: (err: any) -> boolean,
 }
 
 local generation = 0
 local activeCleanup: (() -> ())? = nil
+local ABORT_TOKEN = "WorldEffectAborted"
 
 local WorldEffectFlight = {} :: WorldEffectFlight
+
+--- Roblox wraps `error("WorldEffectAborted")` as `"path:line: WorldEffectAborted"`.
+function WorldEffectFlight.isAbortError(err: any): boolean
+	return string.find(tostring(err), ABORT_TOKEN, 1, true) ~= nil
+end
 
 function WorldEffectFlight:begin(): number
 	local prev = activeCleanup

@@ -130,6 +130,16 @@ local function createBlackHoleEffect(donatorName, recipientName, donationAmount)
 		end
 	end
 
+	-- Background threads also call wait(); abort must not spam Studio red errors.
+	local function spawnAbortable(fn: () -> ())
+		task.spawn(function()
+			local spawnOk, spawnErr = pcall(fn)
+			if not spawnOk and not WorldEffectFlight.isAbortError(spawnErr) then
+				warn("BlackHole spawn failed:", spawnErr)
+			end
+		end)
+	end
+
 	local ok, err = pcall(function()
 	-- Clone effect model
 	effectModel = ReplicatedStorage.WorldEffects.BlackHole:Clone()
@@ -247,7 +257,7 @@ local function createBlackHoleEffect(donatorName, recipientName, donationAmount)
 	local meteorStartTime = tick()
 	local meteorSpawnDelay = 0.5
 
-	spawn(function()
+	spawnAbortable(function()
 		while meteorShowerActive and WorldEffectFlight:isActive(gen) do
 			if tick() - meteorStartTime > 90 then
 				break
@@ -255,7 +265,7 @@ local function createBlackHoleEffect(donatorName, recipientName, donationAmount)
 			if not WorldEffectFlight:wait(gen, meteorSpawnDelay) then
 				break
 			end
-			spawn(function()
+			spawnAbortable(function()
 				if not WorldEffectFlight:isActive(gen) then
 					return
 				end
@@ -350,7 +360,7 @@ local function createBlackHoleEffect(donatorName, recipientName, donationAmount)
 	end)
 
 	-- Portal opening sequence
-	spawn(function()
+	spawnAbortable(function()
 		soundsFolder.Summon:Play()
 		soundsFolder.Earthquake:Play()
 		blackHoleOrb.PortalAmbiance.Playing = true
@@ -764,7 +774,7 @@ local function createBlackHoleEffect(donatorName, recipientName, donationAmount)
 
 	cleanup()
 	WorldEffectFlight:finish(gen)
-	if not ok and tostring(err) ~= "WorldEffectAborted" then
+	if not ok and not WorldEffectFlight.isAbortError(err) then
 		warn("BlackHole effect failed:", err)
 	end
 end

@@ -11,6 +11,14 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.56] - 2026-07-17
+
+### Changed
+- **World VFX console noise cleaned up** — when Nuke replaces Smite4/BlackHole, background `spawn` / animation-marker threads no longer dump `WorldEffectAborted` stacks to the console (expected abort). Abort detection now matches Roblox's wrapped error string via `WorldEffectFlight.isAbortError`, and the `World effect dispatch` / `skipped` diagnostics were demoted from `info` to `debug`.
+
+### Notes
+- **Donation spam hardening verified** — test/preview commands (`/testcash`, `/testsaweria`, `/testdonate`, `/testrobux`) enforce `isAdmin` server-side and manual commands (`/donatecash`, `/addcash`, …) enforce owner-or-Studio; chat commands run off server-authoritative `TextChatCommand.Triggered` / `Chatted` (no client remote), and real donations come from server-side Saweria polling / MarketplaceReceipt. No client-triggerable path can spam donation notifications or world VFX.
+
 ## [2.4.55] - 2026-07-17
 
 ### Fixed

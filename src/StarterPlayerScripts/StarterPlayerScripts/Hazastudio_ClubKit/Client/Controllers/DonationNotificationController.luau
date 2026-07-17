@@ -1679,7 +1679,7 @@ local function init(_deps: {}?)
 				if type(Config.Branding) == "table" and type(Config.Branding.GAME_NAME) == "string" and Config.Branding.GAME_NAME ~= "" then
 					recipientName = Config.Branding.GAME_NAME
 				end
-				log:info("World effect dispatch", {
+				log:debug("World effect dispatch", {
 					effect = worldEffect,
 					amount = tonumber(payload.amount) or 0,
 					donor = donorName,
@@ -1692,7 +1692,7 @@ local function init(_deps: {}?)
 					payload.robloxUserId
 				)
 			else
-				log:info("World effect skipped", {
+				log:debug("World effect skipped", {
 					effect = worldEffect,
 					prefsOk = prefsOk,
 					gateOk = gateOk,

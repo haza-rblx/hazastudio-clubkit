@@ -140,6 +140,16 @@ local function createDonationEffect(donorName, recipientName, donationAmount, do
 		end
 	end
 
+	-- Background threads also call wait(); abort must not spam Studio red errors.
+	local function spawnAbortable(fn: () -> ())
+		task.spawn(function()
+			local spawnOk, spawnErr = pcall(fn)
+			if not spawnOk and not WorldEffectFlight.isAbortError(spawnErr) then
+				warn("Blossom spawn failed:", spawnErr)
+			end
+		end)
+	end
+
 	local ok, err = pcall(function()
 	-- Clone the main effect model
 	effectModel = ReplicatedStorage.WorldEffects.Smite4:Clone()
@@ -312,7 +322,7 @@ local function createDonationEffect(donorName, recipientName, donationAmount, do
 	local meteorSpawnDelay = 0.5
 
 	-- Start meteor shower
-	spawn(function()
+	spawnAbortable(function()
 		while meteorShowerActive and WorldEffectFlight:isActive(gen) do
 			if tick() - meteorStartTime > 90 then
 				break
@@ -320,7 +330,7 @@ local function createDonationEffect(donorName, recipientName, donationAmount, do
 			if not WorldEffectFlight:wait(gen, meteorSpawnDelay) then
 				break
 			end
-			spawn(function()
+			spawnAbortable(function()
 				if not WorldEffectFlight:isActive(gen) then
 					return
 				end
@@ -425,7 +435,7 @@ local function createDonationEffect(donorName, recipientName, donationAmount, do
 	airAmbiance.Parent = workspace
 
 	-- Start ambiance effects
-	spawn(function()
+	spawnAbortable(function()
 		-- Floor ambiance
 		for _, effect in pairs(floorAmbianceClone:GetChildren()) do
 			if effect:IsA("ParticleEmitter") then
@@ -510,7 +520,12 @@ local function createDonationEffect(donorName, recipientName, donationAmount, do
 	updateHammerFlameEffects(1)
 
 	local function trackMarker(name, handler)
-		table.insert(markerConnections, giantAnimation:GetMarkerReachedSignal(name):Connect(handler))
+		table.insert(markerConnections, giantAnimation:GetMarkerReachedSignal(name):Connect(function(...)
+			local markerOk, markerErr = pcall(handler, ...)
+			if not markerOk and not WorldEffectFlight.isAbortError(markerErr) then
+				warn("Blossom marker failed:", name, markerErr)
+			end
+		end))
 	end
 
 	-- Animation event handlers
@@ -913,7 +928,7 @@ local function createDonationEffect(donorName, recipientName, donationAmount, do
 	giantAnimation:Play()
 
 	-- Start environmental effects
-	spawn(function()
+	spawnAbortable(function()
 		if not WorldEffectFlight:isActive(gen) then
 			return
 		end
@@ -1020,7 +1035,7 @@ local function createDonationEffect(donorName, recipientName, donationAmount, do
 
 	cleanup()
 	WorldEffectFlight:finish(gen)
-	if not ok and tostring(err) ~= "WorldEffectAborted" then
+	if not ok and not WorldEffectFlight.isAbortError(err) then
 		warn("Blossom effect failed:", err)
 	end
 end
