@@ -11,6 +11,11 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.58] - 2026-07-18
+
+### Fixed
+- **Overhead missing on large / streamed maps + `/re` basecamp hop** — root cause was character lifecycle, not a Roblox platform break: attach raced a temporary Head, `/re` used `LoadCharacter` (spawn → restore) and double-fired `Avatar:Refreshed`, and loading restore forced `Enabled=false`. `/re` now prefers in-place `ApplyDescription` (stay put); LoadCharacter fallback streams then restores without a second overhead attach; server waits for a stable Head before parenting the BillboardGui; client rebinds the Head watcher when Head is replaced; loading dismiss no longer clobbers Club Kit overhead `Enabled`.
+
 ## [2.4.57] - 2026-07-18
 
 ### Fixed

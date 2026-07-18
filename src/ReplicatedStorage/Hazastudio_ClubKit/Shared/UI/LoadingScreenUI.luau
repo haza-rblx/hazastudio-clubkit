@@ -1048,7 +1048,12 @@ function LoadingScreenUI:_restoreOverheads()
 	for _, entry in ipairs(self._overheadSuppressed) do
 		pcall(function()
 			if entry.gui and entry.gui.Parent then
-				entry.gui.Enabled = entry.wasEnabled
+				-- Club Kit project overhead starts Enabled=false and OverheadUI owns
+				-- Enabled after payload paint. Restoring wasEnabled (often false)
+				-- clobbered a successful apply that raced the loading dismiss.
+				if not entry.isProjectOverhead then
+					entry.gui.Enabled = entry.wasEnabled
+				end
 			end
 		end)
 	end

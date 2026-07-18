@@ -727,6 +727,12 @@ Config.Overhead = {
 	REMOTE_READY_TIMEOUT = 45,
 	-- Timeout WaitForChild saat attach GUI ke Head (detik)
 	HEAD_WAIT_TIMEOUT = 5,
+	-- After Head appears, wait until the same Head instance stays put this long
+	-- before parenting BillboardGui. Prevents attach-to-temporary-Head on large /
+	-- streamed maps where appearance settle replaces Head after CharacterAdded.
+	HEAD_STABLE_DEBOUNCE = 0.35,
+	-- Cap for stable-Head wait (debounce loop). On timeout, attach to current Head.
+	HEAD_STABLE_TIMEOUT = 8,
 	-- Batas maksimal tunggu in-flight GroupService call (detik)
 	INFLIGHT_WAIT_MAX = 5,
 	-- Timeout WaitForChild Humanoid/HumanoidRootPart saat restore session (detik)

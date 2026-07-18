@@ -41,6 +41,10 @@ local function destroyConnections()
 		conn:Disconnect()
 		_pendingFlushConnections[userId] = nil
 	end
+	for userId, conn in pairs(_headRebindConnections) do
+		conn:Disconnect()
+		_headRebindConnections[userId] = nil
+	end
 	for userId, conn in pairs(_playerCharacterConnections) do
 		conn:Disconnect()
 		_playerCharacterConnections[userId] = nil
@@ -84,6 +88,7 @@ local cachedPayloadsByUserId = _cachedPayloadsByUserId
 local _uiCache: { [number]: any } = {}
 local _pendingPayloads: { [number]: OverheadPayload } = {}
 local _pendingFlushConnections: { [number]: RBXScriptConnection } = {}
+local _headRebindConnections: { [number]: RBXScriptConnection } = {}
 local _playerCharacterConnections: { [number]: RBXScriptConnection } = {}
 local NIL_SENTINEL = DeltaCompressor.NIL_SENTINEL
 local applyLocalPayloadPatchImpl: ((number, { [string]: any }) -> ())? = nil
@@ -167,6 +172,7 @@ local function init(_deps: {}?): ()
 	local pendingPayloads = _pendingPayloads
 	-- Connections that watch for the overhead GUI appearing on a character's Head.
 	local pendingFlushConnections = _pendingFlushConnections
+	local headRebindConnections = _headRebindConnections
 	local uiCache = _uiCache
 	-- Per-player CharacterAdded — Disconnect on PlayerRemoving (not module-lifetime _connections).
 	local playerCharacterConnections = _playerCharacterConnections
@@ -193,31 +199,70 @@ local function init(_deps: {}?): ()
 		end
 	end
 
+	local function disconnectHeadRebind(userId: number)
+		local conn = headRebindConnections[userId]
+		if conn then
+			conn:Disconnect()
+			headRebindConnections[userId] = nil
+		end
+	end
+
 	local function flushPendingPayload(userId: number)
 		syncOverheadGuiForUser(userId)
 	end
 
+	local function bindToHead(userId: number, head: Instance)
+		if not head:IsA("BasePart") then
+			return
+		end
+		disconnectPendingFlush(userId)
+		syncOverheadGuiForUser(userId)
+		local conn = head.ChildAdded:Connect(function(child)
+			if isProjectOverheadGui(child) and child:IsA("BillboardGui") then
+				syncOverheadGuiForUser(userId)
+			end
+		end)
+		pendingFlushConnections[userId] = conn
+		for _, child in ipairs(head:GetChildren()) do
+			if isProjectOverheadGui(child) and child:IsA("BillboardGui") then
+				syncOverheadGuiForUser(userId)
+				break
+			end
+		end
+	end
+
+	-- Watch current Head for GUI replication, and rebind when appearance settle
+	-- replaces Head (large / streamed maps). Without rebind, ChildAdded stays on
+	-- the destroyed Head and pending payloads never paint.
 	local function bindOverheadGuiWatcher(player: Player, character: Model)
 		local userId = player.UserId
+		disconnectHeadRebind(userId)
+		disconnectPendingFlush(userId)
+
+		headRebindConnections[userId] = character.ChildAdded:Connect(function(child)
+			if child.Name == "Head" and child:IsA("BasePart") then
+				if player.Character ~= character then
+					return
+				end
+				-- Clear stale OverheadUI bound to the previous Head instance.
+				local old = uiCache[userId]
+				if old and type(old.destroy) == "function" then
+					old:destroy()
+				end
+				uiCache[userId] = nil
+				bindToHead(userId, child)
+			end
+		end)
+
 		task.spawn(function()
 			local head = character:WaitForChild("Head", 10)
 			if not head then
 				return
 			end
-			syncOverheadGuiForUser(userId)
-			disconnectPendingFlush(userId)
-			local conn = head.ChildAdded:Connect(function(child)
-				if isProjectOverheadGui(child) and child:IsA("BillboardGui") then
-					syncOverheadGuiForUser(userId)
-				end
-			end)
-			pendingFlushConnections[userId] = conn
-			for _, child in ipairs(head:GetChildren()) do
-				if isProjectOverheadGui(child) and child:IsA("BillboardGui") then
-					syncOverheadGuiForUser(userId)
-					break
-				end
+			if player.Character ~= character then
+				return
 			end
+			bindToHead(userId, head)
 		end)
 	end
 
@@ -241,6 +286,7 @@ local function init(_deps: {}?): ()
 			local cached = cachedPayloadsByUserId[userId]
 			pendingPayloads[userId] = if type(cached) == "table" then cached else nil
 			disconnectPendingFlush(userId)
+			disconnectHeadRebind(userId)
 			bindOverheadGuiWatcher(player, character)
 		end)
 		if player.Character then
@@ -266,6 +312,7 @@ local function init(_deps: {}?): ()
 		cachedPayloadsByUserId[userId] = nil
 		pendingPayloads[userId] = nil
 		disconnectPendingFlush(userId)
+		disconnectHeadRebind(userId)
 	end))
 	for _, player in ipairs(Players:GetPlayers()) do
 		watchPlayer(player)

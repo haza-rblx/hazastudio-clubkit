@@ -3,6 +3,7 @@
 local Players = game:GetService("Players")
 local TeleportService = game:GetService("TeleportService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local AfkGuardDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.AfkGuardDomain)
@@ -22,6 +23,11 @@ type AfkSyncRestoreOptions = {
 	notifyPlayer: ((player: Player, message: string, kind: string?) -> ())?,
 }
 
+type DescriptionCacheEntry = {
+	desc: HumanoidDescription,
+	at: number,
+}
+
 local function createSessionCommandService(deps: {
 	notify: any,
 	syncService: any?,
@@ -38,6 +44,8 @@ local function createSessionCommandService(deps: {
 	local pendingJoinRestore: {[number]: RestorePayload} = {}
 	local pendingAfkSyncRestore: {[number]: AfkGuardDomain.SyncRestorePayload} = {}
 	local pendingReSyncRestore: {[number]: boolean} = {}
+	-- D4: cache GetHumanoidDescriptionFromUserIdAsync for /re in-place refresh.
+	local descriptionCache: { [number]: DescriptionCacheEntry } = {}
 
 	local service = {}
 
@@ -139,6 +147,80 @@ local function createSessionCommandService(deps: {
 		character:PivotTo(lifted)
 	end
 
+	-- Stream destination before PivotTo so large / StreamingEnabled maps do not
+	-- leave the player at SpawnLocation (basecamp) or drop them through unloaded terrain.
+	local function restorePositionWithStream(player: Player, character: Model, restoreCFrame: CFrame)
+		local targetPos = restoreCFrame.Position
+		if Workspace.StreamingEnabled then
+			pcall(function()
+				player:RequestStreamAroundAsync(targetPos)
+			end)
+		end
+		applyRestoreCFrame(character, restoreCFrame)
+		local hrp = character:FindFirstChild("HumanoidRootPart")
+		if hrp and hrp:IsA("BasePart") and (hrp.Position - targetPos).Magnitude > 50 then
+			if Workspace.StreamingEnabled then
+				pcall(function()
+					player:RequestStreamAroundAsync(targetPos)
+				end)
+			end
+			applyRestoreCFrame(character, restoreCFrame)
+		end
+	end
+
+	local function getRefreshDescription(player: Player): HumanoidDescription?
+		local ttl = tonumber(Config.Session.RE_CACHE_TTL) or 300
+		local cached = descriptionCache[player.UserId]
+		if cached and (os.clock() - cached.at) < ttl then
+			local okClone, cloned = pcall(function()
+				return cached.desc:Clone()
+			end)
+			if okClone and cloned then
+				return cloned
+			end
+		end
+		local ok, desc = pcall(function()
+			return Players:GetHumanoidDescriptionFromUserIdAsync(player.UserId)
+		end)
+		if ok and desc then
+			descriptionCache[player.UserId] = { desc = desc, at = os.clock() }
+			local okClone, cloned = pcall(function()
+				return desc:Clone()
+			end)
+			if okClone and cloned then
+				return cloned
+			end
+			return desc
+		end
+		local character = player.Character
+		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+		if humanoid then
+			local okApplied, applied = pcall(function()
+				return humanoid:GetAppliedDescription()
+			end)
+			if okApplied and applied then
+				return applied
+			end
+		end
+		return nil
+	end
+
+	local function finishInPlaceRefresh(player: Player)
+		pendingReSyncRestore[player.UserId] = nil
+		if syncService and type(syncService.restorePreparedRefresh) == "function" then
+			syncService:restorePreparedRefresh(player)
+		end
+		-- In-place ApplyDescription does not fire CharacterAdded — OverheadController
+		-- must reattach via Avatar:Refreshed. LoadCharacter fallback must NOT emit this
+		-- (CharacterAdded already runs recovery attach).
+		if eventBus and type(eventBus.emit) == "function" then
+			eventBus:emit("Avatar:Refreshed", {
+				player = player,
+				reason = "session_refresh_inplace",
+			})
+		end
+	end
+
 	local function restoreAfterCharacterAdded(player: Player, character: Model, payload: RestorePayload)
 		task.spawn(function()
 			local humanoidInstance = character:WaitForChild("Humanoid", Config.Overhead.CHARACTER_PART_WAIT_TIMEOUT)
@@ -165,7 +247,7 @@ local function createSessionCommandService(deps: {
 			end
 
 			humanoid:ChangeState(Enum.HumanoidStateType.Physics)
-			applyRestoreCFrame(character, restoreCFrame)
+			restorePositionWithStream(player, character, restoreCFrame)
 			task.defer(function()
 				if humanoid.Parent then
 					humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
@@ -193,18 +275,14 @@ local function createSessionCommandService(deps: {
 				return
 			end
 
+			-- LoadCharacter /re fallback: restore dance only. Do NOT emit Avatar:Refreshed —
+			-- OverheadController.onCharacterAdded already attaches + recovery broadcast.
 			if pendingReSyncRestore[player.UserId] then
 				pendingReSyncRestore[player.UserId] = nil
 				if syncService and type(syncService.restorePreparedRefresh) == "function" then
 					task.defer(function()
 						syncService:restorePreparedRefresh(player)
 					end)
-				end
-				if eventBus and type(eventBus.emit) == "function" then
-					eventBus:emit("Avatar:Refreshed", {
-						player = player,
-						reason = "session_refresh",
-					})
 				end
 			end
 		end)
@@ -277,6 +355,7 @@ local function createSessionCommandService(deps: {
 		pendingJoinRestore[player.UserId] = nil
 		pendingAfkSyncRestore[player.UserId] = nil
 		pendingReSyncRestore[player.UserId] = nil
+		descriptionCache[player.UserId] = nil
 	end
 
 	function service:handleRefresh(player: Player): Result<nil>
@@ -301,6 +380,35 @@ local function createSessionCommandService(deps: {
 		end
 
 		notify.player(player, Config.Session.MSG_REFRESHING, "INFO")
+
+		-- Prefer in-place ApplyDescription: no SpawnLocation hop, no basecamp flash,
+		-- no double CharacterAdded+Avatar:Refreshed attach race on large maps.
+		local character = player.Character
+		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+		if humanoid and character and character.Parent then
+			pendingReSyncRestore[player.UserId] = true
+			local desc = getRefreshDescription(player)
+			if desc then
+				local applied, applyErr = pcall(function()
+					humanoid:ApplyDescription(desc)
+				end)
+				if applied then
+					task.defer(function()
+						if not player.Parent then
+							pendingReSyncRestore[player.UserId] = nil
+							return
+						end
+						finishInPlaceRefresh(player)
+					end)
+					return Result.Ok(nil)
+				end
+				log:warn("ApplyDescription refresh failed; falling back to LoadCharacter", {
+					player = player.Name,
+					error = tostring(applyErr),
+				})
+			end
+			pendingReSyncRestore[player.UserId] = nil
+		end
 
 		pendingRespawnRestore[player.UserId] = {
 			cframe = serializeCFrame(restoreCFrame),

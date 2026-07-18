@@ -1,0 +1,180 @@
+================================================================================
+CLUB KIT — FEATURE LIST (Discord, clean layout)
+Cara pakai: copy isi MESSAGE saja (tanpa garis ----). Pin MESSAGE 1.
+================================================================================
+
+
+---------- MESSAGE 1/5 ----------
+
+# Club Kit Features
+**Part 1/5**
+
+**Easy Setup**
+Only 2 scripts to configure — `ClubKitConfig` + `Secrets`
+Feature toggles · Easy branding · One-click engine update
+
+**1 · Roles & Membership**
+Roles: Owner, Guest, Staff, Moderator, DJ, Lead Dance, Streamer, Influencer
+Paid tiers: VIP / VVIP / Supreme (custom names)
+Top Spender auto-rank (Rupiah & Robux)
+Chat tags · Team colors · Special badges
+`/setrole` · Per-role tools · Custom privileges
+(gift · announce · teleport · admin · music)
+
+**2 · Shop & Gift**
+Clean Shop + Gift GUI
+Self-buy Game Pass · Gift via Dev Product
+Gift other players · Bulk gift for staff
+
+**3 · Donation**
+Bagi-Bagi or Saweria · Robux + Cash GUI
+Aura VFX · World VFX (Nuke · Hammer · BlackHole)
+Camera highlight · Donation notifications
+Admin preview · Owner manual tools
+
+---------- END MESSAGE 1/5 ----------
+
+
+---------- MESSAGE 2/5 ----------
+
+# Club Kit Features
+**Part 2/5**
+
+**4 · Leaderboards**
+Top 3 poster-style showcase
+Daily board · Live chat board · Running text
+Robux · Cash · Community · Likes
+Showcase / demo mode for trailers
+
+**5 · Music (24/7)**
+Upload · Playlist · Delete — all in-game
+Favorites · New drops · Request history
+DJ / Manage tabs · Global or zone mode
+Clean responsive UI · Volume in Settings
+
+**6 · Sync Dance**
+Lead / follow sync · Transfer lead
+Speed control · Favorites
+Dance panel (desktop + mobile)
+Lead Dance role · AFK sync restore
+
+**7 · Avatar Context Menu**
+3D avatar preview
+Quick actions: dance · carry · profile
+Likes · Friends social proof
+Bio · Status · Couple · Community badge
+
+---------- END MESSAGE 2/5 ----------
+
+
+---------- MESSAGE 3/5 ----------
+
+# Club Kit Features
+**Part 3/5**
+
+**8 · Couples**
+Propose · Accept · Breakup
+Single / Taken / Down to Fun
+Name on ACM + overhead · Couple chat tag
+
+**9 · Carry**
+Piggyback · Bridal · Hug · Tandem · Fireman · Choke
+Custom anims · Carry GUI · Distance limit
+
+**10 · Overhead & Titles**
+Role · Membership · Donation rank · Level · Couple · Title
+Color presets · Gradient anim · Admin fonts/sizes
+Special badges · Community badge · Rank chips
+Hide layers in Settings (server-based)
+
+**11 · Stickers**
+Global collection
+Shoulder billboard · Hotbar panel
+
+**12 · Inventory & Hotbar**
+Custom inventory design
+Tools sync by role/membership
+Drag & drop · Mobile layout
+
+---------- END MESSAGE 3/5 ----------
+
+
+---------- MESSAGE 4/5 ----------
+
+# Club Kit Features
+**Part 4/5**
+
+**13 · Level & Streak**
+Streak popup · Level on overhead
+Leaderstats / player list
+
+**14 · Settings**
+Graphics: Low / Balanced / High
+Tone · Saturation · Contrast · Brightness
+Shadows · Blur · Textures · Particles · Bubbles
+Music volume · Camera FOV
+Hide name tags / all GUI
+Per-layer & per-badge overhead visibility
+Hide announcements & donation VFX
+Reset to defaults
+
+**15 · Profile**
+Display name · Title · Bio · Status
+Couple mode + show name toggle
+Community badge (`/setcommun`)
+
+**16 · Chat & Announce**
+Free `/announce` (privilege)
+Paid Broadcast for everyone else
+Role + couple chat tags
+Dynamic bubble height · Notification center
+
+---------- END MESSAGE 4/5 ----------
+
+
+---------- MESSAGE 5/5 ----------
+
+# Club Kit Features
+**Part 5/5**
+
+**17 · Join Community**
+Modal after loading
+Optional free VIP on join
+Greetings for Owner / Staff / Top Spenders
+
+**18 · Cinema · CCTV · Freecam**
+Cinematic dock (orbit · dolly · crane)
+CCTV targets · Freecam desktop + mobile
+Broadcast shots to players
+
+**19 · Command Library**
+In-game command list
+Filtered by your role
+
+**20 · Admin Panel**
+Custom titles · Fonts · Sizes · Presets
+Admin utilities · Privilege gated
+
+**21 · Session & Anti-AFK**
+`/re` · `/rejoin` · `/bring` · `/to`
+Anti-AFK 24/7 auto rejoin
+Sync restore after AFK
+
+**22 · Gravity**
+`/ungravity` float · `/gravity` restore
+Speed 1–10 · Hotkeys
+
+**23 · Topbar & Mobile**
+Music · Shop · Broadcast · Camera · Commands
+Responsive mobile panels
+
+**24 · Loading Screen**
+Branded logo · Cinematic intro
+Custom welcome text
+
+**25 · Extra**
+Role tools (Sign · Rope · GlowStick)
+Plugin engine update · Safe config keep
+Demo / showcase mode · High CCU friendly
+
+---------- END MESSAGE 5/5 ----------

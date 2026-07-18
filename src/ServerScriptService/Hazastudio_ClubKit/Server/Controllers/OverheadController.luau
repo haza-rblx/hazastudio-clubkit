@@ -367,6 +367,51 @@ end
 			or instance:FindFirstChild("OverheadGUIMainWrapper", true) ~= nil
 	end
 
+	-- Wait until Head exists and stops being replaced (appearance settle on
+	-- streamed / large maps). Attaching to a temporary Head is the root cause of
+	-- "GUI attached" server-side while client never sees BillboardGui.
+	local function waitForStableHead(character: Model): BasePart?
+		local debounce = math.max(0.05, tonumber(Config.Overhead.HEAD_STABLE_DEBOUNCE) or 0.35)
+		local timeout = math.max(
+			tonumber(Config.Overhead.HEAD_WAIT_TIMEOUT) or 5,
+			tonumber(Config.Overhead.HEAD_STABLE_TIMEOUT) or 8
+		)
+		local deadline = os.clock() + timeout
+		local head: Instance? = character:WaitForChild("Head", timeout)
+		if not head or not head:IsA("BasePart") then
+			return nil
+		end
+		local stableSince = os.clock()
+		while os.clock() < deadline do
+			if not character.Parent then
+				return nil
+			end
+			local current = character:FindFirstChild("Head")
+			if current ~= head then
+				head = current
+				if not head or not head:IsA("BasePart") then
+					local remaining = deadline - os.clock()
+					if remaining <= 0 then
+						return nil
+					end
+					head = character:WaitForChild("Head", remaining)
+					if not head or not head:IsA("BasePart") then
+						return nil
+					end
+				end
+				stableSince = os.clock()
+			elseif (os.clock() - stableSince) >= debounce then
+				return head :: BasePart
+			end
+			task.wait(0.05)
+		end
+		local fallback = character:FindFirstChild("Head")
+		if fallback and fallback:IsA("BasePart") then
+			return fallback
+		end
+		return nil
+	end
+
 	local function cleanupCharacterOverheads(character: Model, keep: BillboardGui?)
 		for _, descendant in ipairs(character:GetDescendants()) do
 			if descendant ~= keep and isProjectOverheadGui(descendant) then
@@ -381,8 +426,8 @@ end
 		if not template then
 			return nil
 		end
-		local head = character:WaitForChild("Head", Config.Overhead.HEAD_WAIT_TIMEOUT)
-		if not head or not head:IsA("BasePart") then
+		local head = waitForStableHead(character)
+		if not head then
 			log:warn("Head tidak ditemukan", { player = player.Name })
 			return nil
 		end
@@ -394,7 +439,7 @@ end
 		cleanupCharacterOverheads(character, nil)
 		local gui = template:Clone() :: BillboardGui
 		gui.Enabled = false -- sembunyikan sampai payload datang
-		gui.Adornee = head :: BasePart
+		gui.Adornee = head
 		gui.Parent = head
 		activeGuis[player.UserId] = gui
 		OverheadPremiumBadge.apply(gui, cachedPayloads[player.UserId])
@@ -408,7 +453,8 @@ end
 		end
 		local head = character:FindFirstChild("Head")
 		if not head or not head:IsA("BasePart") then
-			return nil
+			-- Appearance mid-swap: wait for a stable Head then attach.
+			return attachGui(player, character)
 		end
 		local existing = activeGuis[player.UserId]
 		if existing and existing.Parent == head then
@@ -416,6 +462,7 @@ end
 			cleanupCharacterOverheads(character, existing)
 			return existing
 		end
+		-- Stale GUI (parented to a destroyed/replaced Head) — full reattach.
 		cleanupCharacterOverheads(character, nil)
 		return attachGui(player, character)
 	end
@@ -1055,9 +1102,7 @@ end
 		-- Stability fix: JANGAN destroy GUI lama dulu. Sebelumnya destroy → gap
 		-- 1.2s tanpa GUI (6 retry × 0.1s). Sekarang biar ensureGuiAttached handle:
 		-- kalau Head reference sama, reuse existing GUI (zero gap). Kalau Head
-		-- berubah, attachGui destroy+create atomik (no yield between).
-		-- Memory leak note: attachGui sudah handle cleanup existing GUI (line 360-363)
-		-- + cleanupCharacterOverheads, jadi destroy di sini redundant.
+		-- berubah, attachGui destroy+create atomik after waitForStableHead.
 		local wasEnabled = false
 		local existing = activeGuis[player.UserId]
 		if existing then
@@ -1065,7 +1110,15 @@ end
 		end
 
 		task.spawn(function()
+			local character = player.Character
+			if character then
+				-- Let appearance settle before reattach (in-place /re ApplyDescription).
+				waitForStableHead(character)
+			end
 			for _ = 1, 6 do
+				if not player.Parent then
+					return
+				end
 				local gui = ensureGuiAttached(player)
 				if gui then
 					-- Preserve visibility: kalau GUI lama was Enabled, enable yang baru
