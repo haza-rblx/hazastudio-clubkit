@@ -141,36 +141,97 @@ local function createSessionCommandService(deps: {
 		CharacterReady.pivotTo(player, character, lifted)
 	end
 
-	local function restoreAfterCharacterAdded(player: Player, character: Model, payload: RestorePayload)
+	-- Single-flight id so a superseded CharacterAdded aborts the older restore loop
+	-- instead of double-pivoting or racing clear of pending.
+	local restoreFlightId: { [number]: number } = {}
+
+	local function restoreAfterCharacterAdded(player: Player, payload: RestorePayload)
+		local userId = player.UserId
+		local flight = (restoreFlightId[userId] or 0) + 1
+		restoreFlightId[userId] = flight
+
 		task.spawn(function()
-			local snap = CharacterReady.wait(character, "parts")
+			local function isFlight(): boolean
+				return restoreFlightId[userId] == flight and player.Parent ~= nil
+			end
+
+			local timeout = math.max(8, tonumber(Config.Overhead.CHARACTER_PART_WAIT_TIMEOUT) or 5)
+			local snap = CharacterReady.waitForPositionRestore(player, timeout)
+			if not isFlight() then
+				return
+			end
 			if not snap then
-				clearRefreshLock(player)
-				log:warn("Restore skipped - character not ready", {
+				-- Keep pending so a later CharacterAdded can retry. Lock timeout is the safety net.
+				log:warn("Restore deferred - character not ready yet", {
 					player = player.Name,
 				})
 				return
 			end
-			local humanoid = snap.humanoid
 
 			local restoreCFrame = deserializeCFrame(payload.cframe)
 			if not restoreCFrame then
+				pendingRespawnRestore[userId] = nil
+				pendingJoinRestore[userId] = nil
 				clearRefreshLock(player)
 				return
 			end
 
-			humanoid:ChangeState(Enum.HumanoidStateType.Physics)
-			restorePositionWithStream(player, character, restoreCFrame)
+			local character = snap.character
+			local humanoid = snap.humanoid
+			local lifted = restoreCFrame + Vector3.new(0, Config.Session.RESTORE_Y_OFFSET, 0)
+			local targetPos = lifted.Position
+
+			local function applyPivot(): boolean
+				if not isFlight() then
+					return false
+				end
+				if player.Character ~= character or not character.Parent then
+					return false
+				end
+				humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+				restorePositionWithStream(player, character, restoreCFrame)
+				return true
+			end
+
+			if not applyPivot() then
+				log:warn("Restore deferred - character replaced before pivot", {
+					player = player.Name,
+				})
+				return
+			end
+
+			-- Claim position pending only after a successful pivot.
+			pendingRespawnRestore[userId] = nil
+			pendingJoinRestore[userId] = nil
+
+			local function reassertIfDrifted()
+				if not isFlight() then
+					return
+				end
+				if player.Character ~= character or not character.Parent then
+					return
+				end
+				local hrp = character:FindFirstChild("HumanoidRootPart")
+				if hrp and hrp:IsA("BasePart") and (hrp.Position - targetPos).Magnitude > 8 then
+					-- SpawnLocation / streaming can overwrite an early PivotTo.
+					restorePositionWithStream(player, character, restoreCFrame)
+				end
+			end
+
+			-- Engine spawn placement often lands after CharacterAdded; re-assert twice.
+			task.defer(reassertIfDrifted)
+			task.delay(0.2, reassertIfDrifted)
+
 			task.defer(function()
 				if humanoid.Parent then
 					humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
 				end
 			end)
 
-			local syncPayload = pendingAfkSyncRestore[player.UserId]
+			local syncPayload = pendingAfkSyncRestore[userId]
 			if syncPayload then
-				pendingAfkSyncRestore[player.UserId] = nil
-				pendingReSyncRestore[player.UserId] = nil
+				pendingAfkSyncRestore[userId] = nil
+				pendingReSyncRestore[userId] = nil
 				if syncService and type(syncService.restoreAfterAfkRejoin) == "function" then
 					task.defer(function()
 						local options: AfkSyncRestoreOptions = {
@@ -184,15 +245,15 @@ local function createSessionCommandService(deps: {
 				end
 				log:info("afk_restore_position_ok", {
 					player = player.Name,
-					userId = player.UserId,
+					userId = userId,
 				})
 				return
 			end
 
 			-- /re: restore dance only. OverheadController onCharacterAdded already
 			-- attaches + recovery broadcast (avoids double attach).
-			if pendingReSyncRestore[player.UserId] then
-				pendingReSyncRestore[player.UserId] = nil
+			if pendingReSyncRestore[userId] then
+				pendingReSyncRestore[userId] = nil
 				if syncService and type(syncService.restorePreparedRefresh) == "function" then
 					task.defer(function()
 						syncService:restorePreparedRefresh(player)
@@ -239,21 +300,14 @@ local function createSessionCommandService(deps: {
 			end
 		end
 
-		player.CharacterAdded:Connect(function(character)
-			local pending = pendingRespawnRestore[player.UserId]
-			if pending then
-				pendingRespawnRestore[player.UserId] = nil
-				restoreAfterCharacterAdded(player, character, pending)
+		player.CharacterAdded:Connect(function(_character)
+			-- Keep pending until pivot succeeds. Each CharacterAdded starts a new
+			-- flight that supersedes the previous loop (no double-pivot race).
+			local pending = pendingRespawnRestore[player.UserId] or pendingJoinRestore[player.UserId]
+			if not pending then
 				return
 			end
-
-			local joinPending = pendingJoinRestore[player.UserId]
-			if not joinPending then
-				return
-			end
-
-			pendingJoinRestore[player.UserId] = nil
-			restoreAfterCharacterAdded(player, character, joinPending)
+			restoreAfterCharacterAdded(player, pending)
 		end)
 	end
 
@@ -269,6 +323,7 @@ local function createSessionCommandService(deps: {
 		pendingJoinRestore[player.UserId] = nil
 		pendingAfkSyncRestore[player.UserId] = nil
 		pendingReSyncRestore[player.UserId] = nil
+		restoreFlightId[player.UserId] = nil
 	end
 
 	function service:handleRefresh(player: Player): Result<nil>

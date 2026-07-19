@@ -157,6 +157,73 @@ function CharacterReady.isReady(target: Player | Model, tier: Tier): boolean
 	return CharacterReady.snapshot(target, tier) ~= nil
 end
 
+--- Wait for the player's *current* character to be safe for PivotTo after LoadCharacter.
+--- Survives R15 interim Character replace. Prefers Workspace parent + AppearanceLoaded
+--- so Roblox spawn placement does not overwrite the restore (with timeout fallback).
+function CharacterReady.waitForPositionRestore(player: Player, timeoutSec: number?): Snapshot?
+	local timeout = timeoutSec or math.max(partsTimeout(), 8)
+	local deadline = os.clock() + timeout
+	local appearanceConn: RBXScriptConnection? = nil
+	local appearanceDone = false
+
+	local function disconnectAppearance()
+		if appearanceConn then
+			appearanceConn:Disconnect()
+			appearanceConn = nil
+		end
+	end
+
+	local function ensureAppearanceHook()
+		if appearanceConn then
+			return
+		end
+		appearanceDone = hasAppearanceLoaded(player)
+		if appearanceDone then
+			return
+		end
+		appearanceConn = player.CharacterAppearanceLoaded:Connect(function()
+			appearanceDone = true
+		end)
+	end
+
+	while os.clock() < deadline and player.Parent do
+		local character = player.Character
+		if not character or not character.Parent then
+			disconnectAppearance()
+			appearanceDone = false
+			task.wait(0.05)
+		else
+			ensureAppearanceHook()
+
+			local snap = CharacterReady.snapshot(character, "parts")
+			if not snap then
+				local slice = math.min(0.75, deadline - os.clock())
+				if slice >= 0.05 then
+					snap = CharacterReady.wait(character, "parts", slice)
+				end
+			end
+
+			if snap and player.Character == snap.character and snap.character.Parent then
+				local inWorld = snap.character:IsDescendantOf(Workspace)
+				local appearanceOk = appearanceDone or hasAppearanceLoaded(player)
+				local remaining = deadline - os.clock()
+				-- Near timeout: accept parts+inWorld so we still restore rather than stick at spawn.
+				if inWorld and (appearanceOk or remaining < 1.25) then
+					disconnectAppearance()
+					return snap
+				end
+			elseif snap and player.Character ~= snap.character then
+				disconnectAppearance()
+				appearanceDone = false
+			end
+			task.wait(0.05)
+		end
+	end
+
+	disconnectAppearance()
+	return CharacterReady.snapshot(player, "parts")
+end
+
 --- Wait until Head is final enough to parent adornments.
 --- Prefers AppearanceLoaded (R15 package replace is done); debounce is fallback only.
 function CharacterReady.waitStableHead(character: Model, timeoutSec: number?): BasePart?

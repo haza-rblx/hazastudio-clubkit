@@ -11,6 +11,11 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.60] - 2026-07-19
+
+### Fixed
+- **`/re` stuck at SpawnLocation** — production restore path: single-flight per CharacterAdded (no double-pivot race); `CharacterReady.waitForPositionRestore` waits PartsReady + in-world (+ AppearanceLoaded when available) so Roblox spawn placement does not overwrite PivotTo; pending kept until pivot succeeds; deferred re-assert if position drifts.
+
 ## [2.4.59] - 2026-07-19
 
 ### Added
