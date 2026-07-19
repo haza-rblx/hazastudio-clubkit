@@ -1570,23 +1570,23 @@ local function createSettingsController(deps: {
 			if phase == "pending" then
 				return {
 					title = "Name Tags",
-					message = "Updating " .. overheadLabel:lower() .. " on name tags...",
-					description = "Syncing this with what others can see above your head.",
+					message = "Updating " .. overheadLabel:lower() .. " on your name tag...",
+					description = "Saving what others can see above your head.",
 				}
 			end
 			return {
 				title = "Name Tags",
-				message = overheadLabel .. " updated on name tags",
-				description = "Name tag visibility saved.",
+				message = overheadLabel .. " updated on your name tag",
+				description = "Your name tag privacy is saved.",
 			}
 		end
 
 		return {
 			title = "Name Tags",
-			message = if phase == "pending" then "Updating name tags..." else "Name tags updated",
+			message = if phase == "pending" then "Updating your name tag..." else "Your name tag updated",
 			description = if phase == "pending"
-				then "Syncing visibility with the server."
-				else "Visibility is saved.",
+				then "Saving what others can see above your head."
+				else "Your name tag privacy is saved.",
 		}
 	end
 

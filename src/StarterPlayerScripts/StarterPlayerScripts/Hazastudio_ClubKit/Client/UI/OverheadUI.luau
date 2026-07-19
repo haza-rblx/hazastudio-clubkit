@@ -808,18 +808,13 @@ local function getOverheadMaxDistance(): number
 	return 48
 end
 
--- Gate public visibility (subject-controlled) dengan local viewer preference.
--- SettingsController menulis `SettingsOverheadLayerVisible_<key>` / `SettingsOverheadBadgeVisible_<key>`
--- ke LocalPlayer setiap kali user toggle layer/badge di Settings. Tanpa gate ini,
--- setting hide-layer user tidak berpengaruh ke OverheadUI sampai payload baru datang.
--- defaultValue adalah nilai dari payload.publicOverheadLayerVisible (atau publicOverheadBadgeVisible).
--- Jika defaultValue=false, tidak perlu cek attribute (public sudah hide). Kalau true,
--- attribute local viewer yang jadi penentu — default ke true saat attribute belum di-set.
-local function isLayerVisible(key: string, defaultValue: boolean): boolean
-	if not defaultValue then
-		return false
-	end
-	return getLocalBoolAttribute("SettingsOverheadLayerVisible_" .. key, true)
+-- Privacy: `publicOverhead*` is what others see on this subject's head.
+-- LocalPlayer attributes (`SettingsOverheadLayerVisible_*` / badge) only give
+-- instant feedback on OWN overhead before the server mirrors settings → public.
+-- They must NOT filter other players' overheads (viewer-global hide).
+local function isOwnSubject(subjectUserId: number?): boolean
+	local localPlayer = Players.LocalPlayer
+	return localPlayer ~= nil and subjectUserId == localPlayer.UserId
 end
 
 local function getPublicMapValue(map: { [string]: boolean }?, key: string, defaultValue: boolean): boolean
@@ -833,30 +828,38 @@ local function getPublicMapValue(map: { [string]: boolean }?, key: string, defau
 	return defaultValue
 end
 
+local function isLayerVisible(key: string, publicDefault: boolean, subjectUserId: number?): boolean
+	if isOwnSubject(subjectUserId) then
+		return getLocalBoolAttribute("SettingsOverheadLayerVisible_" .. key, publicDefault)
+	end
+	return publicDefault
+end
+
 local function isCoupleRelationshipRowVisible(payload: OverheadPayload): boolean
 	local publicDefault = getPublicMapValue(payload.publicOverheadLayerVisible, "CoupleName", false)
-	local localPlayer = Players.LocalPlayer
-	if localPlayer and payload.userId == localPlayer.UserId then
-		if not getLocalBoolAttribute("SettingsOverheadLayerVisible_CoupleName", true) then
-			return false
-		end
+	if not isLayerVisible("CoupleName", publicDefault, payload.userId) then
+		return false
+	end
+	-- Own head: require an explicit relationship mode so the row has content.
+	if isOwnSubject(payload.userId) then
 		local mode = payload.relationshipMode
 		return mode == "Single" or mode == "Taken" or mode == "Fun"
 	end
-	return isLayerVisible("CoupleName", publicDefault)
+	return true
 end
 
-local function isBadgeVisible(key: string, defaultValue: boolean): boolean
-	if not defaultValue then
-		return false
+local function isBadgeVisible(key: string, publicDefault: boolean, subjectUserId: number?): boolean
+	if isOwnSubject(subjectUserId) then
+		return getLocalBoolAttribute("SettingsOverheadBadgeVisible_" .. key, publicDefault)
 	end
-	return getLocalBoolAttribute("SettingsOverheadBadgeVisible_" .. key, true)
+	return publicDefault
 end
 
 local function setBadges(
 	badgeGroup: Frame,
 	visibleBadges: { string },
-	publicBadgeVisible: { [string]: boolean }
+	publicBadgeVisible: { [string]: boolean },
+	subjectUserId: number?
 ): number
 	local visibleSet: { [string]: true } = {}
 	for _, name in ipairs(visibleBadges) do
@@ -869,7 +872,11 @@ local function setBadges(
 			local badgeKey = BADGE_SETTING_KEY_BY_FRAME[badgeName]
 			local shouldShow = badgeKey ~= nil
 				and visibleSet[badgeName] == true
-				and isBadgeVisible(badgeKey, getPublicMapValue(publicBadgeVisible, badgeKey, true))
+				and isBadgeVisible(
+					badgeKey,
+					getPublicMapValue(publicBadgeVisible, badgeKey, true),
+					subjectUserId
+				)
 			local badgeFrame = frame :: Frame
 			badgeFrame.Visible = shouldShow
 			if shouldShow then
@@ -1005,26 +1012,38 @@ local function setDonationLayers(wrapper: GuiObject, payload: OverheadPayload)
 		return
 	end
 
-	local function applyChip(wrapperName: string, _labelName: string, rank: number?, suffix: string)
+	local function applyChip(
+		wrapperName: string,
+		_labelName: string,
+		rank: number?,
+		suffix: string,
+		layerKey: string
+	)
 		local chip = layers:FindFirstChild(wrapperName)
 		if not chip or not chip:IsA("GuiObject") then
 			return
 		end
 		local hasRank = type(rank) == "number" and (rank :: number) > 0
-		chip.Visible = hasRank
-		if hasRank then
+		local layerVisible = isLayerVisible(
+			layerKey,
+			getPublicMapValue(payload.publicOverheadLayerVisible, layerKey, true),
+			payload.userId
+		)
+		local show = hasRank and layerVisible
+		chip.Visible = show
+		if show then
 			local label = chip:FindFirstChildWhichIsA("TextLabel")
 			if label then
 				(label :: TextLabel).Text = "#" .. tostring(rank) .. " " .. suffix
 			end
 		end
 		local animEnabled = Config.Overhead.ANIMATE_DONATION_RANK_GRADIENT == true
-		setChipGradientAnim(chip, wrapperName, hasRank and animEnabled)
+		setChipGradientAnim(chip, wrapperName, show and animEnabled)
 	end
 
 	-- Robux ranking = topDonateRank, Rupiah/Saweria ranking = topSpenderRank
-	applyChip("RobuxRankWrapper", "RobuxRanking", payload.topDonateRank, "ROBUX")
-	applyChip("RupiahRankWrapper", "RupiahRank", payload.topSpenderRank, "RUPIAH")
+	applyChip("RobuxRankWrapper", "RobuxRanking", payload.topDonateRank, "ROBUX", "TopDonate")
+	applyChip("RupiahRankWrapper", "RupiahRank", payload.topSpenderRank, "RUPIAH", "TopSpender")
 
 	-- Sembunyiin container kalau dua-duanya kosong, supaya gak makan slot layout.
 	local anyVisible = false
@@ -1434,7 +1453,8 @@ function OverheadUI:apply(payload: OverheadPayload)
 		local specialTitleVisible = payload.specialTitle ~= nil
 			and isLayerVisible(
 				"SpecialTitle",
-				getPublicMapValue(payload.publicOverheadLayerVisible, "SpecialTitle", true)
+				getPublicMapValue(payload.publicOverheadLayerVisible, "SpecialTitle", true),
+				payload.userId
 			)
 		specialTitleRow.Visible = specialTitleVisible
 		specialTitleRow.BackgroundTransparency = 1
@@ -1500,9 +1520,14 @@ function OverheadUI:apply(payload: OverheadPayload)
 
 	local badgeGroup = wrapper:FindFirstChild("02-BadgeGroup") :: Frame
 	if badgeGroup then
-		local visibleBadgeCount = setBadges(badgeGroup, payload.visibleBadges, payload.publicOverheadBadgeVisible)
+		local visibleBadgeCount =
+			setBadges(badgeGroup, payload.visibleBadges, payload.publicOverheadBadgeVisible, payload.userId)
 		local badgeGroupVisible = visibleBadgeCount > 0
-			and isLayerVisible("BadgeGroup", getPublicMapValue(payload.publicOverheadLayerVisible, "BadgeGroup", true))
+			and isLayerVisible(
+				"BadgeGroup",
+				getPublicMapValue(payload.publicOverheadLayerVisible, "BadgeGroup", true),
+				payload.userId
+			)
 		badgeGroup.Visible = badgeGroupVisible
 		setStreakCount(badgeGroup, payload.streakDays)
 		setLikeCount(badgeGroup, payload.likesCount)
@@ -1525,7 +1550,8 @@ function OverheadUI:apply(payload: OverheadPayload)
 	local specialStatusVisible = payload.statusText ~= nil
 		and isLayerVisible(
 			"SpecialStatus",
-			getPublicMapValue(payload.publicOverheadLayerVisible, "SpecialStatus", true)
+			getPublicMapValue(payload.publicOverheadLayerVisible, "SpecialStatus", true),
+			payload.userId
 		)
 	rowSet("00-SpecialStatus", specialStatusVisible, payload.statusText)
 	applyTextShadowIfBackgroundless(specialStatusRow)
@@ -1535,7 +1561,8 @@ function OverheadUI:apply(payload: OverheadPayload)
 	local specialRankVisible = hasSpecialRank
 		and isLayerVisible(
 			"SpecialRank",
-			getPublicMapValue(payload.publicOverheadLayerVisible, "SpecialRank", true)
+			getPublicMapValue(payload.publicOverheadLayerVisible, "SpecialRank", true),
+			payload.userId
 		)
 	rowSet("04-SpecialRank", specialRankVisible, payload.specialRank)
 	applyTextShadowIfBackgroundless(specialRankRow)
@@ -1545,20 +1572,31 @@ function OverheadUI:apply(payload: OverheadPayload)
 	local showLegacyTopSpenderRow = Config.Donation.SHOW_LEGACY_TOP_SPENDER_ROW == true
 	local topSpenderVisible = showLegacyTopSpenderRow
 		and payload.topSpenderText ~= nil
-		and isLayerVisible("TopSpender", getPublicMapValue(payload.publicOverheadLayerVisible, "TopSpender", true))
+		and isLayerVisible(
+			"TopSpender",
+			getPublicMapValue(payload.publicOverheadLayerVisible, "TopSpender", true),
+			payload.userId
+		)
 	rowSet("05-TopSpender", topSpenderVisible, uppercaseText(payload.topSpenderText))
 	applyTextShadowIfBackgroundless(topSpenderRow)
 
 	local topDonateRow = wrapper:FindFirstChild("06-TopDonate")
 	local topDonateVisible = payload.topDonateText ~= nil
-		and isLayerVisible("TopDonate", getPublicMapValue(payload.publicOverheadLayerVisible, "TopDonate", true))
+		and isLayerVisible(
+			"TopDonate",
+			getPublicMapValue(payload.publicOverheadLayerVisible, "TopDonate", true),
+			payload.userId
+		)
 	rowSet("06-TopDonate", topDonateVisible, uppercaseText(payload.topDonateText))
 	applyTextShadowIfBackgroundless(topDonateRow)
 
 	local rankRow = wrapper:FindFirstChild("07-Rank") :: Frame?
 	if rankRow then
-		local rankVisible =
-			isLayerVisible("Rank", getPublicMapValue(payload.publicOverheadLayerVisible, "Rank", true))
+		local rankVisible = isLayerVisible(
+			"Rank",
+			getPublicMapValue(payload.publicOverheadLayerVisible, "Rank", true),
+			payload.userId
+		)
 		rankRow.Visible = rankVisible
 		local rankLabel = rankRow:FindFirstChildWhichIsA("TextLabel")
 		if rankLabel then
@@ -1578,7 +1616,11 @@ function OverheadUI:apply(payload: OverheadPayload)
 		local levelRow = wrapper:FindFirstChild("03-Level") :: Frame?
 		if levelRow then
 			local levelVisible = payload.level ~= nil
-				and isLayerVisible("Level", getPublicMapValue(payload.publicOverheadLayerVisible, "Level", true))
+				and isLayerVisible(
+					"Level",
+					getPublicMapValue(payload.publicOverheadLayerVisible, "Level", true),
+					payload.userId
+				)
 			levelRow.Visible = levelVisible
 			if levelVisible then
 				setLevelRow(levelRow, payload)
@@ -1595,8 +1637,11 @@ function OverheadUI:apply(payload: OverheadPayload)
 		end
 	end
 
-	local displayNameVisible =
-		isLayerVisible("DisplayName", getPublicMapValue(payload.publicOverheadLayerVisible, "DisplayName", true))
+	local displayNameVisible = isLayerVisible(
+		"DisplayName",
+		getPublicMapValue(payload.publicOverheadLayerVisible, "DisplayName", true),
+		payload.userId
+	)
 	local displayNameRow = wrapper:FindFirstChild("08-DisplayName")
 	local displayNameMembershipRow = wrapper:FindFirstChild("08-DisplayNameAndMembership")
 	if displayNameMembershipRow and displayNameMembershipRow:IsA("GuiObject") then

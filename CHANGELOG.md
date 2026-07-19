@@ -11,6 +11,16 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.62] - 2026-07-19
+
+### Fixed
+- **Name Tag Details / Badge Types hide was viewer-global** — toggles are privacy for **your** overhead only; other players' layers stay visible when they show them. Local attributes only give instant feedback on your own head.
+- **Top Rupiah / Top Robux hide ignored donation chips** — `00-DonationLayers` chips (`RupiahRankWrapper` / `RobuxRankWrapper`) now respect `TopSpender` / `TopDonate` visibility (same as legacy rows).
+
+### Changed
+- Settings → Overhead public sync is **debounced (3s idle)**, **diff-before-write**, and **one short retry** to avoid UpdateAsync / refresh spam when toggling rapidly.
+- Settings copy clarifies Name Tag Details / Badge Types control what others see on **your** name tag.
+
 ## [2.4.61] - 2026-07-19
 
 ### Added

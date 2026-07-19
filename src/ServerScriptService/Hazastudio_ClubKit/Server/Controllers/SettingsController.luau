@@ -56,6 +56,17 @@ local function createSettingsController(deps: {
 		maxSize = 200,
 	})
 
+	-- Coalesce Settings → Overhead public visibility writes (anti UpdateAsync spam).
+	local PUBLIC_SYNC_IDLE_SEC = 3
+	local pendingPublicSyncByUserId: {
+		[number]: {
+			layers: { [string]: boolean },
+			badges: { [string]: boolean },
+		},
+	} =
+		{}
+	local publicSyncTokenByUserId: { [number]: number } = {}
+
 	local _connections: { RBXScriptConnection } = {}
 
 	local function track(conn: RBXScriptConnection): RBXScriptConnection
@@ -101,7 +112,29 @@ local function createSettingsController(deps: {
 		syncNetwork:fireClient(player, SettingsDomain.merge(nil, nil))
 	end
 
-	local function syncPublicOverheadVisibility(
+	local function boolMapsEqual(a: { [string]: boolean }?, b: { [string]: boolean }?): boolean
+		if a == b then
+			return true
+		end
+		if type(a) ~= "table" or type(b) ~= "table" then
+			return false
+		end
+		for key, value in pairs(a) do
+			if b[key] ~= value then
+				return false
+			end
+		end
+		for key, value in pairs(b) do
+			if a[key] ~= value then
+				return false
+			end
+		end
+		return true
+	end
+
+	-- Diff-before-write + at most one short retry. Returns true when stored
+	-- public maps match the requested maps (including no-op / already synced).
+	local function writePublicOverheadVisibility(
 		player: Player,
 		publicLayerVisible: { [string]: boolean },
 		publicBadgeVisible: { [string]: boolean }
@@ -110,7 +143,7 @@ local function createSettingsController(deps: {
 			return true
 		end
 
-		local retryDelays = { 0, 1, 3 }
+		local retryDelays = { 0, 1 }
 		for _, delaySec in ipairs(retryDelays) do
 			if delaySec > 0 then
 				task.wait(delaySec)
@@ -119,14 +152,27 @@ local function createSettingsController(deps: {
 				return false
 			end
 
+			local didChange = false
 			local overheadSaved = overheadRepository:update(player.UserId, function(current)
-				return OverheadDomain.mergeStored(current, {
+				local nextData = OverheadDomain.mergeStored(current, {
 					publicOverheadLayerVisible = publicLayerVisible,
 					publicOverheadBadgeVisible = publicBadgeVisible,
 				})
+				if
+					boolMapsEqual(current.publicOverheadLayerVisible, nextData.publicOverheadLayerVisible)
+					and boolMapsEqual(current.publicOverheadBadgeVisible, nextData.publicOverheadBadgeVisible)
+				then
+					return current
+				end
+				didChange = true
+				return nextData
 			end)
 			if overheadSaved.ok then
-				if overheadController and type(overheadController.refreshPlayer) == "function" then
+				if
+					didChange
+					and overheadController
+					and type(overheadController.refreshPlayer) == "function"
+				then
 					overheadController:refreshPlayer(player)
 				end
 				return true
@@ -140,6 +186,56 @@ local function createSettingsController(deps: {
 		end
 
 		return false
+	end
+
+	local function cancelPublicOverheadSync(userId: number)
+		publicSyncTokenByUserId[userId] = (publicSyncTokenByUserId[userId] or 0) + 1
+		pendingPublicSyncByUserId[userId] = nil
+	end
+
+	local function flushPublicOverheadSync(player: Player): boolean
+		local userId = player.UserId
+		local pending = pendingPublicSyncByUserId[userId]
+		if not pending then
+			return true
+		end
+		cancelPublicOverheadSync(userId)
+		return writePublicOverheadVisibility(player, pending.layers, pending.badges)
+	end
+
+	local function schedulePublicOverheadSync(
+		player: Player,
+		publicLayerVisible: { [string]: boolean },
+		publicBadgeVisible: { [string]: boolean }
+	)
+		local userId = player.UserId
+		pendingPublicSyncByUserId[userId] = {
+			layers = publicLayerVisible,
+			badges = publicBadgeVisible,
+		}
+		publicSyncTokenByUserId[userId] = (publicSyncTokenByUserId[userId] or 0) + 1
+		local token = publicSyncTokenByUserId[userId]
+		task.delay(PUBLIC_SYNC_IDLE_SEC, function()
+			if publicSyncTokenByUserId[userId] ~= token then
+				return
+			end
+			local pending = pendingPublicSyncByUserId[userId]
+			pendingPublicSyncByUserId[userId] = nil
+			if not pending then
+				return
+			end
+			if not player.Parent then
+				return
+			end
+			local synced = writePublicOverheadVisibility(player, pending.layers, pending.badges)
+			if not synced and notify and player.Parent then
+				notify.player(
+					player,
+					"[Settings] Saved locally, but public overhead visibility may not have synced yet. Try again.",
+					"WARNING"
+				)
+			end
+		end)
 	end
 
 	local function upsertStored(player: Player, incoming: any)
@@ -168,18 +264,11 @@ local function createSettingsController(deps: {
 			type(incoming.overheadLayerVisible) == "table"
 			or type(incoming.overheadBadgeVisible) == "table"
 		then
-			local publicLayerVisible = updated.value.overheadLayerVisible
-			local publicBadgeVisible = updated.value.overheadBadgeVisible
-			task.spawn(function()
-				local synced = syncPublicOverheadVisibility(player, publicLayerVisible, publicBadgeVisible)
-				if not synced and notify and player.Parent then
-					notify.player(
-						player,
-						"[Settings] Saved locally, but public overhead visibility may not have synced yet. Try again.",
-						"WARNING"
-					)
-				end
-			end)
+			schedulePublicOverheadSync(
+				player,
+				updated.value.overheadLayerVisible,
+				updated.value.overheadBadgeVisible
+			)
 		end
 
 		syncNetwork:fireClient(player, updated.value)
@@ -228,17 +317,24 @@ local function createSettingsController(deps: {
 			end
 
 			syncNetwork:fireClient(player, reset.value)
+			-- Reset should apply public defaults promptly (not wait for idle debounce).
+			cancelPublicOverheadSync(player.UserId)
 			if overheadRepository then
 				local defaultSettings = SettingsDomain.defaultStoredData()
-				local overheadSaved = overheadRepository:update(player.UserId, function(current)
-					return OverheadDomain.mergeStored(current, {
-						publicOverheadLayerVisible = defaultSettings.overheadLayerVisible,
-						publicOverheadBadgeVisible = defaultSettings.overheadBadgeVisible,
-					})
+				task.spawn(function()
+					local synced = writePublicOverheadVisibility(
+						player,
+						defaultSettings.overheadLayerVisible,
+						defaultSettings.overheadBadgeVisible
+					)
+					if not synced and notify and player.Parent then
+						notify.player(
+							player,
+							"[Settings] Reset saved, but public overhead visibility may not have synced yet.",
+							"WARNING"
+						)
+					end
 				end)
-				if overheadSaved.ok and overheadController and type(overheadController.refreshPlayer) == "function" then
-					overheadController:refreshPlayer(player)
-				end
 			end
 			if notify then
 				notify.player(player, "[Settings] All settings were reset.", "SUCCESS")
@@ -246,7 +342,14 @@ local function createSettingsController(deps: {
 		end))
 
 		track(Players.PlayerRemoving:Connect(function(player)
+			-- Flush coalesced privacy sync before settings leave-flush so public
+			-- maps are not lost when the player leaves mid-debounce.
+			local pending = pendingPublicSyncByUserId[player.UserId]
+			if pending then
+				flushPublicOverheadSync(player)
+			end
 			settingsService:onPlayerRemoving(player)
+			cancelPublicOverheadSync(player.UserId)
 		end))
 
 		-- Fold join-time settings GetAsync into SharedProfileLoader instead of
@@ -280,6 +383,9 @@ local function createSettingsController(deps: {
 	end
 
 	function controller:destroy()
+		for userId in pairs(pendingPublicSyncByUserId) do
+			cancelPublicOverheadSync(userId)
+		end
 		for _, conn in ipairs(_connections) do
 			conn:Disconnect()
 		end
