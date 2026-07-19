@@ -11,6 +11,11 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.61] - 2026-07-19
+
+### Added
+- **`/re` keeps camera orbit** — client snapshots relative camera before `LoadCharacter` and re-applies yaw/pitch/zoom after the new Humanoid binds (skips freecam/cinematic/first-person).
+
 ## [2.4.60] - 2026-07-19
 
 ### Fixed

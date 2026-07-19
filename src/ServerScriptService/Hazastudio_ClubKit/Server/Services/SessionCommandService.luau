@@ -129,6 +129,9 @@ local function createSessionCommandService(deps: {
 		local userId = player.UserId
 		pendingReSyncRestore[userId] = nil
 		pendingRespawnRestore[userId] = nil
+		pcall(function()
+			player:SetAttribute(tostring(Config.Session.PENDING_REFRESH_ATTRIBUTE or "ClubKitPendingCharacterRefresh"), nil)
+		end)
 		if syncService and type(syncService.clearPreparedRefresh) == "function" then
 			syncService:clearPreparedRefresh(player)
 		end
@@ -203,6 +206,12 @@ local function createSessionCommandService(deps: {
 			-- Claim position pending only after a successful pivot.
 			pendingRespawnRestore[userId] = nil
 			pendingJoinRestore[userId] = nil
+			pcall(function()
+				player:SetAttribute(
+					tostring(Config.Session.PENDING_REFRESH_ATTRIBUTE or "ClubKitPendingCharacterRefresh"),
+					nil
+				)
+			end)
 
 			local function reassertIfDrifted()
 				if not isFlight() then
@@ -353,6 +362,12 @@ local function createSessionCommandService(deps: {
 		-- to land in unloaded terrain / stick near SpawnLocation on large maps.
 		CharacterReady.streamAround(player, restoreCFrame.Position)
 
+		-- Client snapshots camera on CharacterRemoving while this is set.
+		local pendingAttr = tostring(Config.Session.PENDING_REFRESH_ATTRIBUTE or "ClubKitPendingCharacterRefresh")
+		pcall(function()
+			player:SetAttribute(pendingAttr, true)
+		end)
+
 		pendingRespawnRestore[player.UserId] = {
 			cframe = serializeCFrame(restoreCFrame),
 		}
@@ -365,8 +380,13 @@ local function createSessionCommandService(deps: {
 				pendingReSyncRestore[userId] = nil
 				pendingRespawnRestore[userId] = nil
 				local stillHere = Players:GetPlayerByUserId(userId)
-				if stillHere and syncService and type(syncService.clearPreparedRefresh) == "function" then
-					syncService:clearPreparedRefresh(stillHere)
+				if stillHere then
+					pcall(function()
+						stillHere:SetAttribute(pendingAttr, nil)
+					end)
+					if syncService and type(syncService.clearPreparedRefresh) == "function" then
+						syncService:clearPreparedRefresh(stillHere)
+					end
 				end
 				log:warn("Refresh lock timed out", { userId = userId })
 			end

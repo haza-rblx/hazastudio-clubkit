@@ -595,6 +595,7 @@ trackClientLifecycle("AdminController", ClientMods.AdminController)
 trackClientLifecycle("AvatarLikeWorldEffect", ClientMods.AvatarLikeWorldEffect)
 trackClientLifecycle("TopMenuController", ClientMods.TopMenuController)
 trackClientLifecycle("StickerBillboardAnimator", ClientMods.StickerBillboardAnimator)
+ClientMods.RefreshCameraPreserve.init()
 
 local function createSubscriptionGroup(name: string): any
 	local groupLog = Logger.new(name)

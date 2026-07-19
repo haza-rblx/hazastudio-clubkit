@@ -1707,6 +1707,8 @@ Config.Session = {
 	TELEPORT_FORWARD_OFFSET = 4,
 	-- Max seconds a /re in-flight lock may stick if CharacterAdded restore never finishes.
 	REFRESH_LOCK_TIMEOUT = 12,
+	-- Client reads this on CharacterRemoving to snapshot camera across LoadCharacter.
+	PENDING_REFRESH_ATTRIBUTE = "ClubKitPendingCharacterRefresh",
 	MSG_REFRESHING = "[Session] Refreshing your character.",
 	MSG_REFRESH_BUSY = "[Session] Refresh already in progress — wait a moment.",
 	MSG_REJOINING = "[Session] Rejoining this server and bringing your spot back.",

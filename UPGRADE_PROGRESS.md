@@ -2,7 +2,7 @@
 
 Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
 
-**Versi saat ini:** `2.4.60` (lihat [`VERSION`](VERSION))  
+**Versi saat ini:** `2.4.61` (lihat [`VERSION`](VERSION))  
 **Target rilis berikutnya:** _(belum ditetapkan)_
 
 ---
@@ -19,7 +19,7 @@ Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
 
 | Path | Change |
 |------|--------|
-| _(kosong)_ | — |
+| _(belum ada)_ | |
 
 ---
 
