@@ -13,6 +13,7 @@ local OverheadDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domai
 local Logger     = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local DeltaCompressor = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DeltaCompressor)
 local NetworkPerfCounters = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.NetworkPerfCounters)
+local CharacterReady = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.CharacterReady)
 
 type OverheadPayload = Types.OverheadPayload
 
@@ -239,23 +240,20 @@ local function init(_deps: {}?): ()
 		disconnectHeadRebind(userId)
 		disconnectPendingFlush(userId)
 
-		headRebindConnections[userId] = character.ChildAdded:Connect(function(child)
-			if child.Name == "Head" and child:IsA("BasePart") then
-				if player.Character ~= character then
-					return
-				end
-				-- Clear stale OverheadUI bound to the previous Head instance.
-				local old = uiCache[userId]
-				if old and type(old.destroy) == "function" then
-					old:destroy()
-				end
-				uiCache[userId] = nil
-				bindToHead(userId, child)
+		headRebindConnections[userId] = CharacterReady.onHeadAdded(character, function(head)
+			if player.Character ~= character then
+				return
 			end
+			local old = uiCache[userId]
+			if old and type(old.destroy) == "function" then
+				old:destroy()
+			end
+			uiCache[userId] = nil
+			bindToHead(userId, head)
 		end)
 
 		task.spawn(function()
-			local head = character:WaitForChild("Head", 10)
+			local head = CharacterReady.waitStableHead(character, 10)
 			if not head then
 				return
 			end

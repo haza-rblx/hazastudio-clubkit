@@ -10,6 +10,7 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
+local CharacterReady = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.CharacterReady)
 
 local StickerBillboardAnimator = {}
 
@@ -526,18 +527,48 @@ local function hookCharacter(character: Model, player: Player)
 	-- Try immediately
 	tryHook()
 
-	-- Scope to Head only (BillboardGui is always parented to Head)
-		local head = character:WaitForChild("Head", 5)
-		if head then
-			table.insert(
-				conns,
-				head.ChildAdded:Connect(function(child: Instance)
-					if child.Name == Config.Sticker.BILLBOARD_GUI_NAME and child:IsA("BillboardGui") then
-						task.defer(tryHook)
-					end
-				end)
-			)
+	-- Watch adornee parts in the same priority as StickerService (UpperTorso first, not Head-only).
+	local priority = Config.Sticker.DEFAULT_ADORNEE_PRIORITY
+	local function watchAdorneePart(part: BasePart)
+		table.insert(
+			conns,
+			part.ChildAdded:Connect(function(child: Instance)
+				if child.Name == Config.Sticker.BILLBOARD_GUI_NAME and child:IsA("BillboardGui") then
+					task.defer(tryHook)
+				end
+			end)
+		)
+	end
+
+	for _, partName in ipairs(priority) do
+		local part = character:FindFirstChild(partName)
+		if part and part:IsA("BasePart") then
+			watchAdorneePart(part)
 		end
+	end
+
+	table.insert(
+		conns,
+		character.ChildAdded:Connect(function(child: Instance)
+			if not child:IsA("BasePart") then
+				return
+			end
+			for _, partName in ipairs(priority) do
+				if child.Name == partName then
+					watchAdorneePart(child)
+					task.defer(tryHook)
+					break
+				end
+			end
+		end)
+	)
+
+	-- If adornee already exists but GUI arrives later via replication, one deferred retry helps.
+	task.defer(function()
+		if character.Parent and CharacterReady.findAdornee(character, priority) then
+			tryHook()
+		end
+	end)
 end
 
 local function hookPlayer(player: Player)

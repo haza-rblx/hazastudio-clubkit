@@ -9,6 +9,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local Config = require(script.Parent.Parent.Constants.Config)
 local LoadingCinematicCamera = require(script.Parent.Parent.Utils.LoadingCinematicCamera)
+local CharacterReady = require(script.Parent.Parent.Utils.CharacterReady)
 
 local LoadingScreenUI = {}
 LoadingScreenUI.__index = LoadingScreenUI
@@ -993,25 +994,35 @@ function LoadingScreenUI:_suppressOverheads()
 	end
 
 	local function watchCharacter(character: Model)
-		local head = character:FindFirstChild("Head")
-		if not head then
-			return
+		local function bindHead(head: BasePart)
+			for _, desc in ipairs(head:GetDescendants()) do
+				if desc:IsA("BillboardGui") then
+					hideGui(desc :: BillboardGui)
+				end
+			end
+
+			local conn = head.DescendantAdded:Connect(function(desc)
+				if desc:IsA("BillboardGui") and isOverlayBlocking(self) then
+					hideGui(desc :: BillboardGui)
+				end
+			end)
+			table.insert(self._overheadConns, conn)
 		end
 
-		-- Hide any BillboardGui already present (parented to Head)
-		for _, desc in ipairs(head:GetDescendants()) do
-			if desc:IsA("BillboardGui") then
-				hideGui(desc :: BillboardGui)
-			end
+		local existing = character:FindFirstChild("Head")
+		if existing and existing:IsA("BasePart") then
+			bindHead(existing)
 		end
 
-		-- Watch for BillboardGui added to Head later (server replication arrives after CharacterAdded)
-		local conn = head.DescendantAdded:Connect(function(desc)
-			if desc:IsA("BillboardGui") and isOverlayBlocking(self) then
-				hideGui(desc :: BillboardGui)
-			end
-		end)
-		table.insert(self._overheadConns, conn)
+		-- Late Head (streamed / appearance settle) — same rebind contract as OverheadController.
+		table.insert(
+			self._overheadConns,
+			CharacterReady.onHeadAdded(character, function(head)
+				if isOverlayBlocking(self) then
+					bindHead(head)
+				end
+			end)
+		)
 	end
 
 	local function watchPlayer(player: Player)
@@ -1069,15 +1080,29 @@ function LoadingScreenUI:_hideOtherPlayersLocally()
 	local localPlayer = Players.LocalPlayer
 
 	local function hideCharacter(character: Model)
+		local function hidePart(part: BasePart)
+			if self._hiddenParts[part] == nil then
+				self._hiddenParts[part] = part.LocalTransparencyModifier
+			end
+			part.LocalTransparencyModifier = 1
+		end
+
 		for _, desc in ipairs(character:GetDescendants()) do
 			if desc:IsA("BasePart") then
-				local part = desc :: BasePart
-				if self._hiddenParts[part] == nil then
-					self._hiddenParts[part] = part.LocalTransparencyModifier
-				end
-				part.LocalTransparencyModifier = 1
+				hidePart(desc :: BasePart)
 			end
 		end
+
+		-- StreamingEnabled: limbs/accessories can arrive after the initial snapshot.
+		local descConn = character.DescendantAdded:Connect(function(desc)
+			if not isOverlayBlocking(self) then
+				return
+			end
+			if desc:IsA("BasePart") then
+				hidePart(desc :: BasePart)
+			end
+		end)
+		table.insert(self._playerHideConns, descConn)
 	end
 
 	for _, player in ipairs(Players:GetPlayers()) do

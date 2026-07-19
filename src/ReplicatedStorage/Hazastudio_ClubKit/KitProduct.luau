@@ -6,8 +6,8 @@ local KitProduct = {
 	ProductId = "hazastudioclubkit",
 	ProductName = "Hazastudio Clubkit",
 	Vendor = "Hazastudio",
-	KitVersion = "2.4.58",
-	BuildId = "20260718",
+	KitVersion = "2.4.59",
+	BuildId = "20260719",
 	LicenseApiProduct = "clubkit",
 	-- v1.3+: server polls donation-api /v2/license/verify. Older kit builds omit this flag.
 	LicenseEnforcementEnabled = true,

@@ -708,8 +708,8 @@ Config.Overhead = {
 	EXISTING_PAYLOAD_BATCH_DELAY = 0.03,
 	ROSTER_REQUEST_RATE_MAX = 2,
 	ROSTER_REQUEST_RATE_WINDOW = 10,
-	-- Detik tunggu setelah CharacterAdded sebelum broadcast payload pertama.
-	-- Cukup untuk client siap menerima RemoteEvent.
+	-- Soft ceiling for AdornReady wait before first join broadcast (signal gate;
+	-- usually instant after stable-Head attach). No longer an unconditional sleep.
 	CHARACTER_READY_DELAY = 0.5,
 	-- Detik setelah broadcast pertama untuk kirim broadcast kedua (deferred re-broadcast).
 	-- Memberi waktu GroupService:GetGroupsAsync() selesai di live server (biasanya 1-3 detik).
@@ -727,11 +727,10 @@ Config.Overhead = {
 	REMOTE_READY_TIMEOUT = 45,
 	-- Timeout WaitForChild saat attach GUI ke Head (detik)
 	HEAD_WAIT_TIMEOUT = 5,
-	-- After Head appears, wait until the same Head instance stays put this long
-	-- before parenting BillboardGui. Prevents attach-to-temporary-Head on large /
-	-- streamed maps where appearance settle replaces Head after CharacterAdded.
+	-- After Head appears, prefer AppearanceLoaded (CharacterReady); debounce below
+	-- is fallback when CAL never fires (some StarterCharacters).
 	HEAD_STABLE_DEBOUNCE = 0.35,
-	-- Cap for stable-Head wait (debounce loop). On timeout, attach to current Head.
+	-- Cap for stable-Head wait (AppearanceLoaded wait + debounce fallback).
 	HEAD_STABLE_TIMEOUT = 8,
 	-- Batas maksimal tunggu in-flight GroupService call (detik)
 	INFLIGHT_WAIT_MAX = 5,
@@ -1706,7 +1705,10 @@ Config.Session = {
 	RESTORE_Y_OFFSET = 0,
 	TELEPORT_Y_OFFSET = 3,
 	TELEPORT_FORWARD_OFFSET = 4,
+	-- Max seconds a /re in-flight lock may stick if CharacterAdded restore never finishes.
+	REFRESH_LOCK_TIMEOUT = 12,
 	MSG_REFRESHING = "[Session] Refreshing your character.",
+	MSG_REFRESH_BUSY = "[Session] Refresh already in progress — wait a moment.",
 	MSG_REJOINING = "[Session] Rejoining this server and bringing your spot back.",
 	MSG_RESTORE_FAILED = "[Session] I could not read your last position, so I stopped there.",
 	MSG_REJOIN_FAILED = "[Session] Rejoin did not go through. Try again soon.",
@@ -1720,9 +1722,6 @@ Config.Session = {
 	MSG_TELEPORT_TARGET_NOT_READY = "[Teleport] That player is not ready yet.",
 	MSG_TELEPORT_SUCCESS_BRING = "[Teleport] Brought %s to you.",
 	MSG_TELEPORT_SUCCESS_TO = "[Teleport] Moved you to %s.",
-	-- D4 (quota-efficiency-pass-2026-06, Phase 1): cache TTL untuk !re HumanoidDescription
-	-- response. Description rarely changes. Set to 0 to disable caching (always refetch).
-	RE_CACHE_TTL = 300,
 }
 -- ============================================================
 -- GRAVITY / UNGRAVITY — server-wide float (staff+ only)

@@ -3,7 +3,6 @@
 local Players = game:GetService("Players")
 local TeleportService = game:GetService("TeleportService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Workspace = game:GetService("Workspace")
 
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local AfkGuardDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.AfkGuardDomain)
@@ -11,6 +10,7 @@ local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Con
 local Result = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Result)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local RateLimiter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.RateLimiter)
+local CharacterReady = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.CharacterReady)
 
 type Result<T> = Types.Result<T>
 
@@ -23,11 +23,6 @@ type AfkSyncRestoreOptions = {
 	notifyPlayer: ((player: Player, message: string, kind: string?) -> ())?,
 }
 
-type DescriptionCacheEntry = {
-	desc: HumanoidDescription,
-	at: number,
-}
-
 local function createSessionCommandService(deps: {
 	notify: any,
 	syncService: any?,
@@ -36,52 +31,54 @@ local function createSessionCommandService(deps: {
 })
 	local notify = deps.notify
 	local syncService = deps.syncService
-	local eventBus = deps.eventBus
 	local syncNotify = deps.syncNotify
 	local log = Logger.new("SessionCommandService")
 	local limiter = RateLimiter.new(Config.Session.RATE_MAX, Config.Session.RATE_WINDOW)
-	local pendingRespawnRestore: {[number]: RestorePayload} = {}
-	local pendingJoinRestore: {[number]: RestorePayload} = {}
-	local pendingAfkSyncRestore: {[number]: AfkGuardDomain.SyncRestorePayload} = {}
-	local pendingReSyncRestore: {[number]: boolean} = {}
-	-- D4: cache GetHumanoidDescriptionFromUserIdAsync for /re in-place refresh.
-	local descriptionCache: { [number]: DescriptionCacheEntry } = {}
+	local pendingRespawnRestore: { [number]: RestorePayload } = {}
+	local pendingJoinRestore: { [number]: RestorePayload } = {}
+	local pendingAfkSyncRestore: { [number]: AfkGuardDomain.SyncRestorePayload } = {}
+	-- True while a /re LoadCharacter → restore cycle is in flight.
+	local pendingReSyncRestore: { [number]: boolean } = {}
 
 	local service = {}
 
-	local function serializeCFrame(cframe: CFrame): {number}
+	local function serializeCFrame(cframe: CFrame): { number }
 		return { cframe:GetComponents() }
 	end
 
-	local function deserializeCFrame(values: {number}): CFrame?
-		-- Validasi lengkap untuk CFrame values
+	local function deserializeCFrame(values: { number }): CFrame?
 		if #values ~= 12 then
 			return nil
 		end
 
-		-- Validasi semua values adalah number yang valid (bukan nan/inf)
 		for _, value in ipairs(values) do
 			if type(value) ~= "number" or value ~= value or math.abs(value) == math.huge then
-				-- value ~= value checks for NaN
-				-- math.abs(value) == math.huge checks for infinity
 				return nil
 			end
 		end
 
-		-- Validasi range posisi wajar (tidak terlalu jauh dari origin)
-		-- Roblox workspace biasanya dalam range -100000 to 100000
 		local MAX_POSITION = 100000
-		if math.abs(values[1]) > MAX_POSITION or
-		   math.abs(values[2]) > MAX_POSITION or
-		   math.abs(values[3]) > MAX_POSITION then
+		if
+			math.abs(values[1]) > MAX_POSITION
+			or math.abs(values[2]) > MAX_POSITION
+			or math.abs(values[3]) > MAX_POSITION
+		then
 			return nil
 		end
 
 		return CFrame.new(
-			values[1], values[2], values[3],
-			values[4], values[5], values[6],
-			values[7], values[8], values[9],
-			values[10], values[11], values[12]
+			values[1],
+			values[2],
+			values[3],
+			values[4],
+			values[5],
+			values[6],
+			values[7],
+			values[8],
+			values[9],
+			values[10],
+			values[11],
+			values[12]
 		)
 	end
 
@@ -125,124 +122,40 @@ local function createSessionCommandService(deps: {
 		if not character then
 			return false
 		end
-
-		local humanoid = character:FindFirstChildOfClass("Humanoid")
-		if humanoid then
-			humanoid.Sit = false
-		end
-
-		character:PivotTo(targetCFrame)
-
-		local hrp = character:FindFirstChild("HumanoidRootPart")
-		if hrp and hrp:IsA("BasePart") then
-			hrp.AssemblyLinearVelocity = Vector3.zero
-			hrp.AssemblyAngularVelocity = Vector3.zero
-		end
-
-		return true
+		return CharacterReady.pivotTo(player, character, targetCFrame)
 	end
 
-	local function applyRestoreCFrame(character: Model, restoreCFrame: CFrame)
-		local lifted = restoreCFrame + Vector3.new(0, Config.Session.RESTORE_Y_OFFSET, 0)
-		character:PivotTo(lifted)
+	local function clearRefreshLock(player: Player)
+		local userId = player.UserId
+		pendingReSyncRestore[userId] = nil
+		pendingRespawnRestore[userId] = nil
+		if syncService and type(syncService.clearPreparedRefresh) == "function" then
+			syncService:clearPreparedRefresh(player)
+		end
 	end
 
 	-- Stream destination before PivotTo so large / StreamingEnabled maps do not
-	-- leave the player at SpawnLocation (basecamp) or drop them through unloaded terrain.
+	-- leave the player at SpawnLocation or drop them through unloaded terrain.
 	local function restorePositionWithStream(player: Player, character: Model, restoreCFrame: CFrame)
-		local targetPos = restoreCFrame.Position
-		if Workspace.StreamingEnabled then
-			pcall(function()
-				player:RequestStreamAroundAsync(targetPos)
-			end)
-		end
-		applyRestoreCFrame(character, restoreCFrame)
-		local hrp = character:FindFirstChild("HumanoidRootPart")
-		if hrp and hrp:IsA("BasePart") and (hrp.Position - targetPos).Magnitude > 50 then
-			if Workspace.StreamingEnabled then
-				pcall(function()
-					player:RequestStreamAroundAsync(targetPos)
-				end)
-			end
-			applyRestoreCFrame(character, restoreCFrame)
-		end
-	end
-
-	local function getRefreshDescription(player: Player): HumanoidDescription?
-		local ttl = tonumber(Config.Session.RE_CACHE_TTL) or 300
-		local cached = descriptionCache[player.UserId]
-		if cached and (os.clock() - cached.at) < ttl then
-			local okClone, cloned = pcall(function()
-				return cached.desc:Clone()
-			end)
-			if okClone and cloned then
-				return cloned
-			end
-		end
-		local ok, desc = pcall(function()
-			return Players:GetHumanoidDescriptionFromUserIdAsync(player.UserId)
-		end)
-		if ok and desc then
-			descriptionCache[player.UserId] = { desc = desc, at = os.clock() }
-			local okClone, cloned = pcall(function()
-				return desc:Clone()
-			end)
-			if okClone and cloned then
-				return cloned
-			end
-			return desc
-		end
-		local character = player.Character
-		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-		if humanoid then
-			local okApplied, applied = pcall(function()
-				return humanoid:GetAppliedDescription()
-			end)
-			if okApplied and applied then
-				return applied
-			end
-		end
-		return nil
-	end
-
-	local function finishInPlaceRefresh(player: Player)
-		pendingReSyncRestore[player.UserId] = nil
-		if syncService and type(syncService.restorePreparedRefresh) == "function" then
-			syncService:restorePreparedRefresh(player)
-		end
-		-- In-place ApplyDescription does not fire CharacterAdded — OverheadController
-		-- must reattach via Avatar:Refreshed. LoadCharacter fallback must NOT emit this
-		-- (CharacterAdded already runs recovery attach).
-		if eventBus and type(eventBus.emit) == "function" then
-			eventBus:emit("Avatar:Refreshed", {
-				player = player,
-				reason = "session_refresh_inplace",
-			})
-		end
+		local lifted = restoreCFrame + Vector3.new(0, Config.Session.RESTORE_Y_OFFSET, 0)
+		CharacterReady.pivotTo(player, character, lifted)
 	end
 
 	local function restoreAfterCharacterAdded(player: Player, character: Model, payload: RestorePayload)
 		task.spawn(function()
-			local humanoidInstance = character:WaitForChild("Humanoid", Config.Overhead.CHARACTER_PART_WAIT_TIMEOUT)
-			local hrp = character:WaitForChild("HumanoidRootPart", Config.Overhead.CHARACTER_PART_WAIT_TIMEOUT)
-			if not (humanoidInstance and humanoidInstance:IsA("Humanoid")) or not hrp then
-				pendingReSyncRestore[player.UserId] = nil
-				if syncService and type(syncService.clearPreparedRefresh) == "function" then
-					syncService:clearPreparedRefresh(player)
-				end
+			local snap = CharacterReady.wait(character, "parts")
+			if not snap then
+				clearRefreshLock(player)
 				log:warn("Restore skipped - character not ready", {
 					player = player.Name,
 				})
 				return
 			end
-			local humanoid = humanoidInstance :: Humanoid
+			local humanoid = snap.humanoid
 
 			local restoreCFrame = deserializeCFrame(payload.cframe)
 			if not restoreCFrame then
-				pendingReSyncRestore[player.UserId] = nil
-				if syncService and type(syncService.clearPreparedRefresh) == "function" then
-					syncService:clearPreparedRefresh(player)
-				end
+				clearRefreshLock(player)
 				return
 			end
 
@@ -257,6 +170,7 @@ local function createSessionCommandService(deps: {
 			local syncPayload = pendingAfkSyncRestore[player.UserId]
 			if syncPayload then
 				pendingAfkSyncRestore[player.UserId] = nil
+				pendingReSyncRestore[player.UserId] = nil
 				if syncService and type(syncService.restoreAfterAfkRejoin) == "function" then
 					task.defer(function()
 						local options: AfkSyncRestoreOptions = {
@@ -275,8 +189,8 @@ local function createSessionCommandService(deps: {
 				return
 			end
 
-			-- LoadCharacter /re fallback: restore dance only. Do NOT emit Avatar:Refreshed —
-			-- OverheadController.onCharacterAdded already attaches + recovery broadcast.
+			-- /re: restore dance only. OverheadController onCharacterAdded already
+			-- attaches + recovery broadcast (avoids double attach).
 			if pendingReSyncRestore[player.UserId] then
 				pendingReSyncRestore[player.UserId] = nil
 				if syncService and type(syncService.restorePreparedRefresh) == "function" then
@@ -355,7 +269,6 @@ local function createSessionCommandService(deps: {
 		pendingJoinRestore[player.UserId] = nil
 		pendingAfkSyncRestore[player.UserId] = nil
 		pendingReSyncRestore[player.UserId] = nil
-		descriptionCache[player.UserId] = nil
 	end
 
 	function service:handleRefresh(player: Player): Result<nil>
@@ -364,9 +277,9 @@ local function createSessionCommandService(deps: {
 			return Result.Err(Config.Session.MSG_RATE_LIMIT)
 		end
 
-		if pendingReSyncRestore[player.UserId] then
-			notify.player(player, Config.Session.MSG_RATE_LIMIT, "WARNING")
-			return Result.Err(Config.Session.MSG_RATE_LIMIT)
+		if pendingReSyncRestore[player.UserId] or pendingRespawnRestore[player.UserId] then
+			notify.player(player, Config.Session.MSG_REFRESH_BUSY, "WARNING")
+			return Result.Err(Config.Session.MSG_REFRESH_BUSY)
 		end
 
 		local restoreCFrame = getCharacterRestoreCFrame(player)
@@ -381,49 +294,34 @@ local function createSessionCommandService(deps: {
 
 		notify.player(player, Config.Session.MSG_REFRESHING, "INFO")
 
-		-- Prefer in-place ApplyDescription: no SpawnLocation hop, no basecamp flash,
-		-- no double CharacterAdded+Avatar:Refreshed attach race on large maps.
-		local character = player.Character
-		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-		if humanoid and character and character.Parent then
-			pendingReSyncRestore[player.UserId] = true
-			local desc = getRefreshDescription(player)
-			if desc then
-				local applied, applyErr = pcall(function()
-					humanoid:ApplyDescription(desc)
-				end)
-				if applied then
-					task.defer(function()
-						if not player.Parent then
-							pendingReSyncRestore[player.UserId] = nil
-							return
-						end
-						finishInPlaceRefresh(player)
-					end)
-					return Result.Ok(nil)
-				end
-				log:warn("ApplyDescription refresh failed; falling back to LoadCharacter", {
-					player = player.Name,
-					error = tostring(applyErr),
-				})
-			end
-			pendingReSyncRestore[player.UserId] = nil
-		end
+		-- Warm streamed destination before LoadCharacter so restore is less likely
+		-- to land in unloaded terrain / stick near SpawnLocation on large maps.
+		CharacterReady.streamAround(player, restoreCFrame.Position)
 
 		pendingRespawnRestore[player.UserId] = {
 			cframe = serializeCFrame(restoreCFrame),
 		}
 		pendingReSyncRestore[player.UserId] = true
 
+		local userId = player.UserId
+		local lockTimeout = math.max(5, tonumber(Config.Session.REFRESH_LOCK_TIMEOUT) or 12)
+		task.delay(lockTimeout, function()
+			if pendingReSyncRestore[userId] or pendingRespawnRestore[userId] then
+				pendingReSyncRestore[userId] = nil
+				pendingRespawnRestore[userId] = nil
+				local stillHere = Players:GetPlayerByUserId(userId)
+				if stillHere and syncService and type(syncService.clearPreparedRefresh) == "function" then
+					syncService:clearPreparedRefresh(stillHere)
+				end
+				log:warn("Refresh lock timed out", { userId = userId })
+			end
+		end)
+
 		local loaded, loadErr = pcall(function()
 			player:LoadCharacter()
 		end)
 		if not loaded then
-			pendingRespawnRestore[player.UserId] = nil
-			pendingReSyncRestore[player.UserId] = nil
-			if syncService and type(syncService.clearPreparedRefresh) == "function" then
-				syncService:clearPreparedRefresh(player)
-			end
+			clearRefreshLock(player)
 			log:error("LoadCharacter refresh failed", {
 				player = player.Name,
 				error = tostring(loadErr),
@@ -458,13 +356,7 @@ local function createSessionCommandService(deps: {
 		notify.player(player, Config.Session.MSG_REJOINING, "INFO")
 
 		local success, err = pcall(function()
-			TeleportService:TeleportToPlaceInstance(
-				game.PlaceId,
-				game.JobId,
-				player,
-				nil,
-				teleportData
-			)
+			TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, player, nil, teleportData)
 		end)
 
 		if not success then
@@ -523,13 +415,7 @@ local function createSessionCommandService(deps: {
 
 		local function trySameServer(): (boolean, string?)
 			local ok, err = pcall(function()
-				TeleportService:TeleportToPlaceInstance(
-					game.PlaceId,
-					game.JobId,
-					player,
-					nil,
-					teleportData
-				)
+				TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, player, nil, teleportData)
 			end)
 			if ok then
 				return true, nil
@@ -540,8 +426,7 @@ local function createSessionCommandService(deps: {
 		local success, err = trySameServer()
 		local maxRetry = tonumber(afkConfig.MAX_RETRY) or 1
 		local retryDelay = tonumber(afkConfig.RETRY_DELAY_SEC) or 30
-		local canRetry = reportedIdleSec == nil
-			or AfkGuardDomain.isBelowTeleportAbortIdle(reportedIdleSec)
+		local canRetry = reportedIdleSec == nil or AfkGuardDomain.isBelowTeleportAbortIdle(reportedIdleSec)
 
 		if not success and maxRetry > 0 and canRetry then
 			task.wait(retryDelay)

@@ -33,6 +33,7 @@ local RunService = game:GetService("RunService")
 local Cleaner = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Cleaner)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
+local CharacterReady = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.CharacterReady)
 
 type ILogger = Types.ILogger
 
@@ -65,6 +66,9 @@ export type ProximityInterestService = {
 	onSubscriberAdded: (self: ProximityInterestService, listener: SubscriberListener) -> () -> (),
 	onSubscriberRemoved: (self: ProximityInterestService, listener: SubscriberListener) -> () -> (),
 	removePlayer: (self: ProximityInterestService, player: Player) -> (),
+	--- Force an immediate membership pass (respawn / PartsReady). No-op-cheap when
+	--- positions unchanged; restores self+nearby that the HRP gap pruned.
+	recomputeNow: (self: ProximityInterestService) -> (),
 }
 
 -- A single membership entry: holds the player refs (for events) and the
@@ -381,6 +385,40 @@ function ProximityInterestService.create(deps: ProximityInterestDeps): Proximity
 		interest:removePlayer(player)
 	end
 
+	function self:recomputeNow()
+		tickAccumulator = 0
+		recompute()
+	end
+
+	local function schedulePartsReadyRecompute(player: Player, character: Model)
+		task.spawn(function()
+			if not CharacterReady.isReady(character, "parts") then
+				local snap = CharacterReady.wait(character, "parts")
+				if not snap then
+					return
+				end
+			end
+			if player.Character ~= character or not player.Parent then
+				return
+			end
+			-- Immediate self+nearby restore after HRP gap (respawn / LoadCharacter).
+			-- Heartbeat alone can leave a ≤RECOMPUTE_INTERVAL blank-tag window.
+			self:recomputeNow()
+		end)
+	end
+
+	local function watchPlayerCharacter(player: Player)
+		cleaner:add(player.CharacterAdded:Connect(function(character)
+			if character:IsA("Model") then
+				schedulePartsReadyRecompute(player, character)
+			end
+		end))
+		local existing = player.Character
+		if existing and existing:IsA("Model") then
+			schedulePartsReadyRecompute(player, existing)
+		end
+	end
+
 	function self:onStart()
 		cleaner:add(RunService.Heartbeat:Connect(function(dt)
 			tickAccumulator += dt
@@ -394,6 +432,13 @@ function ProximityInterestService.create(deps: ProximityInterestDeps): Proximity
 		cleaner:add(Players.PlayerRemoving:Connect(function(player)
 			self:removePlayer(player)
 		end))
+
+		cleaner:add(Players.PlayerAdded:Connect(function(player)
+			watchPlayerCharacter(player)
+		end))
+		for _, player in Players:GetPlayers() do
+			watchPlayerCharacter(player)
+		end
 
 		log:info("ProximityInterestService started (spatial grid optimized)", {
 			radius = radius,

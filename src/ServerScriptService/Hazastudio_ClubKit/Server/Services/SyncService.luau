@@ -26,6 +26,7 @@ local AfkGuardDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domai
 local AnimatorUtils = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.ContextModule.AnimatorUtils)
 local AssetHealthReporter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.AssetHealthReporter)
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
+local CharacterReady = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.CharacterReady)
 
 -- Inlined Result<T> to keep this module self-contained for the analyzer.
 type Result<T> = { ok: true, value: T } | { ok: false, error: string }
@@ -1401,7 +1402,13 @@ local self = {} :: any
 			return
 		end
 
+		-- Dance needs Animator, not Head. Wait briefly so /re restore does not
+		-- one-shot nil when Animator lags Humanoid by a frame.
 		local animator = AnimatorUtils.getAnimator(player)
+		if not animator then
+			local snap = CharacterReady.wait(player, "anim", 5)
+			animator = if snap then snap.animator else AnimatorUtils.getAnimator(player)
+		end
 		if not animator then
 			return
 		end

@@ -21,6 +21,7 @@ local DeltaCompressor = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Util
 local OverheadPremiumBadge = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.OverheadPremiumBadge)
 local HttpApiCounter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.HttpApiCounter)
 local NetworkPerfCounters = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.NetworkPerfCounters)
+local CharacterReady = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.CharacterReady)
 type OverheadPayload = Types.OverheadPayload
 -- Structural type for the optional ProximityInterestService dependency injected by
 -- Main.server.luau (task 2.2). We declare only the subset of the API used here so that
@@ -371,45 +372,7 @@ end
 	-- streamed / large maps). Attaching to a temporary Head is the root cause of
 	-- "GUI attached" server-side while client never sees BillboardGui.
 	local function waitForStableHead(character: Model): BasePart?
-		local debounce = math.max(0.05, tonumber(Config.Overhead.HEAD_STABLE_DEBOUNCE) or 0.35)
-		local timeout = math.max(
-			tonumber(Config.Overhead.HEAD_WAIT_TIMEOUT) or 5,
-			tonumber(Config.Overhead.HEAD_STABLE_TIMEOUT) or 8
-		)
-		local deadline = os.clock() + timeout
-		local head: Instance? = character:WaitForChild("Head", timeout)
-		if not head or not head:IsA("BasePart") then
-			return nil
-		end
-		local stableSince = os.clock()
-		while os.clock() < deadline do
-			if not character.Parent then
-				return nil
-			end
-			local current = character:FindFirstChild("Head")
-			if current ~= head then
-				head = current
-				if not head or not head:IsA("BasePart") then
-					local remaining = deadline - os.clock()
-					if remaining <= 0 then
-						return nil
-					end
-					head = character:WaitForChild("Head", remaining)
-					if not head or not head:IsA("BasePart") then
-						return nil
-					end
-				end
-				stableSince = os.clock()
-			elseif (os.clock() - stableSince) >= debounce then
-				return head :: BasePart
-			end
-			task.wait(0.05)
-		end
-		local fallback = character:FindFirstChild("Head")
-		if fallback and fallback:IsA("BasePart") then
-			return fallback
-		end
-		return nil
+		return CharacterReady.waitStableHead(character)
 	end
 
 	local function cleanupCharacterOverheads(character: Model, keep: BillboardGui?)
@@ -997,7 +960,7 @@ end
 	--              resets any delta key. Used by refreshAll(), donation settle
 	--              re-broadcast, and onCharacterAdded (R6.1, R6.2, R6.3).
 	--   "recovery" — reset every recipient's per-pair delta key and send a full
-	--              Snapshot to each recipient. Used by handleAvatarRefreshed and
+	--              Snapshot to each recipient. Used by respawn recovery and
 	--              admin rank-change refresh (R6.4). This is the ONLY path that
 	--              may reset delta keys.
 	--
@@ -1097,48 +1060,6 @@ end
 			mode = resolvedMode,
 			recipients = #recipients,
 		})
-	end
-	local function handleAvatarRefreshed(player: Player)
-		-- Stability fix: JANGAN destroy GUI lama dulu. Sebelumnya destroy → gap
-		-- 1.2s tanpa GUI (6 retry × 0.1s). Sekarang biar ensureGuiAttached handle:
-		-- kalau Head reference sama, reuse existing GUI (zero gap). Kalau Head
-		-- berubah, attachGui destroy+create atomik after waitForStableHead.
-		local wasEnabled = false
-		local existing = activeGuis[player.UserId]
-		if existing then
-			wasEnabled = existing.Enabled
-		end
-
-		task.spawn(function()
-			local character = player.Character
-			if character then
-				-- Let appearance settle before reattach (in-place /re ApplyDescription).
-				waitForStableHead(character)
-			end
-			for _ = 1, 6 do
-				if not player.Parent then
-					return
-				end
-				local gui = ensureGuiAttached(player)
-				if gui then
-					-- Preserve visibility: kalau GUI lama was Enabled, enable yang baru
-					-- supaya client tidak lihat overhead hilang sepersekian detik.
-					-- Client akan re-apply payload via recovery broadcast di bawah.
-					if wasEnabled then
-						gui.Enabled = true
-					end
-					task.wait(0.1)
-					-- Recovery mode: reset all per-recipient baselines so every
-					-- current viewer receives a full Snapshot (R6.4).
-					broadcastPayload(player, "recovery")
-					return
-				end
-				task.wait(0.1)
-			end
-			log:warn("Failed to reattach overhead after avatar refresh", {
-				player = player.Name,
-			})
-		end)
 	end
 	-- ----------------------------------------------------------
 	-- Kirim payload semua player yang sudah ada ke satu client baru
@@ -1285,15 +1206,26 @@ end
 			if not player.Parent then
 				return
 			end
+			-- HRP gap drops self+nearby until the next proximity tick. Force
+			-- membership restore before recovery so Snapshot reaches nearby viewers.
+			if proximity and type((proximity :: any).recomputeNow) == "function" then
+				(proximity :: any):recomputeNow()
+			end
 			broadcastPayload(player, "recovery")
 			hasCompletedInitialSetup[player.UserId] = true
 			return
 		end
 
-		-- Pastikan client-side sudah ready sebelum broadcast (join pertama saja)
-		task.wait(Config.Overhead.CHARACTER_READY_DELAY)
+		-- Signal gate (AdornReady) instead of fixed CHARACTER_READY_DELAY sleep.
+		-- After tryAttachGui this is usually already true (no extra debounce).
+		if not CharacterReady.isReady(player, "adorn") then
+			CharacterReady.wait(player, "adorn")
+		end
 		if not player.Parent then
 			return
+		end
+		if proximity and type((proximity :: any).recomputeNow) == "function" then
+			(proximity :: any):recomputeNow()
 		end
 		-- 1. Broadcast overhead player ini ke semua subscriber (delta mode — R6.2).
 		--    The Snapshot-on-enter handler in ProximityInterestService (task 3.2) will
@@ -1307,6 +1239,7 @@ end
 			end
 			sendAllExistingTo(player)
 		end)
+		-- GroupService settle windows (not character readiness) — keep wall-clock.
 		task.delay(Config.Overhead.GROUP_RANK_SETTLE_DELAY, function()
 			if not player.Parent then
 				return
@@ -1356,8 +1289,8 @@ end
 	local function onPlayerAdded(player: Player)
 		-- Pre-create leaderstats sebelum character muncul. Bug 2026-05-23:
 		-- Roblox PlayerList kadang cuma show DisplayName + Likes karena
-		-- syncBuiltinPlayerList baru jalan setelah CHARACTER_READY_DELAY (kira-kira
-		-- 0.5s setelah respawn). Kalau client udah subscribe ke leaderstats sebelum
+		-- syncBuiltinPlayerList baru jalan setelah first overhead broadcast.
+		-- Kalau client udah subscribe ke leaderstats sebelum
 		-- semua IntValue dibuat, column Streak/Robux/Cash bisa ke-skip di tampilan.
 		-- Pre-create dengan Value=0 di sini bikin folder lengkap dari awal; nilai
 		-- aktual di-isi saat broadcastPayload pertama jalan.
@@ -1512,18 +1445,6 @@ end
 	Players.PlayerRemoving:Connect(onPlayerRemoving)
 	for _, player in ipairs(Players:GetPlayers()) do
 		task.spawn(onPlayerAdded, player)
-	end
-	if eventBus and type(eventBus.on) == "function" then
-		eventBus:on("Avatar:Refreshed", function(payload: any)
-			if type(payload) ~= "table" then
-				return
-			end
-			local player = payload.player
-			if not player or not player:IsA("Player") or not player.Parent then
-				return
-			end
-			handleAvatarRefreshed(player)
-		end)
 	end
 
 	-- ----------------------------------------------------------

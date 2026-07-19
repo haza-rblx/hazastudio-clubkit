@@ -1,5 +1,8 @@
 --!strict
 -- AnimatorUtils.lua - No Priority Logic, Let Roblox Handle It
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CharacterReady = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.CharacterReady)
+
 local module = {}
 local DANCE_PRIORITY = Enum.AnimationPriority.Action4
 -- Simple cache with weak keys (auto-cleanup by Lua GC)
@@ -66,25 +69,7 @@ end
 -- Character Readiness Check
 -- ============================================
 function module.isCharacterReady(player)
-	if not player or not player.Parent then
-		return false
-	end
-	if not player.Character or not player.Character.Parent then
-		return false
-	end
-	local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
-	if not humanoid or not humanoid.Parent then
-		return false
-	end
-	local animator = humanoid:FindFirstChildOfClass("Animator")
-	if not animator or not animator.Parent then
-		return false
-	end
-	local hrp = player.Character:FindFirstChild("HumanoidRootPart")
-	if not hrp or not hrp.Parent then
-		return false
-	end
-	return true
+	return CharacterReady.isReady(player, "anim")
 end
 function module.getAnimator(player)
 	if not module.isCharacterReady(player) then

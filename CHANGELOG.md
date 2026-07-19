@@ -11,6 +11,29 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.59] - 2026-07-19
+
+### Added
+- **CharacterReady (map versatility Phase A)** — shared `Shared/Utils/CharacterReady` with tiers `parts` / `adorn` / `anim`, stream-gated `pivotTo` / `streamAround`.
+
+### Fixed
+- **`/re` only once / never works (v2.4.58 regression)** — removed in-place `ApplyDescription` path (Roblox cache no-op + sticky `pendingReSyncRestore` lock). `/re` is `LoadCharacter` again with stream warm + stream restore, distinct busy message, and a lock timeout. Overhead Head settle / client rebind from 2.4.58 kept.
+- **Loading overhead suppress misses late Head** — suppress watcher rebinds when Head appears/replaced instead of early-returning when Head is missing at CharacterAdded.
+- **Sticker client miss on UpperTorso** — `StickerBillboardAnimator` watches server adornee priority (`UpperTorso`…), not Head-only.
+- **`/bring` / `/to` on streamed maps** — teleports use the same stream-warm `pivotTo` as `/re` restore.
+- **Respawn blank nametags (Phase B)** — proximity membership restores immediately on PartsReady (`recomputeNow`); overhead recovery / join broadcast run after that pass.
+- **Join first broadcast wall-clock (Phase B)** — replaced unconditional `CHARACTER_READY_DELAY` sleep with AdornReady signal gate.
+- **`/re` dance restore one-shot nil** — `anim` tier is parts+Animator only (no Head); `restorePreparedRefresh` waits/retries Animator briefly.
+- **Head attach tax / temp-Head race** — `waitStableHead` prefers `HasAppearanceLoaded` / `CharacterAppearanceLoaded` (instant when already loaded); debounce is fallback only (e.g. some StarterCharacters).
+- **Loading other-player flash on stream-in** — `hideOtherPlayers` follows `DescendantAdded` while overlay blocks.
+- **CharacterReady.wait hang** — Character wait is deadline-bound (no bare `CharacterAdded:Wait()`).
+
+### Changed
+- Overhead server/client + `AnimatorUtils.isCharacterReady` route through `CharacterReady`.
+- Removed dead `Avatar:Refreshed` overhead listener (no emitters after ApplyDescription `/re` removal).
+- `CHARACTER_READY_DELAY` comment only (no forced sleep); GroupService settle delays unchanged.
+- Phase C buyer View_Range knobs: **out of scope** (engine owns readiness).
+
 ## [2.4.58] - 2026-07-18
 
 ### Fixed
