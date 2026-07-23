@@ -37,7 +37,7 @@ local function createSessionCommandService(deps: {
 	local pendingRespawnRestore: { [number]: RestorePayload } = {}
 	local pendingJoinRestore: { [number]: RestorePayload } = {}
 	local pendingAfkSyncRestore: { [number]: AfkGuardDomain.SyncRestorePayload } = {}
-	-- True while a /re LoadCharacter → restore cycle is in flight.
+	-- True while a /re in-place appearance refresh is in flight.
 	local pendingReSyncRestore: { [number]: boolean } = {}
 
 	local service = {}
@@ -128,12 +128,93 @@ local function createSessionCommandService(deps: {
 	local function clearRefreshLock(player: Player)
 		local userId = player.UserId
 		pendingReSyncRestore[userId] = nil
-		pendingRespawnRestore[userId] = nil
-		pcall(function()
-			player:SetAttribute(tostring(Config.Session.PENDING_REFRESH_ATTRIBUTE or "ClubKitPendingCharacterRefresh"), nil)
-		end)
 		if syncService and type(syncService.clearPreparedRefresh) == "function" then
 			syncService:clearPreparedRefresh(player)
+		end
+	end
+
+	--- Fetch website avatar description. No kit TTL cache (that caused /re no-ops).
+	local function fetchFreshDescription(player: Player): HumanoidDescription?
+		pcall(function()
+			local clearFn = (player :: any).ClearCachedAvatarAppearance
+			if type(clearFn) == "function" then
+				clearFn(player)
+			end
+		end)
+
+		local ok, desc = pcall(function()
+			return Players:GetHumanoidDescriptionFromUserIdAsync(player.UserId)
+		end)
+		if ok and typeof(desc) == "Instance" and desc:IsA("HumanoidDescription") then
+			return desc
+		end
+
+		-- DevForum workaround when GetHumanoidDescription fails: build a temp model.
+		local okModel, model = pcall(function()
+			return Players:CreateHumanoidModelFromUserIdAsync(player.UserId)
+		end)
+		if not okModel or typeof(model) ~= "Instance" then
+			return nil
+		end
+		local humanoid = model:FindFirstChildOfClass("Humanoid")
+		local applied: HumanoidDescription? = nil
+		if humanoid then
+			local okApplied, result = pcall(function()
+				return humanoid:GetAppliedDescription()
+			end)
+			if okApplied and typeof(result) == "Instance" and result:IsA("HumanoidDescription") then
+				applied = result
+			end
+		end
+		pcall(function()
+			model:Destroy()
+		end)
+		return applied
+	end
+
+	--- Clone website HD and mark UseAvatarSettings when the property exists.
+	local function prepareRefreshDescription(website: HumanoidDescription): HumanoidDescription
+		local okClone, cloned = pcall(function()
+			return website:Clone()
+		end)
+		local out: HumanoidDescription = if okClone and cloned then cloned else website
+		pcall(function()
+			if (out :: any).UseAvatarSettings ~= nil then
+				(out :: any).UseAvatarSettings = true
+			end
+		end)
+		return out
+	end
+
+	local function applyAppearanceInPlace(humanoid: Humanoid, desc: HumanoidDescription): (boolean, string?)
+		-- Hangout-style ApplyDescription (stay put). Avoid Reset — can break Avatar Settings.
+		local ok, err = pcall(function()
+			local asyncApply = (humanoid :: any).ApplyDescriptionAsync
+			if type(asyncApply) == "function" then
+				asyncApply(humanoid, desc)
+			else
+				humanoid:ApplyDescription(desc)
+			end
+		end)
+		if ok then
+			return true, nil
+		end
+		return false, tostring(err)
+	end
+
+	local function emitAvatarRefreshed(player: Player)
+		local bus = deps.eventBus
+		if bus and type(bus.emit) == "function" then
+			bus:emit("Avatar:Refreshed", {
+				player = player,
+				reason = "session_refresh_inplace",
+			})
+		end
+	end
+
+	local function restoreDanceImmediately(player: Player)
+		if syncService and type(syncService.restorePreparedRefresh) == "function" then
+			syncService:restorePreparedRefresh(player)
 		end
 	end
 
@@ -206,12 +287,6 @@ local function createSessionCommandService(deps: {
 			-- Claim position pending only after a successful pivot.
 			pendingRespawnRestore[userId] = nil
 			pendingJoinRestore[userId] = nil
-			pcall(function()
-				player:SetAttribute(
-					tostring(Config.Session.PENDING_REFRESH_ATTRIBUTE or "ClubKitPendingCharacterRefresh"),
-					nil
-				)
-			end)
 
 			local function reassertIfDrifted()
 				if not isFlight() then
@@ -257,17 +332,6 @@ local function createSessionCommandService(deps: {
 					userId = userId,
 				})
 				return
-			end
-
-			-- /re: restore dance only. OverheadController onCharacterAdded already
-			-- attaches + recovery broadcast (avoids double attach).
-			if pendingReSyncRestore[userId] then
-				pendingReSyncRestore[userId] = nil
-				if syncService and type(syncService.restorePreparedRefresh) == "function" then
-					task.defer(function()
-						syncService:restorePreparedRefresh(player)
-					end)
-				end
 			end
 		end)
 	end
@@ -341,15 +405,16 @@ local function createSessionCommandService(deps: {
 			return Result.Err(Config.Session.MSG_RATE_LIMIT)
 		end
 
-		if pendingReSyncRestore[player.UserId] or pendingRespawnRestore[player.UserId] then
+		if pendingReSyncRestore[player.UserId] then
 			notify.player(player, Config.Session.MSG_REFRESH_BUSY, "WARNING")
 			return Result.Err(Config.Session.MSG_REFRESH_BUSY)
 		end
 
-		local restoreCFrame = getCharacterRestoreCFrame(player)
-		if not restoreCFrame then
-			notify.player(player, Config.Session.MSG_RESTORE_FAILED, "ERROR")
-			return Result.Err(Config.Session.MSG_RESTORE_FAILED)
+		local character = player.Character
+		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+		if not character or not character.Parent or not humanoid then
+			notify.player(player, Config.Session.MSG_REFRESH_FAILED, "ERROR")
+			return Result.Err(Config.Session.MSG_REFRESH_FAILED)
 		end
 
 		if syncService and type(syncService.prepareRefreshRestore) == "function" then
@@ -358,52 +423,67 @@ local function createSessionCommandService(deps: {
 
 		notify.player(player, Config.Session.MSG_REFRESHING, "INFO")
 
-		-- Warm streamed destination before LoadCharacter so restore is less likely
-		-- to land in unloaded terrain / stick near SpawnLocation on large maps.
-		CharacterReady.streamAround(player, restoreCFrame.Position)
-
-		-- Client snapshots camera on CharacterRemoving while this is set.
-		local pendingAttr = tostring(Config.Session.PENDING_REFRESH_ATTRIBUTE or "ClubKitPendingCharacterRefresh")
-		pcall(function()
-			player:SetAttribute(pendingAttr, true)
-		end)
-
-		pendingRespawnRestore[player.UserId] = {
-			cframe = serializeCFrame(restoreCFrame),
-		}
+		-- Busy lock only — no LoadCharacter, no spawn hop, no camera restore.
 		pendingReSyncRestore[player.UserId] = true
-
 		local userId = player.UserId
 		local lockTimeout = math.max(5, tonumber(Config.Session.REFRESH_LOCK_TIMEOUT) or 12)
 		task.delay(lockTimeout, function()
-			if pendingReSyncRestore[userId] or pendingRespawnRestore[userId] then
+			if pendingReSyncRestore[userId] then
 				pendingReSyncRestore[userId] = nil
-				pendingRespawnRestore[userId] = nil
 				local stillHere = Players:GetPlayerByUserId(userId)
-				if stillHere then
-					pcall(function()
-						stillHere:SetAttribute(pendingAttr, nil)
-					end)
-					if syncService and type(syncService.clearPreparedRefresh) == "function" then
-						syncService:clearPreparedRefresh(stillHere)
-					end
+				if stillHere and syncService and type(syncService.clearPreparedRefresh) == "function" then
+					syncService:clearPreparedRefresh(stillHere)
 				end
 				log:warn("Refresh lock timed out", { userId = userId })
 			end
 		end)
 
-		local loaded, loadErr = pcall(function()
-			player:LoadCharacter()
-		end)
-		if not loaded then
+		local websiteDesc = fetchFreshDescription(player)
+		if not websiteDesc then
 			clearRefreshLock(player)
-			log:error("LoadCharacter refresh failed", {
-				player = player.Name,
-				error = tostring(loadErr),
-			})
-			notify.player(player, Config.Session.MSG_RESTORE_FAILED, "ERROR")
-			return Result.Err(Config.Session.MSG_RESTORE_FAILED)
+			log:warn("Refresh description fetch failed", { player = player.Name })
+			notify.player(player, Config.Session.MSG_REFRESH_FAILED, "ERROR")
+			return Result.Err(Config.Session.MSG_REFRESH_FAILED)
 		end
+
+		-- Character may have been replaced while yielding on the fetch.
+		character = player.Character
+		humanoid = character and character:FindFirstChildOfClass("Humanoid")
+		if not character or not character.Parent or not humanoid or player.UserId ~= userId then
+			clearRefreshLock(player)
+			notify.player(player, Config.Session.MSG_REFRESH_FAILED, "ERROR")
+			return Result.Err(Config.Session.MSG_REFRESH_FAILED)
+		end
+
+		local desc = prepareRefreshDescription(websiteDesc)
+		local applied, applyErr = applyAppearanceInPlace(humanoid, desc)
+		if not applied then
+			clearRefreshLock(player)
+			log:warn("ApplyDescription refresh failed", {
+				player = player.Name,
+				error = tostring(applyErr),
+			})
+			notify.player(player, Config.Session.MSG_REFRESH_FAILED, "ERROR")
+			return Result.Err(Config.Session.MSG_REFRESH_FAILED)
+		end
+
+		-- Dance first (same frame as apply) so /re while jogging feels continuous.
+		-- Overhead waits for Head settle separately — must not delay dance.
+		pendingReSyncRestore[userId] = nil
+		restoreDanceImmediately(player)
+
+		task.spawn(function()
+			if not player.Parent or player.UserId ~= userId then
+				return
+			end
+			local current = player.Character
+			if current then
+				CharacterReady.waitStableHead(current, 5)
+			end
+			if player.Parent and player.Character == current then
+				emitAvatarRefreshed(player)
+			end
+		end)
 
 		return Result.Ok(nil)
 	end

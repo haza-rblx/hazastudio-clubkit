@@ -177,12 +177,21 @@ local function create(deps: {
 
 	local onFollowersHardUnsyncedCallback: ((leaderName: string, followerNames: { string }) -> ())? = nil
 
-	local MIN_REQUEST_INTERVAL = 0.10
-	local FADE_IN = config.FADE_IN or 0.18
-	local FADE_OUT = config.FADE_OUT or 0.12
-	local SWITCH_FADE_IN = config.SWITCH_FADE_IN or 0.2
-	local SWITCH_FADE_OUT = config.SWITCH_FADE_OUT or SWITCH_FADE_IN
-	local SYNC_JOIN_FADE_IN = config.SYNC_JOIN_FADE_IN or FADE_IN
+	-- Dance request throttle: at least switch fade so crossfades cannot stack.
+	local SWITCH_FADE = math.max(
+		tonumber(config.SWITCH_FADE_IN) or 0.55,
+		tonumber(config.SWITCH_FADE_OUT) or 0.55
+	)
+	local MIN_REQUEST_INTERVAL = math.max(
+		0.10,
+		tonumber(config.SWITCH_INPUT_COOLDOWN) or SWITCH_FADE,
+		SWITCH_FADE
+	)
+	local FADE_IN = config.FADE_IN or 0.45
+	local FADE_OUT = config.FADE_OUT or FADE_IN
+	local SWITCH_FADE_IN = SWITCH_FADE
+	local SWITCH_FADE_OUT = SWITCH_FADE
+	local SYNC_JOIN_FADE = math.max(0.12, tonumber(config.SYNC_JOIN_FADE_IN) or 0.4)
 
 	local prewarmAnimations = animLoader.loadAnimations()
 
@@ -320,18 +329,21 @@ local function create(deps: {
 	-- ============================================================
 	-- ANIMATION LOOKUP
 	-- ============================================================
+	-- Prefer AnimationId (authoritative). Name-first caused sync join to pick the
+	-- wrong Dance/Pose asset when names collide — looks wrong until the player
+	-- switches dance (panel passes the real Animation instance).
 	local function findAnimation(animationName: string?, animationId: string?): Animation?
-		if animationName then
-			local byName = prewarmAnimations[animationName]
-			if typeof(byName) == "Instance" and byName:IsA("Animation") then
-				return byName
-			end
-		end
 		if animationId and animationId ~= "" then
 			for _, anim in pairs(prewarmAnimations) do
 				if typeof(anim) == "Instance" and anim:IsA("Animation") and anim.AnimationId == animationId then
 					return anim
 				end
+			end
+		end
+		if animationName then
+			local byName = prewarmAnimations[animationName]
+			if typeof(byName) == "Instance" and byName:IsA("Animation") then
+				return byName
 			end
 		end
 		return nil
@@ -636,17 +648,21 @@ local function create(deps: {
 	local function replicateAnimation(
 		rootPlayer: Player,
 		animation: Animation?,
-		opts: { isSyncJoin: boolean?, speed: number?, fade: number? }?
+		opts: { isSyncJoin: boolean?, speed: number?, fade: number?, stopFade: number?, timePosition: number? }?
 	)
 		local t0 = os.clock()
 		opts = opts or {}
 		local isSyncJoin = (opts :: any).isSyncJoin == true
 		local fade = (opts :: any).fade
+		local forcedPhase = (opts :: any).timePosition
+		if type(forcedPhase) ~= "number" then
+			forcedPhase = nil
+		end
 		if fade == nil then
 			if not animation then
 				fade = FADE_OUT
 			elseif isSyncJoin then
-				fade = SYNC_JOIN_FADE_IN
+				fade = SYNC_JOIN_FADE
 			else
 				fade = FADE_IN
 			end
@@ -660,7 +676,12 @@ local function create(deps: {
 		--   - rootPlayer is the leader of their chain, AND
 		--   - this isn't a follower joining (sync join uses leader's existing time)
 		if isRootTheLeader and animation and not isSyncJoin then
-			syncStartTimes[rootPlayer.Name] = tick()
+			if type(forcedPhase) == "number" then
+				local speedForAnchor = (opts :: any).speed or activeSpeeds[rootPlayer.Name] or config.DEFAULT_SPEED or 1
+				syncStartTimes[rootPlayer.Name] = tick() - (forcedPhase / math.max(speedForAnchor, 0.01))
+			else
+				syncStartTimes[rootPlayer.Name] = tick()
+			end
 			activeAnimations[rootPlayer.Name] = animation.Name
 			activeAnimationIds[rootPlayer.Name] = animation.AnimationId
 			if (opts :: any).speed then
@@ -751,21 +772,79 @@ local function create(deps: {
 				track.Looped = true
 				track.Priority = config.ANIM_PRIORITY
 
-				-- Stop any other dance tracks first so weight doesn't pile up
-				pcall(function()
-					AnimatorUtils.stopOtherDances(animator, track, prewarmAnimations, stopFade)
-				end)
-
-				if not track.IsPlaying then
-					track:Play(fade, 1, leaderSpeed)
+				-- Matching Stop+Play fade (Roblox crossfade). Soft path clears mid-fade
+				-- zombies first so rapid switches cannot stack Action4 weights.
+				if type(stopFade) == "number" and stopFade > 0 then
+					pcall(function()
+						AnimatorUtils.prepareDanceCrossfade(animator, track, prewarmAnimations, stopFade)
+					end)
 				else
-					track:AdjustSpeed(leaderSpeed)
+					pcall(function()
+						AnimatorUtils.stopOtherDances(animator, track, prewarmAnimations, 0)
+					end)
 				end
 
-				-- Snap follower to leader's current phase on sync join.
-				-- Immediate when Length is ready (no defer → no phase-0 delay).
-				-- If Length is still 0 on a cold LoadAnimation, one-frame defer only.
-				if syncedPlayer ~= leader and isSyncJoin then
+				local function applySnap(targetTrack: AnimationTrack, phase: number): boolean
+					if not targetTrack.IsPlaying then
+						return false
+					end
+					local length = targetTrack.Length
+					if type(length) == "number" and length > 0 then
+						pcall(function()
+							targetTrack.TimePosition = phase % length
+						end)
+						return true
+					end
+					return false
+				end
+
+				-- Cold LoadAnimation often has Length=0 for a few frames.
+				local function applySnapWhenReady(targetTrack: AnimationTrack, phase: number)
+					if applySnap(targetTrack, phase) then
+						return
+					end
+					task.spawn(function()
+						for _ = 1, 12 do
+							if not targetTrack.Parent or not targetTrack.IsPlaying then
+								return
+							end
+							if applySnap(targetTrack, phase) then
+								return
+							end
+							task.wait()
+						end
+					end)
+				end
+
+				-- Keep fade-in. Do not Stop(0) the target track — that cancels Play fade.
+				-- If the track is mid fade-out (switch-back), AdjustWeight brings it up
+				-- smoothly; AdjustSpeed alone left it stuck at low weight ("not smooth").
+				local function ensurePlayingWithFade(targetTrack: AnimationTrack)
+					if not targetTrack.IsPlaying then
+						targetTrack:Play(fade, 1, leaderSpeed)
+						return
+					end
+					local weight = 1
+					pcall(function()
+						weight = targetTrack.WeightCurrent
+					end)
+					if weight < 0.98 then
+						pcall(function()
+							targetTrack:AdjustWeight(1, fade)
+						end)
+					end
+					targetTrack:AdjustSpeed(leaderSpeed)
+				end
+
+				if type(forcedPhase) == "number" then
+					ensurePlayingWithFade(track)
+					applySnapWhenReady(track, forcedPhase)
+				else
+					ensurePlayingWithFade(track)
+				end
+
+				-- Snap follower to leader when caller did not pass timePosition.
+				if type(forcedPhase) ~= "number" and syncedPlayer ~= leader and isSyncJoin then
 					local snapTime: number? = nil
 					if config.SYNC_JOIN_USE_LEADER_TRACK_TIME ~= false then
 						snapTime = getLeaderTrackTimePosition(leader)
@@ -777,24 +856,7 @@ local function create(deps: {
 						end
 					end
 					if snapTime then
-						local function applySnap(targetTrack: AnimationTrack, phase: number)
-							if not targetTrack.IsPlaying then
-								return
-							end
-							local length = targetTrack.Length
-							if type(length) == "number" and length > 0 then
-								pcall(function()
-									targetTrack.TimePosition = phase % length
-								end)
-							end
-						end
-						if track.Length > 0 then
-							applySnap(track, snapTime)
-						else
-							task.defer(function()
-								applySnap(track, snapTime :: number)
-							end)
-						end
+						applySnapWhenReady(track, snapTime)
 					end
 				end
 
@@ -810,11 +872,10 @@ local function create(deps: {
 				-- Mark Syncing attribute for non-leader members of the chain
 				if syncedPlayer ~= leader and syncedPlayer.Character then
 					syncedPlayer.Character:SetAttribute("Syncing", leader.Name)
-					end
-				end)
-			end
+				end
+			end)
 		end
-
+	end
 	-- ============================================================
 	-- PUBLIC API
 -- ============================================================
@@ -928,13 +989,12 @@ local self = {} :: any
 		activeAnimationIds[player.Name] = animation.AnimationId
 		activeSpeeds[player.Name] = clampedSpeed
 		if isSwitch then
-			-- Hard-stop outgoing dance on switch. SWITCH_FADE_OUT (0.28s) was longer than
-			-- MIN_REQUEST_INTERVAL (0.10s), so rapid switches blended 2–3 Action4 tracks
-			-- ("broken arms"). New track still fades in via SWITCH_FADE_IN.
+			-- Matching Stop+Play fade (map-style crossfade). Anti-stack via
+			-- prepareDanceCrossfade + request cooldown >= fade.
 			replicateAnimation(player, animation, {
 				speed = clampedSpeed,
 				fade = SWITCH_FADE_IN,
-				stopFade = 0,
+				stopFade = SWITCH_FADE_OUT,
 			})
 		else
 			replicateAnimation(player, animation, {
@@ -1040,13 +1100,28 @@ local self = {} :: any
 		syncStartTimes[player.Name] = nil
 		scheduleLeaderUpdate()
 
-		-- Replicate leader's animation to player + their downstream
+		-- Replicate leader's animation: soft matching fade + upfront phase snap.
 		local leaderAnimName = activeAnimations[ultimateLeader.Name]
 		local leaderAnimId = activeAnimationIds[ultimateLeader.Name]
 		if leaderAnimName then
 			local animation = findAnimation(leaderAnimName, leaderAnimId)
 			if animation then
-				replicateAnimation(player, animation, { isSyncJoin = true })
+				local snapTime: number? = nil
+				if config.SYNC_JOIN_USE_LEADER_TRACK_TIME ~= false then
+					snapTime = getLeaderTrackTimePosition(ultimateLeader)
+				end
+				if snapTime == nil then
+					local leaderTime = getLeaderTime(ultimateLeader)
+					if leaderTime > 0 then
+						snapTime = leaderTime
+					end
+				end
+				replicateAnimation(player, animation, {
+					isSyncJoin = true,
+					fade = SYNC_JOIN_FADE,
+					stopFade = SYNC_JOIN_FADE,
+					timePosition = snapTime or 0,
+				})
 			else
 				-- Anim resource missing locally — let client know.
 				return ResultModule.Err("leader_not_dancing")
@@ -1142,14 +1217,28 @@ local self = {} :: any
 
 		scheduleLeaderUpdate()
 
-		-- Replicate leader's animation ke seluruh subtree-nya (subtree caller udah
-		-- masuk di sini karena baru di-register sebagai followers ultimateLeader).
+		-- Replicate leader's animation ke seluruh subtree (hard join, same as sync).
 		local leaderAnimName = activeAnimations[ultimateLeader.Name]
 		local leaderAnimId = activeAnimationIds[ultimateLeader.Name]
 		if leaderAnimName then
 			local animation = findAnimation(leaderAnimName, leaderAnimId)
 			if animation then
-				replicateAnimation(ultimateLeader, animation, { isSyncJoin = true })
+				local snapTime: number? = nil
+				if config.SYNC_JOIN_USE_LEADER_TRACK_TIME ~= false then
+					snapTime = getLeaderTrackTimePosition(ultimateLeader)
+				end
+				if snapTime == nil then
+					local leaderTime = getLeaderTime(ultimateLeader)
+					if leaderTime > 0 then
+						snapTime = leaderTime
+					end
+				end
+				replicateAnimation(ultimateLeader, animation, {
+					isSyncJoin = true,
+					fade = SYNC_JOIN_FADE,
+					stopFade = SYNC_JOIN_FADE,
+					timePosition = snapTime or 0,
+				})
 			end
 		else
 			-- Leader idle: stop dance di seluruh subtree caller (yang baru di-move).
@@ -1402,6 +1491,9 @@ local self = {} :: any
 			return
 		end
 
+		-- ApplyDescription can invalidate cached tracks — drop cache before replay.
+		AnimatorUtils.clearCacheForPlayer(player)
+
 		-- Dance needs Animator, not Head. Wait briefly so /re restore does not
 		-- one-shot nil when Animator lags Humanoid by a frame.
 		local animator = AnimatorUtils.getAnimator(player)
@@ -1413,28 +1505,45 @@ local self = {} :: any
 			return
 		end
 
+		local phase = tonumber(snapshot.timePosition) or 0
+		local speed = tonumber(snapshot.speed) or (config.DEFAULT_SPEED or 1)
+
 		-- If not following anyone, this player is a root leader — re-anchor
-		-- timing and re-replicate to followers (if any) so they snap back.
+		-- timing and re-replicate to followers (if any) so they snap back in-phase.
 		if not snapshot.syncing then
 			activeAnimations[player.Name] = animationName
 			activeAnimationIds[player.Name] = animationId
-			activeSpeeds[player.Name] = snapshot.speed
-			syncStartTimes[player.Name] = tick() - (snapshot.timePosition / math.max(snapshot.speed, 0.01))
-			replicateAnimation(player, animation, { speed = snapshot.speed, fade = 0 })
+			activeSpeeds[player.Name] = speed
+			syncStartTimes[player.Name] = tick() - (phase / math.max(speed, 0.01))
+			replicateAnimation(player, animation, {
+				speed = speed,
+				fade = 0,
+				stopFade = 0,
+				timePosition = phase,
+			})
 		else
-			-- Restored as follower. Pull current leader's phase if available.
+			-- Restored as follower. Prefer live leader phase (salon-continuous sync).
 			local syncingName = if type(snapshot.syncing) == "string" then snapshot.syncing else nil
 			local leader = if syncingName then Players:FindFirstChild(syncingName) else nil
 			if leader then
-				replicateAnimation(player, animation, { isSyncJoin = true, fade = 0 })
+				replicateAnimation(player, animation, {
+					isSyncJoin = true,
+					fade = 0,
+					stopFade = 0,
+				})
 			else
-				-- Leader gone — fall back to playing solo.
+				-- Leader gone — fall back to playing solo at saved phase.
 				activeAnimations[player.Name] = animationName
 				activeAnimationIds[player.Name] = animationId
-				activeSpeeds[player.Name] = snapshot.speed
-				syncStartTimes[player.Name] = tick() - (snapshot.timePosition / math.max(snapshot.speed, 0.01))
+				activeSpeeds[player.Name] = speed
+				syncStartTimes[player.Name] = tick() - (phase / math.max(speed, 0.01))
 				character:SetAttribute("Syncing", nil)
-				replicateAnimation(player, animation, { speed = snapshot.speed, fade = 0 })
+				replicateAnimation(player, animation, {
+					speed = speed,
+					fade = 0,
+					stopFade = 0,
+					timePosition = phase,
+				})
 			end
 		end
 	end

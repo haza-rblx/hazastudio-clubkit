@@ -934,18 +934,20 @@ Config.Sync = {
 	MAX_CHAIN_DEPTH = 100,
 	MAX_PAYLOAD_BYTES = 512, -- Max payload size for sync remotes
 	ANIM_PRIORITY = Enum.AnimationPriority.Action4,
-	-- Natural transitions (owner request). Legacy used 0; raise if too sluggish.
-	FADE_IN = 0.18,
-	FADE_OUT = 0.14,
-	SWITCH_FADE_IN = 0.22,
-	SWITCH_FADE_OUT = 0.28,
-	SYNC_JOIN_FADE_IN = 0.12,
+	-- Defaults; buyer override via ClubKitConfig.Sync → ConfigBootstrap.
+	-- Salon-style crossfade (matching Stop+Play). Longer = smoother blend.
+	FADE_IN = 0.45,
+	FADE_OUT = 0.45,
+	SWITCH_FADE_IN = 0.55,
+	SWITCH_FADE_OUT = 0.55,
+	SYNC_JOIN_FADE_IN = 0.4,
 	SWITCH_TRANSITION_LEAD_TIME = 0.06,
 	DANCE_WALK_SPEED = 16,
 	MIN_SPEED = 0,
 	MAX_SPEED = 2.0,
 	DEFAULT_SPEED = 1.0,
-	SWITCH_INPUT_COOLDOWN = 0.15,
+	-- Keep >= switch fade so rapid clicks cannot stack mid-crossfade tracks.
+	SWITCH_INPUT_COOLDOWN = 0.55,
 	WUTWUT_STOP_ARM_WINDOW = 0.24,
 	WUTWUT_CHAIN_WINDOW = 0.32,
 	WUTWUT_RESTART_FADE = 0,
@@ -1705,12 +1707,11 @@ Config.Session = {
 	RESTORE_Y_OFFSET = 0,
 	TELEPORT_Y_OFFSET = 3,
 	TELEPORT_FORWARD_OFFSET = 4,
-	-- Max seconds a /re in-flight lock may stick if CharacterAdded restore never finishes.
+	-- Max seconds a /re in-flight lock may stick if apply/settle never finishes.
 	REFRESH_LOCK_TIMEOUT = 12,
-	-- Client reads this on CharacterRemoving to snapshot camera across LoadCharacter.
-	PENDING_REFRESH_ATTRIBUTE = "ClubKitPendingCharacterRefresh",
 	MSG_REFRESHING = "[Session] Refreshing your character.",
 	MSG_REFRESH_BUSY = "[Session] Refresh already in progress — wait a moment.",
+	MSG_REFRESH_FAILED = "[Session] Could not refresh your avatar. Try again.",
 	MSG_REJOINING = "[Session] Rejoining this server and bringing your spot back.",
 	MSG_RESTORE_FAILED = "[Session] I could not read your last position, so I stopped there.",
 	MSG_REJOIN_FAILED = "[Session] Rejoin did not go through. Try again soon.",
@@ -1867,6 +1868,7 @@ Config.Admin = {
 	MSG_TITLE_NO_TARGET = "[Admin] Pick a player first.",
 	MSG_TITLE_EMPTY = "[Admin] Give the title some text.",
 	MSG_TITLE_TOO_LONG = "[Admin] That title is a bit too long.",
+	MSG_TITLE_FILTERED = "[Admin] That title was blocked by the text filter. Try different words.",
 	MSG_TITLE_INVALID_SIZE = "[Admin] That title size is not available.",
 	MSG_TITLE_INVALID_STYLE = "[Admin] That title style is not available.",
 	MSG_TITLE_NOT_FOUND = "[Admin] I could not find '%s'.",
@@ -2178,10 +2180,11 @@ Config.Donation = {
 	-- Polling interval notifikasi (detik) - CEPAT, ini yang mempengaruhi delay setelah bayar
 	-- Semakin kecil = notif lebih cepat muncul, tapi lebih banyak HTTP request
 	-- Min rekomendasi: 3s | Max: 30s
-	NOTIF_POLL_INTERVAL = 15,
+	-- Idle ~0–5s tipikal (was 15s); masih jauh di bawah HttpService 500/min/server.
+	NOTIF_POLL_INTERVAL = 5,
 	-- Adaptive burst polling — wired via BackgroundJobScheduler:setInterval after each
 	-- donation_poll completes (idle = NOTIF_POLL_INTERVAL; hot = NOTIF_BURST_INTERVAL).
-	NOTIF_BURST_INTERVAL = 5, -- detik polling saat burst mode (setelah donasi terdeteksi)
+	NOTIF_BURST_INTERVAL = 2, -- detik polling saat burst mode (setelah donasi terdeteksi)
 	NOTIF_BURST_WINDOW = 45, -- detik sebelum kembali ke NOTIF_POLL_INTERVAL normal
 	-- Client: when pending queue is at least half full, shorten notif display (no drops).
 	NOTIF_BACKLOG_DISPLAY_SCALE = 0.6,
@@ -3189,6 +3192,13 @@ Config.Budget = {
 	DEFER_SECONDS = 8, -- Scaling 100→200 CCU: extended from 5s to 8s to give budget more time to recover during load spikes
 	POLL_INTERVAL = 0.5, -- budget replenishment poll cadence (seconds)
 	NEGATIVE_CACHE_TTL = 10, -- seconds to skip retrying a DataStore read after budget_exhausted
+}
+-- Delayed server restart (game.ServerRestartScheduled from Creator Hub / Open Cloud).
+-- Early flush + toast before BindToClose; {eta} / {reason} placeholders in messages.
+Config.ServerRestart = {
+	NOTIF_TYPE = "WARNING",
+	MSG_DEFAULT = "[System] Server restart in ~{eta}. Your progress is being saved.",
+	MSG_WITH_REASON = "[System] Server restart in ~{eta}. {reason} Progress is being saved.",
 }
 -- Persistence Fabric (DataStoreScheduler + session write-behind + InvalidateBus).
 -- Kill switch: USE_LEGACY_PER_REPO_BUDGET_GATE = true restores pre-fabric BudgetGate races.

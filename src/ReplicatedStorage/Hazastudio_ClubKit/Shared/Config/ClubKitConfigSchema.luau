@@ -407,6 +407,14 @@ ClubKitConfigSchema.defaults = {
 	JoinCommunity = {
 		MemberInfoUrl = nil :: string?,
 	},
+	Sync = {
+		FadeIn = 0.45,
+		FadeOut = 0.45,
+		SwitchFadeIn = 0.55,
+		SwitchFadeOut = 0.55,
+		SyncJoinFade = 0.4,
+		SwitchInputCooldown = 0.55,
+	},
 	Features = {
 		MusicPlayer = true,
 		SyncDance = true,

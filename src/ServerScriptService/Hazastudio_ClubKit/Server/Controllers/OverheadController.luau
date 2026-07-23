@@ -1447,6 +1447,53 @@ end
 		task.spawn(onPlayerAdded, player)
 	end
 
+	-- In-place /re (ApplyDescription) does not fire CharacterAdded — reattach overhead.
+	local function handleAvatarRefreshed(player: Player)
+		local wasEnabled = false
+		local existing = activeGuis[player.UserId]
+		if existing then
+			wasEnabled = existing.Enabled
+		end
+
+		task.spawn(function()
+			local character = player.Character
+			if character then
+				waitForStableHead(character)
+			end
+			for _ = 1, 6 do
+				if not player.Parent then
+					return
+				end
+				local gui = ensureGuiAttached(player)
+				if gui then
+					if wasEnabled then
+						gui.Enabled = true
+					end
+					task.wait(0.1)
+					broadcastPayload(player, "recovery")
+					return
+				end
+				task.wait(0.1)
+			end
+			log:warn("Failed to reattach overhead after avatar refresh", {
+				player = player.Name,
+			})
+		end)
+	end
+
+	if eventBus and type(eventBus.on) == "function" then
+		eventBus:on("Avatar:Refreshed", function(payload: any)
+			if type(payload) ~= "table" then
+				return
+			end
+			local player = payload.player
+			if not player or not player:IsA("Player") or not player.Parent then
+				return
+			end
+			handleAvatarRefreshed(player)
+		end)
+	end
+
 	-- ----------------------------------------------------------
 	-- Snapshot-on-enter and leave handlers (task 3.2)
 	-- ----------------------------------------------------------

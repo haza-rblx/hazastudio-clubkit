@@ -238,6 +238,44 @@ function module.stopOtherDances(animator, excludeTrack, loadedAnimations, fadeOu
 		end
 	end
 end
+
+-- Crossfade helper: at most one soft-out + one soft-in.
+-- Mid-fade / low-weight dance tracks are hard-cleared (Stop after Stop is unreliable
+-- on Roblox — that's what stacked into "broken arms"). Full-weight dances soft-out.
+function module.prepareDanceCrossfade(animator, excludeTrack, loadedAnimations, fadeOut)
+	if not animator or not animator.Parent then
+		return
+	end
+	fadeOut = (fadeOut ~= nil) and fadeOut or 0.06
+	local tracks
+	local success = pcall(function()
+		tracks = animator:GetPlayingAnimationTracks()
+	end)
+	if not success or not tracks then
+		return
+	end
+
+	-- Only hard-clear near-dead zombies. Soft-stop anything still visible so
+	-- SwitchFade actually blends (old 0.98 threshold hard-killed mid-weight tracks).
+	local ZOMBIE_WEIGHT = 0.2
+	for _, t in ipairs(tracks) do
+		if t ~= excludeTrack and isDanceTrack(t, loadedAnimations) then
+			local weight = 0
+			pcall(function()
+				weight = t.WeightCurrent
+			end)
+			if (not t.IsPlaying) or weight < ZOMBIE_WEIGHT then
+				pcall(function()
+					t:Stop(0)
+				end)
+			else
+				pcall(function()
+					t:Stop(fadeOut)
+				end)
+			end
+		end
+	end
+end
 -- ============================================
 -- Clear Cache (call on character death)
 -- ============================================

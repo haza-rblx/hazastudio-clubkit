@@ -182,6 +182,22 @@ function ConfigBootstrap.apply(config: any)
 		end
 	end
 
+	local syncDance = clubKit.Sync
+	if type(config.Sync) == "table" and type(syncDance) == "table" then
+		local function applyFadeSeconds(targetKey: string, buyerValue: any)
+			local seconds = tonumber(buyerValue)
+			if seconds and seconds >= 0 then
+				config.Sync[targetKey] = seconds
+			end
+		end
+		applyFadeSeconds("FADE_IN", syncDance.FadeIn)
+		applyFadeSeconds("FADE_OUT", syncDance.FadeOut)
+		applyFadeSeconds("SWITCH_FADE_IN", syncDance.SwitchFadeIn)
+		applyFadeSeconds("SWITCH_FADE_OUT", syncDance.SwitchFadeOut)
+		applyFadeSeconds("SYNC_JOIN_FADE_IN", syncDance.SyncJoinFade or syncDance.SyncJoinFadeIn)
+		applyFadeSeconds("SWITCH_INPUT_COOLDOWN", syncDance.SwitchInputCooldown)
+	end
+
 	config.AdminUserIds = clubKit.AdminUserIds or {}
 	config.TopSpenders = clubKit.TopSpenders or {}
 

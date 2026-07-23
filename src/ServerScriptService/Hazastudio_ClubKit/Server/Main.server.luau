@@ -745,7 +745,7 @@ end
 if backgroundJobScheduler then
 	-- Donation notification polling - respects NOTIF_POLL_INTERVAL from config
 	if donationService and type(donationService.pollDonations) == "function" then
-		local notifInterval = (Config.Donation and Config.Donation.NOTIF_POLL_INTERVAL) or 15
+		local notifInterval = (Config.Donation and Config.Donation.NOTIF_POLL_INTERVAL) or 5
 		local cashEnabled = Config.FeatureFlags.DonationCashEnabled
 		if cashEnabled == nil then
 			cashEnabled = Config.FeatureFlags.DonationSaweriaEnabled ~= false
@@ -1255,11 +1255,44 @@ log:info(
 	"Server initialized. Overhead + Gift + Streak + Level + Couple + Shop + Sticker + Notify + AvatarContext + AvatarLike + Carry + CommandRouter + CommandLibrary + Settings ready."
 )
 -- ============================================================
--- AUTOSAVE — periodic flush of session-buffered data so a non-graceful
--- server crash (process kill / OOM) cannot lose an entire session of XP,
--- settings, and favorites. Without this, those buffers only flush on
--- PlayerRemoving / BindToClose, so a crash between events loses everything.
+-- AUTOSAVE + ServerRestartScheduled early flush
+-- Periodic flush so a non-graceful crash cannot lose a full session of XP /
+-- settings / favorites. Same path runs early when Creator Hub schedules a
+-- delayed restart (before BindToClose's 30s window).
 -- ============================================================
+local function flushSessionBuffersEarly()
+	for _, player in ipairs(Players:GetPlayers()) do
+		if levelService and type(levelService.flushPlayer) == "function" then
+			pcall(function()
+				levelService:flushPlayer(player.UserId)
+			end)
+		end
+		if settingsService and type(settingsService.flushStored) == "function" then
+			pcall(function()
+				settingsService:flushStored(player)
+			end)
+		end
+	end
+	if settingsService and type(settingsService.flushShutdown) == "function" then
+		pcall(function()
+			settingsService:flushShutdown()
+		end)
+	end
+	if syncFavoritesRepo then
+		pcall(function()
+			syncFavoritesRepo:flushAll()
+		end)
+	end
+	if musicFavoritesRepo then
+		pcall(function()
+			musicFavoritesRepo:flushAll()
+		end)
+	end
+	pcall(function()
+		PersistenceFabricHooks.flushAll()
+	end)
+end
+
 local autosaveActive = true
 task.spawn(function()
 	while autosaveActive do
@@ -1267,35 +1300,19 @@ task.spawn(function()
 		if not autosaveActive then
 			break
 		end
-		pcall(function()
-			for _, player in ipairs(Players:GetPlayers()) do
-				if levelService and type(levelService.flushPlayer) == "function" then
-					pcall(function()
-						levelService:flushPlayer(player.UserId)
-					end)
-				end
-				if settingsService and type(settingsService.flushStored) == "function" then
-					pcall(function()
-						settingsService:flushStored(player)
-					end)
-				end
-			end
-			if syncFavoritesRepo then
-				pcall(function()
-					syncFavoritesRepo:flushAll()
-				end)
-			end
-			if musicFavoritesRepo then
-				pcall(function()
-					musicFavoritesRepo:flushAll()
-				end)
-			end
-			pcall(function()
-				PersistenceFabricHooks.flushAll()
-			end)
-		end)
+		pcall(flushSessionBuffersEarly)
 	end
 end)
+
+do
+	local ServerRestartHooks = require(script.Parent.Init.ServerRestartHooks)
+	ServerRestartHooks.connect({
+		log = log,
+		notify = Notify,
+		flushEarly = flushSessionBuffersEarly,
+		connectionCleaner = connectionCleaner,
+	})
+end
 -- ============================================================
 -- SCRIPT DESTROYING - cleanup saat Rojo hot-reload di Studio
 -- Mencegah accumulation ServerMods.NetworkManager + scheduler di Studio

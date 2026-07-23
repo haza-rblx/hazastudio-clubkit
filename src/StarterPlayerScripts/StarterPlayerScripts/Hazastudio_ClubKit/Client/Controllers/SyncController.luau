@@ -187,6 +187,9 @@ function SyncController:_handleNotification(payload: any)
 	local notifType = payload.type
 	if notifType == "sync_success" or notifType == "transfer_success" then
 		self:_cancelClickWarm()
+		-- Kill any local-only loading-screen dance so it cannot blend with
+		-- the server-replicated sync track (looks wrong until switch dance).
+		self:stopLoadingLocalDances()
 		local currentAnim = if type(payload.currentAnim) == "string" then payload.currentAnim else ""
 		self.store:set({
 			isSyncing = true,

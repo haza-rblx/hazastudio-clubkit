@@ -11,6 +11,24 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.63] - 2026-07-23
+
+### Fixed
+- **Admin giftcard false success** — `AdminSendGiftcard` now stores/replays the real outcome per `requestId` (success or failure). Retries after a failed grant no longer return `{ success = true }`.
+- **Admin SetTitle permission message** — non-admin attempts notify `MSG_GIFT_NO_PERM` instead of the misleading “style not available”.
+- **Admin ResetTitle silent fail** — auth / rate-limit failures now notify the admin (same messages as gift/title rate paths).
+
+### Changed
+- **Dance crossfade (map-style)** — switch + sync join use matching `Stop(fade)` + `Play(fade)`. Mid-fade zombies hard-clear only when nearly dead (`weight < 0.2`); full/mid-weight soft-out. Switch-back onto a fading track uses `AdjustWeight(1, fade)`. Defaults: switch **0.55s**, start **0.45s**, sync join **0.4s**. Buyer can tune via **`ClubKitConfig.Sync`** (`FadeIn` / `SwitchFadeIn` / `SyncJoinFade` / `SwitchInputCooldown`) — schema fill-forward + ConfigBootstrap. Sync join still samples leader phase + Length retry. `/re` restore stays hard snap.
+- **`/re` in-place appearance refresh** — no `LoadCharacter` / SpawnLocation hop / camera fight. Fetches fresh `HumanoidDescription` (`ClearCachedAvatarAppearance` + `GetHumanoidDescriptionFromUserIdAsync`, no kit TTL cache) and applies with `ApplyDescriptionAsync` while staying put. Dance restores **immediately** at saved phase (not after Head wait); overhead `Avatar:Refreshed` settles separately. Failures stay in place with `MSG_REFRESH_FAILED` (no respawn fallback). Website **animation pack** is applied too (earlier locomotion-ID freeze left packs stuck on the first avatar).
+- **Removed LoadCharacter `/re` camera leftover** — deleted unused `RefreshCameraPreserve` client module + `PENDING_REFRESH_ATTRIBUTE` (in-place `/re` never respawns).
+- **Admin SetTitle text filter** — special titles run through `TextService` broadcast filter before persist; blocked/empty → `MSG_TITLE_FILTERED`.
+- **Cash donation notif poll faster** — idle `NOTIF_POLL_INTERVAL` 15s → **5s**, burst `NOTIF_BURST_INTERVAL` 5s → **2s** (typical delay ~0–5s / ~0–2s after pay). Still well under Roblox HttpService 500/min/server and CF Workers free quota.
+
+### Added
+- **Delayed server restart early flush** — on `game.ServerRestartScheduled` (Creator Hub / Open Cloud delayed restart), kit warns all players and flushes session buffers (XP, settings, favorites, Persistence Fabric) before `BindToClose`. Gift pending already durable in DataStore; final BindToClose flush unchanged.
+- **`ClubKitConfig.Sync`** — buyer knobs for dance fade transitions (documented in template).
+
 ## [2.4.62] - 2026-07-19
 
 ### Fixed

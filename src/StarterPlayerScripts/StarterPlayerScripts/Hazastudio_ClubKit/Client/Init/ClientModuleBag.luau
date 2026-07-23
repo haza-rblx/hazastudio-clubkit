@@ -57,7 +57,6 @@ return {
 	-- Side-effect load (legacy): keep so NukeEffectController still registers listeners.
 	_NukeEffectController = require(Client.Utils.NukeEffectController),
 	StickerBillboardAnimator = require(Client.Utils.StickerBillboardAnimator),
-	RefreshCameraPreserve = require(Client.Utils.RefreshCameraPreserve),
 	CommandLibraryStore = require(Client.State.CommandLibraryStore),
 	CarryStore = require(Client.State.CarryStore),
 	InventoryStore = require(Client.State.InventoryStore),

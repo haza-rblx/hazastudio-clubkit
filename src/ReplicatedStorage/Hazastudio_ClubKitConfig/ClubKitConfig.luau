@@ -481,6 +481,40 @@ ClubKitConfig.JoinCommunity = {
 }
 
 -- =============================================================================
+-- SYNC DANCE (transisi crossfade, detik)
+-- =============================================================================
+-- Semua angka = lama blend (detik). Lebih besar = lebih soft; lebih kecil = lebih snappy.
+--
+-- Kapan dipakai:
+--   FadeIn / FadeOut
+--     Mulai dance dari idle, atau stop dance balik ke idle.
+--     FadeIn  = dance baru naik weight.
+--     FadeOut = dance lama turun weight.
+--
+--   SwitchFadeIn / SwitchFadeOut
+--     Ganti dance A → B saat sudah joget (bukan dari idle).
+--     SwitchFadeOut = A pudar; SwitchFadeIn = B muncul.
+--     Idealnya sama angkanya (matching) biar blend salon-style, tidak “deg”.
+--     Biasanya sedikit lebih panjang dari FadeIn/Out karena dua dance saling silang.
+--
+--   SyncJoinFade
+--     Player ikut sync ke leader (atau transfer lead). Satu nilai dipakai
+--     Stop+Play matching saat ikut dance leader.
+--
+--   SwitchInputCooldown
+--     Jeda minimum antar klik emote (detik). Set >= SwitchFadeIn/Out supaya
+--     spam klik tidak nest banyak track (efek “lengan patah”).
+--
+ClubKitConfig.Sync = {
+	FadeIn = 0.45, -- idle → dance (naik)
+	FadeOut = 0.45, -- dance → idle (turun)
+	SwitchFadeIn = 0.55, -- dance A→B: B naik
+	SwitchFadeOut = 0.55, -- dance A→B: A turun (samakan dengan SwitchFadeIn)
+	SyncJoinFade = 0.4, -- ikut / sync ke leader
+	SwitchInputCooldown = 0.55, -- jeda klik emote; >= SwitchFade*
+}
+
+-- =============================================================================
 -- FITUR (matikan modul yang tidak dipakai)
 -- =============================================================================
 ClubKitConfig.Features = {
