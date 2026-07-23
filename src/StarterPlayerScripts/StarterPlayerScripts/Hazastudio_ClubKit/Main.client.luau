@@ -1642,7 +1642,7 @@ if Config.FeatureFlags.SyncDanceEnabled then
 		end)
 		emotePanel:bindFavoriteToggle(function(animationName)
 			syncDanceController:onFavoriteToggled(animationName)
-			emotePanel:setFavorites(ClientMods.SyncStore:get().favoritedAnims)
+			-- Store subscription calls setFavorites(..., true) — badge only on Dance/Pose.
 		end)
 		emotePanel:bindSpeedChanged(function(speed)
 			syncDanceController:onSpeedChanged(speed)

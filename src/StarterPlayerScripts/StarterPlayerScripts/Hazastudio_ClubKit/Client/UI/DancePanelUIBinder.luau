@@ -943,33 +943,16 @@ function DancePanelUIBinder:_buildFilteredSource(): { AnimationEntry }
 		return filtered
 	end
 
+	-- Dance / Pose: keep catalog order. Do NOT inject favorites from the other
+	-- category or re-sort by favorite — Favorites tab owns that list.
 	local source = if self._currentCategory == "Pose" then self._poseAnims else self._danceAnims
-	local alternateSource = if self._currentCategory == "Pose" then self._danceAnims else self._poseAnims
 	local filtered = {}
-	local addedByName = {}
 
 	for _, animation in ipairs(source) do
 		if self._searchQuery == "" or string.find(string.lower(animation.Name), self._searchQuery, 1, true) then
 			table.insert(filtered, animation)
-			addedByName[animation.Name] = true
 		end
 	end
-
-	for _, animation in ipairs(alternateSource) do
-		if not addedByName[animation.Name] and self._favoritedAnims[animation.Name] == true then
-			if self._searchQuery == "" or string.find(string.lower(animation.Name), self._searchQuery, 1, true) then
-				table.insert(filtered, animation)
-				addedByName[animation.Name] = true
-			end
-		end
-	end
-
-	-- Sort alphabetical aja. Item favorit TIDAK lagi naik ke atas —
-	-- biarin stay di posisi natural-nya. Khusus favorit udah ada tab
-	-- sendiri (Favorites) yang nge-handle list dedicated.
-	table.sort(filtered, function(a: AnimationEntry, b: AnimationEntry)
-		return a.Name < b.Name
-	end)
 
 	return filtered
 end
@@ -1431,15 +1414,33 @@ end
 
 function DancePanelUIBinder:setFavorites(favorites: { [string]: boolean }, suppressRebuild: boolean?)
 	self._favoritedAnims = favorites
-	if suppressRebuild == true then
+
+	-- Favorites tab content depends on the set — rebuild, but keep scroll.
+	if self._currentCategory == "Favorites" then
+		self:_saveCurrentCategoryScroll()
+		self._pendingRestoreScrollY = self._scrollByCategory.Favorites or 0
 		self._listDirty = true
-		if self._isOpen and #self._activeRows > 0 then
-			self:refreshRowStates()
+		if self._isOpen then
+			self:rebuildListIncremental(false)
 		end
 		return
 	end
+
+	-- Dance / Pose: favorite is badge-only. Never rebuild (rebuild was jumping
+	-- scroll / reshuffling rows so the starred emote felt like it "moved to top").
+	if suppressRebuild ~= false then
+		if self._isOpen and #self._activeRows > 0 then
+			self:refreshRowStates()
+		else
+			self._listDirty = true
+		end
+		return
+	end
+
 	self._listDirty = true
 	if self._isOpen then
+		self:_saveCurrentCategoryScroll()
+		self._pendingRestoreScrollY = self._scrollByCategory[self._currentCategory] or 0
 		self:rebuildListIncremental(false)
 	end
 end

@@ -11,6 +11,11 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.65] - 2026-07-23
+
+### Changed
+- **Dance panel favorite** — starring an emote only toggles the badge; it no longer rebuilds/reorders the Dance/Pose list (Favorites tab still lists favs). Cross-category favorite injection into Dance/Pose removed.
+
 ## [2.4.64] - 2026-07-23
 
 ### Fixed
