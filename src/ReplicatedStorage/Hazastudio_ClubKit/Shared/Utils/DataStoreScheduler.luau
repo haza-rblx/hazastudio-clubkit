@@ -225,9 +225,15 @@ function DataStoreScheduler.executeAsync<T>(
 		local elapsed = os.clock() - startedAt
 		if elapsed >= deferSeconds then
 			metrics.rejectedBudget += 1
+			-- Distinguish kit concurrency saturation from real Roblox budget pressure.
+			-- Inflight-full with healthy GetRequestBudget must NOT poison negative caches.
+			local refuseReason = if inflight >= maxInflight and available >= (cost + headroom)
+				then "inflight_saturated"
+				else "budget_low"
 			if log then
-				log:warn("Budget exhausted, refusing call", {
+				log:warn("DataStore admission refused", {
 					gate = gateName,
+					reason = refuseReason,
 					requestType = tostring(requestType),
 					budget = budget,
 					reserved = reserved,
@@ -237,7 +243,7 @@ function DataStoreScheduler.executeAsync<T>(
 					deferredMs = math.floor(elapsed * 1000),
 				})
 			end
-			return Result.Err("budget_exhausted")
+			return Result.Err(refuseReason)
 		end
 
 		if not deferred then
@@ -245,8 +251,12 @@ function DataStoreScheduler.executeAsync<T>(
 		end
 		deferred = true
 		if log then
-			log:debug("Budget low, deferring", {
+			local deferReason = if inflight >= maxInflight and available >= (cost + headroom)
+				then "inflight"
+				else "budget"
+			log:debug("Budget admission deferring", {
 				gate = gateName,
+				reason = deferReason,
 				requestType = tostring(requestType),
 				budget = budget,
 				reserved = reserved,

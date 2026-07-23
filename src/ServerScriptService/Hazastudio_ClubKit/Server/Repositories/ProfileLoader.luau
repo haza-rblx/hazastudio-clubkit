@@ -109,6 +109,8 @@ end
 local function isTransientError(err: string): boolean
 	-- Scaling 100→200 CCU Phase 3: detect transient errors that should be retried
 	return err == "budget_exhausted"
+		or err == "budget_low"
+		or err == "inflight_saturated"
 		or err == "ds_throttled"
 		or string.find(err, "Timeout") ~= nil
 		or string.find(err, "InternalError") ~= nil
@@ -161,9 +163,10 @@ local function processJob(self: any, job: Job)
 		elseif type(valueOrError) == "table" and valueOrError.ok ~= nil then
 			result = valueOrError :: any
 			if not result.ok and isRetryableResultError(result.error) and attempt < maxRetries then
-				-- budget_exhausted is negative-cached; do not hold a concurrency
-				-- slot for 10s+. Caller (Main) requeues overhead after TTL.
-				if result.error == "budget_exhausted" then
+				-- budget_low / legacy budget_exhausted is negative-cached; do not hold a
+				-- concurrency slot for 10s+. Caller (Main) requeues overhead after TTL.
+				-- inflight_saturated is NOT negative-cached — keep retrying.
+				if result.error == "budget_exhausted" or result.error == "budget_low" then
 					break
 				end
 				if self._logger then

@@ -224,42 +224,59 @@ local function createOverheadService(deps: {
 		Cache.set(cacheKey, groupsResult, groupsTtl)
 		return groupsResult, true
 	end
-	local function getGroupRank(userId: number): number
+	local function getGroupRank(userId: number): (number, boolean)
 		local rankCacheKey = GROUP_RANK_PREFIX .. userId
 		local cachedRank = Cache.get(rankCacheKey)
-		if cachedRank then
-			return cachedRank :: number
+		-- Provenance record: { rank, ok }. Legacy number cache treated as ok=true.
+		if type(cachedRank) == "table" then
+			local rank = tonumber((cachedRank :: any).rank)
+			local ok = (cachedRank :: any).ok == true
+			if rank ~= nil then
+				return rank, ok
+			end
+		elseif type(cachedRank) == "number" then
+			return cachedRank, true
 		end
 
 		-- PRIMARY: Try Worker endpoint (Open Cloud API, dedicated rate limit)
 		local workerRank = fetchRankFromWorker(userId)
 		if workerRank then
-			Cache.set(rankCacheKey, workerRank, Config.Group.RANK_CACHE_TTL)
-			return workerRank
+			Cache.set(rankCacheKey, { rank = workerRank, ok = true }, Config.Group.RANK_CACHE_TTL)
+			return workerRank, true
 		end
 
 		-- FALLBACK: GroupService direct (unreliable at high CCU)
 		local rankId = 0
-		local groups = select(1, getGroups(userId)) or {}
+		local groups, groupsOk = getGroups(userId)
+		if type(groups) ~= "table" then
+			groups = {}
+		end
 		for _, groupInfo in ipairs(groups) do
 			if groupInfo.Id == Config.Group.GROUP_ID then
 				rankId = groupInfo.Rank
 				break
 			end
 		end
-		-- LKG fallback: if GroupService returned nothing useful, use last known rank
-		if rankId == 0 and #groups == 0 then
+
+		-- Transient failure (worker miss + GroupService fail/empty unknown): do NOT
+		-- cache rank 0 for RANK_CACHE_TTL — that blocked LKG for 10 minutes.
+		if rankId == 0 and groupsOk ~= true then
 			local player = Players:GetPlayerByUserId(userId)
 			if player then
 				local lkgRank = player:GetAttribute("_LKG_RankId")
 				if type(lkgRank) == "number" and lkgRank > 0 then
 					log:debug("GroupService empty, using LKG rank", { userId = userId, lkgRank = lkgRank })
-					return lkgRank
+					return lkgRank, true
 				end
 			end
+			local failTtl = (Config.HttpApi and Config.HttpApi.NEGATIVE_CACHE_TTL) or 30
+			Cache.set(rankCacheKey, { rank = 0, ok = false }, math.min(failTtl, 30))
+			return 0, false
 		end
-		Cache.set(rankCacheKey, rankId, Config.Group.RANK_CACHE_TTL)
-		return rankId
+
+		-- Confirmed: groups loaded (member or not). Cache including confirmed 0.
+		Cache.set(rankCacheKey, { rank = rankId, ok = true }, Config.Group.RANK_CACHE_TTL)
+		return rankId, true
 	end
 	local function isHiddenDonationUser(userId: number): boolean
 		local hiddenUserIds = Config.Leaderboards.HIDDEN_ROBUX_USER_IDS
@@ -605,7 +622,11 @@ local function createOverheadService(deps: {
 	-- buildPayload: fungsi utama, dipanggil saat player join
 	-- dan saat data di-refresh
 	-- ----------------------------------------------------------
-	function service:buildPayloadWithMeta(player: Player): { result: Result<OverheadPayload>, usedFallback: boolean }
+	function service:buildPayloadWithMeta(player: Player): {
+		result: Result<OverheadPayload>,
+		usedFallback: boolean,
+		rankLookupOk: boolean,
+	}
 		local userId = player.UserId
 		-- Phase 1: Load stored data (required before donation rank logic).
 		local storedResult = repo:load(userId)
@@ -624,6 +645,7 @@ local function createOverheadService(deps: {
 		-- Results collected into locals; counter tracks completion.
 		local groups: { RobloxGroupEntry } = {}
 		local rankId: number = 0
+		local rankLookupOk = false
 		local resolvedDisplayName: string = player.DisplayName
 		local relationshipMode: Types.ProfileRelationshipMode? = nil
 		local statusText: string? = nil
@@ -651,7 +673,7 @@ local function createOverheadService(deps: {
 		-- Task A: Groups + rank
 		spawnTask(function()
 			groups = select(1, getGroups(userId)) or {}
-			rankId = getGroupRank(userId)
+			rankId, rankLookupOk = getGroupRank(userId)
 		end)
 
 		-- Task B: Profile
@@ -816,10 +838,12 @@ local function createOverheadService(deps: {
 		local targetPlayer = Players:GetPlayerByUserId(userId)
 		if targetPlayer and payload.role and payload.role ~= "Guest" and payload.role ~= "" then
 			targetPlayer:SetAttribute("_LKG_Role", payload.role)
-			targetPlayer:SetAttribute("_LKG_RankId", rankId)
+			if rankLookupOk and rankId > 0 then
+				targetPlayer:SetAttribute("_LKG_RankId", rankId)
+			end
 		end
 
-		return { result = ResultUtil.Ok(payload), usedFallback = usedFallback }
+		return { result = ResultUtil.Ok(payload), usedFallback = usedFallback, rankLookupOk = rankLookupOk }
 	end
 	function service:buildPayload(player: Player): Result<OverheadPayload>
 		return self:buildPayloadWithMeta(player).result
@@ -828,7 +852,7 @@ local function createOverheadService(deps: {
 		return repo:load(userId)
 	end
 	function service:getRawGroupRole(player: Player): RoleKey
-		local rankId = getGroupRank(player.UserId)
+		local rankId = select(1, getGroupRank(player.UserId))
 		return OverheadDomain.resolveRole(rankId, player.UserId)
 	end
 	function service:getEffectivePayload(player: Player): Result<OverheadPayload>
@@ -847,7 +871,7 @@ local function createOverheadService(deps: {
 		end
 		stored = OverheadDomain.applyHardcoded(stored, userId)
 
-		local rankId = getGroupRank(userId)
+		local rankId = select(1, getGroupRank(userId))
 		local role: RoleKey
 		local storedGiftedRole = OverheadDomain.normalizeRoleKey(stored.giftedRole)
 		if storedGiftedRole and OverheadDomain.isValidRole(storedGiftedRole) then

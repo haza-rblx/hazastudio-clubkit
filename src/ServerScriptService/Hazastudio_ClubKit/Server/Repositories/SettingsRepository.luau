@@ -81,7 +81,7 @@ local function createSettingsRepository(datastoreKey: string?): any
 		local cacheKey = KEY_PREFIX .. userId
 
 		if Cache.getNegative(cacheKey) then
-			return Result.Err("budget_exhausted")
+			return Result.Err("budget_low")
 		end
 
 		local cached = Cache.get(cacheKey)
@@ -99,7 +99,7 @@ local function createSettingsRepository(datastoreKey: string?): any
 
 		if not result.ok then
 			log:error("Load failed", { userId = userId, err = result.error })
-			if result.error == "budget_exhausted" then
+			if result.error == "budget_low" or result.error == "budget_exhausted" then
 				Cache.setNegative(cacheKey, Config.Budget.NEGATIVE_CACHE_TTL or 10)
 			end
 			return Result.Err(result.error)

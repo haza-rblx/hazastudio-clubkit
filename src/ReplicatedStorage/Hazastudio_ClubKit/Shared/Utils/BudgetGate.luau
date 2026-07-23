@@ -9,7 +9,8 @@
 -- restores the pre-fabric per-instance snapshot loop.
 --
 -- Contract:
---   - executeAsync polls/reserves budget; refuses with budget_exhausted
+--   - executeAsync polls/reserves budget; refuses with budget_low
+--     (legacy alias budget_exhausted may still appear from older call sites)
 --   - optional 3rd arg keyMutex serializes same-key writes via the scheduler
 --   - if the wrapped function returns a Result, it is passed through
 
@@ -156,7 +157,7 @@ function BudgetGate:executeAsync<T>(
 					deferredMs = math.floor(elapsed * 1000),
 				})
 			end
-			return Result.Err("budget_exhausted")
+			return Result.Err("budget_low")
 		end
 
 		deferred = true

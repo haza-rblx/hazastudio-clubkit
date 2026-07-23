@@ -182,6 +182,16 @@ export type AboutRosterEntry = {
 	role: RoleKey,
 	updatedAt: number,
 }
+-- Thin global chat-tag roster (not proximity-gated). ChatTagsController primary source.
+export type ChatTagEntry = {
+	userId: number,
+	displayName: string,
+	primaryTag: string,
+	coupleTag: string?,
+	role: string,
+	effectiveMembership: string,
+	rev: number,
+}
 -- ============================================================
 -- COUPLE SYSTEM
 -- ============================================================

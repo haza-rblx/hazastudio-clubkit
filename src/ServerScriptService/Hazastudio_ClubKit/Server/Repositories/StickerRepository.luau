@@ -166,7 +166,7 @@ function StickerRepository.loadGlobalPool(): any
 
 	if not result.ok then
 		log:warn("Sticker global pool load failed", { error = result.error })
-		if result.error == "budget_exhausted" then
+		if result.error == "budget_low" or result.error == "budget_exhausted" then
 			Cache.setNegative(GLOBAL_CACHE_KEY, Config.Budget.NEGATIVE_CACHE_TTL or 10)
 		end
 		local fallback = sanitizeGlobalPool(nil)
@@ -233,7 +233,7 @@ function StickerRepository.load(userId: number): any
 			userId = userId,
 			error = result.error,
 		})
-		if result.error == "budget_exhausted" then
+		if result.error == "budget_low" or result.error == "budget_exhausted" then
 			Cache.setNegative(cacheKey, Config.Budget.NEGATIVE_CACHE_TTL or 10)
 		end
 		return Result.Ok(defaultData())

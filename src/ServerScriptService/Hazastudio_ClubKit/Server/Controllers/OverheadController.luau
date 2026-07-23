@@ -84,6 +84,9 @@ end
 	-- Server -> Client: kirim payload overhead
 	local RemoteOverheadUpdate = getOrCreateRemote("OverheadUpdate")
 	local RemoteAboutRosterSync = getOrCreateRemote("AboutRosterSync")
+	local RemoteChatTagSync = getOrCreateRemote(
+		tostring(Config.Overhead.REMOTE_CHAT_TAG_SYNC or "ChatTagSync")
+	)
 	-- NetworkManagers batch per-Heartbeat. Overhead deltas can fan out to all
 	-- 70+ players multiple times per second (donation tick, streak rollover,
 	-- like count); batching coalesces same-frame fires onto one wire flush.
@@ -94,6 +97,11 @@ end
 	})
 	local aboutRosterNetwork = NetworkManager.create({
 		reliable = RemoteAboutRosterSync,
+		logger = log,
+		isServer = true,
+	})
+	local chatTagNetwork = NetworkManager.create({
+		reliable = RemoteChatTagSync,
 		logger = log,
 		isServer = true,
 	})
@@ -150,6 +158,11 @@ end
 		return player.Parent ~= nil
 	end
 	local aboutRosterEntryFingerprints: { [number]: string } = {}
+	-- Global thin chat-tag roster (not proximity-gated).
+	local chatTagEntries: { [number]: Types.ChatTagEntry } = {}
+	local chatTagRevs: { [number]: number } = {}
+	local chatTagFingerprints: { [number]: string } = {}
+	local payloadRankLookupOk: { [number]: boolean } = {}
 	-- v2.3: DeltaCompressor — broadcasts only changed fields after the
 	-- initial full state per player. Reduces overhead payload size by
 	-- 60-80% in steady state since most updates touch 1-3 fields out of
@@ -275,6 +288,101 @@ end
 
 			aboutRosterNetwork:fireAllClients(result.value)
 		end)
+	end
+
+	local function isTagAuthoritative(usedFallback: boolean, rankLookupOk: boolean, primaryTag: string?): boolean
+		-- Confirmed rank (member or non-member) is always tag-authoritative.
+		if rankLookupOk == true then
+			return true
+		end
+		-- Unresolved join (DS fallback + rank unknown): never publish Guest-from-unresolved.
+		if usedFallback then
+			return false
+		end
+		-- DS loaded but rank unknown: allow non-Guest tags (gifted membership etc.),
+		-- still block Guest-labeled primary so we don't poison the global roster.
+		if type(primaryTag) ~= "string" or primaryTag == "" then
+			return false
+		end
+		local guestLabel = Config.ChatPrimaryTagLabel and Config.ChatPrimaryTagLabel.Guest
+		if type(guestLabel) ~= "string" or guestLabel == "" then
+			guestLabel = "GUEST"
+		end
+		return primaryTag ~= guestLabel
+	end
+
+	local function chatTagFingerprint(entry: Types.ChatTagEntry): string
+		return table.concat({
+			tostring(entry.userId),
+			entry.displayName,
+			entry.primaryTag,
+			entry.coupleTag or "",
+			entry.role,
+			entry.effectiveMembership,
+		}, "|")
+	end
+
+	local function publishChatTagFromPayload(payload: OverheadPayload, usedFallback: boolean, rankLookupOk: boolean)
+		local primaryTag = payload.chatPrimaryTag
+		if type(primaryTag) ~= "string" or primaryTag == "" then
+			return
+		end
+		if not isTagAuthoritative(usedFallback, rankLookupOk, primaryTag) then
+			return
+		end
+		local displayName = payload.displayName
+		if type(displayName) ~= "string" or displayName == "" then
+			return
+		end
+		local userId = payload.userId
+		local nextRev = (chatTagRevs[userId] or 0) + 1
+		local entry: Types.ChatTagEntry = {
+			userId = userId,
+			displayName = displayName,
+			primaryTag = primaryTag,
+			coupleTag = if type(payload.chatCoupleTag) == "string" and payload.chatCoupleTag ~= ""
+				then payload.chatCoupleTag
+				else nil,
+			role = tostring(payload.role or "Guest"),
+			effectiveMembership = tostring(payload.effectiveMembership or "Guest"),
+			rev = nextRev,
+		}
+		local fp = chatTagFingerprint(entry)
+		if chatTagFingerprints[userId] == fp then
+			return
+		end
+		chatTagFingerprints[userId] = fp
+		chatTagRevs[userId] = nextRev
+		chatTagEntries[userId] = entry
+		chatTagNetwork:fireAllClients({
+			kind = "chattag_upsert",
+			userId = userId,
+			entry = entry,
+		})
+	end
+
+	local function sendChatTagsTo(player: Player)
+		local batch = {}
+		for _, entry in pairs(chatTagEntries) do
+			table.insert(batch, entry)
+		end
+		chatTagNetwork:fireClient(player, {
+			kind = "chattag_batch",
+			batch = batch,
+		})
+	end
+
+	local function removeChatTag(userId: number)
+		if chatTagEntries[userId] == nil then
+			return
+		end
+		chatTagEntries[userId] = nil
+		chatTagFingerprints[userId] = nil
+		chatTagRevs[userId] = nil
+		chatTagNetwork:fireAllClients({
+			kind = "chattag_remove",
+			remove = userId,
+		})
 	end
 
 	local function fingerprintPayload(payload: OverheadPayload): string
@@ -432,13 +540,13 @@ end
 	-- ----------------------------------------------------------
 	-- Build payload untuk satu player
 	-- ----------------------------------------------------------
-	local function buildPayload(player: Player): (OverheadPayload?, boolean)
+	local function buildPayload(player: Player): (OverheadPayload?, boolean, boolean)
 		local meta = service:buildPayloadWithMeta(player)
 		if not meta.result.ok then
 			log:warn("buildPayload gagal", { player = player.Name, err = meta.result.error })
-			return nil, false
+			return nil, false, false
 		end
-		return meta.result.value, meta.usedFallback
+		return meta.result.value, meta.usedFallback, meta.rankLookupOk == true
 	end
 	local function buildAndCachePayload(player: Player): (OverheadPayload?, boolean)
 		local userId = player.UserId
@@ -454,13 +562,14 @@ end
 			if cached and stored ~= nil then
 				local currentFingerprint = service:computeInputsFingerprint(userId)
 				if currentFingerprint == stored then
-					-- Cache valid, return cached tanpa rebuild
+					-- Cache valid, return cached tanpa rebuild (re-publish tag if needed).
+					publishChatTagFromPayload(cached, false, payloadRankLookupOk[userId] == true)
 					return cached, false
 				end
 			end
 		end
 
-		local payload, usedFallback = buildPayload(player)
+		local payload, usedFallback, rankLookupOk = buildPayload(player)
 		if not payload then
 			return nil, false
 		end
@@ -470,13 +579,20 @@ end
 		-- ada cache sama sekali (first load). Ini cegah "Guest flicker" di chat tags
 		-- saat refreshAll hit transient DataStore failure.
 		if usedFallback and cachedPayloads[userId] and not payloadWasFallback[userId] then
+			publishChatTagFromPayload(cachedPayloads[userId], false, payloadRankLookupOk[userId] == true)
 			return cachedPayloads[userId], false
 		end
+
+		-- Unresolved first-paint (DS fallback + rank unknown): do not install as
+		-- lasting Guest authority if we somehow already have a good cache (handled
+		-- above). Still allow attach path to proceed with fallback for nametag, but
+		-- ChatTag publish is skipped via isTagAuthoritative.
 		local fingerprint = fingerprintPayload(payload)
 		local changed = payloadFingerprints[userId] ~= fingerprint
 		cachedPayloads[userId] = payload
 		payloadFingerprints[userId] = fingerprint
 		payloadWasFallback[userId] = usedFallback
+		payloadRankLookupOk[userId] = rankLookupOk
 		-- S1: only store inputs fingerprint when we loaded real stored data. If we fell
 		-- back to default data, leave the fingerprint nil so the next build retries.
 		if not usedFallback then
@@ -485,6 +601,7 @@ end
 			storedInputsFingerprints[userId] = nil
 		end
 		updateAboutRosterFromPayload(player, payload)
+		publishChatTagFromPayload(payload, usedFallback, rankLookupOk)
 		-- Selalu return payload build terbaru (bukan referensi cache lama) supaya
 		-- syncBuiltinPlayerList dapat cash/robux terbaru untuk leaderstats.
 		return payload, changed
@@ -1189,7 +1306,11 @@ end
 		return nil
 	end
 
-	local JOIN_DATA_READY_TIMEOUT = 5
+	local JOIN_DATA_READY_TIMEOUT = math.max(
+		10,
+		tonumber(Config.Overhead.JOIN_DATA_READY_TIMEOUT) or 10,
+		tonumber(Config.Persistence and Config.Persistence.DEFER_SECONDS) or 8
+	)
 
 	local function finishCharacterSetup(player: Player, isRespawn: boolean?)
 		-- Join-time DataStore reads are serialized; wait until this player's data is
@@ -1238,6 +1359,8 @@ end
 				return
 			end
 			sendAllExistingTo(player)
+			sendAboutRosterTo(player)
+			sendChatTagsTo(player)
 		end)
 		-- GroupService settle windows (not character readiness) — keep wall-clock.
 		task.delay(Config.Overhead.GROUP_RANK_SETTLE_DELAY, function()
@@ -1362,9 +1485,11 @@ end
 		-- S1: cleanup stored inputs fingerprint to avoid memory leak
 		storedInputsFingerprints[player.UserId] = nil
 		payloadWasFallback[player.UserId] = nil
+		payloadRankLookupOk[player.UserId] = nil
 		dataReadyPlayers[player.UserId] = nil
 		hasCompletedInitialSetup[player.UserId] = nil
 		gameplayReadyPlayers[player.UserId] = nil
+		removeChatTag(player.UserId)
 		-- Free all per-recipient delta baselines where this player was the subject
 		-- (keys "overhead:<userId>:<viewerUserId>"). The per-viewer side of any
 		-- remaining pairs is cleaned up when the onSubscriberRemoved handler fires
@@ -1428,6 +1553,7 @@ end
 		task.spawn(function()
 			sendAllExistingTo(player)
 			sendAboutRosterTo(player)
+			sendChatTagsTo(player)
 		end)
 	end)
 	-- ----------------------------------------------------------

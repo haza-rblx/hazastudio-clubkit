@@ -91,7 +91,7 @@ local function createOverheadRepository(datastoreKey: string?): IOverheadReposit
 
 		local cacheKey = KEY_PREFIX .. userId
 		if Cache.getNegative(cacheKey) then
-			return ResultUtil.Err("budget_exhausted")
+			return ResultUtil.Err("budget_low")
 		end
 		local cached = Cache.get(cacheKey)
 		if cached then
@@ -108,7 +108,8 @@ local function createOverheadRepository(datastoreKey: string?): IOverheadReposit
 		end, mutexFor(userId))
 		if not result.ok then
 			log:error("Load gagal", { userId = userId, err = result.error })
-			if result.error == "budget_exhausted" then
+			-- Only poison on real Roblox budget pressure — never on inflight_saturated.
+			if result.error == "budget_low" or result.error == "budget_exhausted" then
 				Cache.setNegative(cacheKey, Config.Budget.NEGATIVE_CACHE_TTL or 10)
 			end
 			return ResultUtil.Err(result.error)

@@ -11,6 +11,17 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.64] - 2026-07-23
+
+### Fixed
+- **Chat tags no longer invent `[GUEST]` for distant players** — chat tags use a thin global `ChatTagSync` roster (AboutRoster-style), not proximity-gated overhead. Name + `[tag]` share the same role/membership color; until an authoritative entry arrives, chat shows display name only.
+- **Join-storm false `budget_exhausted`** — DataStoreScheduler distinguishes `inflight_saturated` vs `budget_low`; negative-cache only on real budget pressure. `MAX_INFLIGHT_PER_TYPE` / `ProfileLoader.MAX_CONCURRENCY` restored to **8**; `JOIN_DATA_READY_TIMEOUT` raised to **10s** (≥ defer).
+- **Rank cache no longer poisons Guest for 10 minutes** — group rank cache stores `{ rank, ok }`; transient GroupService/worker failures use short fail TTL + `_LKG_RankId` instead of caching confirmed-zero for `RANK_CACHE_TTL`.
+- **ChatTag edge hardening** — catch-up via `OverheadRosterRequest` after client wire; batch upsert ignores stale `rev`; client clears store on `PlayerRemoving`; publish gate keys off Guest **primaryTag** (not role alone) so gifted membership still publishes when rank lookup flakes; `lastGood` only from ChatTagStore.
+
+### Added
+- **`ChatTagSync` remote + client `ChatTagStore`** — server publishes tag-authoritative entries only (`rankLookupOk` and/or non-unresolved payload); joiners get a batch; leavers get remove.
+
 ## [2.4.63] - 2026-07-23
 
 ### Fixed

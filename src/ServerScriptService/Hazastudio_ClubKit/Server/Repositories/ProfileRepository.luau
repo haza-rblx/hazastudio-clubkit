@@ -55,7 +55,7 @@ function ProfileRepository:load(userId: number): Result<ProfileStoredData>
 	local key = self:_key(userId)
 
 	if Cache.getNegative(key) then
-		return Result.Err("budget_exhausted")
+		return Result.Err("budget_low")
 	end
 
 	-- Check cache
@@ -74,7 +74,7 @@ function ProfileRepository:load(userId: number): Result<ProfileStoredData>
 
 	if not result.ok then
 		self._logger:warn("ProfileRepository:load failed", { userId = userId, error = result.error })
-		if result.error == "budget_exhausted" then
+		if result.error == "budget_low" or result.error == "budget_exhausted" then
 			Cache.setNegative(key, Config.Budget.NEGATIVE_CACHE_TTL or 10)
 		end
 		return Result.Err("DataStore read failed")

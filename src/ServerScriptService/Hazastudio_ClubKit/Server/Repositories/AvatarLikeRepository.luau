@@ -358,7 +358,7 @@ local function createAvatarLikeRepository(deps: { logger: Types.ILogger? }?)
 	function repo:getSummary(targetUserId: number): Result<number>
 		local cacheKey = getSummaryCacheKey(targetUserId)
 		if Cache.getNegative(cacheKey) then
-			return Result.Err("budget_exhausted")
+			return Result.Err("budget_low")
 		end
 		local cached = Cache.get(cacheKey)
 		if cached then
@@ -408,7 +408,7 @@ local function createAvatarLikeRepository(deps: { logger: Types.ILogger? }?)
 				targetUserId = targetUserId,
 				error = result.error,
 			})
-			if result.error == "budget_exhausted" then
+			if result.error == "budget_low" or result.error == "budget_exhausted" then
 				Cache.setNegative(cacheKey, Config.Budget.NEGATIVE_CACHE_TTL or 10)
 			end
 			return Result.Err(result.error)

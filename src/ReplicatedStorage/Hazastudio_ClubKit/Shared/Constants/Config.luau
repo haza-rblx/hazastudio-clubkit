@@ -711,6 +711,11 @@ Config.Overhead = {
 	-- Soft ceiling for AdornReady wait before first join broadcast (signal gate;
 	-- usually instant after stable-Head attach). No longer an unconditional sleep.
 	CHARACTER_READY_DELAY = 0.5,
+	-- Join gate: wait for ProfileLoader before first broadcast. Must be >=
+	-- Persistence.DEFER_SECONDS so we do not force-broadcast mid scheduler wait.
+	JOIN_DATA_READY_TIMEOUT = 10,
+	-- Global thin chat-tag roster (ChatTagSync). Independent of proximity overhead.
+	REMOTE_CHAT_TAG_SYNC = "ChatTagSync",
 	-- Detik setelah broadcast pertama untuk kirim broadcast kedua (deferred re-broadcast).
 	-- Memberi waktu GroupService:GetGroupsAsync() selesai di live server (biasanya 1-3 detik).
 	-- Broadcast kedua memastikan role yang benar (Owner/Admin/dll.) sampai ke client.
@@ -3191,7 +3196,7 @@ Config.Budget = {
 	READ_PER_MIN_TARGET = 80, -- R3.3: >=80 reads/min/server at 100 CCU
 	DEFER_SECONDS = 8, -- Scaling 100→200 CCU: extended from 5s to 8s to give budget more time to recover during load spikes
 	POLL_INTERVAL = 0.5, -- budget replenishment poll cadence (seconds)
-	NEGATIVE_CACHE_TTL = 10, -- seconds to skip retrying a DataStore read after budget_exhausted
+	NEGATIVE_CACHE_TTL = 10, -- seconds to skip retry after budget_low (not inflight_saturated)
 }
 -- Delayed server restart (game.ServerRestartScheduled from Creator Hub / Open Cloud).
 -- Early flush + toast before BindToClose; {eta} / {reason} placeholders in messages.
@@ -3205,7 +3210,7 @@ Config.ServerRestart = {
 Config.Persistence = {
 	USE_LEGACY_PER_REPO_BUDGET_GATE = false,
 	HEADROOM = 2, -- keep this many spare credits beyond minBudget before dispatch
-	MAX_INFLIGHT_PER_TYPE = 4, -- concurrent DS ops per RequestType across all repos
+	MAX_INFLIGHT_PER_TYPE = 8, -- concurrent DS ops per RequestType (was 4; aligned with ProfileLoader)
 	KEY_MUTEX_ENABLED = true, -- serialize UpdateAsync/GetAsync on same store::key
 	DEFER_SECONDS = 8, -- scheduler wait window (falls back to Config.Budget.DEFER_SECONDS)
 	POLL_INTERVAL = 0.5,
@@ -3251,9 +3256,9 @@ Config.ClientHttpApi = {
 	GET_USER_ID_TTL = 600,
 }
 -- Join-time DataStore read serialization (perf-scaling R3.7 / R10.1). Consumed by ProfileLoader.
--- Persistence Fabric: default 4 (safer with global scheduler HEADROOM); was 8 for 100→200 join storms.
+-- Persistence Fabric: default 8 (aligned with MAX_INFLIGHT_PER_TYPE); was briefly 4 then restored.
 Config.ProfileLoader = {
-	MAX_CONCURRENCY = 4,
+	MAX_CONCURRENCY = 8,
 	PER_PLAYER_CONCURRENCY = 1, -- R10.1: per-player reads run sequentially through one queue
 	-- Critical join kinds (overhead/profile) enqueue immediately; secondary kinds wait this long.
 	SECONDARY_JOIN_DELAY_SEC = 4,

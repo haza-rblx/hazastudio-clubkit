@@ -261,8 +261,12 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 				return result
 			end
 
-			-- Only retry on budget exhaustion; other errors are terminal.
-			if result.error ~= "budget_exhausted" then
+			-- Only retry on admission/budget pressure; other errors are terminal.
+			if
+				result.error ~= "budget_exhausted"
+				and result.error ~= "budget_low"
+				and result.error ~= "inflight_saturated"
+			then
 				return result
 			end
 
@@ -288,7 +292,7 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 	-- Patch #2 R4: Defer/retry wrapper untuk reads. Sama seperti
 	-- executeWithDeferRetry (writes), tapi window lebih pendek (30s vs 60s)
 	-- karena caller bisa dapat fallback dari cache (TTL 60s) atau join-time
-	-- pre-fetch yang lain. Retry hanya on budget_exhausted (transient) -
+	-- pre-fetch yang lain. Retry on budget_low / inflight_saturated (transient) -
 	-- terminal error langsung return. Budget biasanya recover <1s setelah
 	-- exhaustion di Roblox, jadi 2s interval + 30s window = max 15 attempts
 	-- untuk handle transient storms saat high-load.
@@ -312,8 +316,12 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 				return result
 			end
 
-			-- Only retry on budget exhaustion; other errors are terminal.
-			if result.error ~= "budget_exhausted" then
+			-- Only retry on admission/budget pressure; other errors are terminal.
+			if
+				result.error ~= "budget_exhausted"
+				and result.error ~= "budget_low"
+				and result.error ~= "inflight_saturated"
+			then
 				return result
 			end
 

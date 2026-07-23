@@ -35,6 +35,7 @@ end
 
 local function provisionRemotesFolder(remotes: Folder, config: any)
 	ensureRemoteEvent(remotes, "AboutRosterSync")
+	ensureRemoteEvent(remotes, "ChatTagSync")
 	ensureRemoteEvent(remotes, "OverheadRosterRequest")
 	ensureRemoteEvent(remotes, "OverheadRequestRefresh")
 	ensureRemoteEvent(remotes, "OverheadUpdate")
