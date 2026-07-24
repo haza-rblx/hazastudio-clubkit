@@ -11,6 +11,11 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.66] - 2026-07-24
+
+### Changed
+- **Version bump for engine sync** — empty release; no feature or bug fix changes. Use plugin **Update Engine** to pull kit `2.4.66`.
+
 ## [2.4.65] - 2026-07-23
 
 ### Changed

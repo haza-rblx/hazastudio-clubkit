@@ -1,0 +1,146 @@
+================================================================================
+CLUB KIT — PROMO (kirim ke server lain)
+Cara pakai: copy isi MESSAGE saja.
+Invite: https://discord.gg/sTzD8PMX3d
+================================================================================
+
+
+---------- PROMO Part 1/3 ----------
+
+# Hazastudio Club Kit
+**All-in-one club system untuk Roblox**
+
+Bukan script campur aduk — satu kit utuh: membership, shop, donasi, music, social, admin, sampai update engine.
+
+**Easy Setup**
+Cuma 2 script yang diedit buyer: `ClubKitConfig` + `Secrets`
+Feature toggles · Branding mudah · One-click engine update
+Config & secrets tetap aman saat update (tidak ketimpa)
+
+**1 · Roles & Membership**
+Owner · Guest · Staff · Moderator · DJ · Lead Dance · Streamer · Influencer
+Paid tiers: VIP / VVIP / Supreme (nama bisa custom)
+Top Spender auto-rank (Rupiah & Robux)
+Chat tags · Team colors · Special badges
+`/setrole` · Per-role tools · Custom privileges
+(gift · announce · teleport · admin · music)
+
+**2 · Shop & Gift**
+Shop + Gift GUI bersih
+Self-buy Game Pass · Gift via Dev Product
+Gift ke player lain · Bulk gift untuk staff
+
+**3 · Donation**
+Bagi-Bagi atau Saweria · Robux + Cash GUI
+Aura VFX · World VFX (Nuke · Hammer · BlackHole)
+Camera highlight · Notifikasi donasi
+Admin preview · Owner manual tools
+
+Lanjut Part 2/3 ↓
+
+---------- END Part 1/3 ----------
+
+
+---------- PROMO Part 2/3 ----------
+
+# Hazastudio Club Kit
+**Part 2/3**
+
+**4 · Leaderboards**
+Top 3 poster-style showcase
+Daily board · Live chat board · Running text
+Robux · Cash · Community · Likes
+Ada showcase / demo mode untuk trailer
+
+**5 · Music (24/7)**
+Upload · Playlist · Delete — semua in-game
+Favorites · New drops · Request history
+DJ / Manage tabs · Global atau zone mode
+UI responsif · Volume di Settings
+
+**6 · Sync Dance**
+Lead / follow sync · Transfer lead
+Speed control · Favorites
+Dance panel (desktop + mobile)
+Lead Dance role · AFK sync restore
+
+**7 · Avatar Context Menu**
+Preview avatar 3D
+Quick actions: dance · carry · profile
+Likes · Friends social proof
+Bio · Status · Couple · Community badge
+
+**8 · Couples**
+Propose · Accept · Breakup
+Single / Taken / Down to Fun
+Nama di ACM + overhead · Couple chat tag
+
+**9 · Carry**
+Piggyback · Bridal · Hug · Tandem · Fireman · Choke
+Custom anims · Carry GUI · Distance limit
+
+**10 · Overhead & Titles**
+Role · Membership · Donation rank · Level · Couple · Title
+Color presets · Gradient · Admin fonts/sizes
+Special badges · Community badge · Rank chips
+Bisa hide per-layer di Settings
+
+Lanjut Part 3/3 ↓
+
+---------- END Part 2/3 ----------
+
+
+---------- PROMO Part 3/3 ----------
+
+# Hazastudio Club Kit
+**Part 3/3**
+
+**11–12 · Stickers · Inventory & Hotbar**
+Koleksi sticker global · Shoulder billboard
+Inventory custom · Tools sync by role/membership
+Drag & drop · Layout mobile
+
+**13–16 · Progress · Settings · Profile · Chat**
+Level & streak · Leaderstats
+Settings grafis lengkap + hide GUI / VFX / overhead
+Profile: display name · title · bio · status
+`/announce` (privilege) · Paid Broadcast · Notification center
+
+**17–25 · Extra yang jarang ada di kit biasa**
+Join Community modal (+ optional free VIP)
+Cinema · CCTV · Freecam (desktop + mobile)
+Command library per role · Admin panel
+Anti-AFK 24/7 · `/re` `/rejoin` `/bring` `/to`
+Gravity tools · Topbar mobile · Loading screen branded
+Role tools (Sign · Rope · GlowStick)
+Demo / showcase mode · Siap high CCU
+
+---
+
+**Discord Hazastudio**
+Hub resmi untuk demo, proof customer, docs, update & order.
+
+Servernya **masih baru** — membernya masih sedikit, jadi:
+• Tanya langsung lebih gampang kejawab
+• Feedback & request lebih didengerin
+• Early members ikut tumbuh bareng produknya
+
+Kalau tertarik Club Kit (atau mau lihat showcase / tanya paket), join di sini:
+https://discord.gg/sTzD8PMX3d
+
+---------- END Part 3/3 ----------
+
+
+---------- SHORT + NOTE BARU (kalau cuma boleh 1 pesan) ----------
+
+**Hazastudio Club Kit** — all-in-one club system Roblox
+
+Roles & VIP · Shop & gift · Donation VFX
+Music 24/7 · Sync dance · Couples · Carry
+Leaderboards · Overhead · Profile · Admin · Anti-AFK
+Setup: `ClubKitConfig` + `Secrets` saja · Engine update one-click
+
+Discord hub masih **baru** (member masih sedikit) — cocok buat tanya langsung, lihat showcase, atau early join.
+https://discord.gg/sTzD8PMX3d
+
+---------- END SHORT ----------
