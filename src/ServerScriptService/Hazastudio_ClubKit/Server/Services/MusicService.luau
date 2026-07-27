@@ -20,6 +20,7 @@ local HttpApiCounter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils
 local HttpApi = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.HttpApi)
 local createMusicSession = require(script.Parent.MusicSession)
 local MusicAssetValidator = require(script.Parent.MusicAssetValidator)
+local MusicCatalogSeeder = require(script.Parent.MusicCatalogSeeder)
 
 type TrackInfo = MusicDomain.TrackInfo
 type PlaylistInfo = MusicDomain.PlaylistInfo
@@ -335,6 +336,17 @@ local function createMusicService(deps: {
 		if not result.ok then
 			log:error("Gagal load music library", { error = result.error })
 		else
+			local catalogOk, catalogErr = pcall(function()
+				MusicCatalogSeeder.merge({
+					repo = repo,
+					config = config,
+					logger = log,
+					featureFlags = Config.FeatureFlags,
+				})
+			end)
+			if not catalogOk then
+				log:warn("MusicCatalogSeed failed", { error = tostring(catalogErr) })
+			end
 			log:info("MusicService initialized")
 			service:ensureRequestHistoryPlaylist()
 			local pollInterval = tonumber(config.SYNC_POLL_INTERVAL) or 0

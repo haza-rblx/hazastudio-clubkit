@@ -1299,6 +1299,8 @@ Config.FeatureFlags = {
 	STUDIO_GIFT_BYPASS = IS_STUDIO,
 	SyncDanceEnabled = true,
 	MusicPlayerEnabled = true,
+	-- Merge Hazastudio_ClubKitConfig/MusicCatalog into MusicLibrary DataStore on boot.
+	MusicCatalogSeedEnabled = true,
 	SettingsEnabled = true,
 	HotbarEnabled = true,
 	LoadingScreenEnabled = true,
@@ -2672,6 +2674,9 @@ Config.Music = {
 	SPECIAL_PLAYLIST_NEW_DROPS_ID = "__new_drops__",
 	SPECIAL_PLAYLIST_REQUEST_HISTORY_ID = "__request_history__",
 	SPECIAL_PLAYLIST_REQUEST_HISTORY_NAME = "Requested",
+	-- MusicCatalog seed (ClubKitConfig.Features.MusicCatalogSeed)
+	CATALOG_DEFAULT_PLAYLIST_NAME = "Legacy",
+	CATALOG_SYNC_SOURCE = "music-catalog-seeder",
 	-- Mode: "global" (single server-wide session, every player hears the same
 	-- track) atau "zone" (per-tagged-zone sessions, players only hear music
 	-- when inside a tagged BasePart). "global" recommended untuk club games,

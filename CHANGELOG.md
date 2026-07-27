@@ -11,6 +11,11 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.67] - 2026-07-28
+
+### Added
+- **MusicCatalog script seed** — isi `Hazastudio_ClubKitConfig/MusicCatalog.luau` (satu baris per track, multi-part `parts` hingga 9). Server merge additive ke DataStore saat boot; default playlist **Legacy**. Manage UI tetap bisa edit/pindah/hapus. Toggle: `ClubKitConfig.Features.MusicCatalogSeed` (schema fill-forward). Delete lewat Manage tidak di-reseed (fingerprint + tombstone).
+
 ## [2.4.66] - 2026-07-24
 
 ### Changed

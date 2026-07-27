@@ -519,6 +519,9 @@ ClubKitConfig.Sync = {
 -- =============================================================================
 ClubKitConfig.Features = {
 	MusicPlayer = true,
+	-- Bulk seed from Hazastudio_ClubKitConfig/MusicCatalog.luau into DataStore on boot.
+	-- false = skip merge (tracks already seeded stay in library).
+	MusicCatalogSeed = true,
 	SyncDance = true,
 	Hotbar = true,
 	LoadingScreen = true,

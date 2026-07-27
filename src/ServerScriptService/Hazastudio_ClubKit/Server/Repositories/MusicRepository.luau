@@ -34,6 +34,7 @@ local function clonePlaylist(data: PlaylistInfo): PlaylistInfo
 	return {
 		id = data.id,
 		name = data.name,
+		visibility = (data :: any).visibility,
 		coverType = data.coverType,
 		coverValue = data.coverValue,
 		fontFace = data.fontFace,
@@ -144,6 +145,7 @@ function MusicRepository:_serializePlaylists(source: { [string]: PlaylistInfo },
 	for id, playlist in pairs(source) do
 		serialized[id] = {
 			name = playlist.name,
+			visibility = (playlist :: any).visibility,
 			coverType = playlist.coverType,
 			coverValue = playlist.coverValue,
 			fontFace = playlist.fontFace,
@@ -158,6 +160,7 @@ function MusicRepository:_serializePlaylists(source: { [string]: PlaylistInfo },
 		if serialized[id] == nil then
 			serialized[id] = {
 				name = playlist.name,
+				visibility = (playlist :: any).visibility,
 				coverType = playlist.coverType,
 				coverValue = playlist.coverValue,
 				fontFace = playlist.fontFace,
@@ -391,6 +394,10 @@ function MusicRepository:getTrack(trackId: string): TrackInfo?
 	return if track then cloneTrack(track) else nil
 end
 
+function MusicRepository:getTrackTombstones(): { [string]: TrackInfo }
+	return self:_cloneTracks(self._trackTombstones)
+end
+
 function MusicRepository:getPlaylist(playlistId: string): PlaylistInfo?
 	local playlist = self._playlists[playlistId]
 	return if playlist then clonePlaylist(playlist) else nil
@@ -537,6 +544,7 @@ function MusicRepository:bulkSeed(deps: {
 	newPlaylists: { PlaylistInfo },
 	newTracks: { TrackInfo },
 	appendToExistingPlaylists: { [string]: { string } },
+	syncSource: string?,
 }): Result<nil>
 	local hasNewPlaylists = #deps.newPlaylists > 0
 	local hasNewTracks = #deps.newTracks > 0
@@ -545,13 +553,17 @@ function MusicRepository:bulkSeed(deps: {
 		return Result.Ok(nil)
 	end
 
+	local syncSource = if type(deps.syncSource) == "string" and deps.syncSource ~= ""
+		then deps.syncSource
+		else "music-seeder"
+
 	local nextPlaylists = self:_clonePlaylists(self._playlists)
 	local nextTracks = self:_cloneTracks(self._tracks)
 
 	-- Add new playlists
 	for _, np in ipairs(deps.newPlaylists) do
 		local cloned = clonePlaylist(np)
-		stampSyncFields(cloned :: any, "music-seeder")
+		stampSyncFields(cloned :: any, syncSource)
 		clearDeletedSyncField(cloned :: any)
 		nextPlaylists[cloned.id] = cloned
 	end
@@ -566,14 +578,14 @@ function MusicRepository:bulkSeed(deps: {
 				table.insert(mergedTrackIds, trackId)
 			end
 			target.trackIds = mergedTrackIds
-			stampSyncFields(target :: any, "music-seeder")
+			stampSyncFields(target :: any, syncSource)
 		end
 	end
 
 	-- Add new tracks
 	for _, nt in ipairs(deps.newTracks) do
 		local cloned = cloneTrack(nt)
-		stampSyncFields(cloned :: any, "music-seeder")
+		stampSyncFields(cloned :: any, syncSource)
 		clearDeletedSyncField(cloned :: any)
 		nextTracks[cloned.id] = cloned
 	end

@@ -339,6 +339,7 @@ function ConfigBootstrap.apply(config: any)
 	if type(config.FeatureFlags) == "table" and type(features) == "table" then
 		local map = {
 			MusicPlayer = "MusicPlayerEnabled",
+			MusicCatalogSeed = "MusicCatalogSeedEnabled",
 			SyncDance = "SyncDanceEnabled",
 			Hotbar = "HotbarEnabled",
 			LoadingScreen = "LoadingScreenEnabled",

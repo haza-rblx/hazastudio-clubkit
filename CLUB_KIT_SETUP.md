@@ -157,6 +157,8 @@ Harus match secret di Cloudflare Worker / backend. **Jangan share file ini ke pu
 ```lua
 Features = {
     MusicPlayer = true,
+    -- Bulk seed tracks from MusicCatalog.luau on server boot (additive).
+    MusicCatalogSeed = true,
     Shop = true,
     Leaderboards = true,
     DonationCash = true,
@@ -165,6 +167,16 @@ Features = {
     PromptJoinCommunityOnLoad = true, -- setelah loading: modal Join Community (skip jika sudah member; butuh GroupId > 0)
     JoinGreetings = true, -- toast Owner/Leadership/Content/top-10 joiners
     -- matikan yang tidak dipakai: false
+},
+```
+
+**Music catalog (bulk script add):** isi `ReplicatedStorage/Hazastudio_ClubKitConfig/MusicCatalog.luau`. Tiap track **satu baris**; `parts` boleh multi (max 9). Default playlist **Legacy**. Setelah seed, Manage UI tetap bisa edit/pindah playlist. Matikan merge baru lewat `Features.MusicCatalogSeed = false` (library yang sudah ada tetap).
+
+```lua
+-- MusicCatalog.luau (contoh)
+tracks = {
+    { name = "Song A", creator = "Artist", parts = { "1234567890" } },
+    { name = "Song B", creator = "Artist", parts = { "111", "222", "333" }, playbackSpeed = 0.85 },
 },
 ```
 

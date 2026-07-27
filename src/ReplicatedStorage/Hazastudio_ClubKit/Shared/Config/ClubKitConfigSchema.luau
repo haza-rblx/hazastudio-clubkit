@@ -417,6 +417,7 @@ ClubKitConfigSchema.defaults = {
 	},
 	Features = {
 		MusicPlayer = true,
+		MusicCatalogSeed = true,
 		SyncDance = true,
 		Hotbar = true,
 		LoadingScreen = true,
