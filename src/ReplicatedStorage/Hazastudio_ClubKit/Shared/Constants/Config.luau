@@ -2249,7 +2249,9 @@ Config.Donation = {
 	-- Owner-only manual donation commands (Studio bypass permission check).
 	CMD_ADD_ROBUX = "setrobux", -- /setrobux <username|userId> <robux amount>
 	CMD_REMOVE_ROBUX = "removerobux", -- /removerobux <username|userId|me> [robux]; `me` = clear self (Studio only)
-	CMD_TEST_CASH = "testcash", -- /testcash <idr amount> (admin test preview: notif + aura + world VFX, no persist)
+	CMD_FAKE_CASH = "fakecash", -- /fakecash [player] <idr> [message] (admin preview: notif + aura + world VFX, no persist)
+	CMD_FAKE_ROBUX = "fakerobux", -- /fakerobux [player] <robux> [message] (admin preview: notif + aura only, no persist)
+	CMD_TEST_CASH = "fakecash", -- deprecated alias constant → fakecash
 	CMD_DONATE_CASH = "donatecash", -- /donatecash <username|userId> <idr> [message]
 	CMD_ADD_CASH = "addcash", -- /addcash <username|userId> <idr amount> (leaderboard only)
 	CMD_REMOVE_CASH = "removecash", -- /removecash <username|userId|me> [idr]; `me` = clear self (Studio only)
@@ -2267,8 +2269,10 @@ Config.Donation = {
 		donatebagibagi = "donatecash",
 		addbagibagi = "addcash",
 		removebagibagi = "removecash",
-		testsaweria = "testcash",
-		testdonate = "testcash",
+		testcash = "fakecash",
+		testsaweria = "fakecash",
+		testdonate = "fakecash",
+		testrobux = "fakerobux",
 		dumpsaweria = "dumpbagibagi",
 	} :: { [string]: string },
 	-- Admin commands

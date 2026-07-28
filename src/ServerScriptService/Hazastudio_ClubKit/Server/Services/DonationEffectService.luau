@@ -134,6 +134,8 @@ local function createDonationEffectService(deps: {
 
 	-- Anchor/placeholder parts in legacy aura models (often named "BasePart")
 	-- must stay welded for positioning but should never render on the character.
+	-- ParticleEmitter / Beam / Trail / Light still work on Transparency=1 hosts —
+	-- do NOT treat those as "keep visible" (that caused the gray brick at feet).
 	local HIDDEN_EFFECT_PART_NAMES: { [string]: boolean } = {
 		basepart = true,
 		anchor = true,
@@ -141,33 +143,24 @@ local function createDonationEffectService(deps: {
 		hitbox = true,
 		collision = true,
 		primary = true,
+		part = true,
+		handle = true,
+		effect = true,
+		aura = true,
+		main = true,
 	}
 
-	local function partHasRenderableVisual(part: BasePart): boolean
+	-- True only for intentional mesh/decal geometry. Emitters/lights are not geometry.
+	local function partHasRenderableGeometry(part: BasePart): boolean
 		if part:IsA("MeshPart") and part.MeshId ~= "" and part.Transparency < 1 then
 			return true
 		end
 
-		for _, child in ipairs(part:GetChildren()) do
-			if child:IsA("ParticleEmitter") or child:IsA("Beam") or child:IsA("Trail") then
-				return true
-			end
-			if child:IsA("Decal") or child:IsA("Texture") then
-				return true
-			end
-			if child:IsA("SpecialMesh") and child.MeshId ~= "" then
-				return true
-			end
-		end
-
 		for _, descendant in ipairs(part:GetDescendants()) do
-			if descendant:IsA("ParticleEmitter") or descendant:IsA("Beam") or descendant:IsA("Trail") then
-				return true
-			end
 			if descendant:IsA("Decal") or descendant:IsA("Texture") then
 				return true
 			end
-			if descendant:IsA("PointLight") or descendant:IsA("SpotLight") or descendant:IsA("SurfaceLight") then
+			if descendant:IsA("SpecialMesh") and descendant.MeshId ~= "" then
 				return true
 			end
 		end
@@ -179,7 +172,9 @@ local function createDonationEffectService(deps: {
 		if HIDDEN_EFFECT_PART_NAMES[string.lower(part.Name)] then
 			return true
 		end
-		return not partHasRenderableVisual(part)
+		-- Hide unless the part has intentional mesh/decal geometry.
+		-- ParticleEmitter / Beam / Trail / Light alone must not keep the brick visible.
+		return not partHasRenderableGeometry(part)
 	end
 
 	local function normalizeEffectParts(effect: Instance, attachPart: BasePart)

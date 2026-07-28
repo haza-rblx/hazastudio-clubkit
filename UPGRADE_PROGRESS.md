@@ -2,7 +2,7 @@
 
 Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
 
-**Versi saat ini:** `2.4.67` (lihat [`VERSION`](VERSION))  
+**Versi saat ini:** `2.4.68` (lihat [`VERSION`](VERSION))  
 **Target rilis berikutnya:** _(belum ditetapkan)_
 
 ---
@@ -11,7 +11,7 @@ Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
 
 | Area | Status |
 |------|--------|
-| _(kosong — siap development)_ | |
+| Plugin panel v2 (Engine/Tools UI) | WIP — ship rebuild nanti |
 
 ---
 
@@ -19,7 +19,11 @@ Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
 
 | Path | Change |
 |------|--------|
-| _(belum ada)_ | |
+| `tools/ClubKitPackagerPlugin/plugin/UpdaterPanel.luau` | Panel v2 UI (Engine/Tools) |
+| `tools/ClubKitPackagerPlugin/plugin/DovetailTheme.luau` | AMOLED tokens |
+| `tools/ClubKitPackagerPlugin/plugin/HazastudioClubKit.plugin.luau` | Wire Gen Tools / Carry fix callbacks |
+| `tools/ClubKitPackagerPlugin/prototypes/plugin-panel-v2.html` | Design iterations |
+| `tools/ClubKitPackagerPlugin/plugin-build/**` | Synced copies (panel v2) |
 
 ---
 

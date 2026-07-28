@@ -217,21 +217,21 @@ Panduan lengkap: [`docs/index.html#leaderboard-seeder`](docs/index.html#leaderbo
 
 ---
 
-## Test commands (admin)
+## Fake donation commands (admin)
 
 | Command | Efek | Persist? |
 |---------|------|----------|
-| `/testcash <idr>` | Notif + **aura + world VFX** (preview) | ❌ tidak |
-| `/testrobux <robux>` | Notif + **aura saja** (preview) | ❌ tidak |
-| `/testsaweria <idr>` | Deprecated alias → `/testcash` | ❌ tidak |
-| `/testdonate <idr>` | Deprecated alias → `/testcash` | ❌ tidak |
+| `/fakecash [player] <idr> [message]` | Notif + **aura + world VFX** (preview) | ❌ tidak |
+| `/fakerobux [player] <robux> [message]` | Notif + **aura saja** (preview) | ❌ tidak |
+| `/testcash` / `/testsaweria` / `/testdonate` | Deprecated alias → `/fakecash` | ❌ tidak |
+| `/testrobux` | Deprecated alias → `/fakerobux` | ❌ tidak |
 | `/addcash <user> <idr>` | Leaderboard + overhead sync | ✅ ya |
 | `/setrobux <user> <robux>` | Leaderboard Robux | ✅ ya |
 | `/donatecash <user> <idr>` | Persist + notif + VFX | ✅ ya |
 
-Gunakan `/testcash` / `/testrobux` untuk uji notif + VFX tanpa mengubah leaderboard. Untuk isi board manual pakai `/addcash` atau `/setrobux`.
+Gunakan `/fakecash` / `/fakerobux` untuk uji notif + VFX tanpa mengubah leaderboard. Untuk isi board manual pakai `/addcash` atau `/setrobux`.
 
-**Showcase (`ClubKitShowcase.luau` aktif):** tier rendah — contoh `/testrobux 10` → aura Level4; `/testcash 2000` → aura + Nuke. Nonaktifkan showcase untuk threshold production (100k+ world VFX).
+**Showcase (`ClubKitShowcase.luau` aktif):** tier rendah — contoh `/fakerobux 10` → aura Level4; `/fakecash 2000` → aura + Nuke. Nonaktifkan showcase untuk threshold production (100k+ world VFX).
 
 ---
 
@@ -265,7 +265,7 @@ Gunakan `/testcash` / `/testrobux` untuk uji notif + VFX tanpa mengubah leaderbo
 | `PaidBroadcast.PRODUCT_ID masih 0` | Buat Developer Product broadcast → isi `PaidBroadcast.ProductId` |
 | Saweria "API not configured" | Isi `ApiUrl` + `DonationApiSecret` |
 | Robux/Likes "No … yet" | Normal — belum ada donasi/like di DataStore |
-| Mau isi leaderboard manual | `/addcash` atau `/setrobux` — bukan `/testcash` |
+| Mau isi leaderboard manual | `/addcash` atau `/setrobux` — bukan `/fakecash` |
 | Board blank tanpa teks | Tambah `LoadingOverlay` di template SurfaceGui place |
 | `Group.GROUP_ID tidak valid` | Isi `GroupId` atau nyalakan showcase |
 
@@ -277,10 +277,10 @@ Gunakan `/testcash` / `/testrobux` untuk uji notif + VFX tanpa mengubah leaderbo
 
 | Command | Fungsi |
 |---------|--------|
-| `/testcash <idr>` | Notif + aura + world VFX; board **tidak** berubah |
-| `/testrobux <robux>` | Notif + aura saja; board **tidak** berubah |
-| `/testsaweria <idr>` | Deprecated alias → `/testcash` |
-| `/testdonate <idr>` | Deprecated alias → `/testcash` |
+| `/fakecash [player] <idr> [message]` | Notif + aura + world VFX; board **tidak** berubah |
+| `/fakerobux [player] <robux> [message]` | Notif + aura saja; board **tidak** berubah |
+| `/testcash` / `/testsaweria` / `/testdonate` | Deprecated alias → `/fakecash` |
+| `/testrobux` | Deprecated alias → `/fakerobux` |
 
 ### Persist — owner (atau Studio bypass)
 

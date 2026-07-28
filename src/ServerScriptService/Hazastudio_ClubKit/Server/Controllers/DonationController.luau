@@ -1004,150 +1004,6 @@ local function createDonationController(deps: {
 			})
 		end)
 	end)
-	local testDonateDeprecationWarned = false
-
-	local function runTestCashDonation(player: Player, amount: number, labelPrefix: string)
-		if not isCashDonationEnabled() then
-			notify.player(player, string.format("[%s] Cash donation disabled in config.", labelPrefix), "WARNING")
-			return
-		end
-		if not isAdmin(player) then
-			notify.player(player, string.format("[%s] Admin/Staff-only command.", labelPrefix), "ERROR")
-			return
-		end
-		local testCash = donationService.testCashDonation
-		if type(testCash) ~= "function" then
-			notify.player(player, string.format("[%s] Service tidak tersedia.", labelPrefix), "ERROR")
-			return
-		end
-		task.spawn(function()
-			local ok, err = testCash(
-				donationService,
-				player.UserId,
-				player.Name,
-				math.floor(amount),
-				"[Test Donation]"
-			)
-			if not ok then
-				notify.player(player, string.format("[%s] Gagal: %s", labelPrefix, err), "ERROR")
-				return
-			end
-			local extra = if err ~= "" then (" (" .. err .. ")") else ""
-			notify.player(
-				player,
-				string.format(
-					"[%s] Kamu +%d IDR -> notif + aura + world VFX (preview only, tidak persist).%s",
-					labelPrefix,
-					math.floor(amount),
-					extra
-				),
-				"SUCCESS"
-			)
-		end)
-	end
-
-	local function runTestRobuxDonation(player: Player, amount: number)
-		if not isAdmin(player) then
-			notify.player(player, "[TestRobux] Admin/Staff-only command.", "ERROR")
-			return
-		end
-		local testRobux = donationService.testRobuxDonation
-		if type(testRobux) ~= "function" then
-			notify.player(player, "[TestRobux] Service tidak tersedia.", "ERROR")
-			return
-		end
-		task.spawn(function()
-			local ok, err = testRobux(
-				donationService,
-				player.UserId,
-				player.Name,
-				math.floor(amount),
-				"[Test Robux Donation]"
-			)
-			if not ok then
-				notify.player(player, string.format("[TestRobux] Gagal: %s", err), "ERROR")
-				return
-			end
-			local extra = if err ~= "" then (" (" .. err .. ")") else ""
-			notify.player(
-				player,
-				string.format(
-					"[TestRobux] Kamu +%d Robux -> notif + aura saja (preview only, tidak persist).%s",
-					math.floor(amount),
-					extra
-				),
-				"SUCCESS"
-			)
-		end)
-	end
-
-	-- /testcash <idr amount> (admin): test IDR donation flow (aura + world VFX).
-	commandExecutionService:registerRawHandler(Config.Donation.CMD_TEST_CASH, function(player: Player, rawText: string)
-		local args = splitArgs(rawText)
-		local amountStr = args[1]
-		if not amountStr then
-			notify.player(player, "[TestCash] Usage: /testcash <idr amount>", "WARNING")
-			return
-		end
-		local amount = tonumber(amountStr)
-		if not amount or amount <= 0 then
-			notify.player(player, "[TestCash] Amount harus angka positif (IDR).", "WARNING")
-			return
-		end
-		runTestCashDonation(player, amount, "TestCash")
-	end)
-
-	-- /testsaweria <idr amount> (admin): deprecated alias for /testcash.
-	commandExecutionService:registerRawHandler("testsaweria", function(player: Player, rawText: string)
-		local args = splitArgs(rawText)
-		local amountStr = args[1]
-		if not amountStr then
-			notify.player(player, "[TestSaweria] Usage: /testsaweria <idr amount> (deprecated — use /testcash)", "WARNING")
-			return
-		end
-		local amount = tonumber(amountStr)
-		if not amount or amount <= 0 then
-			notify.player(player, "[TestSaweria] Amount harus angka positif (IDR).", "WARNING")
-			return
-		end
-		runTestCashDonation(player, amount, "TestSaweria")
-	end)
-
-	-- /testrobux <robux amount> (admin): test Robux donation flow (aura only, no world VFX).
-	commandExecutionService:registerRawHandler("testrobux", function(player: Player, rawText: string)
-		local args = splitArgs(rawText)
-		local amountStr = args[1]
-		if not amountStr then
-			notify.player(player, "[TestRobux] Usage: /testrobux <robux amount>", "WARNING")
-			return
-		end
-		local amount = tonumber(amountStr)
-		if not amount or amount <= 0 then
-			notify.player(player, "[TestRobux] Amount harus angka positif (Robux).", "WARNING")
-			return
-		end
-		runTestRobuxDonation(player, amount)
-	end)
-
-	-- /testdonate <idr amount> (admin): deprecated alias for /testcash.
-	commandExecutionService:registerRawHandler("testdonate", function(player: Player, rawText: string)
-		if not testDonateDeprecationWarned then
-			testDonateDeprecationWarned = true
-			log:warn("/testdonate is deprecated; use /testcash instead")
-		end
-		local args = splitArgs(rawText)
-		local amountStr = args[1]
-		if not amountStr then
-			notify.player(player, "[TestDonate] Usage: /testdonate <idr amount> (deprecated — use /testcash)", "WARNING")
-			return
-		end
-		local amount = tonumber(amountStr)
-		if not amount or amount <= 0 then
-			notify.player(player, "[TestDonate] Amount harus angka positif (IDR).", "WARNING")
-			return
-		end
-		runTestCashDonation(player, amount, "TestDonate")
-	end)
 	-- Manual donation value adjustments (owner-only, Studio bypass).
 	-- Robux → DataStore OrderedDataStore; Bagi-Bagi → cache + overhead sync.
 	local donationCfg = Config.Donation
@@ -1178,6 +1034,269 @@ local function createDonationController(deps: {
 		end
 		return nil, nil, false
 	end
+
+	-- Fake/preview donations (admin): notif + effects, no persist.
+	-- /fakecash [player|userId|me] <amount> [message...]  (player optional; default self)
+	-- Two leading numbers → userId + amount (so /fakecash 12345 50000 targets that id).
+	local fakeCashDeprecationWarned = false
+	local fakeRobuxDeprecationWarned = false
+
+	local function parseFakeDonationArgs(
+		player: Player,
+		rawText: string,
+		labelPrefix: string,
+		currencyLabel: string,
+		cmdName: string
+	): (number?, string?, number?, string?)
+		local args = splitArgs(rawText)
+		if #args < 1 then
+			notify.player(
+				player,
+				string.format(
+					"[%s] Usage: /%s <amount> [message...]  OR  /%s <player|userId|me> <amount> [message...]",
+					labelPrefix,
+					cmdName,
+					cmdName
+				),
+				"WARNING"
+			)
+			return nil, nil, nil, nil
+		end
+
+		local targetUserId: number
+		local targetName: string?
+		local amount: number
+		local messageStart: number
+
+		-- Disambiguation:
+		--   <amount> [message...]                         → self
+		--   <userId> <amount> [message...]                 → target by id (both numeric)
+		--   <player|me> <amount> [message...]              → target by name
+		local amountAsFirst = tonumber(args[1])
+		local amountAsSecond = if #args >= 2 then tonumber(args[2]) else nil
+
+		if amountAsFirst ~= nil and amountAsSecond ~= nil and amountAsSecond > 0 then
+			if amountAsFirst <= 0 then
+				notify.player(
+					player,
+					string.format("[%s] UserId harus angka positif.", labelPrefix),
+					"WARNING"
+				)
+				return nil, nil, nil, nil
+			end
+			local resolvedId, resolvedName = resolveUserIdFromArg(args[1], player)
+			if not resolvedId then
+				notify.player(player, string.format("[%s] Player '%s' nggak ketemu.", labelPrefix, args[1]), "ERROR")
+				return nil, nil, nil, nil
+			end
+			targetUserId = resolvedId
+			targetName = resolvedName
+			amount = amountAsSecond
+			messageStart = 3
+		elseif amountAsFirst ~= nil then
+			if amountAsFirst <= 0 then
+				notify.player(
+					player,
+					string.format("[%s] Amount harus angka positif (%s).", labelPrefix, currencyLabel),
+					"WARNING"
+				)
+				return nil, nil, nil, nil
+			end
+			targetUserId = player.UserId
+			targetName = player.Name
+			amount = amountAsFirst
+			messageStart = 2
+		else
+			if #args < 2 then
+				notify.player(
+					player,
+					string.format(
+						"[%s] Usage: /%s <player|userId|me> <amount> [message...]",
+						labelPrefix,
+						cmdName
+					),
+					"WARNING"
+				)
+				return nil, nil, nil, nil
+			end
+			if not amountAsSecond or amountAsSecond <= 0 then
+				notify.player(
+					player,
+					string.format("[%s] Amount harus angka positif (%s).", labelPrefix, currencyLabel),
+					"WARNING"
+				)
+				return nil, nil, nil, nil
+			end
+			local resolvedId, resolvedName = resolveUserIdFromArg(args[1], player)
+			if not resolvedId then
+				notify.player(player, string.format("[%s] Player '%s' nggak ketemu.", labelPrefix, args[1]), "ERROR")
+				return nil, nil, nil, nil
+			end
+			targetUserId = resolvedId
+			targetName = resolvedName
+			amount = amountAsSecond
+			messageStart = 3
+		end
+
+		local messageParts = {}
+		for i = messageStart, #args do
+			table.insert(messageParts, args[i])
+		end
+		local message = if #messageParts > 0 then table.concat(messageParts, " ") else nil
+		return targetUserId, targetName, amount, message
+	end
+
+	local function runFakeCashDonation(
+		player: Player,
+		targetUserId: number,
+		targetName: string?,
+		amount: number,
+		message: string?,
+		labelPrefix: string
+	)
+		if not isCashDonationEnabled() then
+			notify.player(player, string.format("[%s] Cash donation disabled in config.", labelPrefix), "WARNING")
+			return
+		end
+		if not isAdmin(player) then
+			notify.player(player, string.format("[%s] Admin/Staff-only command.", labelPrefix), "ERROR")
+			return
+		end
+		local testCash = donationService.testCashDonation
+		if type(testCash) ~= "function" then
+			notify.player(player, string.format("[%s] Service tidak tersedia.", labelPrefix), "ERROR")
+			return
+		end
+		task.spawn(function()
+			local ok, err = testCash(
+				donationService,
+				targetUserId,
+				targetName,
+				math.floor(amount),
+				message
+			)
+			if not ok then
+				notify.player(player, string.format("[%s] Gagal: %s", labelPrefix, err), "ERROR")
+				return
+			end
+			local extra = if err ~= "" then (" (" .. err .. ")") else ""
+			local who = targetName or tostring(targetUserId)
+			notify.player(
+				player,
+				string.format(
+					"[%s] %s +%d IDR -> notif + aura + world VFX (preview only, tidak persist).%s",
+					labelPrefix,
+					who,
+					math.floor(amount),
+					extra
+				),
+				"SUCCESS"
+			)
+		end)
+	end
+
+	local function runFakeRobuxDonation(
+		player: Player,
+		targetUserId: number,
+		targetName: string?,
+		amount: number,
+		message: string?,
+		labelPrefix: string
+	)
+		if not isAdmin(player) then
+			notify.player(player, string.format("[%s] Admin/Staff-only command.", labelPrefix), "ERROR")
+			return
+		end
+		local testRobux = donationService.testRobuxDonation
+		if type(testRobux) ~= "function" then
+			notify.player(player, string.format("[%s] Service tidak tersedia.", labelPrefix), "ERROR")
+			return
+		end
+		task.spawn(function()
+			local ok, err = testRobux(
+				donationService,
+				targetUserId,
+				targetName,
+				math.floor(amount),
+				message
+			)
+			if not ok then
+				notify.player(player, string.format("[%s] Gagal: %s", labelPrefix, err), "ERROR")
+				return
+			end
+			local extra = if err ~= "" then (" (" .. err .. ")") else ""
+			local who = targetName or tostring(targetUserId)
+			notify.player(
+				player,
+				string.format(
+					"[%s] %s +%d Robux -> notif + aura saja (preview only, tidak persist).%s",
+					labelPrefix,
+					who,
+					math.floor(amount),
+					extra
+				),
+				"SUCCESS"
+			)
+		end)
+	end
+
+	local function handleFakeCash(player: Player, rawText: string, labelPrefix: string, cmdName: string)
+		local userId, username, amount, message =
+			parseFakeDonationArgs(player, rawText, labelPrefix, "IDR", cmdName)
+		if not userId or not amount then
+			return
+		end
+		runFakeCashDonation(player, userId, username, amount, message, labelPrefix)
+	end
+
+	local function handleFakeRobux(player: Player, rawText: string, labelPrefix: string, cmdName: string)
+		local userId, username, amount, message =
+			parseFakeDonationArgs(player, rawText, labelPrefix, "Robux", cmdName)
+		if not userId or not amount then
+			return
+		end
+		runFakeRobuxDonation(player, userId, username, amount, message, labelPrefix)
+	end
+
+	-- /fakecash [player] <idr> [message] (admin): preview IDR donation (aura + world VFX).
+	commandExecutionService:registerRawHandler(Config.Donation.CMD_FAKE_CASH, function(player: Player, rawText: string)
+		handleFakeCash(player, rawText, "FakeCash", Config.Donation.CMD_FAKE_CASH)
+	end)
+
+	-- Deprecated aliases → fakecash
+	commandExecutionService:registerRawHandler("testcash", function(player: Player, rawText: string)
+		if not fakeCashDeprecationWarned then
+			fakeCashDeprecationWarned = true
+			log:warn("/testcash is deprecated; use /fakecash instead")
+		end
+		handleFakeCash(player, rawText, "FakeCash", Config.Donation.CMD_FAKE_CASH)
+	end)
+	commandExecutionService:registerRawHandler("testsaweria", function(player: Player, rawText: string)
+		if not fakeCashDeprecationWarned then
+			fakeCashDeprecationWarned = true
+			log:warn("/testsaweria is deprecated; use /fakecash instead")
+		end
+		handleFakeCash(player, rawText, "FakeCash", Config.Donation.CMD_FAKE_CASH)
+	end)
+	commandExecutionService:registerRawHandler("testdonate", function(player: Player, rawText: string)
+		if not fakeCashDeprecationWarned then
+			fakeCashDeprecationWarned = true
+			log:warn("/testdonate is deprecated; use /fakecash instead")
+		end
+		handleFakeCash(player, rawText, "FakeCash", Config.Donation.CMD_FAKE_CASH)
+	end)
+
+	-- /fakerobux [player] <robux> [message] (admin): preview Robux donation (aura only).
+	commandExecutionService:registerRawHandler(Config.Donation.CMD_FAKE_ROBUX, function(player: Player, rawText: string)
+		handleFakeRobux(player, rawText, "FakeRobux", Config.Donation.CMD_FAKE_ROBUX)
+	end)
+	commandExecutionService:registerRawHandler("testrobux", function(player: Player, rawText: string)
+		if not fakeRobuxDeprecationWarned then
+			fakeRobuxDeprecationWarned = true
+			log:warn("/testrobux is deprecated; use /fakerobux instead")
+		end
+		handleFakeRobux(player, rawText, "FakeRobux", Config.Donation.CMD_FAKE_ROBUX)
+	end)
 
 	local function requireStudioForSelfAlias(player: Player, label: string, isSelfAlias: boolean): boolean
 		if not isSelfAlias then

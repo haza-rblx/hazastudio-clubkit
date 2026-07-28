@@ -11,6 +11,20 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+### Changed
+- **Studio plugin panel v2** — dock UI rebuilt (AMOLED HyperOS): tabs Engine / Tools, hero + version grid, Check/Update/Skip, channel chips (setting saved; Check still stable-only until channel sync ships), Gen Tools + Carry fix rows. No Package tab in panel. _(ship plugin rebuild later)_
+
+## [2.4.68] - 2026-07-28
+
+### Added
+- **`/fakecash` / `/fakerobux`** — admin fake-donation preview with optional target player and message: `/fakecash [player] <amount> [message…]` (cash: notif + aura + world VFX; Robux: notif + aura only). No leaderboard persist (`testOnly`).
+
+### Changed
+- **Donation preview rename** — canonical commands are `/fakecash` and `/fakerobux`. `/testcash`, `/testrobux`, `/testsaweria`, `/testdonate` remain as deprecated aliases (same parse + admin gate).
+
+### Fixed
+- **Donation aura gray brick** — host `BasePart`s that only carry ParticleEmitter/Beam/Trail/Light are forced `Transparency = 1` (particles still render). Previously those emitters were treated as “keep visible,” so some tiers showed a plastic box at the character’s feet.
+
 ## [2.4.67] - 2026-07-28
 
 ### Added

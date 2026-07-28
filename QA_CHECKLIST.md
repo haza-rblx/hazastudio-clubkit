@@ -117,12 +117,12 @@ Centang modul yang relevan dengan feature flags ON di place kamu.
 | 5.4 | Couple | Request → accept → breakup | [ ] | Flag: `CouplesEnabled` |
 | 5.5 | Shop / Gift | Prompt purchase (Studio test product) | [ ] | |
 | 5.6 | Donation (cash/Robux) | Panel buka → donasi test | [ ] | |
-| 5.6a | `/testrobux 10` (showcase ON) | Aura muncul; **tanpa** Nuke/Smite/BlackHole; board tidak berubah | [ ] | preview only |
-| 5.6b | `/testcash 500` (showcase ON) | Aura showcase tier rendah; board tidak berubah | [ ] | preview only |
-| 5.6c | `/testcash 2000` (showcase ON) | Aura + world Nuke; board tidak berubah | [ ] | preview only |
-| 5.6d | `/testcash 150000` (showcase OFF) | Aura production + world Nuke (100k+); board tidak berubah | [ ] | preview only |
-| 5.6e | `/testsaweria 1000` | Masih jalan (alias `/testcash`); board tidak berubah | [ ] | preview only |
-| 5.6f | `/testcash 5000` lalu cek leaderboard | Notif/VFX jalan; **board tidak berubah** (no persist) | [ ] | |
+| 5.6a | `/fakerobux 10` (showcase ON) | Aura muncul; **tanpa** Nuke/Smite/BlackHole; board tidak berubah | [ ] | preview only |
+| 5.6b | `/fakecash 500` (showcase ON) | Aura showcase tier rendah; board tidak berubah | [ ] | preview only |
+| 5.6c | `/fakecash 2000 hello` (showcase ON) | Aura + world Nuke + message; board tidak berubah | [ ] | preview only |
+| 5.6d | `/fakecash 150000` (showcase OFF) | Aura production + world Nuke (100k+); board tidak berubah | [ ] | preview only |
+| 5.6e | `/testcash 1000` | Masih jalan (deprecated alias `/fakecash`); board tidak berubah | [ ] | preview only |
+| 5.6f | `/fakecash OtherPlayer 5000 msg` lalu cek leaderboard | Notif/VFX di target; **board tidak berubah** (no persist) | [ ] | |
 | 5.6g | `/addcash <self> 5000` | Board + overhead **berubah** (persist) | [ ] | |
 | 5.6h | `DonationCash = false` | Tab IDR panel donasi tersembunyi | [ ] | |
 | 5.7 | Stickers | Place + clear sticker | [ ] | |

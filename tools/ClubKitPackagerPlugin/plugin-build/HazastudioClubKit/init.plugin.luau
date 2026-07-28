@@ -18,7 +18,7 @@ local UpdaterPanel = requirePluginModule("UpdaterPanel")
 local toolbar = plugin:CreateToolbar("Hazastudio Club Kit")
 local openPanelButton = toolbar:CreateButton(
 	"Open Panel",
-	"Buka panel Update Engine + auto check update",
+	"Buka panel Engine / Tools + auto check update",
 	"rbxassetid://99832044843928"
 )
 local genToolsButton = toolbar:CreateButton(
@@ -32,7 +32,7 @@ local widgetInfo = DockWidgetPluginGuiInfo.new(
 	false,
 	false,
 	380,
-	580,
+	640,
 	340,
 	440
 )
@@ -43,19 +43,6 @@ widget.Name = "HazastudioClubKitPackagerOpts"
 local function openPanel()
 	widget.Enabled = true
 end
-
-local updaterApi = UpdaterPanel.create(widget, {
-	onDismiss = function()
-		widget.Enabled = false
-	end,
-})
-
-openPanelButton.Click:Connect(function()
-	openPanel()
-	task.defer(function()
-		updaterApi.checkForUpdates()
-	end)
-end)
 
 local function runGenerateToolsFolder()
 	local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -81,6 +68,27 @@ if typeof(shared) == "table" then
 	shared.generate_tools_folder = runGenerateToolsFolder
 end
 genToolsButton.Click:Connect(runGenerateToolsFolder)
+
+local updaterApi = UpdaterPanel.create(widget, {
+	plugin = plugin,
+	onDismiss = function()
+		widget.Enabled = false
+	end,
+	onGenerateTools = runGenerateToolsFolder,
+	onCarryFix = function()
+		warn(
+			"[ClubKitPanel] Carry fix: use toolbar Hazastudio Club Kit → Carry Upload (local plugin + CreateAssetAsync beta)."
+		)
+		print("[ClubKitPanel] Open Carry Upload from the Plugins toolbar to scan/upload Carry KeyframeSequences.")
+	end,
+})
+
+openPanelButton.Click:Connect(function()
+	openPanel()
+	task.defer(function()
+		updaterApi.checkForUpdates()
+	end)
+end)
 
 print("[ClubKitPackager] Loaded v" .. Manifest.KIT_VERSION .. " - Hazastudio Club Kit")
 print("[ClubKitPackager] Toolbar: Open Panel · Gen Tools")

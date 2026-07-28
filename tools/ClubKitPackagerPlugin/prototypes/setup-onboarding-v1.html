@@ -1,0 +1,1404 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Club Kit — Setup / Onboarding prototype</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --page: #000000;
+      --card: #111111;
+      --elevated: #1a1a1a;
+      --text: #ffffff;
+      --muted: #a0a0a0;
+      --faint: #6e6e6e;
+      --sep: rgba(255, 255, 255, 0.08);
+      --blue: #0a84ff;
+      --blue-bright: #64b5ff;
+      --blue-deep: #0071e3;
+      --blue-soft: rgba(10, 132, 255, 0.2);
+      --green: #30d158;
+      --green-soft: rgba(48, 209, 88, 0.15);
+      --amber: #ffd60a;
+      --amber-soft: rgba(255, 214, 10, 0.14);
+      --red: #ff453a;
+      --red-soft: rgba(255, 69, 58, 0.14);
+      --radius: 16px;
+      --dock-w: 380px;
+      --dock-h: 680px;
+      --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      font-family: var(--font);
+      color: var(--text);
+      background: #000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 28px;
+      padding: 40px 16px 56px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .page-meta { text-align: center; max-width: 420px; }
+    .page-meta h1 { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; }
+    .page-meta p { margin-top: 4px; font-size: 12px; color: var(--faint); line-height: 1.4; }
+
+    .scenario {
+      display: inline-flex;
+      gap: 2px;
+      margin-top: 14px;
+      padding: 3px;
+      background: var(--card);
+      border-radius: 10px;
+    }
+
+    .scenario button {
+      border: 0;
+      background: transparent;
+      color: var(--faint);
+      font: 500 11px/1 var(--font);
+      padding: 7px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    .scenario button[aria-pressed="true"] {
+      background: var(--elevated);
+      color: var(--text);
+    }
+
+    .stage {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 36px;
+      justify-content: center;
+      align-items: flex-start;
+      width: min(900px, 100%);
+    }
+
+    .phone {
+      width: var(--dock-w);
+      height: var(--dock-h);
+      background: var(--page);
+      border-radius: 28px;
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .titlebar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 18px 0;
+      font-size: 11px;
+      color: var(--faint);
+      font-weight: 500;
+    }
+
+    .traffic { display: flex; gap: 6px; }
+    .traffic i {
+      width: 9px; height: 9px; border-radius: 50%;
+      background: #222; font-style: normal;
+    }
+
+    .header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px 2px;
+      gap: 12px;
+    }
+
+    .app-title {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.045em;
+      line-height: 1.1;
+    }
+
+    .ver {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--faint);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 0;
+      padding: 10px 10px 12px;
+      overflow-x: auto;
+    }
+
+    .tabs::-webkit-scrollbar { height: 0; }
+
+    .tabs button {
+      border: 0;
+      outline: none;
+      background: transparent;
+      color: var(--faint);
+      font: 600 12px/1 var(--font);
+      padding: 9px 12px;
+      border-radius: 999px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .tabs button[aria-selected="true"] {
+      background: var(--card);
+      color: var(--text);
+    }
+
+    .body {
+      flex: 1;
+      overflow: auto;
+      padding: 0 14px 14px;
+    }
+
+    .body::-webkit-scrollbar { width: 0; }
+    .panel[hidden] { display: none !important; }
+
+    .card {
+      background: var(--card);
+      border-radius: var(--radius);
+      margin-bottom: 12px;
+      overflow: hidden;
+    }
+
+    .btn {
+      width: 100%;
+      border: 0;
+      outline: none;
+      border-radius: 999px;
+      padding: 14px 16px;
+      font: 600 15px/1.35 var(--font);
+      cursor: pointer;
+    }
+
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .btn-primary { background: var(--blue); color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: var(--blue-deep); }
+    .btn-ghost { background: var(--elevated); color: var(--text); }
+    .btn-ghost:hover:not(:disabled) { background: #222; }
+    .btn-text {
+      background: none;
+      color: var(--blue);
+      font-weight: 500;
+      padding: 10px;
+    }
+
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 20px 18px;
+      font-size: 12px;
+      color: var(--faint);
+    }
+
+    .footer button {
+      border: 0;
+      outline: none;
+      background: none;
+      color: var(--blue);
+      font: 500 14px/1 var(--font);
+      cursor: pointer;
+    }
+
+    .setup-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 0 2px 10px;
+    }
+
+    .step-meta {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--faint);
+    }
+
+    .step-meta.active { color: var(--blue-bright); }
+
+    .progress {
+      display: flex;
+      gap: 6px;
+      justify-content: center;
+      align-items: center;
+      padding: 0 0 14px;
+    }
+
+    .progress button {
+      width: 8px;
+      height: 8px;
+      border: 0;
+      border-radius: 50%;
+      background: var(--elevated);
+      cursor: pointer;
+      padding: 0;
+      transition: width 0.2s, background 0.15s, border-radius 0.2s;
+    }
+
+    .progress button.on {
+      width: 22px;
+      border-radius: 999px;
+      background: var(--blue);
+      cursor: default;
+    }
+
+    .progress button.done { background: #3a3a3c; }
+    .progress button:disabled { cursor: default; }
+
+    .step[hidden] { display: none !important; }
+
+    .step-title {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.2;
+      margin-bottom: 6px;
+    }
+
+    .step-hint {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.45;
+      margin-bottom: 16px;
+    }
+
+    .field { margin-bottom: 12px; }
+
+    .field label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--faint);
+      margin-bottom: 6px;
+    }
+
+    .field label .tag {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--faint);
+    }
+
+    .field label .tag.req { color: var(--muted); }
+
+    .field input {
+      width: 100%;
+      border: 0;
+      outline: none;
+      background: var(--elevated);
+      color: var(--text);
+      font: 500 14px/1.3 var(--font);
+      padding: 12px 14px;
+      border-radius: 12px;
+    }
+
+    .field input:focus {
+      box-shadow: 0 0 0 2px var(--blue-soft);
+    }
+
+    .field input.err {
+      box-shadow: 0 0 0 2px var(--red-soft);
+    }
+
+    .field input::placeholder { color: #555; }
+
+    .field .help {
+      margin-top: 5px;
+      font-size: 11px;
+      color: var(--faint);
+      line-height: 1.35;
+    }
+
+    .field .err-msg {
+      margin-top: 5px;
+      font-size: 11px;
+      color: var(--red);
+      display: none;
+    }
+
+    .field.has-err .err-msg { display: block; }
+    .field.has-err .help { display: none; }
+
+    .input-wrap { position: relative; }
+    .input-wrap input { padding-right: 52px; }
+
+    .input-wrap .eye {
+      position: absolute;
+      right: 6px;
+      top: 50%;
+      transform: translateY(-50%);
+      border: 0;
+      background: transparent;
+      color: var(--faint);
+      font: 600 11px/1 var(--font);
+      padding: 8px;
+      cursor: pointer;
+    }
+
+    .seg {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      padding: 3px;
+      background: var(--elevated);
+      border-radius: 12px;
+    }
+
+    .seg button {
+      border: 0;
+      outline: none;
+      background: transparent;
+      color: var(--faint);
+      font: 600 13px/1 var(--font);
+      padding: 10px;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+
+    .seg button[aria-pressed="true"] {
+      background: var(--card);
+      color: var(--text);
+    }
+
+    .tier-block {
+      padding: 14px;
+      background: var(--elevated);
+      border-radius: 12px;
+      margin-bottom: 10px;
+    }
+
+    .tier-block .name {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+
+    .tier-block .grid2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .tier-block .mini-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--faint);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 4px;
+    }
+
+    .tier-block input {
+      width: 100%;
+      border: 0;
+      outline: none;
+      background: #0d0d0d;
+      color: var(--text);
+      font: 500 13px/1.3 var(--font);
+      padding: 10px 12px;
+      border-radius: 10px;
+    }
+
+    .wizard-nav {
+      display: grid;
+      grid-template-columns: 1fr 1.4fr;
+      gap: 8px;
+      margin-top: 8px;
+      padding-bottom: 4px;
+    }
+
+    .preview {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--elevated);
+      border-radius: 14px;
+      padding: 14px;
+      margin-bottom: 16px;
+    }
+
+    .preview .logo {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      background: #222;
+      display: grid;
+      place-items: center;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+
+    .preview .pname {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .preview .psub {
+      font-size: 11px;
+      color: var(--faint);
+      margin-top: 2px;
+    }
+
+    .check-list { list-style: none; }
+
+    .check-list li {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      position: relative;
+      cursor: pointer;
+    }
+
+    .check-list li + li::before {
+      content: "";
+      position: absolute;
+      left: 16px;
+      right: 0;
+      top: 0;
+      height: 1px;
+      background: var(--sep);
+    }
+
+    .check-list .mark {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      font-size: 11px;
+      font-weight: 700;
+      flex-shrink: 0;
+      background: var(--elevated);
+      color: var(--faint);
+    }
+
+    .check-list li.ok .mark {
+      background: var(--green-soft);
+      color: var(--green);
+    }
+
+    .check-list li.warn .mark {
+      background: var(--amber-soft);
+      color: var(--amber);
+    }
+
+    .check-list .t { font-size: 14px; font-weight: 500; }
+    .check-list .d { font-size: 12px; color: var(--faint); margin-top: 2px; }
+    .check-list .edit {
+      margin-left: auto;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--blue);
+    }
+
+    .summary-card {
+      background: var(--elevated);
+      border-radius: 12px;
+      padding: 12px 14px;
+      margin-bottom: 14px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .summary-card strong { color: var(--text); font-weight: 600; }
+
+    .nudge {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+
+    .nudge h3 {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 6px;
+    }
+
+    .nudge p {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.45;
+      margin-bottom: 14px;
+    }
+
+    .stub {
+      padding: 20px 8px;
+      text-align: center;
+      color: var(--faint);
+      font-size: 13px;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.72);
+      display: flex;
+      align-items: flex-end;
+      z-index: 20;
+      opacity: 0;
+      pointer-events: none;
+      transition: 0.2s;
+    }
+
+    .overlay.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .sheet {
+      width: 100%;
+      background: var(--card);
+      border-radius: 22px 22px 0 0;
+      padding: 24px 18px 28px;
+    }
+
+    .sheet h3 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+
+    .sheet > p {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.5;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .sheet .actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(8px);
+      background: #f5f5f7;
+      color: #1d1d1f;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 12px 18px;
+      border-radius: 999px;
+      opacity: 0;
+      pointer-events: none;
+      transition: 0.2s;
+      z-index: 40;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .guide {
+      width: min(260px, 100%);
+      font-size: 12px;
+      color: var(--faint);
+      line-height: 1.5;
+      padding-top: 4px;
+    }
+
+    .guide .kicker {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 8px;
+    }
+
+    .guide h4 {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.02em;
+      margin-bottom: 6px;
+    }
+
+    .guide .body-text {
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+
+    .guide ol {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+    }
+
+    .guide li { margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <header class="page-meta">
+    <h1>Club Kit — Setup / Onboarding</h1>
+    <p>Auto-popup when unset + Setup tab. Prototype only — no Source write.</p>
+    <div class="scenario" role="group" aria-label="Scenario">
+      <button type="button" data-scenario="first" aria-pressed="true">First open</button>
+      <button type="button" data-scenario="mid" aria-pressed="false">Mid wizard</button>
+      <button type="button" data-scenario="complete" aria-pressed="false">Complete</button>
+    </div>
+  </header>
+
+  <div class="stage">
+    <div class="phone" id="dock">
+      <div class="titlebar">
+        <div class="traffic" aria-hidden="true"><i></i><i></i><i></i></div>
+        <span>Hazastudio Club Kit</span>
+      </div>
+
+      <div class="header-row">
+        <h2 class="app-title">Club Kit</h2>
+        <span class="ver">v2.4.66</span>
+      </div>
+
+      <nav class="tabs" role="tablist">
+        <button type="button" role="tab" id="tab-engine" aria-selected="false" aria-controls="panel-engine">Engine</button>
+        <button type="button" role="tab" id="tab-package" aria-selected="false" aria-controls="panel-package">Package</button>
+        <button type="button" role="tab" id="tab-tools" aria-selected="false" aria-controls="panel-tools">Tools</button>
+        <button type="button" role="tab" id="tab-setup" aria-selected="true" aria-controls="panel-setup">Setup</button>
+      </nav>
+
+      <div class="body">
+        <section class="panel" id="panel-engine" role="tabpanel" hidden>
+          <div class="nudge" id="engineNudge">
+            <h3>Setup needed</h3>
+            <p>GroupId is still 0. Configure branding, group, shop, and secrets in Setup — without opening scripts.</p>
+            <button type="button" class="btn btn-primary" id="btnGoSetup">Open Setup</button>
+          </div>
+          <div class="stub">Engine — see plugin-panel-v2</div>
+        </section>
+        <section class="panel" id="panel-package" role="tabpanel" hidden>
+          <div class="stub">Package — Export / Unpack</div>
+        </section>
+        <section class="panel" id="panel-tools" role="tabpanel" hidden>
+          <div class="stub">Tools — Generate Tools folder</div>
+        </section>
+
+        <section class="panel" id="panel-setup" role="tabpanel">
+          <div class="setup-top">
+            <div class="step-meta" id="stepMeta">Overview</div>
+          </div>
+          <div class="progress" id="progress" aria-label="Progress"></div>
+
+          <div class="step" data-step="0">
+            <div class="step-title">Set up your club</div>
+            <p class="step-hint">Six steps. Values go to ClubKitConfig and Secrets — no script editor.</p>
+            <div class="card">
+              <ul class="check-list" id="overviewList">
+                <li data-jump="1">
+                  <span class="mark">1</span>
+                  <span>
+                    <div class="t">Branding</div>
+                    <div class="d">Game name and logo</div>
+                  </span>
+                  <span class="edit">Go</span>
+                </li>
+                <li data-jump="2">
+                  <span class="mark">2</span>
+                  <span>
+                    <div class="t">Group and owner</div>
+                    <div class="d">Required before live</div>
+                  </span>
+                  <span class="edit">Go</span>
+                </li>
+                <li data-jump="3">
+                  <span class="mark">3</span>
+                  <span>
+                    <div class="t">Donation</div>
+                    <div class="d">Bagibagi / Saweria</div>
+                  </span>
+                  <span class="edit">Go</span>
+                </li>
+                <li data-jump="4">
+                  <span class="mark">4</span>
+                  <span>
+                    <div class="t">Shop and broadcast</div>
+                    <div class="d">Pass and gift IDs</div>
+                  </span>
+                  <span class="edit">Go</span>
+                </li>
+                <li data-jump="5">
+                  <span class="mark">5</span>
+                  <span>
+                    <div class="t">Secrets</div>
+                    <div class="d">Server-only keys</div>
+                  </span>
+                  <span class="edit">Go</span>
+                </li>
+                <li data-jump="6">
+                  <span class="mark">6</span>
+                  <span>
+                    <div class="t">Review</div>
+                    <div class="d">Checklist and finish</div>
+                  </span>
+                  <span class="edit">Go</span>
+                </li>
+              </ul>
+            </div>
+            <button type="button" class="btn btn-primary" data-goto="1">Start setup</button>
+          </div>
+
+          <div class="step" data-step="1" hidden>
+            <div class="step-title">Branding</div>
+            <p class="step-hint">Shown on loading, posters, and Join Community.</p>
+            <div class="preview" aria-live="polite">
+              <div class="logo" id="logoPreview">NP</div>
+              <div>
+                <div class="pname" id="namePreview">Club</div>
+                <div class="psub">Preview</div>
+              </div>
+            </div>
+            <div class="field" id="field-gameName">
+              <label for="gameName">Game name <span class="tag req">required</span></label>
+              <input id="gameName" type="text" placeholder="Club" autocomplete="off" />
+              <p class="help">Display name for your place.</p>
+              <p class="err-msg">Enter a game name.</p>
+            </div>
+            <div class="field" id="field-logoImage">
+              <label for="logoImage">Logo image <span class="tag">asset id</span></label>
+              <input id="logoImage" type="text" placeholder="rbxassetid://…" autocomplete="off" />
+              <p class="help">Creator Dashboard image asset id.</p>
+              <p class="err-msg">Use rbxassetid://… or digits only.</p>
+            </div>
+            <div class="wizard-nav">
+              <button type="button" class="btn btn-ghost" data-goto="0">Back</button>
+              <button type="button" class="btn btn-primary" data-next="2">Continue</button>
+            </div>
+          </div>
+
+          <div class="step" data-step="2" hidden>
+            <div class="step-title">Group and owner</div>
+            <p class="step-hint">Required before live. Group ID is the number in the groups URL.</p>
+            <div class="field" id="field-groupId">
+              <label for="groupId">Group ID <span class="tag req">required</span></label>
+              <input id="groupId" type="number" placeholder="12345678" min="1" />
+              <p class="help">Must be greater than 0.</p>
+              <p class="err-msg">Enter a valid Group ID.</p>
+            </div>
+            <div class="field" id="field-ownerUserId">
+              <label for="ownerUserId">Owner user ID <span class="tag req">required</span></label>
+              <input id="ownerUserId" type="number" placeholder="987654321" min="1" />
+              <p class="help">Your Roblox user id.</p>
+              <p class="err-msg">Enter owner user ID.</p>
+            </div>
+            <div class="field">
+              <label for="adminIds">Admin user IDs <span class="tag">optional</span></label>
+              <input id="adminIds" type="text" placeholder="111, 222" />
+              <p class="help">Comma-separated extra admins.</p>
+            </div>
+            <div class="wizard-nav">
+              <button type="button" class="btn btn-ghost" data-goto="1">Back</button>
+              <button type="button" class="btn btn-primary" data-next="3">Continue</button>
+            </div>
+          </div>
+
+          <div class="step" data-step="3" hidden>
+            <div class="step-title">Donation</div>
+            <p class="step-hint">Bagibagi / Saweria worker. Leave API URL empty to disable live cash.</p>
+            <div class="field">
+              <label>Provider</label>
+              <div class="seg" role="group">
+                <button type="button" data-provider="bagibagi" aria-pressed="true">Bagibagi</button>
+                <button type="button" data-provider="saweria" aria-pressed="false">Saweria</button>
+              </div>
+            </div>
+            <div class="field" id="field-gameKey">
+              <label for="gameKey">Game key <span class="tag req">required</span></label>
+              <input id="gameKey" type="text" placeholder="the-basic" autocomplete="off" />
+              <p class="help">Must match worker SECRET_&lt;GAME_KEY&gt;.</p>
+              <p class="err-msg">Enter a game key.</p>
+            </div>
+            <div class="field">
+              <label for="apiUrl">Donation API URL <span class="tag">optional</span></label>
+              <input id="apiUrl" type="url" placeholder="https://…/game/your-key" />
+              <p class="help">Empty disables live donation for this place.</p>
+            </div>
+            <div class="wizard-nav">
+              <button type="button" class="btn btn-ghost" data-goto="2">Back</button>
+              <button type="button" class="btn btn-primary" data-next="4">Continue</button>
+            </div>
+          </div>
+
+          <div class="step" data-step="4" hidden>
+            <div class="step-title">Shop and broadcast</div>
+            <p class="step-hint">Pass = self-buy. GiftId = Developer Product for gifts.</p>
+            <div class="tier-block">
+              <div class="name">VIP · Tier 1</div>
+              <div class="grid2">
+                <div>
+                  <div class="mini-label">Buy pass</div>
+                  <input id="t1Pass" type="number" placeholder="0" />
+                </div>
+                <div>
+                  <div class="mini-label">Gift product</div>
+                  <input id="t1Gift" type="number" placeholder="0" />
+                </div>
+              </div>
+            </div>
+            <div class="tier-block">
+              <div class="name">VVIP · Tier 2</div>
+              <div class="grid2">
+                <div>
+                  <div class="mini-label">Buy pass</div>
+                  <input id="t2Pass" type="number" placeholder="0" />
+                </div>
+                <div>
+                  <div class="mini-label">Gift product</div>
+                  <input id="t2Gift" type="number" placeholder="0" />
+                </div>
+              </div>
+            </div>
+            <div class="tier-block">
+              <div class="name">Supreme · Tier 3</div>
+              <div class="grid2">
+                <div>
+                  <div class="mini-label">Buy pass</div>
+                  <input id="t3Pass" type="number" placeholder="0" />
+                </div>
+                <div>
+                  <div class="mini-label">Gift product</div>
+                  <input id="t3Gift" type="number" placeholder="0" />
+                </div>
+              </div>
+            </div>
+            <div class="field">
+              <label for="broadcastId">Paid broadcast Product ID <span class="tag">optional</span></label>
+              <input id="broadcastId" type="number" placeholder="0" />
+            </div>
+            <div class="wizard-nav">
+              <button type="button" class="btn btn-ghost" data-goto="3">Back</button>
+              <button type="button" class="btn btn-primary" data-next="5">Continue</button>
+            </div>
+          </div>
+
+          <div class="step" data-step="5" hidden>
+            <div class="step-title">Secrets</div>
+            <p class="step-hint">Server-only in Hazastudio_ClubKitSecrets. Never on the client.</p>
+            <div class="field">
+              <label for="donationSecret">Donation API secret <span class="tag">optional</span></label>
+              <div class="input-wrap">
+                <input id="donationSecret" type="password" placeholder="••••••••" autocomplete="off" />
+                <button type="button" class="eye" data-toggle="donationSecret">Show</button>
+              </div>
+            </div>
+            <div class="field">
+              <label for="gameDataSecret">Game data API secret <span class="tag">optional</span></label>
+              <div class="input-wrap">
+                <input id="gameDataSecret" type="password" placeholder="••••••••" autocomplete="off" />
+                <button type="button" class="eye" data-toggle="gameDataSecret">Show</button>
+              </div>
+              <p class="help">Optional in Studio — Join Community can fall back to roproxy.</p>
+            </div>
+            <div class="wizard-nav">
+              <button type="button" class="btn btn-ghost" data-goto="4">Back</button>
+              <button type="button" class="btn btn-primary" data-next="6">Continue</button>
+            </div>
+            <button type="button" class="btn btn-text" id="btnSkipSecrets">Skip secrets for now</button>
+          </div>
+
+          <div class="step" data-step="6" hidden>
+            <div class="step-title">You're set</div>
+            <p class="step-hint">Tap a row to edit. Finish will write Source later in Luau.</p>
+            <div class="summary-card" id="summaryCard"></div>
+            <div class="card">
+              <ul class="check-list" id="doneList"></ul>
+            </div>
+            <button type="button" class="btn btn-primary" id="btnFinish">Finish</button>
+            <button type="button" class="btn btn-text" id="btnOpenEngine">Open Engine tab</button>
+          </div>
+        </section>
+      </div>
+
+      <footer class="footer">
+        <button type="button" id="btnDismiss">Close</button>
+        <span>No script editor needed</span>
+      </footer>
+
+      <div class="overlay" id="welcomeOverlay" aria-hidden="true">
+        <div class="sheet" role="dialog" aria-labelledby="welcomeTitle">
+          <h3 id="welcomeTitle">Welcome to Club Kit</h3>
+          <p>This place is not configured yet (GroupId is 0). Walk through setup once — branding, group, shop, secrets — without opening scripts.</p>
+          <div class="actions">
+            <button type="button" class="btn btn-primary" id="btnStartFromOverlay">Start setup</button>
+            <button type="button" class="btn btn-ghost" id="btnDismissOverlay">Not now</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <aside class="guide">
+      <span class="kicker">Guide</span>
+      <h4 id="guideTitle">First open</h4>
+      <p class="body-text" id="guideBody">Overlay appears when GroupId is 0.</p>
+      <span class="kicker">Flow</span>
+      <ol>
+        <li>Auto overlay once if unset</li>
+        <li>Setup tab to edit anytime</li>
+        <li>Later: patch Source in plugin</li>
+      </ol>
+    </aside>
+  </div>
+
+  <div class="toast" id="toast" role="status"></div>
+
+  <script>
+    const DOT_COUNT = 6;
+    const STEP_NAMES = {
+      0: "Overview",
+      1: "Branding",
+      2: "Group",
+      3: "Donation",
+      4: "Shop",
+      5: "Secrets",
+      6: "Review",
+    };
+
+    const GUIDE = {
+      0: { title: "Overview", body: "Six steps. Start from the top, or jump to a section." },
+      1: { title: "Branding", body: "Name and logo players see. Preview updates as you type." },
+      2: { title: "Group", body: "Without Group ID, ranks and commands will not work." },
+      3: { title: "Donation", body: "Connect Bagibagi or Saweria. Game key must match the worker." },
+      4: { title: "Shop", body: "Three tiers: buy Pass + gift Product. Zero keeps shop off." },
+      5: { title: "Secrets", body: "Server-only tokens. Skip is fine in Studio." },
+      6: { title: "Review", body: "Checklist from your inputs. Edit any row, then Finish." },
+    };
+
+    const $ = (id) => document.getElementById(id);
+    let step = 0;
+    let maxReached = 0;
+    let secretsSkipped = false;
+    let setupComplete = false;
+    let provider = "bagibagi";
+
+    function toast(msg) {
+      const el = $("toast");
+      el.textContent = msg;
+      el.classList.add("show");
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => el.classList.remove("show"), 2000);
+    }
+
+    function setOverlay(open) {
+      $("welcomeOverlay").classList.toggle("open", open);
+      $("welcomeOverlay").setAttribute("aria-hidden", open ? "false" : "true");
+    }
+
+    function selectTab(name) {
+      document.querySelectorAll(".tabs [role=tab]").forEach((t) => {
+        t.setAttribute("aria-selected", t.id === "tab-" + name ? "true" : "false");
+      });
+      document.querySelectorAll(".panel").forEach((p) => { p.hidden = true; });
+      $("panel-" + name).hidden = false;
+      updateNudge();
+    }
+
+    function updateNudge() {
+      const incomplete = !setupComplete && !(Number($("groupId").value) > 0);
+      $("engineNudge").style.display = incomplete ? "" : "none";
+    }
+
+    function updateGuide() {
+      const g = GUIDE[step] || GUIDE[0];
+      $("guideTitle").textContent = g.title;
+      $("guideBody").textContent = g.body;
+    }
+
+    function updateMeta() {
+      const meta = $("stepMeta");
+      if (step === 0) {
+        meta.textContent = "Overview";
+        meta.classList.remove("active");
+      } else if (step === 6) {
+        meta.textContent = "Step 6 of 6";
+        meta.classList.add("active");
+      } else {
+        meta.textContent = "Step " + step + " of 6 · " + STEP_NAMES[step];
+        meta.classList.add("active");
+      }
+      updateGuide();
+      updatePreview();
+    }
+
+    function updatePreview() {
+      const name = ($("gameName").value || "").trim() || "Club";
+      $("namePreview").textContent = name;
+      $("logoPreview").textContent = name.slice(0, 2).toUpperCase() || "CK";
+    }
+
+    function clearFieldErrors(stepN) {
+      document.querySelectorAll('.step[data-step="' + stepN + '"] .field').forEach((f) => {
+        f.classList.remove("has-err");
+        const inp = f.querySelector("input");
+        if (inp) inp.classList.remove("err");
+      });
+    }
+
+    function markErr(fieldId, inputId) {
+      const field = $(fieldId);
+      const inp = $(inputId);
+      if (field) field.classList.add("has-err");
+      if (inp) {
+        inp.classList.add("err");
+        inp.focus();
+      }
+    }
+
+    function validateStep(n) {
+      clearFieldErrors(n);
+      if (n === 1) {
+        if (!($("gameName").value || "").trim()) {
+          markErr("field-gameName", "gameName");
+          toast("Enter a game name");
+          return false;
+        }
+        const logo = ($("logoImage").value || "").trim();
+        if (logo && !/^(rbxassetid:\/\/)?\d+$/i.test(logo)) {
+          markErr("field-logoImage", "logoImage");
+          toast("Invalid logo format");
+          return false;
+        }
+      }
+      if (n === 2) {
+        if (!(Number($("groupId").value) > 0)) {
+          markErr("field-groupId", "groupId");
+          toast("Group ID is required");
+          return false;
+        }
+        if (!(Number($("ownerUserId").value) > 0)) {
+          markErr("field-ownerUserId", "ownerUserId");
+          toast("Owner user ID is required");
+          return false;
+        }
+      }
+      if (n === 3) {
+        if (!($("gameKey").value || "").trim()) {
+          markErr("field-gameKey", "gameKey");
+          toast("Game key is required");
+          return false;
+        }
+      }
+      return true;
+    }
+
+    function renderProgress(n) {
+      const el = $("progress");
+      if (n < 1) {
+        el.innerHTML = "";
+        return;
+      }
+      let html = "";
+      for (let i = 1; i <= DOT_COUNT; i++) {
+        let cls = "";
+        if (i === n) cls = "on";
+        else if (i < n || i <= maxReached) cls = "done";
+        const canJump = i <= maxReached || i === n;
+        html +=
+          '<button type="button" class="' + cls + '" data-dot="' + i +
+          '" title="' + STEP_NAMES[i] + '" ' + (canJump ? "" : "disabled") +
+          ' aria-label="Step ' + i + '"></button>';
+      }
+      el.innerHTML = html;
+      el.querySelectorAll("[data-dot]").forEach((b) => {
+        b.addEventListener("click", () => {
+          const t = Number(b.dataset.dot);
+          if (t <= maxReached || t === step) gotoStep(t);
+        });
+      });
+    }
+
+    function shopFilled() {
+      return ["t1Pass", "t1Gift", "t2Pass", "t2Gift", "t3Pass", "t3Gift"].some(
+        (id) => Number($(id).value) > 0
+      );
+    }
+
+    function refreshDoneList() {
+      const gid = Number($("groupId").value) || 0;
+      const hasDonation = ($("donationSecret").value || "").length > 0;
+      const gname = ($("gameName").value || "").trim() || "—";
+      const key = ($("gameKey").value || "").trim() || "—";
+
+      $("summaryCard").innerHTML =
+        "<strong>" + gname + "</strong> · Group " + (gid || "—") +
+        "<br>" + provider + " · key <strong>" + key + "</strong>";
+
+      const items = [
+        {
+          ok: !!($("gameName").value || "").trim(),
+          warn: false,
+          title: "Branding",
+          desc: gname,
+          jump: 1,
+        },
+        {
+          ok: gid > 0 && Number($("ownerUserId").value) > 0,
+          warn: false,
+          title: "Group and owner",
+          desc: gid > 0 ? "GroupId " + gid : "Not set",
+          jump: 2,
+        },
+        {
+          ok: !!($("gameKey").value || "").trim(),
+          warn: !($("apiUrl").value || "").trim(),
+          title: "Donation",
+          desc: ($("apiUrl").value || "").trim()
+            ? provider + " · URL set"
+            : "Key set · URL empty",
+          jump: 3,
+        },
+        {
+          ok: shopFilled(),
+          warn: !shopFilled(),
+          title: "Shop",
+          desc: shopFilled() ? "At least one ID set" : "All zero",
+          jump: 4,
+        },
+        {
+          ok: hasDonation && !secretsSkipped,
+          warn: secretsSkipped || !hasDonation,
+          title: "Secrets",
+          desc: secretsSkipped
+            ? "Skipped"
+            : hasDonation
+              ? "Donation secret set"
+              : "Empty",
+          jump: 5,
+        },
+      ];
+
+      $("doneList").innerHTML = items
+        .map((it) => {
+          const cls = it.ok ? "ok" : it.warn ? "warn" : "skip";
+          const mark = it.ok ? "OK" : it.warn ? "—" : "—";
+          return (
+            '<li class="' + cls + '" data-jump="' + it.jump + '">' +
+            '<span class="mark">' + mark + "</span>" +
+            "<span><div class=\"t\">" + it.title + "</div>" +
+            '<div class="d">' + it.desc + "</div></span>" +
+            '<span class="edit">Edit</span></li>'
+          );
+        })
+        .join("");
+
+      $("doneList").querySelectorAll("[data-jump]").forEach((li) => {
+        li.addEventListener("click", () => gotoStep(Number(li.dataset.jump)));
+      });
+    }
+
+    function gotoStep(n) {
+      step = n;
+      if (n > maxReached) maxReached = n;
+      document.querySelectorAll(".step").forEach((s) => {
+        s.hidden = Number(s.dataset.step) !== n;
+      });
+      renderProgress(n);
+      if (n === 6) refreshDoneList();
+      selectTab("setup");
+      setOverlay(false);
+      updateMeta();
+      updateNudge();
+    }
+
+    function tryNext(from, to) {
+      if (!validateStep(from)) return;
+      gotoStep(to);
+    }
+
+    function fillDefaults(mode) {
+      if (mode === "empty") {
+        $("gameName").value = "";
+        $("logoImage").value = "";
+        $("groupId").value = "";
+        $("ownerUserId").value = "";
+        $("adminIds").value = "";
+        $("gameKey").value = "";
+        $("apiUrl").value = "";
+        ["t1Pass", "t1Gift", "t2Pass", "t2Gift", "t3Pass", "t3Gift", "broadcastId"].forEach((id) => {
+          $(id).value = "";
+        });
+        $("donationSecret").value = "";
+        $("gameDataSecret").value = "";
+      } else if (mode === "mid") {
+        $("gameName").value = "Neon Pulse";
+        $("logoImage").value = "rbxassetid://123456789";
+        $("groupId").value = "98765432";
+        $("ownerUserId").value = "8842050215";
+        $("adminIds").value = "";
+        $("gameKey").value = "neon-pulse";
+        $("apiUrl").value = "";
+        ["t1Pass", "t1Gift", "t2Pass", "t2Gift", "t3Pass", "t3Gift", "broadcastId"].forEach((id) => {
+          $(id).value = "";
+        });
+        $("donationSecret").value = "";
+        $("gameDataSecret").value = "";
+      } else {
+        $("gameName").value = "Neon Pulse";
+        $("logoImage").value = "rbxassetid://123456789";
+        $("groupId").value = "98765432";
+        $("ownerUserId").value = "8842050215";
+        $("adminIds").value = "111222333";
+        $("gameKey").value = "neon-pulse";
+        $("apiUrl").value = "https://example.workers.dev/game/neon-pulse";
+        $("t1Pass").value = "100001";
+        $("t1Gift").value = "200001";
+        $("t2Pass").value = "100002";
+        $("t2Gift").value = "200002";
+        $("t3Pass").value = "100003";
+        $("t3Gift").value = "200003";
+        $("broadcastId").value = "3503700307";
+        $("donationSecret").value = "don_secret_demo";
+        $("gameDataSecret").value = "";
+      }
+      updatePreview();
+    }
+
+    function applyScenario(name) {
+      document.querySelectorAll(".scenario [data-scenario]").forEach((b) => {
+        b.setAttribute("aria-pressed", b.dataset.scenario === name ? "true" : "false");
+      });
+      secretsSkipped = false;
+      setupComplete = false;
+      provider = "bagibagi";
+      document.querySelectorAll("[data-provider]").forEach((x) => {
+        x.setAttribute("aria-pressed", x.dataset.provider === "bagibagi" ? "true" : "false");
+      });
+
+      if (name === "first") {
+        maxReached = 0;
+        fillDefaults("empty");
+        selectTab("engine");
+        gotoStep(0);
+        setOverlay(true);
+        $("guideTitle").textContent = "First open";
+        $("guideBody").textContent = "Overlay appears when GroupId is 0.";
+      } else if (name === "mid") {
+        fillDefaults("mid");
+        maxReached = 3;
+        selectTab("setup");
+        setOverlay(false);
+        gotoStep(3);
+      } else {
+        fillDefaults("full");
+        maxReached = 6;
+        setupComplete = true;
+        selectTab("setup");
+        setOverlay(false);
+        gotoStep(6);
+      }
+      updateNudge();
+    }
+
+    document.querySelectorAll(".tabs [role=tab]").forEach((tab) => {
+      tab.addEventListener("click", () => {
+        selectTab(tab.id.replace("tab-", ""));
+        setOverlay(false);
+      });
+    });
+
+    document.querySelectorAll(".scenario [data-scenario]").forEach((b) => {
+      b.addEventListener("click", () => applyScenario(b.dataset.scenario));
+    });
+
+    document.querySelectorAll("[data-goto]").forEach((b) => {
+      b.addEventListener("click", () => gotoStep(Number(b.dataset.goto)));
+    });
+
+    document.querySelectorAll("[data-next]").forEach((b) => {
+      b.addEventListener("click", () => {
+        const to = Number(b.dataset.next);
+        tryNext(to - 1, to);
+      });
+    });
+
+    document.querySelectorAll("#overviewList [data-jump]").forEach((li) => {
+      li.addEventListener("click", () => gotoStep(Number(li.dataset.jump)));
+    });
+
+    document.querySelectorAll("[data-provider]").forEach((b) => {
+      b.addEventListener("click", () => {
+        provider = b.dataset.provider;
+        document.querySelectorAll("[data-provider]").forEach((x) => {
+          x.setAttribute("aria-pressed", x === b ? "true" : "false");
+        });
+      });
+    });
+
+    document.querySelectorAll(".eye").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const inp = $(btn.dataset.toggle);
+        const show = inp.type === "password";
+        inp.type = show ? "text" : "password";
+        btn.textContent = show ? "Hide" : "Show";
+      });
+    });
+
+    ["gameName", "logoImage"].forEach((id) => {
+      $(id).addEventListener("input", updatePreview);
+    });
+
+    $("groupId").addEventListener("input", updateNudge);
+
+    $("btnSkipSecrets").addEventListener("click", () => {
+      secretsSkipped = true;
+      $("donationSecret").value = "";
+      $("gameDataSecret").value = "";
+      gotoStep(6);
+      toast("Secrets skipped");
+    });
+
+    $("btnFinish").addEventListener("click", () => {
+      setupComplete = Number($("groupId").value) > 0;
+      updateNudge();
+      toast(setupComplete
+        ? "Would write ClubKitConfig + Secrets"
+        : "Group still empty");
+    });
+
+    $("btnOpenEngine").addEventListener("click", () => selectTab("engine"));
+    $("btnGoSetup").addEventListener("click", () => gotoStep(1));
+    $("btnStartFromOverlay").addEventListener("click", () => gotoStep(1));
+    $("btnDismissOverlay").addEventListener("click", () => {
+      setOverlay(false);
+      selectTab("engine");
+      toast("Open Setup tab anytime");
+    });
+    $("btnDismiss").addEventListener("click", () => toast("Close panel"));
+
+    applyScenario("first");
+  </script>
+</body>
+</html>

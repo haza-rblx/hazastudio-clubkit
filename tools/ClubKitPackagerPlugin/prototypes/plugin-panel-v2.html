@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Club Kit Plugin — Panel v2</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --page: #000000;
+      --card: #111111;
+      --elevated: #1a1a1a;
+      --text: #ffffff;
+      --muted: #a0a0a0;
+      --faint: #6e6e6e;
+      --sep: rgba(255, 255, 255, 0.08);
+      --blue: #0a84ff;
+      --blue-bright: #64b5ff;
+      --blue-deep: #0071e3;
+      --blue-soft: rgba(10, 132, 255, 0.2);
+      --red: #ff453a;
+      --red-soft: rgba(255, 69, 58, 0.18);
+      --radius: 16px;
+      --dock-w: 380px;
+      --dock-h: 640px;
+      --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      font-family: var(--font);
+      color: var(--text);
+      background: #000000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 28px;
+      padding: 40px 16px 56px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .page-meta { text-align: center; }
+    .page-meta h1 {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+    .page-meta p {
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--faint);
+    }
+
+    .scenario {
+      display: inline-flex;
+      gap: 2px;
+      margin-top: 14px;
+      padding: 3px;
+      background: var(--card);
+      border-radius: 10px;
+      border: 0;
+    }
+
+    .scenario button {
+      border: 0;
+      background: transparent;
+      color: var(--faint);
+      font: 500 11px/1 var(--font);
+      padding: 7px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    .scenario button[aria-pressed="true"] {
+      background: var(--elevated);
+      color: var(--text);
+    }
+
+    .stage {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 36px;
+      justify-content: center;
+      align-items: flex-start;
+      width: min(900px, 100%);
+    }
+
+    .phone {
+      width: var(--dock-w);
+      height: var(--dock-h);
+      background: var(--page);
+      border-radius: 28px;
+      border: 0;
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .titlebar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 18px 0;
+      font-size: 11px;
+      color: var(--faint);
+      font-weight: 500;
+    }
+
+    .traffic { display: flex; gap: 6px; }
+    .traffic i {
+      width: 9px; height: 9px; border-radius: 50%;
+      background: #222; font-style: normal;
+    }
+
+    .tabs {
+      display: flex;
+      justify-content: center;
+      gap: 0;
+      padding: 12px 14px 14px;
+    }
+
+    .tabs button {
+      border: 0;
+      outline: none;
+      background: transparent;
+      color: var(--faint);
+      font: 600 14px/1 var(--font);
+      padding: 9px 16px;
+      border-radius: 999px;
+      cursor: pointer;
+    }
+
+    .tabs button[aria-selected="true"] {
+      background: var(--card);
+      color: var(--text);
+      box-shadow: none;
+    }
+
+    .body {
+      flex: 1;
+      overflow: auto;
+      padding: 0 14px 16px;
+    }
+
+    .body::-webkit-scrollbar { width: 0; }
+    .panel[hidden] { display: none !important; }
+
+    .card {
+      background: var(--card);
+      border-radius: var(--radius);
+      margin-bottom: 12px;
+      overflow: hidden;
+      border: 0;
+    }
+
+    .sec-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 2px 6px 8px;
+    }
+
+    .sec-head .l {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--faint);
+    }
+
+    .sec-head .r {
+      border: 0;
+      outline: none;
+      background: none;
+      color: var(--blue);
+      font: 500 13px/1 var(--font);
+      cursor: pointer;
+    }
+
+    .hero {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 74px;
+      padding: 12px 12px 16px;
+      margin-bottom: 4px;
+      text-align: center;
+      border: 0;
+      background: transparent;
+      color: var(--text);
+      box-sizing: border-box;
+    }
+
+    .hero .headline {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.25;
+      color: var(--text);
+    }
+
+    .hero .pill {
+      display: none; /* version lives in header chip */
+    }
+
+    .actions-bare {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin: 4px 0 16px;
+      padding: 0 2px;
+    }
+
+    .notes {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.55;
+      padding: 16px;
+      white-space: pre-wrap;
+      max-height: 160px;
+      overflow: auto;
+    }
+
+    .notes::-webkit-scrollbar { width: 4px; }
+    .notes::-webkit-scrollbar-thumb {
+      background: #333;
+      border-radius: 2px;
+    }
+
+    .spec-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .spec-grid > div {
+      padding: 18px 12px;
+      text-align: center;
+    }
+
+    .spec-grid > div:first-child {
+      box-shadow: inset -1px 0 0 var(--sep);
+    }
+
+    .spec-grid .v {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      font-variant-numeric: tabular-nums;
+      margin-bottom: 4px;
+    }
+
+    .spec-grid .v.accent { color: var(--blue-bright); }
+    .spec-grid .k {
+      font-size: 12px;
+      color: var(--faint);
+      font-weight: 500;
+    }
+
+    .pad { padding: 0 16px 16px; }
+
+    .btn {
+      width: 100%;
+      border: 0;
+      outline: none;
+      border-radius: 999px;
+      padding: 14px 16px;
+      font: 600 15px/1.35 var(--font);
+      cursor: pointer;
+      transition: opacity 0.15s, background 0.15s;
+    }
+
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    .btn-primary {
+      background: var(--blue);
+      color: #fff;
+    }
+
+    .btn-primary:hover:not(:disabled) { background: var(--blue-deep); }
+
+    .btn-ghost {
+      background: var(--elevated);
+      color: var(--text);
+    }
+
+    .btn-ghost:hover:not(:disabled) { background: #1c1c1c; }
+
+    .row2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .list-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      padding: 15px 16px;
+      border: 0;
+      outline: none;
+      background: transparent;
+      color: var(--text);
+      text-align: left;
+      font: inherit;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .list-row + .list-row::before {
+      content: "";
+      position: absolute;
+      left: 66px;
+      right: 0;
+      top: 0;
+      height: 1px;
+      background: var(--sep);
+    }
+
+    .list-row:hover { background: rgba(255, 255, 255, 0.04); }
+
+    .list-row .ico {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      font-size: 15px;
+      font-weight: 700;
+      flex-shrink: 0;
+      border: 0;
+    }
+
+    .ico.red { background: var(--red-soft); color: var(--red); }
+    .ico.blue { background: var(--blue-soft); color: var(--blue-bright); }
+    .ico.gray { background: var(--elevated); color: var(--muted); }
+
+    .list-row .mid { flex: 1; min-width: 0; }
+    .list-row .t {
+      font-size: 15px;
+      font-weight: 500;
+      display: block;
+      letter-spacing: -0.01em;
+    }
+    .list-row .d {
+      font-size: 12px;
+      color: var(--faint);
+      margin-top: 3px;
+      line-height: 1.35;
+      display: block;
+    }
+    .list-row .chev {
+      color: #636366;
+      font-size: 22px;
+      font-weight: 300;
+    }
+
+    .modes {
+      display: flex;
+      justify-content: space-around;
+      padding: 22px 8px 10px;
+    }
+
+    .mode {
+      border: 0;
+      outline: none;
+      background: transparent;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 9px;
+      color: var(--faint);
+      font: 500 12px/1.2 var(--font);
+      min-width: 72px;
+    }
+
+    .mode .ring {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: var(--elevated);
+      border: 0;
+      display: grid;
+      place-items: center;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      transition: 0.15s;
+    }
+
+    .mode[aria-pressed="true"] { color: var(--blue); }
+    .mode[aria-pressed="true"] .ring {
+      background: var(--blue-soft);
+      color: var(--blue);
+      box-shadow: inset 0 0 0 2.5px var(--blue);
+    }
+
+    .hint {
+      text-align: center;
+      font-size: 12px;
+      color: var(--faint);
+      padding: 2px 16px 16px;
+      line-height: 1.4;
+    }
+
+    .hint[data-tone="warn"] { color: #ffd60a; }
+    .hint[data-tone="danger"] { color: var(--red); }
+
+    .check {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      padding: 14px 16px;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .check + .check::before {
+      content: "";
+      position: absolute;
+      left: 16px;
+      right: 0;
+      top: 0;
+      height: 1px;
+      background: var(--sep);
+    }
+
+    .check .box {
+      width: 22px;
+      height: 22px;
+      margin-top: 1px;
+      flex-shrink: 0;
+      border-radius: 50%;
+      border: 0;
+      background: var(--elevated);
+      position: relative;
+    }
+
+    .check[data-on="true"] .box {
+      background: var(--blue);
+    }
+
+    .check[data-on="true"] .box::after {
+      content: "";
+      position: absolute;
+      left: 7px; top: 4px;
+      width: 5px; height: 9px;
+      border: solid #fff;
+      border-width: 0 2px 2px 0;
+      transform: rotate(45deg);
+    }
+
+    .check .t { font-size: 15px; font-weight: 500; display: block; }
+    .check .h {
+      font-size: 12px;
+      color: var(--faint);
+      margin-top: 3px;
+      line-height: 1.35;
+      display: block;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(8px);
+      background: #f5f5f7;
+      color: #1d1d1f;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 12px 18px;
+      border-radius: 999px;
+      opacity: 0;
+      pointer-events: none;
+      transition: 0.2s;
+      z-index: 40;
+      border: 0;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .modal-bg {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      display: grid;
+      place-items: center;
+      z-index: 50;
+      opacity: 0;
+      pointer-events: none;
+      transition: 0.2s;
+      padding: 20px;
+    }
+
+    .modal-bg.open { opacity: 1; pointer-events: auto; }
+
+    .modal {
+      width: min(320px, 100%);
+      background: #0a0a0a;
+      border: 0;
+      border-radius: 20px;
+      padding: 24px 18px 16px;
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+    }
+
+    .modal h4 {
+      font-size: 17px;
+      font-weight: 700;
+      text-align: center;
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+    }
+
+    .modal p {
+      font-size: 13px;
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.45;
+      margin-bottom: 18px;
+    }
+
+    .note {
+      max-width: 260px;
+      font-size: 12px;
+      color: var(--faint);
+      line-height: 1.5;
+      padding-top: 8px;
+    }
+
+    .note strong {
+      color: var(--muted);
+      display: block;
+      margin-bottom: 6px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+  </style>
+</head>
+<body>
+  <header class="page-meta">
+    <h1>Club Kit panel v2</h1>
+    <p>HyperOS · AMOLED black</p>
+    <div class="scenario" role="group">
+      <button type="button" data-scenario="uptodate" aria-pressed="false">Up to date</button>
+      <button type="button" data-scenario="update" aria-pressed="true">Update ready</button>
+      <button type="button" data-scenario="canary" aria-pressed="false">On canary</button>
+    </div>
+  </header>
+
+  <div class="stage">
+    <div class="phone" id="dock">
+      <div class="titlebar">
+        <div class="traffic" aria-hidden="true"><i></i><i></i><i></i></div>
+        <span>Hazastudio Club Kit</span>
+      </div>
+
+      <nav class="tabs" role="tablist">
+        <button type="button" role="tab" id="tab-engine" aria-selected="true" aria-controls="panel-engine">Engine</button>
+        <button type="button" role="tab" id="tab-tools" aria-selected="false" aria-controls="panel-tools">Tools</button>
+      </nav>
+
+      <div class="body">
+        <section class="panel" id="panel-engine" role="tabpanel">
+          <div class="hero ok" id="heroCard">
+            <div class="headline" id="heroTitle">You're on the latest engine.</div>
+          </div>
+
+          <div class="card">
+            <div class="spec-grid">
+              <div>
+                <div class="v" id="currentVer">2.4.66</div>
+                <div class="k">This place</div>
+              </div>
+              <div>
+                <div class="v accent" id="latestVer">2.4.66</div>
+                <div class="k">Channel latest</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="actions-bare">
+            <button type="button" class="btn btn-primary" id="btnPrimary">Check for updates</button>
+            <button type="button" class="btn btn-ghost" id="btnStay">Skip this version</button>
+          </div>
+
+          <div class="sec-head">
+            <span class="l">Release notes</span>
+          </div>
+          <div class="card">
+            <p class="notes" id="notes">Empty release / version bump for engine sync.
+Config and Secrets are never overwritten.</p>
+          </div>
+
+          <div class="sec-head"><span class="l">More actions</span></div>
+          <div class="card">
+            <button type="button" class="list-row" id="btnRollbackRow" disabled>
+              <span class="ico red">↓</span>
+              <span class="mid">
+                <span class="t" id="btnRollbackLabel">Downgrade</span>
+                <span class="d">Previous tag on this channel</span>
+              </span>
+              <span class="chev">›</span>
+            </button>
+          </div>
+
+          <div class="sec-head"><span class="l">Channel</span></div>
+          <div class="card">
+            <div class="modes" role="group">
+              <button type="button" class="mode" data-channel="stable" aria-pressed="true">
+                <span class="ring">ST</span>Stable
+              </button>
+              <button type="button" class="mode" data-channel="canary" aria-pressed="false">
+                <span class="ring">CN</span>Canary
+              </button>
+              <button type="button" class="mode" data-channel="nightly" aria-pressed="false">
+                <span class="ring">NT</span>Nightly
+              </button>
+            </div>
+            <p class="hint" id="channelHint">Production / buyer places. Tags: vX.Y.Z</p>
+          </div>
+        </section>
+
+        <section class="panel" id="panel-tools" role="tabpanel" hidden>
+          <div class="sec-head"><span class="l">Studio helpers</span></div>
+          <div class="card">
+            <button type="button" class="list-row" id="btnGenTools">
+              <span class="ico blue">T</span>
+              <span class="mid">
+                <span class="t">Generate Tools folders</span>
+                <span class="d">Empty folders under ServerStorage.Tools from role config</span>
+              </span>
+              <span class="chev">›</span>
+            </button>
+            <button type="button" class="list-row" id="btnCarryFix">
+              <span class="ico gray">C</span>
+              <span class="mid">
+                <span class="t">Carry fix</span>
+                <span class="d">Upload ReplicatedStorage.Carry clips + patch ClubKitConfig animations</span>
+              </span>
+              <span class="chev">›</span>
+            </button>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <aside class="note">
+      <strong>HyperOS cues</strong>
+      Elevated cards (no stroke), system blue #0A84FF, soft hairline separators, filled channel rings.
+    </aside>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <div class="modal-bg" id="rollbackModal">
+    <div class="modal">
+      <h4>Downgrade engine?</h4>
+      <p id="rbBody">Engine Sources only. Config, Secrets, and GUI stay.</p>
+      <div class="row2">
+        <button type="button" class="btn btn-ghost" id="rbCancel">Cancel</button>
+        <button type="button" class="btn btn-primary" id="rbConfirm">Downgrade</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const CHANNEL_COPY = {
+      stable: { hint: "Production / buyer places. Tags: vX.Y.Z", tone: "" },
+      canary: { hint: "Early features — use a test place.", tone: "warn" },
+      nightly: { hint: "Dev builds. Expect breakage.", tone: "danger" },
+    };
+
+    const SCENARIOS = {
+      uptodate: {
+        current: "2.4.66", latest: "2.4.66", channel: "stable",
+        hero: "You're on the latest engine.",
+        notes: "Empty release / version bump for engine sync.\nConfig and Secrets are never overwritten.",
+        primary: "Check for updates", updateReady: false,
+        canRollback: true, previous: "v2.4.65",
+      },
+      update: {
+        current: "2.4.66", latest: "2.4.67", channel: "stable",
+        hero: "An engine update is available.",
+        notes: "Dance crossfade (map-style) — switch + sync join use matching Stop/Play fades. Mid-fade zombies hard-clear only when nearly dead.\n\nChat tags no longer invent [GUEST] for distant players — ChatTagSync roster is global, not proximity-gated.\n\nJoin-storm false budget_exhausted fixed — DataStoreScheduler distinguishes inflight_saturated vs budget_low.\n\nRank cache no longer poisons Guest for 10 minutes on transient GroupService failures.\n\nDelayed server restart early flush on ServerRestartScheduled — warns players and flushes XP / settings / favorites before BindToClose.\n\nAdmin giftcard false success fixed — stores real outcome per requestId. SetTitle permission + filter messages clarified.\n\nCash donation notif poll faster — idle 5s, burst 2s.",
+        primary: "Update engine", updateReady: true,
+        canRollback: true, previous: "v2.4.65",
+      },
+      canary: {
+        current: "2.4.67-canary.3", latest: "2.4.67-canary.3", channel: "canary",
+        hero: "You're on the latest canary.",
+        notes: "Channel-aware updater + downgrade — experimental.",
+        primary: "Check for updates", updateReady: false,
+        canRollback: true, previous: "v2.4.67-canary.2",
+      },
+    };
+
+    const $ = (id) => document.getElementById(id);
+
+    function toast(msg) {
+      const el = $("toast");
+      el.textContent = msg;
+      el.classList.add("show");
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => el.classList.remove("show"), 2000);
+    }
+
+    function setChannelUI(ch) {
+      document.querySelectorAll("[data-channel]").forEach((b) => {
+        b.setAttribute("aria-pressed", b.dataset.channel === ch ? "true" : "false");
+      });
+      const c = CHANNEL_COPY[ch];
+      $("channelHint").textContent = c.hint;
+      $("channelHint").dataset.tone = c.tone;
+    }
+
+    function setDowngrade(on, prev) {
+      $("btnRollbackRow").disabled = !on;
+      const label = on ? `Downgrade to ${prev}` : "Downgrade";
+      $("btnRollbackLabel").textContent = label;
+      $("btnRollbackRow").dataset.previous = prev || "";
+    }
+
+    function applyScenario(name) {
+      const s = SCENARIOS[name];
+      $("dock").dataset.scenario = name;
+      $("currentVer").textContent = s.current;
+      $("latestVer").textContent = s.latest;
+      $("heroTitle").textContent = s.hero;
+      $("notes").textContent = s.notes;
+      $("btnPrimary").textContent = s.primary;
+      $("heroCard").className = "hero " + (s.updateReady ? "update" : "ok");
+      setDowngrade(s.canRollback, s.previous);
+      setChannelUI(s.channel);
+      document.querySelectorAll(".scenario [data-scenario]").forEach((b) => {
+        b.setAttribute("aria-pressed", b.dataset.scenario === name ? "true" : "false");
+      });
+    }
+
+    document.querySelectorAll(".tabs [role=tab]").forEach((tab) => {
+      tab.addEventListener("click", () => {
+        document.querySelectorAll(".tabs [role=tab]").forEach((t) => t.setAttribute("aria-selected", "false"));
+        tab.setAttribute("aria-selected", "true");
+        document.querySelectorAll(".panel").forEach((p) => { p.hidden = true; });
+        $(tab.getAttribute("aria-controls")).hidden = false;
+      });
+    });
+
+    document.querySelectorAll(".scenario [data-scenario]").forEach((b) => {
+      b.addEventListener("click", () => applyScenario(b.dataset.scenario));
+    });
+
+    document.querySelectorAll("[data-channel]").forEach((b) => {
+      b.addEventListener("click", () => {
+        setChannelUI(b.dataset.channel);
+        toast("Channel → " + b.dataset.channel);
+      });
+    });
+
+    document.querySelectorAll("[data-check]").forEach((row) => {
+      row.addEventListener("click", () => {
+        row.dataset.on = row.dataset.on === "true" ? "false" : "true";
+      });
+    });
+
+    $("btnPrimary").addEventListener("click", () => {
+      const up = $("btnPrimary").textContent.toLowerCase().includes("update engine");
+      toast(up ? "Update engine" : "Check for updates");
+      if (!up && $("dock").dataset.scenario === "uptodate") applyScenario("update");
+    });
+
+    const skip = () => toast("Skip this version");
+    $("btnStay").addEventListener("click", skip);
+
+    function openDown(btn) {
+      if (btn.disabled) return;
+      $("rbBody").textContent = `Apply ${btn.dataset.previous}. Config, Secrets, GUI stay.`;
+      $("rollbackModal").classList.add("open");
+      $("rollbackModal").dataset.previous = btn.dataset.previous;
+    }
+
+    $("btnRollbackRow").addEventListener("click", () => openDown($("btnRollbackRow")));
+    $("rbCancel").addEventListener("click", () => $("rollbackModal").classList.remove("open"));
+    $("rbConfirm").addEventListener("click", () => {
+      $("rollbackModal").classList.remove("open");
+      toast("Downgrade " + $("rollbackModal").dataset.previous);
+    });
+
+    $("btnGenTools").addEventListener("click", () => toast("Generate Tools folder"));
+    $("btnCarryFix").addEventListener("click", () => toast("Carry fix — open Carry Upload"));
+
+    applyScenario("update");
+  </script>
+</body>
+</html>
