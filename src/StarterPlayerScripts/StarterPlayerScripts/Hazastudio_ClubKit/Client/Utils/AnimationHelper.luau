@@ -3,6 +3,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
+local MotionPresets = require(script.Parent.MotionPresets)
 -- ============================================================
 -- Types
 -- ============================================================
@@ -41,20 +42,10 @@ export type AnimationHelper = {
 	stopRotation: (self: AnimationHelper, handle: RotationHandle) -> (),
 }
 -- ============================================================
--- Constants
+-- Constants (legacy playful / FX — not MotionPresets calm language)
 -- ============================================================
 local SCALE_POP_TIME = 0.4
 local SCALE_OUT_TIME = 0.2
-local PRESENT_PANEL_SNAP_TIME = 0.18
-local PRESENT_PANEL_SETTLE_TIME = 0.16
-local DISMISS_PANEL_TIME = 0.16
-local PRESENT_PANEL_Y_OFFSET = 34
-local PRESENT_PANEL_SETTLE_Y_OFFSET = -2
-local DISMISS_PANEL_Y_OFFSET = 22
-local CENTER_PANEL_OPEN_START_SCALE = 0.96
-local CENTER_PANEL_CLOSE_SCALE = 0.96
-local CENTER_PANEL_OPEN_TIME = 0.28
-local CENTER_PANEL_CLOSE_TIME = 0.18
 local PANEL_CAMERA_FOV_DELTA = 2
 
 local function getPanelBlurConfig(): { SIZE: number, FADE_IN: number, FADE_OUT: number }
@@ -68,12 +59,6 @@ local function getPanelBlurConfig(): { SIZE: number, FADE_IN: number, FADE_OUT: 
 		FADE_OUT = tonumber(panelBlur.FADE_OUT) or 0.22,
 	}
 end
-local PRESENT_DIALOG_SNAP_TIME = 0.13
-local PRESENT_DIALOG_SETTLE_TIME = 0.12
-local DISMISS_DIALOG_TIME = 0.12
-local PRESENT_DIALOG_Y_OFFSET = 12
-local PRESENT_DIALOG_SETTLE_Y_OFFSET = -1
-local DISMISS_DIALOG_Y_OFFSET = 8
 local SWING_TIME = 0.55
 local SCATTER_TIME = 0.38
 local SCATTER_SPREAD = 0.35
@@ -89,7 +74,7 @@ local SCATTER_DIRS: { { number } } = {
 -- Private helpers
 -- ============================================================
 local function makeInfo(t: number, style: Enum.EasingStyle, dir: Enum.EasingDirection): TweenInfo
-	return TweenInfo.new(t, style, dir)
+	return MotionPresets.makeInfo(t, style, dir)
 end
 local function getOrCreateUIScale(frame: Frame): UIScale
 	local existing = frame:FindFirstChildWhichIsA("UIScale") :: UIScale?
@@ -286,19 +271,20 @@ end
 -- Ada settle kecil di akhir supaya terasa gamey, tapi typography tetap stabil.
 -- ============================================================
 function AnimationHelper:presentPanel(modal: Frame, onDone: (() -> ())?): ()
+	local preset = MotionPresets.panelOpen()
 	local restingPos = resolveRestingPosition(modal)
 	local token = beginAnimation(modal)
-	local settlePos = offsetPosition(restingPos, PRESENT_PANEL_SETTLE_Y_OFFSET)
-	modal.Position = offsetPosition(restingPos, PRESENT_PANEL_Y_OFFSET)
+	local settlePos = offsetPosition(restingPos, preset.settleYOffset)
+	modal.Position = offsetPosition(restingPos, preset.yOffset)
 	modal.Visible = true
 	local snapTween = TweenService:Create(
 		modal,
-		makeInfo(PRESENT_PANEL_SNAP_TIME, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+		makeInfo(preset.snapTime, preset.snapStyle, Enum.EasingDirection.Out),
 		{ Position = settlePos }
 	)
 	local settleTween = TweenService:Create(
 		modal,
-		makeInfo(PRESENT_PANEL_SETTLE_TIME, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+		makeInfo(preset.settleTime, preset.settleStyle, Enum.EasingDirection.Out),
 		{ Position = restingPos }
 	)
 	registerTweens(modal, { snapTween, settleTween }, restingPos)
@@ -324,13 +310,14 @@ function AnimationHelper:presentPanel(modal: Frame, onDone: (() -> ())?): ()
 	snapTween:Play()
 end
 function AnimationHelper:dismissPanel(modal: Frame, onDone: (() -> ())?): ()
+	local preset = MotionPresets.panelClose()
 	local restingPos = resolveRestingPosition(modal)
 	local token = beginAnimation(modal)
-	local targetPos = offsetPosition(restingPos, DISMISS_PANEL_Y_OFFSET)
+	local targetPos = offsetPosition(restingPos, preset.yOffset)
 	modal.Visible = true
 	local positionTween = TweenService:Create(
 		modal,
-		makeInfo(DISMISS_PANEL_TIME, Enum.EasingStyle.Cubic, Enum.EasingDirection.In),
+		makeInfo(preset.time, preset.style, preset.direction),
 		{ Position = targetPos }
 	)
 	registerTweens(modal, { positionTween }, restingPos)
@@ -490,16 +477,17 @@ function AnimationHelper:presentCenterPanel(modal: Frame, onDone: (() -> ())?, o
 	enableZoom: boolean?
 }?): ()
 	local opts = options or {}
+	local openPreset = MotionPresets.centerOpen()
 	local uiScale = getOrCreateUIScale(modal)
 	local token = beginAnimation(modal)
 
 	self:presentBackdropEffects(opts)
 	
-	uiScale.Scale = CENTER_PANEL_OPEN_START_SCALE
+	uiScale.Scale = openPreset.startScale
 	modal.Visible = true
 	local scaleTween = TweenService:Create(
 		uiScale,
-		makeInfo(CENTER_PANEL_OPEN_TIME, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+		MotionPresets.centerOpenInfo(),
 		{ Scale = 1 }
 	)
 	registerTweens(modal, { scaleTween }, modal.Position)
@@ -522,6 +510,7 @@ function AnimationHelper:dismissCenterPanel(modal: Frame, onDone: (() -> ())?, o
 	enableZoom: boolean?
 }?): ()
 	local opts = options or {}
+	local closePreset = MotionPresets.centerClose()
 	local uiScale = getOrCreateUIScale(modal)
 	local token = beginAnimation(modal)
 
@@ -530,8 +519,8 @@ function AnimationHelper:dismissCenterPanel(modal: Frame, onDone: (() -> ())?, o
 	modal.Visible = true
 	local scaleTween = TweenService:Create(
 		uiScale,
-		makeInfo(CENTER_PANEL_CLOSE_TIME, Enum.EasingStyle.Sine, Enum.EasingDirection.In),
-		{ Scale = CENTER_PANEL_CLOSE_SCALE }
+		MotionPresets.centerCloseInfo(),
+		{ Scale = closePreset.endScale }
 	)
 	registerTweens(modal, { scaleTween }, modal.Position)
 	scaleTween.Completed:Once(function(playbackState)
@@ -551,19 +540,20 @@ end
 -- Present/Dismiss Dialog - snap-settle kecil untuk modal lokal.
 -- ============================================================
 function AnimationHelper:presentDialog(modal: Frame, onDone: (() -> ())?): ()
+	local preset = MotionPresets.dialogOpen()
 	local restingPos = resolveRestingPosition(modal)
 	local token = beginAnimation(modal)
-	local settlePos = offsetPosition(restingPos, PRESENT_DIALOG_SETTLE_Y_OFFSET)
-	modal.Position = offsetPosition(restingPos, PRESENT_DIALOG_Y_OFFSET)
+	local settlePos = offsetPosition(restingPos, preset.settleYOffset)
+	modal.Position = offsetPosition(restingPos, preset.yOffset)
 	modal.Visible = true
 	local snapTween = TweenService:Create(
 		modal,
-		makeInfo(PRESENT_DIALOG_SNAP_TIME, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+		makeInfo(preset.snapTime, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
 		{ Position = settlePos }
 	)
 	local settleTween = TweenService:Create(
 		modal,
-		makeInfo(PRESENT_DIALOG_SETTLE_TIME, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+		makeInfo(preset.settleTime, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
 		{ Position = restingPos }
 	)
 	registerTweens(modal, { snapTween, settleTween }, restingPos)
@@ -589,13 +579,14 @@ function AnimationHelper:presentDialog(modal: Frame, onDone: (() -> ())?): ()
 	snapTween:Play()
 end
 function AnimationHelper:dismissDialog(modal: Frame, onDone: (() -> ())?): ()
+	local preset = MotionPresets.dialogClose()
 	local restingPos = resolveRestingPosition(modal)
 	local token = beginAnimation(modal)
-	local targetPos = offsetPosition(restingPos, DISMISS_DIALOG_Y_OFFSET)
+	local targetPos = offsetPosition(restingPos, preset.yOffset)
 	modal.Visible = true
 	local positionTween = TweenService:Create(
 		modal,
-		makeInfo(DISMISS_DIALOG_TIME, Enum.EasingStyle.Cubic, Enum.EasingDirection.In),
+		makeInfo(preset.time, preset.style, preset.direction),
 		{ Position = targetPos }
 	)
 	registerTweens(modal, { positionTween }, restingPos)

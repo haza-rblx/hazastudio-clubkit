@@ -7,6 +7,7 @@ local UserInputService = game:GetService("UserInputService")
 local ObjectPool = require(script.Parent.Parent.Utils.ObjectPool)
 local ScrollIndicatorHelper = require(script.Parent.Parent.Utils.ScrollIndicatorHelper)
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
+local PressFeedback = require(script.Parent.Parent.Utils.PressFeedback)
 local SliderSelectorUtil = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.SliderSelectorUtil)
 
 local DancePanelUIBinder = {} :: any
@@ -541,6 +542,8 @@ function DancePanelUIBinder:_bindTabs()
 	if self.refs.favoritesTabButton then
 		self.refs.favoritesTabButton.AutoButtonColor = false
 	end
+	PressFeedback.bindPressScale(self.refs.danceTabButton)
+	PressFeedback.bindPressScale(self.refs.poseTabButton)
 	bindPressDown(self.refs.danceTabButton, function()
 		self:setCategory("Dance")
 	end)
@@ -548,6 +551,7 @@ function DancePanelUIBinder:_bindTabs()
 		self:setCategory("Pose")
 	end)
 	if self.refs.favoritesTabButton then
+		PressFeedback.bindPressScale(self.refs.favoritesTabButton)
 		bindPressDown(self.refs.favoritesTabButton, function()
 			self:setCategory("Favorites")
 		end)

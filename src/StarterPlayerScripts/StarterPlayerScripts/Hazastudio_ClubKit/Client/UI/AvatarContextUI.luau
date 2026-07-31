@@ -8,6 +8,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local AvatarViewport3D = require(script.Parent.Parent.Utils.AvatarViewport3D)
 local AvatarPrewarmShared = require(script.Parent.Parent.Utils.AvatarPrewarmShared)
+local MotionPresets = require(script.Parent.Parent.Utils.MotionPresets)
 
 type AvatarContextPayload = Types.AvatarContextPayload
 type ILogger = Types.ILogger
@@ -37,12 +38,6 @@ local LIKE_BUTTON_TEXT_IDLE = "Like Player"
 local LIKE_BUTTON_TEXT_ACTIVE = "Unlike Player"
 local LIKE_BUTTON_ACTIVE_COLOR = Color3.fromRGB(255, 82, 112)
 local LIKE_BUTTON_ACTIVE_TRANSPARENCY = 0.05
-local PANEL_OPEN_START_SCALE = 0.96
-local PANEL_OPEN_Y_OFFSET = 34
-local PANEL_CLOSE_SCALE = 0.96
-local PANEL_CLOSE_Y_OFFSET = 22
-local PANEL_OPEN_TWEEN = TweenInfo.new(0.28, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
-local PANEL_CLOSE_TWEEN = TweenInfo.new(0.18, Enum.EasingStyle.Sine, Enum.EasingDirection.In)
 
 local function formatCompactCount(value: number?): string
 	local count = math.max(0, math.floor(value or 0))
@@ -375,15 +370,19 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 		local token = panelAnimationToken
 		cancelPanelTweens()
 
+		local center = MotionPresets.centerOpen()
+		local panel = MotionPresets.panelOpen()
+		local openInfo = MotionPresets.centerOpenInfo()
+
 		mainWrapper.GroupTransparency = 0
-		mainWrapperScale.Scale = PANEL_OPEN_START_SCALE
-		mainWrapper.Position = offsetPosition(panelRestingPosition, PANEL_OPEN_Y_OFFSET)
+		mainWrapperScale.Scale = center.startScale
+		mainWrapper.Position = offsetPosition(panelRestingPosition, panel.yOffset)
 		mainWrapper.Visible = true
 
-		local positionTween = TweenService:Create(mainWrapper, PANEL_OPEN_TWEEN, {
+		local positionTween = TweenService:Create(mainWrapper, openInfo, {
 			Position = panelRestingPosition,
 		})
-		local scaleTween = TweenService:Create(mainWrapperScale, PANEL_OPEN_TWEEN, {
+		local scaleTween = TweenService:Create(mainWrapperScale, openInfo, {
 			Scale = 1,
 		})
 		panelTween = positionTween
@@ -413,14 +412,17 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 		local token = panelAnimationToken
 		cancelPanelTweens()
 
-		local targetPosition = offsetPosition(panelRestingPosition, PANEL_CLOSE_Y_OFFSET)
+		local centerClose = MotionPresets.centerClose()
+		local panelClose = MotionPresets.panelClose()
+		local closeInfo = MotionPresets.centerCloseInfo()
+		local targetPosition = offsetPosition(panelRestingPosition, panelClose.yOffset)
 		mainWrapper.Visible = true
 
-		local positionTween = TweenService:Create(mainWrapper, PANEL_CLOSE_TWEEN, {
+		local positionTween = TweenService:Create(mainWrapper, closeInfo, {
 			Position = targetPosition,
 		})
-		local scaleTween = TweenService:Create(mainWrapperScale, PANEL_CLOSE_TWEEN, {
-			Scale = PANEL_CLOSE_SCALE,
+		local scaleTween = TweenService:Create(mainWrapperScale, closeInfo, {
+			Scale = centerClose.endScale,
 		})
 		panelTween = positionTween
 		panelScaleTween = scaleTween

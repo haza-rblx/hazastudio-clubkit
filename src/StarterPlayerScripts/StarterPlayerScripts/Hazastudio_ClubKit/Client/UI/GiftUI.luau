@@ -7,6 +7,7 @@ local TweenService = game:GetService("TweenService")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local ShopDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.ShopDomain)
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
+local PressFeedback = require(script.Parent.Parent.Utils.PressFeedback)
 -- ============================================================
 -- Mapping tier -> elemen GUI
 -- ============================================================
@@ -630,6 +631,7 @@ function GiftUI:bindTabButton(tier: string, callback: () -> ())
 	local tierIndex = self._tierIndex[normalizedTier]
 	local btn = tierIndex and self._tabButtons[tierIndex]
 	if btn then
+		PressFeedback.bindPressScale(btn)
 		btn.MouseButton1Click:Connect(callback)
 	end
 end
@@ -643,11 +645,13 @@ function GiftUI:bindGiftButton(tier: string, callback: () -> ())
 	local inputArea = tabFrame and tabFrame:FindFirstChild("InputArea") :: Frame?
 	local btn = inputArea and inputArea:FindFirstChild(GIFT_BTN[normalizedTier]) :: TextButton?
 	if btn then
+		PressFeedback.bindPressScale(btn)
 		btn.MouseButton1Click:Connect(callback)
 	end
 end
 function GiftUI:bindClose(callback: () -> ())
 	if self._closeBtn then
+		PressFeedback.bindPressScale(self._closeBtn)
 		self._closeBtn.Activated:Connect(callback)
 	end
 end
@@ -658,6 +662,7 @@ function GiftUI:bindNotifClose(callback: () -> ())
 		local inputArea = content and content:FindFirstChild("InputArea") :: Frame?
 		local btn = inputArea and inputArea:FindFirstChildWhichIsA("TextButton") :: TextButton?
 		if btn then
+			PressFeedback.bindPressScale(btn)
 			btn.MouseButton1Click:Connect(callback)
 		end
 	end

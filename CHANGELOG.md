@@ -12,7 +12,19 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 ## [Unreleased]
 
 ### Changed
+- **TopMenu (topbar custom) open/close** — critically-damped spring slide + fade (`UISpring`) instead of Quart tween; interruptible mid-flight; tune via `Config.UIMotion.SIDEBAR_SPRING_FREQ`.
+- **Sidebar / toast / command library / avatar context** — open/close timings unified via MotionPresets (no local 0.28/0.18 dialect copies).
+- **Admin + Donation floating subpanels** — open with calm `presentCenterPanel` instead of Back `scalePop`. Streak / Couple spectacle pops unchanged.
 - **Studio plugin panel v2** — dock UI rebuilt (AMOLED HyperOS): tabs Engine / Tools, hero + version grid, Check/Update/Skip, channel chips (setting saved; Check still stable-only until channel sync ships), Gen Tools + Carry fix rows. No Package tab in panel. _(ship plugin rebuild later)_
+- **Admin Hub chrome** — propagate MainWrapper polish to player/action popups + toast (panel `#0C0C0C`, corner 18, no stroke, fade headers, danger close).
+- **Admin Hub motion** — hub open/close via `presentCenterPanel`; player/action overlays via `presentDialog` + dim fade; PressFeedback on tiles/sidebar/CTAs. Action feedback uses kit `NotifService` → General Notification Center (not the hub Toast frame).
+- **Admin Hub popups** — closer to HTML prototype: surface `#141414`, soft stroke, larger player/action panels (360×480 / 440×560), clean headers (no white fade), 2-col pick cards + white selected chips, callout title/body variants, donate amount preview.
+
+### Added
+- **UI MotionPresets** — shared calm motion tokens (`Client/Utils/MotionPresets`) + thin `Config.UIMotion` (`MOTION_SCALE`, center open/close times). AnimationHelper center/panel/dialog timings read presets.
+- **PressFeedback** — calm press UIScale micro-interaction on Shop/Gift CTAs, TopMenu entries, MenuShell tabs/modal, Dance category tabs.
+- **UISpring** — shared critically-damped UI spring driver (Heartbeat).
+- **Admin Hub (`04-AdminHub`)** — action-first staff panel (gallery + player popup + sheets) wired to CommandLibrary execute; topbar Admin opens hub. Title tile opens existing Admin Panel editor. Gates: mod teleport/announce, admin gift/role/gravity/fake donate, owner ledger/reload boards.
 
 ## [2.4.68] - 2026-07-28
 

@@ -21,6 +21,7 @@ return {
 	AfkGuardController = require(Client.Controllers.AfkGuardController),
 	GiftController = require(Client.Controllers.GiftController),
 	AdminController = require(Client.Controllers.AdminController),
+	AdminHubController = require(Client.Controllers.AdminHubController),
 	createAvatarContextController = require(Client.Controllers.AvatarContextController),
 	createCarryController = require(Client.Controllers.CarryController),
 	createCommandLibraryController = require(Client.Controllers.CommandLibraryController),

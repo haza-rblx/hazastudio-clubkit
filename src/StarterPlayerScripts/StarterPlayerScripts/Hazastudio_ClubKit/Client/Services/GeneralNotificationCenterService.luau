@@ -6,6 +6,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
+local MotionPresets = require(script.Parent.Parent.Utils.MotionPresets)
 
 local log = Logger.new("GeneralNotificationCenterService")
 
@@ -471,7 +472,8 @@ local function playNotification(refs: Refs, payload: ResolvedPayload)
 		refs.basePosition.Y.Offset + PANEL_ENTRY_OFFSET
 	)
 
-	local enterInfo = TweenInfo.new(PANEL_ENTRY_DURATION, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+	local enterInfo = MotionPresets.toastInInfo()
+	local entryDuration = MotionPresets.scaledTime(PANEL_ENTRY_DURATION)
 
 	local _enterTweens = {
 		tween(refs.panel, enterInfo, {
@@ -498,7 +500,7 @@ local function playNotification(refs: Refs, payload: ResolvedPayload)
 		}))
 	end
 
-	task.wait(PANEL_ENTRY_DURATION + ANIMATION_SETTLE_BUFFER)
+	task.wait(entryDuration + ANIMATION_SETTLE_BUFFER)
 
 	if not isRefsAlive(refs) then
 		invalidateCachedRefs(refs)
@@ -512,7 +514,8 @@ local function playNotification(refs: Refs, payload: ResolvedPayload)
 		return
 	end
 
-	local exitInfo = TweenInfo.new(PANEL_EXIT_DURATION, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	local exitInfo = MotionPresets.toastOutInfo()
+	local exitDuration = MotionPresets.scaledTime(PANEL_EXIT_DURATION)
 	local exitPosition = UDim2.new(
 		refs.basePosition.X.Scale,
 		refs.basePosition.X.Offset,
@@ -545,7 +548,7 @@ local function playNotification(refs: Refs, payload: ResolvedPayload)
 		}))
 	end
 
-	task.wait(PANEL_EXIT_DURATION + ANIMATION_SETTLE_BUFFER)
+	task.wait(exitDuration + ANIMATION_SETTLE_BUFFER)
 
 	cleanupDisplay(refs)
 end

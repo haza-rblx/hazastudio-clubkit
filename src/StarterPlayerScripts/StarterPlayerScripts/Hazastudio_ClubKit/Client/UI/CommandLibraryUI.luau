@@ -6,6 +6,7 @@ local TweenService = game:GetService("TweenService")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local ObjectPool = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.ObjectPool)
+local MotionPresets = require(script.Parent.Parent.Utils.MotionPresets)
 type ILogger = Types.ILogger
 type CommandLibraryEntry = Types.CommandLibraryEntry
 type CardRefs = {
@@ -34,11 +35,6 @@ type RowMeta = {
 }
 
 local LIST_FIXED_HEIGHT = 300
-local PANEL_OPEN_START_SCALE = 0.96
-local PANEL_OPEN_TIME = 0.28
-local PANEL_CLOSE_TIME = 0.18
-local PANEL_OPEN_TWEEN = TweenInfo.new(PANEL_OPEN_TIME, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
-local PANEL_CLOSE_TWEEN = TweenInfo.new(PANEL_CLOSE_TIME, Enum.EasingStyle.Sine, Enum.EasingDirection.In)
 local CARET_BLINK_INTERVAL = 0.52
 local CARET_SIDE_PADDING = 14
 local CARET_WIDTH = 2
@@ -558,7 +554,8 @@ local function createCommandLibraryUI(deps: { logger: ILogger })
 		inputWrapper.GroupTransparency = 0
 		listWrapper.GroupTransparency = 0
 		mainWrapper.Visible = true
-		tweenMainScale(PANEL_OPEN_START_SCALE, 1, PANEL_OPEN_TWEEN, nil)
+		local open = MotionPresets.centerOpen()
+		tweenMainScale(open.startScale, 1, MotionPresets.centerOpenInfo(), nil)
 	end
 	function ui:hide()
 		local wasOpen = panelOpen
@@ -570,7 +567,8 @@ local function createCommandLibraryUI(deps: { logger: ILogger })
 		suppressInputCallbacks = true
 		inputTextBox.Text = ""
 		suppressInputCallbacks = false
-		tweenMainScale(1, 0, PANEL_CLOSE_TWEEN, function()
+		local close = MotionPresets.centerClose()
+		tweenMainScale(1, close.endScale, MotionPresets.centerCloseInfo(), function()
 			mainWrapper.Visible = false
 			mainScaleRef.Scale = 1
 			releaseRows()

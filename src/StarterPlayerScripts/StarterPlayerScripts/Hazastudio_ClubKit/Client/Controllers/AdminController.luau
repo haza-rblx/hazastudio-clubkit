@@ -38,9 +38,12 @@ end
 local function init(deps: {
 	remotes: Folder,
 	icon: any?,
+	-- When false, topbar open/close + enable/disable are owned by AdminHubController.
+	bindTopbar: boolean?,
 })
 	local remotes      = deps.remotes
 	local topbarIcon   = deps.icon
+	local bindTopbar   = deps.bindTopbar ~= false
 	local localPlayer  = Players.LocalPlayer
 	-- Resolve admin GUI (v2 preferred, v1 fallback)
 	local gui: ScreenGui? = nil
@@ -126,13 +129,15 @@ local function init(deps: {
 			local wasAdmin = isAdmin
 			isAdmin = PermissionDomain.canUseAdminPanel(role, localPlayer.UserId)
 			log:debug("Role detected", { role = role, isAdmin = isAdmin })
-			if topbarIcon and isAdmin ~= wasAdmin then
+			if bindTopbar and topbarIcon and isAdmin ~= wasAdmin then
 				if isAdmin then
 					topbarIcon:setEnabled(true)
 				else
 					topbarIcon:setEnabled(false)
 					ui:hide()
 				end
+			elseif not bindTopbar and not isAdmin then
+				ui:hide()
 			end
 		end
 		local selectedPlayer = ui:getSelectedPlayer()
@@ -416,9 +421,9 @@ local function init(deps: {
 		end
 	end)
 	-- ============================================================
-	-- Topbar icon
+	-- Topbar icon (optional — Admin Hub may own the icon instead)
 	-- ============================================================
-	if topbarIcon then
+	if bindTopbar and topbarIcon then
 		topbarIcon:setEnabled(false)
 		topbarIcon.selected:Connect(function()
 			refreshPlayerList(true)

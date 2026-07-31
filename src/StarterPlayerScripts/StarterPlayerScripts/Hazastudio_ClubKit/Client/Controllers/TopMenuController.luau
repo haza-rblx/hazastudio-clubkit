@@ -3,12 +3,14 @@
 local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
+local MotionPresets = require(script.Parent.Parent.Utils.MotionPresets)
+local PressFeedback = require(script.Parent.Parent.Utils.PressFeedback)
+local UISpring = require(script.Parent.Parent.Utils.UISpring)
 local LeaderstatsVisibilityService = require(script.Parent.Parent.Services.LeaderstatsVisibilityService)
 local PhoneLayout = require(script.Parent.Parent.Utils.PhoneLayout)
 local TopMenuGuiRefs = require(script.Parent.Parent.UI.TopMenuGuiRefs)
@@ -34,8 +36,6 @@ type InitDeps = {
 	isCinematicVisible: (() -> boolean)?,
 }
 
-local MENU_SLIDE_IN = TweenInfo.new(0.28, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
-local MENU_SLIDE_OUT = TweenInfo.new(0.20, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 local MENU_HIDDEN_MARGIN = 24
 local BLUR_OPTIONS = {
 	enableBlur = true,
@@ -51,7 +51,9 @@ local desktopRestingPosition: UDim2? = nil
 local phoneRestingPosition: UDim2? = nil
 local isOpen = false
 local isAnimating = false
-local menuTween: Tween? = nil
+local menuPosSpring: UISpring.DriveHandle? = nil
+local menuFadeSpring: UISpring.DriveHandle? = nil
+local menuAnimToken = 0
 local clickOutsideConnection: RBXScriptConnection? = nil
 local viewportConnection: RBXScriptConnection? = nil
 local blockedMenuIcons: { [any]: boolean } = {}
@@ -63,9 +65,14 @@ end
 
 local BUTTONS = Config.TopbarMenu.BUTTONS
 
-local function cancelTween(tween: Tween?)
-	if tween then
-		tween:Cancel()
+local function stopMenuSprings()
+	if menuPosSpring then
+		menuPosSpring:stop()
+		menuPosSpring = nil
+	end
+	if menuFadeSpring then
+		menuFadeSpring:stop()
+		menuFadeSpring = nil
 	end
 end
 
@@ -378,7 +385,8 @@ local function hideMenuImmediate()
 	end
 	isOpen = false
 	isAnimating = false
-	cancelTween(menuTween)
+	menuAnimToken += 1
+	stopMenuSprings()
 	if animHelper then
 		animHelper:cancelPanel(refs.desktopMenu)
 		animHelper:cancelPanel(refs.phoneMenu)
@@ -398,15 +406,115 @@ local function hideMenuImmediate()
 	if phoneRestingPosition then
 		refs.phoneMenu.Position = phoneRestingPosition
 	end
+	if refs.desktopMenu:IsA("CanvasGroup") then
+		(refs.desktopMenu :: CanvasGroup).GroupTransparency = 0
+	end
+	if refs.phoneMenu:IsA("CanvasGroup") then
+		(refs.phoneMenu :: CanvasGroup).GroupTransparency = 0
+	end
 	refs.root.Enabled = false
 	disconnectClickOutside()
 	LeaderstatsVisibilityService.popHidden()
+end
+
+local function applyMenuPosition(frame: GuiObject, resting: UDim2, xOffset: number)
+	frame.Position = UDim2.new(resting.X.Scale, xOffset, resting.Y.Scale, resting.Y.Offset)
+end
+
+local function springMenuTo(opts: {
+	frame: GuiObject,
+	resting: UDim2,
+	goalX: number,
+	goalFade: number,
+	onSettled: (() -> ())?,
+})
+	local frame = opts.frame
+	local resting = opts.resting
+
+	local startX = frame.Position.X.Offset
+	local startXV = 0
+	local startFade = if frame:IsA("CanvasGroup") then (frame :: CanvasGroup).GroupTransparency else 0
+	local startFadeV = 0
+	if menuPosSpring and menuPosSpring:isRunning() then
+		startX = menuPosSpring:getPosition()
+		startXV = menuPosSpring:getVelocity()
+	end
+	if menuFadeSpring and menuFadeSpring:isRunning() then
+		startFade = menuFadeSpring:getPosition()
+		startFadeV = menuFadeSpring:getVelocity()
+	end
+
+	menuAnimToken += 1
+	local token = menuAnimToken
+	stopMenuSprings()
+
+	local settledPos = false
+	local settledFade = not frame:IsA("CanvasGroup")
+	local function tryFinish()
+		if token ~= menuAnimToken then
+			return
+		end
+		if not settledPos or not settledFade then
+			return
+		end
+		stopMenuSprings()
+		applyMenuPosition(frame, resting, opts.goalX)
+		if frame:IsA("CanvasGroup") then
+			(frame :: CanvasGroup).GroupTransparency = opts.goalFade
+		end
+		if opts.onSettled then
+			opts.onSettled()
+		end
+	end
+
+	menuPosSpring = UISpring.driveNumber({
+		frequency = MotionPresets.sidebarSpringFrequency(),
+		position = startX,
+		velocity = startXV,
+		goal = opts.goalX,
+		posEpsilon = 0.35,
+		velEpsilon = 8,
+		onStep = function(value: number)
+			if token ~= menuAnimToken then
+				return
+			end
+			applyMenuPosition(frame, resting, value)
+		end,
+		onSettled = function()
+			settledPos = true
+			tryFinish()
+		end,
+	})
+
+	if frame:IsA("CanvasGroup") then
+		menuFadeSpring = UISpring.driveNumber({
+			frequency = MotionPresets.sidebarFadeSpringFrequency(),
+			position = startFade,
+			velocity = startFadeV,
+			goal = opts.goalFade,
+			posEpsilon = 0.01,
+			velEpsilon = 0.05,
+			onStep = function(value: number)
+				if token ~= menuAnimToken then
+					return
+				end
+				(frame :: CanvasGroup).GroupTransparency = math.clamp(value, 0, 1)
+			end,
+			onSettled = function()
+				settledFade = true
+				tryFinish()
+			end,
+		})
+	else
+		tryFinish()
+	end
 end
 
 local function hideMenu()
 	if not refs or (not isOpen and not isAnimating) then
 		return
 	end
+	-- Already closing — leave the in-flight spring alone.
 	if isAnimating and not isOpen then
 		return
 	end
@@ -423,29 +531,24 @@ local function hideMenu()
 	end
 
 	local restingPosition = getRestingPosition(activeFrame)
-	cancelTween(menuTween)
+	local hidden = getMenuHiddenPosition(activeFrame, restingPosition)
 	if animHelper then
 		animHelper:cancelPanel(activeFrame)
 	end
 
-	local tweenGoal = {
-		Position = getMenuHiddenPosition(activeFrame, restingPosition),
-	} :: { [string]: any }
-	if activeFrame:IsA("CanvasGroup") then
-		tweenGoal.GroupTransparency = 1
-	end
-
-	menuTween = TweenService:Create(activeFrame, MENU_SLIDE_OUT, tweenGoal)
-	menuTween:Play()
-
 	local closed = false
 	local pending = 2
+	local closeToken = 0
 	local function finishClose()
 		if closed then
 			return
 		end
 		pending -= 1
 		if pending > 0 then
+			return
+		end
+		-- Ignore if a newer open/close animation superseded this close.
+		if closeToken ~= menuAnimToken or isOpen then
 			return
 		end
 		closed = true
@@ -461,12 +564,23 @@ local function hideMenu()
 		LeaderstatsVisibilityService.popHidden()
 	end
 
-	menuTween.Completed:Once(function(playbackState)
-		if playbackState == Enum.PlaybackState.Completed then
+	springMenuTo({
+		frame = activeFrame,
+		resting = restingPosition,
+		goalX = hidden.X.Offset,
+		goalFade = 1,
+		onSettled = function()
+			if not isOpen then
+				finishClose()
+			end
+		end,
+	})
+	closeToken = menuAnimToken
+	playBackdropOut(function()
+		if not isOpen then
 			finishClose()
 		end
 	end)
-	playBackdropOut(finishClose)
 end
 
 local function showMenu()
@@ -474,15 +588,23 @@ local function showMenu()
 		log:warn("showMenu called before TopMenuController init finished")
 		return
 	end
-	if isOpen or isAnimating then
+	-- Already fully open.
+	if isOpen and not isAnimating then
+		return
+	end
+	-- Already opening — leave in-flight spring alone.
+	if isOpen and isAnimating then
 		return
 	end
 
 	closeSettingsPanelIfOpen()
 
+	local wasClosing = isAnimating and not isOpen
 	isOpen = true
 	isAnimating = true
-	LeaderstatsVisibilityService.pushHidden()
+	if not wasClosing then
+		LeaderstatsVisibilityService.pushHidden()
+	end
 	refs.root.Enabled = true
 	if refs.root.DisplayOrder < 50 then
 		refs.root.DisplayOrder = 50
@@ -498,29 +620,28 @@ local function showMenu()
 	end
 
 	local restingPosition = getRestingPosition(activeFrame)
-	setMenuFrameHiddenState(activeFrame, restingPosition)
+	if not wasClosing then
+		setMenuFrameHiddenState(activeFrame, restingPosition)
+	end
 	activeFrame.Visible = true
 
-	cancelTween(menuTween)
 	if animHelper then
 		animHelper:cancelPanel(activeFrame)
 	end
 
-	local tweenGoal = {
-		Position = restingPosition,
-	} :: { [string]: any }
-	if activeFrame:IsA("CanvasGroup") then
-		tweenGoal.GroupTransparency = 0
-	end
-
-	menuTween = TweenService:Create(activeFrame, MENU_SLIDE_IN, tweenGoal)
-	menuTween:Play()
-	menuTween.Completed:Once(function(playbackState)
-		isAnimating = false
-		if playbackState == Enum.PlaybackState.Completed then
+	springMenuTo({
+		frame = activeFrame,
+		resting = restingPosition,
+		goalX = restingPosition.X.Offset,
+		goalFade = 0,
+		onSettled = function()
+			isAnimating = false
 			activeFrame.Position = restingPosition
-		end
-	end)
+			if activeFrame:IsA("CanvasGroup") then
+				(activeFrame :: CanvasGroup).GroupTransparency = 0
+			end
+		end,
+	})
 end
 
 local function isPointerInsideMenu(point: Vector2): boolean
@@ -562,6 +683,7 @@ local function bindButton(button: TextButton?, action: () -> ())
 	if not button then
 		return
 	end
+	PressFeedback.bindPressScale(button)
 	button.Activated:Connect(function()
 		closeMenuThen(action)
 	end)
@@ -678,8 +800,8 @@ function TopMenuController.destroy()
 		viewportConnection:Disconnect()
 		viewportConnection = nil
 	end
-	cancelTween(menuTween)
-	menuTween = nil
+	menuAnimToken += 1
+	stopMenuSprings()
 	for _, conn in ipairs(_initConnections) do
 		conn:Disconnect()
 	end

@@ -7,6 +7,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local ShopDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.ShopDomain)
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
+local PressFeedback = require(script.Parent.Parent.Utils.PressFeedback)
 -- Mapping tier -> nama elemen di GUI
 local TIER_CARD: { [string]: string } = {
 }
@@ -504,6 +505,7 @@ function ShopUI:bindBuyButton(tier: string, callback: () -> ())
 	local inputArea = refs.card:FindFirstChild("InputArea") :: Frame?
 	local btn = inputArea and inputArea:FindFirstChild("Buy" .. suffix .. "Button") :: TextButton?
 	if btn then
+		PressFeedback.bindPressScale(btn)
 		btn.MouseButton1Click:Connect(callback)
 	end
 end
@@ -520,11 +522,13 @@ function ShopUI:bindGiftButton(tier: string, callback: () -> ())
 	local inputArea = refs.card:FindFirstChild("InputArea") :: Frame?
 	local btn = inputArea and inputArea:FindFirstChild("Gift" .. suffix .. "Button") :: TextButton?
 	if btn then
+		PressFeedback.bindPressScale(btn)
 		btn.MouseButton1Click:Connect(callback)
 	end
 end
 function ShopUI:bindClose(callback: () -> ())
 	if self._closeBtn then
+		PressFeedback.bindPressScale(self._closeBtn)
 		self._closeBtn.MouseButton1Click:Connect(callback)
 	end
 end
@@ -540,6 +544,7 @@ function ShopUI:bindNotifClose(tier: string, callback: () -> ())
 	local inputArea = content and content:FindFirstChild("InputArea") :: Frame?
 	local btn = inputArea and inputArea:FindFirstChildWhichIsA("TextButton") :: TextButton?
 	if btn then
+		PressFeedback.bindPressScale(btn)
 		btn.MouseButton1Click:Connect(callback)
 	end
 end

@@ -320,7 +320,8 @@ end
 
 local function popOpen(anim: AnimationHelper.AnimationHelper, panel: GuiObject)
 	makeFloatingPanelInputOpaque(panel)
-	anim:scalePop((panel :: any) :: Frame, nil)
+	-- Calm center open (no Back overshoot) — primary floating shells share MotionPresets.
+	anim:presentCenterPanel((panel :: any) :: Frame, nil)
 end
 
 local function resolvePreviewLabel(host: GuiObject): TextLabel?

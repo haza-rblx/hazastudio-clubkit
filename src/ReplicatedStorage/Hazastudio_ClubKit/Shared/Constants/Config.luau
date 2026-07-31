@@ -1455,6 +1455,13 @@ Config.PanelBlur = {
 	-- BackdropBlur GUI frames: lower = lebih gelap = terasa lebih frosted.
 	MODAL_BACKDROP_TRANSPARENCY = 0.38,
 }
+-- Thin UI motion knobs (calm panel language). Full presets live in Client MotionPresets.
+Config.UIMotion = {
+	MOTION_SCALE = 1, -- global duration multiplier (reduced-motion hook)
+	CENTER_OPEN_TIME = 0.28,
+	CENTER_CLOSE_TIME = 0.18,
+	SIDEBAR_SPRING_FREQ = 4.8, -- TopMenu / sidebar critically-damped spring (softer = lower)
+}
 -- ============================================================
 -- SHOP SYSTEM
 -- ============================================================
@@ -1768,6 +1775,7 @@ Config.Gravity = {
 Config.Admin = {
 	GUI_NAME = "04-AdminPanelv2",
 	GUI_NAME_CANDIDATES = { "04-AdminPanelv2", "04-AdminPanel" },
+	HUB_GUI_NAME = "04-AdminHub",
 	GUI_WAIT_TIMEOUT = 30, -- timeout WaitForChild GUI (detik)
 	GUI_SCALE_BAKED = 0.82,
 	GUI_SCALE_MOBILE = 0.54,

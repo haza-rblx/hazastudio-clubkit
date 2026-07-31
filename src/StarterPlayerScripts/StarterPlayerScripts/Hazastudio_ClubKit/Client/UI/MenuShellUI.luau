@@ -10,6 +10,8 @@ local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Con
 local NotifService = require(script.Parent.Parent.Services.NotifService)
 local LeaderstatsVisibilityService = require(script.Parent.Parent.Services.LeaderstatsVisibilityService)
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
+local MotionPresets = require(script.Parent.Parent.Utils.MotionPresets)
+local PressFeedback = require(script.Parent.Parent.Utils.PressFeedback)
 local MenuGuiRefs = require(script.Parent.MenuGuiRefs)
 local ProfileTabBinder = require(script.Parent.ProfileTabBinder)
 local SettingsTabBinder = require(script.Parent.SettingsTabBinder)
@@ -19,8 +21,6 @@ type ProfileMenuPayload = Types.ProfileMenuPayload
 type OverheadPayload = Types.OverheadPayload
 
 local SIDEBAR_HIDDEN_MARGIN = 24
-local SIDEBAR_TWEEN_IN = TweenInfo.new(0.28, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
-local SIDEBAR_TWEEN_OUT = TweenInfo.new(0.20, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 local BLUR_OPTIONS = {
 	enableBlur = true,
 	blurName = Config.Settings.BACKDROP_BLUR_NAME,
@@ -300,6 +300,7 @@ function MenuShellUI:_wireTabs()
 		end
 		wired[button] = true
 		disableAutoButtonColor(button)
+		PressFeedback.bindPressScale(button)
 		button.Activated:Connect(function()
 			self:_selectTab(tabKey)
 		end)
@@ -395,12 +396,14 @@ function MenuShellUI:_wireModal()
 	local refs = self._refs
 	if refs.modalCancelButton then
 		disableAutoButtonColor(refs.modalCancelButton)
+		PressFeedback.bindPressScale(refs.modalCancelButton)
 		refs.modalCancelButton.Activated:Connect(function()
 			self:_hideProfileFieldModal()
 		end)
 	end
 	if refs.modalUpdateButton then
 		disableAutoButtonColor(refs.modalUpdateButton)
+		PressFeedback.bindPressScale(refs.modalUpdateButton)
 		refs.modalUpdateButton.Activated:Connect(function()
 			self:_submitProfileFieldModal()
 		end)
@@ -588,7 +591,7 @@ function MenuShellUI:show()
 	if wrapper:IsA("CanvasGroup") then
 		wrapperTweenGoal.GroupTransparency = 0
 	end
-	self._wrapperTween = TweenService:Create(wrapper, SIDEBAR_TWEEN_IN, wrapperTweenGoal)
+	self._wrapperTween = TweenService:Create(wrapper, MotionPresets.sidebarInInfo(), wrapperTweenGoal)
 	self._wrapperTween:Play()
 
 	if not wasVisible then
@@ -650,7 +653,7 @@ function MenuShellUI:hide()
 	if wrapper:IsA("CanvasGroup") then
 		wrapperTweenGoal.GroupTransparency = 1
 	end
-	local wrapperTween = TweenService:Create(wrapper, SIDEBAR_TWEEN_OUT, wrapperTweenGoal)
+	local wrapperTween = TweenService:Create(wrapper, MotionPresets.sidebarOutInfo(), wrapperTweenGoal)
 	self._wrapperTween = wrapperTween
 	wrapperTween.Completed:Connect(function(playbackState)
 		if playbackState ~= Enum.PlaybackState.Completed or self._visible then

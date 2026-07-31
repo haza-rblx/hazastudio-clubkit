@@ -95,9 +95,7 @@ local PROFILE_INPUT_ROW_PADDING_Y = 10
 local PROFILE_INPUT_AREA_PADDING_X = 14
 local INFO_ROW_HEIGHT = 72
 local SIDEBAR_HIDDEN_MARGIN = 24
--- Entrance: smooth deceleration slide, no bounce.
-local SIDEBAR_TWEEN_IN = TweenInfo.new(0.28, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
-local SIDEBAR_TWEEN_OUT = TweenInfo.new(0.20, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+-- Sidebar entrance timings: MotionPresets.sidebarInInfo / sidebarOutInfo (MenuShellUI).
 local BACKDROP_TWEEN_IN = TweenInfo.new(0.20, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local BACKDROP_TWEEN_OUT = TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 local SETTINGS_ICON = {

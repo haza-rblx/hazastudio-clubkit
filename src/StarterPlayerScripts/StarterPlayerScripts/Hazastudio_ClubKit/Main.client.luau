@@ -201,6 +201,7 @@ local JoinGreetingController = require(script.Parent.Client.Controllers.JoinGree
 local syncDanceController: any = nil
 local syncLeadTopbarController: any = nil
 local giftController: any = nil
+local adminPanelApi: any = nil
 local carryController: any = nil
 local danceWarmupService: any = nil
 local loadingDanceHoldHooked = false
@@ -1033,7 +1034,7 @@ do
 			MobilePanelManager.close(panelId)
 		end)
 	end
-	MobilePanelManager.register("admin", Config.Admin.GUI_NAME, function()
+	MobilePanelManager.register("admin", Config.Admin.HUB_GUI_NAME or Config.Admin.GUI_NAME, function()
 		adminIcon:deselect()
 	end)
 	MobilePanelManager.register("command", Config.CommandLibrary.GUI_NAME, function()
@@ -1314,12 +1315,25 @@ trackBootTask("AfkGuardController.init", function()
 		ClientMods.AfkGuardController.init({ remotes = Remotes })
 	end
 end)
--- === Admin Panel ===
+-- === Admin Hub (primary) + Admin Panel (title editor) ===
 trackBootTask("AdminController.init", function()
-	ClientMods.AdminController.init({
+	adminPanelApi = ClientMods.AdminController.init({
 		remotes = Remotes,
 		icon = adminIcon,
+		bindTopbar = false,
 	})
+end)
+trackBootTask("AdminHubController.init", function()
+	local hubApi = ClientMods.AdminHubController.init({
+		remotes = Remotes,
+		icon = adminIcon,
+		openTitlePanel = function()
+			if adminPanelApi and type(adminPanelApi.show) == "function" then
+				adminPanelApi.show()
+			end
+		end,
+	})
+	trackClientLifecycle("AdminHubController", hubApi)
 end)
 trackBootTask("CommandLibraryController.init", function()
 	local commandLibraryService = trackClientLifecycle(

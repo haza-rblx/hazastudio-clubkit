@@ -1,0 +1,1979 @@
+﻿<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Club Kit — Admin Deck</title>
+  <!--
+    Club Kit — Admin Hub HTML prototype (Studio-portable)
+
+    Target ScreenGui: 04-AdminHub  (new; keep 04-AdminPanelv2 for title editor)
+
+    STUDIO HIERARCHY (data-name on nodes → Instance.Name)
+    ─────────────────────────────────────────────────────
+    MainWrapper                         Frame  (= .hub)  open via presentCenterPanel + UIScale
+    ├── UICorner / UIStroke / UIPadding
+    ├── 01-SidebarWrapper               Frame  Offset X = side-w; UIListLayout Vertical + UIPadding
+    │   ├── SideLabelBrowse / SideLabelCategories
+    │   └── SideBtn_*                   TextButton (Icon ImageLabel + Label TextLabel)
+    └── 02-MainContentWrapper           Frame  Size (1, -sideW, 1, 0)
+        ├── 01-HeaderWrapper            Frame  UIListLayout Horizontal
+        │   ├── 1-HeaderTitle           TextLabel
+        │   ├── 02-SearchBox            Frame + TextBox
+        │   └── 3-CloseModalButton      TextButton
+        ├── 02-GalleryScroll            ScrollingFrame + UIPadding
+        │   └── Section_*               Frame
+        │       ├── 1-SectionLabel      TextLabel
+        │       └── 2-TileGrid          Frame + UIGridLayout FillDirectionMaxCells=3
+        │           └── ActionTileTemplate  TextButton/Frame + UIPadding + UICorner
+        │               ├── IconCircle  ImageLabel (UICorner circle + UIGradient)
+        │               ├── TileInfo    Frame + UIListLayout Vertical
+        │               │   ├── 1-Title / 2-SubTitle   TextLabels  (SubTitle Truncate)
+        │               └── GearButton  TextButton (AnchorPoint 1,0 — float speed)
+        ├── DimOverlay                  Frame full-bleed
+        ├── 03-PlayerPopup              Frame AnchorPoint 0.5,0.5
+        │   ├── 01-Header + Close
+        │   ├── 02-SearchBox
+        │   └── ScrollablePlayerList    ScrollingFrame + UIListLayout
+        │       └── PlayerSelectorCard  TextButton (reuse Gift/Admin card names)
+        │           ├── PlayerProfilePicture  ImageLabel  rbxthumb AvatarHeadShot
+        │           └── PlayerInformation → 1-Title / 2-SubTitle (+ RoleBadge)
+        ├── 04-ActionPopup              Frame AnchorPoint 0.5,0.5 (same presentCenterPanel pattern)
+        │   ├── SheetHead               IconCircle + 1-Title + Close
+        │   ├── SheetBody               ScrollingFrame  (forms live here)
+        │   └── SheetFoot               Frame OUTSIDE scroll (CTA row)
+        └── Toast                       Frame
+
+    CSS → STUDIO LAYOUT (do not invent flex in Luau)
+    ────────────────────────────────────────────────
+    display:flex + gap/pad   → UIListLayout + UIPadding (Padding Offset)
+    grid 3 columns           → UIGridLayout CellSize Offset, MaxCells=3
+    absolute popup            → AnchorPoint 0.5,0.5 + Position; tween UIScale/opacity
+    (all menus = centered popup — no bottom sheet)
+    border-radius            → UICorner
+    hairline / shadow        → UIStroke
+    overflow scroll          → ScrollingFrame; CanvasSize from AbsoluteContentSize
+    CSS tokens (:root) → bake Color3 / Offset; single source for Studio AdminHubTheme
+    Phosphor / Inter (web)   → ImageLabel icons + FontFace in Studio
+
+    Space scale: --s0 2 · --s1 4 · --micro 6 · --s2 10 · --s3 14 · --s4 18 · --s5 24
+    Locked: --title-sub-gap 3px · hub 780×680 · side 184 · grid 3
+    Selection: inset ring --ring-w / --ring · fill --fill-selected
+    Kit constants in <script> KIT mirror Config / ClubKitConfig / AnimationModes.
+  -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.2/src/fill/style.css" />
+  <style>
+    :root {
+      /*
+        AdminHub design tokens — bake to Color3 / Offset in Studio.
+        Space: 2 / 4 / 6 / 10 / 14 / 18 / 24. Title–subtitle gap locked at 3px.
+      */
+      --font: "Inter", "Segoe UI", sans-serif;
+
+      /* —— Color —— */
+      --text: #ffffff;
+      --ink: #0a0a0a;
+      --muted: #a0a0a0;
+      --faint: #5c5c5c;
+      --icon-faint: #666666;
+      --page: #050505;
+      --chrome: #111111;
+      --panel: rgba(12, 12, 12, 0.96);
+      --surface: #141414;
+      --surface-raised: #1a1a1a;
+      --line: rgba(255, 255, 255, 0.06);
+      --line-strong: rgba(255, 255, 255, 0.08);
+      --fill: rgba(255, 255, 255, 0.04);
+      --fill-sidebar: rgba(255, 255, 255, 0.025);
+      --fill-hover: rgba(255, 255, 255, 0.07);
+      --fill-strong: rgba(255, 255, 255, 0.06);
+      --fill-selected: rgba(255, 255, 255, 0.10);
+      --fill-active: rgba(255, 255, 255, 0.12);
+      --fill-gear: rgba(255, 255, 255, 0.08);
+      --fill-gear-hover: rgba(255, 255, 255, 0.14);
+      --cta: #ffffff;
+      --cta-fg: var(--ink);
+      --accent: #0a84ff;
+      --danger: #ff3b30;
+      --dim: rgba(0, 0, 0, 0.55);
+      --well: rgba(0, 0, 0, 0.45);
+      --well-deep: rgba(0, 0, 0, 0.55);
+      --preview-well: rgba(0, 0, 0, 0.40);
+      --shadow: rgba(0, 0, 0, 0.50);
+      --shadow-deep: rgba(0, 0, 0, 0.55);
+      --ring: #ffffff;
+      --ring-w: 1.5px;
+      --ok: #4ade80;
+      --ok-bg: rgba(74, 222, 128, 0.10);
+      --warn: #fbbf24;
+      --warn-bg: rgba(251, 191, 36, 0.10);
+      --info: #60a5fa;
+      --info-bg: rgba(96, 165, 250, 0.10);
+      --disabled-opacity: 0.35;
+
+      /* Icon accents (solid) */
+      --g-blue: #3b82f6;
+      --g-violet: #7c3aed;
+      --g-pink: #db2777;
+      --g-rose: #e11d48;
+      --g-amber: #d97706;
+      --g-green: #16a34a;
+      --g-cyan: #0891b2;
+      --g-red: #dc2626;
+
+      /* —— Space (Offset) —— */
+      --s0: 2px;
+      --s1: 4px;
+      --micro: 6px;
+      --s2: 10px;
+      --s3: 14px;
+      --s4: 18px;
+      --s5: 24px;
+      --track-pad: 3px;
+      --title-sub-gap: 3px;
+      --pad: var(--s5);
+      --stack: var(--s4);
+
+      /* —— Radius (UICorner) —— */
+      --r-xs: 6px;
+      --r-sm: 10px;
+      --r-md: 14px;
+      --r-lg: 18px;
+      --r-pill: 999px;
+
+      /* —— Type —— */
+      --fs-2xs: 10px;
+      --fs-xs: 11px;
+      --fs-sm: 12px;
+      --fs-md: 14px;
+      --fs-lg: 16px;
+      --fs-xl: 18px;
+      --lh-tight: 1.15;
+      --lh-title: 1.2;
+      --lh-body: 1.35;
+
+      /* —— Controls —— */
+      --ctrl: 40px;
+      --btn: 36px;
+      --ico: 42px;
+      --ico-sm: 32px;
+      --ico-glyph: 20px;
+      --ico-glyph-sm: 15px;
+      --nav-glyph: 18px;
+      --av: 40px;
+      --gear: 30px;
+      --swatch-h: 22px;
+      --font-chip-h: 32px;
+      --speed: 44px;
+      --textarea-min: 64px;
+      --preview-min: 64px;
+      --search-w: 148px;
+
+      /* —— Shell / popups —— */
+      --side-w: 184px;
+      --hub-w: 780px;
+      --hub-h: 680px;
+      --grid-cols: 3;
+      --popup-w: 360px;
+      --popup-h: 480px;
+      --sheet-w: 440px;
+      --sheet-h: 560px;
+      --sheet-wide-w: 460px;
+      --sheet-wide-h: 640px;
+      --style-grid-max: 148px;
+      --font-grid-max: 120px;
+      --presets-max: 132px;
+
+      /* —— Motion / scroll —— */
+      --ease: cubic-bezier(0.22, 1, 0.36, 1);
+      --scroll-size: 6px;
+      --scroll-track: transparent;
+      --scroll-thumb: rgba(255, 255, 255, 0.18);
+      --scroll-thumb-hover: rgba(255, 255, 255, 0.32);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* Shared dark scrollbar (Firefox + WebKit) */
+    .grid-wrap,
+    .sheet-body,
+    .plist,
+    .presets,
+    .preset-row,
+    .style-grid,
+    .font-grid {
+      scrollbar-width: thin;
+      scrollbar-color: var(--scroll-thumb) var(--scroll-track);
+    }
+    .grid-wrap::-webkit-scrollbar,
+    .sheet-body::-webkit-scrollbar,
+    .plist::-webkit-scrollbar,
+    .presets::-webkit-scrollbar,
+    .preset-row::-webkit-scrollbar,
+    .style-grid::-webkit-scrollbar,
+    .font-grid::-webkit-scrollbar {
+      width: var(--scroll-size);
+      height: var(--scroll-size);
+    }
+    .grid-wrap::-webkit-scrollbar-track,
+    .sheet-body::-webkit-scrollbar-track,
+    .plist::-webkit-scrollbar-track,
+    .presets::-webkit-scrollbar-track,
+    .preset-row::-webkit-scrollbar-track,
+    .style-grid::-webkit-scrollbar-track,
+    .font-grid::-webkit-scrollbar-track {
+      background: var(--scroll-track);
+    }
+    .grid-wrap::-webkit-scrollbar-thumb,
+    .sheet-body::-webkit-scrollbar-thumb,
+    .plist::-webkit-scrollbar-thumb,
+    .presets::-webkit-scrollbar-thumb,
+    .preset-row::-webkit-scrollbar-thumb,
+    .style-grid::-webkit-scrollbar-thumb,
+    .font-grid::-webkit-scrollbar-thumb {
+      background: var(--scroll-thumb);
+      border-radius: var(--r-pill);
+    }
+    .grid-wrap::-webkit-scrollbar-thumb:hover,
+    .sheet-body::-webkit-scrollbar-thumb:hover,
+    .plist::-webkit-scrollbar-thumb:hover,
+    .presets::-webkit-scrollbar-thumb:hover,
+    .preset-row::-webkit-scrollbar-thumb:hover,
+    .style-grid::-webkit-scrollbar-thumb:hover,
+    .font-grid::-webkit-scrollbar-thumb:hover {
+      background: var(--scroll-thumb-hover);
+    }
+    .grid-wrap::-webkit-scrollbar-corner,
+    .sheet-body::-webkit-scrollbar-corner,
+    .plist::-webkit-scrollbar-corner,
+    .presets::-webkit-scrollbar-corner,
+    .preset-row::-webkit-scrollbar-corner,
+    .style-grid::-webkit-scrollbar-corner,
+    .font-grid::-webkit-scrollbar-corner {
+      background: transparent;
+    }
+    body {
+      min-height: 100vh; font-family: var(--font); color: var(--text); background: var(--page); /* page outside tokens */
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: var(--s4); padding: var(--s5) var(--s3) var(--s5); -webkit-font-smoothing: antialiased;
+      font-size: var(--fs-md);
+    }
+    body::before {
+      content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+      background: var(--page);
+    }
+
+    /* —— Page chrome (outside hub) —— */
+    .meta { text-align: center; max-width: 420px; }
+    .meta h1 { font-size: var(--fs-md); font-weight: 600; }
+    .meta p { margin-top: var(--s1); font-size: var(--fs-sm); color: var(--faint); line-height: 1.45; }
+    .scenario {
+      display: inline-flex; gap: var(--s0); margin-top: var(--s3); padding: var(--track-pad);
+      background: var(--chrome); border-radius: var(--r-md);
+    }
+    .scenario button {
+      border: 0; background: transparent; color: var(--faint);
+      font: 500 var(--fs-sm)/1 var(--font); padding: var(--s2) var(--s3); border-radius: var(--r-sm); cursor: pointer;
+    }
+    .scenario button[aria-pressed="true"] { background: var(--cta); color: var(--ink); }
+
+    /* —— Hub shell → MainWrapper Frame + UICorner/UIStroke —— */
+    /* flex row → two children: Sidebar Offset + Main (1, -sideW, 1, 0) */
+    .hub {
+      width: min(var(--hub-w), 100%);
+      height: min(var(--hub-h), 90vh);
+      border-radius: var(--r-lg);
+      background: var(--panel);
+      box-shadow: 0 0 0 1px var(--line), 0 32px 64px var(--shadow-deep);
+      display: flex; flex-direction: row;
+      position: relative; overflow: hidden;
+    }
+
+    /* —— Sidebar → 01-SidebarWrapper + UIListLayout Vertical —— */
+    .sidebar {
+      width: var(--side-w); flex-shrink: 0;
+      background: var(--fill-sidebar);
+      border-right: 1px solid var(--line);
+      padding: var(--pad) var(--s2);
+      display: flex; flex-direction: column; gap: var(--s0);
+      overflow-y: auto; scrollbar-width: none;
+    }
+    .sidebar::-webkit-scrollbar { display: none; }
+    .side-label,
+    .sec,
+    .field label {
+      font-size: var(--fs-xs); font-weight: 700; color: var(--faint);
+      text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    .side-label { padding: var(--s3) var(--s2) var(--s2); }
+    .side-label:first-child { padding-top: var(--s1); }
+    .side-btn {
+      width: 100%; border: 0; border-radius: var(--r-md);
+      background: transparent; color: var(--muted);
+      font: 600 var(--fs-md)/1 var(--font); text-align: left;
+      padding: var(--s3) var(--s3); cursor: pointer;
+      display: flex; align-items: center; gap: var(--s2);
+    }
+    .side-btn i { font-size: var(--nav-glyph); line-height: 1; }
+    .side-btn:hover { background: var(--fill-hover); color: var(--text); }
+    .side-btn[aria-current="true"] { background: var(--accent); color: var(--text); }
+
+    .main {
+      flex: 1; min-width: 0;
+      display: flex; flex-direction: column;
+      position: relative;
+    }
+
+    /* —— Top bar —— */
+    .top {
+      flex-shrink: 0;
+      display: flex; align-items: center; gap: var(--s2);
+      padding: var(--pad) var(--pad) 0;
+      min-height: calc(var(--ctrl) + var(--pad));
+    }
+    .brand {
+      flex: 1; min-width: 0;
+      font-size: var(--fs-xl); font-weight: 800; letter-spacing: -0.02em;
+      line-height: 1.1;
+    }
+
+    /* Search fields share height + fill */
+    .top-search,
+    .search-row {
+      display: flex; align-items: center; gap: var(--s2);
+      height: var(--ctrl); padding: 0 var(--s3);
+      background: var(--fill-strong);
+    }
+    .top-search { border-radius: var(--r-pill); width: var(--search-w); flex-shrink: 0; }
+    .top-search i,
+    .search-row > i { color: var(--icon-faint); font-size: var(--nav-glyph); }
+    .top-search input,
+    .search-row input {
+      flex: 1; min-width: 0; width: 100%; border: 0; outline: none; background: transparent;
+      color: var(--text); font: 500 var(--fs-md)/1 var(--font);
+    }
+    .top-search input::placeholder,
+    .search-row input::placeholder { color: var(--faint); }
+
+    /* Icon buttons — close (hub) + x (panels) same size */
+    .close,
+    .x {
+      width: var(--btn); height: var(--btn); border-radius: 50%; border: 0;
+      color: var(--text); cursor: pointer; flex-shrink: 0;
+      display: grid; place-items: center;
+    }
+    .close { background: var(--danger); }
+    .x { background: var(--fill-strong); }
+    .close i, .x i { font-size: var(--nav-glyph); line-height: 1; }
+
+    /* —— Gallery → 02-GalleryScroll ScrollingFrame; .grid → UIGridLayout MaxCells=3 —— */
+    .grid-wrap {
+      flex: 1; min-height: 0; overflow-y: auto; padding: var(--s3) var(--pad) var(--pad);
+    }
+    #gridRoot {
+      display: flex; flex-direction: column; gap: var(--s5);
+    }
+    .Section { display: flex; flex-direction: column; gap: var(--s2); }
+    .sec { margin: 0; }
+    .grid {
+      display: grid; grid-template-columns: repeat(var(--grid-cols), 1fr); gap: var(--s2);
+    }
+    .pick-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--s2);
+      align-content: start;
+      margin: 0;
+      padding-bottom: 2px; /* room for selected ring */
+    }
+
+    /* Gallery tiles */
+    .tile {
+      border: 0; border-radius: var(--r-md); padding: var(--s3);
+      background: var(--fill); color: var(--text); text-align: left;
+      cursor: pointer; font-family: var(--font);
+      display: flex; flex-direction: column; gap: var(--s2);
+      transition: background 0.12s, transform 0.12s;
+      position: relative;
+    }
+    .tile:hover { background: var(--fill-hover); }
+    .tile:active { transform: scale(0.98); }
+    .tile.has-gear { padding-right: calc(var(--gear) + var(--s4)); }
+    .tile-gear {
+      position: absolute; top: var(--s2); right: var(--s2);
+      height: var(--gear); min-width: var(--gear); padding: 0 var(--s2);
+      border: 0; border-radius: var(--r-pill);
+      background: var(--fill-gear); color: var(--muted);
+      font: 700 var(--fs-xs)/1 var(--font); cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center; gap: var(--s1);
+      z-index: 1;
+    }
+    .tile-gear:hover { background: var(--fill-gear-hover); color: var(--text); }
+    .tile-gear i { font-size: var(--fs-md); line-height: 1; }
+
+    /* Popup pick cards — full card visible, ring not clipped */
+    .pick-card {
+      border: 0; border-radius: var(--r-md); padding: var(--s3);
+      background: var(--fill); color: var(--text); text-align: left;
+      cursor: pointer; font-family: var(--font);
+      display: flex; flex-direction: column; gap: var(--s2);
+      min-width: 0; min-height: 0;
+      box-shadow: inset 0 0 0 var(--ring-w) transparent;
+      transition: background 0.12s, box-shadow 0.12s;
+    }
+    .pick-card:hover { background: var(--fill-hover); }
+    .pick-card[aria-pressed="true"] {
+      background: var(--fill-selected);
+      box-shadow: inset 0 0 0 var(--ring-w) var(--ring);
+    }
+
+    .tile .ico,
+    .pick-card .pc-ico,
+    .sheet-head .ico {
+      width: var(--ico); height: var(--ico); border-radius: 50%;
+      display: grid; place-items: center; color: var(--text); flex-shrink: 0;
+    }
+    .tile .ico i,
+    .pick-card .pc-ico i,
+    .sheet-head .ico i { font-size: var(--ico-glyph); line-height: 1; }
+
+    .tile .t,
+    .pick-card .pc-t {
+      font-size: var(--fs-md); font-weight: 700; letter-spacing: -0.01em; line-height: var(--lh-title);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .tile .TileInfo,
+    .pick-card > span:last-of-type,
+    .prow .PlayerInformation {
+      min-width: 0; width: 100%; overflow: hidden;
+    }
+    .tile .d,
+    .pick-card .pc-d {
+      font-size: var(--fs-sm); color: var(--muted); line-height: var(--lh-body);
+      margin-top: var(--title-sub-gap);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    body[data-role="Moderator"] .tile.admin,
+    body[data-role="Moderator"] .tile.owner {
+      opacity: var(--disabled-opacity); pointer-events: none;
+    }
+
+    .g-blue { background: var(--g-blue); }
+    .g-violet { background: var(--g-violet); }
+    .g-pink { background: var(--g-pink); }
+    .g-rose { background: var(--g-rose); }
+    .g-amber { background: var(--g-amber); }
+    .g-green { background: var(--g-green); }
+    .g-cyan { background: var(--g-cyan); }
+    .g-red { background: var(--g-red); }
+
+    /* —— Overlay layers —— */
+    .dim {
+      position: absolute; inset: 0; background: var(--dim);
+      opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 4;
+    }
+    .dim.on { opacity: 1; pointer-events: auto; }
+
+    /* Popups → AnchorPoint 0.5,0.5. Fixed max height so SheetBody can scroll under Foot. */
+    .popup,
+    .sheet {
+      position: absolute; left: 50%; top: 50%;
+      width: calc(100% - (var(--pad) * 2));
+      background: var(--surface);
+      box-shadow: 0 0 0 1px var(--line-strong), 0 20px 48px var(--shadow);
+      display: flex; flex-direction: column;
+      border-radius: var(--r-lg);
+      overflow: hidden; /* clip to radius; children scroll inside */
+      transform: translate(-50%, -46%) scale(0.97);
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.18s, transform 0.22s var(--ease);
+    }
+    .popup {
+      z-index: 6;
+      max-width: var(--popup-w);
+      height: min(68%, var(--popup-h));
+      max-height: 68%;
+    }
+    .sheet {
+      z-index: 5;
+      max-width: var(--sheet-w);
+      height: min(78%, var(--sheet-h));
+      max-height: 78%;
+    }
+    .popup.open,
+    .sheet.open {
+      opacity: 1; pointer-events: auto;
+      transform: translate(-50%, -50%) scale(1);
+    }
+
+    .popup-head,
+    .sheet-head {
+      flex-shrink: 0; display: flex; align-items: center; gap: var(--s2);
+      padding: var(--s3) var(--pad) var(--s2);
+      min-height: calc(var(--btn) + var(--s3) + var(--s2));
+    }
+    .popup-head h2,
+    .sheet-head h2 {
+      flex: 1; min-width: 0;
+      font-size: var(--fs-lg); font-weight: 800; letter-spacing: -0.01em;
+      line-height: var(--lh-title);
+    }
+    .sheet-body {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-x: hidden;
+      overflow-y: auto;
+      padding: var(--s1) var(--pad) var(--s4);
+      overscroll-behavior: contain;
+    }
+    .sheet-foot {
+      flex-shrink: 0;
+      padding: var(--s3) var(--pad) var(--pad);
+      display: flex; gap: var(--s2);
+      background: var(--surface);
+      box-shadow: 0 -1px 0 var(--line);
+      position: relative;
+      z-index: 1;
+    }
+
+    .search-row {
+      flex-shrink: 0; margin: 0 var(--pad) var(--s2);
+      border-radius: var(--r-md);
+    }
+    .plist {
+      flex: 1; min-height: 0; overflow-y: auto; padding: 0 var(--s2) var(--s3);
+    }
+
+    /* Player rows + target chip */
+    .prow,
+    .target {
+      width: 100%; border: 0; color: var(--text); cursor: pointer;
+      display: flex; align-items: center; gap: var(--s3);
+      padding: var(--s2) var(--s3); border-radius: var(--r-md);
+      font-family: var(--font); text-align: left;
+    }
+    .prow { background: transparent; }
+    .prow:hover { background: var(--fill-strong); }
+    .prow[aria-selected="true"] { background: var(--cta); color: var(--ink); }
+    .prow[aria-selected="true"] .meta-un { color: var(--faint); }
+    .target {
+      background: var(--fill-strong); margin-bottom: var(--stack);
+    }
+    .pav,
+    .target .pav {
+      width: var(--av); height: var(--av); border-radius: 50%; flex-shrink: 0;
+      background: var(--fill-strong); object-fit: cover; display: block;
+    }
+    .prow[aria-selected="true"] .pav {
+      box-shadow: 0 0 0 var(--ring-w) var(--chrome);
+    }
+    .meta-dn,
+    .target .t { font-size: var(--fs-md); font-weight: 700; }
+    .meta-un,
+    .target .d { font-size: var(--fs-sm); color: var(--muted); margin-top: var(--s0); }
+    .meta-role {
+      margin-left: auto; font-size: var(--fs-xs); font-weight: 600;
+      color: var(--faint); padding: var(--s1) var(--s2); border-radius: var(--r-pill);
+      background: var(--fill-strong); flex-shrink: 0;
+    }
+    .prow[aria-selected="true"] .meta-role { background: var(--fill-strong); color: var(--faint); }
+    .target .chg {
+      margin-left: auto; font-size: var(--fs-sm); font-weight: 600; color: var(--muted);
+    }
+    .plist-empty,
+    .empty {
+      text-align: center; padding: var(--s5) var(--s3); color: var(--faint); font-size: var(--fs-sm);
+    }
+    .empty { grid-column: 1 / -1; font-size: var(--fs-md); padding: var(--s5) var(--s4); }
+
+    /* —— Form primitives (sheet) —— */
+    .field { margin-bottom: var(--stack); }
+    .field label { display: block; margin-bottom: var(--s2); }
+    .field input, .field textarea {
+      width: 100%; border: 0; outline: none; background: var(--fill-strong);
+      color: var(--text); font: 500 var(--fs-md)/1.35 var(--font);
+      border-radius: var(--r-md); padding: var(--s2) var(--s3);
+      min-height: var(--ctrl);
+    }
+    .field textarea { min-height: var(--textarea-min); resize: none; padding-top: var(--s2); }
+    .field input::placeholder, .field textarea::placeholder { color: var(--faint); }
+
+    .chips,
+    .presets {
+      display: flex; flex-wrap: wrap; gap: var(--s2); margin-bottom: var(--stack);
+    }
+    .presets {
+      max-height: var(--presets-max); overflow-y: auto;
+    }
+    .chip {
+      border: 0; background: var(--fill-strong); color: var(--muted);
+      font: 600 var(--fs-sm)/1 var(--font);
+      height: var(--ctrl); padding: 0 var(--s3);
+      border-radius: var(--r-pill); cursor: pointer;
+    }
+    .chip[aria-pressed="true"] { background: var(--cta); color: var(--ink); }
+    .chips.speed-picks {
+      gap: var(--s2); flex-wrap: wrap;
+    }
+    .chip.speed {
+      width: var(--speed); height: var(--speed); padding: 0;
+      border-radius: 50%;
+      font: 700 var(--fs-lg)/1 var(--font);
+      display: inline-grid; place-items: center;
+      flex-shrink: 0;
+    }
+    .preset {
+      border: 0; min-width: 76px; /* preset chip floor */ height: var(--btn); padding: 0 var(--s2);
+      border-radius: var(--r-sm); background: var(--surface-raised); color: var(--text);
+      font: 700 var(--fs-xs)/1 var(--font); cursor: pointer;
+      box-shadow: inset 0 0 0 1px transparent;
+    }
+    .preset[aria-pressed="true"] { box-shadow: inset 0 0 0 var(--ring-w) var(--ring); }
+
+    /* —— Custom title popup —— */
+    .title-preview {
+      position: sticky; top: 0; z-index: 2;
+      margin: 0 0 var(--stack);
+      padding: var(--s4) var(--s3);
+      border-radius: var(--r-md);
+      background: var(--well-deep);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .title-preview span {
+      font-size: var(--fs-xl); font-weight: 800; line-height: var(--lh-title);
+      letter-spacing: -0.02em; word-break: break-word;
+      color: var(--text);
+    }
+    .title-preview.is-empty span {
+      color: var(--faint); font-weight: 600; font-size: var(--fs-sm);
+    }
+    .field-head {
+      display: flex; align-items: baseline; justify-content: space-between;
+      margin-bottom: var(--s2); gap: var(--s2);
+    }
+    .field-head label { margin-bottom: 0; }
+    .field-head .field-meta {
+      font-size: var(--fs-xs); font-weight: 600; color: var(--faint);
+      text-transform: none; letter-spacing: 0;
+    }
+    .preset-row {
+      display: flex; flex-wrap: nowrap; gap: var(--s2);
+      overflow-x: auto; overflow-y: hidden;
+      padding-bottom: var(--s1); margin-bottom: 0;
+      scrollbar-width: thin;
+      scrollbar-color: var(--scroll-thumb) var(--scroll-track);
+    }
+    .preset-row .preset {
+      flex: 0 0 auto; max-width: 200px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .style-grid {
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--micro);
+      max-height: var(--style-grid-max); overflow-y: auto; margin-bottom: 0;
+      padding-right: var(--s0);
+    }
+    .style-card {
+      border: 0; border-radius: var(--r-sm); padding: var(--micro);
+      background: var(--fill); color: var(--text); cursor: pointer;
+      font-family: var(--font); text-align: left;
+      display: flex; flex-direction: column; gap: var(--s1);
+      box-shadow: inset 0 0 0 var(--ring-w) transparent;
+      transition: background 0.12s, box-shadow 0.12s;
+      min-width: 0;
+    }
+    .style-card:hover { background: var(--fill-hover); }
+    .style-card[aria-pressed="true"] {
+      background: var(--fill-selected);
+      box-shadow: inset 0 0 0 var(--ring-w) var(--ring);
+    }
+    .style-card .swatch {
+      height: var(--swatch-h); border-radius: var(--r-xs); width: 100%;
+    }
+    .style-card .name {
+      font-size: var(--fs-2xs); font-weight: 700; line-height: var(--lh-tight);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      color: var(--muted);
+    }
+    .style-card[aria-pressed="true"] .name { color: var(--text); }
+    .size-row {
+      display: flex; gap: var(--s1); padding: var(--track-pad); margin-bottom: 0;
+      background: var(--well); border-radius: var(--r-md);
+    }
+    .size-row .chip {
+      flex: 1; border-radius: var(--r-sm); padding: 0;
+      text-align: center; justify-content: center;
+      min-height: var(--ctrl);
+    }
+    .font-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: var(--micro);
+      max-height: var(--font-grid-max); overflow-y: auto; margin-bottom: 0;
+      padding-right: var(--s0);
+    }
+    .font-chip {
+      border: 0; height: var(--font-chip-h); padding: 0 var(--s2); border-radius: var(--r-sm);
+      background: var(--surface-raised); color: var(--muted);
+      font: 600 var(--fs-xs)/1 var(--font); cursor: pointer; text-align: left;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      box-shadow: inset 0 0 0 var(--ring-w) transparent;
+    }
+    .font-chip[aria-pressed="true"] {
+      color: var(--text); background: var(--fill-active);
+      box-shadow: inset 0 0 0 var(--ring-w) var(--ring);
+    }
+    .sheet.sheet-wide {
+      max-width: var(--sheet-wide-w);
+      height: min(84%, var(--sheet-wide-h));
+      max-height: 84%;
+    }
+
+    .seg {
+      display: flex; gap: var(--s0); padding: var(--track-pad); margin-bottom: var(--stack);
+      background: var(--well); border-radius: var(--r-md);
+      min-height: var(--ctrl);
+    }
+    .seg button {
+      flex: 1; border: 0; background: transparent; color: var(--faint);
+      font: 600 var(--fs-sm)/1.15 var(--font); padding: var(--s2) var(--s1);
+      border-radius: var(--r-sm); cursor: pointer;
+    }
+    .seg button[aria-pressed="true"] { background: var(--fill-active); color: var(--text); }
+    body[data-role="Moderator"] .seg button.admin,
+    body[data-role="Moderator"] .seg button.owner {
+      opacity: var(--disabled-opacity); pointer-events: none;
+    }
+
+    .mode-list {
+      display: grid; grid-template-columns: 1fr; gap: var(--micro);
+      margin-bottom: var(--stack);
+    }
+    .mode-card {
+      border: 0; border-radius: var(--r-md); padding: var(--s2) var(--s3);
+      background: var(--fill); color: var(--text); cursor: pointer;
+      font-family: var(--font); text-align: left;
+      display: flex; flex-direction: row; align-items: center; gap: var(--s2);
+      box-shadow: inset 0 0 0 var(--ring-w) transparent;
+      min-width: 0;
+    }
+    .mode-card:hover { background: var(--fill-hover); }
+    .mode-card[aria-pressed="true"] {
+      background: var(--fill-selected);
+      box-shadow: inset 0 0 0 var(--ring-w) var(--ring);
+    }
+    .mode-card.is-locked {
+      opacity: var(--disabled-opacity); pointer-events: none;
+    }
+    .mode-card .mc-top {
+      display: flex; align-items: center; gap: var(--s2); width: 100%; min-width: 0;
+    }
+    .mode-card .mc-ico {
+      width: var(--ico-sm); height: var(--ico-sm); border-radius: var(--r-sm); flex-shrink: 0;
+      display: grid; place-items: center; color: var(--text);
+    }
+    .mode-card .mc-ico i { font-size: var(--ico-glyph-sm); line-height: 1; }
+    .mode-card .mc-text { flex: 1; min-width: 0; }
+    .mode-card .mc-t { font-size: var(--fs-sm); font-weight: 700; line-height: var(--lh-title); }
+    .mode-card .mc-d {
+      margin-top: var(--s0); font-size: var(--fs-2xs); color: var(--muted); line-height: var(--lh-title);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .mode-card .mc-gate {
+      font-size: var(--fs-2xs); font-weight: 700; color: var(--faint);
+      text-transform: uppercase; letter-spacing: 0.04em; flex-shrink: 0;
+    }
+
+    .callout {
+      display: flex; gap: var(--s2); align-items: flex-start;
+      padding: var(--s3); border-radius: var(--r-md); margin-bottom: var(--stack);
+      background: var(--fill); font-size: var(--fs-sm); color: var(--muted); line-height: var(--lh-body);
+    }
+    .callout b { color: var(--text); font-weight: 700; }
+    .callout i { font-size: var(--ico-glyph); color: var(--text); flex-shrink: 0; margin-top: 1px; }
+    .callout.warn { background: var(--warn-bg); }
+    .callout.warn i { color: var(--warn); }
+    .callout.ok { background: var(--ok-bg); }
+    .callout.ok i { color: var(--ok); }
+    .callout.soft { background: var(--info-bg); }
+    .callout.soft i { color: var(--info); }
+
+    .preview {
+      margin-bottom: var(--stack); padding: var(--s4); border-radius: var(--r-md);
+      text-align: center; font-size: var(--fs-xl); font-weight: 800; min-height: var(--ctrl);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--text);
+      background: var(--preview-well);
+    }
+    .hint {
+      font-size: var(--fs-sm); color: var(--muted); line-height: var(--lh-body); margin-bottom: var(--stack);
+    }
+
+    .cta {
+      flex: 1; border: 0; border-radius: var(--r-pill);
+      height: var(--ctrl); padding: 0 var(--s4);
+      font: 700 var(--fs-md)/1 var(--font); color: var(--cta-fg); background: var(--cta); cursor: pointer;
+    }
+    .cta.ghost { background: var(--fill-strong); color: var(--text); font-weight: 600; flex: 0.55; }
+
+    .toast {
+      position: absolute; left: 50%; bottom: var(--pad); transform: translate(-50%, var(--s4));
+      background: var(--surface-raised); border-radius: var(--r-md);
+      padding: var(--s2) var(--s4); font-size: var(--fs-sm); font-weight: 600;
+      white-space: nowrap; opacity: 0;
+      transition: transform 0.28s var(--ease), opacity 0.18s;
+      pointer-events: none; z-index: 8;
+      box-shadow: 0 0 0 1px var(--line);
+    }
+    .toast.show { transform: translate(-50%, 0); opacity: 1; }
+
+    @media (max-width: 640px) {
+      .hub { flex-direction: column; height: auto; min-height: 90vh; }
+      .sidebar {
+        width: 100%; flex-direction: row; flex-wrap: nowrap;
+        overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line);
+        padding: var(--s2);
+      }
+      .side-label { display: none; }
+      .side-btn { width: auto; flex-shrink: 0; }
+      .grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body data-role="Owner">
+
+  <div class="meta">
+    <h1>Admin Deck</h1>
+    <p>Studio-portable hierarchy — maps to ScreenGui 04-AdminHub.</p>
+    <div class="scenario">
+      <button type="button" data-role="Owner" aria-pressed="true">Owner / Leadership</button>
+      <button type="button" data-role="Moderator" aria-pressed="false">Moderator</button>
+    </div>
+  </div>
+
+  <!-- ScreenGui 04-AdminHub → MainWrapper -->
+  <div class="hub" id="MainWrapper" data-name="MainWrapper">
+    <aside class="sidebar" id="SidebarWrapper" data-name="01-SidebarWrapper" data-layout="UIListLayout Vertical + UIPadding">
+      <div class="side-label" data-name="SideLabelBrowse">Browse</div>
+      <button type="button" class="side-btn" data-name="SideBtn_Gallery" data-filter="all" aria-current="true">
+        <i class="ph-fill ph-squares-four" data-studio="ImageLabel Icon"></i> Gallery
+      </button>
+      <div class="side-label" data-name="SideLabelCategories">Categories</div>
+      <button type="button" class="side-btn" data-name="SideBtn_Utilities" data-filter="utilities" aria-current="false">
+        <i class="ph-fill ph-wrench"></i> Utilities
+      </button>
+      <button type="button" class="side-btn" data-name="SideBtn_Access" data-filter="access" aria-current="false">
+        <i class="ph-fill ph-key"></i> Access
+      </button>
+      <button type="button" class="side-btn" data-name="SideBtn_Identity" data-filter="identity" aria-current="false">
+        <i class="ph-fill ph-identification-badge"></i> Identity
+      </button>
+      <button type="button" class="side-btn" data-name="SideBtn_Donations" data-filter="donations" aria-current="false">
+        <i class="ph-fill ph-hand-coins"></i> Donations
+      </button>
+    </aside>
+
+    <div class="main" id="MainContentWrapper" data-name="02-MainContentWrapper">
+      <div class="top" id="HeaderWrapper" data-name="01-HeaderWrapper" data-layout="UIListLayout Horizontal">
+        <div class="brand" id="galleryTitle" data-name="1-HeaderTitle">Admin Panel</div>
+        <div class="top-search" data-name="02-SearchBox">
+          <i class="ph-fill ph-magnifying-glass"></i>
+          <input id="gq" type="search" placeholder="Search" autocomplete="off" />
+        </div>
+        <button type="button" class="close" id="hubClose" data-name="3-CloseModalButton" aria-label="Close"><i class="ph-fill ph-x"></i></button>
+      </div>
+
+      <div class="grid-wrap" id="GalleryScroll" data-name="02-GalleryScroll" data-studio="ScrollingFrame">
+        <div id="gridRoot"></div>
+      </div>
+
+      <div class="dim" id="dim" data-name="DimOverlay"></div>
+
+      <div class="popup" id="popup" data-name="03-PlayerPopup" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="popupTitle">
+        <div class="popup-head" data-name="01-Header">
+          <h2 id="popupTitle" data-name="1-Title">Find player</h2>
+          <button type="button" class="x" id="popupClose" data-name="CloseModalButton" aria-label="Close"><i class="ph-fill ph-x"></i></button>
+        </div>
+        <div class="search-row" data-name="02-SearchBox">
+          <i class="ph-fill ph-magnifying-glass"></i>
+          <input id="pq" type="search" placeholder="Name or username…" autocomplete="off" />
+        </div>
+        <div class="plist" id="plist" data-name="ScrollablePlayerList" data-layout="UIListLayout Vertical"></div>
+      </div>
+
+      <div class="sheet" id="sheet" data-name="04-ActionPopup" role="dialog" aria-modal="true" aria-hidden="true">
+        <div class="sheet-head" data-name="SheetHead">
+          <div class="ico" id="sheetIco" data-name="IconCircle"></div>
+          <h2 id="sheetTitle" data-name="1-Title">Action</h2>
+          <button type="button" class="x" id="sheetClose" data-name="CloseModalButton" aria-label="Close"><i class="ph-fill ph-x"></i></button>
+        </div>
+        <div class="sheet-body" id="sheetBody" data-name="SheetBody" data-studio="ScrollingFrame"></div>
+        <div class="sheet-foot" id="sheetFoot" data-name="SheetFoot"></div>
+      </div>
+
+      <div class="toast" id="toast" data-name="Toast"></div>
+    </div>
+  </div>
+
+  <script>
+    // Mock players — real userIds so AvatarHeadShot thumbs resolve.
+    // Studio port: ImageLabel.Image = rbxthumb://type=AvatarHeadShot&id={userId}&w=150&h=150
+    // (same pattern as DonationLeaderboardRepository / DemoDataProvider).
+    const PLAYERS = [
+      { userId: 1, dn: "Roblox", un: "Roblox", role: "Owner" },
+      { userId: 156, dn: "Builderman", un: "builderman", role: "Moderator" },
+      { userId: 261, dn: "Shedletsky", un: "Shedletsky", role: "VIP" },
+      { userId: 1210210, dn: "Sorcus", un: "Sorcus", role: "Player" },
+      { userId: 24813335, dn: "Jandel", un: "Jandel", role: "Player" },
+      { userId: 80254, dn: "NightOwl", un: "NightOwl", role: "Player" },
+    ];
+
+    /** Club Kit contract for Studio. HTML uses web headshot for preview only. */
+    function rbxThumb(userId, size) {
+      size = size || 150;
+      return `rbxthumb://type=AvatarHeadShot&id=${userId}&w=${size}&h=${size}`;
+    }
+    function thumbSrc(userId, size) {
+      size = size || 150;
+      // Preview only — browser cannot load rbxthumb://
+      return `https://www.roblox.com/headshot-thumbnail/image?userId=${userId}&width=${size}&height=${size}&format=png`;
+    }
+    function pavHtml(p) {
+      return `<img class="pav" data-name="PlayerProfilePicture" src="${thumbSrc(p.userId)}" data-rbxthumb="${rbxThumb(p.userId)}" alt="" width="40" height="40" loading="lazy" />`;
+    }
+
+    // ── Kit source mirrors (Config / ClubKitConfig / AnimationModes) ──
+    // Keep in sync with src when porting to Studio Admin Hub.
+    const KIT = {
+      Gravity: { MIN_SPEED: 1, MAX_SPEED: 10, DEFAULT_SPEED: 3 },
+      Announcement: { MAX_MESSAGE_LENGTH: 180 },
+      Admin: {
+        TITLE_MAX_LENGTH: 32,
+        TITLE_SIZE_ORDER: ["S", "M", "L", "XL", "XXL"],
+        TITLE_FONTS: [
+          "GothamBold", "GothamBlack", "ArimoBold", "Bangers", "LuckiestGuy", "Oswald", "DenkOne", "Sarpanch",
+          "FredokaOne", "Cartoon", "ComicNeueAngular", "PatrickHand", "IndieFlower", "Kalam", "AmaticSC",
+          "PressStart2P", "Arcade", "SciFi", "Michroma", "Jura", "Codystar",
+          "PermanentMarker", "Fondamento", "SpecialElite",
+          "Bodoni", "Garamond", "Merriweather",
+          "Creepster", "GrenzeGotisch",
+          "Roboto", "RobotoCondensed", "SourceSansBold", "JosefinSans", "TitilliumWeb", "Ubuntu",
+          "Highway",
+        ],
+        TITLE_SUGGESTIONS: [
+          "🍼 DEDE IMUP 🍼", "👑 KANJENG MAMI 👑", "🌴 BOS SAWIT 🌴", "💎 NYONYA MUDA 💎",
+          "💼 CEO WIJAYA 💼", "🔥 BANDIT MADURA 🔥", "🤴 PRINCE 🤴", "🤴 KING 🤴",
+          "👸 QUEEN ELISABETH 👸", "💃 LEAD DANCE 💃", "🎀 LEAD GEMOY 🎀",
+          "✨ SPPG MPG ✨", "⚔️ KETUA PSHT ⚔️",
+        ],
+      },
+      // AnimationModes.PRESET_MODES — title color style (Admin Panel)
+      TITLE_STYLE_PRESETS: [
+        "StaticColor", "Gradient", "Pulse",
+        "Bubblegum", "ChromeStroke", "Ghost", "GhostStroke", "Gold", "GoldStroke",
+        "Lava", "LavaStroke", "OceanicStroke", "Rainbow", "RainbowStroke",
+        "Silver", "SilverStroke", "Zebra", "RainbowOutline", "DeathStroke",
+        "IceStroke", "FireStroke", "Matrix", "GreenOutline", "Shine",
+        "WaveStroke", "ShineOutline", "ElectricStroke", "NeonStroke",
+        "SunsetStroke", "GalaxyStroke", "PulseGradient", "PulseStroke", "PulseStrokeInvert",
+      ],
+      // RoleCategories — giftable staff roles for /setrole (not membership, not spenders)
+      SETROLE_ROLES: [
+        { key: "CoOwner", label: "Co-Owner", category: "Leadership", desc: "Admin panel · gift · gravity", icon: "ph-crown", g: "g-amber" },
+        { key: "Staff", label: "Staff", category: "Leadership", desc: "Admin panel · gift · gravity", icon: "ph-shield-check", g: "g-blue" },
+        { key: "Moderator", label: "Moderator", category: "Moderation", desc: "Announce · teleport", icon: "ph-gavel", g: "g-violet" },
+        { key: "DJ", label: "DJ", category: "Content", desc: "Music manage", icon: "ph-headphones", g: "g-cyan" },
+        { key: "LeadDance", label: "Lead Dance", category: "Content", desc: "Music manage", icon: "ph-music-notes", g: "g-rose" },
+        { key: "Streamer", label: "Streamer", category: "Content", desc: "Music manage", icon: "ph-video-camera", g: "g-pink" },
+        { key: "Influencer", label: "Influencer", category: "Content", desc: "Music manage", icon: "ph-sparkle", g: "g-amber" },
+      ],
+      // ClubKitConfig.Membership + Config.Gift Tier1/2/3
+      GIFT_TIERS: [
+        { key: "Tier1", label: "VIP", desc: "Membership Tier 1", icon: "ph-star", g: "g-amber" },
+        { key: "Tier2", label: "VVIP", desc: "Membership Tier 2", icon: "ph-medal", g: "g-violet" },
+        { key: "Tier3", label: "Supreme", desc: "Membership Tier 3", icon: "ph-crown-simple", g: "g-rose" },
+      ],
+      // Donation.AURA_TIERS — suggested amount chips (idrMin / min)
+      DONATE_IDR_CHIPS: [10000, 20000, 30000, 50000, 100000, 200000, 300000, 500000, 1000000],
+      DONATE_ROBUX_CHIPS: [10, 80, 150, 250, 500, 1000, 2000, 3000, 5000, 10000],
+    };
+
+    let idx = null;
+    let filter = "all";
+    let query = "";
+    let toastTimer = null;
+    let currentAction = null;
+    let pendingAction = null;
+    let overlay = null;
+    let changeFromSheet = false;
+    let floatSpeed = KIT.Gravity.DEFAULT_SPEED;
+    let donateMode = "test"; // persists across pick-player reopen
+
+    const GROUPS = [
+      { id: "utilities", label: "Utilities" },
+      { id: "access", label: "Access" },
+      { id: "identity", label: "Identity" },
+      { id: "donations", label: "Donations" },
+    ];
+
+    // Gates mirror CommandLibraryDomain + PermissionDomain:
+    //   mod    = canAnnounce / canTeleport (Moderator+)
+    //   admin  = canUseAdminPanel / canGift (Owner, CoOwner, Staff, AdminUserIds)
+    //   owner  = Owner (+ AdminUserIds / Studio) for live donation ledger
+    const ACTIONS = [
+      { id: "bring", group: "utilities", needsPlayer: true, gate: "mod", title: "Bring here", desc: "Pull them to you", icon: "ph-arrow-fat-line-down", g: "g-blue", instant: true, run: (p) => toast(`Brought ${p.dn} to you`) },
+      { id: "to", group: "utilities", needsPlayer: true, gate: "mod", title: "Go to", desc: "Teleport to them", icon: "ph-arrow-fat-line-up", g: "g-violet", instant: true, run: (p) => toast(`Went to ${p.dn}`) },
+      { id: "announce", group: "utilities", needsPlayer: false, gate: "mod", title: "Announce", desc: "Server broadcast", icon: "ph-megaphone", g: "g-amber", need: true, sheet: announceSheet },
+      { id: "ungravity", group: "utilities", needsPlayer: false, gate: "admin", title: "Ungravity", desc: "Float everyone", icon: "ph-planet", g: "g-cyan", instant: true, floatSpeed: true, run: () => toast(`Ungravity — everyone floating at speed ${floatSpeed}`) },
+      { id: "gravity", group: "utilities", needsPlayer: false, gate: "admin", title: "Gravity", desc: "Restore everyone", icon: "ph-arrow-fat-line-down", g: "g-blue", instant: true, floatSpeed: true, run: () => toast("Gravity restored for everyone") },
+      { id: "role", group: "access", needsPlayer: true, gate: "admin", title: "Set role", desc: "Leadership · Mod · Content", icon: "ph-identification-badge", g: "g-amber", need: true, sheet: roleSheet },
+      { id: "gift", group: "access", needsPlayer: true, gate: "admin", title: "Gift membership", desc: "VIP · VVIP · Supreme", icon: "ph-gift", g: "g-pink", need: true, sheet: giftSheet },
+      { id: "title", group: "identity", needsPlayer: true, gate: "admin", title: "Custom title", desc: "Special overhead title", icon: "ph-text-aa", g: "g-violet", need: true, sheet: titleSheet },
+      { id: "donate", group: "donations", needsPlayer: false, gate: "admin", title: "Donations", desc: "Fake donations, credit, or edit score", icon: "ph-hand-coins", g: "g-rose", need: true, sheet: donateSheet },
+      { id: "refresh", group: "donations", needsPlayer: false, gate: "owner", title: "Reload boards", desc: "Refresh cash & Robux boards", icon: "ph-arrows-clockwise", g: "g-cyan", instant: true, run: () => toast("Boards reloaded") },
+    ];
+
+    const el = {
+      gridRoot: document.getElementById("gridRoot"),
+      galleryTitle: document.getElementById("galleryTitle"),
+      gq: document.getElementById("gq"),
+      pq: document.getElementById("pq"),
+      popup: document.getElementById("popup"),
+      popupTitle: document.getElementById("popupTitle"),
+      plist: document.getElementById("plist"),
+      dim: document.getElementById("dim"),
+      sheet: document.getElementById("sheet"),
+      sheetIco: document.getElementById("sheetIco"),
+      sheetTitle: document.getElementById("sheetTitle"),
+      sheetBody: document.getElementById("sheetBody"),
+      sheetFoot: document.getElementById("sheetFoot"),
+      toast: document.getElementById("toast"),
+    };
+
+    function player() { return idx == null ? null : PLAYERS[idx]; }
+
+    function toast(msg) {
+      el.toast.textContent = msg;
+      el.toast.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => el.toast.classList.remove("show"), 2200);
+    }
+
+    function clearPlayer() {
+      idx = null;
+    }
+
+    function matchesQuery(a) {
+      if (!query) return true;
+      const q = query.toLowerCase();
+      return a.title.toLowerCase().includes(q) || a.desc.toLowerCase().includes(q) || a.id.includes(q);
+    }
+
+    function setFilter(next) {
+      filter = next;
+      const g = GROUPS.find(x => x.id === next);
+      el.galleryTitle.textContent = g ? g.label : "Admin Panel";
+      document.querySelectorAll(".side-btn").forEach(b => {
+        b.setAttribute("aria-current", b.dataset.filter === next ? "true" : "false");
+      });
+      renderGrid();
+    }
+
+    function renderGrid() {
+      const root = el.gridRoot;
+      root.innerHTML = "";
+      const list = ACTIONS.filter(a =>
+        (filter === "all" || a.group === filter) && matchesQuery(a)
+      );
+      if (!list.length) {
+        root.innerHTML = `<div class="empty">Nothing found</div>`;
+        return;
+      }
+
+      const groups = GROUPS
+        .map(g => ({
+          id: g.id,
+          label: filter === "all" ? g.label : null,
+          items: list.filter(a => a.group === g.id),
+        }))
+        .filter(g => g.items.length);
+
+      groups.forEach(group => {
+        if (group.label) {
+          const section = document.createElement("div");
+          section.className = "Section";
+          section.dataset.name = "Section_" + group.id;
+          const s = document.createElement("div");
+          s.className = "sec";
+          s.dataset.name = "1-SectionLabel";
+          s.textContent = group.label;
+          section.appendChild(s);
+          const grid = document.createElement("div");
+          grid.className = "grid";
+          grid.dataset.name = "2-TileGrid";
+          grid.dataset.layout = "UIGridLayout MaxCells=3";
+          group.items.forEach(a => {
+            grid.appendChild(buildActionTile(a));
+          });
+          section.appendChild(grid);
+          root.appendChild(section);
+          return;
+        }
+        const grid = document.createElement("div");
+        grid.className = "grid";
+        grid.dataset.name = "2-TileGrid";
+        grid.dataset.layout = "UIGridLayout MaxCells=3";
+        group.items.forEach(a => {
+          grid.appendChild(buildActionTile(a));
+        });
+        root.appendChild(grid);
+      });
+    }
+
+    function buildActionTile(a) {
+      const btn = document.createElement("div");
+      btn.className = "tile"
+        + (a.gate === "admin" ? " admin" : "")
+        + (a.gate === "owner" ? " owner" : "")
+        + (a.floatSpeed ? " has-gear" : "");
+      btn.dataset.name = "ActionTile_" + a.id;
+      btn.setAttribute("role", "button");
+      btn.tabIndex = 0;
+      btn.innerHTML = `
+        <span class="ico ${a.g}" data-name="IconCircle"><i class="ph-fill ${a.icon}"></i></span>
+        <span class="TileInfo" data-name="TileInfo" data-layout="UIListLayout Vertical">
+          <div class="t" data-name="1-Title">${a.title}</div>
+          <div class="d" data-name="2-SubTitle">${a.desc}</div>
+        </span>
+      `;
+      if (a.floatSpeed) {
+        const gear = document.createElement("button");
+        gear.type = "button";
+        gear.className = "tile-gear";
+        gear.dataset.name = "GearButton";
+        gear.title = "Float speed";
+        gear.setAttribute("aria-label", "Float speed settings");
+        gear.innerHTML = `<i class="ph-fill ph-gear"></i><span>${floatSpeed}</span>`;
+        gear.addEventListener("click", (e) => {
+          e.stopPropagation();
+          openFloatSpeedSheet();
+        });
+        btn.appendChild(gear);
+      }
+      const go = () => onAction(a);
+      btn.addEventListener("click", go);
+      btn.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); }
+      });
+      return btn;
+    }
+
+    function renderPlayerList() {
+      const q = el.pq.value.trim().toLowerCase();
+      const list = PLAYERS.filter(p =>
+        !q || p.dn.toLowerCase().includes(q) || p.un.toLowerCase().includes(q)
+      );
+      el.plist.innerHTML = "";
+      if (!list.length) {
+        el.plist.innerHTML = `<div class="plist-empty">No players found</div>`;
+        return;
+      }
+      list.forEach(p => {
+        const i = PLAYERS.indexOf(p);
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "prow";
+        btn.dataset.name = "PlayerSelectorCard";
+        btn.setAttribute("aria-selected", i === idx ? "true" : "false");
+        btn.innerHTML = `
+          ${pavHtml(p)}
+          <span class="PlayerInformation" data-name="PlayerInformation" data-layout="UIListLayout Vertical">
+            <div class="meta-dn" data-name="1-Title">${p.dn}</div>
+            <div class="meta-un" data-name="2-SubTitle">@${p.un}</div>
+          </span>
+          <span class="meta-role" data-name="RoleBadge">${p.role}</span>
+        `;
+        btn.addEventListener("click", () => onPickPlayer(i));
+        el.plist.appendChild(btn);
+      });
+    }
+
+    function openPopup(title) {
+      overlay = "popup";
+      el.popupTitle.textContent = title || "Find player";
+      el.pq.value = "";
+      renderPlayerList();
+      el.popup.classList.add("open");
+      el.popup.setAttribute("aria-hidden", "false");
+      el.dim.classList.add("on");
+      requestAnimationFrame(() => el.pq.focus());
+    }
+
+    function closePopup(keepDim) {
+      el.popup.classList.remove("open");
+      el.popup.setAttribute("aria-hidden", "true");
+      if (overlay === "popup") overlay = null;
+      if (!keepDim) {
+        pendingAction = null;
+        changeFromSheet = false;
+        clearPlayer();
+        if (!overlay) el.dim.classList.remove("on");
+      }
+    }
+
+    function onPickPlayer(i) {
+      idx = i;
+      closePopup(true);
+
+      if (changeFromSheet && currentAction) {
+        changeFromSheet = false;
+        openSheet(currentAction);
+        return;
+      }
+      if (pendingAction) {
+        const a = pendingAction;
+        pendingAction = null;
+        continueAction(a);
+        return;
+      }
+      clearPlayer();
+      el.dim.classList.remove("on");
+    }
+
+    function onAction(a) {
+      currentAction = a;
+      changeFromSheet = false;
+      if (!a.needsPlayer) { continueAction(a); return; }
+      // Always ask who — player never sticks across menus
+      clearPlayer();
+      pendingAction = a;
+      openPopup(`${a.title} — who?`);
+    }
+
+    function continueAction(a) {
+      if (a.instant) {
+        a.run(player());
+        currentAction = null;
+        clearPlayer();
+        if (!overlay) el.dim.classList.remove("on");
+        return;
+      }
+      openSheet(a);
+    }
+
+    function openSheet(a) {
+      closePopup(true);
+      overlay = "sheet";
+      currentAction = a;
+      el.sheetIco.className = "ico " + a.g;
+      el.sheetIco.innerHTML = `<i class="ph-fill ${a.icon}"></i>`;
+      el.sheetTitle.textContent = a.title;
+      el.sheetBody.innerHTML = "";
+      el.sheetFoot.innerHTML = "";
+      a.sheet(el.sheetBody, el.sheetFoot, player());
+      el.sheet.classList.add("open");
+      el.sheet.setAttribute("aria-hidden", "false");
+      el.dim.classList.add("on");
+    }
+
+    function closeSheet(keepDim) {
+      el.sheet.classList.remove("open", "sheet-wide");
+      el.sheet.setAttribute("aria-hidden", "true");
+      if (overlay === "sheet") overlay = null;
+      if (!keepDim) {
+        currentAction = null;
+        clearPlayer();
+        pendingAction = null;
+        changeFromSheet = false;
+        donateMode = "test";
+        if (!overlay) el.dim.classList.remove("on");
+      }
+    }
+
+    function closeOverlay() {
+      if (overlay === "popup") closePopup();
+      else if (overlay === "sheet") closeSheet();
+    }
+
+    function playerTarget(body) {
+      const p = player();
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "target";
+      row.dataset.name = "SelectedPlayerInfo";
+      row.innerHTML = `
+        ${pavHtml(p)}
+        <span class="PlayerInformation" data-name="TargetInfoWrapper" data-layout="UIListLayout Vertical">
+          <div class="t" data-name="1-Title">${p.dn}</div>
+          <div class="d" data-name="2-SubTitle">@${p.un}</div>
+        </span>
+        <span class="chg" data-name="ChangeButton">Change</span>
+      `;
+      row.addEventListener("click", () => {
+        changeFromSheet = true;
+        closeSheet(true);
+        openPopup("Change player");
+      });
+      body.appendChild(row);
+    }
+
+    function footPrimary(label, onClick, ghostLabel, onGhost) {
+      if (ghostLabel) {
+        const g = document.createElement("button");
+        g.type = "button"; g.className = "cta ghost"; g.textContent = ghostLabel;
+        g.addEventListener("click", onGhost);
+        el.sheetFoot.appendChild(g);
+      }
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "cta"; b.textContent = label;
+      b.addEventListener("click", onClick);
+      el.sheetFoot.appendChild(b);
+    }
+
+    function roleSheet(body) {
+      playerTarget(body);
+      body.insertAdjacentHTML("beforeend", `
+        <div class="callout soft">
+          <i class="ph-fill ph-identification-badge"></i>
+          <div><b>Staff role override</b> — RoleCategories keys from ClubKitConfig. Not VIP membership (use Gift). Spenders are leaderboard-only.</div>
+        </div>
+      `);
+      const wrap = document.createElement("div");
+      wrap.className = "pick-grid";
+      body.appendChild(wrap);
+      const roles = KIT.SETROLE_ROLES;
+      let picked = "Moderator";
+      roles.forEach((r) => {
+        const c = document.createElement("button");
+        c.type = "button";
+        c.className = "pick-card";
+        c.setAttribute("aria-pressed", r.key === picked ? "true" : "false");
+        c.innerHTML = `
+          <span class="pc-ico ${r.g}"><i class="ph-fill ${r.icon}"></i></span>
+          <span>
+            <div class="pc-t">${r.label}</div>
+            <div class="pc-d">${r.category} · ${r.desc}</div>
+          </span>
+        `;
+        c.addEventListener("click", () => {
+          picked = r.key;
+          wrap.querySelectorAll(".pick-card").forEach(x => x.setAttribute("aria-pressed", "false"));
+          c.setAttribute("aria-pressed", "true");
+        });
+        wrap.appendChild(c);
+      });
+      footPrimary("Apply role", () => {
+        const label = roles.find(r => r.key === picked)?.label || picked;
+        toast(`${player().dn} → ${label} (${picked})`);
+        closeSheet();
+      }, "Unset role", () => { toast(`Role cleared on ${player().dn}`); closeSheet(); });
+    }
+
+    function giftSheet(body) {
+      playerTarget(body);
+      body.insertAdjacentHTML("beforeend", `
+        <div class="callout ok">
+          <i class="ph-fill ph-gift"></i>
+          <div><b>Membership gift</b> — Config.Gift Tier1 / Tier2 / Tier3 → labels from ClubKitConfig.Membership. Not a staff role.</div>
+        </div>
+      `);
+      const wrap = document.createElement("div");
+      wrap.className = "pick-grid";
+      body.appendChild(wrap);
+      const tiers = KIT.GIFT_TIERS;
+      let picked = "Tier1";
+      tiers.forEach((t, i) => {
+        const c = document.createElement("button");
+        c.type = "button";
+        c.className = "pick-card";
+        c.setAttribute("aria-pressed", i === 0 ? "true" : "false");
+        c.innerHTML = `
+          <span class="pc-ico ${t.g}"><i class="ph-fill ${t.icon}"></i></span>
+          <span>
+            <div class="pc-t">${t.label}</div>
+            <div class="pc-d">${t.key} · ${t.desc}</div>
+          </span>
+        `;
+        c.addEventListener("click", () => {
+          picked = t.key;
+          wrap.querySelectorAll(".pick-card").forEach(x => x.setAttribute("aria-pressed", "false"));
+          c.setAttribute("aria-pressed", "true");
+        });
+        wrap.appendChild(c);
+      });
+      footPrimary("Gift membership", () => {
+        const label = tiers.find(t => t.key === picked)?.label || picked;
+        toast(`Gifted ${label} (${picked}) → ${player().dn}`);
+        closeSheet();
+      }, "Ungift", () => { toast(`Membership ungifted from ${player().dn}`); closeSheet(); });
+    }
+
+    function titleSheet(body) {
+      playerTarget(body);
+      let size = "M";
+      let font = "GothamBold";
+      let style = "StaticColor";
+
+      const STYLE_SWATCH = {
+        StaticColor: "#e5e5e5",
+        Gradient: "linear-gradient(135deg,#60a5fa,#a78bfa)",
+        Pulse: "#f472b6",
+        Bubblegum: "#f9a8d4",
+        ChromeStroke: "#d4d4d8",
+        Ghost: "#cbd5e1",
+        GhostStroke: "#94a3b8",
+        Gold: "#fbbf24",
+        GoldStroke: "#d97706",
+        Lava: "#f97316",
+        LavaStroke: "#ea580c",
+        OceanicStroke: "#22d3ee",
+        Rainbow: "linear-gradient(90deg,#ef4444,#f59e0b,#22c55e,#3b82f6,#a855f7)",
+        RainbowStroke: "linear-gradient(90deg,#f43f5e,#eab308,#10b981,#6366f1)",
+        Silver: "#e2e8f0",
+        SilverStroke: "#94a3b8",
+        Zebra: "repeating-linear-gradient(90deg,#111 0 6px,#eee 6px 12px)",
+        RainbowOutline: "linear-gradient(90deg,#f472b6,#22d3ee,#a3e635)",
+        DeathStroke: "#525252",
+        IceStroke: "#7dd3fc",
+        FireStroke: "#fb923c",
+        Matrix: "#22c55e",
+        GreenOutline: "#4ade80",
+        Shine: "#e0f2fe",
+        WaveStroke: "#67e8f9",
+        ShineOutline: "#fef3c7",
+        ElectricStroke: "#a78bfa",
+        NeonStroke: "#e879f9",
+        SunsetStroke: "#fdba74",
+        GalaxyStroke: "#c026d3",
+        PulseGradient: "linear-gradient(135deg,#f472b6,#818cf8)",
+        PulseStroke: "#fb7185",
+        PulseStrokeInvert: "#a78bfa",
+      };
+      const GRADIENT_STYLES = new Set([
+        "Gradient", "Rainbow", "RainbowStroke", "RainbowOutline", "Zebra", "PulseGradient",
+      ]);
+      const SIZE_PX = { S: 14, M: 18, L: 20, XL: 22, XXL: 24 };
+
+      body.insertAdjacentHTML("beforeend", `
+        <div class="title-preview" id="tPrev"><span>${KIT.Admin.TITLE_SUGGESTIONS[0]}</span></div>
+        <div class="field">
+          <div class="field-head">
+            <label>Title text</label>
+            <span class="field-meta" id="tLen">0/${KIT.Admin.TITLE_MAX_LENGTH}</span>
+          </div>
+          <input id="tTxt" type="text" maxlength="${KIT.Admin.TITLE_MAX_LENGTH}" placeholder="Type a custom title…" value="${KIT.Admin.TITLE_SUGGESTIONS[0]}" />
+        </div>
+        <div class="field">
+          <label>Suggestions</label>
+          <div class="preset-row" id="tSug" data-name="TitleSuggestions"></div>
+        </div>
+        <div class="field">
+          <label>Size</label>
+          <div class="size-row" id="tSize" data-name="SelectSize"></div>
+        </div>
+        <div class="field">
+          <div class="field-head">
+            <label>Font</label>
+            <span class="field-meta" id="tFontMeta">GothamBold</span>
+          </div>
+          <div class="font-grid" id="tFont" data-name="SelectFontStyle"></div>
+        </div>
+        <div class="field">
+          <div class="field-head">
+            <label>Style</label>
+            <span class="field-meta" id="tStyleMeta">StaticColor</span>
+          </div>
+          <div class="style-grid" id="tStyle" data-name="SelectStyle"></div>
+        </div>
+      `);
+
+      el.sheet.classList.add("sheet-wide");
+
+      const txt = body.querySelector("#tTxt");
+      const lenEl = body.querySelector("#tLen");
+      const prev = body.querySelector("#tPrev");
+      const prevSpan = prev.querySelector("span");
+      const styleMeta = body.querySelector("#tStyleMeta");
+      const fontMeta = body.querySelector("#tFontMeta");
+
+      function applyPreviewStyle() {
+        const sw = STYLE_SWATCH[style] || STYLE_SWATCH.StaticColor;
+        if (GRADIENT_STYLES.has(style)) {
+          prevSpan.style.color = "transparent";
+          prevSpan.style.backgroundImage = sw;
+          prevSpan.style.backgroundSize = "100% auto";
+          prevSpan.style.webkitBackgroundClip = "text";
+          prevSpan.style.backgroundClip = "text";
+        } else {
+          prevSpan.style.color = sw;
+          prevSpan.style.backgroundImage = "none";
+          prevSpan.style.webkitBackgroundClip = "unset";
+          prevSpan.style.backgroundClip = "unset";
+        }
+      }
+
+      function syncPreview() {
+        const v = txt.value.trim();
+        lenEl.textContent = `${txt.value.length}/${KIT.Admin.TITLE_MAX_LENGTH}`;
+        if (!v) {
+          prev.classList.add("is-empty");
+          prevSpan.textContent = "Title preview";
+        } else {
+          prev.classList.remove("is-empty");
+          prevSpan.textContent = v;
+          applyPreviewStyle();
+        }
+        prevSpan.style.fontSize = (SIZE_PX[size] || 18) + "px";
+      }
+
+      function syncSuggestionPress() {
+        const v = txt.value;
+        body.querySelectorAll("#tSug .preset").forEach((x) => {
+          x.setAttribute("aria-pressed", x.textContent === v ? "true" : "false");
+        });
+      }
+
+      txt.addEventListener("input", () => {
+        syncPreview();
+        syncSuggestionPress();
+      });
+      syncPreview();
+
+      KIT.Admin.TITLE_SUGGESTIONS.forEach((t, i) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "preset";
+        b.textContent = t;
+        b.title = t;
+        b.setAttribute("aria-pressed", i === 0 ? "true" : "false");
+        b.addEventListener("click", () => {
+          txt.value = t;
+          syncPreview();
+          syncSuggestionPress();
+        });
+        body.querySelector("#tSug").appendChild(b);
+      });
+
+      KIT.Admin.TITLE_SIZE_ORDER.forEach((o) => {
+        const c = document.createElement("button");
+        c.type = "button";
+        c.className = "chip";
+        c.textContent = o;
+        c.setAttribute("aria-pressed", o === size ? "true" : "false");
+        c.addEventListener("click", () => {
+          size = o;
+          body.querySelectorAll("#tSize .chip").forEach(x => x.setAttribute("aria-pressed", "false"));
+          c.setAttribute("aria-pressed", "true");
+          syncPreview();
+        });
+        body.querySelector("#tSize").appendChild(c);
+      });
+
+      KIT.Admin.TITLE_FONTS.forEach((o) => {
+        const c = document.createElement("button");
+        c.type = "button";
+        c.className = "font-chip";
+        c.textContent = o;
+        c.title = o;
+        c.setAttribute("aria-pressed", o === font ? "true" : "false");
+        c.addEventListener("click", () => {
+          font = o;
+          fontMeta.textContent = o;
+          body.querySelectorAll("#tFont .font-chip").forEach(x => x.setAttribute("aria-pressed", "false"));
+          c.setAttribute("aria-pressed", "true");
+        });
+        body.querySelector("#tFont").appendChild(c);
+      });
+
+      KIT.TITLE_STYLE_PRESETS.forEach((t, i) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "style-card";
+        b.setAttribute("aria-pressed", i === 0 ? "true" : "false");
+        b.title = t;
+        b.innerHTML = `
+          <span class="swatch" style="background:${STYLE_SWATCH[t] || STYLE_SWATCH.Gradient}"></span>
+          <span class="name">${t}</span>
+        `;
+        b.addEventListener("click", () => {
+          style = t;
+          styleMeta.textContent = t;
+          body.querySelectorAll("#tStyle .style-card").forEach(x => x.setAttribute("aria-pressed", "false"));
+          b.setAttribute("aria-pressed", "true");
+          syncPreview();
+        });
+        body.querySelector("#tStyle").appendChild(b);
+      });
+
+      footPrimary("Apply title", () => {
+        const text = txt.value.trim();
+        if (!text) { toast("Title text is empty"); return; }
+        toast(`Title “${text}” · ${style} · ${size} · ${font} → ${player().dn}`);
+        closeSheet();
+      }, "Delete title", () => { toast(`Title reset on ${player().dn}`); closeSheet(); });
+    }
+
+    function donateSheet(body) {
+      const isMod = document.body.dataset.role === "Moderator";
+      const isOwnerScenario = document.body.dataset.role === "Owner";
+      let kind = "cash";
+      let editMode = "add";
+      let fakeTarget = "player"; // player | everyone  (merged former server demo)
+      let mode = donateMode === "demo" ? "test" : donateMode;
+
+      // test = fake donations (/fakecash|/fakerobux or server-wide FX) → admin
+      // credit/edit = live donation ledger → Owner only at runtime
+      const modes = [
+        { id: "test", label: "Fake donations", desc: "VFX only — player or everyone", icon: "ph-eye", g: "g-blue", gate: "admin", needsPlayer: false },
+        { id: "credit", label: "Give credit", desc: "Real cash credit + FX", icon: "ph-coins", g: "g-green", gate: "owner", needsPlayer: true },
+        { id: "edit", label: "Edit score", desc: "Manual board correction", icon: "ph-pencil-simple", g: "g-amber", gate: "owner", needsPlayer: true },
+      ];
+
+      function modeAllowed(m) {
+        if (m.gate === "owner") return isOwnerScenario;
+        if (m.gate === "admin") return !isMod;
+        return true;
+      }
+
+      function modeMeta(id) {
+        return modes.find((m) => m.id === id) || modes[0];
+      }
+
+      if (!modeAllowed(modeMeta(mode))) {
+        mode = (modes.find(modeAllowed) || modes[0]).id;
+        donateMode = mode;
+      }
+
+      const list = document.createElement("div");
+      list.className = "mode-list";
+      list.dataset.name = "DonateModeList";
+      modes.forEach((m) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "mode-card" + (modeAllowed(m) ? "" : " is-locked");
+        b.setAttribute("aria-pressed", m.id === mode ? "true" : "false");
+        b.innerHTML = `
+          <span class="mc-ico ${m.g}"><i class="ph-fill ${m.icon}"></i></span>
+          <span class="mc-text">
+            <div class="mc-t">${m.label}</div>
+            <div class="mc-d">${m.desc}</div>
+          </span>
+          <span class="mc-gate">${m.gate === "owner" ? "Owner" : "Admin"}</span>
+        `;
+        b.addEventListener("click", () => {
+          if (!modeAllowed(m)) return;
+          mode = m.id;
+          donateMode = mode;
+          list.querySelectorAll(".mode-card").forEach((x) => x.setAttribute("aria-pressed", "false"));
+          b.setAttribute("aria-pressed", "true");
+          renderDonateBody();
+        });
+        list.appendChild(b);
+      });
+      body.appendChild(list);
+
+      const content = document.createElement("div");
+      content.id = "donateContent";
+      body.appendChild(content);
+
+      function askPlayer(title) {
+        changeFromSheet = true;
+        closeSheet(true);
+        openPopup(title || "Donations — who?");
+      }
+
+      function renderDonateBody() {
+        content.innerHTML = "";
+        el.sheetFoot.innerHTML = "";
+        const meta = modeMeta(mode);
+
+        if (mode === "test") {
+          content.insertAdjacentHTML("beforeend", `
+            <div class="callout soft">
+              <i class="ph-fill ph-eye"></i>
+              <div><b>Does not save.</b> Plays donate VFX only — board score unchanged.</div>
+            </div>
+            <div class="field">
+              <label>Target</label>
+              <div class="chips" id="fakeTarget"></div>
+            </div>
+            <div id="fakePlayerSlot"></div>
+            <div class="chips" id="kind"></div>
+            <div class="preview" id="amtShow">Rp 10.000</div>
+            <div class="field"><label>Amount</label><input id="amt" type="number" value="10000" /></div>
+            <div class="chips" id="presets"></div>
+            <div class="field"><label>Message</label><textarea id="msg" placeholder="Optional…">Thanks!</textarea></div>
+          `);
+
+          const slot = content.querySelector("#fakePlayerSlot");
+          function syncFakeTargetUI() {
+            slot.innerHTML = "";
+            if (fakeTarget === "player") {
+              if (player()) {
+                playerTarget(slot);
+              } else {
+                slot.insertAdjacentHTML("beforeend", `
+                  <div class="callout soft" style="margin-top:0">
+                    <i class="ph-fill ph-user"></i>
+                    <div><b>Pick a player</b> for per-player fake donations, or switch target to Everyone.</div>
+                  </div>
+                `);
+              }
+            }
+            el.sheetFoot.innerHTML = "";
+            if (fakeTarget === "player" && !player()) {
+              footPrimary("Pick player", () => askPlayer("Fake donations — who?"));
+            } else {
+              footPrimary("Play fake donations", () => {
+                const n = Number(content.querySelector("#amt").value) || 0;
+                const cmd = kind === "cash" ? "fakecash" : "fakerobux";
+                if (fakeTarget === "everyone") {
+                  toast(`${cmd} ${n} → everyone — not saved`);
+                } else {
+                  toast(`${cmd} ${n} → ${player().dn} — not saved`);
+                }
+                closeSheet();
+              });
+            }
+          }
+
+          [["Player", "player"], ["Everyone", "everyone"]].forEach(([label, v], i) => {
+            const c = document.createElement("button");
+            c.type = "button";
+            c.className = "chip";
+            c.textContent = label;
+            c.setAttribute("aria-pressed", (v === fakeTarget) ? "true" : "false");
+            c.addEventListener("click", () => {
+              fakeTarget = v;
+              content.querySelectorAll("#fakeTarget .chip").forEach(x => x.setAttribute("aria-pressed", "false"));
+              c.setAttribute("aria-pressed", "true");
+              syncFakeTargetUI();
+            });
+            content.querySelector("#fakeTarget").appendChild(c);
+          });
+
+          wireKindAndAmount();
+          syncFakeTargetUI();
+          return;
+        }
+
+        if (meta.needsPlayer && !player()) {
+          content.insertAdjacentHTML("beforeend", `
+            <div class="callout soft">
+              <i class="ph-fill ph-user"></i>
+              <div><b>Player required.</b> ${meta.label} needs a target player before you can continue.</div>
+            </div>
+          `);
+          footPrimary("Pick player", () => askPlayer(`${meta.label} — who?`));
+          return;
+        }
+
+        if (mode === "credit") {
+          playerTarget(content);
+          content.insertAdjacentHTML("beforeend", `
+            <div class="callout ok">
+              <i class="ph-fill ph-coins"></i>
+              <div><b>Saves to the board.</b> Adds a real cash credit for this player and plays donate FX.</div>
+            </div>
+            <div class="field"><label>Cash amount (IDR)</label><input id="amt" type="number" value="100000" /></div>
+            <div class="chips" id="presets"></div>
+            <div class="field"><label>Message</label><input id="msg" type="text" value="Thank you!" /></div>
+          `);
+          KIT.DONATE_IDR_CHIPS.forEach((n) => {
+            const c = document.createElement("button");
+            c.type = "button"; c.className = "chip"; c.textContent = "Rp " + n.toLocaleString("id-ID");
+            c.setAttribute("aria-pressed", n === 100000 ? "true" : "false");
+            c.addEventListener("click", () => {
+              content.querySelector("#amt").value = n;
+              content.querySelectorAll("#presets .chip").forEach(x => x.setAttribute("aria-pressed", "false"));
+              c.setAttribute("aria-pressed", "true");
+            });
+            content.querySelector("#presets").appendChild(c);
+          });
+          footPrimary("Give credit", () => {
+            toast(`Credited Rp ${Number(content.querySelector("#amt").value).toLocaleString("id-ID")} → ${player().dn}`);
+            closeSheet();
+          });
+          return;
+        }
+
+        if (mode === "edit") {
+          playerTarget(content);
+          content.insertAdjacentHTML("beforeend", `
+            <div class="callout warn">
+              <i class="ph-fill ph-warning-circle"></i>
+              <div><b>Manual fix.</b> Changes the board number directly — no donate FX.</div>
+            </div>
+            <div class="chips" id="kind"></div>
+            <div class="chips" id="editMode"></div>
+            <div class="field"><label>Amount</label><input id="amt" type="number" value="100" /></div>
+          `);
+          [["Cash", "cash"], ["Robux", "robux"]].forEach(([l, v], i) => {
+            const c = document.createElement("button");
+            c.type = "button"; c.className = "chip"; c.textContent = l;
+            c.setAttribute("aria-pressed", i === 0 ? "true" : "false");
+            c.addEventListener("click", () => {
+              kind = v;
+              content.querySelectorAll("#kind .chip").forEach(x => x.setAttribute("aria-pressed", "false"));
+              c.setAttribute("aria-pressed", "true");
+            });
+            content.querySelector("#kind").appendChild(c);
+          });
+          [["Add", "add"], ["Remove", "remove"], ["Set to", "set"]].forEach(([l, v], i) => {
+            const c = document.createElement("button");
+            c.type = "button"; c.className = "chip"; c.textContent = l;
+            c.setAttribute("aria-pressed", i === 0 ? "true" : "false");
+            c.addEventListener("click", () => {
+              editMode = v;
+              content.querySelectorAll("#editMode .chip").forEach(x => x.setAttribute("aria-pressed", "false"));
+              c.setAttribute("aria-pressed", "true");
+            });
+            content.querySelector("#editMode").appendChild(c);
+          });
+          footPrimary("Save score", () => {
+            const n = content.querySelector("#amt").value;
+            const verb = editMode === "add" ? "Added" : editMode === "remove" ? "Removed" : "Set";
+            toast(`${verb} ${kind} ${n} on ${player().dn}`);
+            closeSheet();
+          });
+        }
+      }
+
+      function wireKindAndAmount() {
+        [["Cash (IDR)", "cash"], ["Robux", "robux"]].forEach(([label, v], i) => {
+          const c = document.createElement("button");
+          c.type = "button"; c.className = "chip"; c.textContent = label;
+          c.setAttribute("aria-pressed", i === 0 ? "true" : "false");
+          c.addEventListener("click", () => {
+            kind = v;
+            content.querySelectorAll("#kind .chip").forEach(x => x.setAttribute("aria-pressed", "false"));
+            c.setAttribute("aria-pressed", "true");
+            fillPresets();
+            syncAmt();
+          });
+          content.querySelector("#kind").appendChild(c);
+        });
+        function syncAmt() {
+          const n = Number(content.querySelector("#amt").value) || 0;
+          content.querySelector("#amtShow").textContent = kind === "cash"
+            ? "Rp " + n.toLocaleString("id-ID") : "R$ " + n.toLocaleString("en-US");
+        }
+        function fillPresets() {
+          const wrap = content.querySelector("#presets");
+          wrap.innerHTML = "";
+          const listAmt = kind === "cash" ? KIT.DONATE_IDR_CHIPS : KIT.DONATE_ROBUX_CHIPS;
+          const def = kind === "cash" ? 10000 : 150;
+          content.querySelector("#amt").value = def;
+          listAmt.forEach((n) => {
+            const c = document.createElement("button");
+            c.type = "button"; c.className = "chip";
+            c.textContent = kind === "cash" ? "Rp " + n.toLocaleString("id-ID") : "R$ " + n.toLocaleString("en-US");
+            c.setAttribute("aria-pressed", n === def ? "true" : "false");
+            c.addEventListener("click", () => {
+              content.querySelector("#amt").value = n;
+              wrap.querySelectorAll(".chip").forEach(x => x.setAttribute("aria-pressed", "false"));
+              c.setAttribute("aria-pressed", "true");
+              syncAmt();
+            });
+            wrap.appendChild(c);
+          });
+          syncAmt();
+        }
+        fillPresets();
+        content.querySelector("#amt").addEventListener("input", syncAmt);
+      }
+
+      renderDonateBody();
+    }
+
+    function announceSheet(body) {
+      body.innerHTML = `
+        <div class="field">
+          <label>Message <span id="aLen" style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--muted)">0/${KIT.Announcement.MAX_MESSAGE_LENGTH}</span></label>
+          <textarea id="msg" maxlength="${KIT.Announcement.MAX_MESSAGE_LENGTH}" placeholder="Say something to the server…">Welcome to the club!</textarea>
+        </div>
+        <p class="hint">Max ${KIT.Announcement.MAX_MESSAGE_LENGTH} characters (Config.Announcement).</p>
+      `;
+      const ta = body.querySelector("#msg");
+      const len = body.querySelector("#aLen");
+      const sync = () => { len.textContent = `${ta.value.length}/${KIT.Announcement.MAX_MESSAGE_LENGTH}`; };
+      ta.addEventListener("input", sync);
+      sync();
+      footPrimary("Send announce", () => {
+        const msg = ta.value.trim();
+        if (!msg) { toast("Message is empty"); return; }
+        toast(`Announce sent (${msg.length} chars)`);
+        closeSheet();
+      });
+    }
+
+    function openFloatSpeedSheet() {
+      currentAction = { id: "floatSpeed", title: "Float speed", icon: "ph-gear", g: "g-cyan" };
+      el.sheetIco.className = "ico g-cyan";
+      el.sheetIco.innerHTML = `<i class="ph-fill ph-gear"></i>`;
+      el.sheetTitle.textContent = "Float speed";
+      el.sheetBody.innerHTML = "";
+      el.sheetFoot.innerHTML = "";
+      floatSpeedSheet(el.sheetBody, el.sheetFoot);
+      el.sheet.classList.add("open");
+      el.sheet.setAttribute("aria-hidden", "false");
+      overlay = "sheet";
+      el.dim.classList.add("on");
+    }
+
+    function floatSpeedSheet(body) {
+      const { MIN_SPEED, MAX_SPEED, DEFAULT_SPEED } = KIT.Gravity;
+      body.insertAdjacentHTML("beforeend", `
+        <div class="callout soft">
+          <i class="ph-fill ph-planet"></i>
+          <div><b>Config.Gravity</b> — speed ${MIN_SPEED}–${MAX_SPEED}, default ${DEFAULT_SPEED}. Used when Ungravity floats everyone.</div>
+        </div>
+        <div class="field"><label>Float speed</label><div class="chips speed-picks" id="gSpeed"></div></div>
+      `);
+      for (let n = MIN_SPEED; n <= MAX_SPEED; n++) {
+        const c = document.createElement("button");
+        c.type = "button";
+        c.className = "chip speed";
+        c.textContent = String(n);
+        c.setAttribute("aria-pressed", n === floatSpeed ? "true" : "false");
+        c.addEventListener("click", () => {
+          floatSpeed = n;
+          body.querySelectorAll("#gSpeed .chip").forEach(x => x.setAttribute("aria-pressed", "false"));
+          c.setAttribute("aria-pressed", "true");
+          renderGrid();
+        });
+        body.querySelector("#gSpeed").appendChild(c);
+      }
+      footPrimary("Done", () => {
+        toast(`Float speed → ${floatSpeed}`);
+        closeSheet();
+      });
+    }
+
+    document.querySelectorAll(".side-btn").forEach(b => {
+      b.addEventListener("click", () => setFilter(b.dataset.filter));
+    });
+    el.gq.addEventListener("input", () => {
+      query = el.gq.value.trim();
+      renderGrid();
+    });
+    el.pq.addEventListener("input", renderPlayerList);
+    document.getElementById("popupClose").addEventListener("click", () => closePopup());
+    document.getElementById("hubClose").addEventListener("click", () => toast("Close hub"));
+    el.dim.addEventListener("click", closeOverlay);
+    document.getElementById("sheetClose").addEventListener("click", () => closeSheet());
+
+    document.querySelectorAll(".scenario button").forEach(b => {
+      b.addEventListener("click", () => {
+        document.body.dataset.role = b.dataset.role;
+        document.querySelectorAll(".scenario button").forEach(x =>
+          x.setAttribute("aria-pressed", x === b ? "true" : "false")
+        );
+        renderGrid();
+      });
+    });
+
+    renderGrid();
+  </script>
+</body>
+</html>

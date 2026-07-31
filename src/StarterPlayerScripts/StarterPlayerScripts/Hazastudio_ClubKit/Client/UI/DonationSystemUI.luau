@@ -402,7 +402,8 @@ local function popOpenFromTopCenter(anim: AnimationHelper.AnimationHelper, panel
 		position.Y.Scale,
 		position.Y.Offset
 	)
-	anim:scalePop((panel :: any) :: Frame)
+	-- Calm center open (no Back overshoot) for floating donation subpanels.
+	anim:presentCenterPanel((panel :: any) :: Frame)
 end
 
 local function findTextLabel(root: Instance, name: string): TextLabel?
