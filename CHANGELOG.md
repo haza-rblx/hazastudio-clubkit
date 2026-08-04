@@ -11,8 +11,18 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.69] - 2026-08-04
+
+### Added
+- **`Features.DonationWorldEffects`** — master toggle for cash Nuke/Smite/BlackHole (default true). When false: no `worldEffect` on presentation, client gates skip, Settings “World Effects” row hidden. Aura/announce/highlight unchanged.
+- **`/drone start|stop`** — staff shared freecam: one pilot streams camera (~15Hz); everyone else locks to that view. Gate: admin panel. Shift+P blocked while spectating.
+- **`/crowd <text>`** — staff make every player show the same chat bubble (filtered). Does not execute commands / dances.
+- **SociaBuzz cash provider** — third IDR webhook path (`/webhook/sociabuzz/...`) + `Donation.Provider = "sociabuzz"` branding preset (cash tab / donor labels). Same poll + boards pipeline as Bagi-Bagi/Saweria.
+
 ### Changed
-- **Studio plugin panel v2** — dock UI rebuilt (AMOLED HyperOS): tabs Engine / Tools, hero + version grid, Check/Update/Skip, channel chips (setting saved; Check still stable-only until channel sync ships), Gen Tools + Carry fix rows. No Package tab in panel. _(ship plugin rebuild later)_
+- **Studio plugin panel v2** — dock UI rebuilt (AMOLED HyperOS): tabs Engine / Tools, hero + version grid, Check/Update/Skip, channel chips (setting saved; Check still stable-only until channel sync ships), Gen Tools + Carry fix rows. No Package tab in panel.
+- **Config fill-forward (Update Engine)** — louder Config merge status; broader `Features = {` finder; if missing Features keys cannot be written to Source → clear `CONFIG MERGE FAILED` (engine files still apply). Buyer values never overwritten.
+- **Plugin panel motion** — hero entrance, staggered cards, tab/channel springs, press feedback, update progress bar, status pulse tones, modal scale, confetti-lite on successful Done.
 
 ## [2.4.68] - 2026-07-28
 

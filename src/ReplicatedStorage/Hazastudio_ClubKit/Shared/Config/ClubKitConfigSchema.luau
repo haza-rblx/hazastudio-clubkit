@@ -47,7 +47,7 @@ ClubKitConfigSchema.defaults = {
 		GameKey = "the-basic",
 	},
 	Donation = {
-		Provider = "bagibagi",
+		Provider = "bagibagi", -- "bagibagi" | "saweria" | "sociabuzz"
 		ProviderLink = "",
 		ApiUrl = "",
 		Cash = { Enabled = true },
@@ -434,6 +434,7 @@ ClubKitConfigSchema.defaults = {
 		PromptJoinCommunityOnLoad = true,
 		VipOnCommunityJoin = false,
 		JoinGreetings = true,
+		DonationWorldEffects = true,
 		DonationRankGradientAnim = false,
 	},
 }

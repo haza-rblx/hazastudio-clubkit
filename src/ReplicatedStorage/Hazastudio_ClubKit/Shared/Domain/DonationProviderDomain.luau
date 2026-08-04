@@ -1,5 +1,5 @@
 --!strict
--- Display names + legacy GUI label replacement for external IDR donations (Bagibagi / Saweria).
+-- Display names + legacy GUI label replacement for external IDR donations (Bagibagi / Saweria / SociaBuzz).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -38,10 +38,20 @@ DonationProviderDomain.PRESETS = {
 		illustrationHeight = 200,
 		illustrationGradientEnabled = false,
 	},
+	-- Temporary illustration = Bagibagi asset until a SociaBuzz-branded image exists.
+	sociabuzz = {
+		key = "sociabuzz",
+		name = "SociaBuzz",
+		donorLabel = "nama SociaBuzz",
+		illustrationImage = "rbxassetid://71634976881165",
+		illustrationHeight = 120,
+		illustrationGradientEnabled = true,
+	},
 } :: { [string]: ProviderPreset }
 
 local function normalizeProviderKey(providerKey: string?): string
 	local key = string.lower(tostring(providerKey or ""))
+	key = string.gsub(key, "%s+", "")
 	if DonationProviderDomain.PRESETS[key] then
 		return key
 	end
@@ -61,6 +71,9 @@ function DonationProviderDomain.inferProviderKey(donation: { Provider: string?, 
 	end
 	if type(donation.ProviderName) == "string" and donation.ProviderName ~= "" then
 		local lower = string.lower(donation.ProviderName)
+		if string.find(lower, "sociabuzz", 1, true) or string.find(lower, "socia buzz", 1, true) then
+			return "sociabuzz"
+		end
 		if string.find(lower, "saweria", 1, true) then
 			return "saweria"
 		end
@@ -82,6 +95,10 @@ local LEGACY_TEXT_REPLACEMENTS = {
 	{ "BagiBagi", false },
 	{ "Bagibagi", false },
 	{ "bagibagi", true },
+	{ "SociaBuzz", false },
+	{ "Socia Buzz", false },
+	{ "Sociabuzz", false },
+	{ "sociabuzz", true },
 	{ "Saweria", false },
 	{ "saweria", true },
 }

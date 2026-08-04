@@ -57,8 +57,8 @@ ClubKitConfig.GameDataApi = {
 -- DONASI (Bagi-Bagi / Saweria + threshold aura)
 -- =============================================================================
 ClubKitConfig.Donation = {
-	Provider = "bagibagi", -- "bagibagi" | "saweria" — nama & label donor otomatis
-	ProviderLink = "", -- contoh: "https://bagibagi.co/halaman-kamu"
+	Provider = "bagibagi", -- "bagibagi" | "saweria" | "sociabuzz" — nama & label donor otomatis
+	ProviderLink = "", -- contoh: "https://bagibagi.co/halaman-kamu" atau "https://sociabuzz.com/username"
 	ApiUrl = "https://hazastudio-donation-api.hazastudio.workers.dev/game/the-basic",
 	Cash = { Enabled = true },
 	Robux = { Enabled = true },
@@ -543,6 +543,8 @@ ClubKitConfig.Features = {
 	VipOnCommunityJoin = false,
 	-- Toast when Owner / Leadership / Content / top-10 Robux or cash spender joins (once per session).
 	JoinGreetings = true,
+	-- Global Nuke / Smite / BlackHole on cash donations. false = no duar world VFX; Settings “World Effects” row hidden.
+	DonationWorldEffects = true,
 	-- Animasi UIGradient chip #N ROBUX / #N RUPIAH di overhead (RobuxRankWrapper / RupiahRankWrapper).
 	-- Default false — place lama tanpa UIGradient di wrapper tetap aman; set true setelah tambah gradient di Studio.
 	DonationRankGradientAnim = false,

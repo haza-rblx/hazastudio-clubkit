@@ -4,6 +4,7 @@
 local SourceSyncCore = require(script.Parent.SourceSyncCore)
 local Theme = require(script.Parent.DovetailTheme)
 local DovetailUI = require(script.Parent.DovetailUI)
+local PanelMotion = require(script.Parent.PanelMotion)
 
 local UpdaterPanel = {}
 
@@ -138,6 +139,7 @@ local function makeButton(parent: Instance, props: {
 	end
 	corner(btn, Theme.sizes.pillCorner)
 	btn.Parent = parent
+	PanelMotion.bindPress(btn)
 	return btn
 end
 
@@ -239,11 +241,18 @@ local function makeListRow(parent: Instance, props: {
 		if btn.Active then
 			btn.BackgroundTransparency = 0.96
 			btn.BackgroundColor3 = C.text
+			local scale = PanelMotion.ensureUIScale(btn)
+			PanelMotion.tween(scale, { Scale = 1.01 }, TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out))
 		end
 	end)
 	btn.MouseLeave:Connect(function()
 		btn.BackgroundTransparency = 1
+		local scale = btn:FindFirstChildOfClass("UIScale")
+		if scale then
+			PanelMotion.tween(scale, { Scale = 1 }, TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out))
+		end
 	end)
+	PanelMotion.bindPress(btn)
 
 	return btn
 end
@@ -337,21 +346,22 @@ function UpdaterPanel.create(parent: Instance, opts: CreateOpts?): PanelApi
 	panelTools.Parent = body
 	listLayout(panelTools, 0)
 
+	local toolsRows: { GuiObject } = {}
+
 	local function selectTab(which: string)
 		local isEngine = which == "engine"
-		panelEngine.Visible = isEngine
-		panelTools.Visible = not isEngine
-		for _, tab in { tabEngine, tabTools } do
-			local on = (tab == tabEngine and isEngine) or (tab == tabTools and not isEngine)
-			tab:SetAttribute("Selected", on)
-			if on then
-				tab.BackgroundTransparency = 0
-				tab.BackgroundColor3 = C.card
-				tab.TextColor3 = C.text
-			else
-				tab.BackgroundTransparency = 1
-				tab.TextColor3 = C.faint
-			end
+		local incoming = if isEngine then panelEngine else panelTools
+		local outgoing = if isEngine then panelTools else panelEngine
+		if incoming.Visible then
+			return
+		end
+		PanelMotion.swapPanels(outgoing, incoming)
+		PanelMotion.selectTabChip(tabEngine, isEngine)
+		PanelMotion.selectTabChip(tabTools, not isEngine)
+		tabEngine:SetAttribute("Selected", isEngine)
+		tabTools:SetAttribute("Selected", not isEngine)
+		if not isEngine and #toolsRows > 0 then
+			PanelMotion.staggerIn(toolsRows, 0.06)
 		end
 	end
 
@@ -447,9 +457,12 @@ function UpdaterPanel.create(parent: Instance, opts: CreateOpts?): PanelApi
 	local btnPrimary = makeButton(actions, { text = "Check for updates", primary = true, order = 1 })
 	local btnStay = makeButton(actions, { text = "Skip this version", primary = false, order = 2 })
 
+	local progress = PanelMotion.createProgress(panelEngine, 4)
+	pad(progress.frame, 0, 2, 10, 2)
+
 	-- Release notes
-	makeSecHead(panelEngine, "Release notes", 4)
-	local notesCard = makeCard(panelEngine, 5)
+	makeSecHead(panelEngine, "Release notes", 5)
+	local notesCard = makeCard(panelEngine, 6)
 	local notesLabel = Instance.new("TextLabel")
 	notesLabel.Name = "Notes"
 	notesLabel.BackgroundTransparency = 1
@@ -467,8 +480,8 @@ function UpdaterPanel.create(parent: Instance, opts: CreateOpts?): PanelApi
 	pad(notesLabel, 16)
 
 	-- More actions (rollback)
-	makeSecHead(panelEngine, "More actions", 6)
-	local moreCard = makeCard(panelEngine, 7)
+	makeSecHead(panelEngine, "More actions", 7)
+	local moreCard = makeCard(panelEngine, 8)
 	local btnRollback = makeListRow(moreCard, {
 		iconText = "↓",
 		iconColor = C.red,
@@ -481,8 +494,8 @@ function UpdaterPanel.create(parent: Instance, opts: CreateOpts?): PanelApi
 	btnRollback.Name = "BtnRollback"
 
 	-- Channel
-	makeSecHead(panelEngine, "Channel", 8)
-	local channelCard = makeCard(panelEngine, 9)
+	makeSecHead(panelEngine, "Channel", 9)
+	local channelCard = makeCard(panelEngine, 10)
 	local modes = Instance.new("Frame")
 	modes.BackgroundTransparency = 1
 	modes.Size = UDim2.new(1, 0, 0, 88)
@@ -579,6 +592,8 @@ function UpdaterPanel.create(parent: Instance, opts: CreateOpts?): PanelApi
 		desc = "Upload ReplicatedStorage.Carry clips + patch ClubKitConfig animations",
 		order = 2,
 	})
+	table.insert(toolsRows, btnGenTools)
+	table.insert(toolsRows, btnCarryFix)
 
 	-- ── Rollback confirm overlay ──────────────────────────────────────────────
 	local modalBg = Instance.new("Frame")
@@ -649,8 +664,9 @@ function UpdaterPanel.create(parent: Instance, opts: CreateOpts?): PanelApi
 	}
 	local previousTag: string? = nil
 
-	local function setStatus(text: string, _tone: string?)
+	local function setStatus(text: string, tone: string?)
 		statusLine.Text = text or ""
+		PanelMotion.pulseStatus(statusLine, tone)
 	end
 
 	local function setChannelUI(ch: string)
@@ -662,26 +678,20 @@ function UpdaterPanel.create(parent: Instance, opts: CreateOpts?): PanelApi
 			local on = id == ch
 			local ring = btn:FindFirstChild("Ring") :: TextLabel?
 			local nameLabel = btn:FindFirstChildWhichIsA("TextLabel", false)
-			-- Find name label (not Ring)
 			for _, child in btn:GetChildren() do
 				if child:IsA("TextLabel") and child.Name ~= "Ring" then
 					nameLabel = child
 				end
 			end
 			if ring then
-				if on then
-					ring.BackgroundColor3 = C.blue
-					ring.TextColor3 = C.text
-				else
-					ring.BackgroundColor3 = C.elevated
-					ring.TextColor3 = C.muted
-				end
+				PanelMotion.channelRing(ring, on)
 			end
 			if nameLabel then
 				nameLabel.TextColor3 = if on then C.text else C.faint
 			end
 		end
 		channelHint.Text = CHANNEL_HINT[ch] or CHANNEL_HINT.stable
+		PanelMotion.fadeIn(channelHint, 0.25)
 	end
 
 	local function setDowngrade(enabled: boolean, prev: string?)
@@ -703,6 +713,7 @@ function UpdaterPanel.create(parent: Instance, opts: CreateOpts?): PanelApi
 		if canInstall then
 			btnPrimary.Text = "Update engine"
 			btnPrimary.BackgroundColor3 = C.blue
+			PanelMotion.press(btnPrimary)
 		else
 			btnPrimary.Text = "Check for updates"
 			btnPrimary.BackgroundColor3 = C.blue
@@ -719,8 +730,8 @@ function UpdaterPanel.create(parent: Instance, opts: CreateOpts?): PanelApi
 	local function refreshMeta()
 		local localV = lastCheck.localVersion or "unknown"
 		local latestV = lastCheck.latestVersion
-		currentVerLabel.Text = localV
-		latestVerLabel.Text = latestV or "—"
+		PanelMotion.bumpLabel(currentVerLabel, localV)
+		PanelMotion.bumpLabel(latestVerLabel, latestV or "—")
 
 		if lastCheck.error then
 			heroTitle.Text = "Could not check for updates."
@@ -732,6 +743,7 @@ function UpdaterPanel.create(parent: Instance, opts: CreateOpts?): PanelApi
 
 		if latestV and lastCheck.updateAvailable then
 			heroTitle.Text = "An engine update is available."
+			PanelMotion.popIn(heroTitle, 0)
 			setPrimaryIdle(true)
 		elseif latestV then
 			heroTitle.Text = "You're on the latest engine."
@@ -757,17 +769,17 @@ function UpdaterPanel.create(parent: Instance, opts: CreateOpts?): PanelApi
 		end
 
 		if result.error then
-			setStatus(result.error)
+			setStatus(result.error, "error")
 			warn("[ClubKitUpdater] " .. result.error)
 			return
 		end
 
 		if result.updateAvailable then
 			local msg = ("Update available: v%s → v%s"):format(result.localVersion, result.latestVersion)
-			setStatus(msg)
+			setStatus(msg, "accent")
 			print("[ClubKitUpdater] " .. msg)
 		else
-			setStatus(("Up to date · v%s"):format(result.localVersion))
+			setStatus(("Up to date · v%s"):format(result.localVersion), "ok")
 			print(("[ClubKitUpdater] Engine is up to date (v%s)."):format(result.localVersion))
 		end
 	end
@@ -779,16 +791,19 @@ function UpdaterPanel.create(parent: Instance, opts: CreateOpts?): PanelApi
 		end
 		busy = true
 		heroTitle.Text = "Checking for updates…"
+		PanelMotion.popIn(heroTitle, 0)
 		setPrimaryBusy("Checking…")
-		setStatus("Checking GitHub tags…")
+		setStatus("Checking GitHub tags…", "accent")
+		progress.busy()
 		print("[ClubKitUpdater] Checking GitHub tags...")
 		task.spawn(function()
 			local ok, result = pcall(SourceSyncCore.checkForUpdates)
+			progress.hide()
 			if not ok then
 				local err = tostring(result)
 				lastCheck.error = err
 				refreshMeta()
-				setStatus("Check failed: " .. err)
+				setStatus("Check failed: " .. err, "error")
 				warn("[ClubKitUpdater] " .. err)
 			else
 				applyCheckResult(result)
@@ -809,10 +824,10 @@ function UpdaterPanel.create(parent: Instance, opts: CreateOpts?): PanelApi
 		if lastCheck.localVersion ~= "unknown" and lastCheck.latestVersion then
 			local cmp = SourceSyncCore.compareVersions(lastCheck.localVersion, lastCheck.latestVersion)
 			if cmp > 0 then
-				setStatus("Downgrade detected — see Output.")
+				setStatus("Downgrade detected — see Output.", "warn")
 				warn("[ClubKitUpdater] Downgrade not blocked - proceed with caution.")
 			elseif cmp == 0 then
-				setStatus("Already on latest version.")
+				setStatus("Already on latest version.", "ok")
 				refreshMeta()
 				return
 			end
@@ -820,21 +835,25 @@ function UpdaterPanel.create(parent: Instance, opts: CreateOpts?): PanelApi
 
 		busy = true
 		setPrimaryBusy("Updating…")
-		setStatus("Fetching file tree…")
+		setStatus("Fetching file tree…", "accent")
+		progress.show()
+		progress.set(0, 1)
 		print("[ClubKitUpdater] Applying update from " .. tostring(lastCheck.latestTag) .. "...")
 		task.spawn(function()
 			local tag = lastCheck.latestTag :: string
 			local ok, reportOrErr = pcall(function()
 				return SourceSyncCore.applyEngineUpdate(tag, function(msg, index, total)
 					local line = ("%s (%d/%d)"):format(msg, index, total)
-					setStatus(line)
+					setStatus(line, "accent")
+					progress.set(index, math.max(total, 1))
 					print("[ClubKitUpdater] " .. line)
 				end)
 			end)
 
 			if not ok then
 				local err = tostring(reportOrErr)
-				setStatus("Update failed: " .. err)
+				progress.hide()
+				setStatus("Update failed: " .. err, "error")
 				warn("[ClubKitUpdater] " .. err)
 				busy = false
 				refreshMeta()
@@ -848,20 +867,38 @@ function UpdaterPanel.create(parent: Instance, opts: CreateOpts?): PanelApi
 				print("[ClubKitUpdater] " .. tostring(report.configPatch))
 			end
 			if errCount == 0 then
+				progress.set(1, 1)
 				local doneMsg = ("Done · %d files · v%s · save place"):format(okCount, report.version or "?")
-				if report.configPatch then
-					doneMsg = doneMsg .. " · " .. tostring(report.configPatch)
+				if report.configPatchFailed then
+					doneMsg = ("Done · engine ok · CONFIG MERGE FAILED · see Output · v%s"):format(report.version or "?")
+					setStatus(doneMsg, "warn")
+					warn("[ClubKitUpdater] " .. doneMsg)
+					warn("[ClubKitUpdater] " .. tostring(report.configPatch))
+				else
+					if report.configPatch then
+						doneMsg = doneMsg .. " · " .. tostring(report.configPatch)
+					end
+					setStatus(doneMsg, "ok")
+					print("[ClubKitUpdater] " .. doneMsg)
+					PanelMotion.confetti(root, 1.2)
 				end
-				setStatus(doneMsg)
-				print("[ClubKitUpdater] " .. doneMsg)
 			else
 				local doneMsg = ("Finished with errors: %d ok, %d failed."):format(okCount, errCount)
-				setStatus(doneMsg)
+				if report.configPatchFailed then
+					doneMsg = doneMsg .. " · CONFIG MERGE FAILED"
+				end
+				setStatus(doneMsg, "error")
 				warn("[ClubKitUpdater] " .. doneMsg)
 				for _, line in report.errors do
 					warn("[ClubKitUpdater] FAIL " .. line)
 				end
+				if report.configPatchFailed and report.configPatch then
+					warn("[ClubKitUpdater] " .. tostring(report.configPatch))
+				end
 			end
+			task.delay(0.35, function()
+				progress.hide()
+			end)
 
 			local recheckOk, recheckResult = pcall(SourceSyncCore.checkForUpdates)
 			if recheckOk then
@@ -898,7 +935,7 @@ function UpdaterPanel.create(parent: Instance, opts: CreateOpts?): PanelApi
 		btn.MouseButton1Click:Connect(function()
 			setChannelUI(id)
 			if id ~= "stable" then
-				setStatus("Channel saved · Check/Update still use stable tags for now")
+				setStatus("Channel saved · Check/Update still use stable tags for now", "warn")
 			end
 		end)
 	end
@@ -908,31 +945,35 @@ function UpdaterPanel.create(parent: Instance, opts: CreateOpts?): PanelApi
 			return
 		end
 		rbBody.Text = ("Apply %s. Config, Secrets, GUI stay."):format(previousTag)
-		modalBg.Visible = true
+		PanelMotion.showModal(modalBg, modal)
 	end)
 	rbCancel.MouseButton1Click:Connect(function()
-		modalBg.Visible = false
+		PanelMotion.hideModal(modalBg, modal)
 	end)
 	rbConfirm.MouseButton1Click:Connect(function()
-		modalBg.Visible = false
+		PanelMotion.hideModal(modalBg, modal)
 		if not previousTag or busy then
 			return
 		end
 		busy = true
 		setPrimaryBusy("Downgrading…")
-		setStatus("Downgrading to " .. previousTag)
+		setStatus("Downgrading to " .. previousTag, "accent")
+		progress.busy()
 		local tag = previousTag
 		task.spawn(function()
 			local ok, reportOrErr = pcall(function()
 				return SourceSyncCore.applyEngineUpdate(tag, function(msg, index, total)
-					setStatus(("%s (%d/%d)"):format(msg, index, total))
+					setStatus(("%s (%d/%d)"):format(msg, index, total), "accent")
+					progress.set(index, math.max(total, 1))
 				end)
 			end)
+			progress.hide()
 			if not ok then
-				setStatus("Downgrade failed: " .. tostring(reportOrErr))
+				setStatus("Downgrade failed: " .. tostring(reportOrErr), "error")
 				warn("[ClubKitUpdater] " .. tostring(reportOrErr))
 			else
-				setStatus(("Downgraded · v%s · save place"):format(reportOrErr.version or tag))
+				setStatus(("Downgraded · v%s · save place"):format(reportOrErr.version or tag), "ok")
+				PanelMotion.confetti(root, 0.9)
 			end
 			local recheckOk, recheckResult = pcall(SourceSyncCore.checkForUpdates)
 			if recheckOk then
@@ -967,8 +1008,21 @@ function UpdaterPanel.create(parent: Instance, opts: CreateOpts?): PanelApi
 
 	setChannelUI(activeChannel)
 	refreshMeta()
-	setStatus("Opening · checking for updates…")
+	setStatus("Opening · checking for updates…", "accent")
 	setPrimaryIdle(false)
+
+	-- Opening theatre: hero + stagger cards.
+	PanelMotion.heroEntrance(hero, heroTitle)
+	PanelMotion.staggerIn({
+		specCard,
+		actions,
+		notesCard,
+		moreCard,
+		channelCard,
+		statusLine,
+	}, 0.05)
+	PanelMotion.bindPress(tabEngine)
+	PanelMotion.bindPress(tabTools)
 
 	return {
 		checkForUpdates = checkForUpdates,

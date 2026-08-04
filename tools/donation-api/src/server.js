@@ -97,10 +97,16 @@ function normalizeDonation(raw, provider = "saweria") {
     data.amount_raw || data.amount || data.total || data.nominal || data.value,
   );
   const defaultDonor =
-    provider === "bagibagi" ? "Bagi-Bagi Donor" : "Saweria Donor";
+    provider === "bagibagi"
+      ? "Bagi-Bagi Donor"
+      : provider === "sociabuzz"
+        ? "SociaBuzz Donor"
+        : "Saweria Donor";
   const donorName = cleanString(
     data.donator_name ||
       data.donor_name ||
+      data.supporter ||
+      data.sociabuzz_name ||
       data.saweria_name ||
       data.bagibagi_name ||
       data.name ||
@@ -117,6 +123,9 @@ function normalizeDonation(raw, provider = "saweria") {
   );
   if (!providerTxId && provider === "bagibagi") {
     providerTxId = `bb:${donorName.toLowerCase()}:${amount}:${unixTimestamp}`;
+  }
+  if (!providerTxId && provider === "sociabuzz") {
+    providerTxId = `sb:${donorName.toLowerCase()}:${amount}:${unixTimestamp}`;
   }
   if (!providerTxId) {
     providerTxId = `${donorName}:${amount}:${unixTimestamp}`;
@@ -431,6 +440,7 @@ function gameResponse(game) {
     name: game.name,
     saweriaWebhook: `${base}/webhook/saweria/${key}/${token}`,
     bagibagiWebhook: `${base}/webhook/bagibagi/${key}/${token}`,
+    sociabuzzWebhook: `${base}/webhook/sociabuzz/${key}/${token}`,
     robloxEndpoint: `${base}/game/${key}?secret=${game.roblox_secret}`,
   };
 }
@@ -585,7 +595,7 @@ async function route(req, res) {
     }
 
     if (parts[0] === "webhook" && parts[2] && parts[3]) {
-      if (parts[1] !== "saweria" && parts[1] !== "bagibagi") {
+      if (parts[1] !== "saweria" && parts[1] !== "bagibagi" && parts[1] !== "sociabuzz") {
         return text(res, 404, "not found");
       }
       if (req.method !== "POST")

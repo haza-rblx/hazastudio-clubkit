@@ -64,6 +64,12 @@ local function provisionRemotesFolder(remotes: Folder, config: any)
 	ensureRemoteEvent(remotes, config.CinematicDock.REMOTE_BROADCAST)
 	ensureRemoteEvent(remotes, config.CinematicDock.REMOTE_TARGETS)
 
+	ensureRemoteEvent(remotes, config.Drone.REMOTE_REQUEST)
+	ensureRemoteEvent(remotes, config.Drone.REMOTE_CAMERA)
+	ensureRemoteEvent(remotes, config.Drone.REMOTE_STATE)
+
+	ensureRemoteEvent(remotes, config.Crowd.REMOTE_SAY)
+
 	ensureRemoteEvent(remotes, config.CommandLibrary.REMOTE_EXECUTE)
 	ensureRemoteEvent(remotes, config.CommandLibrary.REMOTE_EXECUTE_RESULT)
 end

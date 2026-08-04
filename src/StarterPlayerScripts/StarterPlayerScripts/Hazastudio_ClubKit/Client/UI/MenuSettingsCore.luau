@@ -525,6 +525,12 @@ local function hasOverheadFeature(feature: string?, overheadPayload: any?): bool
 end
 
 local function shouldShowSettingsItem(item: any, overheadPayload: any?): boolean
+	if type(item.field) == "string" and item.field == "hideDonationWorldEffect" then
+		if Config.FeatureFlags.DonationWorldEffectsEnabled ~= true then
+			return false
+		end
+	end
+
 	if type(overheadPayload) ~= "table" then
 		return true
 	end

@@ -17,6 +17,8 @@ export type ApplyReport = {
 	tag: string?,
 	version: string?,
 	configPatch: string?,
+	-- True when ConfigPatchCore reported error (engine sync may still succeed).
+	configPatchFailed: boolean?,
 }
 
 export type CheckResult = {
@@ -117,6 +119,15 @@ function SourceSyncCore.getLocalVersion(): string?
 	local mod = kit and kit:FindFirstChild("KitProduct")
 	if not mod or not mod:IsA("ModuleScript") then
 		return nil
+	end
+	-- Prefer Source parse — Studio caches require(ModuleScript); after Update Engine
+	-- Source may already be vX.Y.Z while require still returns the old table.
+	local source = mod.Source
+	if type(source) == "string" then
+		local fromSource = string.match(source, 'KitVersion%s*=%s*"(%d+%.%d+%.%d+)"')
+		if fromSource then
+			return fromSource
+		end
 	end
 	local ok, product = pcall(require, mod)
 	if not ok or type(product) ~= "table" then
@@ -387,21 +398,34 @@ function SourceSyncCore.applyEngineUpdate(tag: string, onProgress)
 	end
 
 	-- Additive ClubKitConfig fill-forward (Features + missing top-level sections).
+	-- Engine files stay applied even if config merge fails — surface loudly, do not silence.
 	if #report.errors == 0 then
 		local patchOk, patchResult = pcall(ConfigPatchCore.patchBuyerConfig)
 		if not patchOk then
 			local err = tostring(patchResult)
-			table.insert(report.errors, "Config patch: " .. err)
-			report.configPatch = "Config patch failed: " .. err
+			report.configPatchFailed = true
+			report.configPatch = "Config merge FAILED: " .. err
+			table.insert(report.skipped, "CONFIG MERGE FAILED: " .. err)
+			warn("[ClubKitUpdater] CONFIG MERGE FAILED: " .. err)
 		else
 			local patch = patchResult
 			report.configPatch = patch.message
 			if patch.error then
-				table.insert(report.errors, "Config patch: " .. patch.error)
-			elseif #patch.added > 0 then
-				table.insert(report.ok, "(config) " .. patch.message)
+				report.configPatchFailed = true
+				report.configPatch = patch.message
+				if not string.find(patch.message, "FAILED", 1, true) then
+					report.configPatch = "Config merge FAILED: " .. tostring(patch.error)
+				end
+				-- Soft for engine files: do not push into report.errors (would look like file sync failure).
+				table.insert(report.skipped, "CONFIG MERGE FAILED: " .. tostring(patch.error))
+				warn("[ClubKitUpdater] CONFIG MERGE FAILED: " .. tostring(patch.error))
+				warn("[ClubKitUpdater] Engine Sources updated; ClubKitConfig Source was NOT merged. Add missing Features keys manually or fix the Features = { block, then re-run Update Engine.")
 			else
+				report.configPatchFailed = false
 				table.insert(report.ok, "(config) " .. patch.message)
+				if patch.added and #patch.added > 0 then
+					print("[ClubKitUpdater] Config merge added: " .. table.concat(patch.added, ", "))
+				end
 			end
 		end
 	end

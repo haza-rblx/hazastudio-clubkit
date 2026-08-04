@@ -36,6 +36,8 @@ return {
 	GenericBroadcastController = require(Client.Controllers.GenericBroadcastController),
 	PaidBroadcastController = require(Client.Controllers.PaidBroadcastController),
 	CinematicDockController = require(Client.Controllers.CinematicDockController),
+	createDroneController = require(Client.Controllers.DroneController),
+	createCrowdController = require(Client.Controllers.CrowdController),
 	TopMenuController = require(Client.Controllers.TopMenuController),
 	createFreecamController = require(Client.Controllers.FreecamController),
 	createGravityController = require(Client.Controllers.GravityController),

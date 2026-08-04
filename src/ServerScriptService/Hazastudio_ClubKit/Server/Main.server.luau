@@ -1198,6 +1198,34 @@ if gravityService then
 	})
 	gravityController:init()
 end
+if Config.FeatureFlags.DroneEnabled ~= false then
+	local droneService = ServerMods.createDroneService({
+		stateRemote = Remotes:WaitForChild(Config.Drone.REMOTE_STATE) :: RemoteEvent,
+		logger = Logger.new("DroneService"),
+	})
+	local droneController = ServerMods.createDroneController({
+		service = droneService,
+		commandExecutionService = commandExecutionService,
+		overheadService = overheadService,
+		notify = Notify,
+		logger = Logger.new("DroneController"),
+		rateLimiter = ServerMods.RateLimiter.new(Config.Drone.CMD_RATE_MAX, Config.Drone.CMD_RATE_WINDOW),
+		cameraRateLimiter = ServerMods.RateLimiter.new(Config.Drone.CAMERA_RATE_MAX, Config.Drone.CAMERA_RATE_WINDOW),
+		remotes = Remotes,
+	})
+	droneController:init()
+end
+if Config.FeatureFlags.CrowdEnabled ~= false then
+	local crowdController = ServerMods.createCrowdController({
+		commandExecutionService = commandExecutionService,
+		overheadService = overheadService,
+		notify = Notify,
+		logger = Logger.new("CrowdController"),
+		rateLimiter = ServerMods.RateLimiter.new(Config.Crowd.RATE_MAX, Config.Crowd.RATE_WINDOW),
+		remotes = Remotes,
+	})
+	crowdController:init()
+end
 _commandLibraryController = ServerMods.createCommandLibraryController({
 	service = commandExecutionService,
 	remotes = Remotes,

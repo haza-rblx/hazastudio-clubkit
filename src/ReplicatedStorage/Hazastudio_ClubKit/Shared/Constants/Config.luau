@@ -1314,10 +1314,14 @@ Config.FeatureFlags = {
 	DonationRobuxEnabled = true,
 	AfkGuardEnabled = true,
 	GravityEnabled = true,
+	DroneEnabled = true,
+	CrowdEnabled = true,
 	PromptJoinCommunityOnLoadEnabled = true,
 	-- Grant Tier1 (VIP) membershipBadge when player IsInGroup(Group.GROUP_ID). Default off.
 	VipOnCommunityJoinEnabled = false,
 	JoinGreetingsEnabled = true,
+	-- Master switch for donation Nuke/Smite/BlackHole world VFX (cash). Aura unaffected.
+	DonationWorldEffectsEnabled = true,
 }
 -- ============================================================
 -- DEMO MODE
@@ -1761,6 +1765,45 @@ Config.Gravity = {
 	MSG_RATE_LIMIT = "[Gravity] Slow down — try again in a moment.",
 	MSG_INVALID_SPEED = "[Ungravity] Speed must be a number from 1 to 10.",
 	MSG_NO_PERM = "[Gravity] Only Owner / Leadership (admin panel) can use this.",
+}
+-- ============================================================
+-- DRONE (shared freecam — 1 pilot, all spectators lock view)
+-- ============================================================
+Config.Drone = {
+	CMD_ALIAS = "drone",
+	REMOTE_REQUEST = "DroneRequest",
+	REMOTE_CAMERA = "DroneCamera",
+	REMOTE_STATE = "DroneState",
+	STREAM_HZ = 15,
+	CAMERA_RATE_MAX = 20,
+	CAMERA_RATE_WINDOW = 1,
+	CMD_RATE_MAX = 6,
+	CMD_RATE_WINDOW = 8,
+	MSG_USAGE = "[Drone] /drone start | /drone stop — staff freecam shared to everyone.",
+	MSG_STARTED = "[Drone] Live. You are the pilot — move with freecam controls.",
+	MSG_STARTED_ALL = "[Drone] %s is piloting a shared camera.",
+	MSG_STOPPED = "[Drone] Shared camera ended.",
+	MSG_ALREADY = "[Drone] Already live (pilot: %s).",
+	MSG_NOT_ACTIVE = "[Drone] No shared camera is active.",
+	MSG_NO_PERM = "[Drone] Only Owner / Leadership (admin panel) can use this.",
+	MSG_RATE_LIMIT = "[Drone] Slow down — try again in a moment.",
+}
+-- ============================================================
+-- CROWD (fake say — all players show the same chat bubble)
+-- ============================================================
+Config.Crowd = {
+	CMD_ALIAS = "crowd",
+	REMOTE_SAY = "CrowdSay",
+	MAX_LEN = 120,
+	RATE_MAX = 4,
+	RATE_WINDOW = 10,
+	MSG_USAGE = "[Crowd] /crowd <text> — everyone shows that bubble.",
+	MSG_EMPTY = "[Crowd] Type a message after /crowd.",
+	MSG_TOO_LONG = "[Crowd] Message is too long.",
+	MSG_NO_PERM = "[Crowd] Only Owner / Leadership (admin panel) can use this.",
+	MSG_RATE_LIMIT = "[Crowd] Slow down — try again in a moment.",
+	MSG_FILTER_FAILED = "[Crowd] Roblox could not review that message. Try different wording.",
+	MSG_OK = "[Crowd] Sent to everyone.",
 }
 -- ============================================================
 -- ADMIN PANEL

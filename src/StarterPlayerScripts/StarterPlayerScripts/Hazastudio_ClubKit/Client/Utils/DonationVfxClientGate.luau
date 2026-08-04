@@ -2,6 +2,9 @@
 -- Client gate for donation world VFX (EffectDonate, nuke). Honors Settings graphics attrs.
 
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 
 local DonationVfxClientGate = {}
 
@@ -12,6 +15,9 @@ end
 function DonationVfxClientGate.shouldPlayWorldEffect(): boolean
 	local player = localPlayer()
 	if not player then
+		return false
+	end
+	if Config.FeatureFlags.DonationWorldEffectsEnabled ~= true then
 		return false
 	end
 	-- World FX has its own SettingsHideDonationWorldEffect (DonationExperiencePrefs).

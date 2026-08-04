@@ -113,12 +113,14 @@ local function serializeValue(value: any, indent: number): string
 	return "nil"
 end
 
-local function findFeaturesBlockRange(source: string): (number?, number?)
-	local startPat = "ClubKitConfig%.Features%s*=%s*%{"
-	local startAt, openBrace = string.find(source, startPat)
-	if not startAt or not openBrace then
-		return nil, nil
-	end
+-- Prefer qualified assignment; bare `Features = {` is fallback for reformatted buyer configs.
+local FEATURES_START_PATTERNS = {
+	"ClubKitConfig%.Features%s*=%s*%{",
+	"ClubKitConfig%[%s*[\"']Features[\"']%s*%]%s*=%s*%{",
+	"%f[%w_]Features%s*=%s*%{",
+}
+
+local function findMatchingBrace(source: string, openBrace: number): number?
 	local depth = 0
 	local i = openBrace
 	while i <= #source do
@@ -128,10 +130,23 @@ local function findFeaturesBlockRange(source: string): (number?, number?)
 		elseif ch == "}" then
 			depth -= 1
 			if depth == 0 then
-				return openBrace, i
+				return i
 			end
 		end
 		i += 1
+	end
+	return nil
+end
+
+local function findFeaturesBlockRange(source: string): (number?, number?)
+	for _, startPat in ipairs(FEATURES_START_PATTERNS) do
+		local _startAt, openBrace = string.find(source, startPat)
+		if openBrace then
+			local closeBrace = findMatchingBrace(source, openBrace)
+			if closeBrace then
+				return openBrace, closeBrace
+			end
+		end
 	end
 	return nil, nil
 end
@@ -141,11 +156,19 @@ local function featureKeyExistsInBlock(blockBody: string, key: string): boolean
 	return string.find(blockBody, pattern) ~= nil
 end
 
-local function insertFeaturesKeys(source: string, missing: { { key: string, value: any } }): (string, { string })
+local function missingFeaturePaths(missing: { { key: string, value: any } }): string
+	local paths = {}
+	for _, entry in ipairs(missing) do
+		table.insert(paths, "Features." .. entry.key)
+	end
+	return table.concat(paths, ", ")
+end
+
+local function insertFeaturesKeys(source: string, missing: { { key: string, value: any } }): (string, { string }, string?)
 	local added: { string } = {}
 	local openBrace, closeBrace = findFeaturesBlockRange(source)
 	if not openBrace or not closeBrace then
-		return source, added
+		return source, added, "Could not locate Features = { ... } block to insert: " .. missingFeaturePaths(missing)
 	end
 	local blockBody = string.sub(source, openBrace + 1, closeBrace - 1)
 	local lines = {}
@@ -156,19 +179,25 @@ local function insertFeaturesKeys(source: string, missing: { { key: string, valu
 		end
 	end
 	if #lines == 0 then
-		return source, added
+		-- Require-table missing keys that already appear in Source (e.g. explicit nil) — no write needed.
+		return source, added, nil
 	end
 	local insertion = "\n\t-- Added by ClubKit Update Engine (fill-forward)\n" .. table.concat(lines, "\n") .. "\n"
 	local before = string.sub(source, 1, closeBrace - 1)
 	local after = string.sub(source, closeBrace)
 	-- Trim trailing whitespace before closing brace so insertion sits cleanly.
 	before = string.gsub(before, "%s*$", "")
-	return before .. insertion .. after, added
+	return before .. insertion .. after, added, nil
 end
 
 local function sectionExistsInSource(source: string, section: string): boolean
-	local pattern = "ClubKitConfig%." .. section .. "%s*="
-	return string.find(source, pattern) ~= nil
+	if string.find(source, "ClubKitConfig%." .. section .. "%s*=") then
+		return true
+	end
+	if string.find(source, "ClubKitConfig%[%s*[\"']" .. section .. "[\"']%s*%]%s*=") then
+		return true
+	end
+	return false
 end
 
 local function appendTopLevelSections(source: string, sections: { { name: string, value: any } }): (string, { string })
@@ -292,7 +321,7 @@ function ConfigPatchCore.patchBuyerConfig(): PatchReport
 
 	local missingFeatures, missingSections = ConfigPatchCore.collectMissing(defaults, buyerTable)
 	if #missingFeatures == 0 and #missingSections == 0 then
-		report.message = "Config patch: added 0 keys (already complete)"
+		report.message = "Config merge: added 0 keys (already complete)"
 		return report
 	end
 
@@ -307,10 +336,35 @@ function ConfigPatchCore.patchBuyerConfig(): PatchReport
 	local newSource = source
 
 	if #missingFeatures > 0 and type(buyerTable.Features) == "table" then
-		local inserted, added = insertFeaturesKeys(newSource, missingFeatures)
+		local inserted, added, insertErr = insertFeaturesKeys(newSource, missingFeatures)
 		newSource = inserted
 		for _, path in ipairs(added) do
 			table.insert(addedAll, path)
+		end
+		if insertErr then
+			report.error = insertErr
+			report.message = "Config merge FAILED: Features block not found (engine OK; add keys manually or fix Features table)"
+			return report
+		end
+		-- Block found but fewer lines inserted than keys still absent in Source — should not happen.
+		if #added == 0 then
+			local openBrace, closeBrace = findFeaturesBlockRange(newSource)
+			if openBrace and closeBrace then
+				local blockBody = string.sub(newSource, openBrace + 1, closeBrace - 1)
+				local absent = {}
+				for _, entry in ipairs(missingFeatures) do
+					if not featureKeyExistsInBlock(blockBody, entry.key) then
+						table.insert(absent, "Features." .. entry.key)
+					else
+						table.insert(report.skipped, "Features." .. entry.key)
+					end
+				end
+				if #absent > 0 then
+					report.error = "Config merge FAILED: Features block found but could not insert: " .. table.concat(absent, ", ")
+					report.message = report.error
+					return report
+				end
+			end
 		end
 	elseif #missingFeatures > 0 and type(buyerTable.Features) ~= "table" then
 		-- Features section missing entirely — handled via missingSections.
@@ -318,15 +372,32 @@ function ConfigPatchCore.patchBuyerConfig(): PatchReport
 	end
 
 	if #missingSections > 0 then
+		local beforeSections = newSource
 		local appended, added = appendTopLevelSections(newSource, missingSections)
 		newSource = appended
 		for _, path in ipairs(added) do
 			table.insert(addedAll, path)
 		end
+		if #added == 0 then
+			local unresolved = {}
+			for _, entry in ipairs(missingSections) do
+				if not sectionExistsInSource(beforeSections, entry.name) then
+					table.insert(unresolved, entry.name)
+				else
+					table.insert(report.skipped, entry.name)
+				end
+			end
+			if #unresolved > 0 and #addedAll == 0 then
+				report.error = "Config merge FAILED: could not append section(s): " .. table.concat(unresolved, ", ")
+				report.message = report.error
+				return report
+			end
+		end
 	end
 
 	if newSource == source or #addedAll == 0 then
-		report.message = "Config patch: added 0 keys (source unchanged)"
+		-- Missing at require-time but already present in Source text (e.g. nil assigns) — OK.
+		report.message = "Config merge: added 0 keys (Source already lists schema keys; value lama tetap)"
 		return report
 	end
 
@@ -335,12 +406,12 @@ function ConfigPatchCore.patchBuyerConfig(): PatchReport
 	end)
 	if not setOk then
 		report.error = "Failed to set ClubKitConfig.Source: " .. tostring(setErr)
-		report.message = "Config patch failed writing Source"
+		report.message = "Config merge FAILED writing Source"
 		return report
 	end
 
 	report.added = addedAll
-	report.message = ("Config patch: added %d key(s): %s"):format(#addedAll, table.concat(addedAll, ", "))
+	report.message = ("Config merge: added %d key(s): %s"):format(#addedAll, table.concat(addedAll, ", "))
 	return report
 end
 

@@ -2,6 +2,9 @@
 -- Client runtime attributes for per-player donation experience toggles.
 
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 
 local ATTR_HIDE_WORLD_EFFECT = "SettingsHideDonationWorldEffect"
 local ATTR_HIDE_AURA = "SettingsHideDonationAura"
@@ -19,6 +22,9 @@ local function isHidden(attrName: string): boolean
 end
 
 function DonationExperiencePrefs.shouldShowWorldEffect(): boolean
+	if Config.FeatureFlags.DonationWorldEffectsEnabled ~= true then
+		return false
+	end
 	return not isHidden(ATTR_HIDE_WORLD_EFFECT)
 end
 

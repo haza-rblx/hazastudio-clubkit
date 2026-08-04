@@ -114,6 +114,7 @@ function gameEndpoints(game, baseUrl, socialBaseUrl) {
   return {
     saweria_webhook: `${baseUrl}/webhook/saweria/${key}/${token}`,
     bagibagi_webhook: `${baseUrl}/webhook/bagibagi/${key}/${token}`,
+    sociabuzz_webhook: `${baseUrl}/webhook/sociabuzz/${key}/${token}`,
     roblox_base: `${baseUrl}/game/${key}`,
     roblox_api_url: `${baseUrl}/game/${key}`,
     roblox_secret: game.secret,
@@ -173,13 +174,21 @@ async function ensureSocialSecrets(db) {
   }
 }
 
+function defaultDonorLabel(provider) {
+  if (provider === "bagibagi") return "Bagi-Bagi Donor";
+  if (provider === "sociabuzz") return "SociaBuzz Donor";
+  return "Saweria Donor";
+}
+
 function normalizeDonation(input, provider = "saweria") {
   const root = input && typeof input === "object" ? input : {};
   const data = root.data && typeof root.data === "object" ? root.data : root;
-  const defaultDonor = provider === "bagibagi" ? "Bagi-Bagi Donor" : "Saweria Donor";
+  const defaultDonor = defaultDonorLabel(provider);
   const saweriaName = cleanString(
     data.donator_name ||
       data.donor_name ||
+      data.supporter ||
+      data.sociabuzz_name ||
       data.saweria_name ||
       data.bagibagi_name ||
       data.name ||
@@ -194,6 +203,9 @@ function normalizeDonation(input, provider = "saweria") {
   let providerTxId = cleanString(data.id || data.transaction_id || data.payment_id || data.order_id || data.invoice_id);
   if (!providerTxId && provider === "bagibagi") {
     providerTxId = `bb:${saweriaName.toLowerCase()}:${amount}:${donationAt}`;
+  }
+  if (!providerTxId && provider === "sociabuzz") {
+    providerTxId = `sb:${saweriaName.toLowerCase()}:${amount}:${donationAt}`;
   }
   if (!providerTxId) {
     providerTxId = `${saweriaName}:${amount}:${donationAt}`;
@@ -1452,7 +1464,7 @@ export default {
       }
       if (parts[0] === "game" && parts[1]) return handleGame(req, env, url, parts[1]);
       if (parts[0] === "webhook" && parts[2] && parts[3]) {
-        if (parts[1] === "saweria" || parts[1] === "bagibagi") {
+        if (parts[1] === "saweria" || parts[1] === "bagibagi" || parts[1] === "sociabuzz") {
           return handleWebhook(req, env, parts[2], parts[3], parts[1]);
         }
       }
