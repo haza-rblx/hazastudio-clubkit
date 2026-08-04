@@ -11,6 +11,11 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.70] - 2026-08-04
+
+### Changed
+- **Version nudge** — no engine feature delta vs 2.4.69; bump so Studio **Check Update** picks a fresh tag (re-sync / buyer update path).
+
 ## [2.4.69] - 2026-08-04
 
 ### Added
