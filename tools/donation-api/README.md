@@ -127,13 +127,17 @@ Response:
   "endpoints": {
     "saweria_webhook": "https://.../webhook/saweria/rust/wh_...",
     "bagibagi_webhook": "https://.../webhook/bagibagi/rust/wh_...",
+    "sociabuzz_webhook": "https://.../webhook/sociabuzz/rust/wh_...",
     "roblox_poll": "https://.../game/rust?secret=rbx_..."
   }
 }
 ```
 
 Use `saweria_webhook` in Saweria. Use `bagibagi_webhook` in Bagi-Bagi dashboard
-(Settings → Webhook URL).
+(Settings → Webhook URL). Use `sociabuzz_webhook` in SociaBuzz TRIBE → Integrations
+(Webhook URL). Paste the same `webhook_token` into SociaBuzz **Webhook Token**, then
+set **Webhook HTTP Test Response** to match a successful JSON body (contains `"ok":true`)
+after your first Test Notification.
 
 **Club Kit v1.3 config** (recommended — secret separate from URL):
 
@@ -191,6 +195,21 @@ Test locally:
 curl -X POST "http://127.0.0.1:8787/webhook/bagibagi/<gameKey>/<webhook_token>" \
   -H "content-type: application/json" \
   -d '{"name":"TestUser","amount":10000,"message":"hello"}'
+```
+
+### SociaBuzz webhook payload
+
+SociaBuzz (TRIBE) does not publish an official JSON schema. The API accepts common
+aliases including overlay-style fields (`supporter`, `amount`, `message`) and stores
+the raw body for later refinement. Missing transaction ids synthesize
+`sb:donor:amount:timestamp`.
+
+Test locally:
+
+```bash
+curl -X POST "http://127.0.0.1:8787/webhook/sociabuzz/<gameKey>/<webhook_token>" \
+  -H "content-type: application/json" \
+  -d '{"supporter":"TestUser","amount":10000,"message":"hello"}'
 ```
 
 For future agents and repeat game setup, see `AGENT_HANDOFF.md`.

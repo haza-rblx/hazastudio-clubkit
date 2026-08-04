@@ -1201,6 +1201,22 @@ local _mobileFreecamController = trackClientLifecycle(
 	end,
 	})
 )
+if Config.FeatureFlags.DroneEnabled ~= false then
+	local droneController = ClientMods.createDroneController({
+		freecamController = _freecamController,
+		mobileFreecamController = _mobileFreecamController,
+		remotes = Remotes,
+	})
+	trackClientLifecycle("DroneController", droneController)
+	droneController:init()
+end
+if Config.FeatureFlags.CrowdEnabled ~= false then
+	local crowdController = ClientMods.createCrowdController({
+		remotes = Remotes,
+	})
+	trackClientLifecycle("CrowdController", crowdController)
+	crowdController:init()
+end
 -- Music topbar visibility is owned end-to-end by ClientMods.MusicPlayerController via the
 -- ClientMods.MusicTopbarIcon wrapper. No store subscriber is needed here — the previous
 -- `applyMusicTopbarVisibility` retry pattern relied on `setEnabled(false)` and

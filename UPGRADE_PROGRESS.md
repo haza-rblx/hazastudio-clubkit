@@ -2,7 +2,7 @@
 
 Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
 
-**Versi saat ini:** `2.4.68` (lihat [`VERSION`](VERSION))  
+**Versi saat ini:** `2.4.70` (lihat [`VERSION`](VERSION))  
 **Target rilis berikutnya:** _(belum ditetapkan)_  
 **Branch aktif:** `wip/admin-hub`
 
@@ -12,7 +12,7 @@ Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
 
 | Area | Status |
 |------|--------|
-| Plugin panel v2 (Engine/Tools UI) | WIP — ship rebuild nanti |
+| Merge main `2.4.69` + `2.4.70` | Done — DonationWorldEffects, /drone, /crowd, SociaBuzz, plugin panel v2 + motion |
 | UI Motion Level-Up (hybrid) | Done — presets + press + migrate; TopMenu spring open |
 | Admin Hub | Done — unreleased |
 | Daily boards ×3 (combined / robux / cash) | Done — unreleased |
@@ -39,11 +39,6 @@ Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
 | `src/.../Client/UI/AdminPanelUI.luau` | Floating open → presentCenterPanel |
 | `src/.../Client/UI/DonationSystemUI.luau` | Floating open → presentCenterPanel |
 | `src/.../Client/Services/GeneralNotificationCenterService.luau` | Toast enter/exit via MotionPresets |
-| `tools/ClubKitPackagerPlugin/plugin/UpdaterPanel.luau` | Panel v2 UI (Engine/Tools) |
-| `tools/ClubKitPackagerPlugin/plugin/DovetailTheme.luau` | AMOLED tokens |
-| `tools/ClubKitPackagerPlugin/plugin/HazastudioClubKit.plugin.luau` | Wire Gen Tools / Carry fix callbacks |
-| `tools/ClubKitPackagerPlugin/prototypes/plugin-panel-v2.html` | Design iterations |
-| `tools/ClubKitPackagerPlugin/plugin-build/**` | Synced copies (panel v2) |
 | `src/.../Client/UI/AdminHubUI.luau` | NEW — binder; popup forms ≈ HTML (2-col pick, white chips, callouts) |
 | `src/.../Client/Controllers/AdminHubController.luau` | NEW — action hub → commands; sheet callout/hint/preview polish |
 | `src/.../Client/Controllers/AdminController.luau` | `bindTopbar=false` when hub owns icon |
@@ -58,6 +53,7 @@ Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
 | `src/.../DonationLeaderboardController.luau` | 3 specs, part-scoped resolve, RP prefix, RobuxLogo toggle |
 | `src/.../WorkspaceLeaderboardRenderer.luau` | Cash format `RP ` |
 | `tools/place-fixes/**` | Place-only editmode helpers (Sign/Glow/trails/tools) |
+| `tools/plugin-prototype/**` | Swiss-knife panel HTML prototype (Setup/Config/Diagnostics/Engine/Tools/Packager/Settings) |
 
 ---
 

@@ -17,6 +17,8 @@ export type ApplyReport = {
 	tag: string?,
 	version: string?,
 	configPatch: string?,
+	-- True when ConfigPatchCore reported error (engine sync may still succeed).
+	configPatchFailed: boolean?,
 }
 
 export type CheckResult = {
@@ -396,20 +398,34 @@ function SourceSyncCore.applyEngineUpdate(tag: string, onProgress)
 	end
 
 	-- Additive ClubKitConfig fill-forward (Features + missing top-level sections).
+	-- Engine files stay applied even if config merge fails — surface loudly, do not silence.
 	if #report.errors == 0 then
 		local patchOk, patchResult = pcall(ConfigPatchCore.patchBuyerConfig)
 		if not patchOk then
 			local err = tostring(patchResult)
-			table.insert(report.errors, "Config patch: " .. err)
-			report.configPatch = "Config patch failed: " .. err
+			report.configPatchFailed = true
+			report.configPatch = "Config merge FAILED: " .. err
+			table.insert(report.skipped, "CONFIG MERGE FAILED: " .. err)
+			warn("[ClubKitUpdater] CONFIG MERGE FAILED: " .. err)
 		else
 			local patch = patchResult
 			report.configPatch = patch.message
 			if patch.error then
-				-- Soft: buyer config patch must not mark an otherwise successful engine sync as failed.
-				table.insert(report.ok, "(config warn) " .. patch.error)
+				report.configPatchFailed = true
+				report.configPatch = patch.message
+				if not string.find(patch.message, "FAILED", 1, true) then
+					report.configPatch = "Config merge FAILED: " .. tostring(patch.error)
+				end
+				-- Soft for engine files: do not push into report.errors (would look like file sync failure).
+				table.insert(report.skipped, "CONFIG MERGE FAILED: " .. tostring(patch.error))
+				warn("[ClubKitUpdater] CONFIG MERGE FAILED: " .. tostring(patch.error))
+				warn("[ClubKitUpdater] Engine Sources updated; ClubKitConfig Source was NOT merged. Add missing Features keys manually or fix the Features = { block, then re-run Update Engine.")
 			else
+				report.configPatchFailed = false
 				table.insert(report.ok, "(config) " .. patch.message)
+				if patch.added and #patch.added > 0 then
+					print("[ClubKitUpdater] Config merge added: " .. table.concat(patch.added, ", "))
+				end
 			end
 		end
 	end

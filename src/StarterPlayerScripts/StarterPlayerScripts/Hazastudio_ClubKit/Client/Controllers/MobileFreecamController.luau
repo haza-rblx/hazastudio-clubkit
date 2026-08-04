@@ -667,6 +667,12 @@ local function createMobileFreecamController(deps: {
 		if isOn == active then
 			return
 		end
+		if isOn then
+			local cam = Workspace.CurrentCamera
+			if cam and cam:GetAttribute("DroneLock") == true then
+				return
+			end
+		end
 		active = isOn
 		if isOn then
 			startFreecam()
@@ -752,6 +758,7 @@ local function createMobileFreecamController(deps: {
 		isActive = function(): boolean
 			return active
 		end,
+		setActive = setActive,
 		toggle = function()
 			setActive(not active)
 		end,

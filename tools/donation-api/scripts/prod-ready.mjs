@@ -91,6 +91,9 @@ async function main() {
   if (endpoints.bagibagi_webhook) {
     console.log(`BAGIBAGI_WEBHOOK=${endpoints.bagibagi_webhook}`);
   }
+  if (endpoints.sociabuzz_webhook) {
+    console.log(`SOCIABUZZ_WEBHOOK=${endpoints.sociabuzz_webhook}`);
+  }
   console.log(`ROBLOX_URL=${endpoints.roblox_poll}`);
   console.log(`API_URL=${endpoints.roblox_base}`);
   console.log(`DONATION_API_SECRET=${game.secret || endpoints.roblox_secret || ""}`);

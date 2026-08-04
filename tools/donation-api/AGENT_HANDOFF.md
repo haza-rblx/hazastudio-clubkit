@@ -21,6 +21,7 @@ The API intentionally supports the same actions as the old Google Apps Script br
 - `POST /game/:gameKey?secret=...` with `{ "action": "namemap_set", ... }`
 - `POST /webhook/saweria/:gameKey/:webhookSecret`
 - `POST /webhook/bagibagi/:gameKey/:webhookSecret` (same token; flat `{ name, amount, message }` payload)
+- `POST /webhook/sociabuzz/:gameKey/:webhookSecret` (same token; aliases include `supporter` / `amount` / `message`)
 
 ## Add a New Game
 

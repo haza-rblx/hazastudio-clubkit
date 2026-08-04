@@ -78,7 +78,7 @@ function buildClubKitConfigText(game) {
   return [
     "-- ClubKitConfig.luau (Donation + GameDataApi)",
     'ClubKitConfig.Donation = {',
-    '  Provider = "bagibagi", -- atau "saweria"',
+    '  Provider = "bagibagi", -- "bagibagi" | "saweria" | "sociabuzz"',
     `  ApiUrl = "${game?.clubkit?.donation_api_url || ""}",`,
     "}",
     "ClubKitConfig.GameDataApi = {",
@@ -103,13 +103,22 @@ function buildDeliverySetupText(game, meta = {}) {
     clientNote ? `Client       : ${clientNote}` : null,
     maintenanceUntil ? `Maintenance  : until ${maintenanceUntil}` : "Maintenance  : (not scheduled)",
     "",
-    "── WEBHOOK (paste ke dashboard Saweria / Bagi-Bagi) ──",
+    "── WEBHOOK (paste ke dashboard Saweria / Bagi-Bagi / SociaBuzz) ──",
     "",
     "Saweria:",
     game?.endpoints?.saweria_webhook || "",
     "",
     "Bagi-Bagi:",
     game?.endpoints?.bagibagi_webhook || "",
+    "",
+    "SociaBuzz (TRIBE → Integrations):",
+    game?.endpoints?.sociabuzz_webhook || "",
+    "",
+    "SociaBuzz Webhook Token (sama dengan token di URL / admin):",
+    game?.webhook_token || "",
+    "",
+    "SociaBuzz HTTP Test Response: paste body JSON sukses dari Test Notification",
+    '(contoh biasanya berisi "ok":true — sesuaikan setelah test pertama)',
     "",
     "── ROBLOX CONFIG (copy ke Studio) ──",
     "",
@@ -1278,6 +1287,11 @@ function DeliveryPage({
               value={game.endpoints?.bagibagi_webhook}
               onCopy={() => copy(game.endpoints?.bagibagi_webhook, "Bagi-Bagi webhook copied.")}
             />
+            <EndpointRow
+              label="SociaBuzz"
+              value={game.endpoints?.sociabuzz_webhook}
+              onCopy={() => copy(game.endpoints?.sociabuzz_webhook, "SociaBuzz webhook copied.")}
+            />
           </section>
           <section className="panel">
             <div className="panel-header">
@@ -1554,6 +1568,11 @@ function OverviewPage({
             label="Bagi-Bagi webhook"
             value={activeGame.endpoints?.bagibagi_webhook}
             onCopy={() => copy(activeGame.endpoints?.bagibagi_webhook, "Bagi-Bagi webhook copied.")}
+          />
+          <EndpointRow
+            label="SociaBuzz webhook"
+            value={activeGame.endpoints?.sociabuzz_webhook}
+            onCopy={() => copy(activeGame.endpoints?.sociabuzz_webhook, "SociaBuzz webhook copied.")}
           />
           <EndpointRow
             label="Donation.ApiUrl"

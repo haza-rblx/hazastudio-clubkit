@@ -356,6 +356,7 @@ function ConfigBootstrap.apply(config: any)
 			PromptJoinCommunityOnLoad = "PromptJoinCommunityOnLoadEnabled",
 			VipOnCommunityJoin = "VipOnCommunityJoinEnabled",
 			JoinGreetings = "JoinGreetingsEnabled",
+			DonationWorldEffects = "DonationWorldEffectsEnabled",
 		}
 		for sourceKey, targetKey in pairs(map) do
 			if type(features[sourceKey]) == "boolean" then

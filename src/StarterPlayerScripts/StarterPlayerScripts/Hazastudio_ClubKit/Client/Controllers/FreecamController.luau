@@ -792,6 +792,10 @@ local function createFreecamController(_deps)
 	end
 
 	local function ToggleFreecam()
+		local cam = Workspace.CurrentCamera
+		if cam and cam:GetAttribute("DroneLock") == true then
+			return
+		end
 		setFreecamEnabled(not enabled)
 	end
 
@@ -831,6 +835,7 @@ local function createFreecamController(_deps)
 
 	return {
 		toggle = ToggleFreecam,
+		setActive = setFreecamEnabled,
 		isActive = function() return enabled end,
 		destroy = function()
 			if enabled then

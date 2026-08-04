@@ -1120,6 +1120,11 @@ local function createDonationService(
 			markKnownDonor(args.robloxUserId)
 		end
 
+		local worldEffect: string? = nil
+		if Config.FeatureFlags.DonationWorldEffectsEnabled == true then
+			worldEffect = DonationEffectTierResolver.resolveWorldByIdr(amount)
+		end
+
 		local payload: DonationNotifPayload = {
 			saweriaName = args.filteredDonatorName,
 			amount = amount,
@@ -1130,7 +1135,7 @@ local function createDonationService(
 			robloxDisplayName = args.robloxDisplayName,
 			totalDonationAmount = args.totalDonationAmount,
 			source = "cash",
-			worldEffect = DonationEffectTierResolver.resolveWorldByIdr(amount),
+			worldEffect = worldEffect,
 		}
 		-- Stagger broadcast: delay between notifications to prevent client queue flood.
 		-- At high CCU, multiple donations arrive in one poll cycle. Without staggering,

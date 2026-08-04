@@ -108,22 +108,22 @@ Membership = {
 
 Sesuaikan `RoleCategories`, `SpenderRoles`, `CommandAliases` jika rename role.
 
-### 4. Donasi cash (IDR — Bagi-Bagi / Saweria)
+### 4. Donasi cash (IDR — Bagi-Bagi / Saweria / SociaBuzz)
 
 ```lua
 Donation = {
-    Provider = "bagibagi", -- "bagibagi" | "saweria" — nama & label donor otomatis
-    ProviderLink = "https://bagibagi.co/halaman-kamu",
+    Provider = "bagibagi", -- "bagibagi" | "saweria" | "sociabuzz" — nama & label donor otomatis
+    ProviderLink = "https://bagibagi.co/halaman-kamu", -- atau https://sociabuzz.com/username
     ApiUrl = "https://xxx.workers.dev/game/clubkit-key",
     Cash = { Enabled = true },
     Robux = { Enabled = true },
     MinAmount = 1000, -- threshold notif + leaderboard (IDR)
-    -- Aura karakter (Robux + Bagi-Bagi/Saweria)
+    -- Aura karakter (Robux + cash IDR)
     AuraTiers = {
         { level = 1, min = 10, idrMin = 0, idrMax = 9999, effect = "Level1", sound = "Level1", duration = 4, cameraDuration = 0 },
         -- min = Robux | idrMin/idrMax = range IDR
     },
-    -- World VFX global (hanya Bagi-Bagi/Saweria)
+    -- World VFX global (semua cash IDR)
     WorldEffectTiers = {
         { min = 100000, effect = "Nuke" },
         { min = 250000, effect = "Smite4" },
@@ -132,12 +132,14 @@ Donation = {
 },
 ```
 
+Untuk **SociaBuzz**: set `Provider = "sociabuzz"`, paste `sociabuzz_webhook` dari donation admin panel ke TRIBE → Integrations (Webhook URL), isi **Webhook Token** dengan token dari URL/admin, lalu Test Notification. Cash tab title/donor label mengikuti `Provider`.
+
 **Aura vs world (behavior matrix):**
 
 | Sumber | Aura karakter | World VFX |
 |--------|---------------|-----------|
 | **Robux** | Ya (`min` Robux) | **Tidak** |
-| **Bagi-Bagi / Saweria** | Ya (`idrMin`..`idrMax`) | Ya (`min` IDR) |
+| **Cash IDR** (Bagi-Bagi / Saweria / SociaBuzz) | Ya (`idrMin`..`idrMax`) | Ya (`min` IDR) |
 
 Legacy key `RobuxAuraTiers` / `SaweriaWorldTiers` masih dibaca sebagai alias.
 
@@ -166,10 +168,14 @@ Features = {
     DonationRobux = true,
     PromptJoinCommunityOnLoad = true, -- setelah loading: modal Join Community (skip jika sudah member; butuh GroupId > 0)
     JoinGreetings = true, -- toast Owner/Leadership/Content/top-10 joiners
+    DonationWorldEffects = true, -- Nuke/Smite/BlackHole on cash donate; false = no duar + hide Settings row
     -- matikan yang tidak dipakai: false
 },
 ```
 
+**Update Engine = merge additive config:** setelah Update Engine, plugin menambah key `Features` (dan section top-level) yang hilang dari schema ke `ClubKitConfig` Source — **value/key lama tidak diubah**. Set `false` hanya untuk yang mau dimatikan. Kalau panel bilang CONFIG MERGE FAILED, cek Output; baris baru belum tertulis.
+
+**World effects off:** set `Features.DonationWorldEffects = false` di `ClubKitConfig` untuk map yang tidak mau efek duar. Aura donor, announce, dan highlight tetap. Baris Settings “World Effects” ikut hilang.
 **Music catalog (bulk script add):** isi `ReplicatedStorage/Hazastudio_ClubKitConfig/MusicCatalog.luau`. Tiap track **satu baris**; `parts` boleh multi (max 9). Default playlist **Legacy**. Setelah seed, Manage UI tetap bisa edit/pindah playlist. Matikan merge baru lewat `Features.MusicCatalogSeed = false` (library yang sudah ada tetap).
 
 ```lua

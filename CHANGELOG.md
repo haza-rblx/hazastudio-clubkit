@@ -25,10 +25,27 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 - **TopMenu (topbar custom) open/close** — critically-damped spring slide + fade (`UISpring`) instead of Quart tween; interruptible mid-flight; tune via `Config.UIMotion.SIDEBAR_SPRING_FREQ`.
 - **Sidebar / toast / command library / avatar context** — open/close timings unified via MotionPresets (no local 0.28/0.18 dialect copies).
 - **Admin + Donation floating subpanels** — open with calm `presentCenterPanel` instead of Back `scalePop`. Streak / Couple spectacle pops unchanged.
-- **Studio plugin panel v2** — dock UI rebuilt (AMOLED HyperOS): tabs Engine / Tools, hero + version grid, Check/Update/Skip, channel chips (setting saved; Check still stable-only until channel sync ships), Gen Tools + Carry fix rows. No Package tab in panel. _(ship plugin rebuild later)_
 - **Admin Hub chrome** — propagate MainWrapper polish to player/action popups + toast (panel `#0C0C0C`, corner 18, no stroke, fade headers, danger close).
 - **Admin Hub motion** — hub open/close via `presentCenterPanel`; player/action overlays via `presentDialog` + dim fade; PressFeedback on tiles/sidebar/CTAs. Action feedback uses kit `NotifService` → General Notification Center (not the hub Toast frame).
 - **Admin Hub popups** — closer to HTML prototype: surface `#141414`, soft stroke, larger player/action panels (360×480 / 440×560), clean headers (no white fade), 2-col pick cards + white selected chips, callout title/body variants, donate amount preview.
+
+## [2.4.70] - 2026-08-04
+
+### Changed
+- **Version nudge** — no engine feature delta vs 2.4.69; bump so Studio **Check Update** picks a fresh tag (re-sync / buyer update path).
+
+## [2.4.69] - 2026-08-04
+
+### Added
+- **`Features.DonationWorldEffects`** — master toggle for cash Nuke/Smite/BlackHole (default true). When false: no `worldEffect` on presentation, client gates skip, Settings “World Effects” row hidden. Aura/announce/highlight unchanged.
+- **`/drone start|stop`** — staff shared freecam: one pilot streams camera (~15Hz); everyone else locks to that view. Gate: admin panel. Shift+P blocked while spectating.
+- **`/crowd <text>`** — staff make every player show the same chat bubble (filtered). Does not execute commands / dances.
+- **SociaBuzz cash provider** — third IDR webhook path (`/webhook/sociabuzz/...`) + `Donation.Provider = "sociabuzz"` branding preset (cash tab / donor labels). Same poll + boards pipeline as Bagi-Bagi/Saweria.
+
+### Changed
+- **Studio plugin panel v2** — dock UI rebuilt (AMOLED HyperOS): tabs Engine / Tools, hero + version grid, Check/Update/Skip, channel chips (setting saved; Check still stable-only until channel sync ships), Gen Tools + Carry fix rows. No Package tab in panel.
+- **Config fill-forward (Update Engine)** — louder Config merge status; broader `Features = {` finder; if missing Features keys cannot be written to Source → clear `CONFIG MERGE FAILED` (engine files still apply). Buyer values never overwritten.
+- **Plugin panel motion** — hero entrance, staggered cards, tab/channel springs, press feedback, update progress bar, status pulse tones, modal scale, confetti-lite on successful Done.
 
 ## [2.4.68] - 2026-07-28
 

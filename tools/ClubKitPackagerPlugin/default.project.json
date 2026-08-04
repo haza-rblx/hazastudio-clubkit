@@ -23,6 +23,9 @@
     "DovetailUI": {
       "$path": "plugin/DovetailUI.luau"
     },
+    "PanelMotion": {
+      "$path": "plugin/PanelMotion.luau"
+    },
     "UpdaterPanel": {
       "$path": "plugin/UpdaterPanel.luau"
     },
