@@ -3,7 +3,8 @@
 Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
 
 **Versi saat ini:** `2.4.68` (lihat [`VERSION`](VERSION))  
-**Target rilis berikutnya:** _(belum ditetapkan)_
+**Target rilis berikutnya:** _(belum ditetapkan)_  
+**Branch aktif:** `wip/admin-hub`
 
 ---
 
@@ -13,6 +14,9 @@ Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
 |------|--------|
 | Plugin panel v2 (Engine/Tools UI) | WIP — ship rebuild nanti |
 | UI Motion Level-Up (hybrid) | Done — presets + press + migrate; TopMenu spring open |
+| Admin Hub | Done — unreleased |
+| Daily boards ×3 (combined / robux / cash) | Done — unreleased |
+| LiveChat Footer + pop polish | Done — unreleased |
 
 ---
 
@@ -23,7 +27,7 @@ Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
 | `src/.../Client/Utils/MotionPresets.luau` | NEW — calm motion tokens + MOTION_SCALE |
 | `src/.../Client/Utils/PressFeedback.luau` | NEW — press UIScale helper |
 | `src/.../Client/Utils/AnimationHelper.luau` | Wire center/panel/dialog to MotionPresets |
-| `src/.../Shared/Constants/Config.luau` | `Config.UIMotion` block |
+| `src/.../Shared/Constants/Config.luau` | `Config.UIMotion` + daily board flags (`DAILY_*`) |
 | `src/.../Client/Utils/UISpring.luau` | NEW — critically-damped UI spring driver |
 | `src/.../Client/Controllers/TopMenuController.luau` | Spring open/close + press; sidebar presets |
 | `src/.../Client/UI/MenuShellUI.luau` | Sidebar presets + press on tabs/modal |
@@ -48,6 +52,12 @@ Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
 | `src/.../Shared/Constants/Config.luau` | `Config.Admin.HUB_GUI_NAME` |
 | `tools/BuildAdminHub.editmode.luau` | Studio shell — HTML popup tokens (surface #141414, 360/440) |
 | `tools/prototypes/admin-hub-v1.html` | HTML prototype |
+| `src/.../DonationNotificationController.luau` | LiveChat Footer hide when idle + pop polish |
+| `src/.../DonationController.luau` | `dailyCombined` merge by `lastDonationAt`; fingerprint + empty payload |
+| `src/.../DemoDataProvider.luau` | Demo combined + robux for daily |
+| `src/.../DonationLeaderboardController.luau` | 3 specs, part-scoped resolve, RP prefix, RobuxLogo toggle |
+| `src/.../WorkspaceLeaderboardRenderer.luau` | Cash format `RP ` |
+| `tools/place-fixes/**` | Place-only editmode helpers (Sign/Glow/trails/tools) |
 
 ---
 

@@ -11,7 +11,17 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+### Added
+- **Daily donation boards (3)** — `DailyDonations` (combined Robux+Cash, sort by latest donation), `DailyDonationsRobux`, `DailyDonationsCash`. Combined payload `dailyCombined` with per-row `currencyKind`. Cash rows prefix **`RP `** and hide `RobuxLogo`; Robux rows show the logo.
+- **UI MotionPresets** — shared calm motion tokens (`Client/Utils/MotionPresets`) + thin `Config.UIMotion` (`MOTION_SCALE`, center open/close times). AnimationHelper center/panel/dialog timings read presets.
+- **PressFeedback** — calm press UIScale micro-interaction on Shop/Gift CTAs, TopMenu entries, MenuShell tabs/modal, Dance category tabs.
+- **UISpring** — shared critically-damped UI spring driver (Heartbeat).
+- **Admin Hub (`04-AdminHub`)** — action-first staff panel (gallery + player popup + sheets) wired to CommandLibrary execute; topbar Admin opens hub. Title tile opens existing Admin Panel editor. Gates: mod teleport/announce, admin gift/role/gravity/fake donate, owner ledger/reload boards.
+
 ### Changed
+- **LiveChatDonations Footer** — hidden while idle; donor info root also hidden so message stays centered. Pop in/out polished: Back spring + fade, staggered card/total/footer, soft message settle when returning to idle.
+- **`Leaderboards.DAILY_ROBUX_ENABLED`** default **true**; new **`DAILY_COMBINED_ENABLED`** / **`DAILY_COMBINED_LIMIT`**. Daily SurfaceGui resolve is part-scoped first (shared `DailyDonationsWrapper` name under different parts).
+- Cash amount format on boards: `RP.` → **`RP `** (space).
 - **TopMenu (topbar custom) open/close** — critically-damped spring slide + fade (`UISpring`) instead of Quart tween; interruptible mid-flight; tune via `Config.UIMotion.SIDEBAR_SPRING_FREQ`.
 - **Sidebar / toast / command library / avatar context** — open/close timings unified via MotionPresets (no local 0.28/0.18 dialect copies).
 - **Admin + Donation floating subpanels** — open with calm `presentCenterPanel` instead of Back `scalePop`. Streak / Couple spectacle pops unchanged.
@@ -19,12 +29,6 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 - **Admin Hub chrome** — propagate MainWrapper polish to player/action popups + toast (panel `#0C0C0C`, corner 18, no stroke, fade headers, danger close).
 - **Admin Hub motion** — hub open/close via `presentCenterPanel`; player/action overlays via `presentDialog` + dim fade; PressFeedback on tiles/sidebar/CTAs. Action feedback uses kit `NotifService` → General Notification Center (not the hub Toast frame).
 - **Admin Hub popups** — closer to HTML prototype: surface `#141414`, soft stroke, larger player/action panels (360×480 / 440×560), clean headers (no white fade), 2-col pick cards + white selected chips, callout title/body variants, donate amount preview.
-
-### Added
-- **UI MotionPresets** — shared calm motion tokens (`Client/Utils/MotionPresets`) + thin `Config.UIMotion` (`MOTION_SCALE`, center open/close times). AnimationHelper center/panel/dialog timings read presets.
-- **PressFeedback** — calm press UIScale micro-interaction on Shop/Gift CTAs, TopMenu entries, MenuShell tabs/modal, Dance category tabs.
-- **UISpring** — shared critically-damped UI spring driver (Heartbeat).
-- **Admin Hub (`04-AdminHub`)** — action-first staff panel (gallery + player popup + sheets) wired to CommandLibrary execute; topbar Admin opens hub. Title tile opens existing Admin Panel editor. Gates: mod teleport/announce, admin gift/role/gravity/fake donate, owner ledger/reload boards.
 
 ## [2.4.68] - 2026-07-28
 

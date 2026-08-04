@@ -227,7 +227,7 @@ end
 local function formatDonationValue(kind: string, value: number): string
 	local grouped = formatGrouped(value)
 	if kind == "saweria" or kind == "saweriaPoster" then
-		return "RP." .. grouped
+		return "RP " .. grouped
 	end
 	return grouped
 end
@@ -577,7 +577,7 @@ local function getPosterFallbackSubtext(spec: PosterSpec): string
 end
 
 local function getPosterFallbackValue(spec: PosterSpec): string
-	return if spec.kind == "saweriaPoster" then "RP.0" else "0"
+	return if spec.kind == "saweriaPoster" then "RP 0" else "0"
 end
 
 local function hasLeaderboardEntries(entries: any): boolean

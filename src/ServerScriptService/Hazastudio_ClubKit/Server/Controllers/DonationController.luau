@@ -231,7 +231,7 @@ local function createDonationController(deps: {
 
 	local function workspacePayloadFingerprint(payload: { [string]: any }): string
 		local parts = { tostring(payload.updatedAt or 0) }
-		for _, key in { "robux", "community", "saweria", "dailySaweria", "dailyRobux", "likes" } do
+		for _, key in { "robux", "community", "saweria", "dailySaweria", "dailyRobux", "dailyCombined", "likes" } do
 			local list = payload[key]
 			if type(list) == "table" then
 				table.insert(parts, key .. ":" .. tostring(#list))
@@ -254,6 +254,53 @@ local function createDonationController(deps: {
 	local function invalidateWorkspaceLeaderboardCache()
 		workspaceLeaderboardCache = nil
 		workspaceLeaderboardCacheExpiresAt = 0
+	end
+
+	local function tagDailyCurrency(entries: any, currencyKind: string): { any }
+		if type(entries) ~= "table" then
+			return {}
+		end
+		local tagged = table.create(#entries)
+		for _, entry in ipairs(entries) do
+			if type(entry) == "table" then
+				local row = table.clone(entry)
+				row.currencyKind = currencyKind
+				table.insert(tagged, row)
+			end
+		end
+		return tagged
+	end
+
+	local function buildDailyCombined(dailySaweria: any, dailyRobux: any, limit: number?): { any }
+		local merged = {}
+		for _, entry in ipairs(tagDailyCurrency(dailySaweria, "saweria")) do
+			table.insert(merged, entry)
+		end
+		for _, entry in ipairs(tagDailyCurrency(dailyRobux, "playerRobux")) do
+			table.insert(merged, entry)
+		end
+		table.sort(merged, function(a, b)
+			local aAt = tonumber(a.lastDonationAt) or 0
+			local bAt = tonumber(b.lastDonationAt) or 0
+			if aAt == bAt then
+				return (tonumber(a.total) or 0) > (tonumber(b.total) or 0)
+			end
+			return aAt > bAt
+		end)
+		local resolvedLimit = math.clamp(
+			math.floor(tonumber(limit) or Config.Leaderboards.DAILY_COMBINED_LIMIT or 50),
+			1,
+			Config.Leaderboards.MAX_LIMIT
+		)
+		local result = table.create(math.min(#merged, resolvedLimit))
+		for _, entry in ipairs(merged) do
+			if #result >= resolvedLimit then
+				break
+			end
+			entry.rank = #result + 1
+			table.insert(result, entry)
+		end
+		return result
 	end
 
 	local function stampLeaderboardRevision(payload: { [string]: any })
@@ -284,6 +331,7 @@ local function createDonationController(deps: {
 			saweria = {},
 			dailySaweria = {},
 			dailyRobux = {},
+			dailyCombined = {},
 			likes = {},
 		}
 
@@ -344,7 +392,7 @@ local function createDonationController(deps: {
 				log:warn("getWorkspaceDailySaweriaLeaderboard error", { error = tostring(dailyResult) })
 			end
 		end
-		if Config.Leaderboards.DAILY_ROBUX_ENABLED == true then
+		if Config.Leaderboards.DAILY_ROBUX_ENABLED == true or Config.Leaderboards.DAILY_COMBINED_ENABLED == true then
 			if donationService and type(donationService.getWorkspaceDailyRobuxLeaderboard) == "function" then
 				local drOk, drResult = pcall(donationService.getWorkspaceDailyRobuxLeaderboard, donationService, Config.Leaderboards.ROBUX_LIMIT)
 				if drOk and type(drResult) == "table" then
@@ -373,7 +421,7 @@ local function createDonationController(deps: {
 		end
 		payload.robux = sliceForPaint(payload.robux, Config.Leaderboards.ROBUX_PAINT_LIMIT)
 		payload.likes = sliceForPaint(payload.likes, Config.Leaderboards.LIKES_PAINT_LIMIT)
-		if Config.Leaderboards.DAILY_ROBUX_ENABLED == true then
+		if Config.Leaderboards.DAILY_ROBUX_ENABLED == true or Config.Leaderboards.DAILY_COMBINED_ENABLED == true then
 			payload.dailyRobux = sliceForPaint(payload.dailyRobux, Config.Leaderboards.ROBUX_PAINT_LIMIT)
 		end
 
@@ -392,8 +440,16 @@ local function createDonationController(deps: {
 		enrichSafe(payload.saweria)
 		enrichSafe(payload.likes)
 		enrichSafe(payload.dailySaweria)
-		if Config.Leaderboards.DAILY_ROBUX_ENABLED == true then
+		if Config.Leaderboards.DAILY_ROBUX_ENABLED == true or Config.Leaderboards.DAILY_COMBINED_ENABLED == true then
 			enrichSafe(payload.dailyRobux)
+		end
+
+		if Config.Leaderboards.DAILY_COMBINED_ENABLED == true then
+			payload.dailyCombined = buildDailyCombined(
+				payload.dailySaweria,
+				payload.dailyRobux,
+				Config.Leaderboards.DAILY_COMBINED_LIMIT
+			)
 		end
 
 		-- Log payload summary buat debugging
@@ -402,6 +458,8 @@ local function createDonationController(deps: {
 			community = #payload.community,
 			saweria = #payload.saweria,
 			dailySaweria = #payload.dailySaweria,
+			dailyRobux = #payload.dailyRobux,
+			dailyCombined = #(payload.dailyCombined or {}),
 			likes = #payload.likes,
 		})
 
@@ -568,6 +626,7 @@ local function createDonationController(deps: {
 			saweria = {},
 			dailySaweria = {},
 			dailyRobux = {},
+			dailyCombined = {},
 			likes = {},
 		}
 		attachBoardStates(payload, true)

@@ -66,6 +66,8 @@ type WorkspaceSurfaceRefs = {
 	liveDonatorInfoRoot: Frame?,
 	liveDonatorInfoCard: Frame?,
 	liveDonatorInfoTotal: Frame?,
+	liveFooter: Frame?,
+	liveMessageWrapper: Frame?,
 	liveAvatar: ImageLabel?,
 	liveCommunity: ImageLabel?,
 	liveUsername: TextLabel?,
@@ -121,12 +123,18 @@ local EXIT_ANTICIPATION_DUR = 0.12 -- detik "napas" sebelum kabur (lebih terasa)
 local EXIT_ANTICIPATION_SCALE = 0.970 -- compress lebih dalam
 local EXIT_LAUNCH_DUR = 0.30 -- durasi terbang ke atas (lebih dramatic)
 local EXIT_SLIDE_ABOVE = -65 -- px ke atas dari resting saat exit (lebih jauh)
-local LIVECHAT_POP_FROM = 0.82
-local LIVECHAT_POP_PEAK = 1.04
-local LIVECHAT_POP_IN_DUR = 0.20
-local LIVECHAT_POP_SETTLE_DUR = 0.14
-local LIVECHAT_POP_OUT_SCALE = 0.96
-local LIVECHAT_POP_OUT_DUR = 0.16
+local LIVECHAT_POP_FROM = 0.86
+local LIVECHAT_POP_PEAK = 1.045
+local LIVECHAT_POP_IN_DUR = 0.34
+local LIVECHAT_POP_SETTLE_DUR = 0.2
+local LIVECHAT_POP_OUT_SCALE = 0.9
+local LIVECHAT_POP_OUT_DUR = 0.24
+local LIVECHAT_FOOTER_IN_DUR = 0.28
+local LIVECHAT_FOOTER_OUT_DUR = 0.18
+local LIVECHAT_MSG_SETTLE_DUR = 0.28
+local LIVECHAT_STAGGER_CARD = 0.02
+local LIVECHAT_STAGGER_TOTAL = 0.1
+local LIVECHAT_STAGGER_FOOTER = 0.14
 -- Dedup guard: window (detik) untuk filter notif duplikat dari burst polling
 local DEDUP_WINDOW_SECS = 2.5
 -- HELPERS
@@ -271,6 +279,8 @@ local function buildWorkspaceSurfaceRefs(liveRoot: Instance?, runningRoot: Insta
 	local liveDonatorInfoRoot = if liveChatGui
 		then liveChatGui:FindFirstChild("DonatorInformationsWrapper", true)
 		else nil
+	local liveFooter = if liveChatGui then liveChatGui:FindFirstChild("Footer", true) else nil
+	local liveMessageWrapper = if liveChatGui then liveChatGui:FindFirstChild("MessageWrapper", true) else nil
 	local runningTextGui = findSurfaceGuiByNames(runningRoot, { "RunningTextGUI", "SurfaceGui" })
 	local runningWrapper = if runningTextGui then runningTextGui:FindFirstChild("Wrapper", true) else nil
 	local runningContent = if runningTextGui then runningTextGui:FindFirstChild("ContentWrapper", true) else nil
@@ -286,6 +296,8 @@ local function buildWorkspaceSurfaceRefs(liveRoot: Instance?, runningRoot: Insta
 		liveDonatorInfoTotal = if liveDonatorInfoRoot
 			then liveDonatorInfoRoot:FindFirstChild("TotalDonationsWrapper") :: Frame?
 			else nil,
+		liveFooter = if liveFooter and liveFooter:IsA("Frame") then liveFooter else nil,
+		liveMessageWrapper = if liveMessageWrapper and liveMessageWrapper:IsA("Frame") then liveMessageWrapper else nil,
 		liveAvatar = findImageLabel(liveChatGui, "PlayerImageThumbnail"),
 		liveCommunity = findImageLabel(liveChatGui, "PlayerCommunity"),
 		liveUsername = findTextLabel(liveChatGui, "PlayerUsername"),
@@ -332,27 +344,134 @@ local function getOrCreateLiveChatScale(frame: Frame): UIScale
 	return scale
 end
 
+local function setGroupTransparency(gui: GuiObject, value: number)
+	pcall(function()
+		gui.GroupTransparency = value
+	end)
+end
+
+local function tweenGroupTransparency(gui: GuiObject, value: number, info: TweenInfo): Tween?
+	local ok, tw = pcall(function()
+		return TweenService:Create(gui, info, { GroupTransparency = value })
+	end)
+	if ok and tw then
+		tw:Play()
+		return tw
+	end
+	return nil
+end
+
+local function settleMessageWrapper(refs: WorkspaceSurfaceRefs, towardIdle: boolean)
+	local frame = refs.liveMessageWrapper
+	if not frame or not frame.Parent then
+		return
+	end
+	local scale = getOrCreateLiveChatScale(frame)
+	scale.Scale = if towardIdle then 0.96 else 0.97
+	TweenService:Create(
+		scale,
+		TweenInfo.new(LIVECHAT_MSG_SETTLE_DUR, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+		{ Scale = 1 }
+	):Play()
+end
+
+local function showLiveChatFooter(refs: WorkspaceSurfaceRefs, delaySec: number)
+	local footer = refs.liveFooter
+	if not footer then
+		return
+	end
+	task.delay(delaySec, function()
+		if not footer.Parent then
+			return
+		end
+		local scale = getOrCreateLiveChatScale(footer)
+		footer.Visible = true
+		scale.Scale = 0.94
+		setGroupTransparency(footer, 1)
+		TweenService:Create(
+			scale,
+			TweenInfo.new(LIVECHAT_FOOTER_IN_DUR, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+			{ Scale = 1 }
+		):Play()
+		tweenGroupTransparency(
+			footer,
+			0,
+			TweenInfo.new(LIVECHAT_FOOTER_IN_DUR, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+		)
+	end)
+end
+
+local function hideLiveChatFooter(refs: WorkspaceSurfaceRefs, animated: boolean)
+	local footer = refs.liveFooter
+	if not footer then
+		return
+	end
+	if not animated or not footer.Visible then
+		footer.Visible = false
+		setGroupTransparency(footer, 0)
+		local scale = footer:FindFirstChild("RuntimePopScale")
+		if scale and scale:IsA("UIScale") then
+			scale.Scale = 1
+		end
+		return
+	end
+	local scale = getOrCreateLiveChatScale(footer)
+	local outInfo = TweenInfo.new(LIVECHAT_FOOTER_OUT_DUR, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	TweenService:Create(scale, outInfo, { Scale = 0.94 }):Play()
+	local fade = tweenGroupTransparency(footer, 1, outInfo)
+	local function finish()
+		if footer.Parent then
+			footer.Visible = false
+			setGroupTransparency(footer, 0)
+			scale.Scale = 1
+		end
+	end
+	if fade then
+		fade.Completed:Once(finish)
+	else
+		task.delay(LIVECHAT_FOOTER_OUT_DUR, finish)
+	end
+end
+
 local function resetLiveChatInfoVisibility(refs: WorkspaceSurfaceRefs)
 	if refs.liveDonatorInfoCard then
 		refs.liveDonatorInfoCard.Visible = false
 		getOrCreateLiveChatScale(refs.liveDonatorInfoCard).Scale = 1
+		setGroupTransparency(refs.liveDonatorInfoCard, 0)
 	end
 	if refs.liveDonatorInfoTotal then
 		refs.liveDonatorInfoTotal.Visible = false
 		getOrCreateLiveChatScale(refs.liveDonatorInfoTotal).Scale = 1
+		setGroupTransparency(refs.liveDonatorInfoTotal, 0)
 	end
+	-- Hide donor stack entirely while idle so MainWrapper UIListLayout can
+	-- vertically center MessageWrapper (Footer is also hidden idle).
+	if refs.liveDonatorInfoRoot then
+		refs.liveDonatorInfoRoot.Visible = false
+		getOrCreateLiveChatScale(refs.liveDonatorInfoRoot).Scale = 1
+		setGroupTransparency(refs.liveDonatorInfoRoot, 0)
+	end
+	hideLiveChatFooter(refs, false)
 end
 
 local function popLiveChatInfo(refs: WorkspaceSurfaceRefs)
+	settleMessageWrapper(refs, false)
+
 	if refs.liveDonatorInfoRoot then
 		local rootScale = getOrCreateLiveChatScale(refs.liveDonatorInfoRoot)
 		refs.liveDonatorInfoRoot.Visible = true
-		rootScale.Scale = 0.98
+		rootScale.Scale = 0.94
+		setGroupTransparency(refs.liveDonatorInfoRoot, 0.35)
 		TweenService:Create(
 			rootScale,
-			TweenInfo.new(LIVECHAT_POP_IN_DUR, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			TweenInfo.new(LIVECHAT_POP_IN_DUR, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
 			{ Scale = 1 }
 		):Play()
+		tweenGroupTransparency(
+			refs.liveDonatorInfoRoot,
+			0,
+			TweenInfo.new(LIVECHAT_POP_IN_DUR * 0.85, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+		)
 	end
 
 	local function popFrame(frame: Frame?, delaySec: number)
@@ -363,6 +482,7 @@ local function popLiveChatInfo(refs: WorkspaceSurfaceRefs)
 		local scale = getOrCreateLiveChatScale(frame)
 		frame.Visible = true
 		scale.Scale = LIVECHAT_POP_FROM
+		setGroupTransparency(frame, 0.55)
 
 		task.delay(delaySec, function()
 			if not frame.Parent then
@@ -373,12 +493,17 @@ local function popLiveChatInfo(refs: WorkspaceSurfaceRefs)
 				TweenInfo.new(LIVECHAT_POP_IN_DUR, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
 				{ Scale = LIVECHAT_POP_PEAK }
 			)
+			tweenGroupTransparency(
+				frame,
+				0,
+				TweenInfo.new(LIVECHAT_POP_IN_DUR * 0.75, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+			)
 			grow:Play()
 			grow.Completed:Connect(function()
 				if scale.Parent then
 					TweenService:Create(
 						scale,
-						TweenInfo.new(LIVECHAT_POP_SETTLE_DUR, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+						TweenInfo.new(LIVECHAT_POP_SETTLE_DUR, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
 						{ Scale = 1 }
 					):Play()
 				end
@@ -386,26 +511,27 @@ local function popLiveChatInfo(refs: WorkspaceSurfaceRefs)
 		end)
 	end
 
-	popFrame(refs.liveDonatorInfoCard, 0)
-	popFrame(refs.liveDonatorInfoTotal, 0.05)
+	popFrame(refs.liveDonatorInfoCard, LIVECHAT_STAGGER_CARD)
+	popFrame(refs.liveDonatorInfoTotal, LIVECHAT_STAGGER_TOTAL)
+	showLiveChatFooter(refs, LIVECHAT_STAGGER_FOOTER)
 end
 
 local function popOutLiveChatInfo(refs: WorkspaceSurfaceRefs, onDone: (() -> ())?)
+	hideLiveChatFooter(refs, true)
 	local longestTween: Tween? = nil
 
 	for _, frame in ipairs({ refs.liveDonatorInfoTotal, refs.liveDonatorInfoCard }) do
 		if frame and frame.Parent and frame.Visible then
 			local scale = getOrCreateLiveChatScale(frame)
-			local tweenOut = TweenService:Create(
-				scale,
-				TweenInfo.new(LIVECHAT_POP_OUT_DUR, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
-				{ Scale = LIVECHAT_POP_OUT_SCALE }
-			)
+			local outInfo = TweenInfo.new(LIVECHAT_POP_OUT_DUR, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+			local tweenOut = TweenService:Create(scale, outInfo, { Scale = LIVECHAT_POP_OUT_SCALE })
+			tweenGroupTransparency(frame, 1, outInfo)
 			longestTween = tweenOut
 			tweenOut.Completed:Once(function()
 				if frame.Parent then
 					frame.Visible = false
 					scale.Scale = 1
+					setGroupTransparency(frame, 0)
 				end
 			end)
 			tweenOut:Play()
@@ -414,18 +540,23 @@ local function popOutLiveChatInfo(refs: WorkspaceSurfaceRefs, onDone: (() -> ())
 
 	if refs.liveDonatorInfoRoot and refs.liveDonatorInfoRoot.Parent then
 		local rootScale = getOrCreateLiveChatScale(refs.liveDonatorInfoRoot)
-		local rootTween = TweenService:Create(
-			rootScale,
-			TweenInfo.new(LIVECHAT_POP_OUT_DUR, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
-			{ Scale = LIVECHAT_POP_OUT_SCALE }
-		)
+		local outInfo = TweenInfo.new(LIVECHAT_POP_OUT_DUR, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+		local rootTween = TweenService:Create(rootScale, outInfo, { Scale = LIVECHAT_POP_OUT_SCALE })
+		tweenGroupTransparency(refs.liveDonatorInfoRoot, 1, outInfo)
 		longestTween = rootTween
 		rootTween.Completed:Once(function()
 			if rootScale.Parent then
 				rootScale.Scale = 1
 			end
+			if refs.liveDonatorInfoRoot and refs.liveDonatorInfoRoot.Parent then
+				refs.liveDonatorInfoRoot.Visible = false
+				setGroupTransparency(refs.liveDonatorInfoRoot, 0)
+			end
+			settleMessageWrapper(refs, true)
 		end)
 		rootTween:Play()
+	else
+		settleMessageWrapper(refs, true)
 	end
 
 	if longestTween then

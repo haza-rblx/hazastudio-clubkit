@@ -2477,8 +2477,12 @@ Config.Leaderboards = {
 	CLIENT_PAINT_DATA = false,
 	-- Client runs podium/gradient/daily motion only.
 	CLIENT_PLAY_ANIMATIONS = true,
-	-- Daily boards: Bagi-Bagi (Rupiah) only; DailyDonationsRobux SurfaceGui is not placed.
-	DAILY_ROBUX_ENABLED = false,
+	-- Daily boards: DailyDonations (combined R$+RP), DailyDonationsRobux, DailyDonationsCash.
+	DAILY_ROBUX_ENABLED = true,
+	-- Merge daily Robux + cash into payload.dailyCombined (sorted by lastDonationAt desc).
+	DAILY_COMBINED_ENABLED = true,
+	-- Cap for combined list after merge (before showcase paging).
+	DAILY_COMBINED_LIMIT = 50,
 	REVISION_ATTRIBUTE = "LeaderboardRevision",
 	REMOTE_UPDATED = "WorkspaceLeaderboardsUpdated",
 	REMOTE_SNAPSHOT = "WorkspaceLeaderboardsSnapshot",

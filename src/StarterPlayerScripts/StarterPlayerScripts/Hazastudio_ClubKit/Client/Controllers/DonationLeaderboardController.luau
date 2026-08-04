@@ -44,25 +44,46 @@ type DailySpec = {
 	warnKey: string,
 }
 
-local DAILY_SAWERIA_SPEC: DailySpec = {
+local DAILY_COMBINED_SPEC: DailySpec = {
 	rootPart = "DailyDonations",
+	guiName = "DailyDonationsWrapper",
+	dataKey = "dailyCombined",
+	kind = "combined",
+	warnKey = "dailyCombined",
+}
+
+local DAILY_CASH_SPEC: DailySpec = {
+	rootPart = "DailyDonationsCash",
 	guiName = "DailyDonationsWrapper",
 	dataKey = "dailySaweria",
 	kind = "saweria",
-	warnKey = "dailySaweria",
+	warnKey = "dailyCash",
 }
 
 local DAILY_ROBUX_SPEC: DailySpec = {
 	rootPart = "DailyDonationsRobux",
-	guiName = "DailyRobuxDonationsWrapper",
+	guiName = "DailyDonationsWrapper",
 	dataKey = "dailyRobux",
 	kind = "playerRobux",
 	warnKey = "dailyRobux",
 }
 
--- Daily board specs; Robux wrapper omitted when Config.Leaderboards.DAILY_ROBUX_ENABLED is false.
+-- Daily board specs: combined + cash; Robux when Config.Leaderboards.DAILY_ROBUX_ENABLED.
 local function buildDailySpecs(): { DailySpec }
-	local specs = { DAILY_SAWERIA_SPEC }
+	local specs: { DailySpec } = {}
+	if Config.Leaderboards.DAILY_COMBINED_ENABLED == true then
+		table.insert(specs, DAILY_COMBINED_SPEC)
+	else
+		-- Legacy: main DailyDonations board stays cash-only when combined is off.
+		table.insert(specs, {
+			rootPart = "DailyDonations",
+			guiName = "DailyDonationsWrapper",
+			dataKey = "dailySaweria",
+			kind = "saweria",
+			warnKey = "dailySaweria",
+		})
+	end
+	table.insert(specs, DAILY_CASH_SPEC)
 	if Config.Leaderboards.DAILY_ROBUX_ENABLED == true then
 		table.insert(specs, DAILY_ROBUX_SPEC)
 	end
@@ -279,7 +300,7 @@ end
 local function formatDonationValue(kind: string, value: number): string
 	local grouped = formatGrouped(value)
 	if kind == "saweria" or kind == "saweriaPoster" then
-		return "RP." .. grouped
+		return "RP " .. grouped
 	end
 	return grouped
 end
@@ -331,14 +352,8 @@ local function warnOnce(key: string, message: string, payload: any)
 end
 
 local function resolveDailyDonationsGui(spec: DailySpec): SurfaceGui?
-	-- Strategy 1: global search by SurfaceGui name.
-	local globalHit = findSurfaceGuiByNameGlobal(spec.guiName)
-	if globalHit then
-		return globalHit
-	end
-
-	-- Strategy 2: part-scoped search (backward compatible).
-	local part = workspace:FindFirstChild(spec.rootPart)
+	-- Prefer part-scoped lookup first: multiple boards share DailyDonationsWrapper.
+	local part = workspace:FindFirstChild(spec.rootPart, true)
 	if part then
 		local scoped, autoDiscovered = findSurfaceGuiInPart(part, spec.guiName)
 		if scoped then
@@ -353,9 +368,19 @@ local function resolveDailyDonationsGui(spec: DailySpec): SurfaceGui?
 		end
 	end
 
+	-- Global fallback only when the expected gui name is unique enough.
+	local globalHit = findSurfaceGuiByNameGlobal(spec.guiName)
+	if globalHit then
+		local underExpectedPart = globalHit:FindFirstAncestor(spec.rootPart) ~= nil
+			or (globalHit.Parent and globalHit.Parent.Name == spec.rootPart)
+		if underExpectedPart then
+			return globalHit
+		end
+	end
+
 	if not dailyResolverWarnedByKey[spec.warnKey] then
 		dailyResolverWarnedByKey[spec.warnKey] = true
-		log:warn(spec.guiName .. " SurfaceGui not found")
+		log:warn(spec.guiName .. " SurfaceGui not found", { rootPart = spec.rootPart })
 	end
 	return nil
 end
@@ -745,6 +770,30 @@ local function setRankText(root: Instance, rank: number)
 	end
 end
 
+local function resolveCurrencyKind(entry: any?, boardKind: string): string
+	if boardKind == "combined" then
+		if type(entry) == "table" then
+			local ck = entry.currencyKind or entry.kind
+			if ck == "playerRobux" or ck == "robux" then
+				return "playerRobux"
+			end
+			if ck == "saweria" or ck == "cash" or ck == "saweriaPoster" then
+				return "saweria"
+			end
+		end
+		return "saweria"
+	end
+	return boardKind
+end
+
+local function setRobuxLogoVisible(root: Instance, visible: boolean)
+	for _, descendant in ipairs(root:GetDescendants()) do
+		if descendant:IsA("ImageLabel") and descendant.Name == "RobuxLogo" then
+			descendant.Visible = visible
+		end
+	end
+end
+
 local function getEntryDisplayName(entry: any, kind: string): string
 	if kind == "community" then
 		return tostring(entry.communityName or ("Community " .. tostring(entry.communityId or "")))
@@ -805,6 +854,7 @@ local function getCardFingerprint(entry: any, rank: number, kind: string): strin
 	return table.concat({
 		tostring(rank),
 		kind,
+		tostring(entry.currencyKind or ""),
 		tostring(entry.userId or ""),
 		tostring(entry.communityId or ""),
 		tostring(entry.username or ""),
@@ -812,6 +862,7 @@ local function getCardFingerprint(entry: any, rank: number, kind: string): strin
 		tostring(entry.displayName or ""),
 		tostring(entry.communityName or ""),
 		tostring(entry.total or 0),
+		tostring(entry.lastDonationAt or 0),
 		tostring(entry.thumbnail or ""),
 		tostring(entry.communityLogo or ""),
 	}, "|")
@@ -837,6 +888,8 @@ local function updateCard(
 		return
 	end
 
+	local currencyKind = resolveCurrencyKind(entry, kind)
+
 	local shouldFadeSupportingCard = false
 	if isBasicCard then
 		local fingerprint = getCardFingerprint(entry, rank, kind)
@@ -849,36 +902,36 @@ local function updateCard(
 		card.LayoutOrder = rank
 	end
 	setRankText(card, rank)
-	setAllNamedTexts(card, DISPLAY_NAME_LABEL_NAMES, getEntryDisplayName(entry, kind))
-	setAllNamedTexts(card, USERNAME_LABEL_NAMES, getEntryUsernameText(entry, kind))
-	local portraitImage = getEntryImage(entry, kind)
+	setAllNamedTexts(card, DISPLAY_NAME_LABEL_NAMES, getEntryDisplayName(entry, currencyKind))
+	setAllNamedTexts(card, USERNAME_LABEL_NAMES, getEntryUsernameText(entry, currencyKind))
+	local portraitImage = getEntryImage(entry, currencyKind)
 	setAllNamedImages(card, THUMBNAIL_IMAGE_NAMES, portraitImage)
 	local imageLabel: ImageLabel? = nil
 	local imageChanged = false
 	if isBasicCard then
 		imageLabel, imageChanged =
-			setImageAtPath(card, { "Wrapper", "PlayerThumbnailImage" }, getEntryImage(entry, kind))
+			setImageAtPath(card, { "Wrapper", "PlayerThumbnailImage" }, getEntryImage(entry, currencyKind))
 		if not imageLabel then
 			imageLabel, imageChanged =
-				setImageAtPath(card, { "Wrapper", "PlayerThumbnail" }, getEntryImage(entry, kind))
+				setImageAtPath(card, { "Wrapper", "PlayerThumbnail" }, getEntryImage(entry, currencyKind))
 		end
 		if not imageLabel then
 			imageLabel, imageChanged =
-				setImageAtPath(card, { "Wrapper", "PlayerThumbnailPic" }, getEntryImage(entry, kind))
+				setImageAtPath(card, { "Wrapper", "PlayerThumbnailPic" }, getEntryImage(entry, currencyKind))
 		end
 		if not imageLabel then
-			imageLabel, imageChanged = setImageAtPath(card, { "Wrapper", "ProfilePicture" }, getEntryImage(entry, kind))
+			imageLabel, imageChanged = setImageAtPath(card, { "Wrapper", "ProfilePicture" }, getEntryImage(entry, currencyKind))
 		end
 	end
 	if not imageLabel then
 		imageLabel, imageChanged = setFirstImage(card, THUMBNAIL_IMAGE_NAMES, portraitImage)
 	end
 	local amountValue = tonumber(entry.total) or 0
-	if kind == "saweria" then
-		local label = findValueLabel(card, kind)
+	if currencyKind == "saweria" or currencyKind == "saweriaPoster" then
+		local label = findValueLabel(card, currencyKind)
 		if label then
 			local normalizedValue = math.floor(math.max(amountValue, 0))
-			local text = formatDonationValue(kind, normalizedValue)
+			local text = formatDonationValue(currencyKind, normalizedValue)
 			local previous = lastValueTextByLabel[label]
 			valueNumberByLabel[label] = normalizedValue
 			nextValueCounterGeneration(label)
@@ -889,8 +942,9 @@ local function updateCard(
 			lastValueTextByLabel[label] = text
 		end
 	else
-		setValue(card, kind, amountValue, not isBasicCard)
+		setValue(card, currencyKind, amountValue, not isBasicCard)
 	end
+	setRobuxLogoVisible(card, currencyKind == "playerRobux" or currencyKind == "robux")
 	if not isBasicCard then
 		animateCardEntrance(card, rank)
 	elseif shouldFadeSupportingCard then
@@ -898,9 +952,9 @@ local function updateCard(
 	end
 
 	if isBasicCard and imageLabel == nil then
-		local resolvedRowThumbnail = resolveRowThumbnail(card, kind)
+		local resolvedRowThumbnail = resolveRowThumbnail(card, currencyKind)
 		if resolvedRowThumbnail then
-			local nextImage = getEntryImage(entry, kind)
+			local nextImage = getEntryImage(entry, currencyKind)
 			imageChanged = nextImage ~= "" and resolvedRowThumbnail.Image ~= nextImage
 			resolvedRowThumbnail.Image = nextImage
 			imageLabel = resolvedRowThumbnail
@@ -1422,6 +1476,7 @@ local function init(_deps: {}?)
 		playWorkspaceAnimations({
 			dailySaweria = {},
 			dailyRobux = {},
+			dailyCombined = {},
 			updatedAt = os.time(),
 		})
 	end)
@@ -1439,6 +1494,7 @@ local function init(_deps: {}?)
 			payload = {
 				dailySaweria = {},
 				dailyRobux = {},
+				dailyCombined = {},
 				updatedAt = os.time(),
 			}
 		end

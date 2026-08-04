@@ -429,6 +429,7 @@ function DemoDataProvider.create(config: DemoConfig?): DemoDataProvider
 				saweria = {},
 				dailySaweria = {},
 				dailyRobux = {},
+				dailyCombined = {},
 				likes = {},
 				boardStates = {
 					robux = "empty",
@@ -445,8 +446,34 @@ function DemoDataProvider.create(config: DemoConfig?): DemoDataProvider
 		local likesEntries = generateUserSorted(cachedProfiles, 10, 500, limit, false)
 		local dailySaweria = generateUserSorted(cachedProfiles, 10000, 500000, math.min(4, limit), true)
 		local dailyRobux = if Config.Leaderboards.DAILY_ROBUX_ENABLED == true
+				or Config.Leaderboards.DAILY_COMBINED_ENABLED == true
 			then generateUserSorted(cachedProfiles, robuxMin, math.min(robuxMax, 2000), math.min(4, limit), false)
 			else {}
+
+		local dailyCombined = {}
+		if Config.Leaderboards.DAILY_COMBINED_ENABLED == true then
+			for _, entry in ipairs(dailySaweria) do
+				local row = table.clone(entry)
+				row.currencyKind = "saweria"
+				table.insert(dailyCombined, row)
+			end
+			for _, entry in ipairs(dailyRobux) do
+				local row = table.clone(entry)
+				row.currencyKind = "playerRobux"
+				table.insert(dailyCombined, row)
+			end
+			table.sort(dailyCombined, function(a, b)
+				local aAt = tonumber(a.lastDonationAt) or 0
+				local bAt = tonumber(b.lastDonationAt) or 0
+				if aAt == bAt then
+					return (tonumber(a.total) or 0) > (tonumber(b.total) or 0)
+				end
+				return aAt > bAt
+			end)
+			for index, entry in ipairs(dailyCombined) do
+				entry.rank = index
+			end
+		end
 
 		cachedPayload = {
 			updatedAt = os.time(),
@@ -455,6 +482,7 @@ function DemoDataProvider.create(config: DemoConfig?): DemoDataProvider
 			saweria = saweriaEntries,
 			dailySaweria = dailySaweria,
 			dailyRobux = dailyRobux,
+			dailyCombined = dailyCombined,
 			likes = likesEntries,
 			boardStates = {
 				robux = if #robuxEntries > 0 then "ready" else "empty",
