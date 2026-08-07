@@ -4,7 +4,7 @@ Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
 
 **Versi saat ini:** `2.4.72` (lihat [`VERSION`](VERSION))  
 **Target rilis berikutnya:** _(belum ditetapkan)_  
-**Branch aktif:** `wip/admin-hub`
+**Branch aktif:** `main`
 
 ---
 
