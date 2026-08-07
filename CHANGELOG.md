@@ -11,6 +11,13 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.74] - 2026-08-08
+
+Plugin Config Features panel driven from engine schema manifest (Admin Hub + Legacy SyncBhms visible in UI).
+
+### Changed
+- **Plugin Config → Features** — toggle list now loads from `ClubKitConfigSchema.FEATURE_MANIFEST` in the synced engine (includes Admin Hub, Legacy SyncBhms). No more duplicate hardcoded feature list in the plugin.
+
 ## [2.4.73] - 2026-08-08
 
 English localization pass for engine copy + automatic cash leaderboard title from donation provider.

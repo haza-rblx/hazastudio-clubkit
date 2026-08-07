@@ -11,6 +11,8 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
+local ConfigSchemaCore = require(script.Parent.ConfigSchemaCore)
+
 local ConfigEditCore = {}
 
 export type Snapshot = {
@@ -48,29 +50,20 @@ export type Snapshot = {
 	error: string?,
 }
 
-local FEATURE_KEYS = {
-	"MusicPlayer",
-	"MusicCatalogSeed",
-	"SyncDance",
-	"Hotbar",
-	"LoadingScreen",
-	"LevelSystem",
-	"Settings",
-	"Shop",
-	"Couples",
-	"Stickers",
-	"Leaderboards",
-	"DonationCash",
-	"DonationRobux",
-	"Gravity",
-	"PromptJoinCommunityOnLoad",
-	"VipOnCommunityJoin",
-	"JoinGreetings",
-	"DonationWorldEffects",
-	"DonationRankGradientAnim",
-}
+function ConfigEditCore.getFeatureGroups(): ({ any }, string?)
+	return ConfigSchemaCore.getFeatureGroups()
+end
 
-ConfigEditCore.FEATURE_KEYS = FEATURE_KEYS
+function ConfigEditCore.getFeatureKeys(): { string }
+	return ConfigSchemaCore.getFeatureKeys()
+end
+
+-- Legacy export: refreshed each call so new schema keys appear without plugin rebuild.
+function ConfigEditCore.getFEATURE_KEYS(): { string }
+	return ConfigEditCore.getFeatureKeys()
+end
+
+ConfigEditCore.FEATURE_KEYS = ConfigEditCore.getFeatureKeys()
 
 local function findBuyerConfig(): ModuleScript?
 	local folder = ReplicatedStorage:FindFirstChild("Hazastudio_ClubKitConfig")
@@ -308,7 +301,7 @@ function ConfigEditCore.read(): Snapshot
 	snap.group.ownerGroupRank = tonumber(group.OwnerGroupRank) or 255
 
 	local features = cfg.Features or {}
-	for _, key in FEATURE_KEYS do
+	for _, key in ConfigEditCore.getFeatureKeys() do
 		local v = features[key]
 		if v == nil and key == "DonationCash" then
 			v = features.DonationSaweria

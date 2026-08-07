@@ -36,56 +36,9 @@ export type CreateOpts = {
 	applyPluginSoftUpdate: ((tag: string, onProgress: any) -> any)?,
 }
 
-local FEATURE_GROUPS = {
-	{
-		name = "Music & dance",
-		items = {
-			{ "MusicPlayer", "Music player" },
-			{ "MusicCatalogSeed", "Default playlist" },
-			{ "SyncDance", "Sync dance" },
-		},
-	},
-	{
-		name = "Interface",
-		items = {
-			{ "Hotbar", "Hotbar" },
-			{ "LoadingScreen", "Loading screen" },
-			{ "Settings", "Settings menu" },
-			{ "JoinGreetings", "Join greetings" },
-			{ "PromptJoinCommunityOnLoad", "Join community prompt" },
-		},
-	},
-	{
-		name = "Social & progression",
-		items = {
-			{ "Couples", "Couple system" },
-			{ "Stickers", "Stickers" },
-			{ "LevelSystem", "Level & XP" },
-		},
-	},
-	{
-		name = "Monetization",
-		items = {
-			{ "Shop", "Shop" },
-			{ "Leaderboards", "Donation boards" },
-			{ "DonationCash", "Cash donations" },
-			{ "DonationRobux", "Robux donations" },
-			{ "DonationWorldEffects", "Donation world effects" },
-		},
-	},
-	{
-		name = "More",
-		items = {
-			{ "Gravity", "Gravity tool" },
-			{ "VipOnCommunityJoin", "Free VIP for group members" },
-			{ "DonationRankGradientAnim", "Donor rank animation" },
-		},
-	},
-}
-
 local CONFIG_META = {
 	general = { title = "General", subtitle = "Club name, group, and owner settings." },
-	features = { title = "Features", subtitle = "Turn kit features on or off for your place." },
+	features = { title = "Features", subtitle = "Turn kit features on or off (from ClubKitConfigSchema manifest)." },
 	membership = { title = "Membership", subtitle = "Tier names, prices, and game pass IDs." },
 	donation = { title = "Donations", subtitle = "Provider, API keys, and donation channels." },
 }
@@ -237,7 +190,8 @@ local function buildConfigPage(ctx, page: Frame)
 	end
 
 	local function renderFeatures(draft)
-		for gi, group in FEATURE_GROUPS do
+		local featureGroups = ConfigEditCore.getFeatureGroups()
+		for gi, group in featureGroups do
 			local _c, b = UI.card({ parent = bodyHost, order = gi, gap = 0 })
 			UI.cardTitle(b, group.name, nil, 1)
 			local spacer = Instance.new("Frame")
@@ -246,7 +200,8 @@ local function buildConfigPage(ctx, page: Frame)
 			spacer.LayoutOrder = 2
 			spacer.Parent = b
 			for i, item in group.items do
-				local key, label = item[1], item[2]
+				local key = if type(item) == "table" then (item.key or item[1]) else item[1]
+				local label = if type(item) == "table" then (item.label or item[2]) else item[2]
 				UI.row({
 					parent = b,
 					label = label,

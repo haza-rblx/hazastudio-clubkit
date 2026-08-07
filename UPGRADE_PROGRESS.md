@@ -2,7 +2,7 @@
 
 Internal scratch pad to track work **before** a version is released.
 
-**Current version:** `2.4.73` (see [`VERSION`](VERSION))  
+**Current version:** `2.4.74` (see [`VERSION`](VERSION))  
 **Next release target:** _(not set)_  
 **Active branch:** `main`
 

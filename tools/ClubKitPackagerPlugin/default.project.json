@@ -23,6 +23,9 @@
     "ConfigEditCore": {
       "$path": "plugin/ConfigEditCore.luau"
     },
+    "ConfigSchemaCore": {
+      "$path": "plugin/ConfigSchemaCore.luau"
+    },
     "DovetailTheme": {
       "$path": "plugin/DovetailTheme.luau"
     },

@@ -7,6 +7,7 @@
 
   Runtime: ConfigBootstrap.fillForward(defaults, buyer)
   Plugin: ConfigPatchCore uses this module after Update Engine to patch Source.
+  Plugin Config Features panel: FEATURE_MANIFEST + getFeatureKeys/getFeatureGroups.
 ]]
 
 local ClubKitConfigSchema = {}
@@ -444,6 +445,85 @@ ClubKitConfigSchema.defaults = {
 		DonationRankGradientAnim = false,
 	},
 }
+
+export type FeatureManifestItem = {
+	key: string,
+	label: string,
+}
+
+export type FeatureManifestGroup = {
+	name: string,
+	items: { FeatureManifestItem },
+}
+
+-- Plugin Config panel + FEATURE_KEYS derive from this (not a duplicate hardcoded list).
+-- Keys must exist in `defaults.Features`. Omit legacy aliases hidden from UI (e.g. DonationSaweria).
+ClubKitConfigSchema.FEATURE_MANIFEST = {
+	{
+		name = "Music & dance",
+		items = {
+			{ key = "MusicPlayer", label = "Music player" },
+			{ key = "MusicCatalogSeed", label = "Default playlist" },
+			{ key = "SyncDance", label = "Sync dance" },
+			{ key = "LegacySyncBhms", label = "Legacy SyncBhms place-pack" },
+		},
+	},
+	{
+		name = "Interface",
+		items = {
+			{ key = "Hotbar", label = "Hotbar" },
+			{ key = "LoadingScreen", label = "Loading screen" },
+			{ key = "Settings", label = "Settings menu" },
+			{ key = "JoinGreetings", label = "Join greetings" },
+			{ key = "PromptJoinCommunityOnLoad", label = "Join community prompt" },
+			{ key = "AdminHub", label = "Admin Hub (04-AdminHub)" },
+		},
+	},
+	{
+		name = "Social & progression",
+		items = {
+			{ key = "Couples", label = "Couple system" },
+			{ key = "Stickers", label = "Stickers" },
+			{ key = "LevelSystem", label = "Level & XP" },
+		},
+	},
+	{
+		name = "Monetization",
+		items = {
+			{ key = "Shop", label = "Shop" },
+			{ key = "Leaderboards", label = "Donation boards" },
+			{ key = "DonationCash", label = "Cash donations" },
+			{ key = "DonationRobux", label = "Robux donations" },
+			{ key = "DonationWorldEffects", label = "Donation world effects" },
+		},
+	},
+	{
+		name = "More",
+		items = {
+			{ key = "Gravity", label = "Gravity tool" },
+			{ key = "VipOnCommunityJoin", label = "Free VIP for group members" },
+			{ key = "DonationRankGradientAnim", label = "Donor rank animation" },
+		},
+	},
+} :: { FeatureManifestGroup }
+
+function ClubKitConfigSchema.getFeatureGroups(): { FeatureManifestGroup }
+	return ClubKitConfigSchema.FEATURE_MANIFEST
+end
+
+function ClubKitConfigSchema.getFeatureKeys(): { string }
+	local keys: { string } = {}
+	local seen: { [string]: boolean } = {}
+	for _, group in ClubKitConfigSchema.FEATURE_MANIFEST do
+		for _, item in group.items do
+			if not seen[item.key] then
+				seen[item.key] = true
+				table.insert(keys, item.key)
+			end
+		end
+	end
+	return keys
+end
 
 local function deepClone(value: any): any
 	if type(value) ~= "table" then
