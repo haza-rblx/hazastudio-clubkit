@@ -91,18 +91,18 @@ end
 
 -- Device-aware press handler.
 --
--- Desktop / hybrid (mouse + keyboard): instant fire on InputBegan, sama persis
--- kayak behavior original — no delay, no drag detection.
+-- Desktop / hybrid (mouse + keyboard): instant fire on InputBegan, same as
+-- original behavior — no delay, no drag detection.
 --
--- Touch-only (HP / tablet tanpa keyboard): tap detector. Track posisi awal
--- saat InputBegan, monitor drag via UserInputService global, cancel tap kalau
--- finger bergerak > TAP_DRAG_THRESHOLD pixel. Fire callback baru di InputEnded
--- kalau masih dalam threshold. Cegah row dance kepencet pas user mau scroll.
+-- Touch-only (phone/tablet without keyboard): tap detector. Track initial touch position
+-- on InputBegan, monitor drag via global UserInputService, cancel tap if
+-- If finger moves > TAP_DRAG_THRESHOLD px. Fire callback only on InputEnded
+-- if still within threshold. Prevent dance row tap when user wants to scroll.
 --
--- Return: object dengan method :Disconnect() (compatible dengan existing caller
--- yang panggil rowConnection:Disconnect()).
+-- Return: object with method :Disconnect() (compatible with existing caller
+-- that calls rowConnection:Disconnect()).
 local IS_TOUCH_ONLY_DEVICE = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
--- HP scroll: threshold lebih longgar supaya scroll tidak kepencet sebagai tap dance.
+-- Phone scroll: looser threshold so scrolling is not mistaken for a dance tap.
 local TAP_DRAG_THRESHOLD_SQ = 42 * 42 -- 42px squared (avoid sqrt per InputChanged)
 
 local function bindPressDown(button: GuiButton, callback: (InputObject) -> ())
@@ -110,7 +110,7 @@ local function bindPressDown(button: GuiButton, callback: (InputObject) -> ())
 	local pendingTaps: { [InputObject]: Vector2 } = {}
 
 	table.insert(connections, button.InputBegan:Connect(function(input)
-		-- Mouse: always instant (gak ada drag-to-scroll concern di mouse).
+		-- Mouse: always instant (no drag-to-scroll concern on mouse).
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 			callback(input)
 			return
@@ -139,7 +139,7 @@ local function bindPressDown(button: GuiButton, callback: (InputObject) -> ())
 			local dx = input.Position.X - startPos.X
 			local dy = input.Position.Y - startPos.Y
 			if (dx * dx + dy * dy) > TAP_DRAG_THRESHOLD_SQ then
-				-- Drag detected — user mau scroll, bukan tap. Cancel.
+				-- Drag detected — user wants to scroll, not tap. Cancel.
 				pendingTaps[input] = nil
 			end
 		end))
@@ -150,7 +150,7 @@ local function bindPressDown(button: GuiButton, callback: (InputObject) -> ())
 			end
 			local startPos = pendingTaps[input]
 			if not startPos then
-				-- Either tap di-cancel oleh drag, atau input bukan dari button ini.
+				-- Either tap cancelled by drag, or input not from this button.
 				return
 			end
 			pendingTaps[input] = nil
@@ -426,7 +426,7 @@ local function setGuiInputCapture(gui: GuiObject)
 	end
 end
 
--- HP: pastikan scroll list menangkap touch (tidak nembus ke kamera).
+-- HP: ensure scroll list captures touch (does not pass through to camera).
 function DancePanelUIBinder:_ensureScrollInputCapture()
 	local panelRoot = self.refs.panelRoot
 	local wrapper = self.refs.mainContentWrapper
@@ -440,12 +440,12 @@ function DancePanelUIBinder:_ensureScrollInputCapture()
 	pcall(function()
 		scroll.ElasticBehavior = Enum.ElasticBehavior.Always
 	end)
-	-- Kurangi overscroll / momentum agar scroll list tidak “loncat” di HP.
+	-- Reduce overscroll / momentum so scroll list does not "jump" on mobile.
 	pcall(function()
 		(scroll :: any).ScrollBarThickness = math.max(scroll.ScrollBarThickness, 6)
 	end)
 
-	-- Saat jari di area list, matikan sementara touch-look kamera default.
+	-- While finger is on list area, temporarily disable default camera touch-look.
 	local touchCameraController: any = nil
 	local function resolveTouchCameraController(): any
 		if touchCameraController ~= nil then

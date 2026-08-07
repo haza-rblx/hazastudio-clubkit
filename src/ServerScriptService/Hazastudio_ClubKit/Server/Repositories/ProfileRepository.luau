@@ -36,9 +36,9 @@ function ProfileRepository.new(deps: { logger: ILogger })
 	self._store = DataStoreService:GetDataStore(Config.AvatarContext.PROFILE_DATASTORE_KEY)
 	self._budgetGate = BudgetGate.create({ logger = deps.logger, name = "ProfileRepository" })
 
-	-- Subscribe untuk cache invalidation lintas server.
+	-- Subscribe for cache invalidation lintas server.
 	-- Idempotent: tiap require ProfileRepository.new akan re-subscribe,
-	-- tapi semua callback meng-clear cache lokal yang sama.
+	-- but all callbacks clear the same local cache.
 	CrossServerCache.subscribe(PROFILE_INVALIDATE_TOPIC, function(userId)
 		Cache.invalidate("profile_" .. tostring(userId))
 	end)
@@ -114,13 +114,13 @@ function ProfileRepository:update(
 		return Result.Err("DataStore write failed")
 	end
 
-	-- Set cache baru setelah UpdateAsync berhasil, seperti OverheadRepository
-	-- Agar next read tidak hit DataStore lagi
+	-- Set new cache after successful UpdateAsync, like OverheadRepository
+	-- Agar next read not hit DataStore lagi
 	if savedData then
 		Cache.set(key, savedData, Config.DataStore.CACHE_TTL)
 	end
 
-	-- Broadcast ke server lain agar cache mereka stale di-evict.
+	-- Broadcast to other servers so their cache is stale-evicted.
 	CrossServerCache.publish(PROFILE_INVALIDATE_TOPIC, userId)
 
 	return Result.Ok(savedData :: ProfileStoredData)

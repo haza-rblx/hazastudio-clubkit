@@ -1,10 +1,10 @@
 --!nocheck
 -- Studio Edit Mode: generate empty ServerStorage.Tools folders from role config.
 --
--- Command Bar (tanpa plugin) — SATU baris, selalu jalan:
+-- Command Bar (no plugin) — ONE line, always works:
 --   require(game.ReplicatedStorage.Hazastudio_ClubKit.Shared.Studio.GenerateRoleToolsFolder).run()
 --
--- Dengan plugin ClubKit Studio Tools terpasang:
+-- With ClubKit Studio Tools plugin installed:
 --   generate_tools_folder()
 
 local RunService = game:GetService("RunService")
@@ -58,7 +58,7 @@ local function ensureFolder(parent: Instance, name: string): (Folder, boolean)
 		return existing :: Folder, false
 	end
 	if existing then
-		warn(("[generate_tools_folder] Skip %s — sudah ada (%s)"):format(name, existing.ClassName))
+		warn(("[generate_tools_folder] Skip %s — already ada (%s)"):format(name, existing.ClassName))
 		return existing :: Folder, false
 	end
 
@@ -70,11 +70,11 @@ end
 
 function GenerateRoleToolsFolder.run(options: GenerateOptions?): { created: number, existing: number, folders: { string } }
 	if not RunService:IsStudio() then
-		warn("[generate_tools_folder] Hanya untuk Roblox Studio.")
+		warn("[generate_tools_folder] Roblox Studio only.")
 		return { created = 0, existing = 0, folders = {} }
 	end
 	if RunService:IsRunning() then
-		warn("[generate_tools_folder] Stop Play dulu — hanya Edit Mode.")
+		warn("[generate_tools_folder] Stop Play first — Edit Mode only.")
 		return { created = 0, existing = 0, folders = {} }
 	end
 
@@ -83,7 +83,7 @@ function GenerateRoleToolsFolder.run(options: GenerateOptions?): { created: numb
 
 	local folderNames, roleToolsCfg = collectFolderNames()
 	if #folderNames == 0 then
-		warn("[generate_tools_folder] Tidak ada folder dari config. Sync Rojo / cek ClubKitConfig.")
+		warn("[generate_tools_folder] No folder from config. Sync Rojo / check ClubKitConfig.")
 		return { created = 0, existing = 0, folders = {} }
 	end
 
@@ -139,7 +139,7 @@ end
 
 function GenerateRoleToolsFolder.install()
 	StudioToolsCommand.registerCommandBarGlobal()
-	print("[ClubKit] generate_tools_folder() siap (plugin / shared _G).")
+	print("[ClubKit] generate_tools_folder() ready (plugin / shared _G).")
 end
 
 return GenerateRoleToolsFolder

@@ -1,18 +1,18 @@
 --!nocheck
 -- ============================================================
--- PRINT ADVANCED DJ GUI — dump hierarchy sampai leaf (detail)
+-- PRINT ADVANCED DJ GUI — dump hierarchy to leaf (detail)
 -- ============================================================
--- Utility Command Bar (Edit Mode, read-only) untuk dokumentasi /
--- validasi struktur GUI Advanced DJ.
+-- Command Bar utility (Edit Mode, read-only) for documentation /
+-- Advanced DJ GUI structure validation.
 --
--- CARA PAKAI:
--- 1. Paste SELURUH file ini ke Studio Command Bar (Edit Mode).
--- 2. Enter, lalu copy output dari Output window.
+-- USAGE:
+-- 1. Paste ENTIRE file into Studio Command Bar (Edit Mode).
+-- 2. Enter, then copy output from the Output window.
 --
 -- Output:
---   - Tree ASCII lengkap (ClassName + properti penting) sampai leaf
---   - Daftar leaf path (relatif ke node target)
---   - Stats total node / leaf / depth
+--   - Full ASCII tree (ClassName + important properties) to leaf
+--   - Leaf path list (relative to target node)
+--   - Total node / leaf / depth stats
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -28,7 +28,7 @@ local Workspace = game:GetService("Workspace")
 
 local TARGET_NAME = "100-AdvancedDJ"
 
--- 0 = unlimited (sampai leaf)
+-- 0 = unlimited (to leaf)
 local MAX_DEPTH = 0
 local SHOW_PROPERTIES = true
 local MAX_TREE_LINES = 4000
@@ -38,7 +38,7 @@ local COLLAPSE_REPEATED_SIBLINGS = true
 local REPEAT_SIBLING_THRESHOLD = 12
 local REPEAT_SIBLING_PREVIEW = 3
 
--- Cari di root-root ini (urutan prioritas).
+-- Search these roots (priority order).
 local SEARCH_ROOTS: { Instance } = {
 	StarterGui,
 	StarterPlayer,
@@ -47,7 +47,7 @@ local SEARCH_ROOTS: { Instance } = {
 	Workspace,
 }
 
--- Kalau Play test & node hanya ada di PlayerGui, set true.
+-- If Play testing and node only exists in PlayerGui, set true.
 local INCLUDE_PLAYER_GUI = true
 
 -- ============================================================
@@ -291,7 +291,7 @@ local function walk(root: Instance, inst: Instance, depth: number, prefix: strin
 				walk(root, current, depth + 1, childPrefix, lastFromPreview and (previewCount == runCount))
 			end
 			emitTree(string.format(
-				"%s%s… (%d sibling '%s' [%s] disingkat, tampil %d pertama)",
+				"%s%s… (%d sibling '%s' [%s] truncated, showing first %d)",
 				childPrefix,
 				(j - 1 == #children) and "└─ " or "├─ ",
 				runCount,
@@ -326,7 +326,7 @@ end
 local target, foundIn = findTarget()
 if not target then
 	warn(string.format(
-		"[PrintAdvancedDJGui] Node '%s' tidak ketemu. Cek StarterGui / PlayerGui.",
+		"[PrintAdvancedDJGui] Node '%s' not found. Check StarterGui / PlayerGui.",
 		TARGET_NAME
 	))
 	return
@@ -334,7 +334,7 @@ end
 
 emit("============================================================")
 emit(string.format("ADVANCED DJ GUI DUMP: %s", target:GetFullName()))
-emit(string.format("Ditemukan dari root: %s", foundIn or "?"))
+emit(string.format("Found under root: %s", foundIn or "?"))
 emit(string.format(
 	"Target ClassName: %s | MAX_DEPTH=%s",
 	target.ClassName,
@@ -356,14 +356,14 @@ emit(string.format(
 ))
 if STATS.treeLinesSkipped > 0 then
 	emit(string.format(
-		"Tree output dipotong: %d line tidak ditampilkan (MAX_TREE_LINES=%d).",
+		"Tree output truncated: %d lines not shown (MAX_TREE_LINES=%d).",
 		STATS.treeLinesSkipped,
 		MAX_TREE_LINES
 	))
 end
 if STATS.repeatedGroupsCollapsed > 0 then
 	emit(string.format(
-		"Repeated sibling group disingkat: %d group (threshold=%d).",
+		"Repeated sibling groups truncated: %d groups (threshold=%d).",
 		STATS.repeatedGroupsCollapsed,
 		REPEAT_SIBLING_THRESHOLD
 	))
@@ -372,7 +372,7 @@ emit("============================================================")
 emit("")
 
 if PRINT_LEAF_PATHS then
-	emit("--- LEAF PATHS (relatif ke 100-AdvancedDJ) ---")
+	emit("--- LEAF PATHS (relative to 100-AdvancedDJ) ---")
 	table.sort(LEAF_PATHS)
 	local limit = if LEAF_PATH_LIMIT > 0 then math.min(LEAF_PATH_LIMIT, #LEAF_PATHS) else #LEAF_PATHS
 	for idx = 1, limit do
@@ -380,7 +380,7 @@ if PRINT_LEAF_PATHS then
 	end
 	if LEAF_PATH_LIMIT > 0 and #LEAF_PATHS > LEAF_PATH_LIMIT then
 		emit(string.format(
-			"  ... (%d leaf path tidak ditampilkan; naikkan LEAF_PATH_LIMIT / set 0)",
+			"  ... (%d leaf paths not shown; increase LEAF_PATH_LIMIT / set 0)",
 			#LEAF_PATHS - LEAF_PATH_LIMIT
 		))
 	end
@@ -396,4 +396,4 @@ end
 
 emit("============================================================")
 print(table.concat(LOG, "\n"))
-warn("[PrintAdvancedDJGui] Done. Copy output untuk mapping/wiring detail.")
+warn("[PrintAdvancedDJGui] Done. Copy output for mapping/wiring detail.")

@@ -1,6 +1,6 @@
 --!strict
 -- Server-side HTTP API wrapper (quota-efficiency-pass-2026-06, Phase 2 + Phase 1 admission).
--- Setiap fungsi Roblox API di-wrap dengan: in-flight dedup + cache + negative-cache
+-- Each Roblox API function is wrapped with: in-flight dedup + cache + negative-cache
 -- on failure + optional global concurrency cap.
 --
 -- Kill switch: Config.HttpApi.ENABLED = false → bypass wrapper (direct call).

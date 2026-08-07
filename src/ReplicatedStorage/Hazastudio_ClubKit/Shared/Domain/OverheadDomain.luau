@@ -802,7 +802,7 @@ function OverheadDomain.buildPayload(
 	end
 
 	-- Elite badge: membership Tier3 (stored / role Exclusive) only — not from top Robux/Rupiah rank.
-	-- Selalu strip dulu dari resolveVisibleBadges/BadgeVisibility supaya tidak bocor ke rank lain.
+	-- Always strip first from resolveVisibleBadges/BadgeVisibility so badges do not leak to other ranks.
 	do
 		local filtered: { string } = {}
 		for _, badgeName in ipairs(visibleBadges) do

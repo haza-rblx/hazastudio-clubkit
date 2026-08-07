@@ -1,5 +1,5 @@
 --!strict
--- Business logic untuk /setcommun dan /clearcommun.
+-- Business logic for /setcommun dan /clearcommun.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 

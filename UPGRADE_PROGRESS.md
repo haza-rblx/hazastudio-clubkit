@@ -1,34 +1,34 @@
-﻿# Upgrade Progress - Club Kit
+﻿# Upgrade Progress — Club Kit
 
-Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
+Internal scratch pad to track work **before** a version is released.
 
-**Versi saat ini:** `2.4.72` (lihat [`VERSION`](VERSION))  
-**Target rilis berikutnya:** _(belum ditetapkan)_  
-**Branch aktif:** `main`
+**Current version:** `2.4.73` (see [`VERSION`](VERSION))  
+**Next release target:** _(not set)_  
+**Active branch:** `main`
 
 ---
 
-## Status ringkas
+## Status summary
 
 | Area | Status |
 |------|--------|
 
 ---
 
-## Perubahan file (unreleased)
+## File changes (unreleased)
 
 | Path | Change |
 |------|--------|
 
 ---
 
-## Saat rilis - checklist agent
+## On release — agent checklist
 
-1. [ ] User konfirmasi nomor versi
-2. [ ] Pindahkan `[Unreleased]` di `CHANGELOG.md` ke section versi baru + tanggal
+1. [ ] User confirms version number
+2. [ ] Move `[Unreleased]` in `CHANGELOG.md` to new version section + date
 3. [ ] Update `VERSION` + `ClubKitManifest.KIT_VERSION` + `KitProduct.KitVersion`
 4. [ ] `git diff vPREVIOUS..HEAD --name-only` → `docs/releases/<version>/CHANGED_FILES.md`
 5. [ ] Generate `docs/releases/<version>/UPGRADE.md`
-6. [ ] Reset tabel unreleased di file ini
-7. [ ] Tag git: `git tag vX.Y.Z`
-8. [ ] **Rebuild / reinstall Studio plugin** dari `tools/ClubKitPackagerPlugin` (plugin-build sync saja tidak cukup jika place Tool pakai binary lama)
+6. [ ] Reset unreleased table in this file
+7. [ ] Git tag: `git tag vX.Y.Z`
+8. [ ] **Rebuild / reinstall Studio plugin** from `tools/ClubKitPackagerPlugin` (plugin-build sync alone is not enough if the place Tool still uses an old binary)

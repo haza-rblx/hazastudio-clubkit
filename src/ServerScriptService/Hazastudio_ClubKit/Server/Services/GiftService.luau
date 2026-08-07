@@ -1,5 +1,5 @@
 --!strict
--- Business logic untuk setrole/unsetrole via gifted role.
+-- Business logic for setrole/unsetrole via gifted role.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -53,7 +53,7 @@ local function createGiftService(deps: {
 		end
 
 		if isStudioBypass() then
-			log:warn("Studio bypass aktif saat giveRole", {
+			log:warn("Studio bypass active during giveRole", {
 				giver = giver.Name,
 				target = target.Name,
 				role = normalizedRole,
@@ -103,7 +103,7 @@ local function createGiftService(deps: {
 				return ResultUtil.Err(Config.SetRole.MSG_NO_PERM)
 			end
 		else
-			log:warn("Studio bypass aktif saat removeRole", {
+			log:warn("Studio bypass active during removeRole", {
 				giver = giver.Name,
 				target = target.Name,
 			})

@@ -192,7 +192,7 @@ local function createMusicSession(deps: {
 		end
 		local result = repo:getTracks()
 		if not result.ok then
-			log:warn("Gagal ambil track untuk idle fallback", { error = result.error, zoneId = zoneId })
+			log:warn("Failed to fetch track for idle fallback", { error = result.error, zoneId = zoneId })
 			return nil
 		end
 		local preferredCandidates: { string } = {}

@@ -2,30 +2,30 @@
 -- ============================================================
 -- Update Role Tool folders in ServerStorage (Edit Mode)
 -- ============================================================
--- Sinkronkan ServerStorage.Tools — SATU folder per role (nama folder = chatTag role):
---   • rename folder legacy → nama canonical
---   • merge isi kalau folder target sudah ada
---   • buat folder yang belum ada
---   • pindahkan folder tidak dipakai ke Tools/_Archive (opsional)
+-- Sync ServerStorage.Tools — ONE folder per role (folder name = role chatTag):
+--   • rename legacy folder → canonical name
+--   • merge contents if target folder already exists
+--   • create missing folders
+--   • move unused folders to Tools/_Archive (optional)
 --
--- CARA PAKAI:
--- 1. Buka place NUWA di Studio (Edit Mode).
--- 2. Sync Rojo supaya ReplicatedStorage.Shared.* ada.
--- 3. Set DRY_RUN = true, paste script ke Command Bar → Enter → baca Output.
--- 4. Kalau log OK, set DRY_RUN = false → jalankan lagi.
+-- USAGE:
+-- 1. Open place in Studio (Edit Mode).
+-- 2. Sync Rojo so ReplicatedStorage.Shared.* exists.
+-- 3. Set DRY_RUN = true, paste script into Command Bar → Enter → read Output.
+-- 4. If log OK, set DRY_RUN = false → run again.
 --
--- Lihat juga: tools/EnsureRoleToolFolders.editmode.luau (hanya create, tanpa migrate).
+-- See also: tools/EnsureRoleToolFolders.editmode.luau (create only, no migrate).
 -- ============================================================
 
 local ServerStorage = game:GetService("ServerStorage")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
--- Preview tanpa mengubah instance.
+-- Preview without modifying instances.
 local DRY_RUN = false
--- Pindah folder yang tidak ada di config ke Tools/_Archive (bukan Destroy).
+-- Move folders not in config to Tools/_Archive (not Destroy).
 local ARCHIVE_OBSOLETE = true
 local ARCHIVE_FOLDER_NAME = "_Archive"
--- Buat placeholder Tool di folder kosong (sama seperti EnsureRoleToolFolders).
+-- Create placeholder Tool in empty folders (same as EnsureRoleToolFolders).
 local CREATE_PLACEHOLDER_TOOLS = false
 local PLACEHOLDER_TOOL_NAME = "_RoleToolPlaceholder"
 
@@ -36,8 +36,8 @@ local function emit(line: string)
 	print(line)
 end
 
--- Nama lama di legacy place → folder canonical (sesuai SpenderRoles chatTag):
---   TOP ROBUX DONATOR / TOP RUPIAH SPENDER. DONATUR/DONOR dihapus sebagai role.
+-- Legacy place folder names → canonical folder (per SpenderRoles chatTag):
+--   TOP ROBUX DONATOR / TOP RUPIAH SPENDER. DONATUR/DONOR removed as roles.
 local RENAME_TO_CANONICAL: { [string]: string } = {
 	["CO-OWNER"] = "INVESTOR",
 	["CoOwner"] = "INVESTOR",
@@ -60,7 +60,7 @@ local RENAME_TO_CANONICAL: { [string]: string } = {
 	["TOP SUPPORTER"] = "TOP ROBUX DONATOR",
 	["ROYALE SPENDER"] = "TOP ROBUX DONATOR",
 	["TOP SPENDER"] = "TOP RUPIAH SPENDER",
-	-- DONOR / DONATUR: role dihapus — biarkan ARCHIVE_OBSOLETE pindah ke _Archive
+	-- DONOR / DONATUR: role removed — let ARCHIVE_OBSOLETE move to _Archive
 	["ELITE MEMBER"] = "EXCLUSIVE",
 	["ELITEMEMBER"] = "EXCLUSIVE",
 	["ELITE"] = "EXCLUSIVE",
@@ -192,7 +192,7 @@ local function ensurePlaceholderTool(folder: Folder, dryRun: boolean): boolean
 	tool.Name = PLACEHOLDER_TOOL_NAME
 	tool.RequiresHandle = false
 	tool.CanBeDropped = false
-	tool.ToolTip = "Placeholder — ganti dengan Tool asli"
+	tool.ToolTip = "Placeholder — replace with real Tool"
 	tool:SetAttribute("KitRoleTool", true)
 	tool:SetAttribute("KitRoleToolSource", folder.Name)
 	local handle = Instance.new("Part")
@@ -234,7 +234,7 @@ emit(("DRY_RUN = %s | ARCHIVE_OBSOLETE = %s"):format(tostring(DRY_RUN), tostring
 
 local cfg = getConfig()
 if not cfg then
-	emit("[ERROR] Config.RoleTools tidak bisa di-require. Sync Rojo dulu.")
+	emit("[ERROR] Config.RoleTools could not be required. Sync Rojo first.")
 	return
 end
 
@@ -242,7 +242,7 @@ local rootName = tostring(cfg.ROOT_FOLDER or "Tools")
 local toolsRoot = ServerStorage:FindFirstChild(rootName)
 if not toolsRoot then
 	if DRY_RUN then
-		emit(("[DRY] ServerStorage.%s belum ada — akan dibuat saat DRY_RUN=false"):format(rootName))
+		emit(("[DRY] ServerStorage.%s does not exist yet — will be created when DRY_RUN=false"):format(rootName))
 	else
 		toolsRoot = Instance.new("Folder")
 		toolsRoot.Name = rootName
@@ -250,7 +250,7 @@ if not toolsRoot then
 		emit(("[CREATE] ServerStorage.%s"):format(rootName))
 	end
 elseif not toolsRoot:IsA("Folder") then
-	emit(("[ERROR] ServerStorage.%s class=%s (harus Folder)"):format(rootName, toolsRoot.ClassName))
+	emit(("[ERROR] ServerStorage.%s class=%s (must be Folder)"):format(rootName, toolsRoot.ClassName))
 	return
 else
 	emit(("[OK] ServerStorage.%s"):format(rootName))
@@ -265,7 +265,7 @@ if not toolsRoot or not toolsRoot:IsA("Folder") then
 end
 
 local expectedList, expectedSet = collectExpectedFolderNames()
-emit("Target: satu folder per role (+ DONATUR untuk donasi umum):")
+emit("Target: one folder per role (+ DONATUR for general donations):")
 expectedSet[ARCHIVE_FOLDER_NAME] = true
 emit(("Expected folders from config: %d"):format(#expectedList))
 for _, name in ipairs(expectedList) do
@@ -354,7 +354,7 @@ emit(("Renamed: %d | Merged: %d | Created: %d | Archived: %d | Placeholders: %d"
 	stats.placeholders
 ))
 if DRY_RUN then
-	emit("DRY_RUN aktif — tidak ada perubahan. Set DRY_RUN = false lalu jalankan lagi.")
+	emit("DRY_RUN active — no changes. Set DRY_RUN = false and run again.")
 else
-	emit("Selesai. Isi folder dengan Tool (bukan Model). Cek Tools/_Archive sebelum hapus permanen.")
+	emit("Done. Fill folders with Tool instances (not Model). Check Tools/_Archive before permanent delete.")
 end

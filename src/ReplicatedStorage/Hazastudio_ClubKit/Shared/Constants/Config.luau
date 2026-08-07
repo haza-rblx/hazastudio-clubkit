@@ -1,8 +1,8 @@
 --!strict
 local RunService = game:GetService("RunService")
 local IS_STUDIO = RunService:IsStudio()
--- false = Studio & live pakai key production yang sama (intentional for this kit workflow).
--- true = Studio Play pakai prefix Studio_* (terisolasi dari live).
+-- false = Studio and live share the same production keys (intentional for this kit workflow).
+-- true = Studio Play uses Studio_* prefix (isolated from live).
 local USE_STUDIO_DATASTORE_ISOLATION = false
 local DATASTORE_SCOPE_PREFIX = if IS_STUDIO and USE_STUDIO_DATASTORE_ISOLATION then "Studio_" else ""
 
@@ -24,7 +24,7 @@ Config.DataStoreScope = {
 	USE_STUDIO_ISOLATION = USE_STUDIO_DATASTORE_ISOLATION,
 	PREFIX = DATASTORE_SCOPE_PREFIX,
 	scopedKey = scopedDataStoreKey,
-	-- true = Play di Studio menulis ke key production (bahaya untuk /setrobux dll.).
+	-- true = Play in Studio writes to production keys (risky for /setrobux etc.).
 	writesToLive = studioWritesToLiveDatastore,
 }
 
@@ -203,7 +203,7 @@ local function membershipChatTag(tierKey: string): string
 	return tostring(tier.chatTag)
 end
 -- ============================================================
--- NOTIFY (warna per tipe notifikasi)
+-- NOTIFY (colors per notification type)
 -- ============================================================
 Config.Notify = {
 	COLOR_INFO = Color3.fromRGB(100, 200, 255),
@@ -317,7 +317,7 @@ Config.JoinGreeting = {
 	MAX_VISIBLE_CARDS = 2,
 	-- Second-line toast after creative message (placeholders: {Gelar}, {DisplayName}).
 	ENTERED_SPACE_TEMPLATE = "{Gelar} {DisplayName} has entered the space!",
-	-- Spender gelar templates only (#{N}/{N}). Role-based gelar uses Roles DEFINITIONS.label.
+	-- Spender title templates only (#{N}/{N}). Role-based titles use Roles DEFINITIONS.label.
 	GELAR_TITLES = {
 		SpenderRobux = "Top Robux Donator #{N}",
 		SpenderCash = "Top Rupiah Spender #{N}",
@@ -449,7 +449,7 @@ Config.PaidBroadcast = {
 	GUI_NAME = "13-PaidBroadcast",
 	GUI_SCALE_MOBILE = 0.75,
 	GUI_SCALE_DESKTOP = 0.88,
-	PRODUCT_ID = 0, -- diisi ConfigBootstrap dari ClubKitConfig.PaidBroadcast.ProductId
+	PRODUCT_ID = 0, -- filled by ConfigBootstrap from ClubKitConfig.PaidBroadcast.ProductId
 	REMOTE_SUBMIT = "PaidBroadcastSubmit",
 	REMOTE_RESULT = "PaidBroadcastResult",
 	MAX_MESSAGE_LENGTH = 180,
@@ -490,12 +490,12 @@ Config.PaidBroadcast = {
 		"Don't be shy, {name}. Type it out.",
 		"One message, whole server — go, {name}.",
 		"Your voice, {name}. One broadcast away.",
-		"Halo {name}! Mau broadcast apa hari ini?",
-		"Yuk {name}, spill isi pikiranmu.",
-		"Siap-siap live, {name}?",
-		"Ada yang mau disampaikan ke server, {name}?",
-		"Hai {name} — mau ngomong apa nih?",
-		"Panggungmu nih, {name}. Ketik pesannya.",
+		"Hey {name}! What do you want to broadcast today?",
+		"Go on, {name} — share what's on your mind.",
+		"Ready when you are, {name}.",
+		"Got something for the server, {name}?",
+		"Hi {name} — what would you like to say?",
+		"The stage is yours, {name}. Type your message.",
 	},
 	MSG_EMPTY = "[Broadcast] Type a message first.",
 	MSG_TOO_LONG = "[Broadcast] Message is too long.",
@@ -521,23 +521,23 @@ Config.CinematicDock = {
 	CCTV_NAME_ATTRIBUTE = "DisplayName",
 	-- Optional: set to "360" on a rig part to force the wide 360 movement set.
 	CCTV_PROFILE_ATTRIBUTE = "CCTVProfile",
-	-- Runtime visual policy untuk rig CCTV (BasePart target kamera).
+	-- Runtime visual policy for CCTV rigs (camera target BasePart).
 	-- 1 = fully hidden, 0 = fully visible.
 	CCTV_RUNTIME_TRANSPARENCY = 1,
-	-- Semua BasePart di bawah folder ini (di workspace) otomatis jadi target CCTV.
+	-- Every BasePart under these workspace folders becomes a CCTV target automatically.
 	CCTV_FOLDER_NAMES = { "CCTV" },
 	DEFAULT_DURATION = 12,
 	MAX_DURATION = 30,
 	MIN_DURATION = 4,
 	DEFAULT_SPEED = 1,
 	ALLOWED_SPEEDS = { 0.5, 1, 1.25, 1.5, 2 },
-	-- Rate limit untuk broadcast (selain stop). 3 broadcast / 12 detik per admin.
+	-- Rate limit for broadcast (excluding stop). 3 broadcasts / 12 seconds per admin.
 	RATE_MAX = 3,
 	RATE_WINDOW = 12,
-	-- Movement options yang diiklankan ke UI client.
-	-- `targetType` filter: "character" hanya muncul saat target = player,
-	-- "part" hanya muncul saat target = CCTV. "any" muncul di kedua kasus.
-	-- Urutan di list = urutan tampil di panel dock.
+	-- Movement options exposed to the client UI.
+	-- `targetType` filter: "character" only when target = player,
+	-- "part" only when target = CCTV. "any" appears in both cases.
+	-- List order = panel display order.
 	MOVEMENT_OPTIONS = {
 		-- Character orbit modes
 		{ value = "PendulumOrbit", label = "Pendulum Orbit", targetType = "character" },
@@ -638,7 +638,7 @@ Config.BadgeVisibility = {} :: { [string]: { string } }
 -- ============================================================
 Config.SpecialRank = {} :: { [string]: { text: string, gradient: boolean } }
 -- ============================================================
--- RANK BIASA (07-Rank)
+-- STANDARD RANK (07-Rank)
 -- ============================================================
 Config.RankDisplay = {
 	ELITEMember = { text = membershipRankText("Tier3"), gradient = Config.Membership.Tiers.Tier3.rankGradient },
@@ -674,7 +674,7 @@ Config.SetRole = {
 -- HARDCODED SPECIAL DATA
 -- ============================================================
 Config.Hardcoded = {
-	-- [userId] = { specialTitle = "teks", specialRank = "teks" }
+	-- [userId] = { specialTitle = "text", specialRank = "text" }
 }
 -- ============================================================
 -- SECURITY
@@ -684,10 +684,10 @@ Config.Security = {
 	REFRESH_WINDOW = 10,
 	MAX_REQUEST_CACHE = 500,
 	CHAT_COMMAND_DEDUPE_WINDOW = 2,
-	MAX_PAYLOAD_BYTES = 1024, -- 1KB untuk commands
-	-- TTL-based dedup windows - cegah wipe-all cache issue
-	REQUEST_DEDUPE_WINDOW = 10, -- detik dedup untuk admin/couple commands
-	PURCHASE_DEDUPE_WINDOW = 3600, -- 1 jam dedup untuk PurchaseId receipt
+	MAX_PAYLOAD_BYTES = 1024, -- 1KB for commands
+	-- TTL-based dedup windows — prevents wipe-all cache issues
+	REQUEST_DEDUPE_WINDOW = 10, -- seconds dedup for admin/couple commands
+	PURCHASE_DEDUPE_WINDOW = 3600, -- 1 hour dedup for PurchaseId receipts
 }
 -- ============================================================
 -- OVERHEAD CONTROLLER TIMING
@@ -716,38 +716,38 @@ Config.Overhead = {
 	JOIN_DATA_READY_TIMEOUT = 10,
 	-- Global thin chat-tag roster (ChatTagSync). Independent of proximity overhead.
 	REMOTE_CHAT_TAG_SYNC = "ChatTagSync",
-	-- Detik setelah broadcast pertama untuk kirim broadcast kedua (deferred re-broadcast).
-	-- Memberi waktu GroupService:GetGroupsAsync() selesai di live server (biasanya 1-3 detik).
-	-- Broadcast kedua memastikan role yang benar (Owner/Admin/dll.) sampai ke client.
+	-- Seconds after the first broadcast to send the second (deferred re-broadcast).
+	-- Gives GroupService:GetGroupsAsync() time to finish on live servers (usually 1–3 seconds).
+	-- Second broadcast ensures the correct role (Owner/Admin/etc.) reaches the client.
 	-- S4 (quota-efficiency-pass-2026-06, Phase 1, Q1=extend): extended from 4s to 15s.
-	-- 2nd broadcast dipertahankan untuk UX role-settle, tapi dipindah ke window yang
-	-- cukup jauh dari join storm (default 4s tumpang tindih dengan peak load).
+	-- 2nd broadcast kept for UX role-settle, but moved to a window
+	-- far enough from the join storm (default 4s overlapped with peak load).
 	-- Revert to 4 via Config if UX requires faster settle.
 	GROUP_RANK_SETTLE_DELAY = 5,
 	-- Live rank resolve via getRobuxLeaderboard: defer until DonationController LB pre-warm
 	-- (~25s) has populated robux cache. Stored topDonateRank still shows at join.
 	RANK_RESOLVE_DELAY_SEC = 30,
 	RANK_RESOLVE_JITTER_SEC = 5,
-	-- Client tunggu OverheadUpdate (detik). Server boot berat bisa >10s di Studio.
+	-- Client wait for OverheadUpdate (seconds). Heavy server boot can exceed 10s in Studio.
 	REMOTE_READY_TIMEOUT = 45,
-	-- Timeout WaitForChild saat attach GUI ke Head (detik)
+	-- WaitForChild timeout when attaching GUI to Head (seconds)
 	HEAD_WAIT_TIMEOUT = 5,
 	-- After Head appears, prefer AppearanceLoaded (CharacterReady); debounce below
 	-- is fallback when CAL never fires (some StarterCharacters).
 	HEAD_STABLE_DEBOUNCE = 0.35,
 	-- Cap for stable-Head wait (AppearanceLoaded wait + debounce fallback).
 	HEAD_STABLE_TIMEOUT = 8,
-	-- Batas maksimal tunggu in-flight GroupService call (detik)
+	-- Maximum wait for in-flight GroupService calls (seconds)
 	INFLIGHT_WAIT_MAX = 5,
-	-- Timeout WaitForChild Humanoid/HumanoidRootPart saat restore session (detik)
+	-- WaitForChild timeout for Humanoid/HumanoidRootPart during session restore (seconds)
 	CHARACTER_PART_WAIT_TIMEOUT = 5,
 	-- S1 (quota-efficiency-pass-2026-06, Phase 1): short-circuit buildAndCachePayload
-	-- kalau input cache state (groups, grouprank, stored data, leaderboard ranks) tidak
-	-- berubah sejak last build. Skip service:buildPayload() entirely. Kill switch:
+	-- when input cache state (groups, grouprank, stored data, leaderboard ranks) has not
+	-- change since last build. Skip service:buildPayload() entirely. Kill switch:
 	-- set S1_SHORTCIRCUIT = false to revert to always-build behavior.
 	S1_SHORTCIRCUIT = true,
-	-- S2 (quota-efficiency-pass-2026-06, Phase 1): debounce refreshAll. Skip kalau
-	-- <S2_DEBOUNCE_MS dari last call. Coalesce donation burst jadi 1 broadcast. Set
+	-- S2 (quota-efficiency-pass-2026-06, Phase 1): debounce refreshAll. Skip if
+	-- <S2_DEBOUNCE_MS since last call. Coalesce donation bursts into one broadcast. Set
 	-- to 0 to disable (default on, 1000ms).
 	S2_DEBOUNCE_MS = 1000,
 }
@@ -781,7 +781,7 @@ Config.OverheadGuiVariants = {
 -- RATE LIMITER
 -- ============================================================
 Config.RateLimiter = {
-	-- Interval cleanup bucket (detik) - expired entries dihapus secara periodik
+	-- Bucket cleanup interval (seconds) — expired entries removed periodically
 	CLEANUP_INTERVAL = 300,
 }
 -- ============================================================
@@ -796,29 +796,29 @@ Config.Template = {
 -- ============================================================
 Config.Streak = {
 	MIN_DAYS = 1,
-	-- Hari yang dianggap milestone (animasi lebih dramatis)
+	-- Days treated as milestones (more dramatic animation)
 	MILESTONE_DAYS = { 7, 14, 30, 60, 100, 365 },
 	-- Remote name
 	REMOTE_NOTIF = "StreakNotif", -- Server -> Client
 	-- Timing
-	SHOW_DURATION = 3.0, -- detik ditampilkan sebelum auto-dismiss
-	COUNTER_DURATION = 1.2, -- durasi counter animate 0 -> angka
-	CLIENT_READY_DELAY = 1.5, -- tunggu client siap sebelum fire notif
+	SHOW_DURATION = 3.0, -- seconds shown before auto-dismiss
+	COUNTER_DURATION = 1.2, -- counter animate duration 0 -> number
+	CLIENT_READY_DELAY = 1.5, -- wait for client ready before firing notification
 	-- Glow pulse
 	GLOW_PULSE_COUNT = 3,
-	GLOW_PULSE_SIZE_OUT = 430, -- px saat pulse mengembang
-	GLOW_PULSE_SIZE_IN = 400, -- px saat pulse menyusut
+	GLOW_PULSE_SIZE_OUT = 430, -- px when pulse expands
+	GLOW_PULSE_SIZE_IN = 400, -- px when pulse contracts
 	-- Overlay backdrop
 	OVERLAY_TRANSPARENCY = 0.45,
 	-- Particles
 	PARTICLE_COUNT = 45,
 	PARTICLE_SIZE_MIN = 3,
 	PARTICLE_SIZE_MAX = 8,
-	PARTICLE_DIST_MIN = 0.22, -- jarak minimal dalam scale
-	PARTICLE_DIST_MAX = 0.44, -- jarak maksimal (DIST_MIN + 0.22)
-	PARTICLE_DELAY_MAX = 0.25, -- delay burst maks per partikel
-	PARTICLE_DUR_MIN = 1.8, -- durasi terbang minimal
-	PARTICLE_DUR_VAR = 0.8, -- variasi tambahan (random * ini)
+	PARTICLE_DIST_MIN = 0.22, -- minimum distance in scale units
+	PARTICLE_DIST_MAX = 0.44, -- maximum distance (DIST_MIN + 0.22)
+	PARTICLE_DELAY_MAX = 0.25, -- max burst delay per particle
+	PARTICLE_DUR_MIN = 1.8, -- minimum flight duration
+	PARTICLE_DUR_VAR = 0.8, -- extra variation (random * this)
 }
 -- ============================================================
 -- MEMBERSHIP BADGE
@@ -837,7 +837,7 @@ Config.MembershipBadgeFrame = {
 	Tier2 = Config.Membership.Tiers.Tier2.badgeFrame,
 	Tier1 = Config.Membership.Tiers.Tier1.badgeFrame,
 	ELITEMember = Config.Membership.Tiers.Tier3.badgeFrame,
-	VVIPMember = Config.Membership.Tiers.Tier2.badgeFrame, -- typo di template dipertahankan
+	VVIPMember = Config.Membership.Tiers.Tier2.badgeFrame, -- template typo preserved intentionally
 	VIPMember = Config.Membership.Tiers.Tier1.badgeFrame,
 	Member = Config.Membership.Tiers.Member.badgeFrame,
 }
@@ -874,26 +874,26 @@ Config.PlayerList = {
 	LIKES_STAT_NAME = "Likes",
 	ROBUX_STAT_NAME = "Robux",
 	CASH_STAT_NAME = "Cash",
-	-- BrickColor names untuk PlayerList built-in Roblox
+	-- BrickColor names for built-in Roblox PlayerList
 	-- Team.TeamColor = BrickColor (limited palette ~63 preset)
-	-- BrickColor.new(Color3) snap ke preset terdekat -> sering jadi abu-abu
-	-- Solusi: pakai BrickColor name langsung biar warna konsisten
+	-- BrickColor.new(Color3) snaps to nearest preset -> often becomes gray
+	-- Fix: use BrickColor name strings directly for consistent colors
 	TEAM_COLORS = {} :: { [string]: string },
 }
 -- ============================================================
 -- COUPLE SYSTEM
 -- ============================================================
 Config.Couple = {
-	-- Berapa lama request couple aktif sebelum expired (detik)
+	-- How long a couple request stays active before expiring (seconds)
 	REQUEST_TIMEOUT = 60,
 	-- Rate limit request
 	RATE_MAX = 3,
 	RATE_WINDOW = 60,
 	-- Topbar
 	TOPBAR_ORDER = 3,
-	-- Announce ke semua player
-	ANNOUNCE_COUPLED = "%s dan %s sekarang sudah berpasangan! 💕",
-	ANNOUNCE_BREAKUP = "%s dan %s telah berpisah. 💔",
+	-- Announce to all players
+	ANNOUNCE_COUPLED = "%s and %s are now a couple! 💕",
+	ANNOUNCE_BREAKUP = "%s and %s have broken up. 💔",
 	ANNOUNCE_COLOR = "rgb(255,180,255)",
 	ANNOUNCE_MAX_ATTEMPTS = 5,
 	ANNOUNCE_RETRY_WAIT = 0.3,
@@ -1208,7 +1208,7 @@ Config.RoleTools = {
 	ROOT_FOLDER = "Tools",
 	GRANT_ATTRIBUTE = "KitRoleTool",
 	SOURCE_ATTRIBUTE = "KitRoleToolSource",
-	-- Diisi oleh RolesDomain.applyDerivedConfig (satu folder per role = chatTag).
+	-- Filled by RolesDomain.applyDerivedConfig (one folder per role = chatTag).
 	FOLDERS_BY_ROLE = {} :: { [string]: { string } },
 	FOLDERS_BY_MEMBERSHIP = {} :: { [string]: { string } },
 	FOLDER_PRIORITY = {} :: { [string]: number },
@@ -1228,7 +1228,7 @@ Config.Sticker = {
 	STICKER_CLEAR_ATTRIBUTE = "StickerClear",
 	DATASTORE_NAME = scopedDataStoreKey("StickerCollection_v1"),
 	KEY_PREFIX = "Player_",
-	-- Shared pool: satu upload tampil di picker semua player (DataStore key terpisah dari Player_*).
+	-- Shared pool: one upload appears in every player's picker (DataStore key separate from Player_*).
 	GLOBAL_POOL_KEY = "GlobalPool_v1",
 	REMOTE_SET = "StickerSet",
 	REMOTE_CLEAR = "StickerClear",
@@ -1252,7 +1252,7 @@ Config.Sticker = {
 	BILLBOARD_LIGHT_INFLUENCE = 1,
 	IMAGE_TRANSPARENCY = 0,
 	DISPLAY_DURATION_SECONDS = 5,
-	-- Klik picker hanya tampilkan di pundak (session); DataStore hanya saat upload (ADD).
+	-- Picker click shows on shoulder only (session); DataStore write only on upload (ADD).
 	PERSIST_SELECTION_ON_SET = false,
 	PANEL_TWEEN_TIME = 0.22,
 	PANEL_CLOSED_OFFSET = 32,
@@ -1360,7 +1360,7 @@ Config.Loading = {
 	TEMPLATE_WAIT_TIMEOUT = 10,
 	CONTROLLER_WAIT_TIMEOUT = 30,
 	CONTROLLER_POLL_INTERVAL = 0.1,
-	-- Minimum tampil setelah boot + overhead siap (bukan fake 30s tunggu).
+	-- Minimum display after boot + overhead ready (not a fake 30s wait).
 	MINIMUM_DURATION = 2,
 	MINIMUM_AFTER_READY = 1.5,
 	SKIP_PROMPT_DELAY = 0,
@@ -1395,7 +1395,7 @@ Config.Loading = {
 	CLICK_BLACKOUT_DURATION = 0.6,
 	CLICK_REVEAL_DURATION = 1.4,
 	WELCOME_DISMISS_FORMAT = "Welcome to the club, %s",
-	-- PRIMARY_GREETING: diisi ConfigBootstrap dari ClubKitConfig.Branding.Greeting
+	-- PRIMARY_GREETING: filled by ConfigBootstrap from ClubKitConfig.Branding.Greeting
 	CINEMATIC = {
 		BIND_NAME = "LoadingCinematicCamera",
 		BIND_PRIORITY_OFFSET = 100,
@@ -1445,9 +1445,9 @@ Config.Debug = {
 -- UI SFX
 -- ============================================================
 Config.UISFX = {
-	-- Master switch buat hover & click UI SFX. Set false biar UI fully senyap.
+	-- Master switch for hover & click UI SFX. Set false to silence all UI sounds.
 	ENABLED = false,
-	-- Ganti dengan asset id UI sound kamu.
+	-- Replace with your UI sound asset IDs.
 	HOVER_SOUND_ID = "rbxassetid://132401905689089",
 	CLICK_SOUND_ID = "rbxassetid://109847084382411",
 	HOVER_VOLUME = 0.2,
@@ -1458,11 +1458,11 @@ Config.UISFX = {
 }
 -- Shared frosted backdrop for shop/gift/couple/donation/admin/music modals, etc.
 Config.PanelBlur = {
-	ENABLED = false, -- Lighting BlurEffect (berat); zoom kamera tetap jalan.
+	ENABLED = false, -- Lighting BlurEffect (expensive); camera zoom still works.
 	SIZE = 36,
 	FADE_IN = 0.32,
 	FADE_OUT = 0.22,
-	-- BackdropBlur GUI frames: lower = lebih gelap = terasa lebih frosted.
+	-- BackdropBlur GUI frames: lower = darker = more frosted feel.
 	MODAL_BACKDROP_TRANSPARENCY = 0.38,
 }
 -- Thin UI motion knobs (calm panel language). Full presets live in Client MotionPresets.
@@ -1497,7 +1497,7 @@ Config.Shop = {
 			BUY_ID = 0,
 		},
 	},
-	-- Source of truth katalog membership untuk Shop + Admin Giftcard
+	-- Source of truth membership catalog for Shop + Admin Giftcard
 	CATALOG = {
 		Tier1 = {
 			name = Config.Membership.Tiers.Tier1.label,
@@ -1515,7 +1515,7 @@ Config.Shop = {
 			image = "rbxassetid://84120496876687",
 		},
 	},
-	-- Benefits per tier - setiap entry = 1 slide carousel
+	-- Benefits per tier — each entry = 1 carousel slide
 	-- { icon, title, description }
 	BENEFITS = {
 		Tier1 = {
@@ -1571,26 +1571,26 @@ Config.Shop = {
 		},
 	},
 	-- Carousel animation
-	CAROUSEL_INTERVAL = 3, -- detik per slide
-	CAROUSEL_FADE_TIME = 0.3, -- durasi fade dasar (detik)
-	CAROUSEL_STAGGER_TIME = 0.1, -- jeda antar elemen (icon -> title -> desc)
-	CAROUSEL_SLIDE_OFFSET = 0.08, -- offset horizontal relatif terhadap parent
+	CAROUSEL_INTERVAL = 3, -- seconds per slide
+	CAROUSEL_FADE_TIME = 0.3, -- base fade duration (seconds)
+	CAROUSEL_STAGGER_TIME = 0.1, -- stagger between elements (icon -> title -> desc)
+	CAROUSEL_SLIDE_OFFSET = 0.08, -- horizontal offset relative to parent
 	-- Topbar
-	TOPBAR_ORDER = 2, -- urutan di topbar (1 = paling kiri)
+	TOPBAR_ORDER = 2, -- topbar order (1 = leftmost)
 	-- Remote names
-	REMOTE_GRANT = "ShopGrantNotif", -- Server -> Client setelah purchase berhasil
-	REMOTE_GIFT_INIT = "ShopGiftPending", -- Client -> Server sebelum prompt gift purchase
-	-- Gift pending timeout - kalau terlalu lama tidak jadi purchase, hapus pending
+	REMOTE_GRANT = "ShopGrantNotif", -- Server -> Client after successful purchase
+	REMOTE_GIFT_INIT = "ShopGiftPending", -- Client -> Server before gift purchase prompt
+	-- Gift pending timeout — if purchase never completes, clear pending
 	GIFT_PENDING_TIMEOUT = 120,
 	-- Durable gift intent (DataStore) — survives server restart until ProcessReceipt.
 	GIFT_PENDING_PERSIST_TIMEOUT = 1800,
 	GIFT_PENDING_DATASTORE_KEY = scopedDataStoreKey("ShopGiftPending_v1"),
-	-- Rate limit untuk ShopGiftPending remote
+	-- Rate limit for ShopGiftPending remote
 	GIFT_RATE_MAX = 3,
 	GIFT_RATE_WINDOW = 60,
-	-- Timeout menunggu remote siap di client (detik)
+	-- Timeout waiting for remote ready on client (seconds)
 	REMOTE_READY_TIMEOUT = 30,
-	-- Delay antara shop panel tutup dan notif muncul (detik)
+	-- Delay between shop panel close and notification show (seconds)
 	NOTIF_SHOW_DELAY = 0.35,
 }
 -- ============================================================
@@ -1604,13 +1604,13 @@ Config.Gift = {
 	BLUR_FADE_IN = 0.3,
 	BLUR_FADE_OUT = 0.2,
 	GIFT_PROMPT_DELAY = 0.3,
-	-- UI constants (mengganti magic numbers di GiftUI)
-	CARD_SELECTED_ALPHA = 0.8, -- transparansi card saat dipilih dari player list
-	NOTIF_HIDE_DELAY = 0.25, -- delay (detik) sebelum notifWrapper benar-benar tersembunyi
+	-- UI constants (replaces magic numbers in GiftUI)
+	CARD_SELECTED_ALPHA = 0.8, -- card transparency when selected from player list
+	NOTIF_HIDE_DELAY = 0.25, -- delay (seconds) before notifWrapper is fully hidden
 	-- Rate limiting (/gift command)
 	RATE_MAX = 5,
 	RATE_WINDOW = 60,
-	-- Tier aliases untuk /gift command
+	-- Tier aliases for /gift command
 	TIER_ALIASES = {
 		vip = "Tier1",
 		vipmember = "Tier1",
@@ -1625,7 +1625,7 @@ Config.Gift = {
 		exclusive = "Tier3",
 		tier3 = "Tier3",
 	},
-	-- Pesan sistem /gift command
+	-- System messages for /gift command
 	MSG_RATE_LIMIT = "[Gift] Give it a moment before sending another gift.",
 	MSG_NO_PERM = "[Gift] You do not have permission to send memberships.",
 	MSG_NOT_FOUND = "[Gift] I could not find '%s' in this server.",
@@ -1765,7 +1765,7 @@ Config.Gravity = {
 	MAX_SPEED = 10,
 	FLOAT_SPEED_AT_MIN = 3,
 	FLOAT_SPEED_AT_MAX = 18,
-	-- Saat /gravity: kick ke bawah (studs/s) supaya tidak "ngambang" dulu.
+	-- On /gravity: push downward (studs/s) so players do not float briefly first.
 	RESTORE_DOWNWARD_VELOCITY = -45,
 	RESTORE_HORIZONTAL_DAMP = 0.35,
 	RATE_MAX = 12,
@@ -1825,14 +1825,14 @@ Config.Admin = {
 	GUI_NAME = "04-AdminPanelv2",
 	GUI_NAME_CANDIDATES = { "04-AdminPanelv2", "04-AdminPanel" },
 	HUB_GUI_NAME = "04-AdminHub",
-	GUI_WAIT_TIMEOUT = 30, -- timeout WaitForChild GUI (detik)
+	GUI_WAIT_TIMEOUT = 30, -- WaitForChild GUI timeout (seconds)
 	GUI_SCALE_BAKED = 0.82,
 	GUI_SCALE_MOBILE = 0.54,
 	GUI_SCALE_DESKTOP = 0.84,
 	TOPBAR_ORDER = 3,
 	REMOTE_SET_TITLE = "AdminSetTitle",
 	REMOTE_SEND_GIFTCARD = "AdminSendGiftcard",
-	REMOTE_GIFTCARD_RESULT = "AdminGiftcardResult", -- Server->Client setelah grant
+	REMOTE_GIFTCARD_RESULT = "AdminGiftcardResult", -- Server->Client after grant
 	REMOTE_RESET_TITLE = "AdminResetTitle",
 	RATE_MAX = 5,
 	RATE_WINDOW = 30,
@@ -1942,8 +1942,8 @@ Config.Admin = {
 	MSG_TITLE_RESET_NOT_FOUND = "[Admin] I could not find '%s'.",
 	-- AdminService retry config (client-side)
 	RETRY_MAX_ATTEMPTS = 3,
-	RETRY_BACKOFF = { 2, 4, 8 }, -- detik backoff per attempt
-	NETWORK_TIMEOUT = 5, -- detik timeout per attempt
+	RETRY_BACKOFF = { 2, 4, 8 }, -- seconds backoff per attempt
+	NETWORK_TIMEOUT = 5, -- seconds timeout per attempt
 	-- Confirmation dialog
 	CONFIRM_GIFT_TITLE = "Confirm Gift",
 	CONFIRM_GIFT_MESSAGE = "Are you sure you want to send %s Membership to %s?",
@@ -2000,13 +2000,13 @@ Config.AvatarContext = {
 	SOCIAL_PROOF_RATE_WINDOW = 60, -- rate limit window in seconds
 
 	-- Viewport pool: pre-warm all players + local player for instant 3D preview.
-	-- Pool size 15 cukup untuk proximity 30 studs di 100 CCU (rata-rata 5-10
-	-- player terlihat, 15 memberikan headroom untuk spawn baru + LRU protection).
+	-- Pool size 15 is enough for 30-stud proximity at 100 CCU (average 5-10
+	-- visible players; 15 gives headroom for new spawns + LRU protection).
 	VIEWPORT_POOL_SIZE = 15,
 	VIEWPORT_PREWARM_SELF = true,
 
 	-- Timeouts
-	REQUEST_TIMEOUT = 15, -- seconds (parallel fetch ~2-4s, buffer untuk network lambat)
+	REQUEST_TIMEOUT = 15, -- seconds (parallel fetch ~2-4s, buffer for slow network)
 	BUILD_DEADLINE = 5, -- seconds: max wait for parallel ACM fetches on server
 
 	-- 3D Avatar
@@ -2092,14 +2092,14 @@ Config.Icons = {
 		Gift = "rbxassetid://119219253317473",
 		Couple = "rbxassetid://114074615085456",
 		Admin = "rbxassetid://73598133071651",
-		-- Gunakan placeholder yang lebih jelas daripada 0
-		Command = "rbxassetid://70457204831369", -- Empty string = no icon (lebih jelas daripada rbxassetid://0)
+		-- Use a clearer placeholder than 0
+		Command = "rbxassetid://70457204831369", -- Empty string = no icon (clearer than rbxassetid://0)
 		Music = "rbxassetid://109703706311990",
 		Camera = "rbxassetid://131545412033411", -- Freecam / cinematic topbar (HP)
 		Broadcast = "rbxassetid://101268994273611",
 	},
 	Admin = {
-		-- Gunakan placeholder yang lebih jelas daripada 0
+		-- Use a clearer placeholder than 0
 		CursorForbidden = "", -- Empty string = no icon
 	},
 	Avatar = {
@@ -2201,7 +2201,7 @@ Config.Donation = {
 	TOPBAR_ORDER = 4,
 	PROVIDER_KEY = "bagibagi",
 	PROVIDER_NAME = "Bagibagi",
-	PROVIDER_DONOR_LABEL = "nama Bagibagi",
+	PROVIDER_DONOR_LABEL = "Bagibagi name",
 	PROVIDER_LINK = "", -- REPLACE: e.g. "https://bagibagi.co/yourname"
 	BAGIBAGI_LINK = "", -- REPLACE: same as PROVIDER_LINK
 	SAWERIA_LINK = "", -- legacy alias (Saweria kit templates)
@@ -2213,11 +2213,11 @@ Config.Donation = {
 	REMOTE_DONOR_PROFILE_RESPONSE = "DonationDonorProfileResponse",
 	DONOR_PROFILE_CACHE_TTL = 45,
 	DONOR_PROFILE_RANK_LOOKUP_LIMIT = 100,
-	-- Phase 3: Skip API call ke donor_profile untuk player yang belum pernah donasi.
-	-- Marked as known donor via: notif broadcast, manual adjustment, atau cash stats > 0.
-	-- Set false untuk force API call setiap refresh (debugging / new data import).
+	-- Phase 3: Skip API call to donor_profile for players who have never donated.
+	-- Marked as known donor via: notification broadcast, manual adjustment, or cash stats > 0.
+	-- Set false to force API call on every refresh (debugging / new data import).
 	SKIP_API_FOR_UNKNOWN_DONORS = true,
-	-- 30s: matches Leaderboards timeout. Donation Robux init dan products
+	-- 30s: matches Leaderboards timeout. Donation Robux init and products
 	-- response also yields through external HTTP + DataStore on cold start.
 	REMOTE_REQUEST_TIMEOUT = 30,
 	ROBUX_PROMPT_DELAY = 0.25,
@@ -2238,42 +2238,42 @@ Config.Donation = {
 	-- REST routes live under {ApiUrl}/v2/*. Secret in Server/Secrets.luau only.
 	SHEETS_WEB_APP_URL = "",
 	LEGACY_SAWERIA_SEED = {},
-	-- Polling interval leaderboard (detik) - jarang, karena leaderboard tidak perlu real-time
+	-- Leaderboard polling interval (seconds) — infrequent; leaderboard does not need real-time
 	-- Testing: 30 | Production: 120
 	POLL_INTERVAL = 120,
-	-- Polling interval notifikasi (detik) - CEPAT, ini yang mempengaruhi delay setelah bayar
-	-- Semakin kecil = notif lebih cepat muncul, tapi lebih banyak HTTP request
-	-- Min rekomendasi: 3s | Max: 30s
-	-- Idle ~0–5s tipikal (was 15s); masih jauh di bawah HttpService 500/min/server.
+	-- Notification polling interval (seconds) — FAST; this affects post-payment delay
+	-- Lower = notifications appear faster, but more HTTP requests
+	-- Recommended min: 3s | Max: 30s
+	-- Idle ~0–5s typical (was 15s); still well below HttpService 500/min/server.
 	NOTIF_POLL_INTERVAL = 5,
 	-- Adaptive burst polling — wired via BackgroundJobScheduler:setInterval after each
 	-- donation_poll completes (idle = NOTIF_POLL_INTERVAL; hot = NOTIF_BURST_INTERVAL).
-	NOTIF_BURST_INTERVAL = 2, -- detik polling saat burst mode (setelah donasi terdeteksi)
-	NOTIF_BURST_WINDOW = 45, -- detik sebelum kembali ke NOTIF_POLL_INTERVAL normal
+	NOTIF_BURST_INTERVAL = 2, -- polling seconds in burst mode (after donation detected)
+	NOTIF_BURST_WINDOW = 45, -- seconds before returning to normal NOTIF_POLL_INTERVAL
 	-- Client: when pending queue is at least half full, shorten notif display (no drops).
 	NOTIF_BACKLOG_DISPLAY_SCALE = 0.6,
-	-- Backoff saat endpoint error beruntun (exponential, lebih kecil agar recovery cepat)
-	NOTIF_FAILURE_BACKOFF_STEP = 5, -- base delay per failure step (detik)
-	NOTIF_FAILURE_BACKOFF_MAX = 20, -- cap maksimum backoff (detik)
-	-- Retry sekali sebelum dihitung failure - handle transient Worker errors
-	-- Worker cold start biasanya <1s, tapi retry tetap berguna untuk network hiccups
+	-- Backoff on consecutive endpoint errors (exponential, smaller for faster recovery)
+	NOTIF_FAILURE_BACKOFF_STEP = 5, -- base delay per failure step (seconds)
+	NOTIF_FAILURE_BACKOFF_MAX = 20, -- maximum backoff cap (seconds)
+	-- Retry once before counting as failure — handles transient Worker errors
+	-- Worker cold start is usually <1s, but retry still helps with network hiccups
 	NOTIF_RETRY_ENABLED = true,
-	NOTIF_RETRY_DELAY = 2, -- detik tunggu sebelum retry (Worker lebih cepat dari GAS)
-	-- HTTP request timeout (detik) - dinaikin dari 10 ke 20 karena query notifikasi
-	-- perlu waktu untuk full table scan pertama (index baru jalan setelah fix query)
+	NOTIF_RETRY_DELAY = 2, -- seconds to wait before retry (Worker faster than GAS)
+	-- HTTP request timeout (seconds) — raised from 10 to 20 because notification query
+	-- needs time for first full table scan (index active after query fix)
 	HTTP_TIMEOUT = 20,
-	-- Keep-warm ping - optional untuk Worker (Worker tidak memiliki cold start seperti GAS)
-	-- Bisa dinonaktifkan jika menggunakan Cloudflare Worker (selalu warm)
+	-- Keep-warm ping — optional for Worker (Worker has no cold start like GAS)
+	-- Can be disabled when using Cloudflare Worker (always warm)
 	KEEP_WARM_ENABLED = false,
-	KEEP_WARM_INTERVAL = 240, -- 4 menit - legacy dari GAS, tidak diperlukan untuk Worker
-	-- DataStore throttle lockout (P0): saat DataStoreService emit StandardReadExperienceThrottled
-	-- atau OrderedListExperienceThrottled, semua DS-bound ops (repo:getRobuxLeaderboard,
-	-- recordRobuxDonation, dll) short-circuit dan return Err("ds_throttled") selama detik ini.
-	-- Caller fall back ke TTL cache. 60s cukup untuk Roblox BudgetGate re-budget.
+	KEEP_WARM_INTERVAL = 240, -- 4 minutes — legacy from GAS, not needed for Worker
+	-- DataStore throttle lockout (P0): when DataStoreService emits StandardReadExperienceThrottled
+	-- or OrderedListExperienceThrottled, all DS-bound ops (repo:getRobuxLeaderboard,
+	-- recordRobuxDonation, etc.) short-circuit and return Err("ds_throttled") for this many seconds.
+	-- Callers fall back to TTL cache. 60s is enough for Roblox BudgetGate re-budget.
 	DATASTORE_THROTTLE_COOLDOWN = 60,
-	-- Minimum jumlah donasi (Rupiah) untuk diproses notif/leaderboard
+	-- Minimum donation amount (Rupiah) to process for notifications/leaderboard
 	MIN_AMOUNT = 1000,
-	-- Jumlah entry leaderboard yang di-track
+	-- Number of leaderboard entries tracked
 	LEADERBOARD_LIMIT = 10,
 	-- Remote names
 	REMOTE_NOTIFICATION = "DonationNotification",
@@ -2281,9 +2281,9 @@ Config.Donation = {
 	-- Slim signal on DonationLeaderboardUpdated (revision only); set false to rollback full table broadcast.
 	SHEETS_REFRESH_SIGNAL_ONLY = true,
 	REMOTE_ADMIN_COMMAND = "DonationAdminCommand",
-	-- Legacy overhead row "05-TopSpender" (#N INVESTOR). Off = pakai 00-DonationLayers saja.
+	-- Legacy overhead row "05-TopSpender" (#N INVESTOR). Off = use 00-DonationLayers only.
 	SHOW_LEGACY_TOP_SPENDER_ROW = false,
-	-- External donation top spender display text (05-TopSpender row, hanya jika SHOW_LEGACY_TOP_SPENDER_ROW).
+	-- External donation top spender display text (05-TopSpender row, only if SHOW_LEGACY_TOP_SPENDER_ROW).
 	TOP_SPENDER_TEXTS = {
 		[1] = "#1 INVESTOR",
 		[2] = "#2 INVESTOR",
@@ -2296,8 +2296,8 @@ Config.Donation = {
 		[9] = "#9 INVESTOR",
 		[10] = "#10 INVESTOR",
 	},
-	-- Tambahan nilai manual (delta), di-merge ke leaderboard utama saat poll/refresh.
-	-- Persisted via ManualBagibagiRepository (DataStore). Runtime cache di MANUAL_BAGIBAGI_ADJUSTMENTS.
+	-- Manual adjustment values (delta), merged into main leaderboard on poll/refresh.
+	-- Persisted via ManualBagibagiRepository (DataStore). Runtime cache in MANUAL_BAGIBAGI_ADJUSTMENTS.
 	MANUAL_BAGIBAGI_DATASTORE_KEY = scopedDataStoreKey("ManualBagibagiAdjustments_v1"),
 	-- Robux: increment OrderedDataStore (scoped via DataStoreScope — Studio_* when isolated).
 	MANUAL_ROBUX_ADJUSTMENTS = {} :: { [number]: number },
@@ -2344,15 +2344,15 @@ Config.Donation = {
 	MSG_CLAIM_RATE_LIMIT = "[Donation] You already claimed today. Come back tomorrow.",
 	MSG_SHEETS_ERROR = "[Donation] Could not reach the donation server.",
 	-- Rate limit claimdonor per player
-	CLAIM_COOLDOWN = 86400, -- 24 jam (detik)
-	-- SurfaceGui path di workspace (set setelah kamu buat Part-nya di Studio)
-	-- Contoh: "Workspace.DonationBoard.SurfaceGui"
+	CLAIM_COOLDOWN = 86400, -- 24 hours (seconds)
+	-- SurfaceGui path in workspace (set after you create the Part in Studio)
+	-- Example: "Workspace.DonationBoard.SurfaceGui"
 	LEADERBOARD_SURFACE_GUI_PATH = "",
-	-- Notifikasi toast / notification center
-	NOTIF_SHOW_DURATION = 20, -- detik sebelum auto-dismiss (sedikit lebih lama agar sempat dibaca)
-	NOTIF_MAX_QUEUE = 20, -- max notif yang boleh antre di client
-	NOTIF_SLIDE_DURATION = 0.45, -- durasi animasi masuk (detik)
-	NOTIF_GAP_DURATION = 0.18, -- jeda antar notif agar transisi terasa terpisah
+	-- Toast notifications / notification center
+	NOTIF_SHOW_DURATION = 20, -- seconds before auto-dismiss (slightly longer for reading time)
+	NOTIF_MAX_QUEUE = 20, -- max notifications queued on client
+	NOTIF_SLIDE_DURATION = 0.45, -- slide-in animation duration (seconds)
+	NOTIF_GAP_DURATION = 0.18, -- gap between notifications for distinct transitions
 	WORKSPACE_RESTORE_DELAY = 60,
 	-- CollectionService tag applied to Workspace roots that host donation SurfaceGuis.
 	-- TagDonationDisplayRoots.server.luau applies this at runtime so the tag survives
@@ -2366,7 +2366,7 @@ Config.Donation = {
 	-- Donation aura/effect assets live in ServerStorage.DonationEffects / DonationSounds.
 	-- Folder structure: ServerStorage > DonationEffects (Model) > DonationEffects (Folder) > Level1..Level11
 	-- Aura tier resolution (AURA_TIERS): highest `min` for Robux; idrMin..idrMax for Bagi-Bagi/Saweria.
-	-- Konversi ~1 Robux = Rp 100. Robux cinematic mulai Level3 (80 Robux).
+	-- Approx. 1 Robux = Rp 100. Robux cinematic effects start at Level3 (80 Robux).
 	ROBUX_EFFECTS_FOLDER = "DonationEffects",
 	ROBUX_EFFECT_SOUNDS_FOLDER = "DonationSounds",
 	-- World-position VFX (Rocket/Hammer/Blackhole) for Bagi-Bagi/Saweria only (WORLD_EFFECT_TIERS).
@@ -2501,7 +2501,7 @@ Config.Donation = {
 			cameraDuration = 8,
 		},
 	},
-	-- RoleBadge image per role (tampil di donation notif saat donator ada di server)
+	-- RoleBadge image per role (shown on donation notification when donor is in server)
 
 	ROLE_BADGE_IMAGE = {
 		Owner = "rbxassetid://126866972878520",
@@ -2552,8 +2552,8 @@ Config.Leaderboards = {
 	-- Bound missing-board paint retries (board streamed late).
 	PAINT_MISSING_RETRY_MAX = 3,
 	PAINT_MISSING_RETRY_DELAY = 5,
-	-- Delay sebelum kick-off pertama leaderboard refresh saat server start.
-	-- Menghindari DataStore throttle dari burst reads di pre-warm + overhead init.
+	-- Delay before first leaderboard refresh kick-off on server start.
+	-- Avoids DataStore throttle from burst reads during pre-warm + overhead init.
 	INITIAL_REFRESH_DELAY = 30,
 	SNAPSHOT_RATE_MAX = 2,
 	SNAPSHOT_RATE_WINDOW = 15,
@@ -2563,10 +2563,10 @@ Config.Leaderboards = {
 	CMD_SHOWCASE = "showcase",
 	DEFAULT_LIMIT = 10,
 	MAX_LIMIT = 100,
-	-- Patch #2 R1: Unify robux leaderboard cache key. Sebelumnya ROBUX_LIMIT=10 dipakai
-	-- untuk overhead top-donate, sedangkan DONOR_PROFILE_RANK_LOOKUP_LIMIT=100 dipakai
-	-- untuk donor profile lookup — 2 limit = 2 cache key = 2x miss per invalidate.
-	-- Set ke MAX_LIMIT supaya semua caller share satu cache entry (robux:100).
+	-- Patch #2 R1: Unify robux leaderboard cache key. Previously ROBUX_LIMIT=10 was used
+	-- for overhead top-donate, while DONOR_PROFILE_RANK_LOOKUP_LIMIT=100 was used
+	-- for donor profile lookup — 2 limits = 2 cache keys = 2x miss per invalidate.
+	-- Set to MAX_LIMIT so all callers share one cache entry (robux:100).
 	ROBUX_LIMIT = 100,
 	-- Workspace SurfaceGui rows painted (fetch may still use ROBUX_LIMIT for DS/cache).
 	ROBUX_PAINT_LIMIT = 20,
@@ -2581,18 +2581,18 @@ Config.Leaderboards = {
 	METADATA_KEY = scopedDataStoreKey("DonationLeaderboardMetadata_v1"),
 	RECEIPT_KEY = scopedDataStoreKey("DonationRobuxReceipts_v1"),
 	LIKE_ORDERED_KEY = scopedDataStoreKey("AvatarLikesLeaderboard_v1"),
-	-- P1: MemoryStoreService cross-server cache untuk leaderboard. Default ON
-	-- karena MemoryStore quota lebih murah dari DataStore GetSortedAsync
-	-- per-experience (10/min). Semua server share key yang sama dengan TTL
-	-- 60s - drops N×servers GetSortedAsync jadi 1×60s untuk leaderboard miss.
-	-- Fallback otomatis ke DataStore kalau MemoryStore error/disabled.
+	-- P1: MemoryStoreService cross-server cache for leaderboard. Default ON
+	-- because MemoryStore quota is cheaper than DataStore GetSortedAsync
+	-- per-experience (10/min). All servers share the same key with TTL
+	-- 60s — reduces N×servers GetSortedAsync to 1×60s for leaderboard miss.
+	-- Automatic fallback to DataStore if MemoryStore errors/disabled.
 	MEMORY_STORE_CACHE_ENABLED = true,
 	MEMORY_STORE_LEADERBOARD_TTL = 60,
 	MEMORY_STORE_STORE_NAME = "ClubKitLeaderboardCache",
-	-- Developer/test accounts: hidden dari leaderboard paint, overhead donation ranks,
-	-- dan Robux OrderedDS (session-only di Shop). Kosongkan / comment ID saat testing di Studio.
+	-- Developer/test accounts: hidden from leaderboard paint, overhead donation ranks,
+	-- and Robux OrderedDS (session-only in Shop). Clear / comment ID when testing in Studio.
 	HIDDEN_ROBUX_USER_IDS = {
-		-- [8842050215] = true, -- dev account; uncomment untuk sembunyikan dari board Robux
+		-- [8842050215] = true, -- dev account; uncomment to hide from Robux board
 	} :: { [number]: boolean },
 	MSG_REFRESH_USAGE = "[Leaderboard] Try /refreshleaderboard <robux|community|bagibagi|likes|all|audit>.",
 	MSG_REFRESH_NO_PERM = "[Leaderboard] This command is owner-only.",
@@ -2743,20 +2743,20 @@ Config.Music = {
 	CATALOG_DEFAULT_PLAYLIST_NAME = "Legacy",
 	CATALOG_SYNC_SOURCE = "music-catalog-seeder",
 	-- Mode: "global" (single server-wide session, every player hears the same
-	-- track) atau "zone" (per-tagged-zone sessions, players only hear music
-	-- when inside a tagged BasePart). "global" recommended untuk club games,
-	-- "zone" untuk world games dengan multiple distinct areas.
+	-- track) or "zone" (per-tagged-zone sessions, players only hear music
+	-- when inside a tagged BasePart). "global" recommended for club games,
+	-- "zone" for world games with multiple distinct areas.
 	MODE = "global",
-	-- Music zones (cuma dipakai kalau MODE = "zone")
+	-- Music zones (only used when MODE = "zone")
 	ZONE_TAG = "MusicZone",
 	ZONE_ID_ATTRIBUTE = "ZoneId",
 	ZONE_DISPLAY_NAME_ATTRIBUTE = "DisplayName",
 	ZONE_TICK_INTERVAL = 0.2,
 	DEFAULT_ZONE_DISPLAY_NAME = "Music Zone",
 	MSG_NOT_IN_ZONE = "You're not in a music zone yet. Step into one to start listening.",
-	-- Rank yang boleh akses Manage tab
+	-- Ranks allowed to access Manage tab
 	-- Owner=255, CoOwner=254, Developer=200, Admin=100
-	-- DJ rank ditambahkan di sini saat role-nya dibuat
+	-- Add DJ rank here when the role is created
 	MANAGE_ALLOWED_RANKS = { 255, 251, 250},
 	MANAGE_ALLOWED_EXACT_RANKS = { 60 },
 	MANAGE_ALLOWED_INTERNAL_ROLES = {
@@ -2783,7 +2783,7 @@ Config.Music = {
 	-- Remote names
 	REMOTE_TRACK_CHANGED = "MusicTrackChanged", -- S->C
 	REMOTE_QUEUE_UPDATED = "MusicQueueUpdated", -- S->C
-	REMOTE_STATE_SYNC = "MusicStateSync", -- S->C (pada join)
+	REMOTE_STATE_SYNC = "MusicStateSync", -- S->C (on join)
 	REMOTE_TIMING_UPDATED = "MusicTimingUpdated", -- S->C
 	REMOTE_PLAYBACK_FINISHED = "MusicPlaybackFinished", -- C->S
 	REMOTE_DURATION_REPORT = "MusicDurationReport", -- C->S
@@ -2813,14 +2813,14 @@ Config.Music = {
 	-- Playback
 	VOTE_SKIP_DURATION = 1,
 	-- Max audio asset IDs per track. GUI 4-AddorEditTrackModal
-	-- saat ini menyediakan 9 slot (2-TrackIDPart1..9). Naikin nilai
-	-- ini perlu nambah frame baru di GUI juga.
+	-- currently provides 9 slots (2-TrackIDPart1..9). Increase this value
+	-- only if you add new frames in the GUI too.
 	MAX_TRACK_PARTS = 9,
 	NEW_DROPS_WINDOW_SECONDS = 7 * 24 * 60 * 60,
 	VOTE_SKIP_THRESHOLD = 0.5, -- 50% of players must vote
-	-- Default playback speed untuk music GUI saat track gak punya
+	-- Default playback speed for music GUI when track has no
 	-- per-track override (track.playbackSpeed = nil).
-	-- Controller dan binder membaca nilai ini saat pertama kali load.
+	-- Controller and binder read this value on first load.
 	PLAYBACK_SPEED = 0.625,
 	MSG_DJ_MODE_REQUIRED = "Enable DJ mode first to adjust sound effects and playback. Settings were reset.",
 	PITCH_SEMITONES = 0,
@@ -2836,8 +2836,8 @@ Config.Music = {
 	},
 	-- Server: auto-advance when track duration unknown (seconds). Cancelled once client reports duration.
 	AUTO_ADVANCE_UNKNOWN_DURATION_SECONDS = 180,
-	-- Client: skip hanya jika ContentProvider mengonfirmasi gagal (bukan timer).
-	-- Load lambat hanya log stall — tidak auto-skip.
+	-- Client: skip only when ContentProvider confirms failure (not a timer).
+	-- Slow load only logs stall — does not auto-skip.
 	ASSET_LOAD_STALL_LOG_SECONDS = 120,
 	-- Server: extra seconds before auto-advance on track start (client load window).
 	ASSET_LOAD_GRACE_SECONDS = 90,
@@ -2862,7 +2862,7 @@ Config.Music = {
 	-- When false, TimedOut triggers retry instead of immediate skip report.
 	ASSET_FAILURE_TIMEDOUT_IS_DEFINITIVE = false,
 	-- Deprecated: server does not global-skip on client failure reports.
-	-- Server advanceQueue: validasi format asset ID saja (bukan PreloadAsync).
+	-- Server advanceQueue: validate asset ID format only (not PreloadAsync).
 	ASSET_VALIDATE_ON_SERVER = true,
 	ASSET_VALIDATE_USE_PRELOAD = false,
 	-- Client audio prefetch (lookahead cache). Set PREFETCH_ENABLED = false to revert to legacy load-at-transition.
@@ -3126,8 +3126,8 @@ Config.Music = {
 			},
 		},
 	},
-	-- Idle fallback: saat tidak ada request aktif, sistem akan assign lagu otomatis.
-	-- Fallback ini dimatikan saat DJ mode aktif.
+	-- Idle fallback: when no active request, system auto-assigns a track.
+	-- This fallback is disabled while DJ mode is active.
 	IDLE_SYSTEM_FALLBACK_ENABLED = true,
 	SYSTEM_ASSIGNER_LABEL = "Assigned by System",
 	-- Rate limits
@@ -3155,7 +3155,7 @@ Config.Music = {
 	-- Music library rarely changes. Revert to 15s via Config if admin upload track UX issue.
 	-- DataStore-heavy path, not HTTP-API culprit. Default OK.
 	SYNC_POLL_INTERVAL = 30,
-	-- Cover gradient presets (untuk ColorTemplateList)
+	-- Cover gradient presets (for ColorTemplateList)
 	-- Format: { color0, color1, rotation }
 	COVER_GRADIENTS = {
 		{ Color3.fromRGB(34, 10, 32), Color3.fromRGB(92, 18, 66), 90 }, -- Neon Wine
@@ -3167,7 +3167,7 @@ Config.Music = {
 		{ Color3.fromRGB(26, 28, 36), Color3.fromRGB(67, 70, 86), 90 }, -- Club Slate
 		{ Color3.fromRGB(23, 18, 31), Color3.fromRGB(60, 38, 69), 90 }, -- Smoky Plum
 	} :: { { Color3 | number } },
-	-- Font presets (curated list dari Roblox fonts)
+	-- Font presets (curated list from Roblox fonts)
 	FONT_PRESETS = {
 		"Original",
 		"Montserrat",
@@ -3242,7 +3242,7 @@ Config.MobileScale = {
 -- SCROLL INDICATOR
 -- ============================================================
 Config.ScrollIndicator = {
-	-- Detik tanpa scroll sebelum scroll bar transparansi di-fade ke tersembunyi
+	-- Seconds without scroll before scrollbar transparency fades to hidden
 	FADEOUT_DELAY = 3,
 	FADEOUT_DURATION = 0.4,
 	FADEIN_DURATION = 0.15,
@@ -3398,7 +3398,7 @@ local function validateConfig()
 			if type(product) == "table" then
 				if product.BUY_GAMEPASS_ID == 0 or product.BUY_GAMEPASS_ID == nil then
 					warn(
-						("[Config] Shop.PRODUCTS.%s.BUY_GAMEPASS_ID masih 0/nil — isi ClubKitConfig.Shop.Products.%s.BuyGamePassId."):format(
+						("[Config] Shop.PRODUCTS.%s.BUY_GAMEPASS_ID is still 0/nil — set ClubKitConfig.Shop.Products.%s.BuyGamePassId."):format(
 							tostring(tier),
 							tostring(tier)
 						)
@@ -3406,7 +3406,7 @@ local function validateConfig()
 				end
 				if product.GIFT_ID == 0 or product.GIFT_ID == nil then
 					warn(
-						("[Config] Shop.PRODUCTS.%s.GIFT_ID masih 0/nil — ganti dengan Developer Product ID aktual."):format(
+						("[Config] Shop.PRODUCTS.%s.GIFT_ID is still 0/nil — replace with the actual Developer Product ID."):format(
 							tostring(tier)
 						)
 					)
@@ -3415,11 +3415,11 @@ local function validateConfig()
 		end
 	end
 	if Config.PaidBroadcast and (Config.PaidBroadcast.PRODUCT_ID == 0 or Config.PaidBroadcast.PRODUCT_ID == nil) then
-		warn("[Config] PaidBroadcast.PRODUCT_ID masih 0/nil — isi ClubKitConfig.PaidBroadcast.ProductId.")
+		warn("[Config] PaidBroadcast.PRODUCT_ID is still 0/nil — set ClubKitConfig.PaidBroadcast.ProductId.")
 	end
-	-- Group ID harus valid (skip saat showcase/demo — tidak butuh group live)
+	-- Group ID must be valid (skip during showcase/demo — no live group needed)
 	if Config.Group.GROUP_ID <= 0 and not (Config.Demo and Config.Demo.ENABLED == true) then
-		warn("[Config] Group.GROUP_ID tidak valid (harus > 0).")
+		warn("[Config] Group.GROUP_ID is invalid (must be > 0).")
 	end
 end
 local ConfigBootstrap = require(script.Parent.Parent.Config.ConfigBootstrap)

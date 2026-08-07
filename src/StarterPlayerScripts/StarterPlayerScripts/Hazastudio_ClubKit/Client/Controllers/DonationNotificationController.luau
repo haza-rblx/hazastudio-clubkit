@@ -1,6 +1,6 @@
 --!strict
 -- Client/Controllers/DonationNotificationController.lua
--- Terima DonationNotification dari server, tampilkan GUI Studio donation.
+-- Receive DonationNotification from server; display Studio donation GUI.
 -- Single active notification + queue + dedup guard.
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
@@ -43,7 +43,7 @@ type GuiRefs = {
 	backgroundWrapper: GuiObject?,
 	rotatingBackground: ImageLabel?,
 	donationWrapper: Frame,
-	-- active template (set saat showNotif berdasarkan payload.source)
+	-- active template (set in showNotif based on payload.source)
 	panel: CanvasGroup,
 	panelScale: UIScale,
 	senderProfpic: ImageLabel?,
@@ -56,7 +56,7 @@ type GuiRefs = {
 	donationValue: TextLabel?,
 	donationMessage: TextLabel?,
 	countDownBar: Frame?,
-	-- kedua template tersimpan untuk di-swap
+	-- both templates stored for swapping
 	saweriaRefs: TemplateRefs,
 	robuxRefs: TemplateRefs,
 }
@@ -102,27 +102,27 @@ type WorkspaceSurfaceState = {
 
 -- ANIMATION CONSTANTS
 -- Entrance
-local ENTER_SLIDE_OFFSET = -80 -- px di atas resting saat awal masuk (lebih dramatic)
-local ENTER_OVERSHOOT_BELOW = 10 -- px lewat batas bawah resting (spring feel)
-local ENTER_SCALE_FROM = 0.82 -- skala awal (lebih kecil -> pop lebih kentara)
-local ENTER_SCALE_PEAK = 1.055 -- peak scale saat overshoot (lebih terasa)
-local ENTER_PHASE1_DUR = 0.42 -- durasi slide masuk + peak scale (lebih smooth)
-local ENTER_PHASE2_DUR = 0.16 -- durasi settle ke resting (lebih mulus)
+local ENTER_SLIDE_OFFSET = -80 -- px above resting on initial entrance (more dramatic)
+local ENTER_OVERSHOOT_BELOW = 10 -- px past lower resting bound (spring feel)
+local ENTER_SCALE_FROM = 0.82 -- initial scale (smaller -> pop more noticeable)
+local ENTER_SCALE_PEAK = 1.055 -- peak scale on overshoot (more noticeable)
+local ENTER_PHASE1_DUR = 0.42 -- slide-in + peak scale duration (smoother)
+local ENTER_PHASE2_DUR = 0.16 -- settle-to-resting duration (smoother)
 -- Background
-local BG_SPIN_PERIOD = 7 -- detik per 360 deg
-local BG_FADE_IN_DUR = 0.3 -- bg muncul perlahan setelah panel settled
-local BG_FADE_OUT_DUR = 0.18 -- bg hilang saat exit
--- Stagger reveals (elemen konten muncul bergiliran setelah panel settled)
-local STAGGER_DELAY_SENDER = 0.05 -- offset setelah panel selesai animasi
+local BG_SPIN_PERIOD = 7 -- seconds per 360 deg
+local BG_FADE_IN_DUR = 0.3 -- bg fades in slowly after panel settled
+local BG_FADE_OUT_DUR = 0.18 -- bg fades out on exit
+-- Stagger reveals (content elements appear in sequence after panel settled)
+local STAGGER_DELAY_SENDER = 0.05 -- offset after panel finishes animation
 local STAGGER_DELAY_VALUE = 0.13
 local STAGGER_DELAY_MESSAGE = 0.22
-local STAGGER_SLIDE_DIST = 14 -- px - slide dari samping
-local STAGGER_FADE_DUR = 0.32 -- durasi fade+slide tiap elemen (lebih smooth)
+local STAGGER_SLIDE_DIST = 14 -- px - slide from side
+local STAGGER_FADE_DUR = 0.32 -- fade+slide duration per element (smoother)
 -- Exit
-local EXIT_ANTICIPATION_DUR = 0.12 -- detik "napas" sebelum kabur (lebih terasa)
-local EXIT_ANTICIPATION_SCALE = 0.970 -- compress lebih dalam
-local EXIT_LAUNCH_DUR = 0.30 -- durasi terbang ke atas (lebih dramatic)
-local EXIT_SLIDE_ABOVE = -65 -- px ke atas dari resting saat exit (lebih jauh)
+local EXIT_ANTICIPATION_DUR = 0.12 -- seconds "breath" before exit (more noticeable)
+local EXIT_ANTICIPATION_SCALE = 0.970 -- compress deeper
+local EXIT_LAUNCH_DUR = 0.30 -- fly-upward duration (more dramatic)
+local EXIT_SLIDE_ABOVE = -65 -- px above resting on exit (farther)
 local LIVECHAT_POP_FROM = 0.86
 local LIVECHAT_POP_PEAK = 1.045
 local LIVECHAT_POP_IN_DUR = 0.34
@@ -135,7 +135,7 @@ local LIVECHAT_MSG_SETTLE_DUR = 0.28
 local LIVECHAT_STAGGER_CARD = 0.02
 local LIVECHAT_STAGGER_TOTAL = 0.1
 local LIVECHAT_STAGGER_FOOTER = 0.14
--- Dedup guard: window (detik) untuk filter notif duplikat dari burst polling
+-- Dedup guard: window (seconds) to filter duplicate notifs from burst polling
 local DEDUP_WINDOW_SECS = 2.5
 -- HELPERS
 local log = Logger.new("Client.DonationNotificationController")
@@ -154,9 +154,9 @@ local function destroy()
 	table.clear(_connections)
 end
 
-local EMPTY_MESSAGE_TEXT = "Tanpa pesan"
-local DEFAULT_SENDER_USERNAME = "@donatur"
-local DEFAULT_TOTAL_DONATION = "Total : Donasi pertama"
+local EMPTY_MESSAGE_TEXT = "No message"
+local DEFAULT_SENDER_USERNAME = "@donor"
+local DEFAULT_TOTAL_DONATION = "Total: First donation"
 local function getExternalProviderName(): string
 	return DonationProviderDomain.getName()
 end
@@ -581,10 +581,10 @@ local function resolveDisplayIdentity(payload: DonationNotifPayload): (string, s
 	local isRobux = source == "robux"
 	local saweriaName = payload.saweriaName or ""
 
-	-- 3A fix: Resolve Roblox identity untuk BOTH Robux dan Bagibagi donations.
-	-- Sebelumnya non-Robux early-return `payload.saweriaName, ""` yang discard
-	-- robloxUsername/robloxDisplayName → username always "" → fallback "@donatur"
-	-- → thumbnail benar (pakai robloxUserId langsung) tapi name salah.
+	-- 3A fix: Resolve Roblox identity for BOTH Robux and Bagibagi donations.
+	-- Previously non-Robux early-return `payload.saweriaName, ""` discarded
+	-- robloxUsername/robloxDisplayName → username always "" → fallback "@donor"
+	-- → thumbnail correct (uses robloxUserId directly) but name wrong.
 	local username = if type(payload.robloxUsername) == "string" and payload.robloxUsername ~= ""
 		then payload.robloxUsername else ""
 	local displayName = if type((payload :: any).robloxDisplayName) == "string"
@@ -602,9 +602,9 @@ local function resolveDisplayIdentity(payload: DonationNotifPayload): (string, s
 		end
 	end
 
-	-- Fix: untuk Bagibagi (non-Robux), kalau robloxDisplayName sama persis dengan
-	-- robloxUsername (user belum set custom DisplayName), prefer pakai saweriaName
-	-- sebagai displayName supaya notif tidak terlihat redundant "Username @username".
+	-- Fix: for Bagibagi (non-Robux), if robloxDisplayName exactly matches
+	-- robloxUsername (user not yet set custom DisplayName), prefer use saweriaName
+	-- as displayName so notification does not look redundant "Username @username".
 	if not isRobux and displayName ~= "" and username ~= "" and displayName:lower() == username:lower() then
 		displayName = ""
 	end
@@ -615,9 +615,9 @@ local function resolveDisplayIdentity(payload: DonationNotifPayload): (string, s
 	end
 
 	-- For non-Robux (Bagibagi/Saweria): return saweriaName as subtitle (third
-	-- return value) supaya UI bisa show both — Roblox display name primary,
-	-- external Saweria name secondary. Hanya return subtitle kalau saweriaName
-	-- berbeda dari displayName (avoid redundant display).
+	-- return value) so the UI can show both — Roblox display name primary,
+	-- external Saweria name secondary. Only return subtitle when saweriaName
+	-- differs from displayName (avoid redundant display).
 	local subtitle: string? = nil
 	if not isRobux and saweriaName ~= "" and saweriaName ~= displayName then
 		subtitle = saweriaName
@@ -636,7 +636,7 @@ local function buildRunningText(
 		string.upper(displayName) .. " DONATED " .. string.upper(formatDonationAmount(payload)),
 	}
 
-	-- 3B fix: include saweriaName subtitle untuk Bagibagi donations
+	-- 3B fix: include saweriaName subtitle for Bagibagi donations
 	if subtitle and subtitle ~= "" then
 		table.insert(parts, "via " .. subtitle)
 	end
@@ -704,7 +704,7 @@ local function setVisible(obj: GuiObject?, v: boolean)
 		obj.Visible = v
 	end
 end
--- Buat tween, play, dan return - shorthand
+-- Create tween, play, and return — shorthand
 local function tween(instance: Instance, info: TweenInfo, goal: { [string]: any }): Tween
 	local t = TweenService:Create(instance, info, goal)
 	t:Play()
@@ -814,24 +814,24 @@ local function resolveGuiRefs(playerGui: PlayerGui): GuiRefs?
 		rootGui = playerGui:WaitForChild("99-NotificationCenter", 10)
 	end
 	if not rootGui or not rootGui:IsA("ScreenGui") then
-		log:warn("99-NotificationCenter tidak ditemukan di PlayerGui")
+		log:warn("99-NotificationCenter not found in PlayerGui")
 		return nil
 	end
 
 	local donationWrapper = rootGui:FindFirstChild("DonationWrapper")
 	if not donationWrapper or not donationWrapper:IsA("Frame") then
-		log:warn("DonationWrapper tidak ditemukan di 99-NotificationCenter")
+		log:warn("DonationWrapper not found in 99-NotificationCenter")
 		return nil
 	end
 
 	local saweriaPanel = donationWrapper:FindFirstChild("SaweriaDonationTemplate")
 	if not saweriaPanel or not saweriaPanel:IsA("CanvasGroup") then
-		log:warn("SaweriaDonationTemplate tidak ditemukan di DonationWrapper")
+		log:warn("SaweriaDonationTemplate not found in DonationWrapper")
 		return nil
 	end
 	local robuxPanel = donationWrapper:FindFirstChild("RobuxDonationTemplate")
 	if not robuxPanel or not robuxPanel:IsA("CanvasGroup") then
-		log:warn("RobuxDonationTemplate tidak ditemukan di DonationWrapper")
+		log:warn("RobuxDonationTemplate not found in DonationWrapper")
 		return nil
 	end
 
@@ -908,9 +908,9 @@ end
 local function populateGui(refs: GuiRefs, payload: DonationNotifPayload)
 	local msgText = normalizeMessage(payload.message)
 	-- DisplayName: prefer live player DisplayName, fallback saweriaName
-	-- 3B fix: resolveDisplayIdentity sekarang return 3 values (displayName,
-	-- username, subtitle). subtitle = saweriaName untuk Bagibagi donations
-	-- supaya UI show both names. Append ke displayName kalau ada.
+	-- 3B fix: resolveDisplayIdentity now returns 3 values (displayName,
+	-- username, subtitle). subtitle = saweriaName for Bagibagi donations
+	-- so the UI shows both names. Append to displayName when present.
 	local displayName, username, subtitle = resolveDisplayIdentity(payload)
 	if displayName == nil or displayName == "" then
 		displayName = payload.saweriaName
@@ -922,8 +922,8 @@ local function populateGui(refs: GuiRefs, payload: DonationNotifPayload)
 		refs.senderDisplayName.Text = displayName
 	end
 	if refs.senderUsername then
-		-- 3A fix: username sekarang di-resolve dari robloxUsername untuk both
-		-- Robux dan Bagibagi. DEFAULT_SENDER_USERNAME hanya fallback terakhir.
+		-- 3A fix: username is now resolved from robloxUsername for both
+		-- Robux and Bagibagi. DEFAULT_SENDER_USERNAME is only the last fallback.
 		local hasUsername = username ~= ""
 		refs.senderUsername.Text = if hasUsername
 			then "@" .. username
@@ -951,7 +951,7 @@ local function populateGui(refs: GuiRefs, payload: DonationNotifPayload)
 		refs.senderProfpic.ImageTransparency = 0
 		refs.senderProfpic.Image = refs.senderProfpicDefaultImage or refs.senderProfpic.Image
 	end
-	-- RoleBadge: set image sesuai role dari overhead cache, hide untuk Guest/tidak dikenal
+	-- RoleBadge: set image per role from overhead cache, hide for Guest/unknown
 	if refs.roleBadge then
 		local badgeImage: string? = nil
 		if type(payload.robloxUserId) == "number" then
@@ -1052,14 +1052,14 @@ local function applyWorkspaceThumbnail(imageLabel: ImageLabel?, payload: Donatio
 end
 
 local function populateWorkspaceSurfaces(refs: WorkspaceSurfaceRefs, payload: DonationNotifPayload)
-	-- 3B fix: handle subtitle (saweriaName) dari resolveDisplayIdentity
+	-- 3B fix: handle subtitle (saweriaName) from resolveDisplayIdentity
 	local displayName, username, subtitle = resolveDisplayIdentity(payload)
 	local normalizedMessage = normalizeMessage(payload.message)
 	local messageText = normalizedMessage or "YOUR DONATION MESSAGE WILL SHOW UP HERE"
-	-- 3A fix: username sekarang di-resolve dari robloxUsername. "@donatur"
-	-- hanya fallback kalau tidak ada Roblox identity sama sekali.
-	local usernameText = if username ~= "" then "@" .. username:gsub("^@", "") else "@donatur"
-	-- Append subtitle ke displayName untuk workspace live board juga
+	-- 3A fix: username is now resolved from robloxUsername. "@donor"
+	-- is only a fallback when there is no Roblox identity at all.
+	local usernameText = if username ~= "" then "@" .. username:gsub("^@", "") else "@donor"
+	-- Append subtitle to displayName for workspace live board too
 	if subtitle and subtitle ~= "" then
 		displayName = displayName .. " (" .. subtitle .. ")"
 	end
@@ -1083,10 +1083,10 @@ local function populateWorkspaceSurfaces(refs: WorkspaceSurfaceRefs, payload: Do
 		refs.liveLastUpdate.Text = workspaceTimestampText()
 	end
 	if refs.runningText then
-		-- 3B fix: pass subtitle ke buildRunningText
-		-- Note: displayName sudah include subtitle di-append di atas, jadi
-		-- untuk running text kita pakai displayName tanpa append ulang.
-		-- Build running text dari original displayName + subtitle terpisah.
+		-- 3B fix: pass subtitle to buildRunningText
+		-- Note: displayName already includes the appended subtitle above, so
+		-- for running text we use displayName without appending again.
+		-- Build running text from original displayName + subtitle separate.
 		local rawDisplayName, rawUsername, rawSubtitle = resolveDisplayIdentity(payload)
 		refs.runningText.Text = buildRunningText(payload, rawDisplayName, rawUsername, rawSubtitle)
 	end
@@ -1578,8 +1578,8 @@ local function displayInGeneralChat(payload: DonationNotifPayload)
 			rankInfo = " - " .. (Config.Donation.TOP_SPENDER_TEXTS[payload.newRank] or ("Top #" .. payload.newRank))
 		end
 		local msgInfo = msgText and (' - "' .. msgText .. '"') or ""
-		-- 3B fix: pakai Roblox displayName + username (konsisten dengan notif card)
-		-- Sebelumnya pakai payload.saweriaName langsung → always "donatur"/"Bagibagi Donor"
+		-- 3B fix: use Roblox displayName + username (consistent with notif card)
+		-- Previously used payload.saweriaName directly → always "donor"/"Bagibagi Donor"
 		local displayName, username, subtitle = resolveDisplayIdentity(payload)
 		local nameSegment = displayName
 		if username and username ~= "" then
@@ -1590,7 +1590,7 @@ local function displayInGeneralChat(payload: DonationNotifPayload)
 		end
 		general:DisplaySystemMessage(
 			string.format(
-				'<font color="#FFD700">[DONASI] DONASI MASUK</font>  <b>%s</b> <font color="#B4FFB4">%s</font>%s%s',
+				'<font color="#FFD700">[DONATION] DONATION RECEIVED</font>  <b>%s</b> <font color="#B4FFB4">%s</font>%s%s',
 				nameSegment,
 				formatDonationAmount(payload),
 				rankInfo,
@@ -1612,7 +1612,7 @@ local function init(_deps: {}?)
 	if not guiRefs then
 		return
 	end
-	-- Capture resting position dari Studio sebelum kita animasikan apapun
+	-- Capture resting position from Studio before we animate anything
 	local restingPosition: UDim2 = guiRefs.panel.Position
 	resetGuiState(guiRefs :: GuiRefs, restingPosition)
 	local queue: { DonationNotifPayload } = {}
@@ -1625,18 +1625,18 @@ local function init(_deps: {}?)
 	local maxPendingQueue = math.max(1, Config.Donation.NOTIF_MAX_QUEUE)
 	local backlogDisplayScale = math.clamp(tonumber(Config.Donation.NOTIF_BACKLOG_DISPLAY_SCALE) or 0.6, 0.25, 1)
 	local backlogThreshold = math.max(1, math.floor(maxPendingQueue * 0.5))
-	-- Token untuk membatalkan loop background spin & heartbeat
+	-- Token to cancel background spin & heartbeat loops
 	local animToken = 0
 	local runningTextToken = 0
 	local workspaceRestoreToken = 0
 	-- Dedup guard state
-	-- 3D fix: dedup key pakai robloxUserId (bukan saweriaName) supaya donor
-	-- berbeda dengan nama sama/"donatur" tidak di-collapse sebagai duplicate.
-	-- Fallback ke saweriaName kalau robloxUserId nil (edge case).
+	-- 3D fix: dedup key use robloxUserId (not saweriaName) so donor
+	-- with different names but same/"donor" not collapsed as duplicate.
+	-- Fallback to saweriaName if robloxUserId is nil (edge case).
 	local lastEnqueuedDedupKey: string = ""
 	local lastEnqueuedAmount: number = 0
 	local lastEnqueuedAt: number = 0
-	-- Re-resolve refs bila stale (handle ResetOnSpawn setelah respawn)
+	-- Re-resolve refs if stale (handle ResetOnSpawn after respawn)
 	local function getGuiRefs(): GuiRefs?
 		local current = guiRefs
 		if current and current.panel and current.panel.Parent then
@@ -1693,23 +1693,23 @@ local function init(_deps: {}?)
 	end
 	local remotes = ReplicatedStorage:WaitForChild("Remotes", 15)
 	if not remotes then
-		log:warn("Remotes folder tidak ditemukan")
+		log:warn("Remotes folder not found")
 		return
 	end
 	local notifRemote = remotes:WaitForChild(Config.Donation.REMOTE_NOTIFICATION, 15) :: RemoteEvent?
 	if not notifRemote then
-		log:warn("DonationNotification remote tidak ditemukan")
+		log:warn("DonationNotification remote not found")
 		return
 	end
 	-- BACKGROUND SPIN LOOP
-	-- Dipanggil setelah panel selesai animate masuk.
-	-- Loop berjalan sampai token berubah (saat exit dipanggil).
+	-- Called after panel finish entrance animation.
+	-- Loop runs until token changes (when exit is called).
 	local function startBackgroundSpin(refs: GuiRefs, token: number)
 		local bg = refs.rotatingBackground
 		if not bg then
 			return
 		end
-		-- Wrapper sudah visible, kita fade-in bg secara terpisah
+		-- Wrapper already visible; fade in bg separately
 		bg.Rotation = 0
 		bg.ImageTransparency = 1
 		-- Fade in background
@@ -1732,9 +1732,9 @@ local function init(_deps: {}?)
 				)
 				spinTween:Play()
 				spinTween.Completed:Wait()
-				-- Hanya update jika token masih valid
+				-- Only update if token still valid
 				if animToken == token and bg.Parent then
-					-- Pakai modulo agar angka tidak terus menumpuk
+					-- Use modulo so value does not keep accumulating
 					currentRotation = (currentRotation + 360) % 36000
 					bg.Rotation = currentRotation % 360
 				end
@@ -1742,11 +1742,11 @@ local function init(_deps: {}?)
 		end)
 	end
 	-- STAGGER CONTENT REVEAL
-	-- Elemen konten muncul bergiliran setelah panel settled.
-	-- Setiap elemen: slide in from side + fade opacity.
+	-- Content elements appear in sequence after panel settled.
+	-- Each element: slide in from the side and fade opacity.
 	local function staggerReveal(refs: GuiRefs, token: number)
 		task.spawn(function()
-			-- Helper: slide+fade untuk satu GuiObject
+			-- Helper: slide+fade for one GuiObject
 			local function revealElement(elem: GuiObject?, delaySec: number)
 				if not elem or animToken ~= token then
 					return
@@ -1755,22 +1755,22 @@ local function init(_deps: {}?)
 				if animToken ~= token or not elem.Parent then
 					return
 				end
-				-- Simpan posisi asli
+				-- Save original position
 				local origPos = elem.Position
-				-- Mulai dari sedikit ke kanan + transparan
+				-- Start slightly to the right + transparent
 				elem.Position = origPos + UDim2.fromOffset(STAGGER_SLIDE_DIST, 0)
-				-- Jika TextLabel, fade TextTransparency juga
+				-- For TextLabel, fade TextTransparency as well
 				local isTextLabel = elem:IsA("TextLabel")
 				if isTextLabel then
 					(elem :: TextLabel).TextTransparency = 1
 				end
-				-- Tween posisi kembali ke origi
+				-- Tween position back to the original
 				tween(
 					elem,
 					TweenInfo.new(STAGGER_FADE_DUR, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
 					{ Position = origPos }
 				)
-				-- Fade in opacity (terpisah agar bisa tween bersamaan)
+				-- Fade in opacity (separate so tweens can run together)
 				if isTextLabel then
 					tweenWait(
 						elem :: TextLabel,
@@ -1784,12 +1784,12 @@ local function init(_deps: {}?)
 			revealElement(refs.donationMessage :: GuiObject?, STAGGER_DELAY_MESSAGE)
 		end)
 	end
-	-- SHOW NOTIFICATION - sequence lengkap entrance
+	-- SHOW NOTIFICATION — full entrance sequence
 	local function showNotif(payload: DonationNotifPayload)
 		local refs = getGuiRefs()
 		local surfaceStates = getWorkspaceSurfaceStates()
 		if not refs then
-			log:warn("GUI refs tidak valid saat showNotif dipanggil")
+			log:warn("GUI refs invalid when showNotif called")
 			return
 		end
 		isShowingNotif = true
@@ -1856,18 +1856,18 @@ local function init(_deps: {}?)
 			return runningTextToken == marqueeToken
 		end)
 		scheduleWorkspaceRestore(restoreToken)
-		-- Siapkan state awal animasi entrance
-		-- Panel: di atas resting, kecil, transparan penuh
+		-- Prepare initial entrance animation state
+		-- Panel: above resting, small, fully transparent
 		refs.panel.Position = restingPosition + UDim2.fromOffset(0, ENTER_SLIDE_OFFSET)
 		refs.panelScale.Scale = ENTER_SCALE_FROM
 		refs.panel.GroupTransparency = 1
 		refs.panel.Visible = true
 		refs.donationWrapper.Visible = true
-		setVisible(refs.backgroundWrapper, true) -- wrapper visible tapi bg masih transparan
-		-- Phase 1: slide masuk + pop scale (spring overshoot)
-		-- Panel meluncur ke bawah restingPos + sedikit overshoot
+		setVisible(refs.backgroundWrapper, true) -- wrapper visible but bg still transparent
+		-- Phase 1: slide in + pop scale (spring overshoot)
+		-- Panel slides down to restingPos + slight overshoot
 		local targetPhase1 = restingPosition + UDim2.fromOffset(0, ENTER_OVERSHOOT_BELOW)
-		-- Play serentak: posisi + skala + fade-in
+		-- Play position, scale, and fade-in together
 		tween(refs.panel, TweenInfo.new(ENTER_PHASE1_DUR, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
 			Position = targetPhase1,
 			GroupTransparency = 0,
@@ -1875,17 +1875,17 @@ local function init(_deps: {}?)
 		tweenWait(refs.panelScale, TweenInfo.new(ENTER_PHASE1_DUR, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
 			Scale = ENTER_SCALE_PEAK,
 		})
-		-- Phase 2: Settle ke posisi resting
+		-- Phase 2: settle to resting position
 		tween(refs.panel, TweenInfo.new(ENTER_PHASE2_DUR, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 			Position = restingPosition,
 		})
 		tweenWait(refs.panelScale, TweenInfo.new(ENTER_PHASE2_DUR, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 			Scale = 1,
 		})
-		-- Panel sudah settled, mulai efek background dan reveal konten
+		-- Panel settled; start background effects and content reveal
 		startBackgroundSpin(refs, token)
 		staggerReveal(refs, token)
-		-- CountDownBar: tween width 100% -> 0% selama durasi tampil (per-tier).
+		-- CountDownBar: tween width 100% -> 0% for display duration (per-tier).
 		local notifDuration = resolveNotifDuration(payload)
 		-- Drain faster when more notifs are waiting (no drops).
 		if #queue >= backlogThreshold then
@@ -1899,12 +1899,12 @@ local function init(_deps: {}?)
 				{ Size = UDim2.new(0, 0, refs.countDownBar.Size.Y.Scale, refs.countDownBar.Size.Y.Offset) }
 			)
 		end
-		-- Tunggu durasi tampil sesuai tier.
+		-- Wait for display duration per tier.
 		task.wait(notifDuration)
 		-- EXIT SEQUENCE
-		-- Stop semua loop dengan invalidate token
+		-- Stop all loops by invalidating token
 		animToken += 1
-		-- Fade out background dulu
+		-- Fade out background first
 		if refs.rotatingBackground and refs.rotatingBackground.Parent then
 			tween(
 				refs.rotatingBackground,
@@ -1912,13 +1912,13 @@ local function init(_deps: {}?)
 				{ ImageTransparency = 1 }
 			)
 		end
-		-- Anticipation: sedikit compress dulu (seperti "napas" sebelum lompat)
+		-- Anticipation: slight compress first (like a "breath" before jump)
 		tweenWait(
 			refs.panelScale,
 			TweenInfo.new(EXIT_ANTICIPATION_DUR, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
 			{ Scale = EXIT_ANTICIPATION_SCALE }
 		)
-		-- Launch ke atas: panel terbang + mengecil + transparan
+		-- Launch upward: panel flies up + shrinks + fades
 		local exitTarget = restingPosition + UDim2.fromOffset(0, EXIT_SLIDE_ABOVE)
 		tween(
 			refs.panelScale,
@@ -1962,14 +1962,14 @@ local function init(_deps: {}?)
 			if not ok then
 				isShowingNotif = false
 				syncDonationBroadcastLayout()
-				animToken += 1 -- invalidate semua loop
+				animToken += 1 -- invalidate all loop
 				local refs = guiRefs
 				if refs then
 					pcall(setDonationHudHidden, playerGui, false)
 					pcall(resetGuiState, refs, restingPosition)
 					pcall(clearGuiContent, refs)
 				end
-				log:warn("Donation notification gagal diproses", {
+				log:warn("Donation notification failed to process", {
 					err = tostring(err),
 					saweriaName = tostring(nextPayload.saweriaName),
 				})
@@ -2022,10 +2022,10 @@ local function init(_deps: {}?)
 		end
 		local notifPayload = payload :: DonationNotifPayload
 		displayInGeneralChat(notifPayload)
-		-- Dedup guard: filter payload identik dari burst polling (dalam DEDUP_WINDOW_SECS)
-		-- 3D fix: dedup key pakai robloxUserId (bukan saweriaName) supaya donor
-		-- berbeda dengan nama sama/"donatur" tidak di-collapse sebagai duplicate.
-		-- Fallback ke saweriaName kalau robloxUserId nil.
+		-- Dedup guard: filter identical payloads from burst polling (within DEDUP_WINDOW_SECS)
+		-- 3D fix: dedup key use robloxUserId (not saweriaName) so donor
+		-- with different names but same/"donor" not collapsed as duplicate.
+		-- Fallback to saweriaName if robloxUserId is nil.
 		local now = os.clock()
 		local dedupKey = if type(notifPayload.robloxUserId) == "number"
 			then "uid:" .. tostring(notifPayload.robloxUserId)
@@ -2055,7 +2055,7 @@ local function init(_deps: {}?)
 				end
 			end
 			if evictIdx == nil then
-				log:warn("Donation notification queue penuh, notif dibuang", {
+				log:warn("Donation notification queue full, notification dropped", {
 					dedupKey = dedupKey,
 					queueSize = #queue,
 					isShowing = isShowingNotif,

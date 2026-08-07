@@ -116,7 +116,7 @@ local function createSettingsController(deps: {
 		or not (profileUpdateRemote and profileUpdateRemote:IsA("RemoteEvent"))
 		or not (overheadUpdateRemote and overheadUpdateRemote:IsA("RemoteEvent"))
 	then
-		log:warn("Settings/ProfileMenu remotes tidak lengkap dalam waktu tunggu, SettingsController soft-disabled")
+		log:warn("Settings/ProfileMenu remotes not ready within timeout, SettingsController soft-disabled")
 		-- Stub keeps the trackClientLifecycle(...) :: init() call site in
 		-- Main.client safe — Lifecycle:register() drops a nil module silently
 		-- but the caller still calls :init() unconditionally right after.
@@ -1257,10 +1257,10 @@ local function createSettingsController(deps: {
 	end
 
 	local function applyCameraFocus()
-		-- DISABLED 2026-05-23: "Follow" (cameraFocus) di-revert ke Roblox default.
-		-- Reset CameraOffset ke zero supaya kalau session sebelumnya nge-set offset
-		-- (Torso/Head/FullBody), efeknya ilang. FOV slider tetep di-apply di sini
-		-- karena FOV beda dari follow offset.
+		-- DISABLED 2026-05-23: "Follow" (cameraFocus) reverted to Roblox default.
+		-- Reset CameraOffset to zero so if a previous session set offset
+		-- (Torso/Head/FullBody), the effect clears. FOV slider still applied here
+		-- because FOV is separate from follow offset.
 		if cameraTween then
 			cameraTween:Cancel()
 			cameraTween = nil

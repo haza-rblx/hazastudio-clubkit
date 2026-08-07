@@ -1,5 +1,5 @@
 --!strict
--- Business logic untuk /gift dan /ungift membership via chat command.
+-- Business logic for /gift and /ungift membership via chat command.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")

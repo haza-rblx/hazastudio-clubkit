@@ -2,42 +2,42 @@
 -- ============================================================
 -- EXTRACT LEGACY ASSETS (TOOLS, GUIS, + DESCENDANTS)
 -- ============================================================
--- Jalankan di LEGACY place, EDIT MODE, lewat Command Bar Studio
--- (atau drop sebagai Script sementara di ServerScriptService lalu hapus).
+-- Run in LEGACY place, EDIT MODE, via Studio Command Bar
+-- (or drop as a temporary Script under ServerScriptService then delete).
 --
--- Tujuan:
---   Menarik aset legacy yang TIDAK ikut ter-pull ke source code (karena
---   visual/instance non-script tinggal di Studio): Tool di StarterPack,
---   ScreenGui di StarterGui, beserta SEMUA turunannya (Handle/Mesh/Part,
---   Frame/Label/Image, Script/LocalScript, Sound, Animation, dll).
+-- Purpose:
+--   Pull legacy assets that were NOT pulled into source code (because
+--   visual/non-script instances stay in Studio): Tools in StarterPack,
+--   ScreenGuis in StarterGui, and ALL descendants (Handle/Mesh/Part,
+--   Frame/Label/Image, Script/LocalScript, Sound, Animation, etc.).
 --
 -- Output:
 --   ServerStorage > NUWA_LegacyAssets (Folder)
---     ├─ StarterPack (Folder)  -> GlowStick, Handphone, Sign  (Tool utuh)
---     ├─ StarterGui  (Folder)  -> ScreenGui + isinya
---     └─ <ServiceLain> (Folder) -> sesuai yang kamu daftarkan
+--     ├─ StarterPack (Folder)  -> GlowStick, Handphone, Sign  (full Tool)
+--     ├─ StarterGui  (Folder)  -> ScreenGui + contents
+--     └─ <OtherService> (Folder) -> as you register below
 --
---   Folder hasil otomatis di-Select. Klik kanan > Save to File... -> .rbxm
---   Di new system, drag isi tiap subfolder ke service yang sesuai.
+--   Result folder is auto-Selected. Right-click > Save to File... -> .rbxm
+--   In the new system, drag each subfolder's contents to the matching service.
 --
--- CATATAN JUJUR (baca dulu):
---   - Script/LocalScript ikut ter-clone APA ADANYA dari legacy. Banyak di
---     antaranya require modul legacy (mis. ReplicatedStorage.Mods, Icon,
---     Packet). Dependency itu TIDAK ikut. Jadi anggap ini "bahan mentah
---     visual + logika referensi", bukan langsung plug-and-play di new system.
---   - GUI yang di-drive arsitektur lama mungkin perlu di-rewire ke pola
---     controller/UI new system. Visual & layout-nya yang paling berharga.
---   - Aset di bawah grup yang sama (mesh/image/sound/animation) aman lintas
---     place se-universe; ID-nya tetap valid.
+-- HONEST NOTES (read first):
+--   - Script/LocalScript are cloned AS-IS from legacy. Many require legacy
+--     modules (e.g. ReplicatedStorage.Mods, Icon, Packet). Those deps do
+--     NOT come along. Treat this as "raw visual + reference logic", not
+--     plug-and-play in the new system.
+--   - GUIs driven by old architecture may need re-wiring to new controller/UI
+--     patterns. Visual & layout are the most valuable parts.
+--   - Assets under the same group (mesh/image/sound/animation) are safe across
+--     same-universe places; IDs remain valid.
 -- ============================================================
 
 local ServerStorage = game:GetService("ServerStorage")
 local Selection = game:GetService("Selection")
 
 -- ============================================================
--- CONFIG: daftar apa yang mau ditarik.
--- Tiap entry: { service = "<NamaService>", name = "<NamaInstance>" }
--- name opsional -> kalau nil, SEMUA anak service itu ditarik.
+-- CONFIG: list what to extract.
+-- Each entry: { service = "<ServiceName>", name = "<InstanceName>" }
+-- name optional -> if nil, ALL children of that service are extracted.
 -- ============================================================
 local TARGETS = {
 	-- Tools
@@ -45,7 +45,7 @@ local TARGETS = {
 	{ service = "StarterPack", name = "Handphone" },
 	{ service = "StarterPack", name = "Sign" },
 
-	-- GUIs (ScreenGui + turunannya: frame, label, image, localscript)
+	-- GUIs (ScreenGui + descendants: frame, label, image, localscript)
 	{ service = "StarterGui", name = "MenuHandphone" },
 	{ service = "StarterGui", name = "CarryGui" },
 	{ service = "StarterGui", name = "Freecam" },
@@ -58,7 +58,7 @@ local TARGETS = {
 	{ service = "StarterGui", name = "AnnounceFrame" },
 	{ service = "StarterGui", name = "Message" },
 
-	-- Contoh: tarik SEMUA isi sebuah service (name = nil)
+	-- Example: extract ALL children of a service (name = nil)
 	-- { service = "StarterPack" },
 }
 
@@ -80,7 +80,7 @@ local function getServiceSafe(name)
 	if ok and svc then
 		return svc
 	end
-	-- fallback: cari child langsung di game (mis. Workspace child)
+	-- fallback: find direct child under game (e.g. Workspace child)
 	return game:FindFirstChild(name)
 end
 
@@ -139,7 +139,7 @@ local function run()
 		local subfolder = ensureSubfolder(wrapper, target.service)
 
 		if target.name == nil then
-			-- semua anak service
+			-- all children of the service
 			for _, child in ipairs(svc:GetChildren()) do
 				local clone = child:Clone()
 				clone.Parent = subfolder
@@ -161,7 +161,7 @@ local function run()
 		end
 	end
 
-	-- Buang subfolder kosong biar rapi.
+	-- Remove empty subfolders for a tidy output.
 	for _, sub in ipairs(wrapper:GetChildren()) do
 		if #sub:GetChildren() == 0 then
 			sub:Destroy()
@@ -176,15 +176,15 @@ local function run()
 		print("   + " .. line)
 	end
 	if #report.missing > 0 then
-		print(("[ExtractLegacy] %d MISSING (cek nama/lokasi):"):format(#report.missing))
+		print(("[ExtractLegacy] %d MISSING (check name/location):"):format(#report.missing))
 		for _, line in ipairs(report.missing) do
 			print("   - " .. line)
 		end
 	end
 	print("--------------------------------------------------")
-	print(("[ExtractLegacy] DONE. ServerStorage > %s sudah di-Select."):format(OUTPUT_NAME))
-	print("[ExtractLegacy] Klik kanan > Save to File... -> simpan .rbxm")
-	print("[ExtractLegacy] Di new system: drag isi tiap subfolder ke service-nya.")
+	print(("[ExtractLegacy] DONE. ServerStorage > %s is now Selected."):format(OUTPUT_NAME))
+	print("[ExtractLegacy] Right-click > Save to File... -> save .rbxm")
+	print("[ExtractLegacy] In the new system: drag each subfolder's contents to its service.")
 	print("==================================================")
 
 	Selection:Set({ wrapper })

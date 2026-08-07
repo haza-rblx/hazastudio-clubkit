@@ -4,11 +4,11 @@
 -- ============================================================
 -- Guidelines v3: shape/count/flags only — no tool instances, no payloads.
 --
--- CARA PAKAI:
--- 1. Play test di Studio.
--- 2. Paste script ini ke Command Bar → Enter.
--- 3. Salin baris [WARN][HotbarInventoryAudit] dari Output.
--- 4. Opsional: ketik /hotbaraudit di chat saat Play (jika Rojo sudah sync).
+-- USAGE:
+-- 1. Play test in Studio.
+-- 2. Paste this script into Command Bar → Enter.
+-- 3. Copy [WARN][HotbarInventoryAudit] lines from Output.
+-- 4. Optional: type /hotbaraudit in chat during Play (if Rojo is synced).
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -16,7 +16,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local player = Players.LocalPlayer
 if not player then
-	warn("[HotbarInventoryAudit] LocalPlayer tidak ada — jalankan saat Play.")
+	warn("[HotbarInventoryAudit] No LocalPlayer — run during Play.")
 	return
 end
 
@@ -34,11 +34,11 @@ end)
 
 if ok and auditModule then
 	auditModule.log(auditModule.collect(player, "command_bar"))
-	print("[HotbarInventoryAudit] Audit dikirim ke Output via Logger (cari [HotbarInventoryAudit]).")
+	print("[HotbarInventoryAudit] Audit sent to Output via Logger (search for [HotbarInventoryAudit]).")
 	return
 end
 
--- Fallback jika Main belum load: audit manual minimal
+-- Fallback if Main has not loaded yet: minimal manual audit
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Constants"):WaitForChild("Config"))
 
 local function countTools(container: Instance?): number
@@ -57,7 +57,7 @@ end
 local playerGui = player:FindFirstChild("PlayerGui")
 local lines = {
 	"================================================",
-	"HOTBAR INVENTORY AUDIT (fallback — Main belum load)",
+	"HOTBAR INVENTORY AUDIT (fallback — Main not loaded yet)",
 	"userId=" .. tostring(player.UserId),
 	"hotbarEnabled=" .. tostring(Config.FeatureFlags.HotbarEnabled),
 	"hasPlayerGui=" .. tostring(playerGui ~= nil),

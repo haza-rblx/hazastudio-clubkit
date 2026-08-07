@@ -1,6 +1,6 @@
 --!strict
 -- PATH: ServerScriptService/Server/Controllers/CoupleController.lua
--- Handle RemoteEvents untuk couple system.
+-- Handle RemoteEvents for the couple system.
 local Players           = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config      = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
@@ -20,7 +20,7 @@ local function createCoupleController(deps: {
 	overheadController : any,
 	repo               : any,
 	notify             : INotify,
-	remotes            : Folder,   -- injected dari Main.server.lua
+	remotes            : Folder,   -- injected from Main.server.lua
 	profileRepository  : any?,
 	profileMenuSync    : { syncPlayer: ((Player) -> ())? }?,
 })
@@ -39,7 +39,7 @@ local function createCoupleController(deps: {
 	-- TTL-based request dedup (nilai = expiry timestamp, bukan boolean)
 	local processedReqs: {[string]: number} = {}
 	local function rememberRequest(requestId: string): boolean
-		-- Cleanup expired entries - cegah wipe-all yang merusak idempotency
+		-- Cleanup expired entries - prevent wipe-all that breaks idempotency
 		local now = os.clock()
 		for key, expiresAt in pairs(processedReqs) do
 			if expiresAt <= now then
@@ -101,7 +101,7 @@ local function createCoupleController(deps: {
 		repo:invalidateCache(userId)
 	end
 	-- ============================================================
-	-- Setup Remotes - dari injected folder, bukan WaitForChild
+	-- Setup Remotes — from injected folder, not WaitForChild
 	-- ============================================================
 	local function getOrCreate(name: string, class: string): Instance
 		local existing = remotesFolder:FindFirstChild(name)
@@ -294,10 +294,10 @@ local function createCoupleController(deps: {
 			notify.player(player, Config.Couple.MSG_BREAKUP_DONE:format(partnerName or "your partner"), "WARNING")
 			flushThenInvalidate(player.UserId)
 			overheadController:refreshPlayer(player)
-			-- Gunakan hanya partnerId (unik) untuk resolve partner.
-			-- Tidak fallback ke DisplayName (tidak unik - bisa salah target).
-			-- Jika partnerId nil (data lama), partner dianggap offline - overhead-nya
-			-- akan di-refresh saat mereka login kembali.
+			-- Use only partnerId (unique) to resolve partner.
+			-- Do not fall back to DisplayName (not unique — may target wrong player).
+			-- If partnerId nil (legacy data), partner treated as offline — their overhead
+			-- refreshes when they log back in.
 			local resolvedPartner: Player? = partnerPlayer
 			if resolvedPartner then
 				flushThenInvalidate(resolvedPartner.UserId)
@@ -315,7 +315,7 @@ local function createCoupleController(deps: {
 		end)
 	end)
 	-- ============================================================
-	-- Cancel pending request saat player leave
+	-- Cancel pending request when player leaves
 	-- ============================================================
 	Players.PlayerRemoving:Connect(function(player)
 		coupleService:cancelPendingFrom(player.UserId)

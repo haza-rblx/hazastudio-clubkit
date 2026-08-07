@@ -43,10 +43,10 @@ local function createAvatarContextController(deps: {
 	local currentPayload: AvatarContextPayload? = nil
 	local instantPaintApplied = false
 
-	-- Client-side cooldown per target untuk mencegah spam FireServer
-	-- yang cuma akan kena rate limit di server. Cooldown harus lebih pendek
-	-- dari window server (REQUEST_RATE_WINDOW=10s, max=5) -- 1.2s aman
-	-- untuk pola normal interaksi player.
+	-- Client-side cooldown per target to prevent FireServer spam
+	-- that would only hit server rate limits. Cooldown must be shorter
+	-- than the server window (REQUEST_RATE_WINDOW=10s, max=5) — 1.2s is safe
+	-- for normal player interaction patterns.
 	local REQUEST_COOLDOWN = 1.2
 	local lastRequestAt: { [number]: number } = {}
 
@@ -158,7 +158,7 @@ local function createAvatarContextController(deps: {
 			or not (likeRequestRemote and likeRequestRemote:IsA("RemoteEvent"))
 			or not (likeResultRemote and likeResultRemote:IsA("RemoteEvent"))
 		then
-			log:warn("AvatarContext remotes tidak lengkap dalam waktu tunggu, AvatarContextController soft-disabled")
+			log:warn("AvatarContext remotes not ready within timeout, AvatarContextController soft-disabled")
 			return
 		end
 		local remoteRequest = remoteRequest :: RemoteEvent
@@ -656,13 +656,13 @@ local function createAvatarContextController(deps: {
 		end)
 		ui:open()
 
-		-- ORKESTRASI PARALEL (tidak ada yang block yang lain):
+		-- PARALLEL ORCHESTRATION (nothing blocks anything else):
 		-- 1. Fire server request (1ms — no YIELD).
-		-- 2. Instant paint dari cache overhead (text only, 1ms).
+		-- 2. Instant paint from cache overhead (text only, 1ms).
 		-- 3. Show 3D avatar (pool hit = instant, miss = thumbnail instant + pool prewarm on-demand).
-		-- Sebelumnya, setData() synchronous panggil currentViewport:load() yang yield
-		-- CreateHumanoidModelFromUserId 2-8s, block FireServer, dan setLoading(true)
-		-- hide mainContent (close button disabled). Sekarang semua paralel + non-blocking.
+		-- Previously, setData() synchronously called currentViewport:load() which yielded
+		-- CreateHumanoidModelFromUserId 2-8s, blocked FireServer, and setLoading(true)
+		-- hid mainContent (close button disabled). Now all parallel + non-blocking.
 		local requestId = HttpService:GenerateGUID(false)
 		pendingRequestId = requestId
 
@@ -683,8 +683,8 @@ local function createAvatarContextController(deps: {
 			instantPaintApplied = true
 			ui:setData(instantPayload)
 		end
-		-- 3D avatar: pool-or-thumbnail. Tidak yield di main thread.
-		-- Panel tetap fully interactive (close button aktif) selama pool warm.
+		-- 3D avatar: pool-or-thumbnail. Does not yield on the main thread.
+		-- Panel still fully interactive (close button active) while pool warms.
 		ui:showAvatar(targetUserId)
 
 		task.delay(Config.AvatarContext.REQUEST_TIMEOUT, function()
@@ -755,9 +755,9 @@ local function createAvatarContextController(deps: {
 			wasInstantPaint = instantPaintApplied,
 		})
 
-		-- Guard: jangan downgrade visibleBadges dari instant paint ke empty.
-		-- Race condition di server bisa menyebabkan cache hit dengan badge kosong
-		-- padahal overhead cache client sudah punya data benar.
+		-- Guard: do not downgrade visibleBadges from instant paint to empty.
+		-- Server race condition can cause cache hit with empty badge
+		-- even though client overhead cache already has correct data.
 		local serverPayload = response.payload
 		if instantPaintApplied and currentPayload then
 			local serverBadges = serverPayload.visibleBadges

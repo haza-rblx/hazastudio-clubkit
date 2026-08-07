@@ -1,7 +1,7 @@
 --!strict
 -- Client/Controllers/ShopController.lua
 -- Wiring: UI events -> Service, Service events -> UI.
--- No logic here - hanya routing.
+-- No logic here - only routing.
 local Players           = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config            = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
@@ -15,7 +15,7 @@ export type IShopController = {
 local function createShopController(deps: {
 	gui            : ScreenGui,
 	remotes        : Folder,
-	shopService    : any,        -- shared IShopService instance dari Main.client.lua
+	shopService    : any,        -- shared IShopService instance from Main.client.lua
 	giftController : any?,
 	icon           : any,
 }): IShopController
@@ -24,46 +24,46 @@ local function createShopController(deps: {
 	local giftController = deps.giftController
 	local icon           = deps.icon
 	local log            = Logger.new("Client.ShopController")
-	-- ui dibuat di dalam init() agar WaitForChild tidak blocking
-	-- saat createShopController() dipanggil dari Main.client.lua
+	-- UI is created inside init() so WaitForChild does not block
+	-- when createShopController() called from Main.client.lua
 	local ui: any = nil
 	local _connections: { RBXScriptConnection } = {}
 	function self:init()
-		-- Inisialisasi UI (WaitForChild terjadi di sini, bukan saat require/construct)
+		-- Initialize UI (WaitForChild happens here, not on require/construct)
 		ui = ShopUIModule.new(deps.gui)
 		local localPlayer = Players.LocalPlayer
 		table.insert(_connections, icon.selected:Connect(function() ui:show() end))
 		table.insert(_connections, icon.deselected:Connect(function() ui:hide() end))
-		-- Bind close modal - juga deselect icon agar state sinkron
+		-- Bind close modal — also deselect icon so state stays in sync
 		ui:bindClose(function()
 			ui:hide()
 			icon:deselect()
 		end)
 		-- Bind buy + gift per tier
 		for _, tier in ipairs(TIERS) do
-			local t = tier -- capture untuk closure
+			local t = tier -- capture for closure
 			ui:bindBuyButton(t, function()
 				shopService:promptBuy(t)
 			end)
-			-- Gift: tutup shop panel dulu, lalu buka GiftUI dengan tier dipilih
+			-- Gift: close shop panel first, then open GiftUI with selected tier
 			ui:bindGiftButton(t, function()
-				icon:deselect()  -- tutup shop panel
+				icon:deselect()  -- close shop panel
 				if giftController then
 					giftController.show(t)
 				else
-					log:warn("GiftController belum diinject", { tier = t })
+					log:warn("GiftController not yet diinject", { tier = t })
 				end
 			end)
-			-- Bind "Wow, thanks!" button di notification
+			-- Bind "Wow, thanks!" button in notification
 			ui:bindNotifClose(t, function()
 				ui:hideNotification()
 			end)
 		end
-		-- Setelah server konfirmasi membership granted, tampilkan notifikasi
+		-- After server confirms membership granted, show notification
 		shopService:onGranted(function(payload: any)
-			-- Gift notifications dihandle oleh GiftController
+			-- Gift notifications handled by GiftController
 			if payload.isGift then return end
-			-- Self-purchase: tutup shop panel dulu, baru tampilkan notif
+			-- Self-purchase: close shop panel first, then show notification
 			icon:deselect()
 			local displayName = localPlayer.DisplayName
 			task.delay(Config.Shop.NOTIF_SHOW_DELAY, function()

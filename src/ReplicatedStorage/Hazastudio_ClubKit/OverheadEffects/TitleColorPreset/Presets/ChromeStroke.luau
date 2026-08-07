@@ -1,7 +1,7 @@
 local TextEffects = require(script.Parent.Parent);
 
 return function(uiInstance: GuiObject, speed: number, size: number, customColor: ColorSequence | Color3?, customTransparency: NumberSequence | number?, useScaledSize: boolean?)
-    -- Gunakan customColor jika ada, jika tidak gunakan template
+    -- Gunakan customColor if ada, if not use template
     local colorToUse = customColor or TextEffects.Templates.Chrome.Color
     
     local mainGradient = TextEffects.Gradient.new(uiInstance, colorToUse, 0);

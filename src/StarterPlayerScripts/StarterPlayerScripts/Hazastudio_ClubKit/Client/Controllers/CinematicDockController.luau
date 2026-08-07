@@ -46,7 +46,7 @@ type MovementOption = {
 	targetType: string,
 }
 
--- Source movement list dari Config supaya server & client sinkron.
+-- Source movement list from Config so server & client stay in sync.
 local MOVEMENT_OPTIONS_ALL: { MovementOption } = Config.CinematicDock.MOVEMENT_OPTIONS :: any
 
 local FILTER_ROW_NAMES: { [string]: boolean } = {
@@ -478,8 +478,8 @@ local function showBars(duration: number)
 	bottom.Position = UDim2.fromScale(0, 1)
 	bottom.Parent = gui
 
-	-- Skip hint label di atas bottom bar. Anchor ke bottom bar supaya selalu
-	-- nempel di atas bar walaupun tinggi bar berubah saat tween.
+	-- Skip hint label above bottom bar. Anchor to bottom bar so always
+	-- stays above bar even when bar height changes during tween.
 	local skipLabel = Instance.new("TextLabel")
 	skipLabel.Name = "SkipHint"
 	skipLabel.AnchorPoint = Vector2.new(0.5, 1)
@@ -497,9 +497,9 @@ local function showBars(duration: number)
 	skipLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
 	skipLabel.Parent = bottom
 
-	-- Click-anywhere-to-skip overlay. Transparent fullscreen button supaya
-	-- klik dimana saja men-stop cinematic lokal (bars + camera) tanpa nunggu
-	-- server broadcast. Camera trigger server-side tetap auto-stop sesuai duration.
+	-- Click-anywhere-to-skip overlay. Transparent fullscreen button so
+	-- clicking anywhere only stops local cinematic (bars + camera) without waiting
+	-- for server broadcast. Server-side camera trigger still auto-stops per duration.
 	local skipButton = Instance.new("TextButton")
 	skipButton.Name = "SkipOverlay"
 	skipButton.Size = UDim2.fromScale(1, 1)
@@ -571,7 +571,7 @@ hideBars = function()
 	end
 end
 
--- Dual Shutter transition: dua panel hitam dari atas & bawah slam ke tengah
+-- Dual Shutter transition: two black panels slam together from top & bottom
 -- (kayak shutter kamera mekanik), hold sebentar, lalu buka lagi.
 -- Total ~0.1s. Mechanical, premium feel.
 local shutterBlinkGui: ScreenGui? = nil
@@ -582,7 +582,7 @@ local function doShutterBlink(onMidpoint: () -> ())
 		return
 	end
 
-	-- Cleanup previous blink kalau masih ada
+	-- Clean up previous blink if still present
 	if shutterBlinkGui and shutterBlinkGui.Parent then
 		shutterBlinkGui:Destroy()
 	end
@@ -630,7 +630,7 @@ local function doShutterBlink(onMidpoint: () -> ())
 	sheen.Visible = false
 	sheen.Parent = gui
 
-	-- Phase 1: blades slam shut (0.12s) — Back easing untuk mechanical snap
+	-- Phase 1: blades slam shut (0.12s) — Back easing for mechanical snap
 	local slamInfo = TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.In)
 	local topSlam = TweenService:Create(top, slamInfo, {
 		Position = UDim2.fromScale(0, 0.5),
@@ -654,7 +654,7 @@ local function doShutterBlink(onMidpoint: () -> ())
 
 		onMidpoint()
 
-		-- Phase 3: blades open (0.18s) — Quint out untuk smooth, satisfying reveal
+		-- Phase 3: blades open (0.18s) — Quint out for smooth, satisfying reveal
 		task.delay(0.08, function()
 			local openInfo = TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
 			local topOpen = TweenService:Create(top, openInfo, {
@@ -679,7 +679,7 @@ local function doShutterBlink(onMidpoint: () -> ())
 	end)
 end
 
--- Track last target supaya bisa bedain "ganti movement" vs "ganti target".
+-- Track last target to distinguish "change movement" vs "change target".
 local lastTargetId: string? = nil
 
 local function getTargetId(rawTarget: any): string?
@@ -782,13 +782,13 @@ local function playRemoteCinematic(raw: any)
 		applyCinematicWithSpring(target, movement, speed)
 	elseif targetChanged then
 		if target:IsA("BasePart") then
-			-- CCTV -> CCTV: hard cut (no fly glide). Player/part lain tetap transisi aman.
+			-- CCTV -> CCTV: hard cut (no fly glide). Player/part lain still transisi aman.
 			applyPartCinematic(target, movement, speed, cctvToCctvCut)
 		else
 			applyCinematicWithSpring(target, movement, speed)
 		end
 	elseif target:IsA("BasePart") then
-		-- CCTV sama, ganti movement/speed: cut langsung (tanpa shutter / fly).
+		-- Same CCTV rig, different movement/speed: cut directly (no shutter / fly).
 		applyPartCinematic(target, movement, speed, true)
 	else
 		-- Target sama (player), movement/speed beda: shutter blink (punchy cut)
@@ -926,8 +926,8 @@ local function init(_deps: {}?)
 	local playedMovementsSession: { [string]: boolean } = {}
 	local playedTargetsSession: { [string]: boolean } = {}
 
-	-- Forward declaration: rebuildMovementRows dipanggil dari target handler saat
-	-- target type berubah, jadi panelnya di-repopulate dengan opsi yang relevant.
+	-- Forward declaration: rebuildMovementRows called from target handler when
+	-- target type changes, so panel is repopulated with relevant options.
 	local rebuildMovementRows: () -> () = function() end
 	local rebuildTargetRows: (targets: { any }) -> () = function() end
 

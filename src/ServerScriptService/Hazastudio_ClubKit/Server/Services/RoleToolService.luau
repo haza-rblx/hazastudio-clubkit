@@ -162,7 +162,7 @@ function RoleToolService:_resolveFolderNames(payload: OverheadPayload): { string
 		addFolders(folderNames, { folder })
 	end
 
-	-- Multi-role / multi-folder: satu folder saja — yang prioritas tertinggi.
+	-- Multi-role / multi-folder: satu folder only — yang prioritas tertinggi.
 	local selectedFolder: string? = nil
 	local selectedPriority = -math.huge
 	local priorities = cfg.FOLDER_PRIORITY or {}
@@ -328,7 +328,7 @@ function RoleToolService:syncPlayer(player: Player, payload: OverheadPayload?)
 		local folder = findRoleToolFolder(toolsRoot, folderName)
 		if not folder then
 			-- Downgrade to debug: folder mismatch adalah config issue, bukan runtime error.
-			-- Warning hanya sekali per session untuk mengurangi log spam.
+			-- Warning only sekali per session for mengurangi log spam.
 			local warnKey = "RoleToolsFolderMissing_" .. folderName
 			if not player:GetAttribute(warnKey) then
 				player:SetAttribute(warnKey, true)

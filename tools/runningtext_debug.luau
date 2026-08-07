@@ -1,5 +1,5 @@
 -- ============================================================
--- Running Text Debug — paste ke Command Bar (F9) saat Play Mode
+-- Running Text Debug — paste into Command Bar (F9) during Play Mode
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -8,14 +8,14 @@ local RunService = game:GetService("RunService")
 
 print("========== Running Text Debug ==========")
 
--- 1. Cek tagged objects di workspace
+-- 1. Check tagged objects in workspace
 local runningRoots = CollectionService:GetTagged("RunningText")
 print("[1] Workspace objects tagged 'RunningText':", #runningRoots)
 
 for i, root in ipairs(runningRoots) do
 	print(string.format("  #%d: %s (Parent: %s)", i, root:GetFullName(), root.Parent and root.Parent.Name or "nil"))
 
-	-- Cari SurfaceGui
+	-- Find SurfaceGui
 	local gui = root:FindFirstChild("RunningTextGUI", true)
 	if gui and gui:IsA("SurfaceGui") then
 		print("    RunningTextGUI: ✅ found")
@@ -41,7 +41,7 @@ for i, root in ipairs(runningRoots) do
 			print("    SurfaceGui Adornee:", gui.Adornee and gui.Adornee.Name or "nil")
 		end
 	else
-		print("    RunningTextGUI: ❌ NOT FOUND — cari di dalam root:")
+		print("    RunningTextGUI: ❌ NOT FOUND — search inside root:")
 		for _, child in ipairs(root:GetDescendants()) do
 			if child:IsA("SurfaceGui") then
 				print("      SurfaceGui:", child.Name, "| Enabled:", child.Enabled)
@@ -50,7 +50,7 @@ for i, root in ipairs(runningRoots) do
 	end
 end
 
--- 2. Cek DonationNotificationController
+-- 2. Check DonationNotificationController
 local player = Players.LocalPlayer
 if player then
 	local playerScripts = player:FindFirstChild("PlayerScripts")
@@ -64,7 +64,7 @@ if player then
 	end
 end
 
--- 3. Cek Config
+-- 3. Check Config
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = ReplicatedStorage:FindFirstChild("Shared")
 if Config then
@@ -82,7 +82,7 @@ else
 	print("\n[3] Config: ❌ Shared not found")
 end
 
--- 4. Cek LiveChatDonations juga
+-- 4. Check LiveChatDonations too
 local liveRoots = CollectionService:GetTagged("LiveChatDonations")
 print("\n[4] Workspace objects tagged 'LiveChatDonations':", #liveRoots)
 for i, root in ipairs(liveRoots) do
@@ -92,7 +92,7 @@ for i, root in ipairs(liveRoots) do
 end
 
 print("\n=========================================")
-print("Kalau semua ✅ tapi running text ga jalan,")
-print("coba cek Client/DonationNotificationController")
-print("di log Runtime — cari [WARN] atau [ERROR].")
+print("If everything is ✅ but running text still fails,")
+print("check Client/DonationNotificationController")
+print("in Runtime logs — look for [WARN] or [ERROR].")
 print("=========================================")

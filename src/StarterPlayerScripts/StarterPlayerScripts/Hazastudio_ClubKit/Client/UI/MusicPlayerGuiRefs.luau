@@ -1,6 +1,6 @@
 --!strict
 -- PATH: StarterPlayerScripts/Client/UI/MusicPlayerGuiRefs.lua
--- Resolve semua path GUI 06-MusicPlayerGUI ke typed table.
+-- Resolve all 06-MusicPlayerGUI GUI paths to typed table.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -132,7 +132,7 @@ export type Refs = {
 	formTrackIdParts: { Frame },
 	formTrackCreatorField: Frame,
 	-- Per-track normal playback speed input (NormalPlaybackSpeed frame).
-	-- Optional: nil kalau frame belum ada di GUI (backward compat).
+	-- Optional: nil if frame not yet ada di GUI (backward compat).
 	formTrackPlaybackSpeedField: Frame?,
 	-- Form: Playlist modal (AddorEditPlaylistModal), Visible = false by default
 	formPlaylist: CanvasGroup,
@@ -352,7 +352,7 @@ function MusicPlayerGuiRefs.resolve(playerGui: PlayerGui): Refs
 	local mainWrapper = asFrame(expect(root, "MainWrapper"))
 	local mainDragDetector = mainWrapper:FindFirstChildWhichIsA("UIDragDetector")
 
-	-- UIScale untuk pop animation, buat runtime jika belum ada di GUI
+	-- UIScale for pop animation, for runtime if not yet ada di GUI
 	local uiScale: UIScale
 	do
 		local existing = mainWrapper:FindFirstChildWhichIsA("UIScale")
@@ -520,8 +520,8 @@ function MusicPlayerGuiRefs.resolve(playerGui: PlayerGui): Refs
 	assert(formTrackPlaylistFieldRaw, "MusicPlayerGuiRefs: Missing SelectPlaylist field under " .. formTrackScrollable:GetFullName())
 	local formTrackPlaylistField = asFrame(formTrackPlaylistFieldRaw)
 	-- Collect all TrackIDPart fields (2-TrackIDPart1 .. 2-TrackIDPart9).
-	-- Loop sampe 10 buat tolerant kalau nanti ada slot ke-10 ditambah,
-	-- tapi server cap di Config.Music.MAX_TRACK_PARTS (default 9).
+	-- Loop up to 10 to tolerate if a 10th slot is added later,
+	-- but server caps at Config.Music.MAX_TRACK_PARTS (default 9).
 	local formTrackIdParts: { Frame } = {}
 	for i = 1, 10 do
 		local part = formTrackScrollable:FindFirstChild("2-TrackIDPart" .. i)
@@ -536,8 +536,8 @@ function MusicPlayerGuiRefs.resolve(playerGui: PlayerGui): Refs
 	assert(formTrackCreatorFieldRaw, "MusicPlayerGuiRefs: Missing SelectCreator field under " .. formTrackScrollable:GetFullName())
 	local formTrackCreatorField = asFrame(formTrackCreatorFieldRaw)
 	-- Per-track playback speed field. Optional (older kits may not have it).
-	-- Tolerant ke variasi naming: NormalPlaybackSpeed (preferred),
-	-- NormalPlayBackSpeed (legacy capitalization), atau PlaybackSpeed.
+	-- Tolerant to naming variants: NormalPlaybackSpeed (preferred),
+	-- NormalPlayBackSpeed (legacy capitalization), or PlaybackSpeed.
 	local formTrackPlaybackSpeedFieldRaw = formTrackScrollable:FindFirstChild("NormalPlaybackSpeed")
 		or formTrackScrollable:FindFirstChild("NormalPlayBackSpeed")
 		or formTrackScrollable:FindFirstChild("PlaybackSpeed")

@@ -81,9 +81,9 @@ local function createAvatarContextService(deps: {
 	local service = {}
 
 	-- Per (target, viewer) payload cache.
-	-- Mengurangi spam DataStore + GroupService + GetFriendsAsync saat player
-	-- buka/tutup avatar context yang sama berulang (sumber rate-limit hit).
-	local PAYLOAD_CACHE_TTL = 15 -- detik
+	-- Reduces DataStore + GroupService + GetFriendsAsync spam when a player
+	-- repeatedly opens/closes the same avatar context (source of rate-limit hits).
+	local PAYLOAD_CACHE_TTL = 15 -- seconds
 	local payloadCache: { [string]: { value: any, exp: number } } = {}
 	local function makeKey(targetUserId: number, viewerUserId: number): string
 		return tostring(targetUserId) .. ":" .. tostring(viewerUserId)
@@ -114,7 +114,7 @@ local function createAvatarContextService(deps: {
 	function service:buildPayload(targetPlayer: Player, viewerPlayer: Player): Result<AvatarContextPayload>
 		local startTime = os.clock()
 
-		-- Cache check: payload (target, viewer) yang masih fresh dipakai ulang.
+		-- Cache check: reuse payload (target, viewer) that is still fresh.
 		local cacheKey = makeKey(targetPlayer.UserId, viewerPlayer.UserId)
 		local cached = payloadCache[cacheKey]
 		if cached and os.clock() <= cached.exp then
@@ -127,10 +127,10 @@ local function createAvatarContextService(deps: {
 		-- FAST PATH: Use PlayerSnapshotService if available
 		-- Only fetch viewer-specific data (viewerHasLiked) at request time
 		-- ============================================================
-		-- Guard: snapshot hanya valid untuk fast path kalau sudah di-populate
-		-- dari overhead (punya visibleBadges). Kalau snapshot dibuat duluan
-		-- oleh updateFromSocial/updateLikesCount sebelum broadcastPayload
-		-- pertama, visibleBadges masih nil → badge membership tidak muncul.
+		-- Guard: snapshot only valid for fast path if already populated
+		-- from overhead (has visibleBadges). If snapshot is created first
+		-- by updateFromSocial/updateLikesCount before broadcastPayload
+		-- first, visibleBadges still nil → membership badge does not appear.
 		local rawSnapshot = if playerSnapshotService and type(playerSnapshotService.getSnapshot) == "function"
 			then playerSnapshotService:getSnapshot(targetPlayer.UserId)
 			else nil
@@ -346,10 +346,10 @@ local function createAvatarContextService(deps: {
 			canCarry = true,
 			canSyncDance = true,
 		}
-		-- Jangan cache payload dengan visibleBadges kosong untuk non-Guest players.
-		-- Ini bisa terjadi karena race condition dimana snapshot belum ter-populate
-		-- saat pertama kali build. Cache payload incomplete akan serve data salah
-		-- selama 15 detik (TTL). Better re-fetch daripada serve badge kosong.
+		-- Do not cache payload with empty visibleBadges for non-Guest players.
+		-- This can happen due to race condition where snapshot not yet populated
+		-- when first built. Incomplete cached payload would serve wrong data
+		-- for 15 seconds (TTL). Better re-fetch than serve empty badge.
 		local shouldCache = true
 		if #payload.visibleBadges == 0 and payload.role ~= "Guest" then
 			log:debug("ACM payload has empty visibleBadges for non-Guest; skipping cache", {
@@ -373,7 +373,7 @@ local function createAvatarContextService(deps: {
 
 		return Result.Ok(payload)
 	end
-	-- Kedua pcall melindungi dari network error di TextService
+	-- Both pcalls protect against TextService network errors
 	function service:_filterText(text: string, viewerUserId: number): string?
 		local ok, result = pcall(function()
 			return TextService:FilterStringAsync(text, viewerUserId)
@@ -382,7 +382,7 @@ local function createAvatarContextService(deps: {
 			log:warn("Text filtering failed", { text = text })
 			return nil
 		end
-		-- GetNonChatStringForUserAsync juga bisa throw saat network error
+		-- GetNonChatStringForUserAsync may also throw on network error
 		local filterOk, filtered = pcall(function()
 			return result:GetNonChatStringForUserAsync(viewerUserId)
 		end)

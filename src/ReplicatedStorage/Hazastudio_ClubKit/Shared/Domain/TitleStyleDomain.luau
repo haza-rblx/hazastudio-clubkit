@@ -263,7 +263,7 @@ function TitleStyleDomain.sanitizeStyle(raw: any): TitleStyleData?
 	if not label or not family or not animMode or not animSpeed or not bgColors or not textColors or not bgRotation or not textRotation or not strokeColor then
 		return nil
 	end
-	-- Hard limit color points - cegah memory exhaustion dari payload besar
+	-- Hard limit on color points — prevent memory exhaustion from large payloads
 	local MAX_COLOR_POINTS = 10
 	local function sanitizePoints(points: any): {{number}}?
 		local sanitized = {}
@@ -271,7 +271,7 @@ function TitleStyleDomain.sanitizeStyle(raw: any): TitleStyleData?
 		for _, point in ipairs(points) do
 			count += 1
 			if count > MAX_COLOR_POINTS then
-				return nil  -- Tolak jika terlalu banyak points
+				return nil  -- Reject if too many points
 			end
 			if type(point) ~= "table" or type(point[1]) ~= "number" or type(point[2]) ~= "number" or type(point[3]) ~= "number" or type(point[4]) ~= "number" then
 				return nil

@@ -1,7 +1,7 @@
 --!strict
 -- Client/Services/AdminService.lua
 -- Encapsulates sendGiftcard logic: retry, backoff, response handling.
--- Controller hanya call sendGiftcard() dan bind callback - tidak ada retry di controller.
+-- Controller only calls sendGiftcard() and binds callback — no retry in controller.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
@@ -40,8 +40,8 @@ local function createAdminService(deps: {
 		table.clear(_connections)
 	end
 
-	-- Listen untuk AdminGiftcardResult remote (Server->Client)
-	-- Dilakukan saat construct agar tidak miss event
+	-- Listen for AdminGiftcardResult remote (Server->Client)
+	-- Dilakukan when construct so not miss event
 	local pendingCallbacks: {[string]: (result: GiftcardResult) -> ()} = {}
 	task.spawn(function()
 		local remote = remotes:WaitForChild(
@@ -49,14 +49,14 @@ local function createAdminService(deps: {
 			Config.Shop.REMOTE_READY_TIMEOUT
 		) :: RemoteEvent?
 		if not remote then
-			log:warn("AdminGiftcardResult remote tidak ditemukan", {
+			log:warn("AdminGiftcardResult remote not found", {
 				timeout = Config.Shop.REMOTE_READY_TIMEOUT,
 			})
 			return
 		end
 		track(remote.OnClientEvent:Connect(function(data: any)
 			if type(data) ~= "table" then return end
-			-- requestId dipakai untuk route ke callback yang benar
+			-- requestId used to route to correct callback
 			local reqId = data.requestId
 			if type(reqId) ~= "string" then return end
 			local cb = pendingCallbacks[reqId]
@@ -78,7 +78,7 @@ local function createAdminService(deps: {
 		onResult       : (result: GiftcardResult) -> ()
 	)
 		local HttpService = game:GetService("HttpService")
-		-- Satu requestId untuk semua retry - idempotency dijamin server
+		-- Satu requestId for all retry - idempotency dijamin server
 		local requestId = HttpService:GenerateGUID(false)
 		local maxAttempts  = Config.Admin.RETRY_MAX_ATTEMPTS
 		local backoffTable = Config.Admin.RETRY_BACKOFF
@@ -86,7 +86,7 @@ local function createAdminService(deps: {
 		local done          = false
 		local attemptNumber = 0
 		local timeoutThread: thread? = nil
-		-- Daftarkan callback untuk requestId ini
+		-- Daftarkan callback for requestId ini
 		pendingCallbacks[requestId] = function(result: GiftcardResult)
 			if done then return end
 			done = true
@@ -102,11 +102,11 @@ local function createAdminService(deps: {
 			if done then return end
 			attemptNumber += 1
 			if not sendGiftcardRemote then
-				-- Coba cari sekali lagi (mungkin baru saja dibuat server)
+				-- Try finding again (remote may have just been created on server)
 				sendGiftcardRemote = remotes:FindFirstChild(Config.Admin.REMOTE_SEND_GIFTCARD) :: RemoteEvent?
 			end
 			if not sendGiftcardRemote then
-				log:warn("sendGiftcardRemote tidak ditemukan", { attempt = attemptNumber })
+				log:warn("sendGiftcardRemote not found", { attempt = attemptNumber })
 				if not done then
 					done = true
 					pendingCallbacks[requestId] = nil
@@ -120,13 +120,13 @@ local function createAdminService(deps: {
 				tier      = tier,
 				requestId = requestId,
 			})
-			-- Kirim ke server - requestId sama untuk semua attempt (idempotent)
+			-- Send to server — same requestId for all attempts (idempotent)
 			sendGiftcardRemote:FireServer({
 				requestId      = requestId,
 				targetUsername = targetUsername,
 				tier           = tier,
 			})
-			-- Set timeout untuk attempt ini
+			-- Set timeout for attempt ini
 			if timeoutThread then
 				task.cancel(timeoutThread)
 			end
@@ -138,11 +138,11 @@ local function createAdminService(deps: {
 					task.wait(delay)
 					attempt()
 				else
-					-- Semua attempt habis
+					-- All attempts exhausted
 					if not done then
 						done = true
 						pendingCallbacks[requestId] = nil
-						log:warn("Semua retry habis, giftcard gagal", {
+						log:warn("All retries exhausted, giftcard failed", {
 							target = targetUsername,
 							tier   = tier,
 						})

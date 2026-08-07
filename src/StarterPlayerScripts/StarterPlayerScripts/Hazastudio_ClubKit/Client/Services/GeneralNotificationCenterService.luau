@@ -120,9 +120,9 @@ local function shouldSuppress(payload: ResolvedPayload): boolean
 	if payload.domain == "donation" and getLocalBoolAttribute("SettingsHideDonationAnnounce") then
 		return true
 	end
-	-- System Messages: suppress semua notification yang bukan admin/couple/donation.
-	-- Sebelumnya hanya check notifType=="SYSTEM" → INFO/SUCCESS/WARNING/ERROR
-	-- tidak ter-suppress. Sekarang catch-all untuk system-style messages.
+	-- System Messages: suppress all notifications that are not admin/couple/donation.
+	-- Previously only checked notifType=="SYSTEM" → INFO/SUCCESS/WARNING/ERROR
+	-- not ter-suppress. Sekarang catch-all for system-style messages.
 	if payload.domain ~= "admin" and payload.domain ~= "couple" and payload.domain ~= "donation"
 		and getLocalBoolAttribute("SettingsHideSystemAnnounce") then
 		return true
@@ -569,7 +569,7 @@ local function processQueue()
 
 			local refs = resolveRefs()
 			if not refs then
-				log:warn("GeneralNotificationCenter GUI tidak ditemukan; notif dibuang")
+				log:warn("GeneralNotificationCenter GUI not found; notification dropped")
 				table.clear(queue)
 				break
 			end

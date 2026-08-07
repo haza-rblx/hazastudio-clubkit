@@ -210,7 +210,7 @@ function MusicPlayerController.create(
 	self._playbackStartClock = 0 :: number -- os.clock when current track playback started (stall guard)
 	self._playbackEpoch = 0 -- bumped on stop; invalidates stale Loaded/Ended callbacks
 	self._partAdvanceInFlight = false -- part N→N+1 transition
-	self._partDurations = {} :: { [number]: number } -- cache durasi per part
+	self._partDurations = {} :: { [number]: number } -- cache duration per part
 	self._assetFailureReportedTrackIds = {} :: { [string]: boolean }
 	self._prefetchGeneration = 0
 	self._assetCache = MusicAssetCache.create({
@@ -218,7 +218,7 @@ function MusicPlayerController.create(
 		enabled = deps.config.PREFETCH_ENABLED ~= false,
 	})
 
-	-- Remote refs (lazy, wait saat init)
+	-- Remote refs (lazy, wait at init)
 	self._trackChangedRE = nil :: RemoteEvent?
 	self._queueUpdatedRE = nil :: RemoteEvent?
 	self._stateSyncRE = nil :: RemoteEvent?
@@ -380,8 +380,8 @@ function MusicPlayerController:_reportTrackAssetFailure(trackId: string, reason:
 		self._log:debug("Track asset failure already reported", { trackId = trackId, reason = reason })
 		return
 	end
-	-- Race condition guard: jika sound sudah berhasil playing, jangan report failure.
-	-- Ini mencegah deferred report dari transient failure yang sudah recover.
+	-- Race condition guard: if sound already playing successfully, do not report failure.
+	-- Prevents deferred report from transient failure that already recovered.
 	if self:_hasActivePlayback() then
 		self._log:debug("Track asset failure suppressed (sound already playing)", {
 			trackId = trackId,
@@ -411,8 +411,8 @@ function MusicPlayerController:_reportTrackAssetFailure(trackId: string, reason:
 			if self._assetFailureReportedTrackIds[trackId] then
 				return
 			end
-			-- Re-check active playback: jika sound sudah recover dan playing,
-			-- jangan kirim failure report (transient failure recovered).
+			-- Re-check active playback: if sound recovered and playing,
+			-- do not send failure report (transient failure recovered).
 			if self:_hasActivePlayback() then
 				self._log:debug("Deferred track failure cancelled (sound recovered)", {
 					trackId = trackId,
@@ -549,9 +549,9 @@ function MusicPlayerController:_stopAllSounds(fadeDuration: number?)
 	end
 end
 
--- startServerTime + accumDur (opsional): jika diteruskan dari _seekToElapsed,
--- onLoaded() akan menghitung ulang posisi seek dari GetServerTimeNow() agar
--- delay loading asset tidak menyebabkan desync antar player.
+-- startServerTime + accumDur (optional): if passed from _seekToElapsed,
+-- onLoaded() recalculates seek position from GetServerTimeNow() so
+-- delay loading the asset does not cause desync between players.
 function MusicPlayerController:_playFromPart(
 	track: any,
 	partIndex: number,
@@ -561,7 +561,7 @@ function MusicPlayerController:_playFromPart(
 	accumDur: number?
 )
 	if not track or not track.parts or partIndex > #track.parts then
-		-- Semua part selesai -> advance request ke server (server yang putuskan)
+		-- All parts finished -> advance request to server (server decides)
 		return
 	end
 	if self._currentTrackId ~= track.id then
@@ -672,8 +672,8 @@ function MusicPlayerController:_playFromPart(
 		end
 		self._partDurations[partIndex] = partDuration
 
-		-- Hitung posisi seek: jika startServerTime tersedia, gunakan server clock
-		-- saat ini agar load-delay asset tidak menyebabkan desync.
+		-- Compute seek position: if startServerTime available, use server clock
+		-- now so asset load delay does not cause desync.
 		local effectiveSeekTo: number
 		if startServerTime and startServerTime > 0 then
 			local freshElapsed = workspace:GetServerTimeNow() - startServerTime
@@ -684,9 +684,9 @@ function MusicPlayerController:_playFromPart(
 
 		local partEffectiveDur = self._partDurations[partIndex]
 
-		-- Jika posisi seek melampaui durasi part ini, lewati ke part berikutnya.
-		-- Ini terjadi saat durasi tidak diketahui di _seekToElapsed (pertama kali
-		-- join) dan track sudah berada di part 2+.
+		-- If seek position exceeds this part duration, skip to next part.
+		-- This happens when duration unknown in _seekToElapsed (first time
+		-- join) and track is already at part 2+.
 		if
 			startServerTime
 			and startServerTime > 0
@@ -739,7 +739,7 @@ function MusicPlayerController:_playFromPart(
 			fadeTween:Play()
 		end
 
-		-- Setelah ALL parts loaded pertama kali -> hitung total durasi -> report ke server
+		-- After ALL parts loaded first time -> compute total duration -> report to server
 		self:_tryReportDuration(track)
 	end
 
@@ -888,7 +888,7 @@ function MusicPlayerController:_tryReportDuration(track: any)
 		self._binder:setTotalDuration(serverDuration)
 	end
 
-	-- Hitung total jika semua parts sudah punya durasi
+	-- Compute total if all parts already have duration
 	local parts = track.parts
 	local total = 0
 	if type(parts) ~= "table" or #parts == 0 then
@@ -950,7 +950,7 @@ local SKIP_REASON_MESSAGES: { [string]: { title: string, message: string } } = {
 
 function MusicPlayerController:_onTrackChanged(data: any)
 	if type(data) ~= "table" or not data.track then
-		-- Track nil = playback berhenti
+		-- Track nil = playback stopped
 		self:_stopAllSounds(self._trackFadeOutTime)
 		self._currentTrackId = nil
 		self._playbackStartKey = nil
@@ -1062,7 +1062,7 @@ function MusicPlayerController:_onTrackChanged(data: any)
 	self:_primeTrackPartDurations(track)
 
 	-- Apply per-track playback speed sebagai baseline.
-	-- Kalau track punya speed sendiri, pakai itu. Kalau tidak, reset ke global config.
+	-- If track has its own speed, use it. Otherwise reset to global config.
 	local trackSpeed = tonumber((track :: any).playbackSpeed)
 	if trackSpeed and trackSpeed > 0 then
 		self:_setBaseSpeed(trackSpeed)
@@ -1070,7 +1070,7 @@ function MusicPlayerController:_onTrackChanged(data: any)
 		self:_setBaseSpeed(math.max(0.05, tonumber(self._config.PLAYBACK_SPEED) or 1))
 	end
 
-	-- Teruskan startServerTime; _seekToElapsed menghitung elapsed secara fresh.
+	-- Pass through startServerTime; _seekToElapsed computes elapsed fresh.
 	self:_seekToElapsed(track, startServerTime)
 	self:_schedulePrefetchFromStore(track)
 end
@@ -1201,8 +1201,8 @@ function MusicPlayerController:_seekToElapsed(track: any, startServerTime: numbe
 
 	local elapsed = workspace:GetServerTimeNow() - startServerTime
 
-	-- Jika durasi sudah diketahui dari sebelumnya, cari part yang tepat.
-	-- Kalau belum -> play dari part 1 (fresh seek dilakukan saat sound loaded).
+	-- If duration already known, find the correct part.
+	-- If not yet -> play from part 1 (fresh seek done when sound loaded).
 	local accumDur = 0
 	local startPart = 1
 	local seekOffset = 0
@@ -1217,8 +1217,8 @@ function MusicPlayerController:_seekToElapsed(track: any, startServerTime: numbe
 			startPart = i
 			break
 		else
-			-- Durasi tidak diketahui; startServerTime + accumDur diteruskan ke
-			-- _playFromPart agar onLoaded() bisa hitung posisi yang tepat saat itu.
+			-- Duration unknown; startServerTime + accumDur passed to
+			-- _playFromPart so onLoaded() can compute correct position at that time.
 			startPart = i
 			seekOffset = 0
 			break
@@ -1226,17 +1226,17 @@ function MusicPlayerController:_seekToElapsed(track: any, startServerTime: numbe
 	end
 
 	if startPart > #parts then
-		-- Sudah lewat semua parts
+		-- Already past all parts
 		self._log:debug("Elapsed past all parts, waiting for server advance", { trackId = track.id })
 		return
 	end
 
-	-- Teruskan startServerTime + accumDur agar _playFromPart bisa resync
-	-- tepat saat sound selesai loading, bukan saat kita memulai load.
+	-- Pass startServerTime + accumDur so _playFromPart can resync
+	-- exactly when sound finishes loading, not when we start load.
 	self:_playFromPart(track, startPart, seekOffset, self._trackFadeInTime, startServerTime, accumDur)
 end
 
--- Volume sync ke semua sounds
+-- Volume sync to all sounds
 
 function MusicPlayerController:_applyVolume(volume: number)
 	local safeVolume = math.clamp(tonumber(volume) or 0, 0, 1)
@@ -2709,7 +2709,7 @@ function MusicPlayerController:initPanel()
 
 	-- Volume store subscription lives in initEngine via _bindSettingsVolumeControls.
 
-	-- isManageAllowed -> push ke binder via setManageAllowed
+	-- isManageAllowed -> push to binder via setManageAllowed
 	self:_trackUnsubscriber(store:subscribe("isManageAllowed", function(allowed)
 		binder:setManageAllowed(allowed == true)
 	end))
@@ -2824,7 +2824,7 @@ function MusicPlayerController:_openPanel()
 
 	local activeTab = store:get().activeTab
 
-	-- Restore tab terakhir, lalu refresh data yang sesuai dengan tab tersebut.
+	-- Restore last tab, then refresh data matching that tab.
 	binder:switchTab(activeTab)
 
 	if activeTab == "manage" then

@@ -18,10 +18,10 @@ local CrossServerCache = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Uti
 
 local LEADERBOARD_INVALIDATE_TOPIC = "DonationLeaderboardInvalidate"
 
--- P0: Detect throttle/queue errors di pcall catch dan propagate ke global lockout
--- supaya repository-wide operations short-circuit selama cooldown. Roblox
--- error wording untuk DS throttle bervariasi antar versi; pattern "throttled",
--- "queue", dan "Throttled" cukup longgar untuk menangkap semua varian umum.
+-- P0: Detect throttle/queue errors in pcall catch and propagate to global lockout
+-- so repository-wide operations short-circuit during cooldown. Roblox
+-- error wording for DS throttle varies by version; patterns "throttled",
+-- "queue", and "Throttled" are loose enough to catch common variants.
 local THROTTLE_ERROR_PATTERNS = { "throttled", "queue", "Throttled" }
 local function maybeMarkThrottledFromError(err: any)
 	if err == nil then
@@ -36,13 +36,13 @@ local function maybeMarkThrottledFromError(err: any)
 	end
 end
 
--- Server-side TTL cache untuk hasil leaderboard.
--- DataStore GetSortedAsync + per-entry GetAsync sangat mahal saat 70-80 player
--- join bersamaan (assignRobuxTopDonate dipanggil per join). Cache ini
--- menurunkan ratusan DataStore call per menit menjadi ~1 per TTL window.
-local LEADERBOARD_CACHE_TTL = 60 -- detik
-local PLAYER_TOTAL_CACHE_TTL = 90 -- detik
-local METADATA_CACHE_TTL = 300 -- detik (R10.2, R10.3)
+-- Server-side TTL cache for leaderboard results.
+-- DataStore GetSortedAsync + per-entry GetAsync is very expensive when 70-80 players
+-- join at once (assignRobuxTopDonate called per join). This cache
+-- reduces hundreds of DataStore calls per minute to ~1 per TTL window.
+local LEADERBOARD_CACHE_TTL = 60 -- seconds
+local PLAYER_TOTAL_CACHE_TTL = 90 -- seconds
+local METADATA_CACHE_TTL = 300 -- seconds (R10.2, R10.3)
 local leaderboardCache: { [string]: { value: any, exp: number } } = {}
 -- Last-known-good snapshots (no TTL). Served when DS throttle/lockout and TTL cache miss.
 local lastGoodLeaderboard: { [string]: any } = {}
@@ -106,17 +106,17 @@ local function cacheInvalidatePrefix(prefix: string)
 	lastGoodInvalidatePrefix(prefix)
 end
 
--- Patch #2 R3: Coalesce leaderboard cache invalidation per detik.
--- Tanpa ini, setiap donasi burst -> N invalidations (O(N) cache iter per donation).
--- Dengan ini, N donasi dalam 1 detik -> 1 invalidation di akhir window.
--- Trade-off: ~1s staleness window setelah donasi sebelum cache dibersihkan.
--- Acceptable karena LEADERBOARD_CACHE_TTL=60s (1s << 60s) dan DataStore sudah write
--- sebelum mark-dirty, jadi DataStore state selalu lebih baru dari cache TTL.
+-- Patch #2 R3: Coalesce leaderboard cache invalidation per seconds.
+-- Without this, each donation burst -> N invalidations (O(N) cache iter per donation).
+-- With this, N donations within 1 second -> 1 invalidation at end of window.
+-- Trade-off: ~1s staleness window after donation before cache is cleared.
+-- Acceptable because LEADERBOARD_CACHE_TTL=60s (1s << 60s) and DataStore already write
+-- before mark-dirty, so DataStore state is always newer than cache TTL.
 local robuxLeaderboardDirty: boolean = false
 local communityLeaderboardDirty: boolean = false
 local playerTotalDirty: { [number]: true } = {}
 
-local DIRTY_FLUSH_INTERVAL = 1 -- detik
+local DIRTY_FLUSH_INTERVAL = 1 -- seconds
 
 local function flushDirtyCaches()
 	if robuxLeaderboardDirty then
@@ -217,9 +217,9 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 
 	local repo = {}
 
-	-- Patch #2 R3: Mark-dirty API. Dipanggil dari write path (recordRobuxDonation,
-	-- adjustRobuxTotal). Background ticker spawned di akhir createRepository flush
-	-- semua dirty flag sekaligus per detik (1 write batch = 1 invalidation).
+	-- Patch #2 R3: Mark-dirty API. Called from write path (recordRobuxDonation,
+	-- adjustRobuxTotal). Background ticker spawned at end of createRepository flush
+	-- all dirty flags at once per second (1 write batch = 1 invalidation).
 	function repo:markRobuxLeaderboardDirty()
 		robuxLeaderboardDirty = true
 	end
@@ -289,15 +289,15 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 		end
 	end
 
-	-- Patch #2 R4: Defer/retry wrapper untuk reads. Sama seperti
-	-- executeWithDeferRetry (writes), tapi window lebih pendek (30s vs 60s)
-	-- karena caller bisa dapat fallback dari cache (TTL 60s) atau join-time
-	-- pre-fetch yang lain. Retry on budget_low / inflight_saturated (transient) -
-	-- terminal error langsung return. Budget biasanya recover <1s setelah
-	-- exhaustion di Roblox, jadi 2s interval + 30s window = max 15 attempts
-	-- untuk handle transient storms saat high-load.
-	local DEFER_RETRY_READ_INTERVAL = 2 -- detik
-	local DEFER_RETRY_READ_WINDOW = 30 -- detik
+	-- Patch #2 R4: Defer/retry wrapper for reads. Same as
+	-- executeWithDeferRetry (writes), but shorter window (30s vs 60s)
+	-- because caller can get fallback from cache (TTL 60s) or join-time
+	-- pre-fetch elsewhere. Retry on budget_low / inflight_saturated (transient) —
+	-- terminal errors return immediately. Budget usually recovers in <1s after
+	-- exhaustion on Roblox, so 2s interval + 30s window = max 15 attempts
+	-- to handle transient storms under high load.
+	local DEFER_RETRY_READ_INTERVAL = 2 -- seconds
+	local DEFER_RETRY_READ_WINDOW = 30 -- seconds
 
 	local function executeWithDeferRetryRead<T>(readFn: () -> Result<T>, label: string): Result<T>
 		local startedAt = os.clock()
@@ -668,10 +668,10 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 		record: RobuxDonationRecord,
 		opts: { receiptMode: boolean? }?
 	): Result<RecordStatus>
-		-- P0: Skip DS writes saat throttle lockout aktif. Purchase receipt
-		-- tetap akan diproses via HTTP path (Cloudflare Worker) di DonationService;
-		-- DataStore leaderboard increment akan di-reconcile via mark-dirty +
-		-- eventual re-poll saat lockout expire.
+		-- P0: Skip DS writes when throttle lockout active. Purchase receipt
+		-- still processed via the HTTP path (Cloudflare Worker) in DonationService;
+		-- DataStore leaderboard increment will be reconciled via mark-dirty +
+		-- eventual re-poll when lockout expire.
 		if DataStoreThrottleLockout.isLocked() then
 			return Result.Err("ds_throttled")
 		end
@@ -891,7 +891,7 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 			return Result.Ok(nil)
 		end
 
-		-- P0: Skip DS writes saat throttle lockout aktif.
+		-- P0: Skip DS writes when throttle lockout active.
 		if DataStoreThrottleLockout.isLocked() then
 			return Result.Err("ds_throttled")
 		end
@@ -958,7 +958,7 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 		end
 
 		-- P1.1: MemoryStore cross-server cache. Hit => skip DataStore GetSortedAsync
-		-- sepenuhnya (drop terbesar di DS quota). Miss => fallback ke DS path.
+		-- entirely (largest DS quota drop). Miss => fallback to DS path.
 		local memoryStoreName = cfg.MEMORY_STORE_STORE_NAME
 		local memoryStoreKey = cacheKey
 		local msCached = MemoryStoreCache.get(memoryStoreName, memoryStoreKey)
@@ -995,8 +995,8 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 		end
 
 		local page = result.value:GetCurrentPage()
-		-- P1.2: Collect userIds dulu, lalu batch read metadata (parallel).
-		-- Cache hidden-user filtering di sini; yang lolos akan dapat metadata.
+		-- P1.2: Collect userIds first, then batch read metadata (parallel).
+		-- Cache hidden-user filtering here; survivors get metadata.
 		local pageIds: { number } = {}
 		local pageItems: { any } = {}
 		for _, item in ipairs(page) do
@@ -1080,8 +1080,8 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 			})
 		end
 		cacheSet(cacheKey, entries, LEADERBOARD_CACHE_TTL)
-		-- P1.1: Populate MemoryStore (cross-server cache). Best-effort — kalau
-		-- MemoryStore error/disabled, DS result tetap dipakai local cache.
+		-- P1.1: Populate MemoryStore (cross-server cache). Best-effort — if
+		-- MemoryStore error/disabled, DS result still used as local cache.
 		MemoryStoreCache.set(memoryStoreName, memoryStoreKey, entries, cfg.MEMORY_STORE_LEADERBOARD_TTL)
 		return Result.Ok(entries)
 	end
@@ -1301,9 +1301,9 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 		})
 	end
 
-	-- Patch #2 R3: Background ticker flush dirty cache flags per detik.
-	-- Coalesce N donasi burst menjadi 1 invalidation per detik. Tanpa ini,
-	-- setiap donasi trigger cacheInvalidatePrefix() (O(N) iter over leaderboardCache).
+	-- Patch #2 R3: Background ticker flush dirty cache flags per seconds.
+	-- Coalesce N donation bursts into 1 invalidation per second. Without this,
+	-- each donation triggers cacheInvalidatePrefix() (O(N) iter over leaderboardCache).
 	local dirtyFlushActive = true
 	local dirtyFlushThread = task.spawn(function()
 		while dirtyFlushActive do

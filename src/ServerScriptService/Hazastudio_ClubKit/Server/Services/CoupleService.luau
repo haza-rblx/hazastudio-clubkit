@@ -1,10 +1,10 @@
 --!strict
 -- Server/Services/CoupleService.lua
--- Business logic couple. Zero DataStore langsung, zero UI, zero Remote.
+-- Couple business logic. Zero direct DataStore access, zero UI, zero Remote.
 local Players      = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local DataStoreService = game:GetService("DataStoreService")
--- Gunakan ReplicatedStorage local variable, bukan game.ReplicatedStorage
+-- Use the ReplicatedStorage local variable, not game.ReplicatedStorage
 local Config       = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Types        = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local CoupleDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.CoupleDomain)
@@ -30,9 +30,9 @@ local function createCoupleService(deps: {
 	-- not keep hammering a repo that is already shutting down.
 	local _destroyed = false
 
-	-- Budget guard: cek apakah ada cukup budget UpdateAsync sebelum masuk
-	-- transaksi 2-step. Tanpa ini, target sudah commit tapi sender drop di queue,
-	-- bikin half-coupled state yang user laporkan sebagai "couple ilang abis refresh".
+	-- Budget guard: check whether enough UpdateAsync budget before entering
+	-- 2-step transaction. Without this, target already committed but sender dropped in queue,
+	-- creating half-coupled state users report as "couple gone after refresh".
 	local function hasUpdateBudget(minBudget: number): boolean
 		local ok, budget = pcall(function()
 			return DataStoreService:GetRequestBudgetForRequestType(Enum.DataStoreRequestType.UpdateAsync)
@@ -40,10 +40,10 @@ local function createCoupleService(deps: {
 		return ok and type(budget) == "number" and budget >= minBudget
 	end
 
-	-- Robust rollback dengan exponential backoff yang panjang di background.
-	-- repo:update sudah retry 3x (~14s), tapi saat queue saturated 14s sering
-	-- belum cukup. Background retry sampai 4 attempts (10s, 20s, 40s, 80s)
-	-- mencegah half-committed state permanen.
+	-- Robust rollback with long exponential backoff in background.
+	-- repo:update already retries 3x (~14s), but when queue is saturated 14s is often
+	-- not enough. Background retry up to 4 attempts (10s, 20s, 40s, 80s)
+	-- prevents permanent half-committed state.
 	local function rollbackCoupleAsync(userId: number, partnerName: string?)
 		task.spawn(function()
 			local delays = { 10, 20, 40, 80 }
@@ -73,7 +73,7 @@ local function createCoupleService(deps: {
 				task.wait(waitSec)
 			end
 			if not _destroyed then
-				log:error("CRITICAL: Couple rollback gagal total, butuh intervensi manual", {
+				log:error("CRITICAL: Couple rollback failed completely, manual intervention required", {
 					userId = userId,
 					partnerName = partnerName,
 				})
@@ -121,11 +121,11 @@ local function createCoupleService(deps: {
 			end
 		end)
 	end
-	-- Pending requests di memory - tidak perlu disimpan ke DataStore
+	-- Pending requests in memory — no need to persist to DataStore
 	-- Key: targetUserId, Value: { fromUserId, fromName, fromUsername, requestId, expiredAt }
 	local pendingRequests: {[number]: PendingRequest} = {}
-	-- Cleanup expired requests setiap 30 detik
-	-- Thread disimpan agar bisa dibatalkan via service:destroy()
+	-- Clean up expired requests every 30 seconds
+	-- Thread stored so it can be cancelled via service:destroy()
 	local cleanupThread = task.spawn(function()
 		while true do
 			task.wait(30)
@@ -140,18 +140,18 @@ local function createCoupleService(deps: {
 	end)
 	local service = {}
 	-- ----------------------------------------------------------
-	-- sendRequest - kirim couple request dari sender ke target
+	-- sendRequest — send couple request from sender to target
 	-- ----------------------------------------------------------
 	function service:sendRequest(
 		sender        : Player,
 		target        : Player,
 		requestId     : string
 	): Result<nil>
-		-- Tidak bisa couple dengan diri sendiri
+		-- Cannot couple with yourself
 		if sender.UserId == target.UserId then
 			return ResultUtil.Err(Config.Couple.MSG_SELF)
 		end
-		-- Cek sender sudah punya couple
+		-- Check sender already has couple
 		local senderStored = repo:load(sender.UserId)
 		if not senderStored.ok then
 			return ResultUtil.Err("[Couple] I could not load your couple data. Try again.")
@@ -159,13 +159,13 @@ local function createCoupleService(deps: {
 		if CoupleDomain.isCoupled(senderStored.value) then
 			return ResultUtil.Err(Config.Couple.MSG_ALREADY_COUPLED)
 		end
-		-- Cek sender sudah punya pending request
+		-- Check sender already has pending request
 		for _, req in pairs(pendingRequests) do
 			if req.fromUserId == sender.UserId then
 				return ResultUtil.Err(Config.Couple.MSG_REQUEST_PENDING)
 			end
 		end
-		-- Cek target sudah punya couple
+		-- Check target already has couple
 		local targetStored = repo:load(target.UserId)
 		if not targetStored.ok then
 			return ResultUtil.Err("[Couple] I could not load that player's couple data. Try again.")
@@ -173,7 +173,7 @@ local function createCoupleService(deps: {
 		if CoupleDomain.isCoupled(targetStored.value) then
 			return ResultUtil.Err(Config.Couple.MSG_TARGET_COUPLED)
 		end
-		-- Simpan pending request
+		-- Store pending request
 		pendingRequests[target.UserId] = {
 			fromUserId   = sender.UserId,
 			fromName     = sender.DisplayName,
@@ -185,9 +185,9 @@ local function createCoupleService(deps: {
 		return ResultUtil.Ok(nil)
 	end
 	-- ----------------------------------------------------------
-	-- acceptRequest - target accept request dari sender
-	-- Pindahkan semua validasi ke dalam UpdateAsync mutator
-	-- agar atomic dan tidak ada race condition
+	-- acceptRequest - target accept request from sender
+	-- Move all validation into UpdateAsync mutator
+	-- atomic with no race condition
 	-- ----------------------------------------------------------
 	function service:acceptRequest(
 		target    : Player,
@@ -202,9 +202,9 @@ local function createCoupleService(deps: {
 			return ResultUtil.Err("[Couple] That request already expired.")
 		end
 
-		-- Refuse kalau budget terlalu rendah. acceptRequest butuh 2 UpdateAsync
-		-- (target + sender) plus rollback budget kalau salah satu fail.
-		-- Better gagal cepat dengan pesan jelas daripada masuk half-committed state.
+		-- Refuse if budget too low. acceptRequest needs 2 UpdateAsync
+		-- (target + sender) plus rollback budget if salah satu fail.
+		-- Fail fast with a clear message rather than entering a half-committed state.
 		if not hasUpdateBudget(4) then
 			log:warn("acceptRequest refused: low DataStore budget", {
 				target = target.Name,
@@ -216,12 +216,12 @@ local function createCoupleService(deps: {
 		local senderUserId = req.fromUserId
 		local senderName   = req.fromName
 		local targetName   = target.DisplayName
-		-- Save target dengan validasi di dalam mutator (atomic)
+		-- Save target with validation inside mutator (atomic)
 		local saveTarget = repo:update(target.UserId, function(current)
-			-- Validasi di dalam mutator agar atomic
+			-- Validate inside mutator for atomicity
 			if CoupleDomain.isCoupled(current) then
-				-- Jika sudah coupled, return current tanpa perubahan
-				-- UpdateAsync akan return nil dan kita bisa detect ini
+				-- If already coupled, return current state unchanged
+				-- UpdateAsync returns nil and we can detect this
 				return current
 			end
 			return CoupleDomain.applyCouple(current, senderName, senderUserId)
@@ -230,14 +230,14 @@ local function createCoupleService(deps: {
 		if not saveTarget.ok then
 			return ResultUtil.Err("[Couple] Could not save that player's couple data. Try again.")
 		end
-		-- Check apakah target sudah coupled (validasi gagal di mutator)
+		-- Check whether target already coupled (validation failed in mutator)
 		if CoupleDomain.isCoupled(saveTarget.value) and saveTarget.value.couplePartnerId ~= senderUserId then
-			-- Target sudah coupled dengan orang lain (race condition detected)
+			-- Target already coupled with someone else (race condition detected)
 			return ResultUtil.Err(Config.Couple.MSG_TARGET_COUPLED)
 		end
-		-- Save sender dengan validasi di dalam mutator (atomic)
+		-- Save sender with validation inside mutator (atomic)
 		local saveSender = repo:update(senderUserId, function(current)
-			-- Validasi di dalam mutator agar atomic
+			-- Validate inside mutator for atomicity
 			if CoupleDomain.isCoupled(current) then
 				return current
 			end
@@ -245,16 +245,16 @@ local function createCoupleService(deps: {
 		end)
 
 		if not saveSender.ok then
-			-- Rollback target jika sender gagal. Pakai background retry yang panjang
-			-- supaya saat queue clear, rollback tetap commit dan state nggak
-			-- kestuck di half-coupled.
+			-- Rollback target if sender failed. Use long background retry
+			-- so when queue clears, rollback still commits and state does not
+			-- stuck in a half-coupled state.
 			rollbackCoupleAsync(target.UserId, senderName)
 			return ResultUtil.Err("[Couple] Could not save your couple data. Try again.")
 		end
-		-- Check apakah sender sudah coupled (validasi gagal di mutator)
+		-- Check whether sender already coupled (validation failed in mutator)
 		if CoupleDomain.isCoupled(saveSender.value) and saveSender.value.couplePartnerId ~= target.UserId then
-			-- Sender sudah coupled dengan orang lain (race condition detected)
-			-- Rollback target dengan retry panjang
+			-- Sender already coupled with someone else (race condition detected)
+			-- Rollback target with long retry
 			rollbackCoupleAsync(target.UserId, senderName)
 			return ResultUtil.Err(Config.Couple.MSG_ALREADY_COUPLED)
 		end
@@ -280,7 +280,7 @@ local function createCoupleService(deps: {
 		return ResultUtil.Ok({ senderUserId = senderUserId })
 	end
 	-- ----------------------------------------------------------
-	-- breakup - hapus couple dari kedua player
+	-- breakup — remove couple from both players
 	-- ----------------------------------------------------------
 	function service:breakup(player: Player): Result<{ partnerUserId: number? }>
 		local stored = repo:load(player.UserId)
@@ -328,13 +328,13 @@ local function createCoupleService(deps: {
 		return ResultUtil.Ok({ partnerUserId = resolvedPartnerId })
 	end
 	-- ----------------------------------------------------------
-	-- breakupBoth - hapus couple dari kedua player sekaligus
-	-- Pakai couplePartnerId dari DataStore agar bisa breakup meski partner offline
+	-- breakupBoth — remove couple from both players at once
+	-- Use couplePartnerId from DataStore so breakup works even if partner offline
 	-- ----------------------------------------------------------
 	function service:breakupBoth(playerA: Player): Result<nil>
 		local storedA = repo:load(playerA.UserId)
 		if not storedA.ok then
-			log:error("Gagal load data breakup", { err = storedA.error })
+			log:error("Failed to load breakup data", { err = storedA.error })
 			return ResultUtil.Err("[Couple] I could not load your couple data. Try again.")
 		end
 		if not CoupleDomain.isCoupled(storedA.value) then
@@ -342,16 +342,16 @@ local function createCoupleService(deps: {
 		end
 		local partnerIdFromStore   = storedA.value.couplePartnerId
 		local partnerNameFromStore = storedA.value.couplePartner
-		-- Hapus couple dari player A
+		-- Hapus couple from player A
 		local saveA = repo:update(playerA.UserId, function(current)
 			return CoupleDomain.removeCouple(current)
 		end)
 		if not saveA.ok then
-			log:error("Gagal save breakup playerA", { err = saveA.error })
+			log:error("Failed to save breakup playerA", { err = saveA.error })
 			return ResultUtil.Err("[Couple] Breakup could not be saved. Try again.")
 		end
-		-- Cari partnerId - prioritaskan couplePartnerId dari DataStore (primary key)
-		-- Fallback ke pencarian nama hanya jika couplePartnerId nil (data lama)
+		-- Resolve partnerId — prefer couplePartnerId from DataStore (primary key)
+		-- Fallback to name lookup only if couplePartnerId nil (legacy data)
 		local resolvedPartnerId = partnerIdFromStore
 		if not resolvedPartnerId and partnerNameFromStore then
 			for _, p in ipairs(Players:GetPlayers()) do
@@ -366,20 +366,20 @@ local function createCoupleService(deps: {
 				return CoupleDomain.removeCouple(current)
 			end)
 			if not saveB.ok then
-				log:error("Gagal save breakup partner — scheduling retry", {
+				log:error("Failed to save breakup partner — scheduling retry", {
 					partnerId = resolvedPartnerId,
 					err = saveB.error,
 				})
 				clearPartnerCoupleAsync(resolvedPartnerId, "breakupBoth")
 			end
 		else
-			log:warn("Partner tidak ditemukan saat breakup", { partnerName = tostring(partnerNameFromStore) })
+			log:warn("Partner not found when breakup", { partnerName = tostring(partnerNameFromStore) })
 		end
 		log:info("Breakup done", { playerA = playerA.Name })
 		return ResultUtil.Ok(nil)
 	end
 	-- ----------------------------------------------------------
-	-- getPendingRequest - cek apakah ada request pending untuk player
+	-- getPendingRequest - check apakah ada request pending for player
 	-- ----------------------------------------------------------
 	function service:getPendingRequest(userId: number): PendingRequest?
 		local req = pendingRequests[userId]
@@ -389,8 +389,8 @@ local function createCoupleService(deps: {
 		return req
 	end
 	-- ----------------------------------------------------------
-	-- cancelPendingFrom - hapus semua pending request dari sender
-	-- (dipakai saat sender leave)
+	-- cancelPendingFrom - remove all pending request from sender
+	-- (used when sender leaves)
 	-- ----------------------------------------------------------
 	function service:cancelPendingFrom(userId: number)
 		for targetId, req in pairs(pendingRequests) do
@@ -399,7 +399,7 @@ local function createCoupleService(deps: {
 			end
 		end
 	end
-	-- Hentikan cleanup loop dan bersihkan state - untuk testing atau teardown
+	-- Stop cleanup loop and clear state - for testing or teardown
 	function service:destroy()
 		_destroyed = true
 		task.cancel(cleanupThread)

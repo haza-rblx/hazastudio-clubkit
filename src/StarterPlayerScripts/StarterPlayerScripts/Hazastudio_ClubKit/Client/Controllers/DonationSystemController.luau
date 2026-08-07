@@ -47,7 +47,7 @@ function DonationSystemController.init(deps: {
 	local playerGui = localPlayer:WaitForChild("PlayerGui") :: PlayerGui
 	local gui = playerGui:WaitForChild(Config.Donation.GUI_NAME, 15) :: ScreenGui?
 	if not gui then
-		log:warn("Donation GUI tidak ditemukan", {
+		log:warn("Donation GUI not found", {
 			guiName = Config.Donation.GUI_NAME,
 		})
 		return nil
@@ -57,7 +57,7 @@ function DonationSystemController.init(deps: {
 		return DonationSystemGuiRefs.resolve(playerGui, Config.Donation.GUI_NAME)
 	end)
 	if not refsOk then
-		log:warn("Donation GUI structure tidak lengkap; donation panel disabled", {
+		log:warn("Donation GUI structure incomplete; donation panel disabled", {
 			error = tostring(refsOrError),
 		})
 		return nil
@@ -67,7 +67,7 @@ function DonationSystemController.init(deps: {
 		return DonationSystemUI.new(refsOrError)
 	end)
 	if not uiOk then
-		log:warn("Donation UI gagal dibuat; donation panel disabled", {
+		log:warn("Donation UI failed to create; donation panel disabled", {
 			error = tostring(uiOrError),
 		})
 		return nil

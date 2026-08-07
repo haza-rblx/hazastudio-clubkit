@@ -2,38 +2,38 @@
 -- ============================================================
 -- REPAIR TRACK PARTS — fix double "rbxassetid://" prefix
 -- ============================================================
--- KENAPA: Migrasi awal nyimpen track.parts dengan format ber-prefix
--- ("rbxassetid://123"). Padahal kit (MusicPlayerController) nambahin
--- prefix "rbxassetid://" sendiri pas bikin Sound.SoundId. Hasilnya jadi
--- dobel ("rbxassetid://rbxassetid://123") -> HTTP 404, lagu gak bunyi.
+-- WHY: Early migration stored track.parts with prefixed format
+-- ("rbxassetid://123"). The kit (MusicPlayerController) adds the
+-- "rbxassetid://" prefix itself when creating Sound.SoundId. Result is
+-- doubled ("rbxassetid://rbxassetid://123") -> HTTP 404, tracks silent.
 --
--- Kit native nyimpen parts sebagai ANGKA MENTAH ("123"). Script ini
--- benerin semua track yang udah terlanjur ke-commit: strip semua prefix
--- jadi angka mentah aja.
+-- The kit natively stores parts as RAW DIGITS ("123"). This script
+-- fixes all tracks already committed: strip all prefixes
+-- down to raw digits only.
 --
--- CARA PAKAI:
--- 1. Set MODE = "dry_run" -> Play (F5) -> cek Output. Lihat berapa
---    track yang bakal di-fix dan contoh before/after.
--- 2. Kalau OK, set MODE = "commit" -> Play lagi -> tulis ke DataStore.
--- 3. Stop, fresh Play, verify lagu bunyi (gak ada "Failed to load sound").
--- 4. HAPUS script ini setelah selesai.
+-- USAGE:
+-- 1. Set MODE = "dry_run" -> Play (F5) -> check Output. See how many
+--    tracks will be fixed and before/after examples.
+-- 2. If OK, set MODE = "commit" -> Play again -> write to DataStore.
+-- 3. Stop, fresh Play, verify tracks play (no "Failed to load sound").
+-- 4. DELETE this script when finished.
 --
 -- SAFETY:
--- - Dry-run by default. Gak nyentuh DataStore kecuali MODE=="commit".
--- - IDEMPOTENT: track yang parts-nya udah angka mentah di-skip (gak diubah).
--- - Cuma nyentuh field `parts`. Field lain (id, name, creator, playlistId,
---   playbackSpeed, totalDuration, sync*) gak disentuh sama sekali.
--- - Gak ngutak-atik Playlists key sama sekali.
+-- - Dry-run by default. Does not touch DataStore unless MODE=="commit".
+-- - IDEMPOTENT: tracks whose parts are already raw digits are skipped (unchanged).
+-- - Only touches field `parts`. Other fields (id, name, creator, playlistId,
+--   playbackSpeed, totalDuration, sync*) are not modified.
+-- - Does not touch the Playlists key at all.
 -- ============================================================
 
 local DataStoreService = game:GetService("DataStoreService")
 local HttpService = game:GetService("HttpService")
 local RunService = game:GetService("RunService")
 
--- "dry_run" = preview only. "commit" = tulis ke DataStore.
+-- "dry_run" = preview only. "commit" = write to DataStore.
 local MODE: string = "commit"
 
--- Harus match Config.Music / MigrateMusic.
+-- Must match Config.Music / MigrateMusic.
 local DATASTORE_NAME = "MusicLibrary_v1"
 local TRACK_KEY = "Tracks"
 
@@ -47,7 +47,7 @@ local function warnLog(msg: string, ...)
 	warn(LOG_PREFIX, string.format(msg, ...))
 end
 
--- Strip SEMUA occurrence prefix, sisain angka mentah aja.
+-- Strip ALL prefix occurrences, leaving raw digits only.
 -- "rbxassetid://rbxassetid://123" -> "123"
 -- "rbxassetid://123"              -> "123"
 -- "123"                           -> "123"
@@ -79,12 +79,12 @@ local function main()
 	info("=== START === mode=%s", MODE)
 
 	if MODE ~= "dry_run" and MODE ~= "commit" then
-		warnLog("MODE invalid (%s). Harus 'dry_run' atau 'commit'. Abort.", MODE)
+		warnLog("MODE invalid (%s). Must be 'dry_run' or 'commit'. Abort.", MODE)
 		return
 	end
 
 	if not RunService:IsServer() then
-		warnLog("Butuh server context. Run dari Play Mode (F5), bukan client.")
+		warnLog("Requires server context. Run from Play Mode (F5), not client.")
 		return
 	end
 
@@ -114,14 +114,14 @@ local function main()
 		end
 		tracks = decoded
 	elseif type(raw) == "table" then
-		-- Value kesimpen sebagai raw table (BUKAN JSON string). Ini format korup
-		-- — MusicRepository expect JSON string, jadi dia gagal decode -> tracks=0.
-		-- Kita harus re-encode jadi JSON string walaupun parts udah bersih.
+		-- Value stored as raw table (NOT JSON string). This is corrupt format
+		-- — MusicRepository expects JSON string, so decode fails -> tracks=0.
+		-- We must re-encode as JSON string even if parts are already clean.
 		tracks = raw
 		storedAsTable = true
-		warnLog("Value key '%s' kesimpen sebagai RAW TABLE (format korup). Bakal di-re-encode jadi JSON string.", TRACK_KEY)
+		warnLog("Value for key '%s' stored as RAW TABLE (corrupt format). Will re-encode as JSON string.", TRACK_KEY)
 	else
-		warnLog("Key %s kosong / format tak terduga (type=%s). Gak ada yang di-repair.", TRACK_KEY, typeof(raw))
+		warnLog("Key %s empty / unexpected format (type=%s). Nothing to repair.", TRACK_KEY, typeof(raw))
 		return
 	end
 
@@ -144,7 +144,7 @@ local function main()
 						changed = true
 					end
 				else
-					-- pertahankan apa adanya kalau gak bisa di-parse (jangan buang data)
+					-- keep as-is if unparseable (do not discard data)
 					newParts[i] = tostring(p)
 				end
 			end
@@ -176,24 +176,24 @@ local function main()
 	info("Empty parts    : %d", emptyParts)
 
 	if MODE == "dry_run" then
-		info("DRY RUN — no writes. Set MODE='commit' untuk apply.")
+		info("DRY RUN — no writes. Set MODE='commit' to apply.")
 		return
 	end
 
 	local needWrite = (fixed > 0) or storedAsTable
 	if not needWrite then
-		info("Gak ada yang perlu di-fix dan format udah JSON string. DataStore dibiarin apa adanya.")
+		info("Nothing to fix and format is already JSON string. DataStore left unchanged.")
 		return
 	end
 
 	if storedAsTable then
-		info("Re-encoding %d tracks jadi JSON string (benerin format korup)...", total)
+		info("Re-encoding %d tracks as JSON string (fixing corrupt format)...", total)
 	else
 		info("Writing %d repaired tracks to DataStore...", fixed)
 	end
 
-	-- PENTING: MusicRepository nyimpen value sebagai JSON STRING (JSONEncode dulu),
-	-- lalu JSONDecode saat baca. Jadi kita HARUS encode dulu, bukan return raw table.
+	-- IMPORTANT: MusicRepository stores value as JSON STRING (JSONEncode first),
+	-- then JSONDecode on read. So we MUST encode first, not return raw table.
 	local encodeOk, encoded = pcall(function()
 		return HttpService:JSONEncode(tracks)
 	end)
@@ -202,16 +202,17 @@ local function main()
 		return
 	end
 
-	local setOk, err = pcall(function()
+	local writeOk, writeErr = pcall(function()
 		store:UpdateAsync(TRACK_KEY, function()
 			return encoded
 		end)
 	end)
-	if setOk then
-		info("COMMIT SUCCESS — tracks repaired & disimpan sebagai JSON string (fixed=%d, total=%d).", fixed, total)
-	else
-		warnLog("COMMIT FAILED: %s", tostring(err))
+	if not writeOk then
+		warnLog("UpdateAsync(%s) failed: %s", TRACK_KEY, tostring(writeErr))
+		return
 	end
+
+	info("✅ COMMIT SUCCESS — %d tracks written.", total)
 end
 
 main()

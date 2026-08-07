@@ -1,7 +1,7 @@
 --!strict
 -- Server/Controllers/DonationController.lua
 -- Handle remote commands: /linkdonor, /claimdonor
--- Hanya admin yang bisa /linkdonor. Semua player bisa /claimdonor (with rate limit).
+-- Only admins can /linkdonor. All players can /claimdonor (rate limited).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -28,7 +28,7 @@ type INotify = {
 }
 local function createDonationController(deps: {
 	donationService   : any,
-	overheadService   : any,  -- untuk cek role admin
+	overheadService   : any,  -- for admin role check
 	commandExecutionService: any,
 	notify            : INotify,
 	remotes           : Folder,
@@ -196,7 +196,7 @@ local function createDonationController(deps: {
 		AdminCommandRemote = created
 	end
 	local adminCommandRemote = AdminCommandRemote :: RemoteEvent
-	-- Helper: cek admin
+	-- Helper: check admin
 	local function isAdmin(player: Player): boolean
 		if overheadService and type(overheadService.getEffectivePayload) == "function" then
 			local payloadResult = overheadService:getEffectivePayload(player)
@@ -425,7 +425,7 @@ local function createDonationController(deps: {
 			payload.dailyRobux = sliceForPaint(payload.dailyRobux, Config.Leaderboards.ROBUX_PAINT_LIMIT)
 		end
 
-		-- Wrap enrichEntryList with pcall karena resolveUserIdentity bisa error (HTTP timeout dll).
+		-- Wrap enrichEntryList with pcall because resolveUserIdentity may error (HTTP timeout etc.).
 		-- enrichEntryList is a dot-function (entries as 1st arg) — do NOT pass the module as self
 		-- or ipairs runs on the module table and enrich becomes a no-op.
 		local enrichSafe = function(entries)
@@ -452,7 +452,7 @@ local function createDonationController(deps: {
 			)
 		end
 
-		-- Log payload summary buat debugging
+		-- Log payload summary for debugging
 		log:debug("Leaderboard payload built", {
 			robux = #payload.robux,
 			community = #payload.community,
@@ -720,7 +720,7 @@ local function createDonationController(deps: {
 			local ok, err = donationService:linkDonor(saweriaName, robloxUsername)
 			if ok then
 				notify.player(player, Config.Donation.MSG_LINK_SUCCESS:format(saweriaName, robloxUsername), "SUCCESS")
-				log:info("linkdonor berhasil", { by = player.Name, donor = saweriaName, roblox = robloxUsername })
+				log:info("linkdonor succeeded", { by = player.Name, donor = saweriaName, roblox = robloxUsername })
 			else
 				notify.player(player, Config.Donation.MSG_SHEETS_ERROR .. " (" .. err .. ")", "ERROR")
 			end
@@ -742,7 +742,7 @@ local function createDonationController(deps: {
 			local ok, reason = donationService:claimDonor(player, saweriaName)
 			if ok then
 				notify.player(player, Config.Donation.MSG_CLAIM_SUCCESS:format(saweriaName), "SUCCESS")
-				log:info("claimdonor berhasil", { player = player.Name, donor = saweriaName })
+				log:info("claimdonor succeeded", { player = player.Name, donor = saweriaName })
 			elseif reason == "rate_limited" then
 				notify.player(player, Config.Donation.MSG_CLAIM_RATE_LIMIT, "WARNING")
 			elseif reason == "already_assigned" then
@@ -856,12 +856,12 @@ local function createDonationController(deps: {
 			)
 		end)
 	end)
-	-- /verifyspender (owner only): force-sync top 10 spender Saweria + Robux ke overhead.
-	-- Alurnya: 1) force refresh leaderboard data dari sumber, 2) clear rank cache di
-	-- OverheadService (hapus cache negatif yang sticky), 3) re-assign top 10 Saweria
-	-- via DonationService, 4) refresh overhead semua online player biar Robux top 10
-	-- yang nggak overlap ikut ke-resolve. 5) verify hasilnya dengan baca ulang stored
-	-- data dan report ke owner.
+	-- /verifyspender (owner only): force-sync top 10 Saweria + Robux spenders to overhead.
+	-- Flow: 1) force refresh leaderboard data from source, 2) clear rank cache in
+	-- OverheadService (remove sticky negative cache), 3) re-assign top 10 Saweria
+	-- via DonationService, 4) refresh overhead for all online players so Robux top 10
+	-- that does not overlap also gets resolved. 5) verify by re-reading stored
+	-- data and report to owner.
 	-- /dumpbagibagi (alias: /dumpsaweria) — top IDR leaderboard snapshot
 	local function runDumpExternalLeaderboard(player: Player)
 		local providerName = getExternalProviderName()
@@ -879,7 +879,7 @@ local function createDonationController(deps: {
 				Config.Leaderboards.SAWERIA_LIMIT
 			)
 			if type(entries) ~= "table" or #entries == 0 then
-				notify.player(player, tag .. " Leaderboard kosong / belum ke-fetch.", "WARNING")
+				notify.player(player, tag .. " Leaderboard empty / not yet fetched.", "WARNING")
 				return
 			end
 			notify.player(player, string.format("%s Top %d %s:", tag, #entries, providerName), "INFO")
@@ -898,10 +898,10 @@ local function createDonationController(deps: {
 				notify.player(player, line, "INFO")
 				print(tag .. " " .. line)
 			end
-			print(tag .. " Leaderboard di atas sudah termasuk manual IDR adjustment (kalau ada).")
+			print(tag .. " Leaderboard above already includes manual IDR adjustment (if any).")
 			notify.player(
 				player,
-				tag .. " Detail di-print ke server Output (Studio).",
+				tag .. " Details printed to server Output (Studio).",
 				"SUCCESS"
 			)
 			log:info("DumpExternalLeaderboard executed", {
@@ -918,14 +918,14 @@ local function createDonationController(deps: {
 		runDumpExternalLeaderboard(player)
 	end)
 	commandExecutionService:registerRawHandler("verifyspender", function(player: Player, _rawText: string)
-		-- Studio mode: bypass owner check biar bisa di-test pas playtest tanpa harus pakai
-		-- akun owner. Live game tetap owner-only.
+		-- Studio mode: bypass owner check so it can be tested during playtest without needing
+		-- akun owner. Live game still owner-only.
 		if not IS_STUDIO and not isOwner(player) then
 			notify.player(player, "[VerifySpender] Owner-only command.", "ERROR")
 			return
 		end
 		if IS_STUDIO and not isOwner(player) then
-			log:warn("VerifySpender: Studio bypass aktif (non-owner caller)", { player = player.Name })
+			log:warn("VerifySpender: Studio bypass active (non-owner caller)", { player = player.Name })
 		end
 		if not adminCommandLimiter:check(player.UserId) then
 			notify.player(player, "[VerifySpender] Slow down, try again in a moment.", "WARNING")
@@ -934,7 +934,7 @@ local function createDonationController(deps: {
 		task.spawn(function()
 			notify.player(player, "[VerifySpender] Starting sync...", "INFO")
 
-			-- Step 1: force refresh leaderboard data dari Saweria + sheets
+			-- Step 1: force refresh leaderboard data from Saweria + sheets
 			local okRefresh = pcall(function()
 				donationService:forceRefresh()
 			end)
@@ -942,7 +942,7 @@ local function createDonationController(deps: {
 				log:warn("VerifySpender: forceRefresh failed", { player = player.Name })
 			end
 
-			-- Step 2: clear cache rank di OverheadService (hapus cache negatif yang sticky)
+			-- Step 2: clear rank cache in OverheadService (remove sticky negative cache)
 			if overheadService and type(overheadService.invalidateAllRankCaches) == "function" then
 				overheadService:invalidateAllRankCaches()
 			elseif overheadService and type(overheadService.invalidateRankCaches) == "function" then
@@ -955,7 +955,7 @@ local function createDonationController(deps: {
 				report = donationService:forceReassignTopSpenders()
 			end
 
-			-- Step 4: refresh overhead semua online player (cover Robux top 10 juga)
+			-- Step 4: refresh overhead all online player (cover Robux top 10 juga)
 			local Players = game:GetService("Players")
 			for _, p in ipairs(Players:GetPlayers()) do
 				if type(donationService.refreshPlayerOverhead) == "function" then
@@ -963,10 +963,10 @@ local function createDonationController(deps: {
 				end
 			end
 
-			-- Tunggu 1 detik biar refreshPlayer task.spawn beres dan stored data ter-update
+			-- Wait 1 second so refreshPlayer task.spawn finishes and stored data updates
 			task.wait(1)
 
-			-- Step 5: verify dengan baca stored data + workspace leaderboard
+			-- Step 5: verify by reading stored data + workspace leaderboard
 			local saweriaEntries = donationService:getWorkspaceSaweriaLeaderboard(
 				Config.Leaderboards.SAWERIA_LIMIT
 			)
@@ -1138,14 +1138,14 @@ local function createDonationController(deps: {
 			if amountAsFirst <= 0 then
 				notify.player(
 					player,
-					string.format("[%s] UserId harus angka positif.", labelPrefix),
+					string.format("[%s] UserId must be a positive number.", labelPrefix),
 					"WARNING"
 				)
 				return nil, nil, nil, nil
 			end
 			local resolvedId, resolvedName = resolveUserIdFromArg(args[1], player)
 			if not resolvedId then
-				notify.player(player, string.format("[%s] Player '%s' nggak ketemu.", labelPrefix, args[1]), "ERROR")
+				notify.player(player, string.format("[%s] Player '%s' not found.", labelPrefix, args[1]), "ERROR")
 				return nil, nil, nil, nil
 			end
 			targetUserId = resolvedId
@@ -1156,7 +1156,7 @@ local function createDonationController(deps: {
 			if amountAsFirst <= 0 then
 				notify.player(
 					player,
-					string.format("[%s] Amount harus angka positif (%s).", labelPrefix, currencyLabel),
+					string.format("[%s] Amount must be a positive number (%s).", labelPrefix, currencyLabel),
 					"WARNING"
 				)
 				return nil, nil, nil, nil
@@ -1181,14 +1181,14 @@ local function createDonationController(deps: {
 			if not amountAsSecond or amountAsSecond <= 0 then
 				notify.player(
 					player,
-					string.format("[%s] Amount harus angka positif (%s).", labelPrefix, currencyLabel),
+					string.format("[%s] Amount must be a positive number (%s).", labelPrefix, currencyLabel),
 					"WARNING"
 				)
 				return nil, nil, nil, nil
 			end
 			local resolvedId, resolvedName = resolveUserIdFromArg(args[1], player)
 			if not resolvedId then
-				notify.player(player, string.format("[%s] Player '%s' nggak ketemu.", labelPrefix, args[1]), "ERROR")
+				notify.player(player, string.format("[%s] Player '%s' not found.", labelPrefix, args[1]), "ERROR")
 				return nil, nil, nil, nil
 			end
 			targetUserId = resolvedId
@@ -1223,7 +1223,7 @@ local function createDonationController(deps: {
 		end
 		local testCash = donationService.testCashDonation
 		if type(testCash) ~= "function" then
-			notify.player(player, string.format("[%s] Service tidak tersedia.", labelPrefix), "ERROR")
+			notify.player(player, string.format("[%s] Service unavailable.", labelPrefix), "ERROR")
 			return
 		end
 		task.spawn(function()
@@ -1235,7 +1235,7 @@ local function createDonationController(deps: {
 				message
 			)
 			if not ok then
-				notify.player(player, string.format("[%s] Gagal: %s", labelPrefix, err), "ERROR")
+				notify.player(player, string.format("[%s] Failed: %s", labelPrefix, err), "ERROR")
 				return
 			end
 			local extra = if err ~= "" then (" (" .. err .. ")") else ""
@@ -1243,7 +1243,7 @@ local function createDonationController(deps: {
 			notify.player(
 				player,
 				string.format(
-					"[%s] %s +%d IDR -> notif + aura + world VFX (preview only, tidak persist).%s",
+					"[%s] %s +%d IDR -> notif + aura + world VFX (preview only, does not persist).%s",
 					labelPrefix,
 					who,
 					math.floor(amount),
@@ -1268,7 +1268,7 @@ local function createDonationController(deps: {
 		end
 		local testRobux = donationService.testRobuxDonation
 		if type(testRobux) ~= "function" then
-			notify.player(player, string.format("[%s] Service tidak tersedia.", labelPrefix), "ERROR")
+			notify.player(player, string.format("[%s] Service unavailable.", labelPrefix), "ERROR")
 			return
 		end
 		task.spawn(function()
@@ -1280,7 +1280,7 @@ local function createDonationController(deps: {
 				message
 			)
 			if not ok then
-				notify.player(player, string.format("[%s] Gagal: %s", labelPrefix, err), "ERROR")
+				notify.player(player, string.format("[%s] Failed: %s", labelPrefix, err), "ERROR")
 				return
 			end
 			local extra = if err ~= "" then (" (" .. err .. ")") else ""
@@ -1288,7 +1288,7 @@ local function createDonationController(deps: {
 			notify.player(
 				player,
 				string.format(
-					"[%s] %s +%d Robux -> notif + aura saja (preview only, tidak persist).%s",
+					"[%s] %s +%d Robux -> notif + aura only (preview only, does not persist).%s",
 					labelPrefix,
 					who,
 					math.floor(amount),
@@ -1437,7 +1437,7 @@ local function createDonationController(deps: {
 
 	local function listManualValueMap(player: Player, label: string, manualMap: { [number]: number }?, unit: string)
 		if type(manualMap) ~= "table" then
-			notify.player(player, string.format("[%s] Manual list tidak tersedia.", label), "ERROR")
+			notify.player(player, string.format("[%s] Manual list unavailable.", label), "ERROR")
 			return
 		end
 		local sorted: { { userId: number, amount: number } } = {}
@@ -1445,7 +1445,7 @@ local function createDonationController(deps: {
 			table.insert(sorted, { userId = userId, amount = math.floor(tonumber(amount) or 0) })
 		end
 		if #sorted == 0 then
-			notify.player(player, string.format("[%s] Manual adjustment kosong.", label), "INFO")
+			notify.player(player, string.format("[%s] Manual adjustment is empty.", label), "INFO")
 			return
 		end
 		table.sort(sorted, function(a, b)
@@ -1478,22 +1478,22 @@ local function createDonationController(deps: {
 		end
 		local amount = tonumber(amountStr)
 		if not amount or amount <= 0 then
-			notify.player(player, string.format("[%s] Amount harus angka positif (Robux).", label), "WARNING")
+			notify.player(player, string.format("[%s] Amount must be a positive number (Robux).", label), "WARNING")
 			return
 		end
 		task.spawn(function()
 			local userId, resolvedName = resolveUserIdFromArg(target, player)
 			if not userId then
-				notify.player(player, string.format("[%s] Player '%s' nggak ketemu.", label, target), "ERROR")
+				notify.player(player, string.format("[%s] Player '%s' not found.", label, target), "ERROR")
 				return
 			end
 			if type(donationService.addManualRobuxAdjustment) ~= "function" then
-				notify.player(player, string.format("[%s] Service tidak tersedia.", label), "ERROR")
+				notify.player(player, string.format("[%s] Service unavailable.", label), "ERROR")
 				return
 			end
 			local ok, err = donationService:addManualRobuxAdjustment(userId, resolvedName, resolvedName, math.floor(amount))
 			if not ok then
-				notify.player(player, string.format("[%s] Gagal: %s", label, err), "ERROR")
+				notify.player(player, string.format("[%s] Failed: %s", label, err), "ERROR")
 				return
 			end
 			refreshUserIfOnline(userId)
@@ -1502,7 +1502,7 @@ local function createDonationController(deps: {
 			notify.player(
 				player,
 				string.format(
-					"[%s] %s +%d Robux → leaderboard DataStore di-update.",
+					"[%s] %s +%d Robux → leaderboard DataStore updated.",
 					label,
 					resolvedName or tostring(userId),
 					math.floor(amount)
@@ -1534,18 +1534,18 @@ local function createDonationController(deps: {
 				return
 			end
 			if not userId then
-				notify.player(player, string.format("[%s] Player '%s' nggak ketemu.", label, target), "ERROR")
+				notify.player(player, string.format("[%s] Player '%s' not found.", label, target), "ERROR")
 				return
 			end
 			if type(donationService.removeManualRobuxAdjustment) ~= "function" then
-				notify.player(player, string.format("[%s] Service tidak tersedia.", label), "ERROR")
+				notify.player(player, string.format("[%s] Service unavailable.", label), "ERROR")
 				return
 			end
 			-- `me` without amount → wipe full Robux LB total for caller
 			local amount = if isSelfAlias and (amountStr == nil or amountStr == "") then nil else tonumber(amountStr)
 			local ok, err = donationService:removeManualRobuxAdjustment(userId, amount)
 			if not ok then
-				notify.player(player, string.format("[%s] Gagal: %s", label, err), "ERROR")
+				notify.player(player, string.format("[%s] Failed: %s", label, err), "ERROR")
 				return
 			end
 			refreshUserIfOnline(userId)
@@ -1557,7 +1557,7 @@ local function createDonationController(deps: {
 					"[%s] %s Robux leaderboard %s.",
 					label,
 					resolvedName or tostring(userId),
-					if isSelfAlias and amount == nil then "cleared (self)" else "dikurangi"
+					if isSelfAlias and amount == nil then "cleared (self)" else "reduced"
 				),
 				"SUCCESS"
 			)
@@ -1586,7 +1586,7 @@ local function createDonationController(deps: {
 		end
 		local amount = tonumber(amountStr)
 		if not amount or amount <= 0 then
-			notify.player(player, string.format("[%s] Amount harus angka positif (IDR).", label), "WARNING")
+			notify.player(player, string.format("[%s] Amount must be a positive number (IDR).", label), "WARNING")
 			return
 		end
 		local messageParts = {}
@@ -1597,12 +1597,12 @@ local function createDonationController(deps: {
 		task.spawn(function()
 			local userId, resolvedName = resolveUserIdFromArg(target, player)
 			if not userId then
-				notify.player(player, string.format("[%s] Player '%s' nggak ketemu.", label, target), "ERROR")
+				notify.player(player, string.format("[%s] Player '%s' not found.", label, target), "ERROR")
 				return
 			end
 			local donateManual = donationService.donateCashManual or donationService.donateBagibagiManual
 			if type(donateManual) ~= "function" then
-				notify.player(player, string.format("[%s] Service tidak tersedia.", label), "ERROR")
+				notify.player(player, string.format("[%s] Service unavailable.", label), "ERROR")
 				return
 			end
 			local ok, err, totalAdj = donateManual(
@@ -1613,7 +1613,7 @@ local function createDonationController(deps: {
 				message
 			)
 			if not ok then
-				notify.player(player, string.format("[%s] Gagal: %s", label, err), "ERROR")
+				notify.player(player, string.format("[%s] Failed: %s", label, err), "ERROR")
 				return
 			end
 			if overheadService and type(overheadService.invalidateRankCaches) == "function" then
@@ -1626,7 +1626,7 @@ local function createDonationController(deps: {
 			notify.player(
 				player,
 				string.format(
-					"[%s] %s +%d IDR → notif + efek donasi (manual total=%d).%s",
+					"[%s] %s +%d IDR → notif + donation effects (manual total=%d).%s",
 					label,
 					resolvedName or tostring(userId),
 					math.floor(amount),
@@ -1656,18 +1656,18 @@ local function createDonationController(deps: {
 		end
 		local amount = tonumber(amountStr)
 		if not amount or amount <= 0 then
-			notify.player(player, string.format("[%s] Amount harus angka positif (IDR).", label), "WARNING")
+			notify.player(player, string.format("[%s] Amount must be a positive number (IDR).", label), "WARNING")
 			return
 		end
 		task.spawn(function()
 			local userId, resolvedName = resolveUserIdFromArg(target, player)
 			if not userId then
-				notify.player(player, string.format("[%s] Player '%s' nggak ketemu.", label, target), "ERROR")
+				notify.player(player, string.format("[%s] Player '%s' not found.", label, target), "ERROR")
 				return
 			end
 			local addManual = donationService.addManualCashAdjustment or donationService.addManualBagibagiAdjustment
 			if type(addManual) ~= "function" then
-				notify.player(player, string.format("[%s] Service tidak tersedia.", label), "ERROR")
+				notify.player(player, string.format("[%s] Service unavailable.", label), "ERROR")
 				return
 			end
 			local ok, err, totalAdj = addManual(
@@ -1677,7 +1677,7 @@ local function createDonationController(deps: {
 				math.floor(amount)
 			)
 			if not ok then
-				notify.player(player, string.format("[%s] Gagal: %s", label, err), "ERROR")
+				notify.player(player, string.format("[%s] Failed: %s", label, err), "ERROR")
 				return
 			end
 			if overheadService and type(overheadService.invalidateRankCaches) == "function" then
@@ -1726,19 +1726,19 @@ local function createDonationController(deps: {
 				return
 			end
 			if not userId then
-				notify.player(player, string.format("[%s] Player '%s' nggak ketemu.", label, target), "ERROR")
+				notify.player(player, string.format("[%s] Player '%s' not found.", label, target), "ERROR")
 				return
 			end
 			local removeManual = donationService.removeManualCashAdjustment or donationService.removeManualBagibagiAdjustment
 			if type(removeManual) ~= "function" then
-				notify.player(player, string.format("[%s] Service tidak tersedia.", label), "ERROR")
+				notify.player(player, string.format("[%s] Service unavailable.", label), "ERROR")
 				return
 			end
 			-- `me` without amount → wipe all manual cash adjustment for caller
 			local amount = if isSelfAlias and (amountStr == nil or amountStr == "") then nil else tonumber(amountStr)
 			local ok, err, remaining = removeManual(donationService, userId, amount)
 			if not ok then
-				notify.player(player, string.format("[%s] Gagal: %s", label, err), "ERROR")
+				notify.player(player, string.format("[%s] Failed: %s", label, err), "ERROR")
 				return
 			end
 			refreshUserIfOnline(userId)
@@ -1747,7 +1747,7 @@ local function createDonationController(deps: {
 			notify.player(
 				player,
 				string.format(
-					"[%s] %s adjustment sekarang %d IDR%s.",
+					"[%s] %s adjustment is now %d IDR%s.",
 					label,
 					resolvedName or tostring(userId),
 					remaining or 0,
@@ -1822,7 +1822,7 @@ local function createDonationController(deps: {
 			donationService:forceRefresh()
 			invalidateWorkspaceLeaderboardCache()
 			broadcastWorkspaceLeaderboards(true)
-			notify.player(player, "[Donation] Leaderboard di-refresh manual.", "SUCCESS")
+			notify.player(player, "[Donation] Leaderboard manually refreshed.", "SUCCESS")
 		end)
 	end)
 	if deps.workspaceLeaderboardRefresh then
@@ -1910,3 +1910,4 @@ local function createDonationController(deps: {
 	return {}
 end
 return createDonationController
+er

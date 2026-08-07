@@ -1,11 +1,11 @@
 --!strict
 -- Shared/Domain/LevelDomain.lua
 -- Pure functions only. Zero Roblox service calls.
--- Semua logika XP dan level di sini.
+-- All XP and level logic lives here.
 local Config = require(script.Parent.Parent.Constants.Config)
 local LevelDomain = {}
 -- ============================================================
--- XP yang dibutuhkan untuk naik dari level N ke N+1
+-- XP required to go from level N to N+1
 -- Formula: BASE + (level - 1) * INCREMENT
 -- Level 1->2: 100, Level 2->3: 150, Level 3->4: 200, dst
 -- ============================================================
@@ -13,7 +13,7 @@ function LevelDomain.xpNeeded(level: number): number
 	return Config.Level.XP_BASE + (level - 1) * Config.Level.XP_INCREMENT
 end
 -- ============================================================
--- Hasil setelah XP ditambahkan
+-- Hasil after XP ditambahkan
 -- ============================================================
 export type LevelUpResult = {
 	newLevel    : number,
@@ -22,8 +22,8 @@ export type LevelUpResult = {
 	levelsGained: number,
 }
 -- ============================================================
--- addXp - tambah XP, handle multiple level-up sekaligus
--- Mengembalikan state baru tanpa mutasi
+-- addXp - add XP, handle multiple level-up sekaligus
+-- Returns new state without mutation
 -- ============================================================
 function LevelDomain.addXp(
 	currentLevel : number,
@@ -34,9 +34,9 @@ function LevelDomain.addXp(
 	local xp          = (tonumber(currentXp) or 0) + xpGain
 	local levelsGained = 0
 	local maxLevel    = tonumber(Config.Level.MAX_LEVEL) or 0
-	-- Loop untuk handle multiple level-up dari satu XP gain besar
+	-- Loop for handle multiple level-up from satu XP gain besar
 	while true do
-		-- Cek batas level
+		-- Check level cap
 		if maxLevel > 0 and level >= maxLevel then
 			xp = math.min(xp, LevelDomain.xpNeeded(level) - 1)
 			break
@@ -55,8 +55,8 @@ function LevelDomain.addXp(
 	}
 end
 -- ============================================================
--- Progress XP dalam level saat ini (0.0 - 1.0)
--- Berguna untuk progress bar
+-- Progress XP dalam level when ini (0.0 - 1.0)
+-- Berguna for progress bar
 -- ============================================================
 function LevelDomain.progress(level: number, xp: number): number
 	local needed = LevelDomain.xpNeeded(level)

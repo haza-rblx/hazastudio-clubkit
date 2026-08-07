@@ -1,27 +1,27 @@
 --!nocheck
 -- ============================================================
--- EXAMPLE SOURCE DATA buat MigrateMusic.server.luau
+-- EXAMPLE SOURCE DATA for MigrateMusic.server.luau
 -- ============================================================
--- File ini cuma referensi format. Copy struktur tabel-nya, paste
--- ke SOURCE_DATA di MigrateMusic.server.luau, terus isi dgn data
--- dari sistem musik lama kamu.
+-- Reference format only. Copy the table structure and paste
+-- into SOURCE_DATA in MigrateMusic.server.luau, then fill with
+-- data from your legacy music system.
 --
--- Mapper di MigrateMusic.server.luau tolerant ke variasi field name,
--- jadi kalau sistem lama pake nama beda, mapper akan coba match.
+-- MigrateMusic.server.luau mapper tolerates field name variations,
+-- so if the old system uses different names, the mapper will try to match.
 -- ============================================================
 
 return {
 	-- ----------------------------------------------------------
-	-- PLAYLISTS (opsional)
+	-- PLAYLISTS (optional)
 	-- ----------------------------------------------------------
-	-- Kalau gak di-isi, playlist akan auto-dibikin dari track.playlistName,
-	-- atau fallback ke "Imported" (DEFAULT_PLAYLIST_NAME).
+	-- If omitted, playlists are auto-created from track.playlistName,
+	-- or fallback to "Imported" (DEFAULT_PLAYLIST_NAME).
 	playlists = {
 		{
-			-- id = "abc-123",  -- opsional, auto-generate kalau nil
+			-- id = "abc-123",  -- optional, auto-generated if nil
 			name = "Amapiano and Afro Remix",
 			coverType = "gradient", -- "gradient" | "image"
-			coverValue = 1,         -- gradient index (1..N) atau "rbxassetid://..."
+			coverValue = 1,         -- gradient index (1..N) or "rbxassetid://..."
 			fontFace = "Original",
 		},
 		{
@@ -31,15 +31,15 @@ return {
 		},
 		{
 			name = "Throwbacks",
-			-- coverType + coverValue di-default ke gradient index 1
+			-- coverType + coverValue default to gradient index 1
 		},
 	},
 
 	-- ----------------------------------------------------------
-	-- TRACKS (wajib)
+	-- TRACKS (required)
 	-- ----------------------------------------------------------
 	tracks = {
-		-- Format minimum: name + parts + (playlistName atau playlistId)
+		-- Minimum format: name + parts + (playlistName or playlistId)
 		{
 			name = "Make You Mine",
 			creator = "PUBLIC",
@@ -48,21 +48,21 @@ return {
 				"rbxassetid://1234567890",
 				"rbxassetid://1234567891",
 			},
-			-- Per-track playback speed. Mapper accept:
+			-- Per-track playback speed. Mapper accepts:
 			--   - field name: playbackSpeed | normalPlaybackSpeed | speed
 			--   - format: number, "2.3", "2.3x", " 0.85 "
 			normalPlaybackSpeed = 0.85,
 		},
 
-		-- Track tanpa playlist eksplisit \u2192 masuk "Imported"
+		-- Track without explicit playlist → goes to "Imported"
 		{
 			name = "Untitled Drop",
 			creator = "Anonymous",
 			parts = { "rbxassetid://9876543210" },
 		},
 
-		-- Track dgn playlist baru yang belum ada di playlists[] di atas:
-		-- mapper akan auto-create playlist "Drum & Bass" dgn default cover.
+		-- Track with new playlist not in playlists[] above:
+		-- mapper auto-creates playlist "Drum & Bass" with default cover.
 		{
 			name = "Bass Therapy",
 			creator = "DJ Example",
@@ -72,28 +72,28 @@ return {
 				"rbxassetid://2222222222",
 				"rbxassetid://3333333333",
 			},
-			playbackSpeed = 1.25, -- field name "playbackSpeed" juga didukung
+			playbackSpeed = 1.25, -- field name "playbackSpeed" also supported
 		},
 
-		-- Sistem lama yang pake field "assetIds" (array alternatif):
+		-- Legacy system using "assetIds" (alternate array):
 		{
 			name = "Legacy Format Track",
 			creator = "Old System",
 			playlistName = "Throwbacks",
-			assetIds = { "1234", "5678" }, -- mapper auto-add prefix rbxassetid://
+			assetIds = { "1234", "5678" }, -- mapper auto-adds rbxassetid:// prefix
 		},
 
-		-- Sistem lama yang flat assetId1..N (bukan array):
+		-- Legacy system with flat assetId1..N (not an array):
 		{
 			name = "Flat Field Track",
 			creator = "Legacy",
 			playlistName = "Throwbacks",
 			assetId1 = "rbxassetid://4444444444",
 			assetId2 = "rbxassetid://5555555555",
-			-- assetId3..9 boleh kosong
+			-- assetId3..9 may be empty
 		},
 
-		-- Track dgn 9 parts (max sesuai Config.Music.MAX_TRACK_PARTS):
+		-- Track with 9 parts (max per Config.Music.MAX_TRACK_PARTS):
 		{
 			name = "Long Mix",
 			creator = "Producer",
@@ -103,7 +103,7 @@ return {
 				"rbxassetid://1004", "rbxassetid://1005", "rbxassetid://1006",
 				"rbxassetid://1007", "rbxassetid://1008", "rbxassetid://1009",
 			},
-			playbackSpeed = "2.3x", -- format string juga OK
+			playbackSpeed = "2.3x", -- string format also OK
 		},
 	},
 }

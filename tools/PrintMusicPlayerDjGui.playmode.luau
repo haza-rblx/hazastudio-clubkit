@@ -2,17 +2,17 @@
 -- ============================================================
 -- PRINT GUI TREE: Music Player — DJ section → leaf (Play Mode)
 -- ============================================================
--- Dump hierarki 6-DJTab (+ header 3-DJTab) dari PlayerGui saat Play.
+-- Dump 6-DJTab hierarchy (+ 3-DJTab header) from PlayerGui during Play.
 --
--- CARA PAKAI:
--- 1. Play di Studio (client/local).
--- 2. Buka music panel kalau perlu supaya GUI di-clone ke PlayerGui.
--- 3. Copy seluruh file ini → paste ke Command Bar → Enter.
--- 4. Salin output dari jendela Output.
+-- USAGE:
+-- 1. Play in Studio (client/local).
+-- 2. Open the music panel if needed so the GUI is cloned to PlayerGui.
+-- 3. Copy this entire file → paste into Command Bar → Enter.
+-- 4. Copy output from the Output window.
 --
 -- Snapshot referensi (client Play): _non_rojo/docs/music-player/MUSIC_PLAYER_DJ_GUI_CLIENT_PLAYMODE_DUMP.md
 --
--- Read-only — tidak mengubah instance apa pun.
+-- Read-only — does not modify any instances.
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -23,7 +23,7 @@ local DJ_TAB_CONTENT_NAMES = { "6-DJTab" }
 local DJ_TAB_HEADER_NAMES = { "3-DJTab" }
 local SELECTOR_NAMES = { "Selector", "01-HeaderWrapper", "HeaderWrapper" }
 
-local MAX_DEPTH = 0 -- 0 = unlimited (sampai leaf)
+local MAX_DEPTH = 0 -- 0 = unlimited (to leaf)
 local SHOW_PROPERTIES = true
 local SHOW_LEAF_PATHS = true
 local DUMP_HEADER_DJ_TAB = true
@@ -281,13 +281,13 @@ end
 
 local player = Players.LocalPlayer
 if not player then
-	warn("[PrintMusicPlayerDjGui] LocalPlayer tidak ada — jalankan saat Play.")
+	warn("[PrintMusicPlayerDjGui] No LocalPlayer — run during Play.")
 	return
 end
 
 local playerGui = player:FindFirstChildOfClass("PlayerGui")
 if not playerGui then
-	warn("[PrintMusicPlayerDjGui] PlayerGui tidak ditemukan.")
+	warn("[PrintMusicPlayerDjGui] PlayerGui not found.")
 	return
 end
 
@@ -298,7 +298,7 @@ emit("============================================================")
 
 local musicRoot, matchedRoot = findMusicRoot(playerGui)
 if not musicRoot then
-	warn("[PrintMusicPlayerDjGui] Root tidak ditemukan di PlayerGui. Coba: " .. table.concat(ROOT_NAMES, ", "))
+	warn("[PrintMusicPlayerDjGui] Root not found in PlayerGui. Try: " .. table.concat(ROOT_NAMES, ", "))
 	emit("")
 	emit("PlayerGui children:")
 	for _, child in ipairs(sortChildren(playerGui:GetChildren())) do
@@ -312,7 +312,7 @@ emit(string.format("Matched root: %s (%s)", matchedRoot, musicRoot:GetFullName()
 
 local djTab, djHeader = resolveDjTargets(musicRoot)
 if not djTab then
-	warn("[PrintMusicPlayerDjGui] 6-DJTab tidak ditemukan di bawah MainWrapper.")
+	warn("[PrintMusicPlayerDjGui] 6-DJTab not found under MainWrapper.")
 	emit("")
 	emit("MainWrapper children:")
 	local mainWrapper = findFirstByNames(musicRoot, MAIN_WRAPPER_NAMES)

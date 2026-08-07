@@ -1,7 +1,7 @@
 --!strict
 -- Client/Services/ShopService.lua
 -- Trigger MarketplaceService purchase (Game Pass buy / Developer Product gift),
--- listen untuk ShopGrantNotif dari server.
+-- listen for ShopGrantNotif from server.
 
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players            = game:GetService("Players")
@@ -51,19 +51,19 @@ local function createShopService(deps: {
 		table.clear(_connections)
 	end
 
-	-- Panggil semua callback yang terdaftar
+	-- Call all registered callbacks
 	local function fireGranted(payload: GrantPayload)
 		for _, cb in ipairs(grantCallbacks) do
 			task.spawn(cb, payload)
 		end
 	end
 
-	-- Listen ShopGrantNotif dari server
-	-- Pakai task.spawn + WaitForChild agar tidak miss event saat server belum ready
+	-- Listen ShopGrantNotif from server
+	-- Pakai task.spawn + WaitForChild so not miss event when server not yet ready
 	task.spawn(function()
 		local grantRemote = remotes:WaitForChild(REMOTE_GRANT, Config.Shop.REMOTE_READY_TIMEOUT) :: RemoteEvent?
 		if not grantRemote then
-			log:warn("ShopGrantNotif remote tidak ditemukan", {
+			log:warn("ShopGrantNotif remote not found", {
 				timeout = Config.Shop.REMOTE_READY_TIMEOUT,
 			})
 			return
@@ -79,7 +79,7 @@ local function createShopService(deps: {
 		end))
 	end)
 
-	-- Beli untuk diri sendiri (Game Pass — one-time)
+	-- Beli for diri sendiri (Game Pass — one-time)
 	function self:promptBuy(tier: string)
 		local parsedTier = ShopDomain.parseShopTier(tier)
 		if not parsedTier then return end
@@ -88,15 +88,15 @@ local function createShopService(deps: {
 		if type(product) ~= "table" then return end
 		local gamePassId = tonumber(product.BUY_GAMEPASS_ID)
 		if not gamePassId or gamePassId <= 0 then
-			log:warn("BUY_GAMEPASS_ID belum diisi", { tier = parsedTier })
+			log:warn("BUY_GAMEPASS_ID not yet set", { tier = parsedTier })
 			return
 		end
 
 		MarketplaceService:PromptGamePassPurchase(localPlayer, gamePassId)
 	end
 
-	-- Beli sebagai gift untuk player lain
-	-- Alur: kirim pending ke server dulu, baru prompt purchase
+	-- Beli sebagai gift for player lain
+	-- Flow: send pending to server first, then prompt purchase
 	function self:promptGift(tier: string, toUserId: number)
 		local parsedTier = ShopDomain.parseShopTier(tier)
 		if not parsedTier then return end
@@ -105,32 +105,32 @@ local function createShopService(deps: {
 		if type(product) ~= "table" then return end
 		local productId = product.GIFT_ID
 		if productId == 0 then
-			log:warn("GIFT_ID belum diisi", { tier = parsedTier })
+			log:warn("GIFT_ID not yet set", { tier = parsedTier })
 			return
 		end
 
 		local giftRemote = remotes:FindFirstChild(REMOTE_GIFT_INIT) :: RemoteEvent?
 		if not giftRemote then
-			log:warn("Gift init remote tidak ditemukan", { remote = REMOTE_GIFT_INIT })
+			log:warn("Gift init remote not found", { remote = REMOTE_GIFT_INIT })
 			return
 		end
 
 		local requestId = HttpService:GenerateGUID(false)
 
-		-- Beritahu server: "saya mau gift tier ini ke toUserId"
+		-- Tell server: "I want to gift this tier to toUserId"
 		giftRemote:FireServer({
 			tier      = parsedTier,
 			toId      = toUserId,
 			requestId = requestId,
 		})
 
-		-- Beri waktu server menyimpan pending sebelum prompt purchase
+		-- Give server time to store pending before purchase prompt
 		task.delay(Config.Gift.GIFT_PROMPT_DELAY, function()
 			MarketplaceService:PromptProductPurchase(localPlayer, productId)
 		end)
 	end
 
-	-- Daftarkan callback yang dipanggil saat membership berhasil diberikan
+	-- Register callback called when membership is granted
 	function self:onGranted(callback: (payload: GrantPayload) -> ())
 		table.insert(grantCallbacks, callback)
 	end

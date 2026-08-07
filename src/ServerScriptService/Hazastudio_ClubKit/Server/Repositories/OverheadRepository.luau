@@ -1,6 +1,6 @@
 --!strict
 -- Server/Repositories/OverheadRepository.lua
--- HANYA boleh diakses dari Service layer. Zero business logic di sini.
+-- ONLY accessible from Service layer. Zero business logic here.
 -- Persistence Fabric: PlayerSessionStore write-behind when enabled.
 local DataStoreService = game:GetService("DataStoreService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -107,7 +107,7 @@ local function createOverheadRepository(datastoreKey: string?): IOverheadReposit
 			end, Config.DataStore.JOIN_READ_RETRY_ATTEMPTS or 1)
 		end, mutexFor(userId))
 		if not result.ok then
-			log:error("Load gagal", { userId = userId, err = result.error })
+			log:error("Load failed", { userId = userId, err = result.error })
 			-- Only poison on real Roblox budget pressure — never on inflight_saturated.
 			if result.error == "budget_low" or result.error == "budget_exhausted" then
 				Cache.setNegative(cacheKey, Config.Budget.NEGATIVE_CACHE_TTL or 10)
@@ -168,12 +168,12 @@ local function createOverheadRepository(datastoreKey: string?): IOverheadReposit
 			end, Config.DataStore.RETRY_ATTEMPTS)
 		end, mutexFor(userId))
 		if not result.ok then
-			log:error("Update gagal", { userId = userId, err = result.error })
+			log:error("Update failed", { userId = userId, err = result.error })
 			return ResultUtil.Err(result.error)
 		end
 		local finalData = updatedData
 		if not finalData then
-			log:error("Update gagal: updatedData nil", { userId = userId })
+			log:error("Update failed: updatedData nil", { userId = userId })
 			return ResultUtil.Err("Update failed: no data produced")
 		end
 		Cache.set(KEY_PREFIX .. userId, finalData, Config.DataStore.CACHE_TTL)

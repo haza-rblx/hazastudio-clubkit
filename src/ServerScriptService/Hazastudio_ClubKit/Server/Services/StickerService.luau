@@ -442,12 +442,12 @@ end
 function StickerService:onStart()
 	self:_refreshGlobalPool()
 
-	-- Per-player connection pool: hanya CharacterAdded yang perlu per-player tracking.
-	-- _connections tetap dipakai untuk koneksi global (PlayerAdded, PlayerRemoving).
+	-- Per-player connection pool: only CharacterAdded needs per-player tracking.
+	-- _connections still used for global connections (PlayerAdded, PlayerRemoving).
 	local playerConnections: { [number]: RBXScriptConnection } = {}
 
 	local function connectCharacterAdded(player: Player)
-		-- Disconnect koneksi lama jika ada (e.g. rejoin handling)
+		-- Disconnect old connections if any (e.g. rejoin handling)
 		local old = playerConnections[player.UserId]
 		if old then
 			old:Disconnect()
@@ -528,7 +528,7 @@ function StickerService:onStart()
 		self._loadedByUserId[player.UserId] = nil
 	end))
 
-	-- Simpan referensi playerConnections agar destroy() bisa cleanup
+	-- Store playerConnections reference so destroy() can cleanup
 	self._playerConnections = playerConnections
 
 	self._log:info("Sticker service initialized")

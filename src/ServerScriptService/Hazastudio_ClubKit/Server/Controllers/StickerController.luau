@@ -47,7 +47,7 @@ function StickerController:_track(connection: RBXScriptConnection)
 	table.insert(self._connections, connection)
 end
 
--- Wiring semua remote handler. Dipanggil oleh serverLifecycle:startAll().
+-- Wire all remote handlers. Called by serverLifecycle:startAll().
 function StickerController:onStart()
 	self._setRemote =
 		self._remotes:WaitForChild(Config.Sticker.REMOTE_SET,     Config.Sticker.REMOTE_READY_TIMEOUT) :: RemoteEvent?
@@ -94,7 +94,7 @@ function StickerController:onStart()
 		-- 1. Rate limit
 		local allowed, reason = self._rateLimiters.SET:check(player.UserId)
 		if not allowed then
-			-- Throttle warning: hanya log sekali per 10 detik per player
+			-- Throttle warning: only log sekali per 10 seconds per player
 			local warnKey = "_lastStickerRateLimitWarn"
 			local lastWarn = player:GetAttribute(warnKey) or 0
 			local now = os.clock()
@@ -187,7 +187,7 @@ function StickerController:onStart()
 	self._log:info("Sticker controller initialized")
 end
 
--- Dipanggil oleh serverLifecycle:destroyAll().
+-- Called by serverLifecycle:destroyAll().
 function StickerController:destroy()
 	for _, connection in ipairs(self._connections) do
 		connection:Disconnect()

@@ -9,7 +9,7 @@ local ShopDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Sh
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
 local PressFeedback = require(script.Parent.Parent.Utils.PressFeedback)
 -- ============================================================
--- Mapping tier -> elemen GUI
+-- Mapping tier -> GUI elements
 -- ============================================================
 local TAB_FRAME: { [string]: string } = {
 }
@@ -19,7 +19,7 @@ local GIFT_BTN: { [string]: string } = {
 }
 local NOTIF_FRAME: { [string]: string } = {
 }
--- Gradient name yang di-enable saat tab aktif
+-- Gradient name enabled when tab is active
 local ACTIVE_GRADIENT: { [string]: string } = {
 }
 local TIERS = Config.Membership.SHOP_TIERS
@@ -81,7 +81,7 @@ end
 -- ============================================================
 local GiftUI = {} :: any
 GiftUI.__index = GiftUI
-local WAIT_TIMEOUT = 10 -- detik maksimal menunggu elemen GUI
+local WAIT_TIMEOUT = 10 -- seconds max wait for GUI elements
 local SEARCH_HIGHLIGHT_COLOR = "#FF7EB6"
 local EMPTY_STATE_DEFAULT_TITLE = "No one is eligible right now"
 local EMPTY_STATE_DEFAULT_SUBTITLE = "When a player is ready to receive, they'll appear here."
@@ -152,7 +152,7 @@ local function setThumbnailAsync(imageLabel: ImageLabel, userId: number)
 	imageLabel.Image = getThumbnail(userId)
 end
 -- ============================================================
--- Private helper: cari semua RotatingBackground di bawah root
+-- Private helper: find all RotatingBackground under root
 -- ============================================================
 local function collectRotatingBgs(root: Instance): { ImageLabel }
 	local result: { ImageLabel } = {}
@@ -167,14 +167,14 @@ function GiftUI.new(gui: ScreenGui)
 	local self = setmetatable({}, GiftUI) :: any
 	local mainWrapper = gui:WaitForChild("MainWrapper", WAIT_TIMEOUT) :: Frame
 	if not mainWrapper then
-		warn("[GiftUI] MainWrapper tidak ditemukan di " .. gui.Name)
+		warn("[GiftUI] MainWrapper not found di " .. gui.Name)
 		return self
 	end
 	local contentWrapper = mainWrapper:WaitForChild("02-MainContentWrapper", WAIT_TIMEOUT) :: Frame
 	local headerWrapper = mainWrapper:WaitForChild("01-HeaderWrapper", WAIT_TIMEOUT) :: Frame
 	local notifWrapper = gui:WaitForChild("NotificationWrapper", WAIT_TIMEOUT) :: Frame
 	if not (contentWrapper and headerWrapper and notifWrapper) then
-		warn("[GiftUI] Elemen wajib tidak ditemukan di " .. gui.Name)
+		warn("[GiftUI] Elemen required not found di " .. gui.Name)
 		return self
 	end
 	local selectorRaw = headerWrapper:WaitForChild("2-SliderSelector", WAIT_TIMEOUT) :: Frame
@@ -250,11 +250,11 @@ function GiftUI.new(gui: ScreenGui)
 	self._allPlayers = {} :: { { userId: number, displayName: string, username: string } }
 	self._playerCardPool = {} :: { PlayerListEntry }
 	self._isClosing = false
-	-- RotatingBackground: hanya notif yang dipertahankan
+	-- RotatingBackground: only notification preserved
 	self._notifRotBgs = collectRotatingBgs(notifWrapper)
 	self._notifRotHandles = {} :: { any }
 	-- Tab button labels already set above during button collection
-	-- Sembunyikan semua saat init
+	-- Hide all on init
 	gui.Enabled = false
 	notifWrapper.Visible = false
 	mainWrapper.Visible = false
@@ -290,7 +290,7 @@ function GiftUI:setTab(tier: string)
 		normalizedTier = DEFAULT_TIER
 	end
 	self._activeTier = normalizedTier
-	self._selectedPlayer = nil -- reset selected saat ganti tab
+	self._selectedPlayer = nil -- reset selected when switching tab
 	-- Show/hide tab frames
 	for _, t in ipairs(TIERS) do
 		local frameName = TAB_FRAME[t]
@@ -541,15 +541,15 @@ end
 function GiftUI:isVisible(): boolean
 	return self._gui.Enabled
 end
--- Ambil userId target: dari selected player list, atau dari textbox input
+-- Get target userId: from selected player list, or from textbox input
 function GiftUI:getTarget(): (number?, string?)
 	if self._selectedPlayer then
 		return self._selectedPlayer.userId, nil
 	end
-	-- Coba dari username input field active tab
+	-- Coba from username input field active tab
 	local inputBox = self:_getActiveInputBox()
 	if inputBox and #inputBox.Text > 0 then
-		return nil, inputBox.Text -- kembalikan username, perlu di-resolve dulu
+		return nil, inputBox.Text -- return username, needs resolution first
 	end
 	return nil, nil
 end
@@ -563,20 +563,20 @@ function GiftUI:clearInput()
 	end
 	self._selectedPlayer = nil
 end
--- Set teks input field aktif (untuk loading/error feedback)
+-- Set input field text (for loading/error feedback)
 function GiftUI:setInputText(text: string)
 	local inputBox = self:_getActiveInputBox()
 	if inputBox then
 		inputBox.Text = text
 	end
 end
--- Notifikasi untuk giftee (diterima dari server setelah mendapat gift)
+-- Notification for giftee (received from server after gift)
 function GiftUI:showNotification(tier: string, senderName: string)
 	local normalizedTier = normalizeTier(tier)
 	if not normalizedTier then
 		return
 	end
-	-- Pastikan ScreenGui aktif (bisa sedang tersembunyi karena gift panel ditutup)
+	-- Ensure ScreenGui active (may be hidden because gift panel closed)
 	self._gui.Enabled = true
 	for _, t in ipairs(TIERS) do
 		local n = self._notifWrapper:FindFirstChild(NOTIF_FRAME[t]) :: Frame?
@@ -601,23 +601,23 @@ function GiftUI:showNotification(tier: string, senderName: string)
 	end
 	notif.Visible = true
 	self._notifWrapper.Visible = true
-	-- Start rotasi RotatingBackground di notifikasi
+	-- Start RotatingBackground rotation on notification
 	for _, img in ipairs(self._notifRotBgs) do
 		table.insert(self._notifRotHandles, self._anim:startRotation(img))
 	end
-	-- swingIn animasi
+	-- swingIn animation
 	if content then
 		self._anim:swingIn(content :: Frame, self._notifWrapper, nil)
 	end
 end
 function GiftUI:hideNotification()
-	-- Stop rotasi notifikasi
+	-- Stop notification rotation
 	for _, h in ipairs(self._notifRotHandles) do
 		self._anim:stopRotation(h)
 	end
 	self._notifRotHandles = {}
 	self._notifWrapper.Visible = false
-	-- Disable gui hanya kalau mainWrapper juga tidak tampil
+	-- Disable gui only if mainWrapper also not visible
 	if not self._mainWrapper.Visible then
 		self._gui.Enabled = false
 	end

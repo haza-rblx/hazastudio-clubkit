@@ -36,7 +36,7 @@ local function createShopService(deps: {
 	local giftPendingRepository = deps.giftPendingRepository
 	local pending: {[number]: PendingEntry} = {}
 	local self = {} :: IShopService
-	-- Bersihkan pending yang sudah expired
+	-- Bersihkan pending yang already expired
 	local function cleanupPending()
 		local now = os.time()
 		for fromId, entry in pairs(pending) do

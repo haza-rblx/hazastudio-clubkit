@@ -598,7 +598,7 @@ local function createBlackHoleEffect(donatorName, recipientName, donationAmount)
 	-- Create impact visuals
 	SoundAssetSanitizer.removeBlockedSounds(impactVisuals)
 	impactVisuals.Parent = workspace
-	impactVisuals.Anchored = true  -- tambah ini
+	impactVisuals.Anchored = true  -- add ini
 	impactVisuals.Position = SPAWN_POSITION
 
 	TweenService:Create(impactVisuals, TweenInfo.new(30), {

@@ -97,10 +97,10 @@ local function createProfileSocialService(deps: { logger: ILogger })
 		return RunService:IsStudio()
 	end
 
-	-- Push connectionsCount ke Worker KV setelah berhasil resolve.
-	-- Worker tidak bisa fetch Roblox friends API dari Cloudflare IPs,
-	-- jadi game server yang push data supaya subsequent GET dari Worker
-	-- langsung hit KV cache.
+	-- Push connectionsCount to Worker KV after successful resolve.
+	-- Worker cannot fetch Roblox friends API from Cloudflare IPs,
+	-- so game server pushes data so subsequent GET from Worker
+	-- directly hit KV cache.
 	local function pushToWorker(userId: number, connectionsCount: number)
 		local apiConfig = getApiConfig()
 		local secret = Secrets.GameDataApiSecret
@@ -164,11 +164,11 @@ local function createProfileSocialService(deps: { logger: ILogger })
 			}, "worker"
 		end
 
-		-- Worker reachable tapi data kosong (KV belum di-seed), atau Worker unavailable.
-		-- Fallback ke GetFriendsAsync untuk seed cycle pertama.
-		-- Di production, ini hanya terjadi sekali per-user sampai KV ter-populate.
+		-- Worker reachable but data empty (KV not yet seeded), or Worker unavailable.
+		-- Fallback to GetFriendsAsync for first seed cycle.
+		-- In production, this only happens once per user until KV is populated.
 		local useFallback = shouldUseFriendsFallback()
-			or (workerOk and workerCount == nil) -- Worker reachable tapi KV kosong
+			or (workerOk and workerCount == nil) -- Worker reachable but KV empty
 		if useFallback then
 			local friendsCount = fetchViaGetFriendsAsync(userId)
 			if friendsCount ~= nil then
@@ -177,7 +177,7 @@ local function createProfileSocialService(deps: { logger: ILogger })
 					connectionsCount = friendsCount,
 					workerOk = workerOk,
 				})
-				-- Push ke Worker KV supaya subsequent requests langsung hit cache
+				-- Push to Worker KV so subsequent requests directly hit cache
 				pushToWorker(userId, friendsCount)
 				return {
 					followersCount = nil,

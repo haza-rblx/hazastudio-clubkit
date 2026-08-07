@@ -1,12 +1,12 @@
 --!strict
 -- PATH: ServerScriptService/Server/Controllers/MusicController.lua
--- Wire remotes ke MusicService. Semua handler: validation + rate limit + idempotency.
+-- Wire remotes to MusicService. All handlers: validation + rate limit + idempotency.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Logger      = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local NetworkManager = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.NetworkManager)
 local RateLimiter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.RateLimiter)
 local Validator   = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Validator)
--- Helper: buat atau ambil remote
+-- Helper: for or fetch remote
 local function getOrCreate(parent: Instance, name: string, className: string): Instance
 	local existing = parent:FindFirstChild(name)
 	if existing and existing.ClassName == className then return existing end
@@ -26,7 +26,7 @@ end
 local function checkIdempotency(cache: { [string]: boolean }, requestId: string): boolean
 	if cache[requestId] then return false end
 	cache[requestId] = true
-	-- Hard reset jika terlalu besar
+	-- Hard reset if terlalu besar
 	local count = 0
 	for _ in pairs(cache) do
 		count += 1
@@ -45,7 +45,7 @@ local function validatePayload(raw: any): (boolean, string)
 	if type(raw) ~= "table" then
 		return false, "not_table"
 	end
-	-- requestId wajib untuk command yang modifikasi data
+	-- requestId required for commands that modify data
 	if type(raw.requestId) ~= "string" or raw.requestId == "" then
 		return false, "missing_requestId"
 	end
@@ -195,7 +195,7 @@ local function createMusicController(deps: {
 	local notify  = deps.notify
 	local controller = {}
 	function controller:init()
-		-- Buat semua Remote
+		-- Create all remotes
 		local trackChangedRE   = getOrCreate(remotes, config.REMOTE_TRACK_CHANGED,   "RemoteEvent")  :: RemoteEvent
 		local queueUpdatedRE   = getOrCreate(remotes, config.REMOTE_QUEUE_UPDATED,   "RemoteEvent")  :: RemoteEvent
 		local stateSyncRE      = getOrCreate(remotes, config.REMOTE_STATE_SYNC,      "RemoteEvent")  :: RemoteEvent
@@ -283,7 +283,7 @@ local function createMusicController(deps: {
 			config.RESOLVE_REQUEST_ASSET_RATE_WINDOW
 		)
 		local resolveRequestAssetCache = makeIdempotencyCache()
-		-- Wire callbacks ke Service
+		-- Wire callbacks to Service
 		-- skipReason: optional string for client notification (vote_skip, admin_skip, etc.)
 		service:setOnTrackChanged(function(payload: any, members: { Player }, skipReason: string?)
 			if type(payload) ~= "table" then
@@ -337,7 +337,7 @@ local function createMusicController(deps: {
 			end
 			if not checkIdempotency(voteSkipCache, (raw :: any).requestId) then return end
 			task.spawn(function()
-				-- Admin+ bypass: langsung adminSkip tanpa masuk vote flow
+				-- Admin+ bypass: directly adminSkip without entering vote flow
 				if service:isManageAllowed(player) then
 					local ok, err = service:adminSkip(player)
 					if not ok then
@@ -676,7 +676,7 @@ local function createMusicController(deps: {
 				local action = type(raw.action) == "string" and raw.action or ""
 				local data   = type(raw.data) == "table" and raw.data or {}
 				local ok, _err, result = service:managePlaylist(player, action, data)
-				-- Jangan expose detail error internal ke client
+				-- Do not expose internal error details to client
 				fireMusicResponse(responseRE, player, "manage_playlist", (raw :: any).requestId, ok, if ok then result else nil, if ok then nil else "request_failed")
 			end)
 		end)

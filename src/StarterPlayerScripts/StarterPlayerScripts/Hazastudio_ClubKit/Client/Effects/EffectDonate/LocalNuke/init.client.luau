@@ -122,7 +122,7 @@ local function createNukeEffect(nukeModel, donatorName, recipientName, donationA
 	local nukeCFrame = nukeClone.NukeValues.NukeCFrame
 	local donationFrame = nukeClone.BillboardGuiAnimation.Frame
 
-	-- Sembunyikan billboard dulu — nanti muncul setelah impact
+	-- Hide billboard first — appears after impact
 	donationFrame.Parent.Enabled = false
 
 	local centerEmitPoint = nukeClone.CenterEmitPoint
@@ -355,7 +355,7 @@ local function createNukeEffect(nukeModel, donatorName, recipientName, donationA
 	donationFrame.TextLabels.MiddleText.Size = UDim2.fromScale(0, 0)
 	donationFrame.TextLabels.TopText.Position = UDim2.fromScale(0.5, 0.5)
 	donationFrame.TextLabels.TopText.Size = UDim2.fromScale(0, 0)
-	-- Billboard muncul setelah impact
+	-- Billboard muncul after impact
 	donationFrame.TextLabels.TopText.Visible = true
 	donationFrame.TextLabels.BottomText.Visible = true
 	donationFrame.Parent.Enabled = true

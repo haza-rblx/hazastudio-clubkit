@@ -1,14 +1,14 @@
 --!strict
 -- Server/Services/OverheadService.lua
--- Business logic: ambil Group rank + DataStore, merge, build payload.
--- Zero DataStore access langsung, hanya lewat repo.
+-- Business logic: fetch Group rank + DataStore, merge, build payload.
+-- Zero direct DataStore access; only via repo.
 -- Zero UI logic.
 local GroupService = game:GetService("GroupService")
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
--- Gunakan ReplicatedStorage local variable, bukan game.ReplicatedStorage
+-- Use the ReplicatedStorage local variable, not game.ReplicatedStorage
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Secrets = require(ServerScriptService.Hazastudio_ClubKitSecrets.Secrets)
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
@@ -96,7 +96,7 @@ local function fetchRankFromWorker(userId: number): number?
 	return rankId
 end
 -- ============================================================
--- Factory: dependencies diinject, tidak hardcode
+-- Factory: injected dependencies, not hardcoded
 -- ============================================================
 local function createOverheadService(deps: {
 	repo: IOverheadRepository,
@@ -175,7 +175,7 @@ local function createOverheadService(deps: {
 		end)
 	end
 
-	-- In-flight guard: cegah duplicate concurrent GroupService calls untuk userId yang sama.
+	-- In-flight guard: prevent duplicate concurrent GroupService calls for same userId.
 	local inFlight: { [number]: boolean } = {}
 	local function getGroups(userId: number): ({ RobloxGroupEntry }?, boolean)
 		local cacheKey = GROUPS_PREFIX .. userId
@@ -215,7 +215,7 @@ local function createOverheadService(deps: {
 		if not groupsResult then
 			local failTtl = (Config.HttpApi and Config.HttpApi.NEGATIVE_CACHE_TTL) or 30
 			Cache.setNegative(cacheKey, failTtl)
-			log:warn("GroupService gagal, negative-cached", { userId = userId, ttl = failTtl })
+			log:warn("GroupService failed, negative-cached", { userId = userId, ttl = failTtl })
 			return nil, false
 		end
 		-- Self-cache even when Config.HttpApi.ENABLED=false (HttpApi only writes
@@ -447,9 +447,9 @@ local function createOverheadService(deps: {
 			return nil, false
 		end
 
-		-- Match userId dulu, fallback ke username biar konsisten dengan DonationService.assignPlayer
-		-- yang match by username. Tanpa fallback ini, rank bisa hilang kalau metadata.username
-		-- belum sync atau entry.userId belum di-resolve dengan benar.
+		-- Match userId first, fallback to username for consistency with DonationService.assignPlayer
+		-- matching by username. Without this fallback, rank can be lost if metadata.username
+		-- not yet synced or entry.userId not yet resolved correctly.
 		local lowerName = (type(playerName) == "string" and playerName ~= "") and playerName:lower() or nil
 		local resolvedRank: number? = nil
 		for rank, entry in ipairs(result.value) do
@@ -518,9 +518,9 @@ local function createOverheadService(deps: {
 			return nil, false
 		end
 
-		-- Match userId dulu, fallback ke username. Saweria leaderboard sering punya entry
-		-- dengan userId=0 kalau resolveRobloxUserId gagal/throttled, jadi tanpa fallback
-		-- username, player rank #2-#10 yang baru join bisa nggak ke-detect.
+		-- Match userId first, fallback to username. Saweria leaderboard often has entries
+		-- with userId=0 if resolveRobloxUserId fails/throttled, so no fallback
+		-- username, player rank #2-#10 on new join may not be detected.
 		local lowerName = (type(playerName) == "string" and playerName ~= "") and playerName:lower() or nil
 		local resolvedRank: number? = nil
 		for index, entry in ipairs(entriesOrErr) do
@@ -619,8 +619,8 @@ local function createOverheadService(deps: {
 		return partialMatches
 	end
 	-- ----------------------------------------------------------
-	-- buildPayload: fungsi utama, dipanggil saat player join
-	-- dan saat data di-refresh
+	-- buildPayload: main entry point, called when a player joins
+	-- and when data is refreshed
 	-- ----------------------------------------------------------
 	function service:buildPayloadWithMeta(player: Player): {
 		result: Result<OverheadPayload>,
@@ -635,7 +635,7 @@ local function createOverheadService(deps: {
 		if storedResult.ok then
 			stored = storedResult.value
 		else
-			log:warn("Load gagal, pakai default data untuk broadcast", { userId = userId, err = storedResult.error })
+			log:warn("Load failed, use default data for broadcast", { userId = userId, err = storedResult.error })
 			stored = OverheadDomain.defaultStoredData()
 			usedFallback = true
 		end
@@ -753,7 +753,7 @@ local function createOverheadService(deps: {
 		-- Wait for all parallel tasks to complete (with safety timeout)
 		if remaining > 0 then
 			local waited = 0
-			-- 10s timeout: safety net untuk GroupService fetch + profile/likes/robux total.
+			-- 10s timeout: safety net for GroupService fetch + profile/likes/robux total.
 			while remaining > 0 and waited < 10 do
 				doneEvent.Event:Wait()
 				waited += 1
@@ -859,7 +859,7 @@ local function createOverheadService(deps: {
 		return service:buildPayload(player)
 	end
 
-	-- Ringan untuk /announce & broadcast: tanpa leaderboard/profile/like lookup.
+	-- Lightweight for /announce & broadcast: no leaderboard/profile/like lookup.
 	function service:buildBroadcastSenderContext(player: Player): Result<BroadcastSenderContext>
 		local userId = player.UserId
 		local storedResult = repo:load(userId)
@@ -984,12 +984,12 @@ local function createOverheadService(deps: {
 		Cache.invalidate(GROUP_RANK_PREFIX .. userId)
 		log:debug("Group cache invalidated", { userId = userId })
 	end
-	-- Invalidate cache rank Saweria & Robux. Dipakai oleh /verifyspender admin command
-	-- supaya hasil cache negatif (false yang sticky 10 detik) langsung di-clear
-	-- dan buildPayload berikutnya re-fetch dari leaderboard sumber.
-	-- Patch #2 R2: Terima satu userId ATAU list of userId. Loop per-user agar cache
-	-- miss hanya fire untuk player yang rank-nya beneran berubah, bukan 150 player
-	-- seperti versi lama (yang wipe by prefix).
+	-- Invalidate Saweria & Robux rank cache. Used by /verifyspender admin command
+	-- so negative cache result (false sticky for 10 seconds) is directly cleared
+	-- and the next buildPayload re-fetches from the leaderboard source.
+	-- Patch #2 R2: Accept a single userId OR a list of userIds. Loop per-user so cache
+	-- miss only fires for players whose rank actually changed, not all 150 players
+	-- like old version (which wiped by prefix).
 	function service:invalidateRankCaches(userIdOrList: number? | { number }?)
 		local userIds: { number } = {}
 		if type(userIdOrList) == "number" then
@@ -1002,9 +1002,9 @@ local function createOverheadService(deps: {
 			end
 		end
 		if #userIds == 0 then
-			-- Empty list = no-op (preserved safety; tidak wipe all).
-			-- Sebelumnya no-arg wipe SEMUA rank cache — itu Amplifier A. Caller
-			-- yang butuh wipe-all harus eksplisit pakai invalidateAllRankCaches().
+			-- Empty list = no-op (preserved safety; not wipe all).
+			-- Previously no-arg wipe of ALL rank cache — that was Amplifier A. Caller
+			-- callers that need wipe-all must explicitly use invalidateAllRankCaches().
 			log:debug("invalidateRankCaches no-op (empty userIds)")
 			return
 		end
@@ -1014,24 +1014,24 @@ local function createOverheadService(deps: {
 		end
 		log:debug("Rank caches invalidated (per-user)", { count = #userIds })
 	end
-	-- Opt-in: explicit wipe-all untuk kasus langka (hot-reload, admin reset).
-	-- Dipisah supaya R2 default no-arg tidak accidentally wipe 150 cache entries.
+	-- Opt-in: explicit wipe-all for rare cases (hot-reload, admin reset).
+	-- Separated so R2 default no-arg does not accidentally wipe 150 cache entries.
 	function service:invalidateAllRankCaches()
 		Cache.invalidatePrefix(ROBUX_TOP_DONATE_PREFIX)
 		Cache.invalidatePrefix(SAWERIA_TOP_SPENDER_PREFIX)
 		log:debug("Rank caches invalidated (all)")
 	end
 	-- S1 (quota-efficiency-pass-2026-06, Phase 1): cheap hash of input cache state
-	-- yang feed ke buildPayload. Kalau hash ini sama dengan hash sebelumnya, cached
-	-- payload masih valid dan buildPayload bisa di-skip. Menghindari 1.5s CPU untuk
+	-- that feeds buildPayload. If this hash matches the previous hash, cached
+	-- payload is still valid and buildPayload can be skipped. Avoids 1.5s CPU for
 	-- 30-player refreshAll cycle (audit §5.5 C18 + C20).
-	-- Note: Hanya hash cache state internal OverheadService. Profile/like/leaderboard
-	-- modules punya cache masing-masing — asumsi cache miss/refresh sudah dihandle
-	-- oleh invalidation events (invalidateGroupCache, invalidateRankCaches).
+	-- Note: Only hashes internal OverheadService cache state. Profile/like/leaderboard
+	-- modules have their own cache — assume cache miss/refresh already handled
+	-- by invalidation events (invalidateGroupCache, invalidateRankCaches).
 	function service:computeInputsFingerprint(userId: number): string
 		local parts: { string } = {}
 
-		-- 1. Stored data (DataStore cache) — hash key fields yang masuk ke payload
+		-- 1. Stored data (DataStore cache) — hash key fields that feed the payload
 		local stored = Cache.get("overhead:" .. tostring(userId))
 		if type(stored) == "table" then
 			local gmHash = ""
@@ -1054,9 +1054,9 @@ local function createOverheadService(deps: {
 				gmHash = table.concat(tierParts, ",")
 			end
 			-- BUG FIX: hash stored.giftedRole + stored.ownedMembership + stored.membershipBadge
-			-- (bukan stored.role yang tidak exist di schema). Sebelumnya fingerprint
-			-- tidak berubah saat setrole/grantMembership → S1 short-circuit skip rebuild
-			-- → client OverheadUI + leaderstat stuck di role lama.
+			-- (not stored.role which does not exist in schema). Previously fingerprint
+			-- did not change when setrole/grantMembership → S1 short-circuit skip rebuild
+			-- → client OverheadUI + leaderstat stuck on old role.
 			table.insert(
 				parts,
 				"s="

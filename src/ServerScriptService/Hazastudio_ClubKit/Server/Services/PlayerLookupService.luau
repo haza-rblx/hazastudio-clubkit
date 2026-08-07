@@ -1,5 +1,5 @@
 --!strict
--- Resolve player dari username/display name dengan exact dan prefix match.
+-- Resolve player from username/display name with exact and prefix match.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")

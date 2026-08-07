@@ -1,27 +1,27 @@
 --!strict
 -- Shared/Utils/DataStoreThrottleLockout.luau
--- Singleton cooldown gate untuk seluruh server. Saat DataStoreService emit
--- StandardReadExperienceThrottled atau OrderedListExperienceThrottled, semua
--- DS-bound operations (getRobuxLeaderboard, recordRobuxDonation, dll) akan
--- short-circuit selama cooldown dan return Err("ds_throttled"). Caller fall
--- back ke TTL cache; BudgetGate naturally re-budgeted setelah cooldown
--- sehingga throttle biasanya sudah clear.
+-- Singleton cooldown gate for the whole server. When DataStoreService emits
+-- StandardReadExperienceThrottled or OrderedListExperienceThrottled, all
+-- DS-bound operations (getRobuxLeaderboard, recordRobuxDonation, etc) will
+-- short-circuit during cooldown and return Err("ds_throttled"). Callers fall
+-- back to TTL cache; BudgetGate naturally re-budgets after cooldown
+-- so throttle is usually already clear.
 --
--- Penting:
---   - In-memory only. Tiap server restart = lockout reset (acceptable; cooldown 60s).
---   - Event handler dipasang di module load. Kalau DataStoreService di Studio
---     belum punya event (API Services off), Connect di-pcall dan diwarn sekali.
---   - markThrottled() juga dipanggil dari pcall catch di repository jika error
---     string mengandung "throttled" / "queue" / "Throttled" - belt-and-suspenders
---     karena beberapa throttle event tidak fire (mis. Roblox internal limit).
---   - Lockout MONOTONICALLY EXTENDS: kalau sudah locked dan dipanggil lagi,
---     cooldown yang lebih panjang yang berlaku (max(current, new)).
+-- Notes:
+--   - In-memory only. Each server restart = lockout reset (acceptable; cooldown 60s).
+--   - Event handler attached at module load. If DataStoreService in Studio
+--     does not have the event yet (API Services off), Connect is pcall-wrapped and warned once.
+--   - markThrottled() also called from pcall catch in repository if error
+--     string contains "throttled" / "queue" / "Throttled" - belt-and-suspenders
+--     because some throttle events do not fire (e.g. Roblox internal limit).
+--   - Lockout MONOTONICALLY EXTENDS: if already locked and called again,
+--     the longer cooldown wins (max(current, new)).
 
 local DataStoreService = game:GetService("DataStoreService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
--- Lazy Config lookup supaya tidak circular-import. Config mungkin belum loaded
--- saat module pertama di-require.
+-- Lazy Config lookup to avoid circular import. Config may not be loaded
+-- when module is first required.
 local Config = nil :: any
 local function getDefaultCooldown(): number
 	if Config == nil then
@@ -47,14 +47,14 @@ local function _now(): number
 	return os.clock()
 end
 
---- True selama cooldown window aktif. Repo functions check ini di top dan
---- return Err("ds_throttled") tanpa menyentuh DataStore.
+--- True while cooldown window is active. Repo functions check this at top and
+--- return Err("ds_throttled") without touching DataStore.
 function DataStoreThrottleLockout.isLocked(): boolean
 	return _now() < _lockoutUntil
 end
 
---- Extend (atau set) cooldown window. Hanya extend, tidak pernah shorten -
---- supaya late-arriving events tidak accidentally unlock saat throttle storm.
+--- Extend (or set) cooldown window. Only extend, never shorten —
+--- so late-arriving events do not accidentally unlock during throttle storm.
 --- @param cooldownSec optional, default = Config.Donation.DATASTORE_THROTTLE_COOLDOWN
 function DataStoreThrottleLockout.markThrottled(cooldownSec: number?)
 	local cd: number
@@ -69,18 +69,18 @@ function DataStoreThrottleLockout.markThrottled(cooldownSec: number?)
 	end
 end
 
---- Sisa detik lockout aktif (untuk logging).
+--- Remaining lockout seconds (for logging).
 function DataStoreThrottleLockout.getRemainingSec(): number
 	return math.max(0, _lockoutUntil - _now())
 end
 
---- Reset lockout (untuk test/admin command).
+--- Reset lockout (for test/admin command).
 function DataStoreThrottleLockout.clear()
 	_lockoutUntil = 0
 end
 
---- Hook ke DataStoreService events. Panggil sekali saat module load. Aman
---- di-pcall: kalau event tidak ada (Studio tanpa API Services), di-skip.
+--- Hook DataStoreService events. Call once at module load. Safe to
+--- pcall: if event missing (Studio without API Services), skip.
 function DataStoreThrottleLockout.init()
 	if _initialized then
 		return
@@ -101,7 +101,7 @@ function DataStoreThrottleLockout.init()
 			end)
 		end)
 		if not connOk then
-			warn(string.format("[DataStoreThrottleLockout] connect gagal event=%s err=%s", eventName, tostring(err)))
+			warn(string.format("[DataStoreThrottleLockout] connect failed event=%s err=%s", eventName, tostring(err)))
 		end
 	end
 
@@ -109,8 +109,8 @@ function DataStoreThrottleLockout.init()
 	tryConnect("OrderedListExperienceThrottled")
 end
 
--- Auto-init saat module di-require. Module-level code di Luau jalan sekali
--- per server, jadi aman.
+-- Auto-init when module is required. Module-level code runs once
+-- per server, so this is safe.
 DataStoreThrottleLockout.init()
 
 return DataStoreThrottleLockout

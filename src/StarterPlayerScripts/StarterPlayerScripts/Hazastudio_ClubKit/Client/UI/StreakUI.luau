@@ -31,13 +31,13 @@ function StreakUI.new(gui: ScreenGui)
 	self._img      = imgLabel
 	self._count    = countLbl
 	self._anim     = AnimationHelper.new()
-	-- Sembunyikan saat init
+	-- Hide on init
 	gui.Enabled            = false
 	overlay.BackgroundTransparency = 1
 	UIShadowHelper.apply(imgLabel, "STREAK_GLOW")
 	return self
 end
--- Animate counter dari 0 ke target
+-- Animate counter from 0 to target
 function StreakUI:_animateCounter(target: number, onDone: () -> ())
 	local label    = self._count
 	local duration = Config.Streak.COUNTER_DURATION
@@ -88,7 +88,7 @@ function StreakUI:_glowPulse(onDone: () -> ())
 	end
 	pulse()
 end
--- Shake untuk milestone
+-- Shake for milestone
 function StreakUI:_shake()
 	local img    = self._img
 	local origin = img.Position
@@ -104,7 +104,7 @@ function StreakUI:_shake()
 		img.Position = origin
 	end)
 end
--- Partikel spark yang terbang keluar dari StreakImage
+-- Spark particles flying out from StreakImage
 function StreakUI:_spawnParticles(colorSet: { Color3 })
 	local cfg     = Config.Streak
 	local COUNT   = cfg.PARTICLE_COUNT
@@ -181,13 +181,13 @@ function StreakUI:play(payload: {
 	self._anim:scalePop(self._img :: Frame, function()
 		-- 3. Counter animate
 		self:_animateCounter(days, function()
-			-- Partikel meledak setelah counter selesai
+			-- Particles explode after counter finishes
 			self:_spawnParticles(PARTICLE_COLORS[colorKey])
 			-- 4. Milestone shake
 			if isMile then self:_shake() end
 			-- 5. Glow pulse
 			self:_glowPulse(function()
-				-- 6. Auto-dismiss setelah SHOW_DURATION
+				-- 6. Auto-dismiss after SHOW_DURATION
 				task.delay(Config.Streak.SHOW_DURATION, function()
 					self:dismiss()
 				end)
@@ -204,7 +204,7 @@ function StreakUI:dismiss()
 	):Play()
 	task.delay(0.3, function()
 		self._gui.Enabled = false
-		-- Reset UIScale untuk berikutnya
+		-- Reset UIScale for berikutnya
 		local s = self._img:FindFirstChildWhichIsA("UIScale") :: UIScale?
 		if s then s.Scale = 1 end
 	end)

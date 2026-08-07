@@ -1,10 +1,10 @@
--- Paste ke Command Bar saat Play (atau Edit).
+-- Paste into Command Bar during Play (or Edit).
 local pg = game:GetService("Players").LocalPlayer:FindFirstChildOfClass("PlayerGui")
 	or game:GetService("StarterGui")
 local ig = pg and pg:FindFirstChild("IconGroup")
 local mobile = ig and ig:FindFirstChild("DancePanelGUIWrapperv2Mobile")
 if not mobile then
-	warn("[DanceMobileUIScale] DancePanelGUIWrapperv2Mobile tidak ditemukan di", ig and ig:GetFullName() or "PlayerGui")
+	warn("[DanceMobileUIScale] DancePanelGUIWrapperv2Mobile not found under", ig and ig:GetFullName() or "PlayerGui")
 	return
 end
 local scales = {}
@@ -23,7 +23,7 @@ if animScale and animScale:IsA("UIScale") then
 	print(string.format("[DanceMobileUIScale] DancePanelRootScale=%.4f (anim, should stay 1)", animScale.Scale))
 end
 if #scales == 0 then
-	print("[DanceMobileUIScale] (tidak ada UIScale di subtree)")
+	print("[DanceMobileUIScale] (no UIScale in subtree)")
 else
 	for _, line in ipairs(scales) do
 		print("[DanceMobileUIScale]", line)

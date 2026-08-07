@@ -1,9 +1,9 @@
 --!strict
 -- Shared/Utils/Validator.lua
--- Terpusat: semua schema validation di sini.
--- Setiap validator mengembalikan { valid: boolean, errors: {string} }
+-- Centralized: all schema validation here.
+-- Each validator returns { valid: boolean, errors: {string} }
 local HttpService = game:GetService("HttpService")
--- require di atas bersama require lain, bukan di tengah file
+-- require at top with other requires, not mid-file
 local Config = require(script.Parent.Parent.Constants.Config)
 local Logger = require(script.Parent.Logger)
 type VResult = { valid: boolean, errors: {string} }
@@ -13,7 +13,7 @@ local function vr(errs: {string}): VResult
 end
 local Validator = {}
 -- ============================================================
--- BASE: command envelope (dipakai oleh semua remote yang modif data)
+-- BASE: command envelope (used by all remotes that modify data)
 -- ============================================================
 function Validator.command(d: any): VResult
 	local e: {string} = {}
@@ -95,14 +95,14 @@ end
 -- ============================================================
 -- ADMIN SET TITLE
 -- ============================================================
--- Validator.adminSetTitle dan Validator.adminSendGiftcard dihapus
--- (dead code - tidak dipakai, digantikan oleh adminSetTitleByUsername
---  dan adminSendGiftcardByUsername yang menerima targetUsername string)
--- Hard limits untuk titleStyle payload - cegah memory exhaustion
-local TITLE_STYLE_MAX_COLOR_POINTS = 10   -- max entries di bgColors / textColors
-local TITLE_STYLE_MAX_NEST_DEPTH   = 2    -- max depth untuk nested arrays
-local TITLE_STYLE_MAX_SERIALIZED   = 2048 -- max serialized bytes untuk titleStyle
--- Validate structure depth dan ukuran titleStyle secara rekursif
+-- Validator.adminSetTitle and Validator.adminSendGiftcard removed
+-- (dead code - unused, replaced by adminSetTitleByUsername
+--  and adminSendGiftcardByUsername which accept targetUsername string)
+-- Hard limits for titleStyle payload - prevent memory exhaustion
+local TITLE_STYLE_MAX_COLOR_POINTS = 10   -- max entries in bgColors / textColors
+local TITLE_STYLE_MAX_NEST_DEPTH   = 2    -- max depth for nested arrays
+local TITLE_STYLE_MAX_SERIALIZED   = 2048 -- max serialized bytes for titleStyle
+-- Validate titleStyle structure depth and size recursively
 local function validateStyleDepth(value: any, depth: number): boolean
 	if depth > TITLE_STYLE_MAX_NEST_DEPTH then
 		return false
@@ -147,7 +147,7 @@ function Validator.adminSetTitleByUsername(d: any): VResult
 	elseif type(d.titleStyle) ~= "table" then
 		table.insert(e, "missing presetMode or titleStyle")
 	else
-		-- Validasi depth, ukuran, dan serialisasi titleStyle (legacy path)
+		-- Validate depth, size, and titleStyle serialization (legacy path)
 		if not validateStyleDepth(d.titleStyle, 0) then
 			table.insert(e, "titleStyle too large or too deep")
 		else
@@ -216,7 +216,7 @@ end
 -- ============================================================
 -- HELPER: ukuran payload (cegah oversized payload exploit)
 -- ============================================================
-local MAX_PAYLOAD_BYTES = Config.Security.MAX_PAYLOAD_BYTES  -- dari Config, bukan magic number
+local MAX_PAYLOAD_BYTES = Config.Security.MAX_PAYLOAD_BYTES  -- from Config, not a magic number
 function Validator.checkSize(d: any): (boolean, number)
 	return Validator.checkSizeLimit(d, MAX_PAYLOAD_BYTES)
 end
@@ -227,7 +227,7 @@ function Validator.checkSizeLimit(d: any, maxBytes: number): (boolean, number)
 		return HttpService:JSONEncode(d)
 	end)
 	if not ok then
-		log:warn("JSONEncode gagal saat checkSize", {
+		log:warn("JSONEncode failed when checkSize", {
 			error = tostring(encodedOrErr),
 		})
 		return false, -1

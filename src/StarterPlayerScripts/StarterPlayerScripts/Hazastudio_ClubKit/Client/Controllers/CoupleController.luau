@@ -138,7 +138,7 @@ local function init(deps: { icon: any? }?): ()
 		or not (RemoteAnnounce and RemoteAnnounce:IsA("RemoteEvent"))
 		or not (RemotePanelData and RemotePanelData:IsA("RemoteEvent"))
 	then
-		log:warn("Couple remotes tidak lengkap dalam waktu tunggu, CoupleController tidak dijalankan")
+		log:warn("Couple remotes not ready within timeout, CoupleController not started")
 		return
 	end
 	-- Re-bind with explicit casts (matches coupleGuiSafe below) so the rest of
@@ -158,7 +158,7 @@ local function init(deps: { icon: any? }?): ()
 	local playerGui = localPlayer:WaitForChild("PlayerGui") :: PlayerGui
 	local coupleGui = playerGui:WaitForChild("01-CoupleSystemGUI", 30) :: ScreenGui?
 	if not coupleGui then
-		log:warn("01-CoupleSystemGUI tidak ditemukan, CoupleController tidak dijalankan")
+		log:warn("01-CoupleSystemGUI not found, CoupleController not started")
 		return
 	end
 	local coupleGuiSafe = coupleGui :: ScreenGui
@@ -178,7 +178,7 @@ local function init(deps: { icon: any? }?): ()
 			breakupTaken = breakupUnified
 			breakupSingle = breakupUnified
 		else
-			log:error("2-BreakupContent* frames tidak ditemukan")
+			log:error("2-BreakupContent* frames not found")
 			return
 		end
 	end
@@ -229,7 +229,7 @@ local function init(deps: { icon: any? }?): ()
 	end
 	
 	if not requestButton or not breakUpButton then
-		log:error("Request/BreakUp buttons tidak ditemukan di 2-SliderSelector")
+		log:error("Request/BreakUp buttons not found di 2-SliderSelector")
 		return
 	end
 	
@@ -250,7 +250,7 @@ local function init(deps: { icon: any? }?): ()
 		or headerWrapper:FindFirstChild("03-CloseModalButton")
 		or headerWrapper:FindFirstChild("CloseModalButton")
 	if not closeModalButton or not closeModalButton:IsA("TextButton") then
-		log:warn("Couple GUI close button tidak ditemukan — panel tetap jalan tanpa tombol close modal")
+		log:warn("Couple GUI close button not found — panel still runs without modal close button")
 		closeModalButton = nil
 	end
 	local searchBox = selectPlayerFrame:FindFirstChild("01-SearchBox") :: TextBox?
@@ -269,7 +269,7 @@ local function init(deps: { icon: any? }?): ()
 	local requestPlayerPfp = profilPicture:FindFirstChild("PlayerDisplayName") :: ImageLabel?
 	local targetPfp = profilPicture:FindFirstChild("CoupleDisplayName") :: ImageLabel?
 	-- ============================================================
-	-- BreakupContentSingle (belum couple)
+	-- BreakupContentSingle (not coupled yet)
 	-- ============================================================
 	local breakupSingleJumbotron = breakupSingle:FindFirstChild("JumbotronTextandImage") :: Frame?
 	local breakupSingleProfil = breakupSingleJumbotron
@@ -277,7 +277,7 @@ local function init(deps: { icon: any? }?): ()
 	local breakupSinglePlayerPfp = breakupSingleProfil
 		and breakupSingleProfil:FindFirstChild("PlayerDisplayName") :: ImageLabel?
 	-- ============================================================
-	-- BreakupContentTaken (sudah couple)
+	-- BreakupContentTaken (already coupled)
 	-- ============================================================
 	local breakupInputArea = breakupTaken:WaitForChild("InputArea") :: Frame
 	local currentCoupleLbl = breakupInputArea:WaitForChild("1-CurrentCouple"):WaitForChild("TextLabel") :: TextLabel
@@ -373,8 +373,8 @@ local function init(deps: { icon: any? }?): ()
 	-- ============================================================
 	-- Helpers - panel & notif
 	-- ============================================================
-	-- Forward declaration: setTab didefinisikan setelah showPanel,
-	-- tapi showPanel memanggilnya. Tanpa ini, Lua lookup ke global (nil).
+	-- Forward declaration: setTab defined after showPanel,
+	-- but showPanel calls it. Without this, Lua lookup hits global (nil).
 	local setTab: (boolean) -> ()
 	local function setOverlayVisible(visible: boolean): ()
 		if not overlayFrame then
@@ -517,8 +517,8 @@ local function init(deps: { icon: any? }?): ()
 		end
 		requestContent.Visible = showRequest and not isCoupled
 		selectPlayerFrame.Visible = showRequest and not isCoupled
-		-- Single = tab breakup dibuka tapi belum punya couple
-		-- Taken = sudah punya couple (apapun tabnya)
+		-- Single = breakup tab open but no couple yet
+		-- Taken = already has couple (any tab)
 		breakupSingle.Visible = not showRequest and not isCoupled
 		breakupTaken.Visible = isCoupled
 		
@@ -651,9 +651,9 @@ local function init(deps: { icon: any? }?): ()
 			entry.connection = card.Activated:Connect(function()
 				selectedUserId = uid
 				selectedDisplayName = displayName
-				-- Set displayName ke TextBox
+				-- Set displayName on TextBox
 				usernameBox.Text = displayName
-				-- Foto target muncul dengan animasi scale pop
+				-- Foto target muncul with animasi scale pop
 				if targetPfp then
 					targetPfp.Visible = false
 					setThumbnailAsync(targetPfp, uid)
@@ -690,8 +690,8 @@ local function init(deps: { icon: any? }?): ()
 	-- ============================================================
 	-- Init
 	-- ============================================================
-	-- Sembunyikan semua content panel dari awal supaya tidak flash
-	-- template saat panel dibuka sebelum server data tiba
+	-- Hide all content panels initially so they do not flash
+	-- template when panel dibuka before server data tiba
 	requestContent.Visible = false
 	selectPlayerFrame.Visible = false
 	breakupSingle.Visible = false
@@ -705,7 +705,7 @@ local function init(deps: { icon: any? }?): ()
 		end)
 	end
 	-- ============================================================
-	-- Panel data dari server
+	-- Panel data from server
 	-- ============================================================
 	track(RemotePanelData.OnClientEvent:Connect(function(data: any)
 		if type(data) ~= "table" then
@@ -793,7 +793,7 @@ local function init(deps: { icon: any? }?): ()
 		showPanel(false)
 	end)
 	-- ============================================================
-	-- Notifikasi request masuk (penerima)
+	-- Incoming request notification (recipient)
 	-- ============================================================
 	track(RemoteNotifyRequest.OnClientEvent:Connect(function(data: any)
 		if type(data) ~= "table" then
@@ -814,7 +814,7 @@ local function init(deps: { icon: any? }?): ()
 		showNotif(confirmFrame)
 	end))
 	-- ============================================================
-	-- Notifikasi result
+	-- Result notification
 	-- ============================================================
 	track(RemoteNotifyResult.OnClientEvent:Connect(function(data: any)
 		if type(data) ~= "table" then
@@ -861,15 +861,15 @@ local function init(deps: { icon: any? }?): ()
 		end
 	end))
 	-- ============================================================
-	-- Announce dari server
+	-- Announce from server
 	-- ============================================================
 	track(RemoteAnnounce.OnClientEvent:Connect(function(msg: any)
 		if type(msg) ~= "string" then
 			return
 		end
 		-- Hide flag: respect user's SettingsHideCoupleAnnounce preference.
-		-- Sebelumnya couple announce write langsung ke RBXGeneral chat tanpa
-		-- check flag → toggle di settings menu tidak ada efek.
+		-- Previously couple announce wrote directly to RBXGeneral chat without
+		-- check flag → toggle di settings menu had no effect.
 		if localPlayer:GetAttribute("SettingsHideCoupleAnnounce") == true then
 			return
 		end

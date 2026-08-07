@@ -1,105 +1,105 @@
 # Hazastudio Club Kit Packager
 
-Plugin Roblox Studio untuk **export** dan **unpack** seluruh aset Club Kit v1.3 dalam satu klik — termasuk script, GUI, leaderboard boards, tools, donation effects, dan WorldEffects.
+Roblox Studio plugin to **export** and **unpack** the full Club Kit v1.3 asset set in one click — scripts, GUI, leaderboard boards, tools, donation effects, and WorldEffects.
 
-## Yang di-pack otomatis
+## Automatically packed
 
-| Service | Isi |
-|---------|-----|
+| Service | Contents |
+|---------|----------|
 | `ReplicatedFirst` | `Hazastudio_ClubKit` |
-| `ReplicatedStorage` | `Hazastudio_ClubKit`, `Icon`, `WorldEffects`, opsional `Hazastudio_ClubKitConfig` |
-| `ServerScriptService` | `Hazastudio_ClubKit`, opsional `Hazastudio_ClubKitSecrets` |
+| `ReplicatedStorage` | `Hazastudio_ClubKit`, `Icon`, `WorldEffects`, optional `Hazastudio_ClubKitConfig` |
+| `ServerScriptService` | `Hazastudio_ClubKit`, optional `Hazastudio_ClubKitSecrets` |
 | `StarterPlayerScripts` | `Hazastudio_ClubKit` |
-| `StarterGui` | GUI `01-` … `15-`, `IconGroup`, `HotbarGUI`, `CommandLibraryGUI`, dll. |
+| `StarterGui` | GUI `01-` … `15-`, `IconGroup`, `HotbarGUI`, `CommandLibraryGUI`, etc. |
 | `ServerStorage` | `Tools`, `DonationEffects`, `DonationSounds` |
-| `Workspace` | Leaderboard boards, poster Top1–3, `LiveChatDonations`, `RunningText` |
+| `Workspace` | Leaderboard boards, Top1–3 posters, `LiveChatDonations`, `RunningText` |
 
 ## Install plugin
 
-### Opsi A — Install `.rbxm` (disarankan)
+### Option A — Install `.rbxm` (recommended)
 
-Dari root repo:
+From repo root:
 
 ```powershell
 .\tools\ClubKitPackagerPlugin\build-plugin-rbxm.ps1
 ```
 
-Restart Roblox Studio → toolbar **Hazastudio Club Kit** muncul di tab Plugins.
+Restart Roblox Studio → **Hazastudio Club Kit** toolbar appears on the Plugins tab.
 
-Buyer cukup **pasang RBXM sekali**. Setelah itu update dari dalam panel:
-**Settings → Update plugin** (soft-update dari GitHub) → **Engine → Update engine**.
-Place harus Enable HTTP Requests (sama seperti Update Engine).
+Buyers only need to **install the RBXM once**. After that, update from the panel:
+**Settings → Update plugin** (soft-update from GitHub) → **Engine → Update engine**.
+The place must have HTTP Requests enabled (same as Update Engine).
 
 ### Soft-update plugin (in-app)
 
-Plugin fetch `tools/ClubKitPackagerPlugin/plugin/*.luau` dari tag GitHub publik
-(`ClubKitManifest.UPDATER`) lalu remount via `loadstring` — **tidak** menimpa file
-`.rbxm` di folder Plugins. Bootstrap (`HazastudioClubKit.plugin.luau`) tetap dari install.
-Kalau bootstrap sendiri berubah besar, sebar RBXM baru (jarang).
+The plugin fetches `tools/ClubKitPackagerPlugin/plugin/*.luau` from a public GitHub tag
+(`ClubKitManifest.UPDATER`) and remounts via `loadstring` — it does **not** overwrite the
+`.rbxm` file in the Plugins folder. Bootstrap (`HazastudioClubKit.plugin.luau`) stays from install.
+If bootstrap itself changes significantly, ship a new RBXM (rare).
 
-Urutan wajib: **Update plugin dulu**, baru **Update engine**.
+Required order: **Update plugin first**, then **Update engine**.
 
-### Opsi B — Copy folder (tidak cukup)
+### Option B — Copy folder (not sufficient)
 
-Copy folder saja **tidak** cukup — Roblox hanya load `.rbxm` / `.plugin.luau`, bukan folder `init.server.luau` biasa. Pakai Opsi A.
+Copying the folder alone is **not** enough — Roblox only loads `.rbxm` / `.plugin.luau`, not a plain `init.server.luau` folder. Use Option A.
 
 ```bash
 rojo serve tools/ClubKitPackagerPlugin/default.project.json
 ```
 
-Lalu connect dari Studio plugin Rojo ke folder Plugins.
+Then connect from the Studio Rojo plugin to the Plugins folder.
 
-### Opsi C — Simpan sebagai `.rbxm` (distribusi ke buyer)
+### Option C — Save as `.rbxm` (buyer distribution)
 
-1. Install plugin di Studio (Opsi A).
-2. Buat place kosong → insert plugin folder sebagai model sementara **atau** jalankan dari dev Plugins folder.
-3. Klik kanan folder plugin → **Save to File** → `HazastudioClubKitPackager.rbxm`.
-4. Buyer: drag `.rbxm` ke `%LOCALAPPDATA%\Roblox\Plugins\`.
+1. Install the plugin in Studio (Option A).
+2. Create an empty place → insert the plugin folder as a temporary model **or** run from the dev Plugins folder.
+3. Right-click the plugin folder → **Save to File** → `HazastudioClubKitPackager.rbxm`.
+4. Buyer: drag `.rbxm` to `%LOCALAPPDATA%\Roblox\Plugins\`.
 
-## Dev hot-reload (tanpa restart Studio)
+## Dev hot-reload (no Studio restart)
 
-Iterasi UI/kode panel tanpa rebuild RBXM + restart:
+Iterate panel UI/code without rebuilding RBXM + restarting:
 
 ```powershell
-# 1. Sekali saja setelah RBXM berubah: rebuild + restart Studio
+# 1. Once after RBXM changes: rebuild + restart Studio
 .\build-plugin-rbxm.ps1
 
-# 2. Jalankan dev server (biarkan terbuka)
-.\dev-serve.ps1          # serves plugin/*.luau di http://127.0.0.1:8798
+# 2. Run dev server (leave it open)
+.\dev-serve.ps1          # serves plugin/*.luau at http://127.0.0.1:8798
 ```
 
-3. Edit file `.luau` di `plugin/` → save.
-4. Di Studio: toolbar **Hazastudio Club Kit** → **Reload Panel**
-   (atau `reload_clubkit_panel()` dari command bar).
+3. Edit `.luau` files in `plugin/` → save.
+4. In Studio: **Hazastudio Club Kit** toolbar → **Reload Panel**
+   (or `reload_clubkit_panel()` from the command bar).
 
-Panel di-destroy dan dibangun ulang dari source terbaru via `HttpService` +
-`loadstring`. Kalau dev server mati, Reload jatuh ke modul bundled (tidak error).
-Yang **tidak** ikut hot-reload: `HazastudioClubKit.plugin.luau` (bootstrap) dan
-file modul baru yang belum ada di RBXM — itu tetap butuh rebuild + 1 restart.
+The panel is destroyed and rebuilt from the latest source via `HttpService` +
+`loadstring`. If the dev server is down, Reload falls back to bundled modules (no error).
+**Not** hot-reloaded: `HazastudioClubKit.plugin.luau` (bootstrap) and
+new module files that are not yet in the RBXM — those still need rebuild + one restart.
 
-## Cara pakai
+## Usage
 
-### Export (dari place sumber / dev kit)
+### Export (from source / dev kit place)
 
-1. Buka place yang sudah punya **semua** aset kit (script Rojo + GUI/board/tools di Studio).
-2. Toolbar **Hazastudio Club Kit** → **Export RBXM**.
-3. Atur opsi di panel **Club Kit Packager** (config/secrets).
-4. Pilih lokasi simpan → file `HazastudioClubKit_v1.3.rbxm`.
+1. Open a place that has **all** kit assets (Rojo scripts + GUI/board/tools in Studio).
+2. **Hazastudio Club Kit** toolbar → **Export RBXM**.
+3. Configure options in the **Club Kit Packager** panel (config/secrets).
+4. Choose save location → `HazastudioClubKit_v1.3.rbxm`.
 
-### Unpack (di target / buyer place)
+### Unpack (target / buyer place)
 
-1. Toolbar **Hazastudio Club Kit** → **Unpack RBXM**.
-2. Pilih file `.rbxm` hasil export.
-3. Plugin menempatkan instance ke service yang benar.
-4. Default: **tidak menimpa** `ClubKitConfig` dan `Secrets` buyer jika sudah ada.
+1. **Hazastudio Club Kit** toolbar → **Unpack RBXM**.
+2. Select the exported `.rbxm` file.
+3. The plugin places instances in the correct services.
+4. Default: does **not** overwrite buyer `ClubKitConfig` and `Secrets` if they already exist.
 
-Alternatif: import `.rbxm` manual ke Explorer → pilih folder package → **Unpack Pilihan**.
+Alternative: import `.rbxm` manually into Explorer → select package folder → **Unpack Selection**.
 
-## Setelah unpack (buyer)
+## After unpack (buyer)
 
 1. Edit `ReplicatedStorage/Hazastudio_ClubKitConfig/ClubKitConfig`
 2. Edit `ServerScriptService/Hazastudio_ClubKitSecrets/Secrets`
-3. Hapus `ClubKitShowcase` untuk mode live (opsional)
+3. Remove `ClubKitShowcase` for live mode (optional)
 4. Publish
 
-Panduan lengkap: [`CLUB_KIT_SETUP.md`](../../CLUB_KIT_SETUP.md)
+Full guide: [`CLUB_KIT_SETUP.md`](../../CLUB_KIT_SETUP.md)

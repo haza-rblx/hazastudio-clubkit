@@ -1,7 +1,7 @@
 --!strict
--- Format chat general menjadi [Membership][Couple] DisplayName.
+-- Format general chat as [Membership][Couple] DisplayName.
 --
--- Sumber kebenaran tag: ChatTagStore (global ChatTagSync, not proximity-gated).
+-- Tag source of truth: ChatTagStore (global ChatTagSync, not proximity-gated).
 -- Fallback: OverheadController cache + last-known-good. Never invent Guest
 -- when the player exists but tag data is not yet authoritative.
 
@@ -36,8 +36,8 @@ type TagRecord = {
 
 type ChatTagEntry = Types.ChatTagEntry
 
--- Last-known-good per userId: dipakai kalau cache payload transien kosong
--- (respawn / race) supaya tag tidak flip ke Guest.
+-- Last-known-good per userId: used when cache payload is transiently empty
+-- (respawn / race) so tag does not flip to Guest.
 local lastGoodByUserId: { [number]: TagRecord } = {}
 local unsubscribeChatTagStore: (() -> ())? = nil
 
@@ -113,8 +113,8 @@ local function resolveTagColorKey(primaryTag: string?): string?
 		return nil
 	end
 
-	-- Strip suffix " #N" yang dipake untuk Spender rank tag ("SPENDER #1" → "SPENDER")
-	-- supaya reverse-lookup ke ChatPrimaryTagLabel ketemu base label "SPENDER".
+	-- Strip suffix " #N" used for Spender rank tag ("SPENDER #1" → "SPENDER")
+	-- so reverse-lookup to ChatPrimaryTagLabel finds base label "SPENDER".
 	local lookupTag = primaryTag:gsub(" #%d+$", "")
 
 	for roleKey, label in pairs(Config.ChatPrimaryTagLabel) do
@@ -147,9 +147,9 @@ local function tagRecordFromEntry(entry: ChatTagEntry): TagRecord
 	}
 end
 
--- Bangun TagRecord dari payload overhead. Kalau chatPrimaryTag hilang
--- (delta parsial diperlakukan sebagai full di joiner race), derive dari
--- role/effectiveMembership via OverheadDomain — logika sama dengan server.
+-- Build TagRecord from overhead payload. If chatPrimaryTag is missing
+-- (partial delta treated as full during joiner race), derive from
+-- role/effectiveMembership via OverheadDomain — same logic as the server.
 local function tagRecordFromPayload(payload: any): TagRecord?
 	if type(payload) ~= "table" then
 		return nil

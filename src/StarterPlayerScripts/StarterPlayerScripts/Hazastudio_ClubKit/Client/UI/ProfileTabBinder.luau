@@ -37,7 +37,7 @@ local BADGE_FRAME_NAMES = {
 	"12-InfluencerBadge",
 }
 
--- Satu tombol per mode di Studio; Idle/Selected = gaya visual (gradient/child), bukan swap instance.
+-- One button per mode in Studio; Idle/Selected = visual style (gradient/child), not instance swap.
 local COUPLE_MODES: { { key: string, buttonNames: { string } } } = {
 	{ key = "Single", buttonNames = { "SingleIdle", "SingleSelected" } },
 	{ key = "Taken", buttonNames = { "TakenIdle", "TakenSelected" } },
@@ -187,7 +187,7 @@ local function hideCoupleStyleTemplateButton(template: TextButton?, primary: Tex
 	end
 end
 
--- Studio: Single/Taken pakai *Idle sebagai pill; For Fun kadang cuma *Selected yang visible.
+-- Studio: Single/Taken use *Idle as pill; For Fun sometimes only *Selected is visible.
 local function resolveCouplePrimaryButton(idleButton: TextButton?, selectedButton: TextButton?): TextButton?
 	if idleButton and selectedButton then
 		if idleButton.Visible and not selectedButton.Visible then
@@ -303,7 +303,7 @@ end
 local function setShowCoupleRowVisible(toggle: TextButton, visible: boolean)
 	toggle.Visible = visible
 
-	-- Jangan hide parent besar (SectionContentWrapper / CoupleStatus) — itu bikin 3 pill ikut hilang.
+	-- Do not hide large parent (SectionContentWrapper / CoupleStatus) — that hides all 3 pills.
 	local parent = toggle.Parent
 	if not parent or not parent:IsA("GuiObject") then
 		return
@@ -456,7 +456,7 @@ end
 function ProfileTabBinder:applyTabIdentity()
 	local profileTab = self._refs.profileTab
 	if not profileTab:FindFirstChild("TabIdentity") then
-		warn("[ProfileTabBinder] ProfileTab.TabIdentity not found — TabTitle/TabSubtitle tidak terisi")
+		warn("[ProfileTabBinder] ProfileTab.TabIdentity not found — TabTitle/TabSubtitle not populated")
 		return
 	end
 	MenuSettingsCore.applyProfileTabPageIdentity(profileTab)

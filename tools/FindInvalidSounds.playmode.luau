@@ -2,18 +2,18 @@
 -- ============================================================
 -- Find invalid / blocked Sound asset sources (Play Mode)
 -- ============================================================
--- PENTING: Command Bar harus di context SERVER (bukan Client).
---   Command Bar > dropdown kiri > pilih "Server"
---   Lalu paste script ini > Enter
+-- IMPORTANT: Command Bar must be in SERVER context (not Client).
+--   Command Bar > left dropdown > select "Server"
+--   Then paste this script > Enter
 --
--- Hasil:
---   1. Output window (tab Server) — filter: FindInvalidSounds
---   2. ServerStorage.FindInvalidSoundsReport (StringValue, bisa dibaca di Explorer)
+-- Results:
+--   1. Output window (Server tab) — filter: FindInvalidSounds
+--   2. ServerStorage.FindInvalidSoundsReport (StringValue, readable in Explorer)
 -- ============================================================
 
 local RunService = game:GetService("RunService")
 if not RunService:IsServer() then
-	warn("[FindInvalidSounds] SALAH CONTEXT — pilih Server di Command Bar, bukan Client/All")
+	warn("[FindInvalidSounds] WRONG CONTEXT — select Server in Command Bar, not Client/All")
 	return
 end
 
@@ -92,7 +92,7 @@ end
 
 report("META", "Running on Server — scan place + DataStore")
 
--- 1) Scan semua Sound instance
+-- 1) Scan all Sound instances
 report("SCAN", "Scanning existing Sound instances...")
 for _, inst in ipairs(game:GetDescendants()) do
 	if inst:IsA("Sound") and isTarget(inst.SoundId) then

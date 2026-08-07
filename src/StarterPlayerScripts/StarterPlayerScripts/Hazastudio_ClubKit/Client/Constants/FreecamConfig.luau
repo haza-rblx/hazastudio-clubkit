@@ -3,14 +3,14 @@
 	═══════════════════════════════════════════════════════════════════
 	FREECAM CONFIG (Desktop — Shift+P)
 	═══════════════════════════════════════════════════════════════════
-	File ini khusus tuning freecam cinematic. Edit angka di tabel `Values`
-	di bawah, lalu test di game (rejoin / restart client di Studio).
+	Freecam cinematic tuning. Edit numbers in the `Values` table below,
+	then test in-game (rejoin / restart client in Studio).
 
-	Semua nilai otomatis di-clamp ke range aman saat dipakai controller.
-	Jangan ubah `Ranges` kecuali kamu tahu dampaknya.
+	All values are clamped to safe ranges when used by the controller.
+	Do not change `Ranges` unless you understand the impact.
 
-	Toggle: Shift + P (diatur di FreecamController, bukan di file ini)
-	Mobile: pakai MobileFreecamController terpisah.
+	Toggle: Shift + P (configured in FreecamController, not this file)
+	Mobile: separate MobileFreecamController.
 	═══════════════════════════════════════════════════════════════════
 ]]
 
@@ -88,69 +88,69 @@ end
 
 --[[
 	── Values ────────────────────────────────────────────────────────
-	Ubah hanya bagian ini untuk tuning harian.
+	Edit only this section for day-to-day tuning.
 ]]
 local Values: FreecamConfigValues = {
-	-- false = Shift+P pakai Roblox developer camera (bukan custom freecam)
+	-- false = Shift+P uses Roblox developer camera (not custom freecam)
 	USE_CUSTOM_FREECAM = true,
 
-	-- Kecepatan dasar gerak WASD/QE/Space (studs/detik, sebelum modifier Ctrl/Shift)
+	-- Base WASD/QE/Space movement speed (studs/sec, before Ctrl/Shift modifiers)
 	BASE_SPEED = 30,
 
-	-- Batas multiplier kecepatan saat scroll speed adjust ON (jarang dipakai)
+	-- Speed multiplier bounds when scroll speed adjust is ON (rarely used)
 	SPEED_MIN = 0.1,
 	SPEED_MAX = 12,
 
-	-- true = scroll wheel ubah speed saat tombol gerak ditekan; false = mati
+	-- true = scroll wheel changes speed while movement keys held; false = off
 	SCROLL_SPEED_ADJUST_ENABLED = false,
 
-	-- Besaran perubahan speed per scroll tick (eksponensial), range 0.05–0.5
+	-- Speed change per scroll tick (exponential), range 0.05–0.5
 	SCROLL_FACTOR = 0.22,
 
-	-- Sensitivitas look mouse (semakin besar = lebih cepat), range 0.0005–0.01
+	-- Mouse look sensitivity (higher = faster), range 0.0005–0.01
 	LOOK_SENSITIVITY = 0.0025,
 
-	-- Sensitivitas look touch trackpad/tablet, range 0.001–0.02
+	-- Touch trackpad/tablet look sensitivity, range 0.001–0.02
 	TOUCH_SENSITIVITY = 0.0038,
 
-	-- Batas sudut pitch atas/bawah (derajat), range 45–89
+	-- Pitch up/down limit (degrees), range 45–89
 	PITCH_LIMIT_DEGREES = 88,
 
-	-- Kekencangan rotasi kamera (spring), range 10–120 — tinggi = lebih responsif
+	-- Camera rotation stiffness (spring), range 10–120 — higher = more responsive
 	ROT_STIFFNESS = 60,
 
-	-- Kekencangan percepatan gerak (spring velocity), range 5–80
+	-- Movement acceleration stiffness (spring velocity), range 5–80
 	SPRING_STIFFNESS = 25,
 
-	-- Ctrl = cepat (kelipatan BASE_SPEED), range 1.5–8
+	-- Ctrl = fast (BASE_SPEED multiplier), range 1.5–8
 	FAST_MULT = 3.0,
 
-	-- Shift = lambat/presisi, range 0.05–0.5
+	-- Shift = slow/precise, range 0.05–0.5
 	SLOW_MULT = 0.15,
 
-	-- Roll kamera saat Z/C di-hold (derajat/detik), range 15–180
+	-- Camera roll while Z/C held (deg/sec), range 15–180
 	ROLL_SPEED_DEG_PER_SEC = 75,
 
-	-- Roll saat Shift ditahan (persen dari ROLL_SPEED), range 0.1–1
+	-- Roll while Shift held (% of ROLL_SPEED), range 0.1–1
 	ROLL_SLOW_MULT = 0.30,
 
-	-- Jendela double-tap Z untuk reset roll (detik), range 0.15–0.8
+	-- Double-tap Z window for roll reset (seconds), range 0.15–0.8
 	ROLL_RESET_WINDOW = 0.35,
 
-	-- FOV saat masuk freecam (derajat), range 40–90
+	-- FOV when entering freecam (degrees), range 40–90
 	FOV_DEFAULT = 70,
 
-	-- Batas zoom scroll (derajat)
+	-- Scroll zoom bounds (degrees)
 	FOV_MIN = 5,
 	FOV_MAX = 130,
 
-	-- Perubahan FOV per scroll tick, range 1–15
+	-- FOV change per scroll tick, range 1–15
 	FOV_STEP = 5,
 
-	-- Kecepatan glide FOV ke target; kecil = halus, besar = snappy, range 0.5–12
+	-- FOV glide speed toward target; low = smooth, high = snappy, range 0.5–12
 	FOV_LERP = 3,
 
-	-- Goyangan kamera saat bergerak (bisa terasa wobble); default false
+	-- Camera bob while moving (may feel wobbly); default false
 	BOB_ENABLED = false,
 
 	-- Frekuensi bob (Hz), range 0.5–4

@@ -179,7 +179,7 @@ local function createAdminController(deps: {
 		local presetMode = if type(data.presetMode) == "string" then data.presetMode else nil
 		local titleFont = if type(data.titleFont) == "string" then data.titleFont else nil
 		local titleStyle = data.titleStyle
-		-- Auth dan rate limit SEBELUM idempotency
+		-- Auth and rate limit BEFORE idempotency
 		if not isAdmin(player) then
 			notify.player(player, Config.Admin.MSG_GIFT_NO_PERM, "ERROR")
 			return
@@ -393,7 +393,7 @@ local function createAdminController(deps: {
 		end
 		local requestId = data.requestId :: string
 		local targetUser = data.targetUsername :: string
-		-- Auth dan rate limit SEBELUM idempotency
+		-- Auth and rate limit BEFORE idempotency
 		if not isAdmin(player) then
 			notify.player(player, Config.Admin.MSG_GIFT_NO_PERM, "ERROR")
 			return

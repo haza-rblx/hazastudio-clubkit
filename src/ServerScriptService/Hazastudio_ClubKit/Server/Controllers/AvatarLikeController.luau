@@ -141,8 +141,8 @@ local function createAvatarLikeController(deps: {
 			fireError(player, request.requestId, request.targetUserId, "Target player not found")
 			return
 		end
-		-- task.spawn: service:toggle melakukan write persistence di repository layer.
-		-- Jangan block OnServerEvent handler - concurrent like dari player lain bisa tetap diproses.
+		-- task.spawn: service:toggle performs persistence writes in the repository layer.
+		-- Do not block OnServerEvent handler — concurrent likes from other players can still be processed.
 		task.spawn(function()
 			local toggleResult = service:toggle(player, targetPlayer, request.action)
 			if not toggleResult.ok then

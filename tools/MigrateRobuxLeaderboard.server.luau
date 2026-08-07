@@ -2,37 +2,37 @@
 -- ============================================================
 -- ROBUX LEADERBOARD MIGRATION (LEGACY -> NEW SYSTEM)  v2
 -- ============================================================
--- Pindahkan total donasi Robux per-user dari DataStore legacy ke
--- DataStore new system. DataStore per-UNIVERSE, jadi script ini
--- (dijalankan di place baru, universe sama) bisa baca key legacy.
+-- Migrate per-user total Robux donations from legacy DataStore to
+-- the new system DataStore. DataStores are per-UNIVERSE, so this script
+-- (run in a new place, same universe) can read legacy keys.
 --
--- SUMBER  (legacy): OrderedDataStore "RobuxLstatsData"  key=userId value=robux
--- TUJUAN  (new):    OrderedDataStore "RobuxDonationLeaderboard_User_v1"
---                   DataStore        "DonationLeaderboardMetadata_v1" (opsional)
+-- SOURCE (legacy): OrderedDataStore "RobuxLstatsData"  key=userId value=robux
+-- TARGET (new):    OrderedDataStore "RobuxDonationLeaderboard_User_v1"
+--                  DataStore        "DonationLeaderboardMetadata_v1" (optional)
 --
 -- ============================================================
--- PERUBAHAN v2 (penting, baca):
---   Dataset legacy SANGAT besar (>11.000 entry). Migrasi semua satu-satu
---   via SetAsync tidak realistis (budget DataStore ~70 write/menit) dan
---   memicu TooManyRequests. Leaderboard hanya menampilkan TOP N, dan repo
---   new system resolve nama saat read. Jadi:
---     - Default migrasi hanya TOP `MAX_ENTRIES` spender (cukup utk leaderboard).
---     - DRY-RUN tidak lagi membaca store tujuan (dulu bug: GetAsync per entry).
---     - Semua call dilewatkan BUDGET GATE (nunggu kalau budget habis).
---     - Metadata default OFF (repo self-heal nama saat read). Nyalakan kalau
---       mau nama ter-cache utk top entries.
+-- v2 CHANGES (important — read):
+--   Legacy dataset is VERY large (>11,000 entries). Migrating all one-by-one
+--   via SetAsync is not realistic (DataStore budget ~70 writes/min) and
+--   triggers TooManyRequests. Leaderboard only shows TOP N, and the new
+--   system repo resolves names on read. Therefore:
+--     - Default migrates only TOP `MAX_ENTRIES` spenders (enough for leaderboard).
+--     - DRY-RUN no longer reads target store (old bug: GetAsync per entry).
+--     - All calls go through BUDGET GATE (wait when budget exhausted).
+--     - Metadata default OFF (repo self-heals names on read). Enable if
+--       you want cached names for top entries.
 --
--- SEBELUM RUN:
---   * MATIKAN dulu script pihak ketiga "VIDEOSCREEN LICENSE" — di test
---     terakhir dia SHUTDOWN server di tengah migrasi (gagal verifikasi
---     lisensi). Disable/keluarkan sementara biar migrasi tidak terputus.
+-- BEFORE RUN:
+--   * DISABLE third-party "VIDEOSCREEN LICENSE" script first — in testing
+--     it SHUTDOWN the server mid-migration (license verification failed).
+--     Disable/remove temporarily so migration is not interrupted.
 --   * Game Settings > Security > Enable Studio Access to API Services = ON.
---   * Jalankan di PLAY MODE (F5), bukan Edit.
+--   * Run in PLAY MODE (F5), not Edit.
 --
--- CARA PAKAI:
---   1. MODE="dry_run" -> cek jumlah & Top preview (tanpa write apa pun).
---   2. MODE="commit"  -> tulis ke store baru. Idempotent (aman re-run).
---   3. Hapus script setelah selesai.
+-- USAGE:
+--   1. MODE="dry_run" -> check count & top preview (no writes).
+--   2. MODE="commit"  -> write to new store. Idempotent (safe re-run).
+--   3. Remove script when finished.
 -- ============================================================
 
 local DataStoreService = game:GetService("DataStoreService")
@@ -45,27 +45,27 @@ local RunService = game:GetService("RunService")
 local MODE: string = "commit" -- "dry_run" | "commit"
 local STRATEGY: string = "max" -- "max" | "overwrite" | "skip_existing"
 
--- Hanya migrasi TOP N spender (cukup untuk leaderboard + donor signifikan).
--- OrderedDataStore desc, jadi ini baca dari nilai tertinggi.
--- Set 0 untuk migrasi SEMUA (TIDAK disarankan: >11k entry, throttle parah,
--- butuh berjam-jam + beberapa sesi).
+-- Migrate only TOP N spenders (enough for leaderboard + significant donors).
+-- OrderedDataStore desc, so this reads from highest values first.
+-- Set 0 to migrate ALL (NOT recommended: >11k entries, severe throttling,
+-- but takes hours + multiple sessions).
 local MAX_ENTRIES = 500
 
--- Abaikan entry di bawah nilai ini (donasi receh, tidak penting untuk board).
+-- Skip entries below this value (small donations, not important for boards).
 local MIN_VALUE = 1
 
--- Tulis metadata username utk entry yang dimigrasi. Default false:
--- repo new system resolve nama otomatis saat read (self-heal). Set true
--- hanya kalau mau nama ter-cache (menambah ~2 API call per entry).
+-- Write username metadata for migrated entries. Default false:
+-- new system repo resolves names automatically on read (self-heal). Set true
+-- only if you want cached names (adds ~2 API calls per entry).
 local WRITE_METADATA = false
 
--- Store names (harus match Config.Leaderboards di new system).
+-- Store names (must match Config.Leaderboards in new system).
 local LEGACY_ROBUX_STORE = "RobuxLstatsData"
 local NEW_ROBUX_STORE = "RobuxDonationLeaderboard_User_v1"
 local NEW_METADATA_STORE = "DonationLeaderboardMetadata_v1"
 
 local PAGE_SIZE = 100
-local BUDGET_WAIT = 4 -- detik tunggu kalau budget habis
+local BUDGET_WAIT = 4 -- seconds to wait when budget is exhausted
 
 -- ============================================================
 -- STATE
@@ -92,11 +92,11 @@ local function waitForBudget(requestType, label)
 	while DataStoreService:GetRequestBudgetForRequestType(requestType) < 1 do
 		guard += 1
 		if guard == 1 then
-			info("Budget %s habis, menunggu...", label)
+			info("Budget %s exhausted, waiting...", label)
 		end
 		task.wait(BUDGET_WAIT)
-		if guard > 60 then -- ~4 menit, kasih napas
-			info("Masih menunggu budget %s (sudah %ds)...", label, guard * BUDGET_WAIT)
+		if guard > 60 then -- ~4 minutes, breathe
+			info("Still waiting for budget %s (%ds elapsed)...", label, guard * BUDGET_WAIT)
 			guard = 1
 		end
 	end
@@ -107,14 +107,14 @@ end
 -- ============================================================
 local function getStores()
 	if not RunService:IsServer() then
-		warnLog("Butuh server context. Run dari Play Mode (F5).")
+		warnLog("Requires server context. Run from Play Mode (F5).")
 		return nil
 	end
 	local okL, legacy = pcall(function()
 		return DataStoreService:GetOrderedDataStore(LEGACY_ROBUX_STORE)
 	end)
 	if not okL then
-		warnLog("GetOrderedDataStore(legacy) gagal: %s", tostring(legacy))
+		warnLog("GetOrderedDataStore(legacy) failed: %s", tostring(legacy))
 		return nil
 	end
 	return {
@@ -125,7 +125,7 @@ local function getStores()
 end
 
 -- ============================================================
--- READ TOP-N (budget-aware, berhenti setelah MAX_ENTRIES)
+-- READ TOP-N (budget-aware, stops after MAX_ENTRIES)
 -- ============================================================
 local function readTopLegacy(legacyStore)
 	local results = {}
@@ -134,7 +134,7 @@ local function readTopLegacy(legacyStore)
 		return legacyStore:GetSortedAsync(false, PAGE_SIZE) -- desc
 	end)
 	if not ok then
-		warnLog("GetSortedAsync(legacy) gagal: %s", tostring(pages))
+		warnLog("GetSortedAsync(legacy) failed: %s", tostring(pages))
 		return results
 	end
 
@@ -155,14 +155,14 @@ local function readTopLegacy(legacyStore)
 		if pages.IsFinished then
 			break
 		end
-		-- Budget-gated pagination + jeda biar tidak throttle.
+		-- Budget-gated pagination + delay to avoid throttling.
 		waitForBudget(Enum.DataStoreRequestType.GetSortedAsync, "GetSortedAsync(page)")
 		task.wait(0.2)
 		local advOk, advErr = pcall(function()
 			pages:AdvanceToNextPageAsync()
 		end)
 		if not advOk then
-			warnLog("AdvanceToNextPageAsync berhenti: %s", tostring(advErr))
+			warnLog("AdvanceToNextPageAsync stopped: %s", tostring(advErr))
 			break
 		end
 	end
@@ -186,7 +186,7 @@ local function writeValue(newStore, userId, value)
 		newStore:SetAsync(tostring(userId), value)
 	end)
 	if not ok then
-		warnLog("SetAsync(%d) gagal: %s", userId, tostring(err))
+		warnLog("SetAsync(%d) failed: %s", userId, tostring(err))
 		return false
 	end
 	return true
@@ -219,7 +219,7 @@ local function writeMetadata(metaStore, userId)
 		end)
 	end)
 	if not ok then
-		warnLog("Metadata(%d) gagal: %s", userId, tostring(err))
+		warnLog("Metadata(%d) failed: %s", userId, tostring(err))
 		return false
 	end
 	return true
@@ -241,9 +241,9 @@ local function main()
 	local stores = getStores()
 	if not stores then return end
 
-	info("Membaca top %s dari '%s'...", (MAX_ENTRIES > 0 and tostring(MAX_ENTRIES) or "ALL"), LEGACY_ROBUX_STORE)
+	info("Reading top %s from '%s'...", (MAX_ENTRIES > 0 and tostring(MAX_ENTRIES) or "ALL"), LEGACY_ROBUX_STORE)
 	local entries = readTopLegacy(stores.legacy)
-	info("Terbaca %d entry (sudah terurut desc).", #entries)
+	info("Read %d entries (sorted desc).", #entries)
 
 	info("--- Top 10 preview ---")
 	for i = 1, math.min(10, #entries) do
@@ -258,7 +258,7 @@ local function main()
 		stats.considered += 1
 
 		if MODE == "dry_run" then
-			-- Tidak menyentuh store tujuan sama sekali.
+			-- Do not touch target store at all.
 			stats.migrated += 1
 			continue
 		end
@@ -285,7 +285,7 @@ local function main()
 		if writeValue(stores.new, e.userId, target) then
 			stats.migrated += 1
 			if stats.migrated % 25 == 0 then
-				info("Progress: %d/%d ditulis...", stats.migrated, stats.considered)
+				info("Progress: %d/%d written...", stats.migrated, stats.considered)
 			end
 			if WRITE_METADATA and writeMetadata(stores.meta, e.userId) then
 				stats.metaWritten += 1
@@ -303,9 +303,9 @@ local function main()
 	info("Metadata written: %d", stats.metaWritten)
 	info("Errors          : %d", stats.errors)
 	if MODE == "dry_run" then
-		info("DRY RUN selesai — tidak ada write. Set MODE='commit' untuk apply.")
+		info("DRY RUN complete — no writes. Set MODE='commit' to apply.")
 	else
-		info("COMMIT selesai. Cek leaderboard Robux di game.")
+		info("COMMIT complete. Check Robux leaderboard in game.")
 	end
 end
 

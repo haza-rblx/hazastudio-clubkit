@@ -43,11 +43,11 @@ local function validateClubKitState(state: any)
 			if type(product) == "table" then
 				local buyPassId = product.BuyGamePassId
 				if type(buyPassId) ~= "number" or buyPassId <= 0 then
-					warn("[ConfigBootstrap] Shop.Products." .. tierKey .. ".BuyGamePassId belum diisi (Creator Dashboard → Game Passes)")
+					warn("[ConfigBootstrap] Shop.Products." .. tierKey .. ".BuyGamePassId not set (Creator Dashboard → Game Passes)")
 				end
 				local giftId = product.GiftId
 				if type(giftId) ~= "number" or giftId <= 0 then
-					warn("[ConfigBootstrap] Shop.Products." .. tierKey .. ".GiftId belum diisi (Developer Product)")
+					warn("[ConfigBootstrap] Shop.Products." .. tierKey .. ".GiftId not set (Developer Product)")
 				end
 			end
 		end
@@ -56,7 +56,7 @@ local function validateClubKitState(state: any)
 	if type(paidBroadcast) == "table" then
 		local productId = tonumber(paidBroadcast.ProductId)
 		if not productId or productId <= 0 then
-			warn("[ConfigBootstrap] PaidBroadcast.ProductId belum diisi (Creator Dashboard)")
+			warn("[ConfigBootstrap] PaidBroadcast.ProductId not set (Creator Dashboard)")
 		end
 	end
 end

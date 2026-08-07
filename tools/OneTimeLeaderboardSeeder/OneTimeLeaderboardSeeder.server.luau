@@ -2,22 +2,22 @@
 --[[
   ONE-TIME LEADERBOARD SEEDER (third-party / standalone)
   ====================================================
-  Script pihak ketiga — TIDAK bagian dari Hazastudio_ClubKit runtime.
-  Tulis manual seed ke DataStore leaderboard: Cash (IDR), Robux, Likes.
+  Third-party script — NOT part of Hazastudio_ClubKit runtime.
+  Writes manual seed data to leaderboard DataStores: Cash (IDR), Robux, Likes.
 
-  CARA PAKAI:
-    1. Copy folder `tools/OneTimeLeaderboardSeeder/` ke ServerScriptService.
-    2. Edit `LeaderboardSeedData.luau` (isi userId/username + nilai).
+  USAGE:
+    1. Copy folder `tools/OneTimeLeaderboardSeeder/` to ServerScriptService.
+    2. Edit `LeaderboardSeedData.luau` (userId/username + values).
     3. Game Settings > Security > Enable Studio Access to API Services = ON.
-    4. Set ENABLED = true, MODE = "dry_run" → Play (F5) → cek output.
-    5. MODE = "commit" → Play lagi → verifikasi board in-game.
-    6. Set ENABLED = false atau hapus folder ini (sudah tidak dipakai).
+    4. Set ENABLED = true, MODE = "dry_run" → Play (F5) → check output.
+    5. MODE = "commit" → Play again → verify boards in-game.
+    6. Set ENABLED = false or delete this folder when done.
 
-  SETELAH COMMIT:
-    - Restart server (atau re-publish) agar DonationService hydrate cash manual map.
-    - Di game: /refreshleaderboard all (owner) untuk refresh board client.
+  AFTER COMMIT:
+    - Restart server (or re-publish) so DonationService hydrates the manual cash map.
+    - In-game: /refreshleaderboard all (owner) to refresh client boards.
 
-  DATASTORE KEYS (harus match Config.luau Club Kit):
+  DATASTORE KEYS (must match Config.luau Club Kit):
     - Cash manual : DataStore  ManualBagibagiAdjustments_v1  (doc key manual_v1)
     - Robux board : OrderedDS RobuxDonationLeaderboard_User_v1
     - Likes board : OrderedDS AvatarLikesLeaderboard_v1
@@ -34,9 +34,9 @@ local RunService = game:GetService("RunService")
 local UserService = game:GetService("UserService")
 
 -- =============================================================================
--- CONFIG — matikan setelah dipakai
+-- CONFIG — disable after use
 -- =============================================================================
-local ENABLED = false -- true = jalankan seeder saat server boot
+local ENABLED = false -- true = run seeder on server boot
 local MODE = "dry_run" -- "dry_run" | "commit"
 
 -- Studio isolation: keep false so seeder writes the same live keys as Config (production).
@@ -46,11 +46,11 @@ local SEED_CASH = true
 local SEED_ROBUX = true
 local SEED_LIKES = true
 
--- "set" = tulis nilai absolut | "max" = max(dengan existing) | "add" = tambah ke existing
+-- "set" = write absolute value | "max" = max(with existing) | "add" = add to existing
 local STRATEGY = "set"
 
-local WRITE_METADATA = true -- username/thumbnail di DonationLeaderboardMetadata_v1
-local PACE_SECONDS = 0.12 -- jeda antar write (hindari throttle)
+local WRITE_METADATA = true -- username/thumbnail in DonationLeaderboardMetadata_v1
+local PACE_SECONDS = 0.12 -- delay between writes (avoid throttle)
 local BUDGET_WAIT = 4
 
 -- Base production keys (scoped below when Studio isolation is on)
@@ -93,7 +93,7 @@ local function waitForBudget(requestType: Enum.DataStoreRequestType, label: stri
 	while DataStoreService:GetRequestBudgetForRequestType(requestType) < 1 do
 		guard += 1
 		if guard == 1 then
-			info("Budget %s habis, menunggu...", label)
+			info("Budget %s exhausted, waiting...", label)
 		end
 		task.wait(BUDGET_WAIT)
 	end
@@ -202,7 +202,7 @@ local function writeMetadata(metaStore: GlobalDataStore, userId: number): boolea
 		end)
 	end)
 	if not ok then
-		warnLog("Metadata userId=%d gagal: %s", userId, tostring(err))
+		warnLog("Metadata userId=%d failed: %s", userId, tostring(err))
 		return false
 	end
 	return true
@@ -212,16 +212,16 @@ local function loadSeedData(): any?
 	local parent = script.Parent
 	local module = parent and parent:FindFirstChild("LeaderboardSeedData")
 	if not module or not module:IsA("ModuleScript") then
-		warnLog("LeaderboardSeedData ModuleScript tidak ditemukan di %s", tostring(parent))
+		warnLog("LeaderboardSeedData ModuleScript not found at %s", tostring(parent))
 		return nil
 	end
 	local ok, data = pcall(require, module)
 	if not ok then
-		warnLog("require LeaderboardSeedData gagal: %s", tostring(data))
+		warnLog("require LeaderboardSeedData failed: %s", tostring(data))
 		return nil
 	end
 	if type(data) ~= "table" then
-		warnLog("LeaderboardSeedData harus return table")
+		warnLog("LeaderboardSeedData must return a table")
 		return nil
 	end
 	return data
@@ -234,7 +234,7 @@ local function seedCash(data: any)
 	end
 	local entries = data.Cash
 	if type(entries) ~= "table" or #entries == 0 then
-		info("Cash: tidak ada entry di LeaderboardSeedData.Cash")
+		info("Cash: no entries in LeaderboardSeedData.Cash")
 		return
 	end
 
@@ -243,7 +243,7 @@ local function seedCash(data: any)
 		local userId = resolveUserId(entry)
 		local idr = pickAmount(entry, "idr")
 		if not userId then
-			warnLog("Cash[%d]: userId/username tidak valid", index)
+			warnLog("Cash[%d]: invalid userId/username", index)
 			stats.skipped += 1
 			continue
 		end
@@ -256,7 +256,7 @@ local function seedCash(data: any)
 		stats.cashEntries += 1
 	end
 
-	info("Cash: %d entry siap (strategy=%s)", stats.cashEntries, STRATEGY)
+	info("Cash: %d entries ready (strategy=%s)", stats.cashEntries, STRATEGY)
 	for userId, idr in pairs(resolved) do
 		info("  userId=%d idr=%d", userId, idr)
 	end
@@ -284,7 +284,7 @@ local function seedCash(data: any)
 		end)
 	end)
 	if not ok then
-		warnLog("Cash bulk write gagal: %s", tostring(err))
+		warnLog("Cash bulk write failed: %s", tostring(err))
 		return
 	end
 	stats.written += stats.cashEntries
@@ -298,7 +298,7 @@ local function seedRobux(data: any)
 	end
 	local entries = data.Robux
 	if type(entries) ~= "table" or #entries == 0 then
-		info("Robux: tidak ada entry di LeaderboardSeedData.Robux")
+		info("Robux: no entries in LeaderboardSeedData.Robux")
 		return
 	end
 
@@ -309,7 +309,7 @@ local function seedRobux(data: any)
 		local userId = resolveUserId(entry)
 		local robux = pickAmount(entry, "robux")
 		if not userId or robux <= 0 then
-			warnLog("Robux[%d]: entry tidak valid", index)
+			warnLog("Robux[%d]: invalid entry", index)
 			stats.skipped += 1
 			continue
 		end
@@ -335,7 +335,7 @@ local function seedRobux(data: any)
 			store:SetAsync(tostring(userId), target)
 		end)
 		if not writeOk then
-			warnLog("Robux userId=%d gagal: %s", userId, tostring(writeErr))
+			warnLog("Robux userId=%d failed: %s", userId, tostring(writeErr))
 			continue
 		end
 		writeMetadata(metaStore, userId)
@@ -351,7 +351,7 @@ local function seedLikes(data: any)
 	end
 	local entries = data.Likes
 	if type(entries) ~= "table" or #entries == 0 then
-		info("Likes: tidak ada entry di LeaderboardSeedData.Likes")
+		info("Likes: no entries in LeaderboardSeedData.Likes")
 		return
 	end
 
@@ -363,7 +363,7 @@ local function seedLikes(data: any)
 		local userId = resolveUserId(entry)
 		local likes = pickAmount(entry, "likes")
 		if not userId or likes <= 0 then
-			warnLog("Likes[%d]: entry tidak valid", index)
+			warnLog("Likes[%d]: invalid entry", index)
 			stats.skipped += 1
 			continue
 		end
@@ -396,7 +396,7 @@ local function seedLikes(data: any)
 			})
 		end)
 		if not summaryOk then
-			warnLog("Likes summary userId=%d gagal: %s", userId, tostring(summaryErr))
+			warnLog("Likes summary userId=%d failed: %s", userId, tostring(summaryErr))
 			continue
 		end
 
@@ -405,7 +405,7 @@ local function seedLikes(data: any)
 			leaderboardStore:SetAsync(tostring(userId), target)
 		end)
 		if not boardOk then
-			warnLog("Likes board userId=%d gagal: %s", userId, tostring(boardErr))
+			warnLog("Likes board userId=%d failed: %s", userId, tostring(boardErr))
 			continue
 		end
 
@@ -423,7 +423,7 @@ local function main()
 		return
 	end
 	if MODE ~= "dry_run" and MODE ~= "commit" then
-		warnLog("MODE invalid (%s). Gunakan dry_run atau commit.", tostring(MODE))
+		warnLog("MODE invalid (%s). Use dry_run or commit.", tostring(MODE))
 		return
 	end
 	if STRATEGY ~= "set" and STRATEGY ~= "max" and STRATEGY ~= "add" then
@@ -451,10 +451,10 @@ local function main()
 	info("Skipped        : %d", stats.skipped)
 	info("Errors         : %d", stats.errors)
 	if MODE == "dry_run" then
-		info("DRY RUN selesai — tidak ada write. Set MODE='commit' lalu Play lagi.")
+		info("DRY RUN complete — no writes. Set MODE='commit' then Play again.")
 	else
-		info("COMMIT selesai. Restart server + /refreshleaderboard all untuk verifikasi.")
-		info("Set ENABLED=false atau hapus folder seeder — sudah tidak dipakai.")
+		info("COMMIT complete. Restart server + /refreshleaderboard all to verify.")
+		info("Set ENABLED=false or delete seeder folder — no longer needed.")
 	end
 end
 

@@ -32,13 +32,13 @@ function DonationSystemBootstrap.start(deps: BootstrapDeps): any?
 
 	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui", 30) :: PlayerGui?
 	if not playerGui then
-		deps.logger:warn("PlayerGui tidak ditemukan; donation panel disabled")
+		deps.logger:warn("PlayerGui not found; donation panel disabled")
 		return nil
 	end
 
 	local guiExists = deps.ensureGui(playerGui, Config.Donation.GUI_NAME, 10)
 	if not guiExists then
-		deps.logger:warn("GUI tidak ditemukan; donation panel disabled", {
+		deps.logger:warn("GUI not found; donation panel disabled", {
 			name = Config.Donation.GUI_NAME,
 		})
 		return nil

@@ -3,7 +3,7 @@
 -- Handles: MarketplaceService.ProcessReceipt (gift + legacy buy product + donations),
 -- Game Pass self-buy (PromptGamePassPurchaseFinished + join ownership sync),
 -- ShopGiftPending remote.
--- ProcessReceipt dibuat di sini - hanya satu script boleh set ini per game.
+-- ProcessReceipt is created here — only one script may set this per game.
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -107,7 +107,7 @@ local function createShopController(
 		})
 		return donationResultNetwork
 	end
-	-- TTL-based gift request dedup (nilai = expiry timestamp)
+	-- TTL-based gift request dedup (value = expiry timestamp)
 	local giftLimiter = RateLimiter.new(Config.Shop.GIFT_RATE_MAX, Config.Shop.GIFT_RATE_WINDOW)
 	local donationLimiter =
 		RateLimiter.new(Config.Donation.ROBUX_PENDING_RATE_MAX, Config.Donation.ROBUX_PENDING_RATE_WINDOW)
@@ -121,7 +121,7 @@ local function createShopController(
 	local donationProductsLastRefresh = 0
 	local isRefreshingDonationProducts = false
 	-- PurchaseId idempotency cache TTL-based - PURCHASE_DEDUPE_WINDOW = 3600s
-	-- Tidak wipe-all saat penuh - hanya hapus yang sudah expired
+	-- Do not wipe-all when full — only remove entries that already expired
 	local processedPurchases: { [string]: number } = {}
 	local controller = {} :: IShopController
 
@@ -143,7 +143,7 @@ local function createShopController(
 		return ""
 	end
 
-	-- Kirim notifikasi ke client setelah membership berhasil diberikan
+	-- Send notification to client after membership granted
 	local function notifyClient(userId: number, tier: string, isGift: boolean, fromName: string?)
 		local player = Players:GetPlayerByUserId(userId)
 		if not player then
@@ -343,7 +343,7 @@ local function createShopController(
 			return
 		end
 
-		-- Cegah fetch barengan; kalau force, tunggu fetch yang sedang jalan selesai lalu coba lagi.
+		-- Prevent concurrent fetch; if force, wait for running fetch to finish then retry.
 		if isRefreshingDonationProducts then
 			if not force then
 				return
@@ -371,8 +371,8 @@ local function createShopController(
 			return MarketplaceService:GetDeveloperProductsAsync()
 		end)
 		if not ok then
-			-- PENTING: JANGAN stempel donationProductsLastRefresh saat gagal.
-			-- Jangan timpa cache yang sudah ada dengan list kosong.
+			-- IMPORTANT: do NOT stamp donationProductsLastRefresh on failure.
+			-- Do not overwrite existing cache with an empty list.
 			isRefreshingDonationProducts = false
 			if #nextProducts > 0 then
 				donationProducts = nextProducts
@@ -384,7 +384,7 @@ local function createShopController(
 				})
 				return
 			end
-			log:warn("Gagal fetch Developer Products", {
+			log:warn("Failed to fetch Developer Products", {
 				error = tostring(pagesOrError),
 			})
 			return
@@ -396,7 +396,7 @@ local function createShopController(
 				return pages:GetCurrentPage()
 			end)
 			if not pageOk or type(page) ~= "table" then
-				log:warn("Gagal baca halaman Developer Products", {
+				log:warn("Failed to read Developer Products page", {
 					error = tostring(page),
 				})
 				break
@@ -423,7 +423,7 @@ local function createShopController(
 				pages:AdvanceToNextPageAsync()
 			end)
 			if not advanceOk then
-				log:warn("Gagal lanjut halaman Developer Products", {
+				log:warn("Failed to fetch next Developer Products page", {
 					error = tostring(advanceError),
 				})
 				break
@@ -432,7 +432,7 @@ local function createShopController(
 
 		isRefreshingDonationProducts = false
 		if not hadSuccessfulPage and #nextProducts == 0 then
-			log:warn("Donation products refresh tanpa halaman valid; cache lama dipertahankan", {
+			log:warn("Donation products refresh with no valid page; old cache retained", {
 				cachedCount = #donationProducts,
 			})
 			return
@@ -503,7 +503,7 @@ local function createShopController(
 			task.wait(0.35)
 		end
 		if #donationProducts == 0 then
-			log:warn("Donation products masih kosong setelah menunggu refresh", {
+			log:warn("Donation products still empty after waiting for refresh", {
 				timeout = maxWaitSeconds or DONATION_PRODUCT_FETCH_TIMEOUT,
 				isRefreshing = isRefreshingDonationProducts,
 			})
@@ -657,8 +657,8 @@ local function createShopController(
 			logo = "",
 		}
 	end
-	-- ProcessReceipt - dipanggil Roblox Engine setelah purchase berhasil
-	-- WAJIB return Enum.ProductPurchaseDecision
+	-- ProcessReceipt - called by Roblox Engine after successful purchase
+	-- MUST return Enum.ProductPurchaseDecision
 	MarketplaceService.ProcessReceipt = function(receiptInfo: {
 		PlayerId: number,
 		ProductId: number,
@@ -730,7 +730,7 @@ local function createShopController(
 			local result = shopService:grantMembership(toId, giftTier)
 			if result.ok then
 				shopService:consumePendingGift(userId)
-				-- Ambil nama pengirim untuk notif giftee
+				-- Resolve sender name for giftee notification
 				local sender = Players:GetPlayerByUserId(userId)
 				local fromName = sender and sender.DisplayName or "Someone"
 				notifyClient(toId, giftTier, true, fromName)
@@ -930,7 +930,7 @@ local function createShopController(
 			markPurchaseProcessed()
 			return Enum.ProductPurchaseDecision.PurchaseGranted
 		end
-		-- ProductId tidak dikenal oleh shop - mungkin sistem lain
+		-- ProductId not recognized by shop — may belong to another system
 		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
 	function controller.init(_self: IShopController)
@@ -965,11 +965,11 @@ local function createShopController(
 			onPlayerForGamePassSync(player)
 		end
 
-		-- ShopGiftPending: Client memberi tahu server siapa yang akan di-gift
-		-- sebelum PromptProductPurchase dipanggil di client
+		-- ShopGiftPending: client tells the server who will be gifted
+		-- before PromptProductPurchase is called on the client
 		local giftRemote = remotes:FindFirstChild(REMOTE_GIFT_INIT)
 		if not giftRemote then
-			log:warn("Remote tidak ditemukan: " .. REMOTE_GIFT_INIT, {})
+			log:warn("Remote not found: " .. REMOTE_GIFT_INIT, {})
 			return
 		end
 		(giftRemote :: RemoteEvent).OnServerEvent:Connect(function(player: Player, raw: any)
@@ -1003,7 +1003,7 @@ local function createShopController(
 				return
 			end
 			processedGiftReqs[raw.requestId] = now2 + Config.Security.REQUEST_DEDUPE_WINDOW
-			-- Validasi tier
+			-- Validate tier
 			if not ShopDomain.isShopTier(raw.tier) then
 				log:warn("Invalid gift tier", { player = player.Name, tier = raw.tier })
 				return
@@ -1019,7 +1019,7 @@ local function createShopController(
 				})
 				return
 			end
-			-- Simpan pending
+			-- Store pending gift
 			local result = shopService:storePendingGift(player.UserId, raw.toId)
 			if not result.ok then
 				log:error("storePendingGift fail", { error = result.error })
@@ -1086,7 +1086,7 @@ local function createShopController(
 				end)
 			end)
 		else
-			log:warn("Donation products remote tidak ditemukan", {
+			log:warn("Donation products remote not found", {
 				remote = Config.Donation.REMOTE_ROBUX_PRODUCTS,
 				responseRemote = Config.Donation.REMOTE_ROBUX_PRODUCTS_RESPONSE,
 			})
@@ -1127,7 +1127,7 @@ local function createShopController(
 				}
 			end)
 		else
-			log:warn("Donation pending remote tidak ditemukan", {
+			log:warn("Donation pending remote not found", {
 				remote = Config.Donation.REMOTE_ROBUX_INIT,
 			})
 		end

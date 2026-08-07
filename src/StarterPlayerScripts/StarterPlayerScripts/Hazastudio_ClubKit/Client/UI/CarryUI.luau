@@ -61,7 +61,7 @@ local function createCarryUI(deps: CarryUIDeps)
 	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui") :: PlayerGui
 	local gui = playerGui:WaitForChild(Config.Carry.GUI_NAME, 10)
 	if not gui or not gui:IsA("ScreenGui") then
-		warn("[CarryUI] GUI tidak ditemukan; carry UI disabled")
+		warn("[CarryUI] GUI not found; carry UI disabled")
 		return createDisabledCarryUI()
 	end
 

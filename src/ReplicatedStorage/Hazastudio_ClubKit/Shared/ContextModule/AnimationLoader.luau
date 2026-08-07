@@ -35,9 +35,9 @@ function AnimationLoader.loadAnimations(): { [string]: Animation }
 		end
 	end
 
-	-- Preload dihapus dari sini karena DanceWarmupService sudah handle preload
-	-- dengan lebih baik (generation check, retry logic, dll.)
-	-- Menghindari double preload yang bisa bikin memory usage 2x lipat
+	-- Preload removed from here because DanceWarmupService already handles preload
+	-- with more baik (generation check, retry logic, etc.)
+	-- Avoid double preload that can double memory usage
 	return animations
 end
 

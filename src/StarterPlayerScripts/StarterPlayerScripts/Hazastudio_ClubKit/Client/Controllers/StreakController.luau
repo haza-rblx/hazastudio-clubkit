@@ -27,13 +27,13 @@ local function init(deps: { remotes: Folder })
 	local player  = Players.LocalPlayer
 	local gui = player.PlayerGui:WaitForChild("05-StreakGUI", 30) :: ScreenGui?
 	if not gui then
-		log:warn("05-StreakGUI tidak ditemukan, StreakController tidak dijalankan")
+		log:warn("05-StreakGUI not found, StreakController not started")
 		return
 	end
 	local ui  = StreakUIModule.new(gui :: ScreenGui)
 	local notifRemote = remotes:WaitForChild(Config.Streak.REMOTE_NOTIF, 30) :: RemoteEvent?
 	if not notifRemote then
-		log:warn("Remote StreakNotif tidak ditemukan, StreakController tidak dijalankan")
+		log:warn("Remote StreakNotif not found, StreakController not started")
 		return
 	end
 	track(notifRemote.OnClientEvent:Connect(function(raw: any)

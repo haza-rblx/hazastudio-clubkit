@@ -50,8 +50,8 @@ local ALL_BADGES = {
 	"12-InfluencerBadge",
 }
 
--- Daftar key yang dipakai `isLayerVisible()` di seluruh file. Dipakai untuk
--- mendaftarkan prefix attribute di attribute watcher (lihat watchAttr).
+-- List of keys used by `isLayerVisible()` across the file. Used to
+-- register prefix attributes in attribute watcher (see watchAttr).
 local _LAYER_ATTR_KEYS = {
 	"SpecialTitle",
 	"BadgeGroup",
@@ -65,7 +65,7 @@ local _LAYER_ATTR_KEYS = {
 	"CoupleName",
 }
 
--- Daftar key yang dipakai `isBadgeVisible()` (lihat BADGE_SETTING_KEY_BY_FRAME).
+-- List of keys used by `isBadgeVisible()` (lihat BADGE_SETTING_KEY_BY_FRAME).
 local _BADGE_ATTR_KEYS = {
 	"OwnerCoOwner",
 	"Developer",
@@ -462,8 +462,8 @@ function OverheadUI.new(gui: BillboardGui): OverheadUIImpl
 	local localPlayer = Players.LocalPlayer
 	if localPlayer then
 		-- Consolidated attribute watcher: 1 connection instead of 22+.
-		-- Watch top-level toggle + jarak, plus prefix untuk per-layer / per-badge
-		-- visibility yang ditulis SettingsController saat user toggle hide/show layer.
+		-- Watch top-level toggle + jarak, plus prefix for per-layer / per-badge
+		-- visibility written by SettingsController when user toggles hide/show layer.
 		local watchedExactAttrs: { [string]: boolean } = {
 			SettingsOverheadVisible = true,
 			SettingsOverheadDistance = true,
@@ -965,12 +965,12 @@ end
 
 -- ============================================================
 -- V3 DONATION LAYERS (00-DonationLayers)
--- Renderer V3 menampilkan ranking donasi sebagai chip:
+-- Renderer V3 displays donation ranking as chips:
 --   RobuxRankWrapper > RobuxRanking  -> "#N ROBUX" (topDonateRank)
 --   RupiahRankWrapper > RupiahRank   -> "#N RUPIAH" (topSpenderRank / Saweria)
--- Wrapper disembunyiin kalau rank-nya nil. Aman dipanggil di template
--- yang gak punya "00-DonationLayers" (langsung return).
--- UIGradient di wrapper (kalau ada di template) ikut shared gradient loop:
+-- Wrapper hidden if rank is nil. Safe to call on template
+-- that does not have "00-DonationLayers" (return immediately).
+-- UIGradient on wrapper (if present in template) follows shared gradient loop:
 --   Robux = sheen (flow/sweep), Rupiah = prism (offset + rotation).
 -- ============================================================
 local DONATION_CHIP_ANIM: { [string]: { mode: string, speed: number } } = {
@@ -984,7 +984,7 @@ local function setChipGradientAnim(chip: GuiObject, wrapperName: string, active:
 		return
 	end
 	if active then
-		-- Jangan re-seed startTime / base Rotation tiap apply (biar animasi mulus).
+		-- Do not re-seed startTime / base Rotation on each apply (keeps animation smooth).
 		if animatedGradients[grad] then
 			return
 		end
@@ -1045,7 +1045,7 @@ local function setDonationLayers(wrapper: GuiObject, payload: OverheadPayload)
 	applyChip("RobuxRankWrapper", "RobuxRanking", payload.topDonateRank, "ROBUX", "TopDonate")
 	applyChip("RupiahRankWrapper", "RupiahRank", payload.topSpenderRank, "RUPIAH", "TopSpender")
 
-	-- Sembunyiin container kalau dua-duanya kosong, supaya gak makan slot layout.
+	-- Hide container if both empty, so it does not consume layout slot.
 	local anyVisible = false
 	for _, child in ipairs(layers:GetChildren()) do
 		if child:IsA("GuiObject") and child.Visible then
@@ -1354,7 +1354,7 @@ function OverheadUI:apply(payload: OverheadPayload)
 		return
 	end
 
-	-- Batalkan retry thread sebelumnya kalau ada
+	-- Cancel previous retry thread if any
 	if overheadSelf._loadingRetryThread then
 		pcall(task.cancel, overheadSelf._loadingRetryThread)
 		overheadSelf._loadingRetryThread = nil
@@ -1382,7 +1382,7 @@ function OverheadUI:apply(payload: OverheadPayload)
 		self._gui.Enabled = false
 	end
 
-	-- Jika loading sedang blocking, spawn retry agar overhead muncul setelah loading selesai
+	-- If loading is blocking, spawn retry so overhead appears after loading finishes
 	if loadingBlocking and overheadVisible then
 		overheadSelf._loadingRetryThread = task.spawn(function()
 			while true do
@@ -1390,7 +1390,7 @@ function OverheadUI:apply(payload: OverheadPayload)
 				local retryLoadingUi = LoadingScreenUI.get()
 				local stillBlocking = retryLoadingUi and retryLoadingUi:isBlockingGameplay()
 				if not stillBlocking then
-					-- Loading selesai, re-apply payload
+					-- Loading finished, re-apply payload
 					if overheadSelf._lastPayload then
 						overheadSelf:apply(overheadSelf._lastPayload)
 					end
@@ -1537,7 +1537,7 @@ function OverheadUI:apply(payload: OverheadPayload)
 		end
 	end
 
-	-- V3-only: render donation ranking chips (no-op di template tanpa 00-DonationLayers)
+	-- V3-only: render donation ranking chips (no-op on template without 00-DonationLayers)
 	setDonationLayers(wrapper, payload)
 	if useLazyRows then
 		local donationLayers = wrapper:FindFirstChild("00-DonationLayers")
@@ -1691,11 +1691,11 @@ function OverheadUI:apply(payload: OverheadPayload)
 	ChatBubbleAdornee.scheduleSync(payload.userId, self._gui, wrapper, shouldBeEnabled == true)
 end
 
--- Hapus semua animated gradients yang dimiliki GUI ini dari shared pool.
--- Dipanggil saat OverheadUI di-destroy (e.g. respawn, player leave).
+-- Remove all animated gradients owned by this GUI from shared pool.
+-- Called when OverheadUI is destroyed (e.g. respawn, player leave).
 local function removeGradientsForGui(gui: BillboardGui)
 	for grad in pairs(animatedGradients) do
-		-- Gradient milik GUI ini kalau parent-chain-nya mengarah ke gui
+		-- Gradient owned by this GUI if parent chain leads to gui
 		local inst: Instance? = grad
 		local isOwned = false
 		while inst do
@@ -1720,12 +1720,12 @@ function OverheadUI:destroy()
 			SpecialTitleRenderer.destroy(specialTitleRow)
 		end
 	end
-	-- Stop title animation thread jika ada
+	-- Stop title animation thread if any
 	if overheadSelf._titleAnimThread then
 		task.cancel(overheadSelf._titleAnimThread)
 		overheadSelf._titleAnimThread = nil
 	end
-	-- Cancel loading retry thread jika ada
+	-- Cancel loading retry thread if any
 	if overheadSelf._loadingRetryThread then
 		pcall(task.cancel, overheadSelf._loadingRetryThread)
 		overheadSelf._loadingRetryThread = nil
@@ -1754,11 +1754,11 @@ function OverheadUI:destroy()
 	if Config.Overhead.ENABLE_EFFECT_CACHE then
 		overheadSelf._effectCache = nil
 	end
-	-- Remove gradients milik GUI ini dari shared animation loop (fix H-03)
+	-- Remove gradients owned by this GUI from shared animation loop (fix H-03)
 	if overheadSelf._gui then
 		removeGradientsForGui(overheadSelf._gui)
 	end
-	-- Disconnect semua koneksi (AttributeChanged, Destroying)
+	-- Disconnect all connections (AttributeChanged, Destroying)
 	disconnectConnections(overheadSelf)
 	local lastPayload = overheadSelf._lastPayload
 	if type(lastPayload) == "table" and type(lastPayload.userId) == "number" then

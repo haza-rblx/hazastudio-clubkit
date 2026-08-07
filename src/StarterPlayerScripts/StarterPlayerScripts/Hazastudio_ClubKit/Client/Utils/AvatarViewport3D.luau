@@ -5,7 +5,7 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
--- Import Logger untuk proper logging
+-- Import Logger for proper logging
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local AssetHealthReporter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.AssetHealthReporter)
 local log = Logger.new("AvatarViewport3D")
@@ -153,9 +153,9 @@ local function playIdleAnimation(
 	end)
 end
 
---- Inject a pre-warm pool. load() hanya memakai model dari pool —
---- TIDAK ada fallback CreateHumanoidModelFromUserId. Caller (UI) yang
---- bertanggung jawab untuk thumbnail fallback + trigger pool prewarm.
+--- Inject a pre-warm pool. load() only uses models from the pool —
+--- NO CreateHumanoidModelFromUserId fallback. Caller (UI) is responsible
+--- for thumbnail fallback + triggering pool prewarm.
 function AvatarViewport3D:setPrewarmPool(pool: any)
 	self._prewarmPool = pool
 end
@@ -172,11 +172,11 @@ function AvatarViewport3D:load(userId: number): boolean
 	self._worldModel = worldModel
 	self._viewport.CurrentCamera = nil
 
-	-- Pool-only path. Kalau pool miss, return false agar caller fallback
-	-- ke thumbnail + subscribe ke subscribeModelReady untuk upgrade seamless.
-	-- Menghilangkan CreateHumanoidModelFromUserId di click path supaya
-	-- tidak ada YIELD 2-8s di main thread (root cause dari placeholder lama
-	-- + button close disabled di AvatarContextController.openPanel).
+	-- Pool-only path. On pool miss, return false so caller can fallback
+	-- to thumbnail + subscribe to subscribeModelReady for seamless upgrade.
+	-- Remove CreateHumanoidModelFromUserId from click path so
+	-- no YIELD 2-8s on the main thread (root cause from old placeholder
+	-- + close button disabled in AvatarContextController.openPanel).
 	if not self._prewarmPool or type(self._prewarmPool.take) ~= "function" then
 		log:warn("load() called without prewarm pool; caller must ensure pool is set", { userId = userId })
 		return false
@@ -189,7 +189,7 @@ function AvatarViewport3D:load(userId: number): boolean
 	log:debug("Pool hit — using pre-warmed model", { userId = userId })
 
 	if self._loadGeneration ~= generation then
-		-- Stale load - caller sudah close, discard untuk hindari leak.
+		-- Stale load - caller already close, discard to avoid leak.
 		poolModel:Destroy()
 		log:warn("load() cancelled (superseded by newer request)", { userId = userId })
 		return false

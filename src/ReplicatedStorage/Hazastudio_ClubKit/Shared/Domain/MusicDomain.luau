@@ -1,6 +1,6 @@
 --!strict
 -- PATH: ReplicatedStorage/Shared/Domain/MusicDomain.lua
--- Type definitions untuk Music Player system.
+-- Type definitions for Music Player system.
 
 local MusicDomain = {}
 
@@ -10,16 +10,16 @@ local MusicDomain = {}
 
 export type TrackInfo = {
 	id            : string,         -- UUID (HttpService:GenerateGUID)
-	name          : string,         -- nama lagu
+	name          : string,         -- track name
 	creator       : string,         -- nama creator/artist
 	playlistId    : string,         -- parent playlist ID
 	parts         : { string },     -- up to 9 Roblox audio asset IDs (minimal 1, max = Config.Music.MAX_TRACK_PARTS)
-	totalDuration : number,         -- detik; 0 saat upload pertama, diisi setelah first play
-	playbackSpeed : number?,        -- per-track baseline speed; nil = pakai global Config.Music.PLAYBACK_SPEED
-	coverType     : string?,        -- opsional override cover parent playlist: "gradient" | "image"
-	coverValue    : any?,           -- gradient index atau image URI / asset id
-	createdAt     : number,         -- os.time() saat track dibuat
-	updatedAt     : number,         -- os.time() update terakhir
+	totalDuration : number,         -- seconds; 0 on first upload, filled after first play
+	playbackSpeed : number?,        -- per-track baseline speed; nil = use global Config.Music.PLAYBACK_SPEED
+	coverType     : string?,        -- optional override of parent playlist cover: "gradient" | "image"
+	coverValue    : any?,           -- gradient index or image URI / asset id
+	createdAt     : number,         -- os.time() when the track was created
+	updatedAt     : number,         -- os.time() last update
 	syncUpdatedAt : string?,
 	syncDeletedAt : string?,
 	syncRevision  : number?,
@@ -30,9 +30,9 @@ export type PlaylistInfo = {
 	id         : string,         -- UUID
 	name       : string,
 	visibility : string?,        -- "public" | "private" (default "public")
-	coverType  : string?,        -- "gradient" | "image" (opsional, default "gradient")
-	coverValue : any?,           -- gradient index (number) atau image asset ID (string)
-	fontFace   : string?,        -- nama font dari SelectFontFace (opsional)
+	coverType  : string?,        -- "gradient" | "image" (optional, default "gradient")
+	coverValue : any?,           -- gradient index (number) or image asset ID (string)
+	fontFace   : string?,        -- font name from SelectFontFace (optional)
 	trackIds   : { string },     -- urutan track dalam playlist
 	syncUpdatedAt : string?,
 	syncDeletedAt : string?,
@@ -67,7 +67,7 @@ export type PlaybackState = {
 	voteSkipVoters: { [number]: true },
 }
 
--- Payload yang di-fire oleh RemoteEvent ke client
+-- Payload fired by RemoteEvent to client
 export type TrackChangedPayload = {
 	track: TrackInfo,
 	currentEntry: QueueEntry?,
@@ -100,7 +100,7 @@ export type StateSyncPayload = {
 	djEffects: any?,
 }
 
--- Action payload untuk RF Manage
+-- Action payload for RF Manage
 export type ManagePlaylistPayload = {
 	action : string,  -- "create" | "update" | "delete"
 	data   : { [string]: any },
@@ -206,48 +206,48 @@ function MusicDomain.getTimingProgress(timing: PlaybackTiming?, now: number?): n
 	return math.clamp(elapsed / total, 0, 1)
 end
 
--- Validasi TrackInfo sebelum disimpan ke DataStore
+-- Validate TrackInfo before saving to DataStore
 function MusicDomain.validateTrack(data: { [string]: any }): (boolean, string)
 	if type(data.name) ~= "string" or data.name == "" then
-		return false, "Track name kosong atau bukan string"
+		return false, "Track name empty or not a string"
 	end
 	if type(data.creator) ~= "string" or data.creator == "" then
-		return false, "Track creator kosong atau bukan string"
+		return false, "Track creator empty or not a string"
 	end
 	if type(data.playlistId) ~= "string" or data.playlistId == "" then
-		return false, "playlistId kosong atau bukan string"
+		return false, "playlistId empty or not a string"
 	end
 	if type(data.parts) ~= "table" or #data.parts < 1 then
-		return false, "parts harus array minimal 1 elemen"
+		return false, "parts must be an array with at least 1 element"
 	end
 	if #data.parts > 9 then
 		-- NOTE: must stay in sync with Config.Music.MAX_TRACK_PARTS.
-		-- Validator pake literal di sini biar MusicDomain bebas dari
-		-- dependency ke Config (avoid circular require).
-		return false, "parts tidak boleh lebih dari 9 elemen"
+		-- Validator uses literal here so MusicDomain stays free of
+		-- dependency on Config (avoid circular require).
+		return false, "parts must not have more than 9 elements"
 	end
 	for i, part in ipairs(data.parts) do
 		if type(part) ~= "string" or part == "" then
-			return false, ("parts[%d] bukan string valid"):format(i)
+			return false, ("parts[%d] is not a valid string"):format(i)
 		end
 	end
 	if data.coverType ~= nil then
 		if data.coverType ~= "gradient" and data.coverType ~= "image" then
-			return false, "coverType harus gradient atau image"
+			return false, "coverType must be gradient or image"
 		end
 	end
 	return true, ""
 end
 
--- Validasi PlaylistInfo sebelum disimpan ke DataStore
+-- Validate PlaylistInfo before saving to DataStore
 function MusicDomain.validatePlaylist(data: { [string]: any }): (boolean, string)
 	if type(data.name) ~= "string" or data.name == "" then
-		return false, "Playlist name kosong atau bukan string"
+		return false, "Playlist name empty or not a string"
 	end
 	return true, ""
 end
 
--- Build TrackInfo dari raw data (dengan default values)
+-- Build TrackInfo from raw data (with default values)
 function MusicDomain.buildTrack(data: { [string]: any }): TrackInfo
 	return {
 		id            = tostring(data.id or ""),
@@ -270,7 +270,7 @@ function MusicDomain.buildTrack(data: { [string]: any }): TrackInfo
 	}
 end
 
--- Build PlaylistInfo dari raw data (dengan default values)
+-- Build PlaylistInfo from raw data (with default values)
 function MusicDomain.buildPlaylist(data: { [string]: any }): PlaylistInfo
 	local legacyCover = data.cover
 	local coverType = type(data.coverType) == "string" and data.coverType or nil

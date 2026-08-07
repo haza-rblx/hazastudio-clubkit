@@ -1,7 +1,7 @@
 --!strict
 -- Server/Controllers/LevelController.lua
 -- Listen sumber XP (chat + timer online), dispatch ke LevelService.
--- Juga handle command /setlevel untuk admin.
+-- Juga handle command /setlevel for admin.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config         = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
@@ -18,12 +18,12 @@ local function createLevelController(deps: {
 	local overheadService    = deps.overheadService
 	local overheadController = deps.overheadController
 	local log                = Logger.new("LevelController")
-	-- Cooldown chat per player untuk anti-spam XP
+	-- Cooldown chat per player for anti-spam XP
 	local lastChatXp: {[number]: number} = {}
-	-- Rate limiter untuk /setlevel command
+	-- Rate limiter for /setlevel command
 	local setLevelLimiter = RateLimiter.new(10, 60)
 	-- ----------------------------------------------------------
-	-- Proses XP gain dan refresh overhead jika level up
+	-- Proses XP gain dan refresh overhead if level up
 	-- ----------------------------------------------------------
 	local function giveXp(player: Player, amount: number)
 		task.spawn(function()
@@ -49,16 +49,16 @@ local function createLevelController(deps: {
 		end)
 	end
 	-- ----------------------------------------------------------
-	-- XP dari chat
+	-- XP from chat
 	-- ----------------------------------------------------------
 	local function onPlayerChatted(player: Player, message: string)
-		-- Cek apakah command - skip XP untuk command
+		-- Cek apakah command - skip XP for command
 		local lower = message:lower():match("^%s*(.-)%s*$") or ""
 		if lower:match("^/") then
-			-- Cek /setlevel command dulu
+			-- Check /setlevel command first
 			local username, levelStr = lower:match("^/setlevel%s+(%S+)%s+(%d+)$")
 			if username and levelStr then
-				-- Auth check sebelum rate limit - cegah unauthorized waste rate limit slots
+				-- Auth check before rate limit - cegah unauthorized waste rate limit slots
 				local giverRole = overheadService:getRawGroupRole(player)
 				if not OverheadDomain.canGift(giverRole) then
 					return
@@ -88,7 +88,7 @@ local function createLevelController(deps: {
 					end
 				end)
 			end
-			return -- semua command skip XP
+			return -- all command skip XP
 		end
 		-- Cooldown anti-spam
 		local now  = os.time()
@@ -98,7 +98,7 @@ local function createLevelController(deps: {
 		giveXp(player, Config.Level.XP_PER_CHAT)
 	end
 	-- ----------------------------------------------------------
-	-- XP dari waktu online - timer per player
+	-- XP from waktu online - timer per player
 	-- ----------------------------------------------------------
 	local function startOnlineTimer(player: Player)
 		task.spawn(function()
@@ -110,7 +110,7 @@ local function createLevelController(deps: {
 		end)
 	end
 	-- ----------------------------------------------------------
-	-- Flush XP saat player leave agar tidak hilang
+	-- Flush XP when player leave so not hilang
 	-- ----------------------------------------------------------
 	local function onPlayerRemoving(player: Player)
 		lastChatXp[player.UserId] = nil
@@ -125,7 +125,7 @@ local function createLevelController(deps: {
 		end
 	end
 	-- ----------------------------------------------------------
-	-- Wire semua player
+	-- Wire all player
 	-- ----------------------------------------------------------
 	local function wirePlayer(player: Player)
 		player.Chatted:Connect(function(msg)

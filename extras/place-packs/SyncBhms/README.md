@@ -1,59 +1,59 @@
-# SyncBhms — place-specific pack (bukan engine Club Kit)
+# SyncBhms — place-specific pack (not Club Kit engine)
 
-Pack dance/sync BHMS legacy untuk **satu owner place**. Tidak ikut Rojo `default.project.json`, tidak ikut Update Engine, dan **tidak** masuk changelog buyer.
+Legacy BHMS dance/sync pack for **one place owner**. Not part of Rojo `default.project.json`, not part of Update Engine, and **not** included in buyer changelog.
 
-Ketika aktif: Club Kit **tidak** menjalankan dance panel / `SyncService` / `SyncRemotes`. Tombol **Sync Dance** di Avatar Context Menu (ACM) diarahkan ke `Remotes2.startSync` BHMS.
+When active: Club Kit **does not** run the dance panel / `SyncService` / `SyncRemotes`. The **Sync Dance** button in the Avatar Context Menu (ACM) routes to BHMS `Remotes2.startSync`.
 
-## Isi folder
+## Folder contents
 
-| Path | Fungsi |
-|------|--------|
-| `SyncBhms.rbxm` | Export `Workspace.SyncBhms` (Dance / SyncServer / SyncSettings / DanceGui) |
-| `bridge/SyncBhmsGate.luau` | Baca `Features.LegacySyncBhms` — pack no-op saat `false` |
-| `bridge/SyncBhmsAcmBridge.luau` | Module ACM → BHMS (`ReplicatedStorage.SyncBhmsAcmBridge`) |
-| `bridge/SyncBhmsRemotes.server.luau` | Provision `Remotes2` + `StoredAnimations` (gated) |
-| `README.md` | Panduan ini |
+| Path | Purpose |
+|------|---------|
+| `SyncBhms.rbxm` | Export of `Workspace.SyncBhms` (Dance / SyncServer / SyncSettings / DanceGui) |
+| `bridge/SyncBhmsGate.luau` | Reads `Features.LegacySyncBhms` — pack no-ops when `false` |
+| `bridge/SyncBhmsAcmBridge.luau` | ACM module → BHMS (`ReplicatedStorage.SyncBhmsAcmBridge`) |
+| `bridge/SyncBhmsRemotes.server.luau` | Provisions `Remotes2` + `StoredAnimations` (gated) |
+| `README.md` | This guide |
 
-## Setup di Studio (place owner)
+## Studio setup (place owner)
 
-1. **Config** — di `ClubKitConfig.Features`:
+1. **Config** — in `ClubKitConfig.Features`:
    ```lua
-   SyncDance = true,          -- ACM Sync Dance button tetap ada
-   LegacySyncBhms = true,     -- nyalakan pack BHMS; matikan dance panel Club Kit
-   -- LegacySyncBhms = false  → semua script BHMS no-op (topbar Dance + DanceGui hilang)
+   SyncDance = true,          -- ACM Sync Dance button remains
+   LegacySyncBhms = true,     -- enable BHMS pack; disable Club Kit dance panel
+   -- LegacySyncBhms = false  → all BHMS scripts no-op (topbar Dance + DanceGui hidden)
    ```
-2. Insert **`SyncBhms.rbxm`** (sementara boleh di Workspace, lalu susun ulang seperti di bawah).
-3. Layout runtime (BHMS **tidak** jalan jika script tetap di Workspace):
+2. Insert **`SyncBhms.rbxm`** (temporarily in Workspace is fine; rearrange as below).
+3. Runtime layout (BHMS **does not** run if scripts stay in Workspace):
 
-   | Dari pack | Pindahkan ke |
-   |-----------|----------------|
+   | From pack | Move to |
+   |-----------|---------|
    | `SyncServer` (+ Modules, Main1 enabled, Main disabled) | `ServerScriptService` |
    | `Dance` LocalScripts (`danceDraging1`, `TopbarDance`, `BeatDanceClient`) | `StarterPlayer.StarterPlayerScripts` |
-   | `DanceGui` | `StarterGui` (atau di-clone oleh client script seperti flow BHMS lama) |
+   | `DanceGui` | `StarterGui` (or clone from client script like legacy BHMS flow) |
    | `SyncSettings` (`danceModule`, `emoteModule`, `syncSettings`) | `ReplicatedStorage.SyncSettings` |
 
-4. Paste bridge:
-   - `SyncBhmsGate.luau` → ModuleScript `ReplicatedStorage.SyncBhmsGate` (**wajib** — semua script BHMS cek flag di sini).
-   - `SyncBhmsRemotes.server.luau` → Script di `ServerScriptService` (nama bebas, jalan lebih awal dari Main1).
+4. Paste bridge files:
+   - `SyncBhmsGate.luau` → ModuleScript `ReplicatedStorage.SyncBhmsGate` (**required** — all BHMS scripts check the flag here).
+   - `SyncBhmsRemotes.server.luau` → Script in `ServerScriptService` (any name; run before Main1).
    - `SyncBhmsAcmBridge.luau` → ModuleScript `ReplicatedStorage.SyncBhmsAcmBridge`.
-5. Pastikan **TopbarPlus** `ReplicatedStorage.Icon` ada jika `TopbarDance` memakainya.
-6. Di tiap script BHMS (`TopbarDance`, `danceDraging1`, `BeatDanceClient`, `SyncServer.Main1`, `SyncBhmsRemotes`) tambah di paling atas:
+5. Ensure **TopbarPlus** `ReplicatedStorage.Icon` exists if `TopbarDance` uses it.
+6. At the top of each BHMS script (`TopbarDance`, `danceDraging1`, `BeatDanceClient`, `SyncServer.Main1`, `SyncBhmsRemotes`) add:
    ```lua
    local SyncBhmsGate = require(ReplicatedStorage:WaitForChild("SyncBhmsGate"))
    if not SyncBhmsGate.isEnabled() then
    	return
    end
    ```
-7. Playtest: `LegacySyncBhms = true` → ACM Sync Dance + topbar Dance BHMS. `= false` → hanya Club Kit dance / Lead Dance.
+7. Playtest: `LegacySyncBhms = true` → ACM Sync Dance + BHMS topbar Dance. `= false` → Club Kit dance / Lead Dance only.
 
 ## Mutually exclusive
 
-- `LegacySyncBhms = true` → kit **tidak** boot `SyncController` / `DancePanelUIBinder` / server `SyncService`; pack BHMS jalan.
-- `LegacySyncBhms = false` → pack BHMS **no-op** via `SyncBhmsGate` (topbar Dance + panel ★ EMOTE tidak muncul); Club Kit dance hidup.
-- Jangan biarkan kedua backend sync hidup di place yang sama tanpa gate.
+- `LegacySyncBhms = true` → kit **does not** boot `SyncController` / `DancePanelUIBinder` / server `SyncService`; BHMS pack runs.
+- `LegacySyncBhms = false` → BHMS pack **no-ops** via `SyncBhmsGate` (topbar Dance + ★ EMOTE panel hidden); Club Kit dance active.
+- Do not run both sync backends on the same place without the gate.
 
 ## Maintenance
 
-- Pack ini **custom**; bug BHMS bukan bug kit universal.
-- Update catalog dance = edit `SyncSettings.danceModule` di place, bukan `src/`.
-- Engine hanya menyentuh flag + hook ACM require bridge.
+- This pack is **custom**; BHMS bugs are not universal kit bugs.
+- Dance catalog updates = edit `SyncSettings.danceModule` in the place, not `src/`.
+- Engine only touches the flag + ACM bridge require hook.

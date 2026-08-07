@@ -1,5 +1,5 @@
 --!nocheck
--- Shared helper — dipanggil dari module + plugin Studio.
+-- Shared helper — called from module + plugin Studio.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -30,7 +30,7 @@ function StudioToolsCommand.runGenerateToolsFolder()
 	local mod = StudioToolsCommand.resolveModule()
 	if not mod then
 		warn(
-			"[generate_tools_folder] Module tidak ditemukan. Sync Rojo → ReplicatedStorage.Hazastudio_ClubKit.Shared.Studio.GenerateRoleToolsFolder"
+			"[generate_tools_folder] Module not found. Sync Rojo → ReplicatedStorage.Hazastudio_ClubKit.Shared.Studio.GenerateRoleToolsFolder"
 		)
 		return nil
 	end

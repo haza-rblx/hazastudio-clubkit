@@ -43,7 +43,7 @@ local function createCarryController(deps: CarryControllerDeps)
 
 	local function sendCommand(commandType: string, payload: any): ()
 		if commandRemote == nil then
-			log:warn("Carry command remote belum siap", { commandType = commandType })
+			log:warn("Carry command remote not ready", { commandType = commandType })
 			return
 		end
 
@@ -128,14 +128,14 @@ local function createCarryController(deps: CarryControllerDeps)
 	function controller:init(): ()
 		remotesFolder = ReplicatedStorage:WaitForChild(carryConfig.REMOTE_FOLDER, 10) :: Folder?
 		if remotesFolder == nil then
-			log:warn("Carry remotes folder tidak ditemukan")
+			log:warn("Carry remotes folder not found")
 			return
 		end
 
 		commandRemote = (remotesFolder :: Folder):WaitForChild(carryConfig.COMMAND_REMOTE, 10) :: RemoteEvent?
 		notifyRemote = (remotesFolder :: Folder):WaitForChild(carryConfig.NOTIFY_REMOTE, 10) :: RemoteEvent?
 		if commandRemote == nil or notifyRemote == nil then
-			log:warn("Carry remotes tidak lengkap")
+			log:warn("Carry remotes incomplete")
 			return
 		end
 

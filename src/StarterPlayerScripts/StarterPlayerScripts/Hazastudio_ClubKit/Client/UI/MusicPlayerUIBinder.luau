@@ -1,7 +1,7 @@
 --!strict
 -- PATH: StarterPlayerScripts/Client/UI/MusicPlayerUIBinder.lua
--- Binding semua UI events dan rendering untuk Music Player.
--- Dipanggil oleh Controller setelah refs dan store ready.
+-- Bind all UI events and rendering for Music Player.
+-- Called by Controller after refs and store are ready.
 
 local ContentProvider = game:GetService("ContentProvider")
 local TweenService = game:GetService("TweenService")
@@ -154,7 +154,7 @@ function MusicPlayerUIBinder.new(deps: {
 	self._connections = {} :: { RBXScriptConnection }
 	self._unsubscribers = {} :: { () -> () }
 
-	-- Callbacks yang di-set oleh Controller
+	-- Callbacks set by Controller
 	self._onTabSelected = nil :: ((string) -> ())?
 	self._onToggleDjMode = nil :: (() -> ())?
 	self._onCloseRequested = nil :: (() -> ())?
@@ -354,7 +354,7 @@ end
 
 local function _clearListClones(scrollable: ScrollingFrame, templateName: string)
 	for _, child in ipairs(scrollable:GetChildren()) do
-		-- Preserve: template, UIListLayout, UIPadding, dan CTA buttons
+		-- Preserve: template, UIListLayout, UIPadding, and CTA buttons
 		local isPreserved = child.Name == templateName
 			or child.Name == "UIListLayout"
 			or child.Name == "UIPadding"
@@ -2105,7 +2105,7 @@ end
 
 -- ============================================================
 -- Tab switching: instant swap
--- Tab content langsung ditukar tanpa tween.
+-- Tab content swapped directly without tween.
 -- ============================================================
 
 local TAB_FRAME_KEY = {
@@ -2329,7 +2329,7 @@ end
 
 -- ============================================================
 -- Open / close panel using near-cut motion.
--- Hindari scalePop legacy supaya main panel tidak terasa lambat/kartun.
+-- Avoid legacy scalePop so main panel does not feel slow/cartoonish.
 -- ============================================================
 
 function MusicPlayerUIBinder:openPanel()
@@ -3646,17 +3646,17 @@ function MusicPlayerUIBinder:_updateAuraOverlay(playlist: any?)
 	-- ── Tuning ────────────────────────────────────────────────
 	local BASE_SCALE = 1.0
 	local MAX_SCALE_ADD = 0.32 -- max expansion
-	-- Attack: cepat tangkap beat
+	-- Attack: fast beat capture
 	local ATTACK = 0.70 -- lerp factor naik (frame-rate independent base)
 	-- Decay: "ballistic" — energy halved every DECAY_HALF seconds
 	local DECAY_HALF = 0.38
-	-- Rolling max untuk auto-normalize (adaptif ke volume musik)
+	-- Rolling max for auto-normalize (adapts to music volume)
 	local ROLLING_DECAY = 0.9992
 	local ROLLING_MIN = 180
 
 	local currentScale = auraScale.Scale
 	local rollingMax = ROLLING_MIN
-	-- "energy" terpisah dari visual — visual smoothed terhadap energy
+	-- "energy" separate from visual — visual smoothed toward energy
 	local energy = 0.0
 
 	local function refreshSoundCache(scanClock: number)
@@ -3741,24 +3741,24 @@ function MusicPlayerUIBinder:_updateAuraOverlay(playlist: any?)
 		end
 
 		local raw = math.clamp(loudness / rollingMax, 0, 1)
-		-- Soft-knee curve: sqrt untuk bawah lembut, kuadrat untuk puncak tajam
-		-- Hasilnya: quiet terasa smooth, beat keras tetap punch
+		-- Soft-knee curve: sqrt for soft lower, square for sharp peaks
+		-- Result: quiet feels smooth, hard beats still punch
 		local t = raw < 0.5 and (raw * raw * 2) -- lower half: kuadratik (lembut)
-			or (1 - 2 * (1 - raw) ^ 2) -- upper half: ease-out (punch tapi smooth)
+			or (1 - 2 * (1 - raw) ^ 2) -- upper half: ease-out (punch but smooth)
 
-		-- Energy envelope: attack cepat, decay ballistic (half-life based)
+		-- Energy envelope: fast attack, ballistic decay (half-life based)
 		if t > energy then
 			-- Naik: frame-rate independent attack lerp
 			local f = 1 - (1 - ATTACK) ^ (dt * 60)
 			energy = energy + (t - energy) * f
 		else
-			-- Turun: exponential half-life decay — halved setiap DECAY_HALF detik
+			-- Decay: exponential half-life — halved every DECAY_HALF seconds
 			energy = energy * (0.5 ^ (dt / DECAY_HALF))
 		end
 
 		local targetScale = BASE_SCALE + energy * MAX_SCALE_ADD
 
-		-- Tambahan smoothing ringan pada visual supaya tidak ada jitter
+		-- Extra light smoothing on visual to avoid jitter
 		local VISUAL_SMOOTH = 0.25
 		local vs = 1 - (1 - VISUAL_SMOOTH) ^ (dt * 60)
 

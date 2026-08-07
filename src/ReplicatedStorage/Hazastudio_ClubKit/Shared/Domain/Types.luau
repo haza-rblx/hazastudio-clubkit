@@ -85,7 +85,7 @@ export type CommunityLookupResult =
 	}
 -- ============================================================
 -- DATASTORE PAYLOAD
--- Data yang disimpan di DataStore per player
+-- Data stored in DataStore per player
 -- ============================================================
 export type OverheadStoredData = {
 	specialTitle: string?, -- nil = row hidden
@@ -94,17 +94,17 @@ export type OverheadStoredData = {
 	specialTitleFont: string?, -- Enum.Font name
 	specialTitleStyle: TitleStyleData?,
 	specialTitlePosition: string?, -- "Top" | "Stacked", nil = default (Top)
-	specialRank: string?, -- nil = pakai rank normal (legacy, bisa dihapus)
+	specialRank: string?, -- nil = use normal rank (legacy, may be removed)
 	specialSubRole: string?, -- nil | "DJ" | "Influencer"
-	giftedRole: string?, -- RoleKey yang di-gift, override group rank
+	giftedRole: string?, -- gifted RoleKey, overrides group rank
 	membershipBadge: string?, -- legacy compatibility
 	ownedMembership: MembershipTier?,
 	giftedMemberships: { GiftedMembershipEntry }?,
-	giftedBy: number?, -- UserId yang ngasih gift
-	giftedAt: number?, -- os.time() saat gift
+	giftedBy: number?, -- UserId who sent the gift
+	giftedAt: number?, -- os.time() when gift
 	coupleData: any?, -- CoupleData, nil = single
-	couplePartner: string?, -- display name pasangan untuk overhead (derived dari coupleData)
-	couplePartnerId: number?, -- UserId pasangan (derived dari coupleData)
+	couplePartner: string?, -- display name pasangan for overhead (derived from coupleData)
+	couplePartnerId: number?, -- UserId pasangan (derived from coupleData)
 	showCoupleName: boolean?,
 	publicOverheadLayerVisible: { [string]: boolean }?,
 	publicOverheadBadgeVisible: { [string]: boolean }?,
@@ -112,17 +112,17 @@ export type OverheadStoredData = {
 	topDonateText: string?, -- teks custom
 	topSpenderRank: number?, -- 1, 2, 3... nil = hidden
 	topSpenderText: string?, -- teks custom
-	communityId: number?, -- Roblox Community (Group) Id yang aktif ditampilkan
-	suppressCommunityBadge: boolean?, -- true = /clearcommun, jangan pakai primary fallback
+	communityId: number?, -- Roblox Community (Group) Id actively displayed
+	suppressCommunityBadge: boolean?, -- true = /clearcommun, do not use primary fallback
 	streakDays: number, -- default 0
-	lastLoginAt: number, -- os.time() terakhir login, 0 = belum pernah
+	lastLoginAt: number, -- os.time() terakhir login, 0 = not yet pernah
 	level: number?, -- XP level (LevelSystemEnabled)
 	xp: number?, -- XP progress within current level
 	_version: number,
 }
 -- ============================================================
 -- OVERHEAD PAYLOAD
--- Data lengkap yang dikirim server -> client
+-- Complete data sent server -> client
 -- ============================================================
 export type OverheadPayload = {
 	userId: number,
@@ -163,14 +163,14 @@ export type OverheadPayload = {
 	topDonateText: string?,
 	topSpenderRank: number?,
 	topSpenderText: string?,
-	isSpender: boolean, -- true kalo player masuk top leaderboard (Bagi-Bagi atau Robux)
+	isSpender: boolean, -- true when player enters top leaderboard (Bagi-Bagi or Robux)
 	communityId: number?,
 	communityName: string?,
 	communityLogo: string?,
 	likesCount: number,
 	robuxDonated: number,
 	cashDonated: number,
-	-- Badge list yang harus VISIBLE (sisanya hidden)
+	-- Badge list that must be VISIBLE (others hidden)
 	visibleBadges: { string },
 	publicOverheadLayerVisible: { [string]: boolean },
 	publicOverheadBadgeVisible: { [string]: boolean },
@@ -198,12 +198,12 @@ export type ChatTagEntry = {
 export type CoupleStatus = "none" | "pending_sent" | "pending_received" | "coupled"
 export type CoupleState = "IDLE" | "WAITING" | "COUPLED"
 export type CoupleData = {
-	partnerId: number?, -- UserId pasangan, nil = tidak punya couple
+	partnerId: number?, -- UserId pasangan, nil = does not have couple
 	partnerName: string?, -- DisplayName pasangan
 	partnerUsername: string?, -- Username pasangan
-	pendingTarget: number?, -- UserId yang direquest, nil = tidak ada
-	coupledAt: number?, -- os.time() saat couple terbentuk
-	couplesSince: number?, -- os.time() saat couple terbentuk (alias)
+	pendingTarget: number?, -- requested UserId, nil = none
+	coupledAt: number?, -- os.time() when couple terbentuk
+	couplesSince: number?, -- os.time() when couple terbentuk (alias)
 	_version: number?,
 }
 export type CoupleRequest = {
@@ -257,7 +257,7 @@ export type SyncState = {
 	favoritedAnims: FavoriteAnimations,
 	isInputLocked: boolean,
 	isPanelOpen: boolean,
-	-- Tambahkan field yang dipakai di SyncStore tapi tidak ada di type
+	-- Add fields used in SyncStore but missing from type
 	isDancePreparing: boolean,
 	isDanceReady: boolean,
 	pendingAnimationName: string?,
@@ -527,16 +527,16 @@ export type IOverheadService = {
 export type DonationEntry = {
 	rank: number,
 	saweriaName: string,
-	robloxUsername: string?, -- nil jika belum ter-match
+	robloxUsername: string?, -- nil if not yet ter-match
 	robloxUserId: number?,
 	totalAmount: number,
-	lastDonationAt: string, -- ISO date string dari sheets
+	lastDonationAt: string, -- ISO date string from sheets
 }
 export type DonationNotifPayload = {
 	saweriaName: string,
 	amount: number,
 	message: string?,
-	newRank: number?, -- rank mereka setelah donasi, nil jika tidak masuk top 10
+	newRank: number?, -- their rank after donation, nil if not in top 10
 	robloxUsername: string?,
 	robloxUserId: number?,
 	robloxDisplayName: string?,
@@ -549,7 +549,7 @@ export type DonationNotifPayload = {
 export type DonationLeaderboardPayload = {
 	daily: { DonationEntry },
 	allTime: { DonationEntry },
-	updatedAt: number, -- os.time() saat data di-fetch
+	updatedAt: number, -- os.time() when data di-fetch
 }
 export type DonorProfilePayload = {
 	userId: number,

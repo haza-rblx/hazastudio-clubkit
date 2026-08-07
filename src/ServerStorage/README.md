@@ -2,30 +2,30 @@
 
 ## Tools/
 
-Folder kosong per role/membership.
+Empty folder per role/membership.
 
 ### Studio — Command Bar
 
-**Opsi A — satu baris (tanpa plugin, selalu jalan):**
+**Option A — one line (no plugin, always works):**
 
 ```lua
 require(game.ReplicatedStorage.Hazastudio_ClubKit.Shared.Studio.GenerateRoleToolsFolder).run()
 ```
 
-**Opsi B — `generate_tools_folder()` (butuh plugin):**
+**Option B — `generate_tools_folder()` (requires plugin):**
 
-Install `tools/ClubKitStudioTools/` ke `%LOCALAPPDATA%\Roblox\Plugins\` lalu restart Studio.  
-Atau pakai toolbar **Gen Tools** di plugin Club Kit Packager.
+Install `tools/ClubKitStudioTools/` to `%LOCALAPPDATA%\Roblox\Plugins\` then restart Studio.  
+Or use the **Gen Tools** toolbar in the Club Kit Packager plugin.
 
-Setelah plugin aktif:
+After the plugin is active:
 
 ```lua
 generate_tools_folder()
 ```
 
-Folder mengikuti `ClubKitConfig` + membership (`VIP`, `VVIP`, `SUPREME`). Kosong — isi Tool manual.
+Folders follow `ClubKitConfig` + membership (`VIP`, `VVIP`, `SUPREME`). Empty — add Tools manually.
 
-### Alternatif: PowerShell (Rojo filesystem)
+### Alternative: PowerShell (Rojo filesystem)
 
 ```powershell
 powershell -File tools/GenerateRoleToolFolders.ps1
@@ -33,5 +33,4 @@ powershell -File tools/GenerateRoleToolFolders.ps1
 
 ### Legacy paste script
 
-`tools/EnsureRoleToolFolders.editmode.luau` — paste ke Command Bar (memanggil module di atas).
-
+`tools/EnsureRoleToolFolders.editmode.luau` — paste into Command Bar (calls the module above).

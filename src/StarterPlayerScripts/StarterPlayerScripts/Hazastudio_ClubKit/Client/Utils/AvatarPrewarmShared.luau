@@ -18,9 +18,9 @@ function AvatarPrewarmShared.getPool(): AvatarPrewarmPool.AvatarPrewarmPool
 	sharedPool = AvatarPrewarmPool.create({
 		maxPoolSize = poolSize,
 		proximityRadius = 30,
-		-- 0.1s cooldown hanya untuk tick-based proximity scan. Event-driven
-		-- prewarm (PlayerAdded, CharacterAdded, on-demand click) tetap paralel
-		-- sehingga pool terisi cepat di 100 CCU.
+		-- 0.1s cooldown only for tick-based proximity scan. Event-driven
+		-- prewarm (PlayerAdded, CharacterAdded, on-demand click) still paralel
+		-- sehingga pool filled cepat di 100 CCU.
 		loadCooldown = 0.1,
 		prewarmSelf = Config.AvatarContext.VIEWPORT_PREWARM_SELF ~= false,
 	})

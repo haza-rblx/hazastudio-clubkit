@@ -1,6 +1,6 @@
 --!strict
 -- Client-side thumbnail cache (quota-efficiency-pass-2026-06, Phase 2, task 2.3).
--- Wrap Cache.luau dengan API specialized untuk thumbnail, plus in-flight dedup.
+-- Wrap Cache.luau with API specialized for thumbnail, plus in-flight dedup.
 --
 -- Cache key: "thumb:" .. userId .. ":" .. thumbType.Name .. ":" .. thumbSize.Name
 -- TTL: 600s default (Config.ClientHttpApi.GET_THUMB_TTL)
@@ -93,9 +93,9 @@ function ClientThumbnailCache.get(
 end
 
 -- Direct get-or-fetch: returns the URL string whenever possible.
--- Path A (ENABLED=true): cache → fallback ke direct fetch kalau cache miss/fail.
--- Path B (ENABLED=false): cache layer off → langsung direct fetch.
--- Returns nil hanya kalau direct fetch juga gagal (invalid userId / API throttled).
+-- Path A (ENABLED=true): cache → fallback to direct fetch if cache miss/fail.
+-- Path B (ENABLED=false): cache layer off → directly direct fetch.
+-- Returns nil only if direct fetch juga failed (invalid userId / API throttled).
 function ClientThumbnailCache.getOrFetch(
 	userId: number,
 	thumbType: Enum.ThumbnailType,
@@ -105,11 +105,11 @@ function ClientThumbnailCache.getOrFetch(
 	if url then
 		return url
 	end
-	-- Fallback ke direct fetch. get() bisa return nil di dua kondisi:
+	-- Fallback to direct fetch. get() may return nil in two cases:
 	--   1. ENABLED=false (cache layer off)
-	--   2. ENABLED=true tapi API call di pcall gagal
-	-- Tanpa fallback ini, caller (mis. DonationNotificationController)
-	-- akan dapat nil dan thumbnail ImageLabel kosong.
+	--   2. ENABLED=true but API call in pcall failed
+	-- Without this fallback, caller (e.g. DonationNotificationController)
+	-- will get nil and thumbnail ImageLabel stays empty.
 	local Players = game:GetService("Players")
 	local ok, content = pcall(function()
 		return Players:GetUserThumbnailAsync(userId, thumbType, thumbSize)

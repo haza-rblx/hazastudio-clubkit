@@ -8,12 +8,12 @@ local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Con
 local ShopDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.ShopDomain)
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
 local PressFeedback = require(script.Parent.Parent.Utils.PressFeedback)
--- Mapping tier -> nama elemen di GUI
+-- Mapping tier -> GUI element names
 local TIER_CARD: { [string]: string } = {
 }
 local TIER_NOTIF: { [string]: string } = {
 }
--- Suffix tombol per tier: Buy[Suffix]Button, Gift[Suffix]Button
+-- Button suffix per tier: Buy[Suffix]Button, Gift[Suffix]Button
 local TIER_SUFFIX: { [string]: string } = {
 }
 for _, tier in ipairs(Config.Membership.SHOP_TIERS or {}) do
@@ -112,8 +112,8 @@ type TierRefs = {
 	benefitTitle: TextLabel,
 	benefitDesc: TextLabel,
 	indicatorWrapper: Frame,
-	indicatorActive: Frame, -- template (tidak di-parent ke GUI)
-	indicatorDisable: Frame, -- template (tidak di-parent ke GUI)
+	indicatorActive: Frame, -- template (not parented to GUI)
+	indicatorDisable: Frame, -- template (not parented to GUI)
 }
 type CarouselState = {
 	index: number,
@@ -124,18 +124,18 @@ type CarouselState = {
 -- ============================================================
 local ShopUI = {} :: any
 ShopUI.__index = ShopUI
-local WAIT_TIMEOUT = 10 -- detik maksimal menunggu elemen GUI
+local WAIT_TIMEOUT = 10 -- seconds max wait for GUI elements
 function ShopUI.new(gui: ScreenGui)
 	local self = setmetatable({}, ShopUI) :: any
 	self._gui = gui
 	self._mainWrapper = gui:WaitForChild("MainWrapper", WAIT_TIMEOUT) :: Frame
 	self._notifWrapper = gui:WaitForChild("NotificationWrapper", WAIT_TIMEOUT) :: Frame
 	if not self._mainWrapper then
-		warn("[ShopUI] MainWrapper tidak ditemukan di " .. gui.Name)
+		warn("[ShopUI] MainWrapper not found di " .. gui.Name)
 		return self
 	end
 	if not self._notifWrapper then
-		warn("[ShopUI] NotificationWrapper tidak ditemukan di " .. gui.Name)
+		warn("[ShopUI] NotificationWrapper not found di " .. gui.Name)
 		return self
 	end
 	self._contentWrapper = self._mainWrapper:WaitForChild("02-MainContentWrapper", WAIT_TIMEOUT) :: Frame
@@ -148,12 +148,12 @@ function ShopUI.new(gui: ScreenGui)
 	self:_buildRefs()
 	self:_initPrices()
 	self:_initCarousels()
-	-- Sembunyikan semua saat init
+	-- Hide all on init
 	self._mainWrapper.Visible = false
 	self._notifWrapper.Visible = false
 	return self
 end
--- Ambil dan store referensi semua elemen per tier
+-- Fetch and store references for all elements per tier
 function ShopUI:_buildRefs()
 	for tier, cardName in pairs(TIER_CARD) do
 		local card = self._contentWrapper:FindFirstChild(cardName) :: Frame?
@@ -166,12 +166,12 @@ function ShopUI:_buildRefs()
 		if not (bw and dw and indW) then
 			continue
 		end
-		-- Clone template indicator sebelum dibersihkan
+		-- Clone template indicator before cleanup
 		local activeClone = indW:FindFirstChild("CarrouselIndicatorActive")
 		local disableClone = indW:FindFirstChild("CarrouselIndicatorDisable")
 		activeClone = activeClone and activeClone:Clone() :: Frame
 		disableClone = disableClone and disableClone:Clone() :: Frame
-		-- Bersihkan template dari GUI (akan dibuat ulang secara dinamis)
+		-- Remove template from GUI (recreated dynamically)
 		clearIndicatorGuiObjects(indW)
 		self._tierRefs[tier] = {
 			card = card,
@@ -184,7 +184,7 @@ function ShopUI:_buildRefs()
 		}
 	end
 end
--- Update harga display dari Config
+-- Update harga display from Config
 function ShopUI:_initPrices()
 	for tier, cardName in pairs(TIER_CARD) do
 		local entry = ShopDomain.getCatalogEntry(tier)
@@ -224,10 +224,10 @@ function ShopUI:_initPrices()
 		end
 	end
 end
--- Bangun ulang indicator dots sesuai jumlah benefit dan index aktif
+-- Rebuild indicator dots to match benefit count and active index
 function ShopUI:_buildIndicators(refs: TierRefs, count: number, activeIndex: number)
 	local wrapper = refs.indicatorWrapper
-	-- Hapus dots sebelumnya
+	-- Remove previous dots
 	clearIndicatorGuiObjects(wrapper)
 	wrapper.Visible = count > 1
 	if count <= 1 then
@@ -243,7 +243,7 @@ function ShopUI:_buildIndicators(refs: TierRefs, count: number, activeIndex: num
 		dot.Parent = wrapper
 	end
 end
--- Update konten satu slide (langsung, tanpa animasi)
+-- Update one slide content (immediate, no animation)
 function ShopUI:_applySlide(tier: string, index: number)
 	local refs = self._tierRefs[tier]
 	local cs = self._carousels[tier]
@@ -266,7 +266,7 @@ function ShopUI:_applySlide(tier: string, index: number)
 	self:_buildIndicators(refs, #cs.benefits, index)
 	cs.index = index
 end
--- Fade out -> ganti konten -> fade in
+-- Fade out -> swap content -> fade in
 local function buildExitProps(obj: Instance, basePosition: UDim2, offsetScale: number): { [string]: any }?
 	local props: { [string]: any } = {
 		Position = basePosition + UDim2.fromScale(offsetScale, 0),
@@ -381,7 +381,7 @@ function ShopUI:_fadeToSlide(tier: string, nextIndex: number)
 	task.wait(fadeTime + ((#targets - 1) * staggerTime))
 	cs.animating = false
 end
--- Setup dan mulai semua carousel
+-- Setup and start all carousels
 function ShopUI:_initCarousels()
 	for tier, _ in pairs(TIER_CARD) do
 		local refs = self._tierRefs[tier]
@@ -437,7 +437,7 @@ function ShopUI:showNotification(tier: string, playerDisplayName: string)
 	if not normalizedTier then
 		return
 	end
-	-- Sembunyikan semua notification
+	-- Hide all notifications
 	for _, name in pairs(TIER_NOTIF) do
 		local n = self._notifWrapper:FindFirstChild(name)
 		if n then
@@ -449,7 +449,7 @@ function ShopUI:showNotification(tier: string, playerDisplayName: string)
 	if not notif then
 		return
 	end
-	-- Update teks judul dengan nama player
+	-- Update teks judul with nama player
 	local content = notif:FindFirstChild("1-RequestContent") :: Frame?
 	local jumbotron = content and content:FindFirstChild("JumbotronTextandImage") :: Frame?
 	local frame = jumbotron and jumbotron:FindFirstChild("Frame") :: Frame?
@@ -461,7 +461,7 @@ function ShopUI:showNotification(tier: string, playerDisplayName: string)
 	end
 	notif.Visible = true
 	self._notifWrapper.Visible = true
-	-- swingIn - senada dengan notif di CoupleSystem
+	-- swingIn - similar to CoupleSystem notification
 	local content2 = notif:FindFirstChild("1-RequestContent") :: Frame?
 	if content2 then
 		self._anim:swingIn(content2, self._notifWrapper, nil)
@@ -481,7 +481,7 @@ function ShopUI:hideNotification()
 		if content2 then
 			self._anim:scaleOut(content2, function()
 				self._notifWrapper.Visible = false
-				-- Reset scale untuk berikutnya
+				-- Reset scale for berikutnya
 				local s = content2:FindFirstChildWhichIsA("UIScale") :: UIScale?
 				if s then
 					s.Scale = 1
@@ -532,7 +532,7 @@ function ShopUI:bindClose(callback: () -> ())
 		self._closeBtn.MouseButton1Click:Connect(callback)
 	end
 end
--- Bind tombol "Wow, thanks!" pada notification tier tertentu
+-- Bind "Wow, thanks!" button on specific notification tier
 function ShopUI:bindNotifClose(tier: string, callback: () -> ())
 	local normalizedTier = normalizeTier(tier)
 	if not normalizedTier then

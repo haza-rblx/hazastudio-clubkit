@@ -2,17 +2,17 @@
 -- ============================================================
 -- PRINT GUI TREE: DancePanelGUIWrapperv2Mobile (IconGroup) → leaf
 -- ============================================================
--- Dump hierarki panel dance mobile saja (+ ringkasan saudara di IconGroup).
+-- Dump mobile dance panel hierarchy only (+ IconGroup sibling summary).
 --
 -- Target:
 --   StarterGui.IconGroup.DancePanelGUIWrapperv2Mobile
 --
--- CARA PAKAI:
--- 1. Buka place NUWA di Studio (Edit Mode cukup).
--- 2. Copy seluruh file ini → paste ke Command Bar → Enter.
--- 3. Salin output dari jendela Output.
+-- USAGE:
+-- 1. Open NUWA place in Studio (Edit Mode is enough).
+-- 2. Copy entire file → paste into Command Bar → Enter.
+-- 3. Copy output from the Output window.
 --
--- Read-only — tidak mengubah instance apa pun.
+-- Read-only — does not modify any instances.
 -- ============================================================
 
 local StarterGui = game:GetService("StarterGui")
@@ -20,7 +20,7 @@ local StarterGui = game:GetService("StarterGui")
 local ICON_GROUP_NAME = "IconGroup"
 local MOBILE_PANEL_NAME = "DancePanelGUIWrapperv2Mobile"
 
-local MAX_DEPTH = 0 -- 0 = unlimited (sampai leaf)
+local MAX_DEPTH = 0 -- 0 = unlimited (to leaf)
 local SHOW_PROPERTIES = true
 local SHOW_LEAF_PATHS = true
 local LIST_ICON_GROUP_SIBLINGS = true
@@ -247,7 +247,7 @@ emit("============================================================")
 
 local iconGroup = StarterGui:FindFirstChild(ICON_GROUP_NAME)
 if not iconGroup then
-	warn(string.format("[PrintDancePanelMobileGui] '%s' tidak ditemukan di StarterGui.", ICON_GROUP_NAME))
+	warn(string.format("[PrintDancePanelMobileGui] '%s' not found in StarterGui.", ICON_GROUP_NAME))
 	print(table.concat(LOG, "\n"))
 	return
 end
@@ -271,16 +271,16 @@ end
 
 local mobilePanel = iconGroup:FindFirstChild(MOBILE_PANEL_NAME)
 if not mobilePanel then
-	warn(string.format("[PrintDancePanelMobileGui] '%s' tidak ditemukan di %s.", MOBILE_PANEL_NAME, iconGroup:GetFullName()))
+	warn(string.format("[PrintDancePanelMobileGui] '%s' not found in %s.", MOBILE_PANEL_NAME, iconGroup:GetFullName()))
 	emit("")
-	emit("Hint: pastikan instance ada di Explorer seperti di place NUWA.")
+	emit("Hint: ensure the instance exists in Explorer as in the NUWA place.")
 	print(table.concat(LOG, "\n"))
 	return
 end
 
 dumpRoot(mobilePanel)
 
--- Bandingkan anak level-1 dengan desktop v2 (jika ada)
+-- Compare level-1 children with desktop v2 (if present)
 local desktopV2 = iconGroup:FindFirstChild("DancePanelGUIWrapperv2")
 if desktopV2 then
 	emit("")

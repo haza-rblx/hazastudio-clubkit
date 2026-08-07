@@ -43,7 +43,7 @@ local function createAvatarContextController(deps: {
 		Config.AvatarContext.REQUEST_RATE_MAX,
 		Config.AvatarContext.REQUEST_RATE_WINDOW
 	)
-	-- TTL-based dedup agar tidak memory leak saat server hidup lama
+	-- TTL-based dedup so not memory leak when server hidup lama
 	local processedRequests = {} :: { [string]: number }
 	local viewersByTarget = {} :: {[number]: {[number]: Player}}
 	local targetByViewer = {} :: {[number]: number}
@@ -102,7 +102,7 @@ local function createAvatarContextController(deps: {
 	end
 
 	function controller:_handleRequest(player: Player, raw: any, remoteResponse: RemoteEvent)
-		-- size check dulu sebelum akses field apapun
+		-- size check first before accessing any field
 		if not Validator.checkSize(raw) then
 			log:warn("Payload terlalu besar", { player = player.Name })
 			return
@@ -128,8 +128,8 @@ local function createAvatarContextController(deps: {
 
 		-- Rate limit
 		if not rateLimiter:check(player.UserId) then
-			-- Demote ke debug: client spam adalah pola normal, warn level
-			-- bikin developer console banjir saat 70-80 player main bareng.
+			-- Demote to debug: client spam is a normal pattern; warn level
+			-- floods the developer console when 70-80 players play together.
 			log:debug("Rate limit hit", { player = player.Name })
 			local response: AvatarContextResponse = {
 				requestId = request.requestId,
@@ -165,8 +165,8 @@ local function createAvatarContextController(deps: {
 			return
 		end
 
-		-- Build payload - dijalankan di thread terpisah agar tidak blocking
-		-- handler lain sementara menunggu network/DataStore calls.
+		-- Build payload — runs on a separate thread so it does not block
+		-- other handlers while waiting on network/DataStore calls.
 		task.spawn(function()
 			local result = service:buildPayload(targetPlayer, player)
 
@@ -196,7 +196,7 @@ local function createAvatarContextController(deps: {
 			viewersByTarget[targetUserId] = nil
 			return
 		end
-		-- Profile berubah: invalidate cache supaya rebuild fresh.
+		-- Profile changed: invalidate cache so rebuild is fresh.
 		if type(service.invalidateForTarget) == "function" then
 			service:invalidateForTarget(targetUserId)
 		end
@@ -206,7 +206,7 @@ local function createAvatarContextController(deps: {
 		end
 		for viewerUserId, viewer in pairs(viewers) do
 			if viewer.Parent == Players then
-				-- task.spawn per viewer agar tidak blocking saat banyak viewers
+				-- task.spawn per viewer so it does not block with many viewers
 				task.spawn(function()
 					local result = service:buildPayload(targetPlayer, viewer)
 					if result.ok then
@@ -232,7 +232,7 @@ local function createAvatarContextController(deps: {
 			viewersByTarget[targetUserId] = nil
 			return
 		end
-		-- Context berubah (overhead/like/etc): invalidate cache.
+		-- Context changed (overhead/like/etc): invalidate cache.
 		if type(service.invalidateForTarget) == "function" then
 			service:invalidateForTarget(targetUserId)
 		end
@@ -242,7 +242,7 @@ local function createAvatarContextController(deps: {
 		end
 		for viewerUserId, viewer in pairs(viewers) do
 			if viewer.Parent == Players then
-				-- task.spawn per viewer agar tidak blocking saat banyak viewers
+				-- task.spawn per viewer so it does not block with many viewers
 				task.spawn(function()
 					local result = service:buildPayload(targetPlayer, viewer)
 					if result.ok then

@@ -1,8 +1,8 @@
 --!strict
 -- PATH: ServerScriptService/Server/Repositories/MusicRepository.lua
--- DataStore CRUD untuk music library (playlists + tracks).
--- Data disimpan sebagai satu JSON blob per key (shared library, bukan per-player).
--- Pattern: mirip FavoritesRepository tapi dengan global key, bukan per-player key.
+-- DataStore CRUD for music library (playlists + tracks).
+-- Data stored as one JSON blob per key (shared library, not per-player).
+-- Pattern: similar to FavoritesRepository but with global key, not per-player key.
 
 local DataStoreService = game:GetService("DataStoreService")
 local HttpService = game:GetService("HttpService")
@@ -429,7 +429,7 @@ end
 
 function MusicRepository:deletePlaylist(playlistId: string): Result<nil>
 	if not self._playlists[playlistId] then
-		return Result.Err("Playlist tidak ditemukan: " .. playlistId)
+		return Result.Err("Playlist not found: " .. playlistId)
 	end
 
 	local nextPlaylists = self:_clonePlaylists(self._playlists)
@@ -477,7 +477,7 @@ end
 function MusicRepository:deleteTrack(trackId: string): Result<nil>
 	local currentTrack = self._tracks[trackId]
 	if not currentTrack then
-		return Result.Err("Track tidak ditemukan: " .. trackId)
+		return Result.Err("Track not found: " .. trackId)
 	end
 
 	-- Two-phase write: persist playlist first, then track tombstone.
@@ -520,7 +520,7 @@ function MusicRepository:deleteTrack(trackId: string): Result<nil>
 			self:_serializePlaylists(self._playlists, self._playlistTombstones)
 		)
 		if not rollbackResult.ok then
-			self._logger:error("Rollback playlist gagal setelah deleteTrack gagal", {
+			self._logger:error("Rollback playlist failed after deleteTrack failed", {
 				trackId = trackId,
 				error = (rollbackResult :: { ok: false, error: string }).error,
 			})
@@ -536,9 +536,9 @@ end
 
 -- ============================================================
 -- bulkSeed: insert banyak playlist + track sekaligus dalam 2 DataStore
--- writes (1 per key) sebagai gantinya N writes per item. Pattern dipakai
--- oleh MusicSeeder untuk seed library awal tanpa nge-trigger rate limit.
--- Idempotent saat dipanggil dengan input kosong (return Ok langsung).
+-- writes (1 per key) instead of N writes per item. Pattern used
+-- by MusicSeeder to seed initial library without triggering rate limit.
+-- Idempotent when called with empty input (return Ok immediately).
 -- ============================================================
 function MusicRepository:bulkSeed(deps: {
 	newPlaylists: { PlaylistInfo },
@@ -568,8 +568,8 @@ function MusicRepository:bulkSeed(deps: {
 		nextPlaylists[cloned.id] = cloned
 	end
 
-	-- Append trackIds ke existing playlists (yang udah ada di repo, bukan yang
-	-- baru ditambah di newPlaylists — itu sudah masukin trackIds lewat field).
+	-- Append trackIds to existing playlists (already in repo, not those
+	-- new entries in newPlaylists already include trackIds via field).
 	for playlistId, trackIds in pairs(deps.appendToExistingPlaylists) do
 		local target = nextPlaylists[playlistId]
 		if target then
@@ -604,7 +604,7 @@ function MusicRepository:bulkSeed(deps: {
 		self:_serializeTracks(nextTracks, self._trackTombstones)
 	)
 	if not trackPersistResult.ok then
-		-- Rollback playlists biar tetap konsisten
+		-- Rollback playlists to stay consistent
 		local rollbackResult = self:_setAsync(
 			self._config.PLAYLIST_KEY,
 			self:_serializePlaylists(self._playlists, self._playlistTombstones)
@@ -625,7 +625,7 @@ end
 function MusicRepository:updateTrackDuration(trackId: string, duration: number): Result<nil>
 	local track = self._tracks[trackId]
 	if not track then
-		return Result.Err("Track tidak ditemukan: " .. trackId)
+		return Result.Err("Track not found: " .. trackId)
 	end
 
 	local updatedTrack = cloneTrack(track)

@@ -48,16 +48,16 @@ local function createAvatarLikeRepository(deps: { logger: Types.ILogger? }?)
 	local lastLeaderboardScore: { [number]: number } = {}
 	local lastMetadataFingerprint: { [number]: string } = {}
 
-	-- Server-side TTL cache untuk top leaderboard.
-	-- Tanpa cache ini, getTopLeaderboard memicu syncOnlineLeaderboard
+	-- Server-side TTL cache for top leaderboard.
+	-- Without this cache, getTopLeaderboard triggers syncOnlineLeaderboard
 	-- (write per online player) + GetSortedAsync + per-entry GetAsync metadata.
-	-- Dengan 70-80 player itu ratusan DataStore call per refresh.
-	local LIKES_LEADERBOARD_CACHE_TTL = 60 -- detik
+	-- With 70-80 players that is hundreds of DataStore calls per refresh.
+	local LIKES_LEADERBOARD_CACHE_TTL = 60 -- seconds
 	local likesLeaderboardCache: { [number]: { value: any, exp: number } } = {}
 
-	-- In-flight dedup untuk getSummary: cegah concurrent DataStore reads
-	-- untuk userId yang sama saat refreshAll burst (30 CCU semua rebuild overhead).
-	-- Key = userId, Value = BindableEvent yang di-Fire saat read selesai.
+	-- In-flight dedup for getSummary: prevent concurrent DataStore reads
+	-- for the same userId during refreshAll bursts (30 CCU all rebuild overhead).
+	-- Key = userId, Value = BindableEvent fired when the read completes.
 	local summaryInFlight: { [number]: BindableEvent } = {}
 
 	local repo = {}
@@ -365,8 +365,8 @@ local function createAvatarLikeRepository(deps: { logger: Types.ILogger? }?)
 			return Result.Ok((cached :: LikeSummaryData).totalLikes)
 		end
 
-		-- In-flight dedup: kalau ada concurrent request untuk userId yang sama,
-		-- tunggu hasil dari yang pertama (tanpa double DataStore read).
+		-- In-flight dedup: if a concurrent request exists for the same userId,
+		-- wait for the first result (avoids a duplicate DataStore read).
 		if summaryInFlight[targetUserId] then
 			-- Poll with a timeout instead of a bare BindableEvent.Event:Wait().
 			-- If the in-flight requester's thread is cancelled or errors before
@@ -384,7 +384,7 @@ local function createAvatarLikeRepository(deps: { logger: Types.ILogger? }?)
 			if afterWait then
 				return Result.Ok((afterWait :: LikeSummaryData).totalLikes)
 			end
-			-- Fallthrough kalau requester pertama gagal atau timeout tercapai.
+			-- Fallthrough if requester pertama failed or timeout tercapai.
 		end
 
 		-- Register in-flight

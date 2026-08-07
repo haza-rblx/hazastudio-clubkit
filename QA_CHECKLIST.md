@@ -1,24 +1,24 @@
-# QA Checklist — Club Kit v1.3 (post handover + review pass)
+# QA Checklist — Club Kit v2.4.73 (post handover + review pass)
 
-**Tanggal:** 2026-07-07  
-**Lingkungan:** Roblox Studio (dev) → staging → production  
+**Date:** 2026-07-07  
+**Environment:** Roblox Studio (dev) → staging → production  
 **Tester:** _______________  
 **Build / place file:** _______________  
-**Catatan:** Centang `[x]` setelah lulus. Tulis `FAIL` + screenshot/log kalau gagal.
+**Notes:** Check `[x]` after pass. Write `FAIL` + screenshot/log on failure.
 
 ---
 
-## 0. Pre-flight (wajib sebelum gameplay test)
+## 0. Pre-flight (required before gameplay test)
 
-| # | Test | Pass | Catatan |
-|---|------|------|---------|
-| 0.1 | Rojo sync / insert place berhasil tanpa error di Output | [ ] | |
-| 0.2 | `Secrets.luau` sudah diisi deployer (kalau test donation/API) | [ ] | Kosongkan = fitur API off |
-| 0.3 | `Config.HttpApi.ENABLED = false` (default aman) | [ ] | |
+| # | Test | Pass | Notes |
+|---|------|------|-------|
+| 0.1 | Rojo sync / place insert succeeds with no Output errors | [ ] | |
+| 0.2 | `Secrets.luau` filled by deployer (if testing donation/API) | [ ] | Empty = API features off |
+| 0.3 | `Config.HttpApi.ENABLED = false` (safe default) | [ ] | |
 | 0.4 | `Config.HttpApi.COUNTERS_ENABLED = false` | [ ] | |
-| 0.5 | `./tools/validate-handover.sh` → 0 fail (Git Bash/WSL + aftman) | [ ] | Warn stylua/selene boleh jika pre-existing |
-| 0.6 | Server Output: `"Server initialized..."` tanpa error merah | [ ] | |
-| 0.7 | Client Output: boot selesai, tidak ada error merah berulang | [ ] | |
+| 0.5 | `./tools/validate-handover.sh` → 0 fail (Git Bash/WSL + aftman) | [ ] | stylua/selene warnings OK if pre-existing |
+| 0.6 | Server Output: `"Server initialized..."` with no red errors | [ ] | |
+| 0.7 | Client Output: boot complete, no repeating red errors | [ ] | |
 
 ---
 
@@ -26,147 +26,147 @@
 
 ### C1 — Settings load gate
 
-| # | Langkah | Expected | Pass | Catatan |
-|---|---------|----------|------|---------|
-| 1.1 | Player join dengan koneksi normal | Settings UI menampilkan data tersimpan (bukan default kosong) | [ ] | |
-| 1.2 | Ubah 1 setting → tunggu 5s → rejoin | Perubahan persist | [ ] | |
-| 1.3 | **Stress:** spam toggle setting cepat 10x → rejoin | Tidak revert ke default; tidak corrupt | [ ] | |
-| 1.4 | Simulasi load gagal (matikan DataStore API sementara / budget exhausted) → join | Client boleh tampil default; **save/reset ditolak** (tidak overwrite datastore) | [ ] | Cek server log: `settings_not_loaded` |
+| # | Steps | Expected | Pass | Notes |
+|---|-------|----------|------|-------|
+| 1.1 | Player joins with normal connection | Settings UI shows saved data (not empty defaults) | [ ] | |
+| 1.2 | Change 1 setting → wait 5s → rejoin | Change persists | [ ] | |
+| 1.3 | **Stress:** spam toggle setting 10x quickly → rejoin | Does not revert to default; not corrupted | [ ] | |
+| 1.4 | Simulate load failure (disable DataStore API temporarily / budget exhausted) → join | Client may show defaults; **save/reset rejected** (no datastore overwrite) | [ ] | Check server log: `settings_not_loaded` |
 
 ### C2 — MusicRepository merge
 
-| # | Langkah | Expected | Pass | Catatan |
-|---|---------|----------|------|---------|
-| 1.5 | Edit playlist/track di 1 server → tunggu sync | Perubahan tersimpan | [ ] | |
-| 1.6 | (Multi-server / 2 Studio test place) edit playlist berbeda hampir bersamaan | Tidak ada playlist/track hilang; revision tertinggi menang | [ ] | Opsional jika punya 2 server |
+| # | Steps | Expected | Pass | Notes |
+|---|-------|----------|------|-------|
+| 1.5 | Edit playlist/track on 1 server → wait for sync | Change saved | [ ] | |
+| 1.6 | (Multi-server / 2 Studio test places) edit different playlists nearly simultaneously | No playlist/track loss; highest revision wins | [ ] | Optional if 2 servers available |
 
 ### H3 — Autosave + BindToClose
 
-| # | Langkah | Expected | Pass | Catatan |
-|---|---------|----------|------|---------|
-| 1.7 | Mainkan 2+ menit (XP/settings/favorites berubah) → stop server graceful | Data tersimpan | [ ] | |
-| 1.8 | Cek server log saat shutdown: `BindToClose complete` atau tidak ada warn timeout | [ ] | |
-| 1.9 | Player leave → rejoin dalam 30s | XP, settings, favorites masih ada | [ ] | |
+| # | Steps | Expected | Pass | Notes |
+|---|-------|----------|------|-------|
+| 1.7 | Play 2+ minutes (XP/settings/favorites change) → graceful server stop | Data saved | [ ] | |
+| 1.8 | Check server log on shutdown: `BindToClose complete` or no timeout warn | [ ] | |
+| 1.9 | Player leave → rejoin within 30s | XP, settings, favorites still present | [ ] | |
 
 ---
 
 ## 2. Critical — Memory & lifecycle (C3–C5, H5–H8)
 
-### Studio hot-reload (dev-only, tapi wajib untuk hygiene fix)
+### Studio hot-reload (dev-only, but required for hygiene fix)
 
-| # | Langkah | Expected | Pass | Catatan |
-|---|---------|----------|------|---------|
-| 2.1 | Hot-reload `Main.server` 3x (Rojo) | Tidak ada duplicate join handler (settings sync 1x per join, bukan 3x) | [ ] | |
-| 2.2 | Hot-reload `Main.client` 3x | Tidak ada duplicate notif/donation/overhead event | [ ] | |
-| 2.3 | Setelah reload: 1 donation notif | Muncul **sekali**, bukan double/triple | [ ] | |
-| 2.4 | Monitor Server memory 10 menit + 5 player join/leave (simulasi churn) | Tidak naik terus tanpa batas (trend flat setelah churn) | [ ] | Opsional |
+| # | Steps | Expected | Pass | Notes |
+|---|-------|----------|------|-------|
+| 2.1 | Hot-reload `Main.server` 3x (Rojo) | No duplicate join handler (settings sync 1x per join, not 3x) | [ ] | |
+| 2.2 | Hot-reload `Main.client` 3x | No duplicate notif/donation/overhead events | [ ] | |
+| 2.3 | After reload: 1 donation notif | Appears **once**, not double/triple | [ ] | |
+| 2.4 | Monitor Server memory 10 min + 5 player join/leave (churn sim) | Does not rise without bound (flat trend after churn) | [ ] | Optional |
 
 ### Player leave cleanup
 
-| # | Langkah | Expected | Pass | Catatan |
-|---|---------|----------|------|---------|
-| 2.5 | Player join → lihat overhead rank/cash → leave | Tidak error server | [ ] | |
-| 2.6 | Couple: kirim request → sender leave sebelum accept | Request hilang dari target UI | [ ] | |
-| 2.7 | Music playing → player leave | Tidak error; session bersih | [ ] | |
+| # | Steps | Expected | Pass | Notes |
+|---|-------|----------|------|-------|
+| 2.5 | Player join → see overhead rank/cash → leave | No server error | [ ] | |
+| 2.6 | Couple: send request → sender leaves before accept | Request removed from target UI | [ ] | |
+| 2.7 | Music playing → player leave | No error; session clean | [ ] | |
 
 ---
 
 ## 3. High — Abuse & edge cases (H9–H13)
 
-| # | Area | Langkah | Expected | Pass | Catatan |
-|---|------|---------|----------|------|---------|
-| 3.1 | EffectDonate | Trigger efek donate (BlackHole/Blossom/GreenHammer/Nuke) | Efek jalan; tidak freeze client | [ ] | |
-| 3.2 | EffectDonate | Biarkan efek meteor berjalan >90s (kalau ada loop) | Loop berhenti (deadline 90s) | [ ] | |
-| 3.3 | Donation leaderboard | Burst donasi cepat (3+ dalam 5s) | Leaderboard update ter-debounce (~3s), tidak spam network | [ ] | |
-| 3.4 | MusicService | Coba inject non-audio asset ID ke queue | Ditolak (`asset_not_audio`) | [ ] | |
-| 3.5 | SignServer | Kirim string >64 char / non-string | Ditolak + rate limited | [ ] | |
-| 3.6 | RopeServer | Pakai rope tanpa character valid / spam | Rate limited; tidak exploit | [ ] | |
-| 3.7 | GiftPending | Beli gift → ProcessReceipt (atau simulasi retry) | Gift hanya delivered **sekali**, tidak double | [ ] | |
-| 3.8 | PaidBroadcast | Beli broadcast → transient fail → retry Roblox | Broadcast tetap terkirim (pending tidak hilang) | [ ] | |
-| 3.9 | RoleToolService | Spam request sync tools | Debounce 2s; tidak flicker backpack | [ ] | |
-| 3.10 | GlowStick | Dual-color spam | Cooldown sama seperti single color | [ ] | |
+| # | Area | Steps | Expected | Pass | Notes |
+|---|------|-------|----------|------|-------|
+| 3.1 | EffectDonate | Trigger donate effect (BlackHole/Blossom/GreenHammer/Nuke) | Effect runs; client does not freeze | [ ] | |
+| 3.2 | EffectDonate | Let meteor effect run >90s (if loop exists) | Loop stops (90s deadline) | [ ] | |
+| 3.3 | Donation leaderboard | Burst donations quickly (3+ in 5s) | Leaderboard updates debounced (~3s), no network spam | [ ] | |
+| 3.4 | MusicService | Try injecting non-audio asset ID into queue | Rejected (`asset_not_audio`) | [ ] | |
+| 3.5 | SignServer | Send string >64 char / non-string | Rejected + rate limited | [ ] | |
+| 3.6 | RopeServer | Use rope without valid character / spam | Rate limited; no exploit | [ ] | |
+| 3.7 | GiftPending | Buy gift → ProcessReceipt (or retry sim) | Gift delivered **once**, not double | [ ] | |
+| 3.8 | PaidBroadcast | Buy broadcast → transient fail → Roblox retry | Broadcast still sent (pending not lost) | [ ] | |
+| 3.9 | RoleToolService | Spam request sync tools | 2s debounce; no backpack flicker | [ ] | |
+| 3.10 | GlowStick | Dual-color spam | Same cooldown as single color | [ ] | |
 
 ---
 
 ## 4. Client connection tracking (§5.1 — review pass 2026-07-07)
 
-| # | Modul | Langkah | Expected | Pass |
-|---|-------|---------|----------|------|
-| 4.1 | Overhead | Join → overhead muncul → hot-reload client → join lagi | Overhead tetap update normal | [ ] |
-| 4.2 | Settings (client) | Buka settings → sync dari server → reload client | Panel hydrate benar | [ ] |
-| 4.3 | Couple | Buka couple panel → terima announce | Panel + announce jalan setelah reload | [ ] |
-| 4.4 | Donation notif | 1 donasi masuk | Notif muncul 1x; queue jalan | [ ] |
-| 4.5 | Donation leaderboard | Leaderboard workspace animate | Update via remote + revision attribute | [ ] |
-| 4.6 | Shop/Gift | Beli tier / terima grant notif | Grant callback fire sekali | [ ] |
-| 4.7 | Admin giftcard | Kirim giftcard (jika punya permission) | Result remote routed benar | [ ] |
-| 4.8 | Avatar context | Klik player → like effect | Like effect + panel jalan | [ ] |
-| 4.9 | Cinematic dock | Role yang boleh → buka dock | Broadcast + target list jalan | [ ] |
-| 4.10 | EffectDonate scripts | Trigger efek → reload client script parent | Tidak orphan connection (efek masih bisa trigger) | [ ] |
+| # | Module | Steps | Expected | Pass |
+|---|--------|-------|----------|------|
+| 4.1 | Overhead | Join → overhead appears → hot-reload client → join again | Overhead still updates normally | [ ] |
+| 4.2 | Settings (client) | Open settings → sync from server → reload client | Panel hydrates correctly | [ ] |
+| 4.3 | Couple | Open couple panel → receive announce | Panel + announce work after reload | [ ] |
+| 4.4 | Donation notif | 1 donation arrives | Notif appears 1x; queue works | [ ] |
+| 4.5 | Donation leaderboard | Workspace board animates | Updates via remote + revision attribute | [ ] |
+| 4.6 | Shop/Gift | Buy tier / receive grant notif | Grant callback fires once | [ ] |
+| 4.7 | Admin giftcard | Send giftcard (if permitted) | Result remote routed correctly | [ ] |
+| 4.8 | Avatar context | Click player → like effect | Like effect + panel work | [ ] |
+| 4.9 | Cinematic dock | Permitted role → open dock | Broadcast + target list work | [ ] |
+| 4.10 | EffectDonate scripts | Trigger effect → reload client script parent | No orphan connection (effect still triggerable) | [ ] |
 
 ---
 
-## 5. Feature smoke (regression cepat)
+## 5. Feature smoke (quick regression)
 
-Centang modul yang relevan dengan feature flags ON di place kamu.
+Check modules relevant to feature flags ON in your place.
 
-| # | Feature | Langkah singkat | Pass | Catatan |
-|---|---------|-----------------|------|---------|
+| # | Feature | Quick steps | Pass | Notes |
+|---|---------|-------------|------|-------|
 | 5.1 | Settings | Toggle graphics + overhead visibility → save | [ ] | |
 | 5.2 | Music player | Play / pause / skip / queue | [ ] | |
-| 5.3 | Sync dance | Sync dengan partner | [ ] | Flag: `SyncDanceEnabled` |
+| 5.3 | Sync dance | Sync with partner | [ ] | Flag: `SyncDanceEnabled` |
 | 5.4 | Couple | Request → accept → breakup | [ ] | Flag: `CouplesEnabled` |
 | 5.5 | Shop / Gift | Prompt purchase (Studio test product) | [ ] | |
-| 5.6 | Donation (cash/Robux) | Panel buka → donasi test | [ ] | |
-| 5.6a | `/fakerobux 10` (showcase ON) | Aura muncul; **tanpa** Nuke/Smite/BlackHole; board tidak berubah | [ ] | preview only |
-| 5.6b | `/fakecash 500` (showcase ON) | Aura showcase tier rendah; board tidak berubah | [ ] | preview only |
-| 5.6c | `/fakecash 2000 hello` (showcase ON) | Aura + world Nuke + message; board tidak berubah | [ ] | preview only |
-| 5.6d | `/fakecash 150000` (showcase OFF) | Aura production + world Nuke (100k+); board tidak berubah | [ ] | preview only |
-| 5.6e | `/testcash 1000` | Masih jalan (deprecated alias `/fakecash`); board tidak berubah | [ ] | preview only |
-| 5.6f | `/fakecash OtherPlayer 5000 msg` lalu cek leaderboard | Notif/VFX di target; **board tidak berubah** (no persist) | [ ] | |
-| 5.6g | `/addcash <self> 5000` | Board + overhead **berubah** (persist) | [ ] | |
-| 5.6h | `DonationCash = false` | Tab IDR panel donasi tersembunyi | [ ] | |
+| 5.6 | Donation (cash/Robux) | Open panel → test donation | [ ] | |
+| 5.6a | `/fakerobux 10` (showcase ON) | Aura appears; **no** Nuke/Smite/BlackHole; board unchanged | [ ] | preview only |
+| 5.6b | `/fakecash 500` (showcase ON) | Low-tier showcase aura; board unchanged | [ ] | preview only |
+| 5.6c | `/fakecash 2000 hello` (showcase ON) | Aura + world Nuke + message; board unchanged | [ ] | preview only |
+| 5.6d | `/fakecash 150000` (showcase OFF) | Production aura + world Nuke (100k+); board unchanged | [ ] | preview only |
+| 5.6e | `/testcash 1000` | Still works (deprecated alias `/fakecash`); board unchanged | [ ] | preview only |
+| 5.6f | `/fakecash OtherPlayer 5000 msg` then check leaderboard | Notif/VFX on target; **board unchanged** (no persist) | [ ] | |
+| 5.6g | `/addcash <self> 5000` | Board + overhead **change** (persist) | [ ] | |
+| 5.6h | `DonationCash = false` | IDR donation panel tab hidden | [ ] | |
 | 5.7 | Stickers | Place + clear sticker | [ ] | |
 | 5.8 | Carry | Carry player | [ ] | |
-| 5.9 | Admin panel | Buka + 1 aksi aman (list player) | [ ] | |
+| 5.9 | Admin panel | Open + 1 safe action (list players) | [ ] | |
 | 5.10 | Command library | Execute 1 command | [ ] | |
-| 5.11 | Streak | Login streak notif (hari baru simulasi) | [ ] | |
-| 5.12 | Chat tags | Chat di RBXGeneral | [ ] | Tag format benar |
-| 5.13 | Leaderboard | Workspace board tampil top entries | [ ] | |
+| 5.11 | Streak | Login streak notif (simulated new day) | [ ] | |
+| 5.12 | Chat tags | Chat in RBXGeneral | [ ] | Tag format correct |
+| 5.13 | Leaderboard | Workspace board shows top entries | [ ] | |
 
 ---
 
-## 6. HttpApi wrapper (hanya setelah staging baseline)
+## 6. HttpApi wrapper (only after staging baseline)
 
-**Jangan enable di production sebelum section ini lulus di staging.**
+**Do not enable in production before this section passes in staging.**
 
-| # | Langkah | Expected | Pass | Catatan |
-|---|---------|----------|------|---------|
-| 6.1 | Baseline 1–2 hari dengan `ENABLED=false`, `COUNTERS_ENABLED=false` | Tidak ada regresi gameplay | [ ] | |
-| 6.2 | Command Bar: `HttpApiTelemetry.Enable()` | Counter snapshot di server log | [ ] | |
-| 6.3 | Workload 30 CCU simulasi (atau max yang bisa) 1–2 hari | Counter masuk akal; tidak ada error baru | [ ] | |
+| # | Steps | Expected | Pass | Notes |
+|---|-------|----------|------|-------|
+| 6.1 | Baseline 1–2 days with `ENABLED=false`, `COUNTERS_ENABLED=false` | No gameplay regression | [ ] | |
+| 6.2 | Command Bar: `HttpApiTelemetry.Enable()` | Counter snapshot in server log | [ ] | |
+| 6.3 | 30 CCU simulation workload (or max available) 1–2 days | Counters sensible; no new errors | [ ] | |
 | 6.4 | Command Bar: `HttpApi.Enable()` (parallel-run) | Overhead rank/name resolve normal | [ ] | |
-| 6.5 | Bandingkan cache hit rate vs baseline | Sama atau lebih baik | [ ] | |
-| 6.6 | Rollback test: `ENABLED=false` lagi | Kembali ke direct API tanpa regresi | [ ] | |
+| 6.5 | Compare cache hit rate vs baseline | Same or better | [ ] | |
+| 6.6 | Rollback test: `ENABLED=false` again | Returns to direct API without regression | [ ] | |
 
 ---
 
 ## 7. Sign-off
 
-| Kriteria | Status |
+| Criteria | Status |
 |----------|--------|
-| Semua **§0 Pre-flight** lulus | [ ] |
-| Semua **§1 Critical** lulus | [ ] |
-| **§2 Hot-reload** lulus (minimal 2.1–2.3) | [ ] |
-| **§3 High** lulus (minimal 3.1, 3.3, 3.7, 3.8) | [ ] |
-| **§4 Connection tracking** lulus (minimal 4.1, 4.2, 4.4) | [ ] |
-| **§5 Smoke** lulus untuk feature yang ON | [ ] |
-| **§6 HttpApi** (jika promote wrapper) | [ ] N/A |
+| All **§0 Pre-flight** pass | [ ] |
+| All **§1 Critical** pass | [ ] |
+| **§2 Hot-reload** pass (minimum 2.1–2.3) | [ ] |
+| **§3 High** pass (minimum 3.1, 3.3, 3.7, 3.8) | [ ] |
+| **§4 Connection tracking** pass (minimum 4.1, 4.2, 4.4) | [ ] |
+| **§5 Smoke** pass for enabled features | [ ] |
+| **§6 HttpApi** (if promoting wrapper) | [ ] N/A |
 
-**Keputusan:**
+**Decision:**
 
 - [ ] **READY for staging publish**
-- [ ] **READY for production** (setelah §6 kalau pakai HttpApi wrapper)
-- [ ] **BLOCKED** — isi issue di bawah
+- [ ] **READY for production** (after §6 if using HttpApi wrapper)
+- [ ] **BLOCKED** — list issues below
 
 **Issues found:**
 
@@ -180,12 +180,12 @@ Centang modul yang relevan dengan feature flags ON di place kamu.
 
 ## Quick reference — log strings to watch
 
-| String | Arti |
-|--------|------|
-| `settings_not_loaded` | Load gate bekerja; save ditolak (expected saat load gagal) |
-| `BindToClose complete` | Shutdown flush sukses |
-| `BindToClose: timeout` | **FAIL** — data mungkin hilang |
-| `Gift pending` + double delivery | **FAIL** — cek GiftPendingRepository |
+| String | Meaning |
+|--------|---------|
+| `settings_not_loaded` | Load gate working; save rejected (expected on load failure) |
+| `BindToClose complete` | Shutdown flush succeeded |
+| `BindToClose: timeout` | **FAIL** — data may be lost |
+| `Gift pending` + double delivery | **FAIL** — check GiftPendingRepository |
 | `Paid broadcast receipt without valid pending` | Investigate PaidBroadcast flow |
 | Duplicate settings sync on join | **FAIL** — connection leak / hot-reload |
 

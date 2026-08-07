@@ -1,12 +1,12 @@
 --!strict
 -- Server/HideDefaultOverhead.server.lua
--- Sembunyikan overhead name tag bawaan Roblox untuk semua player.
--- Harus jalan di server agar berlaku untuk semua client.
+-- Hide Roblox default overhead name tag for all players.
+-- Harus run di server so berlaku for all client.
 
 local Players = game:GetService("Players")
 
 -- Per-player CharacterAdded connection tracking.
--- Cegah leak: saat player leave, koneksi di-disconnect eksplisit.
+-- Prevent leak: when player leaves, connections explicitly disconnected.
 local characterAddedConns: { [number]: RBXScriptConnection } = {}
 
 local function hideDefaultOverhead(player: Player)
@@ -21,12 +21,12 @@ local function hideDefaultOverhead(player: Player)
 end
 
 local function onPlayerAdded(player: Player)
-	-- Handle character yang sudah ada (join mid-session di Studio)
+	-- Handle characters already present (join mid-session in Studio)
 	if player.Character then
 		task.spawn(hideDefaultOverhead, player)
 	end
 
-	-- Track connection agar bisa di-cleanup saat player leave
+	-- Track connection so it can be cleaned up when player leaves
 	local old = characterAddedConns[player.UserId]
 	if old then
 		old:Disconnect()
@@ -46,7 +46,7 @@ Players.PlayerRemoving:Connect(function(player: Player)
 	end
 end)
 
--- Handle player yang sudah ada saat server start
+-- Handle players already present when server starts
 for _, player in ipairs(Players:GetPlayers()) do
 	task.spawn(onPlayerAdded, player)
 end

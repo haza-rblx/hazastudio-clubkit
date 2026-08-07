@@ -1,20 +1,20 @@
 --!nocheck
 -- ============================================================
--- PRINT CINEMATIC DOCK GUI — dump hierarchy sampai leaf
+-- PRINT CINEMATIC DOCK GUI — dump hierarchy to leaf
 -- ============================================================
--- Utility Command Bar (Edit Mode, read-only) untuk dokumentasi /
--- update binding CinematicDockController.
+-- Utility Command Bar (Edit Mode, read-only) for documentation /
+-- updating CinematicDockController bindings.
 --
--- CARA PAKAI:
--- 1. Pastikan `12-CinematicDockGUI` ada di place (biasanya StarterGui
---    atau clone ke PlayerGui saat Play).
--- 2. Paste SELURUH file ini ke Command Bar Studio -> Enter.
--- 3. Copy output dari Output window.
+-- USAGE:
+-- 1. Ensure `12-CinematicDockGUI` exists in the place (usually StarterGui
+--    or cloned to PlayerGui during Play).
+-- 2. Paste ENTIRE file into Studio Command Bar -> Enter.
+-- 3. Copy output from the Output window.
 --
 -- Output:
---   - Tree ASCII (ClassName + properti penting) sampai leaf
---   - Daftar leaf path (relatif ke root GUI) buat wiring script
---   - Checklist node yang dipakai CinematicDockController saat ini
+--   - ASCII tree (ClassName + important properties) to leaf
+--   - Leaf path list (relative to GUI root) for wiring scripts
+--   - Checklist of nodes used by CinematicDockController
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -30,12 +30,12 @@ local Workspace = game:GetService("Workspace")
 
 local GUI_NAME = "12-CinematicDockGUI"
 
--- 0 = unlimited (sampai leaf)
+-- 0 = unlimited (to leaf)
 local MAX_DEPTH = 0
 
 local SHOW_PROPERTIES = true
 
--- Cari di root-root ini (urutan prioritas). Edit kalau GUI kamu di tempat lain.
+-- Search these roots (priority order). Edit if your GUI lives elsewhere.
 local SEARCH_ROOTS: { Instance } = {
 	StarterGui,
 	StarterPlayer,
@@ -44,10 +44,10 @@ local SEARCH_ROOTS: { Instance } = {
 	Workspace,
 }
 
--- Kalau Play test & GUI cuma di PlayerGui, set true.
+-- If Play testing and GUI is only in PlayerGui, set true.
 local INCLUDE_PLAYER_GUI = true
 
--- Node yang CinematicDockController expect (untuk checklist di akhir output).
+-- Nodes CinematicDockController expects (for end-of-output checklist).
 local EXPECTED_TOP_LEVEL: { { name: string, classHint: string?, optional: boolean? } } = {
 	{ name = "CinematicDock", classHint = "Frame" },
 	{ name = "OverlayTrigger", classHint = "ImageButton", optional = true },
@@ -292,7 +292,7 @@ end
 
 local target, foundUnder = findGui()
 if not target then
-	warn(string.format("[PrintCinematicDockGui] '%s' tidak ketemu. Cek StarterGui / PlayerGui.", GUI_NAME))
+	warn(string.format("[PrintCinematicDockGui] '%s' not found. Check StarterGui / PlayerGui.", GUI_NAME))
 	return
 end
 
@@ -310,7 +310,7 @@ emit("============================================================")
 emit(string.format("Stats: %d nodes | %d leaves | max depth %d", stats.nodes, stats.leaves, stats.maxDepth))
 emit("============================================================")
 emit("")
-emit("--- LEAF PATHS (relatif ke root, untuk wiring script) ---")
+emit("--- LEAF PATHS (relative to root, for wiring scripts) ---")
 table.sort(leafPaths)
 for _, path in ipairs(leafPaths) do
 	emit("  " .. path)

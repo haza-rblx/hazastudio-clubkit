@@ -1,40 +1,40 @@
-# Hazastudio Club Kit v1.3 — Setup Guide
+# Hazastudio Club Kit v2.4.72 — Setup Guide
 
-Panduan ini untuk **buyer / venue** yang pasang kit di place Roblox mereka.
+This guide is for **buyers / venue owners** installing the kit in their Roblox place.
 
 ---
 
-## Ringkasan: file apa yang diedit?
+## Summary: which files to edit?
 
-| Path di Explorer (Studio) | Edit? | Fungsi |
+| Path in Explorer (Studio) | Edit? | Purpose |
 |------|-------|--------|
-| `ReplicatedStorage/Hazastudio_ClubKitConfig/ClubKitConfig` | **YA** | Satu file config place (group, shop, role, donasi, dll.) |
-| `ServerScriptService/Hazastudio_ClubKitSecrets/Secrets` | **YA** | API secret (server-only, tidak ke client) |
-| `ReplicatedStorage/Hazastudio_ClubKit/Shared/Config/ClubKitShowcase` | Opsional | **Switch demo** — ada = showcase, hapus = live |
-| `ReplicatedStorage/Hazastudio_ClubKit/` (sisanya) | **JANGAN** | Engine shared — replace saat update kit |
-| `ServerScriptService/Hazastudio_ClubKit/Server/` | **JANGAN** | Engine server |
-| `ReplicatedStorage/Hazastudio_ClubKit/Shared/Constants/Config` | **JANGAN** | Engine internal (advanced) |
+| `ReplicatedStorage/Hazastudio_ClubKitConfig/ClubKitConfig` | **YES** | Single place config file (group, shop, roles, donations, etc.) |
+| `ServerScriptService/Hazastudio_ClubKitSecrets/Secrets` | **YES** | API secrets (server-only, never sent to client) |
+| `ReplicatedStorage/Hazastudio_ClubKit/Shared/Config/ClubKitShowcase` | Optional | **Demo switch** — present = showcase; remove = live |
+| `ReplicatedStorage/Hazastudio_ClubKit/` (everything else) | **DO NOT** | Shared engine — replace on kit update |
+| `ServerScriptService/Hazastudio_ClubKit/Server/` | **DO NOT** | Server engine |
+| `ReplicatedStorage/Hazastudio_ClubKit/Shared/Constants/Config` | **DO NOT** | Internal engine (advanced) |
 
-> **Satu sumber config buyer:** `ReplicatedStorage/Hazastudio_ClubKitConfig/ClubKitConfig` saja. Jangan edit `ClubKitDefaults`.
+> **Single buyer config source:** `ReplicatedStorage/Hazastudio_ClubKitConfig/ClubKitConfig` only. Do not edit `ClubKitDefaults`.
 
 ---
 
-## Demo vs Live mode
+## Demo vs live mode
 
-| Kondisi | Mode | Leaderboard |
+| Condition | Mode | Leaderboard |
 |---------|------|-------------|
-| File `ClubKitShowcase.luau` **ada** & `ACTIVE = true` | **Showcase** | Data demo (profiles palsu) |
-| File **dihapus** atau `ACTIVE = false` | **Live** | DataStore + API Bagi-Bagi |
+| `ClubKitShowcase.luau` **exists** & `ACTIVE = true` | **Showcase** | Demo data (fake profiles) |
+| File **removed** or `ACTIVE = false` | **Live** | DataStore + Bagi-Bagi API |
 
-Tidak perlu atur `Showcase.Enabled` di `ClubKitConfig` — itu otomatis dari file showcase.
+You do not need to set `Showcase.Enabled` in `ClubKitConfig` — that is inferred from the showcase file.
 
-**Kirim ke buyer:** hapus `ClubKitShowcase.luau` dari package → langsung live mode.
+**Ship to buyer:** remove `ClubKitShowcase.luau` from the package → live mode immediately.
 
-**Toggle runtime (owner):** `/showcase on` · `/showcase off` · `/showcase status`
+**Runtime toggle (owner):** `/showcase on` · `/showcase off` · `/showcase status`
 
 ---
 
-## Checklist setup (urutan disarankan)
+## Setup checklist (recommended order)
 
 ### 1. Branding & group
 
@@ -42,22 +42,22 @@ Edit `ClubKitConfig.luau`:
 
 ```lua
 Branding = {
-    GameName = "Nama Club Kamu",
+    GameName = "Your Club Name",
     WelcomeMessage = "Welcome to %s",
     Greeting = "Welcome to %s",
-    -- WAJIB diganti: logo community (loading / poster / leaderboard / Join Community modal).
-    -- Jangan biarkan ID bawaan kit (79426970537296) di place live.
+    -- REQUIRED: replace with your community logo (loading / poster / leaderboard / Join Community modal).
+    -- Do not leave the kit default ID (79426970537296) on a live place.
     LogoImage = "rbxassetid://YOUR_COMMUNITY_LOGO_ID",
 },
 
 Group = {
-    GroupId = 12345678,        -- ID group Roblox (wajib live)
-    OwnerUserId = 987654321,   -- userId owner place
+    GroupId = 12345678,        -- Roblox group ID (required for live)
+    OwnerUserId = 987654321,   -- place owner userId
     OwnerGroupRank = 255,
 },
 
 AdminUserIds = {
-    -- [111111] = true,  -- backup admin tanpa group rank
+    -- [111111] = true,  -- backup admin without group rank
 },
 ```
 
@@ -76,27 +76,27 @@ Shop = {
 },
 ```
 
-Aktifkan pass/product di dashboard. `Price` = harga tampil di UI.
+Enable passes/products in the dashboard. `Price` = display price in UI.
 
 ### 2b. Paid broadcast (Developer Product)
 
-Player bayar Robux lewat ikon topbar **Broadcast** untuk kirim pesan ke seluruh server. Staff dengan `canAnnounce` tetap bisa `/announce` gratis.
+Players pay Robux via the topbar **Broadcast** icon to send a message to the whole server. Staff with `canAnnounce` can still use `/announce` for free.
 
-Creator Dashboard → Monetization → Developer Products → buat **satu** product (mis. "Server Broadcast"), atur harga Robux.
+Creator Dashboard → Monetization → Developer Products → create **one** product (e.g. "Server Broadcast"), set Robux price.
 
 ```lua
 PaidBroadcast = {
-    ProductId = 3503700307, -- ganti dengan Product ID dari Creator Dashboard
+    ProductId = 3503700307, -- replace with Product ID from Creator Dashboard
 },
 ```
 
 Path: `ReplicatedStorage/Hazastudio_ClubKitConfig/ClubKitConfig` → `PaidBroadcast.ProductId`.
 
-**Penting:** ini product terpisah dari `Shop.Products` — jangan pakai BuyGamePassId/GiftId membership.
+**Important:** this is separate from `Shop.Products` — do not reuse membership BuyGamePassId/GiftId.
 
-Verifikasi: Play test → ikon Broadcast → prompt Robux muncul. Jika `ProductId` masih `0`, Output: `[ConfigBootstrap] PaidBroadcast.ProductId belum diisi`.
+Verify: Play test → Broadcast icon → Robux prompt appears. If `ProductId` is still `0`, Output: `[ConfigBootstrap] PaidBroadcast.ProductId is not set`.
 
-### 3. Membership & role (nama tier + rank)
+### 3. Membership & roles (tier names + ranks)
 
 ```lua
 Membership = {
@@ -106,24 +106,24 @@ Membership = {
 },
 ```
 
-Sesuaikan `RoleCategories`, `SpenderRoles`, `CommandAliases` jika rename role.
+Adjust `RoleCategories`, `SpenderRoles`, and `CommandAliases` if you rename roles.
 
-### 4. Donasi cash (IDR — Bagi-Bagi / Saweria / SociaBuzz)
+### 4. Cash donations (IDR — Bagi-Bagi / Saweria / SociaBuzz)
 
 ```lua
 Donation = {
-    Provider = "bagibagi", -- "bagibagi" | "saweria" | "sociabuzz" — nama & label donor otomatis
-    ProviderLink = "https://bagibagi.co/halaman-kamu", -- atau https://sociabuzz.com/username
+    Provider = "bagibagi", -- "bagibagi" | "saweria" | "sociabuzz" — donor name & labels auto-set
+    ProviderLink = "https://bagibagi.co/your-page", -- or https://sociabuzz.com/username
     ApiUrl = "https://xxx.workers.dev/game/clubkit-key",
     Cash = { Enabled = true },
     Robux = { Enabled = true },
-    MinAmount = 1000, -- threshold notif + leaderboard (IDR)
-    -- Aura karakter (Robux + cash IDR)
+    MinAmount = 1000, -- notification + leaderboard threshold (IDR)
+    -- Character aura (Robux + cash IDR)
     AuraTiers = {
         { level = 1, min = 10, idrMin = 0, idrMax = 9999, effect = "Level1", sound = "Level1", duration = 4, cameraDuration = 0 },
-        -- min = Robux | idrMin/idrMax = range IDR
+        -- min = Robux | idrMin/idrMax = IDR range
     },
-    -- World VFX global (semua cash IDR)
+    -- Global world VFX (all cash IDR)
     WorldEffectTiers = {
         { min = 100000, effect = "Nuke" },
         { min = 250000, effect = "Smite4" },
@@ -132,29 +132,29 @@ Donation = {
 },
 ```
 
-Untuk **SociaBuzz**: set `Provider = "sociabuzz"`, paste `sociabuzz_webhook` dari donation admin panel ke TRIBE → Integrations (Webhook URL), isi **Webhook Token** dengan token dari URL/admin, lalu Test Notification. Cash tab title/donor label mengikuti `Provider`.
+For **SociaBuzz**: set `Provider = "sociabuzz"`, paste `sociabuzz_webhook` from the donation admin panel into TRIBE → Integrations (Webhook URL), fill **Webhook Token** from the URL/admin, then Test Notification. Cash tab title/donor label follow `Provider`.
 
 **Aura vs world (behavior matrix):**
 
-| Sumber | Aura karakter | World VFX |
+| Source | Character aura | World VFX |
 |--------|---------------|-----------|
-| **Robux** | Ya (`min` Robux) | **Tidak** |
-| **Cash IDR** (Bagi-Bagi / Saweria / SociaBuzz) | Ya (`idrMin`..`idrMax`) | Ya (`min` IDR) |
+| **Robux** | Yes (`min` Robux) | **No** |
+| **Cash IDR** (Bagi-Bagi / Saweria / SociaBuzz) | Yes (`idrMin`..`idrMax`) | Yes (`min` IDR) |
 
-Legacy key `RobuxAuraTiers` / `SaweriaWorldTiers` masih dibaca sebagai alias.
+Legacy keys `RobuxAuraTiers` / `SaweriaWorldTiers` are still read as aliases.
 
 ### 5. Secrets (server)
 
 `ServerScriptService/Hazastudio_ClubKitSecrets/Secrets.luau`:
 
 ```lua
-Secrets.DonationApiSecret = "secret-dari-worker-kamu"
-Secrets.GameDataApiSecret = ""  -- opsional, social API
+Secrets.DonationApiSecret = "secret-from-your-worker"
+Secrets.GameDataApiSecret = ""  -- optional, social API
 ```
 
-Harus match secret di Cloudflare Worker / backend. **Jangan share file ini ke publik.**
+Must match the secret in your Cloudflare Worker / backend. **Do not share this file publicly.**
 
-### 6. Fitur on/off
+### 6. Feature toggles
 
 ```lua
 Features = {
@@ -164,80 +164,81 @@ Features = {
     Shop = true,
     Leaderboards = true,
     DonationCash = true,
-    DonationSaweria = true, -- legacy alias untuk DonationCash
+    DonationSaweria = true, -- legacy alias for DonationCash
     DonationRobux = true,
-    PromptJoinCommunityOnLoad = true, -- setelah loading: modal Join Community (skip jika sudah member; butuh GroupId > 0)
+    PromptJoinCommunityOnLoad = true, -- after loading: Join Community modal (skipped if already member; needs GroupId > 0)
     JoinGreetings = true, -- toast Owner/Leadership/Content/top-10 joiners
-    DonationWorldEffects = true, -- Nuke/Smite/BlackHole on cash donate; false = no duar + hide Settings row
-    -- matikan yang tidak dipakai: false
+    DonationWorldEffects = true, -- Nuke/Smite/BlackHole on cash donate; false = no world VFX + hide Settings row
+    -- disable unused features: false
 },
 ```
 
-**Update Engine = merge additive config:** setelah Update Engine, plugin menambah key `Features` (dan section top-level) yang hilang dari schema ke `ClubKitConfig` Source — **value/key lama tidak diubah**. Set `false` hanya untuk yang mau dimatikan. Kalau panel bilang CONFIG MERGE FAILED, cek Output; baris baru belum tertulis.
+**Update Engine = additive config merge:** after Update Engine, the plugin adds missing `Features` keys (and top-level sections) from schema to `ClubKitConfig` Source — **existing values/keys are not changed**. Set `false` only for features you want off. If the panel shows CONFIG MERGE FAILED, check Output; new rows were not written.
 
-**World effects off:** set `Features.DonationWorldEffects = false` di `ClubKitConfig` untuk map yang tidak mau efek duar. Aura donor, announce, dan highlight tetap. Baris Settings “World Effects” ikut hilang.
-**Music catalog (bulk script add):** isi `ReplicatedStorage/Hazastudio_ClubKitConfig/MusicCatalog.luau`. Tiap track **satu baris**; `parts` boleh multi (max 9). Default playlist **Legacy**. Setelah seed, Manage UI tetap bisa edit/pindah playlist. Matikan merge baru lewat `Features.MusicCatalogSeed = false` (library yang sudah ada tetap).
+**World effects off:** set `Features.DonationWorldEffects = false` in `ClubKitConfig` for maps that should not show world VFX. Donor aura, announce, and highlight still work. Settings “World Effects” row is hidden too.
+
+**Music catalog (bulk script add):** fill `ReplicatedStorage/Hazastudio_ClubKitConfig/MusicCatalog.luau`. One track **per line**; `parts` may be multi-part (max 9). Default playlist **Legacy**. After seed, Manage UI can still edit/move playlists. Disable new merges via `Features.MusicCatalogSeed = false` (existing library remains).
 
 ```lua
--- MusicCatalog.luau (contoh)
+-- MusicCatalog.luau (example)
 tracks = {
     { name = "Song A", creator = "Artist", parts = { "1234567890" } },
     { name = "Song B", creator = "Artist", parts = { "111", "222", "333" }, playbackSpeed = 0.85 },
 },
 ```
 
-### 7. Cek isi rbxm (setelah insert)
+### 7. Verify rbxm contents (after insert)
 
-Kit sudah termasuk di file **`.rbxm`**:
+The kit **`.rbxm`** already includes:
 
-- GUI kit (`StarterGui` — folder `01-` … `15-`)
-- Workspace leaderboard boards (`RobuxDonationBoard`, `SaweriaDonationBoard`, dll.)
-- `ServerStorage/Tools/` sesuai `toolFolder` di config
+- Kit GUIs (`StarterGui` — folders `01-` … `15-`)
+- Workspace leaderboard boards (`RobuxDonationBoard`, `SaweriaDonationBoard`, etc.)
+- `ServerStorage/Tools/` per `toolFolder` in config
 
-Pastikan semua muncul di Explorer setelah insert.
+Confirm all appear in Explorer after insert.
 
 ### 8. Test & publish
 
 Studio → Play test → **File → Publish to Roblox**.
 
-Tidak perlu Rojo/Argon — edit config langsung di Explorer (double-click ModuleScript).
+No Rojo/Argon required — edit config directly in Explorer (double-click ModuleScript).
 
 ---
 
-## Leaderboard: sumber data per board
+## Leaderboard: data source per board
 
-| Board | Butuh ApiUrl? | Sumber live |
+| Board | Needs ApiUrl? | Live source |
 |-------|---------------|-------------|
-| **Robux** | Tidak | DataStore (pembelian VIP / donasi Robux) |
-| **Community** | Tidak | DataStore |
-| **Likes** | Tidak | DataStore (like avatar in-game) |
-| **Bagi-Bagi / Saweria** | **Ya** | HTTP worker + cache |
+| **Robux** | No | DataStore (VIP purchases / Robux donations) |
+| **Community** | No | DataStore |
+| **Likes** | No | DataStore (in-game avatar likes) |
+| **Bagi-Bagi / Saweria** | **Yes** | HTTP worker + cache |
 
-**Live tanpa API:** board Saweria tampil pesan *"Donation API not configured yet"*. Robux/Likes kosong = *"No … yet"* (belum ada data), bukan error API.
+**Live without API:** Saweria board shows *"Donation API not configured yet"*. Empty Robux/Likes = *"No … yet"* (no data yet), not an API error.
 
-### Seed leaderboard manual (one-time)
+### Manual leaderboard seed (one-time)
 
-Script pihak ketiga `tools/OneTimeLeaderboardSeeder/` — untuk isi awal **Cash**, **Robux**, dan/atau **Likes** tanpa sentuh engine kit. Copy ke `ServerScriptService`, isi `LeaderboardSeedData.luau`, dry_run → commit, lalu `/refreshleaderboard all`. Matikan (`ENABLED = false`) atau hapus setelah dipakai.
+Third-party script `tools/OneTimeLeaderboardSeeder/` — initial fill for **Cash**, **Robux**, and/or **Likes** without touching kit engine. Copy to `ServerScriptService`, fill `LeaderboardSeedData.luau`, dry_run → commit, then `/refreshleaderboard all`. Disable (`ENABLED = false`) or remove after use.
 
-Panduan lengkap: [`docs/index.html#leaderboard-seeder`](docs/index.html#leaderboard-seeder)
+Full guide: [`docs/index.html#leaderboard-seeder`](docs/index.html#leaderboard-seeder)
 
 ---
 
 ## Fake donation commands (admin)
 
-| Command | Efek | Persist? |
-|---------|------|----------|
-| `/fakecash [player] <idr> [message]` | Notif + **aura + world VFX** (preview) | ❌ tidak |
-| `/fakerobux [player] <robux> [message]` | Notif + **aura saja** (preview) | ❌ tidak |
-| `/testcash` / `/testsaweria` / `/testdonate` | Deprecated alias → `/fakecash` | ❌ tidak |
-| `/testrobux` | Deprecated alias → `/fakerobux` | ❌ tidak |
-| `/addcash <user> <idr>` | Leaderboard + overhead sync | ✅ ya |
-| `/setrobux <user> <robux>` | Leaderboard Robux | ✅ ya |
-| `/donatecash <user> <idr>` | Persist + notif + VFX | ✅ ya |
+| Command | Effect | Persist? |
+|---------|--------|----------|
+| `/fakecash [player] <idr> [message]` | Notif + **aura + world VFX** (preview) | ❌ no |
+| `/fakerobux [player] <robux> [message]` | Notif + **aura only** (preview) | ❌ no |
+| `/testcash` / `/testsaweria` / `/testdonate` | Deprecated alias → `/fakecash` | ❌ no |
+| `/testrobux` | Deprecated alias → `/fakerobux` | ❌ no |
+| `/addcash <user> <idr>` | Leaderboard + overhead sync | ✅ yes |
+| `/setrobux <user> <robux>` | Robux leaderboard | ✅ yes |
+| `/donatecash <user> <idr>` | Persist + notif + VFX | ✅ yes |
 
-Gunakan `/fakecash` / `/fakerobux` untuk uji notif + VFX tanpa mengubah leaderboard. Untuk isi board manual pakai `/addcash` atau `/setrobux`.
+Use `/fakecash` / `/fakerobux` to test notif + VFX without changing the leaderboard. For manual board fill use `/addcash` or `/setrobux`.
 
-**Showcase (`ClubKitShowcase.luau` aktif):** tier rendah — contoh `/fakerobux 10` → aura Level4; `/fakecash 2000` → aura + Nuke. Nonaktifkan showcase untuk threshold production (100k+ world VFX).
+**Showcase (`ClubKitShowcase.luau` active):** low tiers — e.g. `/fakerobux 10` → Level4 aura; `/fakecash 2000` → aura + Nuke. Disable showcase for production thresholds (100k+ world VFX).
 
 ---
 
@@ -245,81 +246,81 @@ Gunakan `/fakecash` / `/fakerobux` untuk uji notif + VFX tanpa mengubah leaderbo
 
 ### Live production
 
-- [ ] `GroupId` + `OwnerUserId` terisi
-- [ ] `Shop.Products` BuyGamePassId + GiftId terisi & aktif di dashboard
-- [ ] `PaidBroadcast.ProductId` terisi & product aktif di dashboard
-- [ ] `Donation.ApiUrl` + `Secrets.DonationApiSecret` (jika donasi cash aktif)
-- [ ] `ClubKitShowcase.luau` **dihapus** (atau `ACTIVE = false`)
+- [ ] `GroupId` + `OwnerUserId` filled
+- [ ] `Shop.Products` BuyGamePassId + GiftId filled & active in dashboard
+- [ ] `PaidBroadcast.ProductId` filled & product active in dashboard
+- [ ] `Donation.ApiUrl` + `Secrets.DonationApiSecret` (if cash donations enabled)
+- [ ] `ClubKitShowcase.luau` **removed** (or `ACTIVE = false`)
 - [ ] `/showcase status` → OFF
-- [ ] Tool folders ada di `ServerStorage/Tools/`
-- [ ] Test shop, `/setrole`, leaderboard di Studio
+- [ ] Tool folders exist in `ServerStorage/Tools/`
+- [ ] Test shop, `/setrole`, leaderboards in Studio
 - [ ] Publish
 
-### Demo / trailer saja
+### Demo / trailer only
 
-- [ ] Biarkan `ClubKitShowcase.luau` ada
-- [ ] Tidak wajib ApiUrl untuk board terisi demo
-- [ ] Sebelum go-live: hapus showcase file + isi API
-
----
-
-## Troubleshooting singkat
-
-| Masalah | Solusi |
-|---------|--------|
-| Shop warning BuyGamePassId `0` | Isi ID di `Shop.Products` |
-| `PaidBroadcast.PRODUCT_ID masih 0` | Buat Developer Product broadcast → isi `PaidBroadcast.ProductId` |
-| Saweria "API not configured" | Isi `ApiUrl` + `DonationApiSecret` |
-| Robux/Likes "No … yet" | Normal — belum ada donasi/like di DataStore |
-| Mau isi leaderboard manual | `/addcash` atau `/setrobux` — bukan `/fakecash` |
-| Board blank tanpa teks | Tambah `LoadingOverlay` di template SurfaceGui place |
-| `Group.GROUP_ID tidak valid` | Isi `GroupId` atau nyalakan showcase |
+- [ ] Keep `ClubKitShowcase.luau`
+- [ ] ApiUrl not required for demo-filled boards
+- [ ] Before go-live: remove showcase file + configure API
 
 ---
 
-## Command penting
+## Quick troubleshooting
 
-### Preview (tidak persist) — admin
+| Issue | Fix |
+|-------|-----|
+| Shop warning BuyGamePassId `0` | Fill IDs in `Shop.Products` |
+| `PaidBroadcast.PRODUCT_ID is still 0` | Create broadcast Developer Product → fill `PaidBroadcast.ProductId` |
+| Saweria "API not configured" | Fill `ApiUrl` + `DonationApiSecret` |
+| Robux/Likes "No … yet" | Normal — no donations/likes in DataStore yet |
+| Manual leaderboard fill | `/addcash` or `/setrobux` — not `/fakecash` |
+| Board blank with no text | Add `LoadingOverlay` to place SurfaceGui template |
+| `Group.GROUP_ID invalid` | Fill `GroupId` or enable showcase |
 
-| Command | Fungsi |
-|---------|--------|
-| `/fakecash [player] <idr> [message]` | Notif + aura + world VFX; board **tidak** berubah |
-| `/fakerobux [player] <robux> [message]` | Notif + aura saja; board **tidak** berubah |
+---
+
+## Important commands
+
+### Preview (non-persist) — admin
+
+| Command | Purpose |
+|---------|---------|
+| `/fakecash [player] <idr> [message]` | Notif + aura + world VFX; board **unchanged** |
+| `/fakerobux [player] <robux> [message]` | Notif + aura only; board **unchanged** |
 | `/testcash` / `/testsaweria` / `/testdonate` | Deprecated alias → `/fakecash` |
 | `/testrobux` | Deprecated alias → `/fakerobux` |
 
-### Persist — owner (atau Studio bypass)
+### Persist — owner (or Studio bypass)
 
-| Command | Fungsi |
-|---------|--------|
+| Command | Purpose |
+|---------|---------|
 | `/donatecash <player> <idr> [msg]` | Persist + notif + VFX |
-| `/addcash <player> <idr>` | Persist leaderboard cash saja (tanpa VFX) |
-| `/removecash <player> [idr]` | Hapus manual IDR (alias: `/removebagibagi`). Studio: `/removecash me` clear self |
-| `/setrobux <player> <robux>` | Persist leaderboard Robux (tanpa VFX) |
-| `/removerobux <player> [robux]` | Hapus Robux LB. Studio: `/removerobux me` clear self |
+| `/addcash <player> <idr>` | Persist cash leaderboard only (no VFX) |
+| `/removecash <player> [idr]` | Manual IDR removal (alias: `/removebagibagi`). Studio: `/removecash me` clears self |
+| `/setrobux <player> <robux>` | Persist Robux leaderboard (no VFX) |
+| `/removerobux <player> [robux]` | Remove Robux LB entry. Studio: `/removerobux me` clears self |
 
-### Umum
+### General
 
-| Command | Akses | Fungsi |
-|---------|-------|--------|
+| Command | Access | Purpose |
+|---------|--------|---------|
 | `/setrole <player> <role>` | canGift | Set role |
-| `/gift <player> <tier>` | canGift | Beri membership |
+| `/gift <player> <tier>` | canGift | Grant membership |
 | `/showcase on\|off\|status` | owner | Toggle demo leaderboard |
-| `/refreshleaderboard all` | owner | Refresh board |
+| `/refreshleaderboard all` | owner | Refresh boards |
 
 ---
 
-## Cara kirim panduan ini ke Discord
+## Posting this guide to Discord
 
-**Super lengkap (14 pesan):** buka **[DISCORD_SETUP_MESSAGES.txt](DISCORD_SETUP_MESSAGES.txt)** — copy tiap blok `MESSAGE 1/14` … `MESSAGE 14/14` → kirim satu per satu di channel `#setup` → pin MESSAGE 1.
+**Full detail (14 messages):** open **[DISCORD_SETUP_MESSAGES.txt](DISCORD_SETUP_MESSAGES.txt)** — copy each block `MESSAGE 1/14` … `MESSAGE 14/14` → send one at a time in `#setup` → pin MESSAGE 1.
 
-**Ringkas (1 pesan):** **[DISCORD_SETUP_POST.txt](DISCORD_SETUP_POST.txt)**
+**Short (1 message):** **[DISCORD_SETUP_POST.txt](DISCORD_SETUP_POST.txt)**
 
-**File lengkap:** lampirkan `CLUB_KIT_SETUP.md` sebagai attachment di pesan pertama.
+**Full file:** attach `CLUB_KIT_SETUP.md` to the first message.
 
 ---
 
-## Struktur di Explorer (setelah insert rbxm)
+## Explorer structure (after rbxm insert)
 
 ```
 ReplicatedFirst/
@@ -327,12 +328,12 @@ ReplicatedFirst/
     └── LoadingBootstrap.client
 
 ReplicatedStorage/
-├── Hazastudio_ClubKit/              ← engine (jangan edit)
+├── Hazastudio_ClubKit/              ← engine (do not edit)
 │   └── Shared/Config/
-│       └── ClubKitShowcase          ← hapus untuk live
+│       └── ClubKitShowcase          ← remove for live
 ├── Hazastudio_ClubKitConfig/        ← EDIT
 │   └── ClubKitConfig
-└── WorldEffects/                    ← model VFX donasi
+└── WorldEffects/                    ← donation VFX models
 
 ServerScriptService/
 ├── Hazastudio_ClubKit/
@@ -345,11 +346,11 @@ StarterPlayer/StarterPlayerScripts/
 └── Hazastudio_ClubKit/
     └── Main.client
 
-StarterGui/                          ← folder 01- … 15- (GUI kit)
+StarterGui/                          ← folders 01- … 15- (kit GUIs)
 ServerStorage/Tools/                 ← STAFF, VIP, DONOR, …
 Workspace/                           ← RobuxDonationBoard, SaweriaDonationBoard, …
 ```
 
 ---
 
-Hazastudio · Club Kit v1.3
+Hazastudio · Club Kit v2.4.72

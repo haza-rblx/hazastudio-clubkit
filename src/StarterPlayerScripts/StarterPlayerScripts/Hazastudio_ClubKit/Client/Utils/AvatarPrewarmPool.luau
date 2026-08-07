@@ -36,9 +36,9 @@ export type AvatarPrewarmPool = {
 	getPoolSize: (self: AvatarPrewarmPool) -> number,
 	setActive: (self: AvatarPrewarmPool, active: boolean) -> (),
 	destroy: (self: AvatarPrewarmPool) -> (),
-	-- Event: fires once when model untuk userId selesai di-load ke pool.
-	-- Digunakan UI untuk upgrade thumbnail → 3D seamless saat pool miss
-	-- di klik pertama dan prewarm selesai di background.
+	-- Event: fires once when model for userId finishes loading into pool.
+	-- Used by UI to upgrade thumbnail → 3D seamlessly on pool miss
+	-- on first click and prewarm finishes in background.
 	subscribeModelReady: (self: AvatarPrewarmPool, userId: number, callback: () -> ()) -> (() -> ()),
 }
 
@@ -53,9 +53,9 @@ export type PoolConfig = {
 local DEFAULT_MAX_POOL_SIZE = 15
 local DEFAULT_PROXIMITY_RADIUS = 30
 local DEFAULT_TICK_INTERVAL = 1.0
--- loadCooldown diterapkan hanya pada tick-based prewarm (proximity scan).
--- Event-driven prewarm (PlayerAdded/CharacterAdded/on-demand dari controller)
--- selalu paralel karena dipicu oleh event spesifik, bukan loop.
+-- loadCooldown applies only to tick-based prewarm (proximity scan).
+-- Event-driven prewarm (PlayerAdded/CharacterAdded/on-demand from controller)
+-- always parallel because triggered by specific events, not loop.
 local DEFAULT_LOAD_COOLDOWN = 0.1
 
 local AvatarPrewarmPool = {}
@@ -78,9 +78,9 @@ function AvatarPrewarmPool.create(config: PoolConfig?): AvatarPrewarmPool
 	local alive = true
 	local scanActive = false
 	local tickAccum = 0
-	-- Per-userId list of callbacks. Dipanggil sekali saat model siap.
-	-- Setelah fire, callback di-remove agar tidak bocor memori untuk player
-	-- yang频繁 di-klik.
+	-- Per-userId list of callbacks. Fired once when model is ready.
+	-- After fire, callback removed to avoid memory leak for player
+	-- clicked frequently.
 	local modelReadyListeners: { [number]: { () -> () } } = {}
 
 	local function bumpLoadGeneration(userId: number): number
@@ -159,8 +159,8 @@ function AvatarPrewarmPool.create(config: PoolConfig?): AvatarPrewarmPool
 	end
 
 	-- ── Concurrency Limiter ───────────────────────────────────
-	-- Batasi jumlah CreateHumanoidModelFromUserId yang jalan paralel
-	-- agar tidak membanjiri CPU dengan banyak API call sekaligus.
+	-- Limit concurrent CreateHumanoidModelFromUserId calls
+	-- so we do not flood the CPU with many simultaneous API calls.
 	local MAX_CONCURRENT_LOADS = 2
 	local activeLoads = 0
 	local loadQueue: { () -> () } = {}
@@ -193,7 +193,7 @@ function AvatarPrewarmPool.create(config: PoolConfig?): AvatarPrewarmPool
 					loading[userId] = nil
 				end
 
-				-- Drain antrian berikutnya setelah slot bebas
+				-- Drain next queue item after slot frees
 				drainQueue()
 
 				if not alive then
@@ -212,7 +212,7 @@ function AvatarPrewarmPool.create(config: PoolConfig?): AvatarPrewarmPool
 				if not success or not model then
 					return
 				end
-				-- Player mungkin sudah leave saat loading
+				-- Player may already leave when loading
 				if not Players:GetPlayerByUserId(userId) then
 					model:Destroy()
 					return
@@ -254,7 +254,7 @@ function AvatarPrewarmPool.create(config: PoolConfig?): AvatarPrewarmPool
 			end)
 		end
 
-		-- Kalau slot tersedia, langsung jalan. Kalau tidak, masuk antrian FIFO.
+		-- If slot available, run directly. Otherwise enqueue FIFO.
 		if activeLoads < MAX_CONCURRENT_LOADS then
 			executeLoad()
 		else
@@ -344,9 +344,9 @@ function AvatarPrewarmPool.create(config: PoolConfig?): AvatarPrewarmPool
 		return loading[userId] == true
 	end
 
-	--- Trigger prewarm on demand (mis. saat user klik avatar).
-	--- Idempotent: kalau sudah di pool / sedang loading, return false tanpa re-trigger.
-	--- Return true artinya prewarm baru dimulai (untuk logging).
+	--- Trigger prewarm on demand (e.g. when user clicks avatar).
+	--- Idempotent: if already in pool / loading, return false without re-trigger.
+	--- Return true means new prewarm started (for logging).
 	function self:prewarmOnDemand(userId: number): boolean
 		if not alive then return false end
 		if pool[userId] or loading[userId] then return false end
@@ -357,13 +357,13 @@ function AvatarPrewarmPool.create(config: PoolConfig?): AvatarPrewarmPool
 		return true
 	end
 
-	--- Subscribe callback yang di-fire SEKALI saat model untuk userId
-	--- selesai di-load ke pool. UI pakai ini untuk upgrade thumbnail → 3D
-	--- saat klik pertama user yang belum prewarmed.
-	--- Return fungsi unsubscribe.
+	--- Subscribe callback fired ONCE when model for userId
+	--- finishes loading into pool. UI uses this for thumbnail → 3D upgrade
+	--- on first click for not-yet-prewarmed user.
+	--- Return an unsubscribe function.
 	function self:subscribeModelReady(userId: number, callback: () -> ()): () -> ()
 		if not alive then return function() end end
-		-- Kalau sudah ready, fire langsung (defer ke caller thread).
+		-- If already ready, fire directly (defer to caller thread).
 		if pool[userId] then
 			task.defer(callback)
 			return function() end
@@ -395,18 +395,18 @@ function AvatarPrewarmPool.create(config: PoolConfig?): AvatarPrewarmPool
 
 	-- ── Lifecycle ─────────────────────────────────────────────
 
-	-- Tracking CharacterAdded connections per-player agar bisa disconnect
-	-- saat player leave (mencegah memory leak).
+	-- Track CharacterAdded connections per player for disconnect
+	-- when the player leaves (prevents memory leak).
 	local characterAddedConns: { [number]: RBXScriptConnection } = {}
 
-	-- Debounce delay untuk re-warm saat respawn (detik).
-	-- Mencegah destroy+reload instan yang membanjiri CPU.
+	-- Debounce delay for re-warm on respawn (seconds).
+	-- Prevent instant destroy+reload flooding CPU.
 	local REWARM_DEBOUNCE = 1.5
 
 	function self:destroy()
 		alive = false
 		cleaner:clean()
-		-- Disconnect semua CharacterAdded connections
+		-- Disconnect all CharacterAdded connections
 		for userId, conn in characterAddedConns do
 			conn:Disconnect()
 			characterAddedConns[userId] = nil
@@ -420,9 +420,9 @@ function AvatarPrewarmPool.create(config: PoolConfig?): AvatarPrewarmPool
 		poolSize = 0
 		table.clear(loading)
 		table.clear(loadGeneration)
-		-- Bersihkan antrian load yang belum sempat jalan.
+		-- Clear load queue that never started.
 		table.clear(loadQueue)
-		-- Bersihkan listener yang belum sempat fire (panel tertutup saat loading).
+		-- Clear listeners that never fired (panel closed while loading).
 		table.clear(modelReadyListeners)
 	end
 
@@ -434,7 +434,7 @@ function AvatarPrewarmPool.create(config: PoolConfig?): AvatarPrewarmPool
 	end))
 
 	cleaner:add(Players.PlayerRemoving:Connect(function(player)
-		-- Disconnect CharacterAdded connection untuk player ini
+		-- Disconnect CharacterAdded connection for player ini
 		local conn = characterAddedConns[player.UserId]
 		if conn then
 			conn:Disconnect()
@@ -461,21 +461,21 @@ function AvatarPrewarmPool.create(config: PoolConfig?): AvatarPrewarmPool
 		end)
 	end
 
-	-- Helper: setup CharacterAdded listener untuk satu player.
-	-- Debounce re-warm agar tidak langsung destroy+reload saat respawn.
+	-- Helper: setup CharacterAdded listener for satu player.
+	-- Debounce re-warm so not directly destroy+reload when respawn.
 	local function setupCharacterAddedListener(player: Player)
 		if player == localPlayer then return end
 		if characterAddedConns[player.UserId] then return end
 
 		local conn = player.CharacterAdded:Connect(function()
 			if not alive then return end
-			-- Debounce: tunggu sebentar sebelum re-warm untuk hindari burst
+			-- Debounce: brief wait before re-warm to avoid burst
 			task.delay(REWARM_DEBOUNCE, function()
 				if not alive then return end
-				-- Cek player masih valid setelah delay
+				-- Check player still valid after delay
 				if not Players:GetPlayerByUserId(player.UserId) then return end
 
-				-- Invalidate model lama + bump generation so in-flight loads are stale.
+				-- Invalidate old model + bump generation so in-flight loads are stale.
 				bumpLoadGeneration(player.UserId)
 				local entry = pool[player.UserId]
 				if entry and entry.model then
@@ -490,13 +490,13 @@ function AvatarPrewarmPool.create(config: PoolConfig?): AvatarPrewarmPool
 		characterAddedConns[player.UserId] = conn
 	end
 
-	-- Event-driven prewarm: setiap player yang join server langsung mulai
-	-- prewarm di background + setup CharacterAdded listener.
-	-- Saat user klik, model kemungkinan sudah ready.
+	-- Event-driven prewarm: each joining player immediately starts
+	-- background prewarm + CharacterAdded listener setup.
+	-- When user clicks, model likely already ready.
 	cleaner:add(Players.PlayerAdded:Connect(function(player)
 		if player == localPlayer then return end
 		if not alive then return end
-		-- Setup listener untuk re-warm saat respawn (tracked, akan di-disconnect on leave)
+		-- Setup listener for re-warm on respawn (tracked, disconnected on leave)
 		setupCharacterAddedListener(player)
 		task.defer(function()
 			if alive then
@@ -505,7 +505,7 @@ function AvatarPrewarmPool.create(config: PoolConfig?): AvatarPrewarmPool
 		end)
 	end))
 
-	-- Setup CharacterAdded untuk player yang sudah ada di server saat pool dibuat
+	-- Setup CharacterAdded for players already on server when pool is created
 	for _, player in Players:GetPlayers() do
 		setupCharacterAddedListener(player)
 	end

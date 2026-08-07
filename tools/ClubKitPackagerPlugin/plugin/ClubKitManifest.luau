@@ -1,21 +1,21 @@
 --!nocheck
--- Manifest aset Club Kit v1.3 untuk export / unpack otomatis.
+-- Club Kit asset manifest for automated export / unpack.
 
 local ClubKitManifest = {}
 
 ClubKitManifest.PACKAGE_NAME = "HazastudioClubKit_Package"
 ClubKitManifest.MANIFEST_NAME = "_ClubKitManifest"
 ClubKitManifest.PRODUCT_ID = "hazastudioclubkit"
-ClubKitManifest.KIT_VERSION = "2.4.72"
+ClubKitManifest.KIT_VERSION = "2.4.73"
 -- Soft-update version for the Studio dock (may diverge from KIT_VERSION for plugin-only fixes).
-ClubKitManifest.PLUGIN_VERSION = "2.4.72"
+ClubKitManifest.PLUGIN_VERSION = "2.4.73"
 
 -- Soft-update: fetch these Luau modules from GitHub tags (exclude bootstrap).
 ClubKitManifest.PLUGIN_SOURCE_PREFIX = "tools/ClubKitPackagerPlugin/plugin/"
 ClubKitManifest.PLUGIN_BOOTSTRAP = "HazastudioClubKit.plugin.luau"
 ClubKitManifest.PLUGIN_APPLIED_TAG_SETTING = "ClubKit_PluginAppliedTag"
 
--- Folder engine per service (seluruh subtree di-clone).
+-- Engine folder per service (entire subtree cloned).
 ClubKitManifest.SERVICE_ROOTS = {
 	{ service = "ReplicatedFirst", name = "Hazastudio_ClubKit" },
 	{ service = "ReplicatedStorage", name = "Hazastudio_ClubKit" },
@@ -24,7 +24,7 @@ ClubKitManifest.SERVICE_ROOTS = {
 	{ service = "StarterPlayerScripts", name = "Hazastudio_ClubKit" },
 }
 
--- Opsional — buyer config & secrets (bisa di-skip saat export update).
+-- Optional — buyer config & secrets (can be skipped on export update).
 ClubKitManifest.OPTIONAL_ROOTS = {
 	{ service = "ReplicatedStorage", name = "Hazastudio_ClubKitConfig", key = "config" },
 	{ service = "ServerScriptService", name = "Hazastudio_ClubKitSecrets", key = "secrets" },
@@ -67,7 +67,7 @@ ClubKitManifest.WORKSPACE_EXACT = {
 	"Top3Cash",
 }
 
--- Bisa ada banyak instance dengan nama sama (mis. beberapa RunningText).
+-- Multiple instances may share the same name (e.g. several RunningText).
 ClubKitManifest.WORKSPACE_MULTI = {
 	"LiveChatDonations",
 	"RunningText",
@@ -91,7 +91,7 @@ ClubKitManifest.SERVICE_ALIASES = {
 	Workspace = "Workspace",
 }
 
--- Source-sync updater (GitHub tag ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ set Script.Source in place).
+-- Source-sync updater (GitHub tag → set Script.Source in place).
 ClubKitManifest.UPDATER = {
 	githubOwner = "haza-rblx",
 	githubRepo = "hazastudio-clubkit",

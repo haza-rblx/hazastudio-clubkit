@@ -1,8 +1,8 @@
 --!strict
 -- PATH: StarterPlayerScripts/Main.client.lua (LocalScript)
--- Entry point client. Wiring semua client controller di sini.
--- Hot-reload safety: semua listener di luar Lifecycle di-track ke
--- _clientConnections dan di-disconnect di script.Destroying.
+-- Client entry point. Wire all client controllers here.
+-- Hot-reload safety: all listeners outside Lifecycle tracked to
+-- _clientConnections disconnected on script.Destroying.
 
 local RunService = game:GetService("RunService")
 local IS_STUDIO = RunService:IsStudio()
@@ -106,7 +106,7 @@ local function claimClientMainOwnership(): boolean
 				end
 			else
 				studioWarn(
-					"[Main] Duplicate client boot suppressed — hapus LocalScript Main duplikat di StarterPlayerScripts"
+					"[Main] Duplicate client boot suppressed — remove duplicate Main LocalScript in StarterPlayerScripts"
 				)
 				return false
 			end
@@ -130,7 +130,7 @@ local HttpService = game:GetService("HttpService")
 local StarterGui = game:GetService("StarterGui")
 local kitRoot = ReplicatedStorage:WaitForChild("Hazastudio_ClubKit", 30)
 if not kitRoot then
-	-- Critical: tetap merah di production supaya boot gagal terlihat di F9.
+	-- Critical: stay red in production so boot failure is visible in F9.
 	pcall(function()
 		game:GetService("TestService"):Error("[Main] ReplicatedStorage.Hazastudio_ClubKit not found")
 	end)
@@ -347,7 +347,7 @@ end
 
 if LOADING_SCREEN_ENABLED then
 	task.spawn(function()
-		-- Loading controller dibuat dari ReplicatedFirst; di sini kita hanya menempel ke instance yang sama.
+		-- Loading controller created from ReplicatedFirst; here we only attach to the same instance.
 		local ui = LoadingScreenUI.get()
 		local waited = 0
 		while not ui and waited < LoadingConfig.CONTROLLER_WAIT_TIMEOUT do
@@ -485,7 +485,7 @@ local function hardenStarterGuiTemplates()
 	for _, child in ipairs(StarterGui:GetChildren()) do
 		hardenScreenGui(child)
 	end
-	-- M-01: track ke _clientConnections agar di-disconnect saat script.Destroying
+	-- M-01: track to _clientConnections so disconnected on script.Destroying
 	table.insert(_clientConnections, StarterGui.ChildAdded:Connect(function(child)
 		hardenScreenGui(child)
 	end))
@@ -495,7 +495,7 @@ local function bindPlayerGuiResetGuard(playerGui: PlayerGui)
 	for _, child in ipairs(playerGui:GetChildren()) do
 		hardenScreenGui(child)
 	end
-	-- M-02: track ke _clientConnections agar di-disconnect saat script.Destroying
+	-- M-02: track to _clientConnections so disconnected on script.Destroying
 	table.insert(_clientConnections, playerGui.ChildAdded:Connect(function(child)
 		hardenScreenGui(child)
 	end))
@@ -519,7 +519,7 @@ local function ensurePlayerGuiChild(playerGui: PlayerGui, childName: string, tim
 	local clonedChild = starterChild:Clone()
 	hardenScreenGui(clonedChild)
 	clonedChild.Parent = playerGui
-	log:warn("GUI tidak ditemukan di PlayerGui; clone dari StarterGui", {
+	log:warn("GUI not found in PlayerGui; cloning from StarterGui", {
 		name = childName,
 		className = starterChild.ClassName,
 	})
@@ -631,7 +631,7 @@ local function createSubscriptionGroup(name: string): any
 	function group:destroy()
 		for index = #unsubscribers, 1, -1 do
 			local unsubscribe = unsubscribers[index]
-			-- xpcall: hapus type annotation agar return count tidak mismatch
+			-- xpcall: remove type annotation so return count not mismatch
 			local ok, err = xpcall(unsubscribe :: () -> (), debug.traceback)
 			if not ok then
 				groupLog:warn("Subscription cleanup failed", {
@@ -650,7 +650,7 @@ script.Destroying:Connect(function()
 		shared[MAIN_BOOT_OWNER_KEY] = nil
 	end
 	clientLifecycle:destroyAll()
-	-- Disconnect semua listener yang di-track di luar Lifecycle
+	-- Disconnect all listeners tracked outside Lifecycle
 	for _, conn in ipairs(_clientConnections) do
 		conn:Disconnect()
 	end
@@ -674,8 +674,8 @@ task.defer(function()
 end)
 local function placeTopbarIcon(icon: any, order: number)
 	icon:setOrder(order)
-	-- Beberapa versi TopbarPlus menyediakan API alignment explicit.
-	-- Fallback aman: kalau method tidak ada, urutan icon tetap dipakai.
+	-- Some TopbarPlus versions expose explicit alignment API.
+	-- Safe fallback: if method missing, icon order is still used.
 	if type(icon.setRight) == "function" then
 		icon:setRight()
 	elseif type(icon.align) == "function" then
@@ -971,8 +971,8 @@ local function _disableTopbarHoverLabel(icon: any)
 		icon:setLabel("")
 	end
 end
--- NOTE: _disableTopbarHoverLabel tersedia untuk topbar icon future usage
--- ShopService shared - satu instance, dipakai oleh ClientMods.GiftController & ShopController
+-- NOTE: _disableTopbarHoverLabel available for future topbar icon usage
+-- Shared ShopService — one instance, used by ClientMods.GiftController & ShopController
 local sharedShopService = trackClientLifecycle(
 	"ShopService",
 	ClientMods.createShopService({ remotes = Remotes })
@@ -1035,8 +1035,8 @@ if Config.FeatureFlags.StickersEnabled ~= false then
 end
 ClientMods.ChatTagsController.init({})
 -- === Shared Topbar Icons ===
--- Dibuat SEBELUM controller init agar icon sudah ada
--- saat controller mencoba bind .selected/.deselected
+-- Created BEFORE controller init so icons already exist
+-- when controller tries to bind .selected/.deselected
 local menuIcon = Icon.new()
 menuIcon:setImage(Config.Icons.Topbar.Menu, "Deselected")
 menuIcon:setLabel(Config.TopbarMenu.LABEL or "Menu")
@@ -1209,7 +1209,7 @@ end)
 if not cinematicOk then
 	studioWarn("[Main] CinematicDockController.init failed:", cinematicErr)
 end
--- Pakai custom freecam (bukan Roblox dev fly). Desktop = Shift+P; mobile = MobileFreecam GUI.
+-- Use custom freecam (not Roblox dev fly). Desktop = Shift+P; mobile = MobileFreecam GUI.
 pcall(function()
 	StarterPlayer.DevComputerCameraMovementMode = Enum.DevComputerCameraMovementMode.UserInput
 	StarterPlayer.DevTouchCameraMovementMode = Enum.DevTouchCameraMovementMode.Follow
@@ -1335,8 +1335,8 @@ if Config.FeatureFlags.CouplesEnabled ~= false then
 	end)
 end
 -- === Gift + Shop + Streak + Admin ===
--- Semua controller yang memuat GUI dari PlayerGui dijalankan di trackBootTask
--- agar WaitForChild di dalam tidak blocking icon setup topbar
+-- All controllers loading GUI from PlayerGui run in trackBootTask
+-- so WaitForChild inside does not block topbar icon setup
 trackBootTask("GiftShopInit", function()
 	-- === Gift ===
 	local giftCtrl = ClientMods.GiftController.init({
@@ -1609,7 +1609,7 @@ trackBootTask("HotbarController.init", function()
 	)
 	controller:onStart()
 
-	-- M-03: track ke _clientConnections agar di-disconnect saat script.Destroying
+	-- M-03: track to _clientConnections so disconnected on script.Destroying
 	table.insert(_clientConnections, Players.LocalPlayer.CharacterAdded:Connect(function()
 		task.delay(0.4, function()
 			if refsResult.value.root and refsResult.value.root.Parent then
@@ -1821,7 +1821,7 @@ trackBootTask("CarryController.init", function()
 	local carryLog = Logger.new("Carry")
 	local guiExists = ensurePlayerGuiChild(playerGui, Config.Carry.GUI_NAME, 10, carryLog)
 	if not guiExists then
-		carryLog:warn("GUI tidak ditemukan; carry disabled", { name = Config.Carry.GUI_NAME })
+		carryLog:warn("GUI not found; carry disabled", { name = Config.Carry.GUI_NAME })
 		return
 	end
 
@@ -1948,7 +1948,7 @@ trackBootTask("AvatarContextController.init", function()
 	end
 	avatarContextCtrl:init()
 end)
--- Leaderboard tidak blocking loading screen — diinisialisasi di background
+-- Leaderboard does not block loading screen — initialized in background
 if Config.FeatureFlags.LeaderboardEnabled ~= false then
 	task.spawn(function()
 		ClientMods.DonationLeaderboardController.init({})
@@ -1962,7 +1962,7 @@ if Config.FeatureFlags.MusicPlayerEnabled then
 		local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
 		local guiExists = ensurePlayerGuiChild(playerGui, Config.Music.GUI_NAME, 10, _musicLog)
 		if not guiExists then
-			_musicLog:warn("GUI tidak ditemukan — panel disabled", { name = Config.Music.GUI_NAME })
+			_musicLog:warn("GUI not found — panel disabled", { name = Config.Music.GUI_NAME })
 			return nil
 		end
 		local refs = ClientMods.MusicPlayerGuiRefs.resolve(playerGui)

@@ -1,7 +1,7 @@
 --!strict
 --[[
   F9 Developer Console splash — ASCII Hazastudio + kit version + contact.
-  Print sekali per context (client / server). Selalu tampil (termasuk production).
+  Print once per context (client / server). Always shown (including production).
 ]]
 
 local RunService = game:GetService("RunService")

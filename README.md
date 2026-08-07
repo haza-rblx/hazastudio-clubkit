@@ -1,47 +1,47 @@
-# Hazastudio Clubkit v1.3
+# Hazastudio Club Kit v2.4.73
 
-Roblox club kit dengan config terpisah per place. Role, membership, spender, donation, shop, dan feature toggles — tanpa sentuh core engine.
+Roblox club kit with per-place configuration. Roles, membership, spenders, donations, shop, and feature toggles — without touching the core engine.
 
-## Dokumentasi
+## Documentation
 
-| Resource | Deskripsi |
-|----------|-----------|
-| **[docs/index.html](docs/index.html)** | Dokumentasi interaktif (buka di browser) |
-| **[CLUB_KIT_SETUP.md](CLUB_KIT_SETUP.md)** | Ringkasan setup + cara kirim ke Discord |
-| **[DISCORD_SETUP_MESSAGES.txt](DISCORD_SETUP_MESSAGES.txt)** | **14 pesan Discord** — copy satu per satu (super lengkap) |
-| **[DISCORD_SETUP_POST.txt](DISCORD_SETUP_POST.txt)** | Ringkasan singkat 1 pesan |
+| Resource | Description |
+|----------|-------------|
+| **[docs/index.html](docs/index.html)** | Interactive documentation (open in browser) |
+| **[CLUB_KIT_SETUP.md](CLUB_KIT_SETUP.md)** | Setup summary + how to post to Discord |
+| **[DISCORD_SETUP_MESSAGES.txt](DISCORD_SETUP_MESSAGES.txt)** | **14 Discord messages** — copy one at a time (full detail) |
+| **[DISCORD_SETUP_POST.txt](DISCORD_SETUP_POST.txt)** | Short single-message summary |
 
 ## Quick start
 
-1. Insert file **`.rbxm`** Club Kit ke place di Roblox Studio
+1. Insert the Club Kit **`.rbxm`** file into your place in Roblox Studio
 2. Edit `ReplicatedStorage/Hazastudio_ClubKitConfig/ClubKitConfig.luau`
-3. Edit `ServerScriptService/Hazastudio_ClubKitSecrets/Secrets.luau` (jika pakai API)
+3. Edit `ServerScriptService/Hazastudio_ClubKitSecrets/Secrets.luau` (if using API)
 4. Play test → publish
 
-Field kosong (`GroupId = 0`, `ApiUrl = ""`, shop IDs `0`) **sengaja** di template — isi saat deploy.
+Empty template fields (`GroupId = 0`, `ApiUrl = ""`, shop IDs `0`) are **intentional** — fill them at deploy time.
 
-## Buyer files (jangan replace saat update kit)
+## Buyer files (do not replace when updating the kit)
 
-- **Hazastudio_ClubKitConfig/ClubKitConfig.luau** — config venue per place
+- **Hazastudio_ClubKitConfig/ClubKitConfig.luau** — per-place venue config
 - **Hazastudio_ClubKitSecrets/Secrets.luau** — API secrets (server-only)
 
-Core engine ada di folder **Hazastudio_ClubKit** (ReplicatedStorage, ServerScriptService, StarterPlayerScripts, ReplicatedFirst) — replaceable saat update rbxm.
+The core engine lives in **Hazastudio_ClubKit** (ReplicatedStorage, ServerScriptService, StarterPlayerScripts, ReplicatedFirst) — replaceable on rbxm update.
 
-Jangan edit `Hazastudio_ClubKit/Shared/Constants/Config.luau` kecuali advanced (Studio DataStore isolation).
+Do not edit `Hazastudio_ClubKit/Shared/Constants/Config.luau` unless advanced (Studio DataStore isolation).
 
 ## Deploy (rbxm)
 
-Kit dikirim sebagai file **`.rbxm`** — tidak perlu Rojo/Argon.
+The kit is shipped as an **`.rbxm`** file — Rojo/Argon not required.
 
-1. Studio → **Home → Insert from File** → pilih rbxm
-2. Edit config buyer di Explorer
+1. Studio → **Home → Insert from File** → select rbxm
+2. Edit buyer config in Explorer
 3. Play test → **File → Publish to Roblox**
 
-**Update kit:** backup `ClubKitConfig` + `Secrets` dulu, hapus folder `Hazastudio_ClubKit` lama, insert rbxm baru, restore config jika perlu.
+**Kit update:** back up `ClubKitConfig` + `Secrets` first, remove old `Hazastudio_ClubKit` folders, insert new rbxm, restore config if needed.
 
 ## Showcase mode
 
-Untuk screenshot/trailer tanpa data live:
+For screenshots/trailers without live data:
 
 ```
 /showcase on    # owner only
@@ -49,8 +49,8 @@ Untuk screenshot/trailer tanpa data live:
 /showcase status
 ```
 
-Production: hapus `ClubKitShowcase.luau` untuk live mode (atau set `ACTIVE = false` di dalam file).
+Production: remove `ClubKitShowcase.luau` for live mode (or set `ACTIVE = false` inside the file).
 
 ---
 
-Hazastudio · Clubkit v1.3
+Hazastudio · Club Kit v2.4.73

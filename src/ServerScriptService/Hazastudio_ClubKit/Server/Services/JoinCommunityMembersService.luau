@@ -562,7 +562,7 @@ local function createJoinCommunityMembersService(deps: {
 			if not loggedCommunityWorkerSkip then
 				loggedCommunityWorkerSkip = true
 				log:debug(
-					"JoinCommunityMembers GameDataApiSecret kosong — community worker di-skip (normal di Studio); fallback roproxy",
+					"JoinCommunityMembers GameDataApiSecret empty — community worker skipped (normal in Studio); fallback roproxy",
 					{ gameKey = gameKey }
 				)
 			end

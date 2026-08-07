@@ -3,15 +3,15 @@
 -- Tag donation assets for CollectionService-based performance
 -- (Replaces global Workspace.DescendantAdded listeners)
 -- ============================================================
--- Jalankan di NUWA place, Edit Mode, Command Bar.
--- Sesuaikan DONATION_EFFECT_ROOTS dan DONATION_DISPLAY_ROOTS
--- dengan struktur place.
--- Setelah jalan: File > Save to Roblox / publish place.
+-- Run in the NUWA place, Edit Mode, Command Bar.
+-- Adjust DONATION_EFFECT_ROOTS and DONATION_DISPLAY_ROOTS
+-- to match your place structure.
+-- After running: File > Save to Roblox / publish place.
 -- ============================================================
 
 local CollectionService = game:GetService("CollectionService")
 
--- === CONFIG: Sesuaikan dengan Explorer structure ===
+-- === CONFIG: Adjust to match Explorer structure ===
 -- Donation VFX roots (particles, beams) for graphics scaling
 local DONATION_EFFECT_ROOTS = {
 	-- "DonationVFX",

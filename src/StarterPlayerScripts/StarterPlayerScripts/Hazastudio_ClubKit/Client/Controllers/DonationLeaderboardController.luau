@@ -1185,7 +1185,7 @@ local function playDailyCardBatch(state: any, generation: number, rows: { GuiObj
 		return false
 	end
 
-	-- Stagger fade out juga, dari atas ke bawah (reverse domino).
+	-- Stagger fade out juga, from atas ke bawah (reverse domino).
 	for localIndex, row in ipairs(rows) do
 		if row.Visible then
 			local myDelay = (localIndex - 1) * DAILY_CARD_STAGGER * 0.6

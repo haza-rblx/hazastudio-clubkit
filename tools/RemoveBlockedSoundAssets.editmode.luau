@@ -2,14 +2,14 @@
 -- ============================================================
 -- Remove blocked / broken Sound assets (Edit Mode)
 -- ============================================================
--- Jalankan di NUWA place, Edit Mode, Command Bar.
--- ID list diambil dari ReplicatedStorage.Shared.Utils.SoundAssetSanitizer
+-- Run in NUWA place, Edit Mode, Command Bar.
+-- ID list from ReplicatedStorage.Shared.Utils.SoundAssetSanitizer
 --
 -- Known paths (Smite3/Smite4 hammer):
 --   WorldEffects.Smite3/4.DiamondHammer.Handle.MainChargeSound (8578316223)
 --   WorldEffects.Smite3/4.DiamondHammer.Handle.ChargeSound* (9009370950)
 --
--- Setelah jalan: File > Save to Roblox / publish place.
+-- After run: File > Save to Roblox / publish place.
 -- ============================================================
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")

@@ -1,6 +1,6 @@
 --!strict
 -- PATH: StarterPlayerScripts/Client/State/MusicPlayerStore.lua
--- Reactive store untuk Music Player. Pattern: identik dengan SyncStore.
+-- Reactive store for Music Player. Pattern: identik with SyncStore.
 
 local NONE = newproxy(false) -- sentinel: store:set({ key = NONE }) sets key to nil
 
@@ -80,16 +80,16 @@ return createStore({
 	expectedEndServerTime = 0,
 	isPlaying       = false,
 	isDjMode        = false,
-	djOwnerUserId   = nil,     -- number? userId yang menyalakan DJ mode
+	djOwnerUserId   = nil,     -- number? userId who enabled DJ mode
 	volume          = 1,       -- 0..1 (client-side only)
 	queue           = {},      -- { TrackInfo } user requests only (Next up)
 	prefetchBuffer  = {},      -- { TrackInfo } hidden server auto buffer (preload only)
 
 	-- Request Song tab
 	playlists          = {},   -- { [id]: PlaylistInfo }
-	selectedPlaylistId = nil,  -- string? playlistId atau special playlist id
-	tracks             = {},   -- { [id]: TrackInfo } dari playlist yang dipilih
-	favoriteTrackIds   = {},   -- { [trackId]: true } mirror dari Player attribute favorites
+	selectedPlaylistId = nil,  -- string? playlistId or special playlist id
+	tracks             = {},   -- { [id]: TrackInfo } from playlist yang dipilih
+	favoriteTrackIds   = {},   -- { [trackId]: true } mirror from Player attribute favorites
 	searchQuery        = "",
 
 	-- Manage tab
@@ -98,7 +98,7 @@ return createStore({
 	editingPlaylist = nil,     -- PlaylistInfo? (nil = create mode)
 	selectedTrackPlaylistId = nil, -- string? selected playlist in upload/edit track form
 	isManageAllowed = false,
-	isLoading       = false,   -- loading state untuk form submission
+	isLoading       = false,   -- loading state for form submission
 
 	-- Cover & Font customization state
 	selectedCoverType  = "gradient",  -- "gradient" | "image"

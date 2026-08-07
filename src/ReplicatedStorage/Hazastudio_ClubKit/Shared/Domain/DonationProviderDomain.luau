@@ -101,6 +101,9 @@ local LEGACY_TEXT_REPLACEMENTS = {
 	{ "sociabuzz", true },
 	{ "Saweria", false },
 	{ "saweria", true },
+	{ "SAWERIA", false },
+	{ "BAGIBAGI", false },
+	{ "SOCIABUZZ", false },
 }
 
 function DonationProviderDomain.getName(): string
@@ -130,6 +133,27 @@ function DonationProviderDomain.replaceLegacyText(text: string): string
 		end
 	end
 	return out
+end
+
+function DonationProviderDomain.getCashLeaderboardTitle(): string
+	local preset = DonationProviderDomain.resolvePreset(DonationProviderDomain.getKey())
+	return string.upper(preset.name) .. " DONATIONS"
+end
+
+function DonationProviderDomain.applyCashLeaderboardBrand(root: Instance?)
+	if not root then
+		return
+	end
+	DonationProviderDomain.applyDisplayText(root)
+
+	-- Workspace board asset ships with "SAWERIA DONATIONS" (all caps); replaceLegacyText
+	-- does not match SAWERIA, so set the header title explicitly from ClubKitConfig.Provider.
+	local overlay = root:FindFirstChild("OverlayWrapper", true)
+	local header = if overlay then overlay:FindFirstChild("Header", true) else nil
+	local titleLabel = if header then header:FindFirstChild("TextLabel", true) else nil
+	if titleLabel and titleLabel:IsA("TextLabel") then
+		titleLabel.Text = DonationProviderDomain.getCashLeaderboardTitle()
+	end
 end
 
 function DonationProviderDomain.applyDisplayText(root: Instance)

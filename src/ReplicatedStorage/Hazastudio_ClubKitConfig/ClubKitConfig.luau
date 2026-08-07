@@ -1,18 +1,18 @@
 --!strict
 --[[
-  CLUB KIT CONFIG — satu file ini yang buyer edit per place.
+  CLUB KIT CONFIG — the single file buyers edit per place.
   Path: ReplicatedStorage.Hazastudio_ClubKitConfig.ClubKitConfig
 
-  QUICK START (isi dulu sebelum publish):
+  QUICK START (fill these in before publishing):
   ┌─────────────────────────────────────────────────────────────────┐
-  │ 1. Group.GroupId      → angka ID group Roblox kamu              │
-  │ 2. Group.OwnerUserId  → userId owner (rank 255 / owner cmds)    │
-  │ 3. Donation.ApiUrl    → URL worker Bagi-Bagi (kosong = no live) │
+  │ 1. Group.GroupId      → your Roblox group ID (numeric)          │
+  │ 2. Group.OwnerUserId  → owner userId (rank 255 / owner cmds)    │
+  │ 3. Donation.ApiUrl    → Bagi-Bagi worker URL (empty = no live)  │
   │ 4. Shop.Products      → BuyGamePassId (buy) + GiftId (gift Dev Product) │
-  │ 5. PaidBroadcast      → ProductId broadcast berbayar (Robux)    │
-  │ 6. Membership           → nama tier VIP/VVIP/Supreme (section bawah)│
-  │ 7. RoleCategories       → role group, rank, warna, privilege    │
-  │ 8. Secrets.luau       → API secret (folder Hazastudio_ClubKitSecrets) │
+  │ 5. PaidBroadcast      → paid broadcast ProductId (Robux)        │
+  │ 6. Membership           → VIP/VVIP/Supreme tier names (section below)│
+  │ 7. RoleCategories       → group roles, ranks, colors, privileges│
+  │ 8. Secrets.luau       → API secret (Hazastudio_ClubKitSecrets folder) │
   └─────────────────────────────────────────────────────────────────┘
 
   Live mode: default (ClubKitShowcase not in engine tree).
@@ -25,11 +25,11 @@ local ClubKitConfig = {}
 -- BRANDING
 -- =============================================================================
 ClubKitConfig.Branding = {
-	GameName = "Club", -- tampil di VFX donasi / label umum
-	WelcomeMessage = "Welcome to the club, %s", -- tap to continue (%s = nama player)
-	Greeting = "Welcome to the club, %s", -- loading screen awal
-	-- Diganti sekali di sini → loading, poster, leaderboard, Join Community modal.
-	-- Ganti dari ID bawaan kit ke logo community kamu.
+	GameName = "Club", -- shown on donation VFX / general labels
+	WelcomeMessage = "Welcome to the club, %s", -- tap to continue (%s = player name)
+	Greeting = "Welcome to the club, %s", -- initial loading screen
+	-- Change once here → loading, poster, leaderboard, Join Community modal.
+	-- Replace the kit default ID with your community logo.
 	LogoImage = "rbxassetid://79426970537296",
 }
 
@@ -37,16 +37,16 @@ ClubKitConfig.Branding = {
 -- GROUP & ADMIN
 -- =============================================================================
 ClubKitConfig.Group = {
-	GroupId = 0, -- contoh: 12345678  ← WAJIB sebelum live
-	OwnerUserId = 0, -- contoh: 987654321  ← owner place / /showcase, WAJIB diisi sebelum live
-	OwnerGroupRank = 255, -- rank Roblox yang dianggap owner di group
+	GroupId = 0, -- example: 12345678  ← required before go-live
+	OwnerUserId = 0, -- example: 987654321  ← place owner / /showcase; required before go-live
+	OwnerGroupRank = 255, -- Roblox rank treated as owner in the group
 }
 
 ClubKitConfig.AdminUserIds = {
-	-- backup admin tanpa group rank; contoh: [111111] = true,
+	-- backup admins without group rank; example: [111111] = true,
 } :: { [number]: boolean }
 
--- Sementara leaderboard warm-up (opsional): [userId] = rank
+-- Temporary leaderboard warm-up (optional): [userId] = rank
 ClubKitConfig.TopSpenders = {} :: { [number]: number }
 
 ClubKitConfig.GameDataApi = {
@@ -54,26 +54,26 @@ ClubKitConfig.GameDataApi = {
 }
 
 -- =============================================================================
--- DONASI (Bagi-Bagi / Saweria + threshold aura)
+-- DONATION (Bagi-Bagi / Saweria + aura thresholds)
 -- =============================================================================
 ClubKitConfig.Donation = {
-	Provider = "bagibagi", -- "bagibagi" | "saweria" | "sociabuzz" — nama & label donor otomatis
-	ProviderLink = "", -- contoh: "https://bagibagi.co/halaman-kamu" atau "https://sociabuzz.com/username"
+	Provider = "bagibagi", -- "bagibagi" | "saweria" | "sociabuzz" — donor name & label auto-set
+	ProviderLink = "", -- example: "https://bagibagi.co/your-page" or "https://sociabuzz.com/username"
 	ApiUrl = "https://hazastudio-donation-api.hazastudio.workers.dev/game/the-basic",
 	Cash = { Enabled = true },
 	Robux = { Enabled = true },
-	-- Opsional: daftar product donasi Robux manual. Kosong = auto dari dashboard.
+	-- Optional: manual Robux donation product list. Empty = auto from dashboard.
 	RobuxProducts = {} :: { { ProductId: number, Name: string?, Price: number? } },
 
-	-- Min IDR agar masuk notif + leaderboard (bukan tier aura).
+	-- Min IDR to appear in notifications + leaderboard (not aura tier).
 	MinAmount = 1000,
 
-	-- Posisi stage world VFX Rocket / Hammer / BlackHole (impact / anchor).
+	-- World stage position for Rocket / Hammer / BlackHole VFX (impact / anchor).
 	-- Rocket descends to this Vector3. Optional workspace.NukeModel = launch pad only.
 	NukeWorldPosition = Vector3.new(-262.2, 1.285, 64.9),
 
 	-- Aura per player (folder ServerStorage.DonationEffects/LevelN).
-	-- min = Robux | idrMin/idrMax = range Bagi-Bagi | effect/sound = nama folder asset.
+	-- min = Robux | idrMin/idrMax = Bagi-Bagi range | effect/sound = asset folder name.
 	AuraTiers = {
 		{ level = 1, min = 10, idrMin = 0, idrMax = 9999, effect = "Level1", sound = "Level1", duration = 4, cameraDuration = 0 },
 		{ level = 3, min = 80, idrMin = 10000, idrMax = 19999, effect = "Level3", sound = "Level3", duration = 4, cameraDuration = 0 },
@@ -87,7 +87,7 @@ ClubKitConfig.Donation = {
 		{ level = 11, min = 10000, idrMin = 1000000, idrMax = math.huge, effect = "Level11", sound = "Level11", duration = 8, cameraDuration = 8 },
 	},
 
-	-- World VFX Bagi-Bagi (model di ReplicatedStorage.WorldEffects). Robux tidak pakai ini.
+	-- World VFX for Bagi-Bagi (models in ReplicatedStorage.WorldEffects). Robux does not use this.
 	WorldEffectTiers = {
 		{ min = 500000, effect = "BlackHole" }, -- 500k+ IDR
 		{ min = 250000, effect = "Smite4" }, -- 250k+ IDR (hammer)
@@ -96,10 +96,10 @@ ClubKitConfig.Donation = {
 }
 
 -- =============================================================================
--- CARRY (ganti carrier/carried = animation asset ID kamu)
+-- CARRY (replace carrier/carried with your animation asset IDs)
 -- =============================================================================
 ClubKitConfig.Carry = {
-	MaxDistance = 30, -- stud, max jarak request carry
+	MaxDistance = 30, -- studs, max carry request distance
 	StyleOrder = { "Piggyback", "Bridal", "Hug", "Tandem", "Fireman", "Choke" },
 	Styles = {
 		Piggyback = {
@@ -152,7 +152,7 @@ ClubKitConfig.Carry = {
 -- LOADING SCREEN
 -- =============================================================================
 ClubKitConfig.Loading = {
-	CinematicAnimationId = "rbxassetid://78416657618448", -- anim dance saat loading cinematic
+	CinematicAnimationId = "rbxassetid://78416657618448", -- dance animation during cinematic loading
 }
 
 -- =============================================================================
@@ -169,16 +169,16 @@ ClubKitConfig.Shop = {
 }
 
 -- =============================================================================
--- PAID BROADCAST (Developer Product — pesan broadcast ke seluruh server)
+-- PAID BROADCAST (Developer Product — broadcast message to entire server)
 -- =============================================================================
 ClubKitConfig.PaidBroadcast = {
-	ProductId = 3503700307, -- ganti dengan Product ID dari Creator Dashboard
+	ProductId = 3503700307, -- replace with Product ID from Creator Dashboard
 }
 
 -- =============================================================================
--- MEMBERSHIP (nama tier shop)
--- Label = tampilan di UI/chat. Tier1/2/3 = key internal (jangan diubah).
--- Kalau ganti Label, update CommandAliases di bawah (vip/supreme/dll).
+-- MEMBERSHIP (shop tier names)
+-- Label = UI/chat display. Tier1/2/3 = internal keys (do not change).
+-- If you rename Label, update CommandAliases below (vip/supreme/etc.).
 -- =============================================================================
 ClubKitConfig.Membership = {
 	Tier1 = { Label = "VIP", Enabled = true, Priority = 40 },
@@ -187,7 +187,7 @@ ClubKitConfig.Membership = {
 }
 
 -- =============================================================================
--- ROLE CATEGORIES (group rank → role; sesuaikan dengan group Roblox kamu)
+-- ROLE CATEGORIES (group rank → role; match your Roblox group)
 -- privileges per category: canGift, canAnnounce, canTeleport, adminPanel, musicManage
 -- =============================================================================
 ClubKitConfig.RoleCategories = {
@@ -315,7 +315,7 @@ ClubKitConfig.RoleCategories = {
 } :: { any }
 
 -- =============================================================================
--- SPENDER ROLES (leaderboard donor — label/chatTag bebas diedit)
+-- SPENDER ROLES (donor leaderboard — label/chatTag freely editable)
 -- =============================================================================
 ClubKitConfig.SpenderRoles = {
 	CashSpender = {
@@ -352,7 +352,7 @@ ClubKitConfig.SpenderRoles = {
 }
 
 -- =============================================================================
--- SYSTEM ROLES (Owner/Guest — groupRanks = rank Roblox group)
+-- SYSTEM ROLES (Owner/Guest — groupRanks = Roblox group rank)
 -- =============================================================================
 ClubKitConfig.SystemRoles = {
 	Owner = {
@@ -379,7 +379,7 @@ ClubKitConfig.SystemRoles = {
 }
 
 -- =============================================================================
--- ALIAS (update kalau rename role/membership — untuk command & data lama)
+-- ALIAS (update when renaming roles/membership — for commands & legacy data)
 -- =============================================================================
 ClubKitConfig.LegacyAliases = {
 	AfterTeam = "Staff",
@@ -481,41 +481,41 @@ ClubKitConfig.JoinCommunity = {
 }
 
 -- =============================================================================
--- SYNC DANCE (transisi crossfade, detik)
+-- SYNC DANCE (crossfade transitions, seconds)
 -- =============================================================================
--- Semua angka = lama blend (detik). Lebih besar = lebih soft; lebih kecil = lebih snappy.
+-- All values = blend duration (seconds). Higher = softer; lower = snappier.
 --
--- Kapan dipakai:
+-- When each is used:
 --   FadeIn / FadeOut
---     Mulai dance dari idle, atau stop dance balik ke idle.
---     FadeIn  = dance baru naik weight.
---     FadeOut = dance lama turun weight.
+--     Start dance from idle, or stop dance back to idle.
+--     FadeIn  = new dance weight rises.
+--     FadeOut = old dance weight falls.
 --
 --   SwitchFadeIn / SwitchFadeOut
---     Ganti dance A → B saat sudah joget (bukan dari idle).
---     SwitchFadeOut = A pudar; SwitchFadeIn = B muncul.
---     Idealnya sama angkanya (matching) biar blend salon-style, tidak “deg”.
---     Biasanya sedikit lebih panjang dari FadeIn/Out karena dua dance saling silang.
+--     Switch dance A → B while already dancing (not from idle).
+--     SwitchFadeOut = A fades out; SwitchFadeIn = B fades in.
+--     Ideally use matching values for a salon-style blend without a hard cut.
+--     Usually slightly longer than FadeIn/Out because two dances cross over.
 --
 --   SyncJoinFade
---     Player ikut sync ke leader (atau transfer lead). Satu nilai dipakai
---     Stop+Play matching saat ikut dance leader.
+--     Player joins sync with leader (or leadership transfer). One value used
+--     for Stop+Play matching when following the leader's dance.
 --
 --   SwitchInputCooldown
---     Jeda minimum antar klik emote (detik). Set >= SwitchFadeIn/Out supaya
---     spam klik tidak nest banyak track (efek “lengan patah”).
+--     Minimum delay between emote clicks (seconds). Set >= SwitchFadeIn/Out so
+--     spam clicks do not stack tracks (avoids broken-arm artifacts).
 --
 ClubKitConfig.Sync = {
-	FadeIn = 0.45, -- idle → dance (naik)
-	FadeOut = 0.45, -- dance → idle (turun)
-	SwitchFadeIn = 0.55, -- dance A→B: B naik
-	SwitchFadeOut = 0.55, -- dance A→B: A turun (samakan dengan SwitchFadeIn)
-	SyncJoinFade = 0.4, -- ikut / sync ke leader
-	SwitchInputCooldown = 0.55, -- jeda klik emote; >= SwitchFade*
+	FadeIn = 0.45, -- idle → dance (fade in)
+	FadeOut = 0.45, -- dance → idle (fade out)
+	SwitchFadeIn = 0.55, -- dance A→B: B fades in
+	SwitchFadeOut = 0.55, -- dance A→B: A fades out (match SwitchFadeIn)
+	SyncJoinFade = 0.4, -- join / sync to leader
+	SwitchInputCooldown = 0.55, -- emote click cooldown; >= SwitchFade*
 }
 
 -- =============================================================================
--- FITUR (matikan modul yang tidak dipakai)
+-- FEATURES (disable modules you do not use)
 -- =============================================================================
 ClubKitConfig.Features = {
 	MusicPlayer = true,
@@ -538,21 +538,21 @@ ClubKitConfig.Features = {
 	Stickers = true,
 	Leaderboards = true,
 	DonationCash = true,
-	DonationSaweria = true, -- legacy alias untuk DonationCash
+	DonationSaweria = true, -- legacy alias for DonationCash
 	DonationRobux = true,
 	Gravity = true,
 	-- After loading: show custom Join Community modal (always if GroupId > 0; already-joined CTA = "Already joined").
 	PromptJoinCommunityOnLoad = true,
 	-- If true and Group.GroupId > 0: players already in the community group get VIP (Tier1)
-	-- on join; after JoinCommun PromptJoinAsync, server re-checks and grants if now a member.
+	-- on join; after JoinCommunity PromptJoinAsync, server re-checks and grants if now a member.
 	-- Default false — existing places unchanged until buyer enables.
 	VipOnCommunityJoin = false,
 	-- Toast when Owner / Leadership / Content / top-10 Robux or cash spender joins (once per session).
 	JoinGreetings = true,
-	-- Global Nuke / Smite / BlackHole on cash donations. false = no duar world VFX; Settings “World Effects” row hidden.
+	-- Global Nuke / Smite / BlackHole on cash donations. false = no world explosion VFX; Settings “World Effects” row hidden.
 	DonationWorldEffects = true,
-	-- Animasi UIGradient chip #N ROBUX / #N RUPIAH di overhead (RobuxRankWrapper / RupiahRankWrapper).
-	-- Default false — place lama tanpa UIGradient di wrapper tetap aman; set true setelah tambah gradient di Studio.
+	-- UIGradient animation on #N ROBUX / #N RUPIAH chips in overhead (RobuxRankWrapper / RupiahRankWrapper).
+	-- Default false — existing places without UIGradient on wrapper stay safe; set true after adding gradient in Studio.
 	DonationRankGradientAnim = false,
 }
 

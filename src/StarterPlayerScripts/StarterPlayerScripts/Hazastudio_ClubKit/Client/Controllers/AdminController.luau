@@ -1,7 +1,7 @@
 --!strict
 -- Client/Controllers/AdminController.lua
 -- Wire AdminPanelUI -> AdminService -> Server remotes.
--- Controller hanya routing: tidak ada logic, tidak ada retry, tidak ada string parsing.
+-- Controller is routing only: no logic, no retry, no string parsing.
 local HttpService       = game:GetService("HttpService")
 local Players           = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -62,7 +62,7 @@ local function init(deps: {
 		) :: ScreenGui?
 	end
 	if not gui then
-		log:warn("GUI tidak ditemukan, AdminController tidak diinisialisasi", {
+		log:warn("GUI not found, AdminController not initialized", {
 			guiName = Config.Admin.GUI_NAME,
 			timeout = Config.Admin.GUI_WAIT_TIMEOUT,
 		})
@@ -77,7 +77,7 @@ local function init(deps: {
 	local overheadCache: {[number]: OverheadSnapshot} = {}
 	local confirmedTier   : string? = nil
 	local confirmedTarget : { userId: number, username: string, displayName: string }? = nil
-	-- Forward declaration - didefinisikan setelah task.spawn di bawah
+	-- Forward declaration — defined after task.spawn below
 	local updateSelectedSnapshot: () -> ()
 	-- Remote setup (non-blocking)
 	task.spawn(function()
@@ -87,17 +87,17 @@ local function init(deps: {
 		if setTitleRemote then
 			log:info("Admin remotes ready")
 		else
-			log:warn("Admin remotes TIMEOUT — server AdminController mungkin tidak berjalan")
+			log:warn("Admin remotes TIMEOUT — server AdminController may not be running")
 		end
 	end)
 	-- ============================================================
 	-- OverheadUpdate listener
 	--
-	-- Server pakai wire format dengan kind=DELTA atau kind=BATCH; payload.role
-	-- ada di dalam payload.delta atau di tiap entry payload.payloads. Tanpa
-	-- unwrap proper, isAdmin selalu false dan topbar icon gak pernah di-enable.
-	-- Pattern di sini mirror ChatTagsController + client OverheadController:
-	-- maintain baseline per userId, merge delta, atau iterate batch.
+	-- Server uses wire format with kind=DELTA or kind=BATCH; payload.role
+	-- is inside payload.delta or in each entry payload.payloads. Without
+	-- proper unwrap, isAdmin always false and topbar icon never enabled.
+	-- Pattern here mirrors ChatTagsController + client OverheadController:
+	-- maintain baseline per userId, merge delta, or iterate batch.
 	-- ============================================================
 	local payloadBaselines: { [number]: any } = {}
 	local NIL_SENTINEL = DeltaCompressor.NIL_SENTINEL
@@ -162,7 +162,7 @@ local function init(deps: {
 		end
 		local base = payloadBaselines[userId]
 		if not base then
-			-- First delta untuk userId ini biasanya full state karena force-reset.
+			-- First delta for this userId is usually full state due to force-reset.
 			if type(delta.userId) == "number" and type(delta.role) == "string" then
 				ingestFullPayload(delta)
 			end
@@ -204,9 +204,9 @@ local function init(deps: {
 		overheadCache[player.UserId] = nil
 	end))
 
-	-- Attach listener segera kalau remote sudah ada (yang umum karena server
-	-- bikin RemoteEvent saat startup, jauh sebelum AdminController.init dipanggil).
-	-- Fallback ke task.spawn + WaitForChild kalau belum ada.
+	-- Attach listener immediately if remote already exists (common because server
+	-- creates RemoteEvent at startup, long before AdminController.init is called).
+	-- Fallback to task.spawn + WaitForChild if not yet available.
 	local existingRemote = remotes:FindFirstChild("OverheadUpdate") :: RemoteEvent?
 	if existingRemote then
 		track(existingRemote.OnClientEvent:Connect(handleIncoming))
@@ -214,7 +214,7 @@ local function init(deps: {
 		task.spawn(function()
 			local remote = remotes:WaitForChild("OverheadUpdate", Config.Shop.REMOTE_READY_TIMEOUT) :: RemoteEvent?
 			if not remote then
-				log:warn("OverheadUpdate remote tidak tersedia, role detection disabled")
+				log:warn("OverheadUpdate remote unavailable, role detection disabled")
 				return
 			end
 			track(remote.OnClientEvent:Connect(handleIncoming))
@@ -237,7 +237,7 @@ local function init(deps: {
 		end
 		ui:populatePlayers(players)
 	end
-	-- Definisi sebenarnya - mengisi forward declaration di atas
+	-- Actual definition — fills the forward declaration above
 	updateSelectedSnapshot = function()
 		local selectedPlayer = ui:getSelectedPlayer()
 		if not selectedPlayer then
@@ -323,7 +323,7 @@ local function init(deps: {
 			return
 		end
 		if not setTitleRemote then
-			log:warn("setTitleRemote belum siap")
+			log:warn("setTitleRemote not ready")
 			return
 		end
 		setTitleRemote:FireServer({
@@ -351,7 +351,7 @@ local function init(deps: {
 	end)
 	-- ============================================================
 	-- Giftcard: Package selected
-	-- Bind sekali saja saat init - tidak di dalam callback (mencegah multi-bind)
+	-- Bind once at init — not inside callback (prevents multi-bind)
 	-- ============================================================
 	ui:bindPackageSelected(function(tier: string)
 		local selectedPlayer = ui:getSelectedPlayer()
@@ -360,7 +360,7 @@ local function init(deps: {
 		confirmedTarget = selectedPlayer
 		ui:transitionToConfirmation(selectedPlayer, tier)
 	end)
-	-- Send gift dipanggil dari confirmation dialog (yes button)
+	-- Send gift called from confirmation dialog (yes button)
 	local function onSendGiftConfirmed()
 		local tier   = confirmedTier
 		local target = confirmedTarget
@@ -373,7 +373,7 @@ local function init(deps: {
 				local successMsg = Config.Admin.MSG_GIFT_SUCCESS:format(tierName, target.displayName)
 				ui:transitionToSuccess(successMsg)
 			else
-				-- Map error code ke pesan user-friendly
+				-- Map error code to user-friendly message
 				local errMsg: string
 				if result.error == "already_has_tier" then
 					errMsg = Config.Admin.MSG_GIFT_ALREADY_HAS:format(

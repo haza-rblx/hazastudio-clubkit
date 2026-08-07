@@ -58,7 +58,7 @@ local SPRING_LERP_SPEED = 0.55
 local SPRING_TIME_MIN = 5.0
 local SPRING_TIME_MAX = 12
 local SPRING_TRAVEL_RATE = 20
--- Donation / punchy handoff: spring tetap, durasi pendek supaya donator terlihat cepat.
+-- Donation / punchy handoff: keep spring, short duration so donor is visible quickly.
 local SNAPPY_SPRING_LERP_SPEED = 0.62
 local SNAPPY_SPRING_TIME_MIN = 0.32
 local SNAPPY_SPRING_TIME_MAX = 0.72
@@ -114,7 +114,7 @@ local function easeInOutSine(x: number): number
 	return -(math.cos(math.pi * x) - 1) / 2
 end
 
--- Glide pelan: smoothstep (start/end lambat) + tail eksponensial monoton ke 1.
+-- Slow glide: smoothstep (slow start/end) + exponential tail monotonic to 1.
 local function easeSpring(x: number): number
 	if x >= 1 then
 		return 1
@@ -238,9 +238,9 @@ local function blendTransitionCFrame(
 		if not startInside and not endInside then
 			local travel = (targetCF.Position - startCF.Position).Magnitude
 			if travel < math.max(part.Size.Magnitude, 4) then
-				-- Kalau mount posisi sama (mis. cuma movement mengubah look/rotasi),
-				-- gunakan interpolasi CFrame langsung supaya tidak degenerative
-				-- (CFrame.lookAt butuh arah non-nol).
+				-- If mount position is the same (e.g. only movement changes look/rotation),
+				-- use CFrame interpolation directly so it is not degenerate
+				-- (CFrame.lookAt requires a non-zero direction).
 				if travel < 0.05 then
 					return startCF:Lerp(targetCF, alpha)
 				end
@@ -257,9 +257,9 @@ local function blendTransitionCFrame(
 
 		-- Short hop that still clips through rig volume.
 		if directInside then
-			-- Kalau ini hanya perubahan movement di rig yang sama (travel kecil),
-			-- jangan pakai exterior arc karena bisa bikin "pop" saat hampir masuk volume.
-			-- Cukup blend arah lihat di mount tujuan.
+			-- If this is only a movement change on the same rig (small travel),
+			-- do not use exterior arc because it can cause a "pop" when nearly entering the volume.
+			-- Just blend look direction at the destination mount.
 			local travel = (targetCF.Position - startCF.Position).Magnitude
 			if travel < PART_RIG_SWITCH_TRAVEL_THRESHOLD then
 				local lookPoint = startCF.Position:Lerp(targetCF.Position + targetCF.LookVector, alpha)
@@ -272,7 +272,7 @@ local function blendTransitionCFrame(
 				return pose
 			end
 
-			-- Untuk rig switch (travel besar), gunakan exterior arc agar transisi tidak pass-through.
+			-- For rig switch (large travel), use exterior arc so transition is not pass-through.
 			return blendExteriorCFrame(startCF, targetCF, part, alpha)
 		end
 	end
@@ -437,7 +437,7 @@ function CinematicCameraSystem.startCinematic(
 	end
 	activeMode = { kind = "character", def = def, state = state }
 
-	-- Start broadcast: glide dari kamera player (sama seperti ganti target/movement).
+	-- Start broadcast: glide from kamera player (sama seperti ganti target/movement).
 	local profile = options and options.transitionProfile
 	local targetCF = sampleCharacterTargetFrame(def, state, targetParts :: CharacterParts)
 	local travel = (targetCF.Position - currentCFrame.Position).Magnitude
@@ -455,7 +455,7 @@ function CinematicCameraSystem.switchCinematic(
 	options: CinematicOptions?
 )
 	if not isActive then
-		-- Fallback: kalau belum aktif, start biasa
+		-- Fallback: if not yet active, start normally
 		CinematicCameraSystem.startCinematic(character, modeName, speed, options)
 		return
 	end

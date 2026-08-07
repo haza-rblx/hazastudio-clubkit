@@ -306,7 +306,7 @@ function MenuShellUI:_wireTabs()
 		end)
 	end
 
-	-- Dua tab terpisah di TabSwitcher: Profile + Settings (bukan satu tombol toggle).
+	-- Two separate tabs in TabSwitcher: Profile + Settings (not one toggle button).
 	wireButton(buttons.profileButton, "profile")
 	wireButton(buttons.settingsButton, "settings")
 	wireButton(buttons.profileIdle, "profile")

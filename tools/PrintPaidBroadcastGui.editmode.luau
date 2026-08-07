@@ -2,21 +2,21 @@
 -- ============================================================
 -- PRINT GUI TREE: 13-PaidBroadcast (StarterGui) → leaf
 -- ============================================================
--- Dump hierarki lengkap ScreenGui Paid Broadcast ke Output Studio.
+-- Dump full Paid Broadcast ScreenGui hierarchy to Studio Output.
 --
--- CARA PAKAI:
--- 1. Buka place NUWA di Studio (Edit Mode cukup, tidak perlu Play).
--- 2. Pastikan StarterGui berisi "13-PaidBroadcast".
--- 3. Copy seluruh file ini → paste ke Command Bar → Enter.
--- 4. Salin output dari jendela Output.
+-- USAGE:
+-- 1. Open NUWA place in Studio (Edit Mode is enough, Play not required).
+-- 2. Ensure StarterGui contains "13-PaidBroadcast".
+-- 3. Copy this entire file → paste into Command Bar → Enter.
+-- 4. Copy output from the Output window.
 --
--- Read-only — tidak mengubah instance apa pun.
+-- Read-only — does not modify any instances.
 -- ============================================================
 
 local StarterGui = game:GetService("StarterGui")
 
 local GUI_NAME = "13-PaidBroadcast"
-local MAX_DEPTH = 0 -- 0 = unlimited (sampai leaf)
+local MAX_DEPTH = 0 -- 0 = unlimited (to leaf)
 local SHOW_PROPERTIES = true
 local SHOW_LEAF_PATHS = true
 
@@ -196,7 +196,7 @@ end
 
 local target = StarterGui:FindFirstChild(GUI_NAME)
 if not target then
-	warn(string.format("[PrintPaidBroadcastGui] '%s' tidak ditemukan di StarterGui.", GUI_NAME))
+	warn(string.format("[PrintPaidBroadcastGui] '%s' not found in StarterGui.", GUI_NAME))
 	return
 end
 

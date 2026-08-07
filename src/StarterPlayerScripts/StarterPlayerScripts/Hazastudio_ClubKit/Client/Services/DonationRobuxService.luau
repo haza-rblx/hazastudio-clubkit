@@ -216,13 +216,13 @@ local function createDonationRobuxService(deps: {
 		local responseRemote = remotes:FindFirstChild(Config.Donation.REMOTE_ROBUX_PRODUCTS_RESPONSE)
 			or remotes:WaitForChild(Config.Donation.REMOTE_ROBUX_PRODUCTS_RESPONSE, 5)
 		if not productsRemote or not productsRemote:IsA("RemoteEvent") then
-			log:warn("Donation products remote tidak ditemukan", {
+			log:warn("Donation products remote not found", {
 				remote = Config.Donation.REMOTE_ROBUX_PRODUCTS,
 			})
 			return products, "remote_missing"
 		end
 		if not responseRemote or not responseRemote:IsA("RemoteEvent") then
-			log:warn("Donation products response remote tidak ditemukan", {
+			log:warn("Donation products response remote not found", {
 				remote = Config.Donation.REMOTE_ROBUX_PRODUCTS_RESPONSE,
 			})
 			return products, "remote_missing"
@@ -279,7 +279,7 @@ local function createDonationRobuxService(deps: {
 		local result = type(response) == "table" and response.data or nil
 		if type(response) ~= "table" or response.ok ~= true or type(result) ~= "table" then
 			local err = if type(response) == "table" then response.error else response
-			log:warn("Gagal mengambil donation products", {
+			log:warn("Failed to fetch donation products", {
 				error = tostring(err),
 			})
 			return products, if type(err) == "string" then err else "request_failed"
@@ -348,7 +348,7 @@ local function createDonationRobuxService(deps: {
 
 		productsRefreshInFlight = false
 		notifyProductsRefreshWaiters()
-		log:warn("Donation products tetap kosong setelah retry", {
+		log:warn("Donation products still empty after retry", {
 			attempts = maxAttempts,
 			error = lastError,
 		})
@@ -357,7 +357,7 @@ local function createDonationRobuxService(deps: {
 
 	function service.promptDonate(_self: Service, product: DonationProduct, message: string)
 		if product.productId <= 0 then
-			log:warn("Donation productId belum diisi", {
+			log:warn("Donation productId not yet set", {
 				key = product.key,
 				price = product.price,
 			})
@@ -366,7 +366,7 @@ local function createDonationRobuxService(deps: {
 					ok = false,
 					productId = product.productId,
 					price = product.price,
-					error = "Donation product belum dikonfigurasi.",
+					error = "Donation product not configured.",
 				})
 			end
 			return
@@ -374,7 +374,7 @@ local function createDonationRobuxService(deps: {
 
 		local pendingRemote = remotes:FindFirstChild(Config.Donation.REMOTE_ROBUX_INIT) :: RemoteEvent?
 		if not pendingRemote then
-			log:warn("Donation pending remote tidak ditemukan", {
+			log:warn("Donation pending remote not found", {
 				remote = Config.Donation.REMOTE_ROBUX_INIT,
 			})
 			return
@@ -621,7 +621,7 @@ local function createDonationRobuxService(deps: {
 	task.spawn(function()
 		local resultRemote = remotes:WaitForChild(Config.Donation.REMOTE_ROBUX_RESULT, 30) :: RemoteEvent?
 		if not resultRemote then
-			log:warn("Donation result remote tidak ditemukan", {
+			log:warn("Donation result remote not found", {
 				remote = Config.Donation.REMOTE_ROBUX_RESULT,
 			})
 			return

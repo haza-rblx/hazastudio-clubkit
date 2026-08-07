@@ -11,7 +11,7 @@ local GraphicsQuality = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Util
 
 type SettingsPayload = Types.SettingsPayload
 
--- Explicit union type untuk SECTION_DEFS — mencegah type mismatch di array literal heterogeneous
+-- Explicit union type for SECTION_DEFS — mencegah type mismatch di array literal heterogeneous
 type OptionItem = { label: string, value: string, iconImage: string? }
 type SliderDef = {
 	kind: "slider",
@@ -322,9 +322,9 @@ local SECTION_DEFS: { SettingsSectionDef } = {
 					return tostring(math.floor(v + 0.5))
 				end,
 			},
-			-- "Follow" (cameraFocus) row dihapus 2026-05-23: feature di-revert ke
+			-- "Follow" (cameraFocus) row removed 2026-05-23: feature reverted to
 			-- Roblox default camera (no offset).
-			-- "Dock Zoom" slider dihapus 2026-05-23: di-lock ke 35% di semua device.
+			-- "Dock Zoom" slider removed 2026-05-23: locked to 35% on all devices.
 			-- Lihat applyHotbarZoom di SettingsController.luau.
 		},
 	},
@@ -333,7 +333,7 @@ local SECTION_DEFS: { SettingsSectionDef } = {
 		title = "Name Tags",
 		subtitle = "Show or hide custom player name tags above heads.",
 		items = {
-			-- "Show Name Tags At" (overheadDistance) dihapus 2026-05-23.
+			-- "Show Name Tags At" (overheadDistance) removed 2026-05-23.
 			{ kind = "toggle", field = "overheadVisible", label = "Show Name Tags", localOnly = true },
 			{ kind = "toggle", field = "hideAllGui", label = "Hide All GUI", localOnly = true },
 		},

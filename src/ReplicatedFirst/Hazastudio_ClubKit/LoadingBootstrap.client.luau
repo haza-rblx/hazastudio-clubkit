@@ -86,7 +86,7 @@ local LoadingScreenUI = require(loadingScreenModule)
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- Clone template Studio sekarang supaya loading screen muncul sebelum client bootstrap lain jalan.
+-- Clone template Studio sekarang so loading screen muncul before client bootstrap lain jalan.
 local runtimeRoot = playerGui:FindFirstChild("00-LoadingScreen")
 if not (runtimeRoot and runtimeRoot:IsA("ScreenGui")) then
 	local template = StarterGui:WaitForChild("00-LoadingScreen", LoadingConfig.TEMPLATE_WAIT_TIMEOUT)

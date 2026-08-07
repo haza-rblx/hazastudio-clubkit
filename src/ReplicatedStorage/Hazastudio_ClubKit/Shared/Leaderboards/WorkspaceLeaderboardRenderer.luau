@@ -7,6 +7,7 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
+local DonationProviderDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.DonationProviderDomain)
 local LeaderboardIdentity = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.LeaderboardIdentity)
 local LeaderboardDisplayState = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Leaderboards.LeaderboardDisplayState)
 
@@ -1027,7 +1028,14 @@ local function getRow(template: GuiObject, rank: number): GuiObject
 	return clone
 end
 
+local function applyCashBoardProviderBranding(gui: SurfaceGui, spec: BoardSpec)
+	if isSaweriaBoardSpec(spec) then
+		DonationProviderDomain.applyCashLeaderboardBrand(gui)
+	end
+end
+
 local function renderBoardIdle(gui: SurfaceGui, spec: BoardSpec, payload: any)
+	applyCashBoardProviderBranding(gui, spec)
 	setBoardContentVisible(gui, false)
 	for rank = 1, 3 do
 		local card = gui:FindFirstChild(spec.topCards[rank], true)
@@ -1060,6 +1068,8 @@ local function renderBoard(spec: BoardSpec, payload: any): boolean
 	if not gui then
 		return false
 	end
+
+	applyCashBoardProviderBranding(gui, spec)
 
 	local entries = payload[spec.dataKey]
 	if type(entries) ~= "table" then
@@ -1132,6 +1142,7 @@ end
 function WorkspaceLeaderboardRenderer.setBoardLoading(spec: BoardSpec, message: string | { string }?)
 	local gui = resolveBoard(spec)
 	if gui then
+		applyCashBoardProviderBranding(gui, spec)
 		setBoardChrome(gui, true, message or getBoardLoadingCycle(spec))
 	end
 end

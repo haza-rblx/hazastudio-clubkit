@@ -1,19 +1,19 @@
 --!strict
 -- Shared/Domain/StreakDomain.lua
 -- Pure functions only. Zero Roblox service calls.
--- Semua logika streak di sini - tidak ada di service atau repository.
+-- All streak logic lives here — not in service or repository.
 local StreakDomain = {}
 local WIB_OFFSET_SECONDS = 7 * 3600 -- UTC+7
 -- ============================================================
--- Konversi os.time() -> hari kalender WIB (angka bulat)
--- Dipakai untuk bandingkan "apakah hari ini sama dengan kemarin"
--- tanpa peduli jam berapa join
+-- Convert os.time() -> WIB calendar day (integer)
+-- Used to compare whether today is the same as yesterday
+-- regardless of join time
 -- ============================================================
 function StreakDomain.toDayNumber(timestamp: number): number
 	return math.floor((timestamp + WIB_OFFSET_SECONDS) / 86400)
 end
 
--- Window donasi harian WIB: 00:01 s/d 23:59:59 (reset otomatis setelah tengah malam WIB).
+-- WIB daily donation window: 00:01 to 23:59:59 (auto-resets after WIB midnight).
 function StreakDomain.getWibDailyDonationWindow(timestamp: number): (number, number)
 	local dayNumber = StreakDomain.toDayNumber(timestamp)
 	local dayStart = dayNumber * 86400 - WIB_OFFSET_SECONDS
@@ -25,30 +25,30 @@ function StreakDomain.isWithinWibDailyDonationWindow(timestamp: number): boolean
 	return timestamp >= windowStart and timestamp <= windowEnd
 end
 -- ============================================================
--- Hasil evaluasi streak saat player join
+-- Streak evaluation result when player joins
 -- ============================================================
 export type StreakResult = {
 	newStreakDays  : number,
-	didIncrement   : boolean, -- true = streak naik hari ini
-	didReset       : boolean, -- true = streak di-reset karena skip terlalu lama
-	alreadyCounted : boolean, -- true = sudah join hari ini, tidak ada perubahan
+	didIncrement   : boolean, -- true = streak incremented today
+	didReset       : boolean, -- true = streak reset because the gap was too long
+	alreadyCounted : boolean, -- true = already joined today, no change
 }
 -- ============================================================
 -- evaluateStreak
--- Hitung streak baru berdasarkan lastLoginAt dan waktu sekarang.
+-- Compute new streak based on lastLoginAt and current time.
 --
--- Aturan:
--- - dayDiff == 0 : join hari yang sama -> tidak ada perubahan
--- - dayDiff == 1 : join hari berikutnya -> streak + 1
--- - dayDiff == 2 : grace period (skip 1 hari) -> streak + 1
--- - dayDiff >= 3 : skip terlalu lama -> reset ke 1
+-- Rules:
+-- - dayDiff == 0 : same-day join -> no change
+-- - dayDiff == 1 : next-day join -> streak + 1
+-- - dayDiff == 2 : grace period (skip 1 day) -> streak + 1
+-- - dayDiff >= 3 : gap too old -> reset to 1
 -- ============================================================
 function StreakDomain.evaluateStreak(
 	currentStreak : number,
-	lastLoginAt   : number, -- os.time() last login, 0 jika belum pernah
-	now           : number  -- os.time() sekarang
+	lastLoginAt   : number, -- os.time() last login, 0 if never logged in before
+	now           : number  -- os.time() now
 ): StreakResult
-	-- Player baru atau belum pernah login
+	-- New player or never logged in before
 	if lastLoginAt == 0 then
 		return {
 			newStreakDays  = 1,
@@ -61,7 +61,7 @@ function StreakDomain.evaluateStreak(
 	local dayLast = StreakDomain.toDayNumber(lastLoginAt)
 	local dayDiff = dayNow - dayLast
 	if dayDiff == 0 then
-		-- Sudah join hari ini
+		-- Already joined today
 		return {
 			newStreakDays  = currentStreak,
 			didIncrement   = false,
@@ -69,7 +69,7 @@ function StreakDomain.evaluateStreak(
 			alreadyCounted = true,
 		}
 	elseif dayDiff <= 2 then
-		-- Join hari berikutnya atau masih dalam grace period
+		-- Join next day or still within grace period
 		return {
 			newStreakDays  = currentStreak + 1,
 			didIncrement   = true,
@@ -77,7 +77,7 @@ function StreakDomain.evaluateStreak(
 			alreadyCounted = false,
 		}
 	else
-		-- Skip terlalu lama -> reset
+		-- Gap too old -> reset
 		return {
 			newStreakDays  = 1,
 			didIncrement   = false,

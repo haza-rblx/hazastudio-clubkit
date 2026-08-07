@@ -1,13 +1,13 @@
 --!strict
 -- Server/Services/DonationService.lua
--- Polling Donation API v2 (Cloudflare Worker) -> match donatur -> update DataStore -> broadcast events.
--- Mendukung dual leaderboard: daily + all-time.
+-- Poll Donation API v2 (Cloudflare Worker) -> match donors -> update DataStore -> broadcast events.
+-- Supports dual leaderboard: daily + all-time.
 --
 -- API v2: REST under {ApiUrl}/v2/* with Authorization: Bearer secret.
 -- Reliability improvements:
--- - HTTP retry sekali sebelum dihitung failure (handle transient errors)
--- - Exponential backoff dengan cap lebih rendah -> recovery lebih cepat
--- - Batched leaderboard fetch (all-time + daily dalam satu request)
+-- - HTTP retry once before counting as failure (handle transient errors)
+-- - Exponential backoff with lower cap -> faster recovery
+-- - Batched leaderboard fetch (all-time + daily in one request)
 -- - Cursor-based notification polling (no since drift)
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
@@ -81,11 +81,11 @@ local function createDonationService(
 		else "donation_poll"
 	local log = Logger.new("DonationService")
 	local donorCashCache: { [number]: DonorCashCacheEntry } = {}
-	-- Phase 1: Negative cache untuk donor_profile saat Worker rate-limited.
-	-- Tanpa ini, 1 fail = N attempts (tiap refreshAll/poll trigger caller berikutnya).
-	-- TTL lebih panjang dari positive cache biar Worker punya waktu recover.
+	-- Phase 1: Negative cache for donor_profile when Worker is rate-limited.
+	-- Without this, 1 fail = N attempts (each refreshAll/poll triggers next caller).
+	-- Longer TTL than positive cache so Worker has time to recover.
 	local donorFailureCache: { [number]: { expiresAt: number } } = {}
-	local DONOR_PROFILE_FAILURE_CACHE_TTL = 120 -- detik
+	local DONOR_PROFILE_FAILURE_CACHE_TTL = 120 -- seconds
 
 	-- Block /setrobux (add) while Studio writes live keys — accidental inflation risk.
 	-- /removerobux is intentionally allowed so owners can clear live LB from Studio Play
@@ -150,7 +150,7 @@ local function createDonationService(
 	-- Defense in depth: never broadcast rows with received_at < boot, even if cursor slips.
 	-- Kept for the whole server lifetime (do not clear after first successful poll).
 	local notificationSkipBeforeUnix: number = bootUnix
-	local lastNotifReceivedAt: number = 0 -- os.time() saat terakhir ada donasi terdeteksi (burst mode)
+	local lastNotifReceivedAt: number = 0 -- os.time() when last donation detected (burst mode)
 	local processedNotifIds: { [string]: boolean } = {}
 	local processedNotifIdOrder: { string } = {}
 	local MAX_PROCESSED_NOTIF_IDS = 512
@@ -171,11 +171,11 @@ local function createDonationService(
 	}
 	local sheetsBroadcastRevision = 0
 	local lastSheetsBroadcastFingerprint: string? = nil
-	-- Phase 3: Track userId yang pernah donasi (dari notif, manual adjustment, atau cash stats > 0).
-	-- Skip API call ke donor_profile untuk player yang belum pernah donasi — kebanyakan player
-	-- di leaderboard overhead bukan donor, jadi API call selalu return cash_total=0.
-	-- knownDonors sticky: sekali marked, tetap dikenal sampai module reload. Hot-reload safe
-	-- karena state reset = back to "unknown" yang konservatif (cuma extra API call).
+	-- Phase 3: Track userIds that have donated (from notif, manual adjustment, or cash stats > 0).
+	-- Skip donor_profile API call for players who never donated — most players
+	-- on overhead leaderboard not donor, so API call always returns cash_total=0.
+	-- knownDonors sticky: sekali marked, still dikenal sampai module reload. Hot-reload safe
+	-- because state reset = back to conservative "unknown" (just an extra API call).
 	local knownDonors: { [number]: true } = {}
 	local function markKnownDonor(userId: number)
 		if userId and userId > 0 then
@@ -232,7 +232,7 @@ local function createDonationService(
 		end
 	end
 
-	-- { [robloxUsername:lower()]: rank } untuk daily + alltime gabungan
+	-- { [robloxUsername:lower()]: rank } for combined daily + alltime
 	local assignedRanks: { [string]: number } = {}
 	-- Daily Robux tracking (in-memory). Reset tiap tengah malam WIB; window 00:01-23:59:59.
 	-- { [userId]: { userId, username, displayName, thumbnail, total } }
@@ -256,7 +256,7 @@ local function createDonationService(
 	local leaderboardUpdatedCallbacks: { () -> () } = {}
 	-- Claim cooldown: { [userId]: lastClaimAt (os.time) }
 	local claimCooldowns: { [number]: number } = {}
-	-- Failure tracking (consecutive - reset segera setelah 1x sukses)
+	-- Failure tracking (consecutive — reset immediately after one success)
 	local consecutiveFailures = 0
 	-- Helpers
 	local DonationProviderDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.DonationProviderDomain)
@@ -328,11 +328,11 @@ local function createDonationService(
 
 	local function httpRequestOnce(method: string, url: string, body: string?): (boolean, string)
 		if url == "" then
-			return false, "Donation API belum dikonfigurasi"
+			return false, "Donation API not configured"
 		end
 		local secret = Secrets.DonationApiSecret
 		if type(secret) ~= "string" or secret == "" then
-			return false, "DonationApiSecret belum dikonfigurasi"
+			return false, "DonationApiSecret not configured"
 		end
 		local timeout = Config.Donation.HTTP_TIMEOUT
 		local ok, response = pcall(function()
@@ -431,24 +431,24 @@ local function createDonationService(
 		return string.rep("#", length)
 	end
 
-	-- httpGetOnce: satu percobaan HTTP GET dengan RequestAsync + Bearer auth
+	-- httpGetOnce: single HTTP GET attempt with RequestAsync + Bearer auth
 	local function httpGetOnce(url: string): (boolean, string)
 		return httpRequestOnce("GET", url, nil)
 	end
-	-- httpGet: satu percobaan + optional retry (handle transient network errors)
+	-- httpGet: one attempt + optional retry (handle transient network errors)
 	local function httpGet(url: string): (boolean, string)
 		if url == "" then
-			return false, "Donation API belum dikonfigurasi"
+			return false, "Donation API not configured"
 		end
 		local ok, res = httpGetOnce(url)
 		if ok then
 			return true, res
 		end
-		-- Retry sekali jika diaktifkan di config
+		-- Retry once if enabled in config
 		if Config.Donation.NOTIF_RETRY_ENABLED then
-			-- Phase 4: Downgrade ke debug — caller (fetchDonorCashProfile, _pollNotifications, _pollLeaderboard)
-			-- sudah log warning yang lebih spesifik per-endpoint. Retry log ini duplicate noise.
-			log:debug("HTTP gagal, retry dalam " .. Config.Donation.NOTIF_RETRY_DELAY .. "s", {
+			-- Phase 4: Downgrade to debug — caller (fetchDonorCashProfile, _pollNotifications, _pollLeaderboard)
+			-- already logs more specific per-endpoint warning. This retry log is duplicate noise.
+			log:debug("HTTP failed, retry in " .. Config.Donation.NOTIF_RETRY_DELAY .. "s", {
 				url = url,
 				error = res,
 			})
@@ -457,7 +457,7 @@ local function createDonationService(
 		end
 		return false, res
 	end
-	-- Exponential backoff: 5, 10, 20 (capped) detik per consecutive failure
+	-- Exponential backoff: 5, 10, 20 (capped) seconds per consecutive failure
 	local function getNotifFailureBackoff(): number
 		if consecutiveFailures <= 0 then
 			return 0
@@ -839,8 +839,8 @@ local function createDonationService(
 			end
 		end
 	end
-	-- Patch #2 R2: Track userIds yang rank-nya berubah selama applyLeaderboardDiff,
-	-- dipakai untuk invalidate rank cache per-user (bukan wipe all). Di-reset setiap call.
+	-- Patch #2 R2: Track userIds whose rank changed during applyLeaderboardDiff,
+	-- used to invalidate rank cache per-user (not wipe all). Reset each call.
 	local lastDiffChangedUserIds: { [number]: true } = {}
 	local function markChangedUserId(userId: number)
 		if type(userId) == "number" and userId > 0 then
@@ -856,14 +856,14 @@ local function createDonationService(
 		return out
 	end
 	local clearPlayer: (number, string) -> ()
-	-- Assign Saweria top spender tag ke player online.
+	-- Assign Saweria top spender tag to online player.
 	local function assignPlayer(robloxUsername: string, rank: number)
 		local cleanedUsername = cleanRobloxUsername(robloxUsername)
 		if not cleanedUsername then
 			return
 		end
 		local lower = cleanedUsername:lower()
-		-- Cari player aktif
+		-- Find active player
 		for _, player in ipairs(Players:GetPlayers()) do
 			if player.Name:lower() == lower then
 				if isHiddenDonationUser(player.UserId) then
@@ -889,7 +889,7 @@ local function createDonationService(
 						text = topText,
 					})
 				else
-					log:warn("Gagal update DataStore top spender", {
+					log:warn("Failed to update DataStore top spender", {
 						player = player.Name,
 						error = result.error,
 					})
@@ -898,7 +898,7 @@ local function createDonationService(
 			end
 		end
 	end
-	-- Clear Saweria top spender tag dari player yang keluar leaderboard
+	-- Clear Saweria top spender tag from players who left the leaderboard
 	clearPlayer = function(userId: number, playerName: string)
 		local result = repo:update(userId, function(current)
 			return OverheadDomain.mergeStored(current, {
@@ -908,7 +908,7 @@ local function createDonationService(
 		end)
 		if result.ok then
 			markChangedUserId(userId)
-			-- Refresh jika masih online
+			-- Refresh if still online
 			local player = Players:GetPlayerByUserId(userId)
 			if player then
 				overheadController:refreshPlayer(player)
@@ -916,9 +916,9 @@ local function createDonationService(
 			log:info("Cleared top spender tag", { player = playerName })
 		end
 	end
-	-- Diff leaderboard lama vs baru, assign/clear perubahan
+	-- Diff old vs new leaderboard, assign/clear changes
 	local function applyLeaderboardDiff(newEntries: { DonationEntry })
-		-- Reset changed set di awal; assignPlayer/clearPlayer populate via markChangedUserId
+		-- Reset changed set at start; assignPlayer/clearPlayer populate via markChangedUserId
 		lastDiffChangedUserIds = {}
 		local newRanks: { [string]: number } = {}
 		for _, entry in ipairs(newEntries) do
@@ -931,15 +931,15 @@ local function createDonationService(
 				newRanks[lowerName] = entry.rank
 				local oldRank = assignedRanks[lowerName]
 				if oldRank ~= entry.rank then
-					-- Rank berubah atau baru masuk -> assign
+					-- Rank changed or new entry -> assign
 					assignPlayer(username, entry.rank)
 				end
 			end
 		end
-		-- Clear player yang tidak lagi di leaderboard
+		-- Clear players no longer on the leaderboard
 		for lowerName, _ in pairs(assignedRanks) do
 			if not newRanks[lowerName] then
-				-- Cari userId
+				-- Resolve userId
 				for _, player in ipairs(Players:GetPlayers()) do
 					if player.Name:lower() == lowerName then
 						clearPlayer(player.UserId, player.Name)
@@ -961,7 +961,7 @@ local function createDonationService(
 		rerankEntriesByTotal(cachedLeaderboard.allTime)
 		cachedLeaderboard.updatedAt = os.time()
 		applyLeaderboardDiff(cachedLeaderboard.allTime)
-		-- Patch #2 R2: invalidate per-user (rank yang berubah saja), bukan wipe all
+		-- Patch #2 R2: invalidate per-user (changed ranks only), not wipe all
 		invalidateOverheadRankCaches(drainChangedUserIds())
 		broadcastSheetsLeaderboardSignal(forceBroadcast == true)
 		service:notifyWorkspaceLeaderboardsUpdated()
@@ -975,7 +975,7 @@ local function createDonationService(
 	end
 
 	-- Poll
-	-- _pollLeaderboard: fetch all-time & daily dalam satu request v2
+	-- _pollLeaderboard: fetch all-time & daily in one v2 request
 	function service:_pollLeaderboard(forceBroadcast: boolean?)
 		if not isCashDonationEnabled() then
 			return
@@ -1017,18 +1017,18 @@ local function createDonationService(
 				log:warn("Leaderboard v2 parse failed")
 			end
 		else
-			log:warn("HTTP gagal (leaderboards v2)", { error = res })
+			log:warn("HTTP failed (leaderboards v2)", { error = res })
 		end
 
 		if not allTimeOk and previousCache and #previousCache.allTime > 0 then
 			allTimeEntries = previousCache.allTime
-			log:warn("Leaderboard all-time pakai cache (HTTP gagal)", {
+			log:warn("Leaderboard all-time using cache (HTTP failed)", {
 				cachedCount = #allTimeEntries,
 			})
 		end
 		if not dailyOk and previousCache and #previousCache.daily > 0 then
 			dailyEntries = previousCache.daily
-			log:warn("Leaderboard daily pakai cache (HTTP gagal)", {
+			log:warn("Leaderboard daily using cache (HTTP failed)", {
 				cachedCount = #dailyEntries,
 			})
 		end
@@ -1036,16 +1036,16 @@ local function createDonationService(
 			return
 		end
 
-		-- P0: Saat throttle lockout aktif, HTTP cache tetap di-update tapi skip
+		-- P0: When throttle lockout active, HTTP cache still updated but skip
 		-- downstream DS cascade (applyLeaderboardDiff + refreshAll). DS writes/
-		-- reads akan short-circuit via repository lockout; explicit log di sini
-		-- supaya operator bisa lihat di console tanpa harus grep server log.
+		-- reads will short-circuit via repository lockout; explicit log here
+		-- so operators can see in console without grepping server log.
 		if DataStoreThrottleLockout.isLocked() then
-			log:info("Leaderboard poll: skipping DS cascade (throttle lockout aktif)", {
+			log:info("Leaderboard poll: skipping DS cascade (throttle lockout active)", {
 				remainingSec = math.floor(DataStoreThrottleLockout.getRemainingSec() + 0.5),
 			})
-			-- Tetap update in-memory cache + broadcast signal so client UI tetap
-			-- up-to-date dengan HTTP state; hanya DS-bound ops yang di-skip.
+			-- Still update in-memory cache + broadcast signal so client UI stays
+			-- up-to-date with HTTP state; only DS-bound ops are skipped.
 			if allTimeOk then
 				cachedLeaderboard = {
 					daily = dailyEntries,
@@ -1061,7 +1061,7 @@ local function createDonationService(
 		end
 
 		-- Merge legacy Saweria snapshot with the live sheet data so old totals remain connected.
-		-- Daily tidak di-seed karena resets.
+		-- Daily is not seeded because it resets.
 		if allTimeOk then
 			allTimeEntries = mergeLegacySaweriaEntries(allTimeEntries)
 			applyManualBagibagiAdjustments(allTimeEntries)
@@ -1077,7 +1077,7 @@ local function createDonationService(
 		if type(self.invalidateDonorProfileCache) == "function" then
 			self:invalidateDonorProfileCache()
 		end
-		-- Apply diff berdasarkan all-time (overhead tag berdasarkan all-time)
+		-- Apply diff based on all-time (overhead tag is based on all-time)
 		applyLeaderboardDiff(allTimeEntries)
 		-- Same as syncBagibagiLeaderboardFromCache: per-user invalidate after diff
 		-- (refreshAll no longer runs on routine polls).
@@ -1114,8 +1114,8 @@ local function createDonationService(
 			return
 		end
 
-		-- Phase 3: Mark as known donor — broadcast selalu = userId sah jadi donatur.
-		-- Covers semua caller: _pollNotifications, presentCashDonation, manual cash.
+		-- Phase 3: Mark as known donor — broadcast always = valid userId becomes donor.
+		-- Covers all caller: _pollNotifications, presentCashDonation, manual cash.
 		if not args.testOnly then
 			markKnownDonor(args.robloxUserId)
 		end
@@ -1288,7 +1288,7 @@ local function createDonationService(
 			if not ok then
 				consecutiveFailures += 1
 				local backoff = getNotifFailureBackoff()
-				log:warn("HTTP gagal (notifications v2)", {
+				log:warn("HTTP failed (notifications v2)", {
 					error = res,
 					consecutiveFailures = consecutiveFailures,
 					backoff = backoff,
@@ -1441,7 +1441,7 @@ local function createDonationService(
 		end)
 		if not success then
 			consecutiveFailures += 1
-			log:warn("Gagal parse notifications response", {
+			log:warn("Failed to parse notifications response", {
 				consecutiveFailures = consecutiveFailures,
 			})
 			finishPoll()
@@ -1456,12 +1456,12 @@ local function createDonationService(
 		consecutiveFailures = 0
 		-- Keep notificationSkipBeforeUnix for the server lifetime — clearing it used to
 		-- let subsequent cursor pages replay historical donations as live notifs.
-		-- Jika ada donasi baru: aktifkan burst mode + refresh leaderboard segera
+		-- On new donation: enable burst mode + refresh leaderboard immediately
 		if hadNewDonations then
 			lastNotifReceivedAt = os.time()
 			log:debug("Burst mode activated — new donation detected")
-			-- Trigger leaderboard refresh async dengan debounce agar rank data segera up-to-date
-			-- tanpa blocking notification poll berikutnya. Debounce prevents multiple rapid refreshes.
+			-- Trigger async leaderboard refresh with debounce so rank data is up-to-date quickly
+			-- without blocking the next notification poll. Debounce prevents multiple rapid refreshes.
 			local now = os.time()
 			if not _leaderboardRefreshQueued and (now - _lastLeaderboardRefreshAt) >= LEADERBOARD_REFRESH_DEBOUNCE then
 				_leaderboardRefreshQueued = true
@@ -1505,7 +1505,7 @@ local function createDonationService(
 
 	local function fetchDonorCashProfile(userId: number, username: string): (number, number?)
 		local now = os.clock()
-		-- Phase 1: Negative cache check — skip silently kalau Worker baru saja fail untuk userId ini.
+		-- Phase 1: Negative cache check — skip silently if Worker just failed for this userId.
 		local failEntry = donorFailureCache[userId]
 		if failEntry then
 			if failEntry.expiresAt > now then
@@ -1528,7 +1528,7 @@ local function createDonationService(
 
 		local ok, body = httpGet(url)
 		if not ok then
-			-- Phase 1: Catat fail supaya caller berikutnya (refreshAll, leaderboard poll, dll) skip selama TTL.
+			-- Phase 1: Record fail so next callers (refreshAll, leaderboard poll, etc.) skip during TTL.
 			donorFailureCache[userId] = {
 				expiresAt = now + DONOR_PROFILE_FAILURE_CACHE_TTL,
 			}
@@ -1540,7 +1540,7 @@ local function createDonationService(
 			return HttpService:JSONDecode(body)
 		end)
 		if not success or type(decoded) ~= "table" or decoded.ok ~= true then
-			-- Phase 1: Parse fail juga di-cache (response yang konsisten malformed = gak perlu retry tiap 3-5s).
+			-- Phase 1: Parse fail also cached (consistently malformed response = no need to retry every 3-5s).
 			donorFailureCache[userId] = {
 				expiresAt = now + DONOR_PROFILE_FAILURE_CACHE_TTL,
 			}
@@ -1548,7 +1548,7 @@ local function createDonationService(
 			return 0, nil
 		end
 
-		-- Phase 1: Success path — bersihkan negative entry biar next fail akan di-record lagi.
+		-- Phase 1: Success path — clear negative entry so next fail is recorded again.
 		donorFailureCache[userId] = nil
 		local total = math.max(0, math.floor(tonumber(decoded.cash_total) or 0))
 		local rankValue = tonumber(decoded.cash_rank)
@@ -1685,8 +1685,8 @@ local function createDonationService(
 	-- Shared path for donation panel, overhead payload, and leaderstats Cash column.
 	function service:getPlayerCashStats(userId: number, username: string): (number, number?)
 		local cached = donorCashCache[userId]
-		-- Jangan pakai cache rank-only dengan total 0: itu bikin panel/leaderstats
-		-- stuck di #1 / 0 sementara overhead chip rank tetap tampil.
+		-- Do not use rank-only cache with total 0: that makes panel/leaderstats
+		-- stuck at #1 / 0 while overhead chip rank still shows.
 		if cached and cached.expiresAt > os.clock() and cached.total > 0 then
 			return cached.total, cached.rank
 		end
@@ -1706,7 +1706,7 @@ local function createDonationService(
 			cashTotal = manualTotal
 		end
 
-		-- Phase 3: Skip API call kalau player belum pernah donasi DAN local lookup juga miss.
+		-- Phase 3: Skip API call if player never donated AND local lookup also misses.
 		if
 			cashTotal <= 0
 			and Config.Donation.SKIP_API_FOR_UNKNOWN_DONORS ~= false
@@ -1728,7 +1728,7 @@ local function createDonationService(
 				rank = cashRank,
 				expiresAt = os.clock() + (Config.Donation.DONOR_PROFILE_CACHE_TTL or 45),
 			}
-			-- Phase 3: Mark as known donor (cashTotal > 0 dari any source).
+			-- Phase 3: Mark as known donor (cashTotal > 0 from any source).
 			markKnownDonor(userId)
 		end
 
@@ -2350,7 +2350,7 @@ local function createDonationService(
 		return entries
 	end
 	-- Called from ShopController on a successful Robux donation.
-	-- In-memory tracking; window WIB 00:01-23:59:59, reset otomatis setelah tengah malam WIB.
+	-- In-memory tracking; WIB window 00:01-23:59:59, auto-reset after WIB midnight.
 	function service:recordRobuxDonationDaily(record: {
 		userId: number,
 		username: string?,
@@ -2453,9 +2453,9 @@ local function createDonationService(
 		end
 		return result
 	end
-	-- forceRefresh: poll notif + leaderboard sekarang juga (debug / admin tool)
+	-- forceRefresh: poll notifications + leaderboard immediately (debug / admin tool)
 	function service:forceRefresh()
-		log:info("Force refresh donasi dipanggil")
+		log:info("Force refresh donation called")
 		local ok, err = pcall(function()
 			self:_pollLeaderboard(true)
 			self:_pollNotifications()
@@ -2464,11 +2464,11 @@ local function createDonationService(
 			log:error("Force refresh error", { error = tostring(err) })
 		end
 	end
-	-- Admin: link external provider name -> roblox username via POST ke sheets NameMap
+	-- Admin: link external provider name -> roblox username via POST to sheets NameMap
 	function service:linkDonor(saweriaName: string, robloxUsername: string): (boolean, string)
 		local url = buildV2Url("donor-links")
 		if url == "" then
-			return false, "Donation API atau DonationApiSecret belum dikonfigurasi"
+			return false, "Donation API or DonationApiSecret not configured"
 		end
 		local cleanedSaweriaName = cleanProviderName(saweriaName)
 		local cleanedRobloxUsername = cleanRobloxUsername(robloxUsername)
@@ -2484,27 +2484,27 @@ local function createDonationService(
 		})
 		local ok, res = httpRequestOnce("PUT", url, body)
 		if not ok then
-			log:warn("linkDonor PUT gagal", { error = res })
+			log:warn("linkDonor PUT failed", { error = res })
 			return false, res
 		end
-		-- Trigger refresh agar assignment langsung update
+		-- Trigger refresh so assignment updates immediately
 		task.delay(1, function()
 			self:forceRefresh()
 		end)
 		log:info("Donor linked", { provider = getProviderName(), donor = cleanedSaweriaName, roblox = cleanedRobloxUsername })
 		return true, ""
 	end
-	-- Player self-claim: assign external provider name ke diri sendiri
+	-- Player self-claim: assign external provider name to self
 	function service:claimDonor(player: Player, saweriaName: string): (boolean, string)
 		local userId = player.UserId
 		local nowEpoch = os.time()
 		cleanupClaimCooldowns(nowEpoch)
-		-- Rate limit: 1x per hari
+		-- Rate limit: once per day
 		local lastClaim = claimCooldowns[userId]
 		if lastClaim and (nowEpoch - lastClaim) < Config.Donation.CLAIM_COOLDOWN then
 			return false, "rate_limited"
 		end
-		-- Cari entry di leaderboard yang belum ter-assign dan namanya cocok (case-insensitive)
+		-- Find unassigned leaderboard entry with matching name (case-insensitive)
 		local found = false
 		local cleanedSaweriaName = cleanProviderName(saweriaName)
 		for _, entry in ipairs(cachedLeaderboard.allTime) do
@@ -2528,10 +2528,10 @@ local function createDonationService(
 		self:invalidateDonorProfileCache(userId)
 		return true, ""
 	end
-	-- Force re-assign semua top 10 Saweria yang online sekarang. Bypass deduplication
-	-- assignedRanks supaya kalau ada player yang stuck (rank di DataStore beda dari
-	-- leaderboard), bisa dipaksa sync ulang. Dipakai oleh /verifyspender admin command.
-	-- Returns: { checked, assigned, missing, entries } untuk reporting.
+	-- Force re-assign all top 10 Saweria currently online. Bypass deduplication
+	-- assignedRanks so if a player is stuck (rank in DataStore differs from
+	-- leaderboard), can be force-synced. Used by /verifyspender admin command.
+	-- Returns: { checked, assigned, missing, entries } for reporting.
 	function service:forceReassignTopSpenders(): {
 		checked: number,
 		assigned: number,
@@ -2543,7 +2543,7 @@ local function createDonationService(
 		local entries: { { rank: number, username: string, online: boolean } } = {}
 		local assigned = 0
 		local missing = 0
-		-- Reset tracking biar applyLeaderboardDiff/assignPlayer treat semua sebagai "new".
+		-- Reset tracking so applyLeaderboardDiff/assignPlayer treat all as "new".
 		assignedRanks = {}
 		for _, entry in ipairs(cachedLeaderboard.allTime) do
 			if entry.rank > limit then
@@ -2582,8 +2582,8 @@ local function createDonationService(
 			entries = entries,
 		}
 	end
-	-- Helper: trigger overhead refresh untuk player. Dipakai oleh /verifyspender
-	-- supaya Robux top 10 yang nggak overlap dengan Saweria top 10 ikut ke-refresh.
+	-- Helper: trigger overhead refresh for player. Used by /verifyspender
+	-- so Robux top 10 that does not overlap with Saweria top 10 also gets refreshed.
 	function service:refreshPlayerOverhead(player: Player)
 		-- Refresh cash cache first so the overhead rebuild sees the latest value
 		-- (cashDonated is now fetched asynchronously, not in buildPayload).
@@ -2595,12 +2595,12 @@ local function createDonationService(
 			overheadController:refreshPlayer(player)
 		end
 	end
-	-- Assign overhead tag ke player yang baru join (jika mereka ada di leaderboard)
+	-- Assign overhead tag to newly joined player (if they are on the leaderboard)
 	function service:onPlayerAdded(player: Player)
 		local lowerName = player.Name:lower()
 		local rank = assignedRanks[lowerName]
 		if rank then
-			-- Delay sedikit agar DataStore player sudah siap
+			-- Short delay so player DataStore is ready
 			task.delay(3, function()
 				if player and player.Parent then
 					assignPlayer(player.Name, rank)
@@ -2613,9 +2613,9 @@ local function createDonationService(
 	end)
 
 	-- ── Public wrappers ───────────────────────────────────────────────────────
-	-- Diperlukan agar BackgroundJobScheduler di Main.server.luau bisa register
+	-- Required so BackgroundJobScheduler in Main.server.luau can register
 	-- jobs via type-check `type(donationService.pollDonations) == "function"`.
-	-- Tanpa ini, guard tersebut selalu false dan scheduler jadi dead code.
+	-- Without this, that guard is always false and the scheduler becomes dead code.
 	function service:pollDonations()
 		return service:_pollNotifications()
 	end

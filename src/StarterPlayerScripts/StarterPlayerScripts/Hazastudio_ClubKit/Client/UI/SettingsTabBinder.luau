@@ -81,7 +81,7 @@ function SettingsTabBinder:_applyTabIdentity()
 		return
 	end
 	if not scrollable:FindFirstChild("TabIdentity") then
-		warn("[SettingsTabBinder] SettingsTab.TabIdentity not found — TabTitle/TabSubtitle tidak terisi")
+		warn("[SettingsTabBinder] SettingsTab.TabIdentity not found — TabTitle/TabSubtitle not populated")
 		return
 	end
 	MenuSettingsCore.applySettingsTabPageIdentity(scrollable)

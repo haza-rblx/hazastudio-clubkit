@@ -1,5 +1,5 @@
 --!strict
--- Non-blocking task queue: heavy work masuk queue dan dieksekusi satu per satu.
+-- Non-blocking task queue: heavy work enters queue and executes one at a time.
 
 local Logger = require(script.Parent.Logger)
 

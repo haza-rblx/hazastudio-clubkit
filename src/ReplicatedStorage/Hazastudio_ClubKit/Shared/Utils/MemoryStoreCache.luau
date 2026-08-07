@@ -1,25 +1,25 @@
 --!strict
 -- Shared/Utils/MemoryStoreCache.luau
--- Thin wrapper di atas MemoryStoreService untuk cross-server cache layer.
+-- Thin wrapper on MemoryStoreService for cross-server cache layer.
 --
--- Use case utama: leaderboard cache yang dishare antar semua server. Tanpa
--- layer ini, tiap server akan hit DataStore GetSortedAsync independent =>
--- N×servers×1 per-TTL = banyak DS calls. Dengan MemoryStore, hanya server
--- pertama yang miss cache yang hit DS; sisanya dapat dari shared MemoryStore
--- (yang lebih murah per-call).
+-- Primary use case: leaderboard cache shared across all servers. Without
+-- this layer, each server hits DataStore GetSortedAsync independently =>
+-- N×servers×1 per-TTL = many DS calls. With MemoryStore, only the first
+-- server to miss cache hits DS; others read from shared MemoryStore
+-- (cheaper per call).
 --
 -- MemoryStore limits (Roblox docs):
 --   - Min TTL 30s, max ~7 days
 --   - 4 KB per key value
---   - Per-experience read/write quota (lebih besar dari DataStore GetSortedAsync
---     experience limit, tapi lebih kecil dari DataStore per-server quota).
---   - MemoryStore bisa throw throttle/timeout — di-pcall dan fall through ke
---     return nil/false supaya caller selalu bisa fallback ke DataStore.
+--   - Per-experience read/write quota (higher than DataStore GetSortedAsync
+--     experience limit, but lower than DataStore per-server quota).
+--   - MemoryStore may throw throttle/timeout — pcall-wrapped and fall through to
+--     return nil/false so callers can always fallback to DataStore.
 --
 -- Config:
---   Config.Leaderboards.MEMORY_STORE_CACHE_ENABLED — toggle global
---   Config.Leaderboards.MEMORY_STORE_LEADERBOARD_TTL — TTL default (detik)
---   Config.Leaderboards.MEMORY_STORE_STORE_NAME — nama store (default "ClubKitLeaderboardCache")
+--   Config.Leaderboards.MEMORY_STORE_CACHE_ENABLED — global toggle
+--   Config.Leaderboards.MEMORY_STORE_LEADERBOARD_TTL — default TTL (seconds)
+--   Config.Leaderboards.MEMORY_STORE_STORE_NAME — store name (default "ClubKitLeaderboardCache")
 
 local MemoryStoreService = game:GetService("MemoryStoreService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -29,11 +29,11 @@ local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Con
 local MemoryStoreCache = {}
 
 -- Per-name store handle cache. GetDataStore returns the same handle per name,
--- tapi kita cache supaya tidak ada re-resolve setiap call.
+-- but we cache it to avoid re-resolving on every call.
 local _stores: { [string]: any } = {}
 
--- Lazy config read untuk hindari circular-import. Config mungkin belum loaded
--- saat module pertama di-require di server lain.
+-- Lazy config read to avoid circular import. Config may not be loaded yet
+-- when the module is first required on another server.
 local _enabledCache: boolean = false
 local function isEnabled(): boolean
 	if _enabledCache == true then
@@ -57,16 +57,16 @@ local function getStore(name: string): any?
 		return (MemoryStoreService:GetHashMap(name) :: any)
 	end)
 	if not ok or store == nil then
-		-- MemoryStore bisa unavailable di Studio tanpa API Services.
-		-- Caller dapat nil dan harus fallback ke DS path.
+		-- MemoryStore may be unavailable in Studio without API Services.
+		-- Caller may get nil and must fallback to DS path.
 		return nil
 	end
 	_stores[name] = store
 	return store
 end
 
---- Get cached value. Return nil kalau miss, disabled, atau error.
---- Caller SELALU harus treat nil sebagai "no cache" dan fallback ke source-of-truth.
+--- Get cached value. Return nil if miss, disabled, or error.
+--- Caller MUST always treat nil as "no cache" and fallback to source-of-truth.
 function MemoryStoreCache.get(storeName: string, key: string): any?
 	if not isEnabled() then
 		return nil
@@ -84,9 +84,9 @@ function MemoryStoreCache.get(storeName: string, key: string): any?
 	return value
 end
 
---- Set value with TTL (detik). Default TTL dari Config.Leaderboards.MEMORY_STORE_LEADERBOARD_TTL
---- (60s) — cukup pendek untuk self-heal kalau invalidation terlewat.
---- Return true kalau berhasil, false kalau disabled / error / TTL invalid.
+--- Set value with TTL (seconds). Default TTL from Config.Leaderboards.MEMORY_STORE_LEADERBOARD_TTL
+--- (60s) — short enough for self-heal if invalidation is missed.
+--- Return true on success, false if disabled / error / TTL invalid.
 function MemoryStoreCache.set(storeName: string, key: string, value: any, ttl: number?): boolean
 	if not isEnabled() then
 		return false
@@ -111,8 +111,8 @@ function MemoryStoreCache.set(storeName: string, key: string, value: any, ttl: n
 	return ok
 end
 
---- Invalidate (delete) a key. Dipanggil dari write path supaya next read
---- fallback ke DataStore (dan re-populate MemoryStore dengan fresh data).
+--- Invalidate (delete) a key. Called from the write path so the next read
+--- falls back to DataStore (and re-populates MemoryStore with fresh data).
 function MemoryStoreCache.remove(storeName: string, key: string): boolean
 	if not isEnabled() then
 		return false

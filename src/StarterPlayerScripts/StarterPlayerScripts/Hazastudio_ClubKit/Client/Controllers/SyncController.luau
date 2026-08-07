@@ -621,10 +621,10 @@ function SyncController:requestSyncByUserId(targetUserId: number): boolean
 	return true
 end
 
--- Lead dancer transfer kepemimpinan ke target. Server bakal pindahin
--- seluruh subtree caller (caller + transitive followers) ke target's
--- ultimate leader. Kalau caller bukan leader (gak punya followers), server
--- otomatis fallback ke normal sync.
+-- Lead dancer transfers leadership to target. Server moves
+-- entire caller subtree (caller + transitive followers) to target's
+-- ultimate leader. If caller is not leader (has no followers), server
+-- automatically fallback to normal sync.
 function SyncController:requestTransferLeadByUserId(targetUserId: number): boolean
 	local targetPlayer = Players:GetPlayerByUserId(targetUserId)
 	if not targetPlayer or targetPlayer == Players.LocalPlayer then

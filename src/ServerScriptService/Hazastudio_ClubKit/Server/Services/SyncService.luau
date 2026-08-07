@@ -1135,16 +1135,16 @@ local self = {} :: any
 	end
 
 	-- ============================================================
-	-- Transfer Lead — Lead dancer (caller dengan minimal 1 follower) hand-over
-	-- kepemimpinan ke target. Seluruh subtree caller (caller + transitive
-	-- followers) di-move ke target's ultimate leader, jadi rata di bawah dia.
+	-- Transfer Lead — Lead dancer (caller with minimal 1 follower) hand-over
+	-- leadership to target. Entire caller subtree (caller + transitive
+	-- followers) moved to target's ultimate leader, flattened under them.
 	--
-	-- Beda dari handleSyncRequest:
-	--   handleSyncRequest = caller doang yang move (chain). Followers caller
-	--                        tetep nempel ke caller.
-	--   handleTransferLead = SELURUH subtree caller flat ke target→ultimateLeader.
-	--                        Hasil: targetUltimateLeader punya followers langsung
-	--                        ke seluruh anggota subtree caller.
+	-- Differs from handleSyncRequest:
+	--   handleSyncRequest = only caller moves (chain). Followers caller
+	--                        stay attached to caller.
+	--   handleTransferLead = ENTIRE caller subtree flat to target→ultimateLeader.
+	--                        Result: targetUltimateLeader has direct followers
+	--                        to all members of caller subtree.
 	-- ============================================================
 	function self:handleTransferLead(player: Player, targetPlayer: Player): Result<string>
 		if not player.Character then
@@ -1157,15 +1157,15 @@ local self = {} :: any
 			return ResultModule.Err("error")
 		end
 
-		-- Caller harus actually punya followers untuk transfer. Kalau enggak,
-		-- fallback ke normal sync (treat sebagai sync biasa).
+		-- Caller must actually have followers for transfer. If not,
+		-- fallback to normal sync (treat as regular sync).
 		local hasFollowers = followerMap[player.Name] and next(followerMap[player.Name]) ~= nil
 		if not hasFollowers then
 			return self:handleSyncRequest(player, targetPlayer, true)
 		end
 
-		-- Resolve target's ultimate leader (kalau target lagi syncing ke X,
-		-- transfer ke X bukan ke target).
+		-- Resolve target's ultimate leader (if target is syncing to X,
+		-- syncing to X not to target).
 		local ultimateName = SyncDomain.getSyncSource(targetPlayer.Name, syncMap, config.MAX_CHAIN_DEPTH or 100)
 			or targetPlayer.Name
 		local ultimateLeader = Players:FindFirstChild(ultimateName)
@@ -1173,14 +1173,14 @@ local self = {} :: any
 			return ResultModule.Err("error")
 		end
 		if ultimateLeader == player then
-			-- Target's ultimate leader = caller. Artinya target ada di subtree caller.
+			-- Target's ultimate leader = caller. Target is in caller's subtree.
 			return ResultModule.Err("leader_blocked")
 		end
 		if SyncDomain.wouldCreateCircular(player.Name, ultimateLeader.Name, syncMap) then
 			return ResultModule.Err("circular_blocked")
 		end
 
-		-- BFS collect seluruh subtree caller (caller + transitive followers).
+		-- BFS collect entire caller subtree (caller + transitive followers).
 		local subtreeMembers: { string } = {}
 		do
 			local queue: { string } = { player.Name }
@@ -1200,9 +1200,9 @@ local self = {} :: any
 			end
 		end
 
-		-- Move setiap member: registerSync nge-handle cleanup followerMap lama,
-		-- plus clear self-leader state. Setelah loop ini followerMap caller kosong
-		-- dan ultimateLeader's followerMap dapet seluruh subtree caller.
+		-- Move each member: registerSync handles cleanup of old followerMap,
+		-- plus clear self-leader state. After this loop caller followerMap is empty
+		-- and ultimateLeader's followerMap gets entire caller subtree.
 		for _, name in ipairs(subtreeMembers) do
 			registerSync(name, ultimateLeader.Name)
 			activeAnimations[name] = nil
@@ -1217,7 +1217,7 @@ local self = {} :: any
 
 		scheduleLeaderUpdate()
 
-		-- Replicate leader's animation ke seluruh subtree (hard join, same as sync).
+		-- Replicate leader's animation to entire subtree (hard join, same as sync).
 		local leaderAnimName = activeAnimations[ultimateLeader.Name]
 		local leaderAnimId = activeAnimationIds[ultimateLeader.Name]
 		if leaderAnimName then
@@ -1241,7 +1241,7 @@ local self = {} :: any
 				})
 			end
 		else
-			-- Leader idle: stop dance di seluruh subtree caller (yang baru di-move).
+			-- Leader idle: stop dance in entire caller subtree (newly moved).
 			for _, name in ipairs(subtreeMembers) do
 				local member = Players:FindFirstChild(name)
 				if member then
@@ -1852,9 +1852,9 @@ local self = {} :: any
 	end
 
 	_scavengeThread = task.spawn(function()
-		-- Loop berhenti ketika _scavengeActive di-flip oleh destroy() (dipanggil
-		-- dari script.Destroying di Main.server). Tanpa ini, setiap hot-reload
-		-- menumpuk thread scavenge baru yang reference closure lama.
+		-- Loop stops when _scavengeActive is flipped by destroy() (called
+		-- from script.Destroying in Main.server). Without this, every hot-reload
+		-- pile up new scavenge threads referencing old closure.
 		while _scavengeActive do
 			task.wait(SCAVENGE_INTERVAL)
 			if _scavengeActive then

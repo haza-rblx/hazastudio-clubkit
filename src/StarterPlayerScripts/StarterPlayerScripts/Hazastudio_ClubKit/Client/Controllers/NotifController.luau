@@ -32,7 +32,7 @@ local function init(deps: Deps): ()
 			return
 		end
 		if type(raw.message) ~= "string" or #raw.message == 0 then
-			log:warn("Message tidak valid")
+			log:warn("Message not valid")
 			return
 		end
 

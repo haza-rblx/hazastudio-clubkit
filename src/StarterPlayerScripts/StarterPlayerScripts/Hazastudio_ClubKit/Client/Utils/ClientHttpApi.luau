@@ -1,6 +1,6 @@
 --!strict
 -- Client-side HTTP API wrapper (quota-efficiency-pass-2026-06, Phase 2, task 2.2).
--- Subset dari server HttpApi.luau — 3 functions untuk client.
+-- Subset of server HttpApi.luau — 3 functions for the client.
 -- Kill switch: Config.ClientHttpApi.ENABLED = false → direct call.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")

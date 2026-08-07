@@ -1607,7 +1607,7 @@ function LoadingScreenUI:_bindSkipDuringLoadInput()
 	end)
 end
 
---- Boot + overhead siap: izinkan skip (tap anywhere) tanpa fake early finish.
+--- Boot + overhead ready: allow skip (tap anywhere) without fake early finish.
 function LoadingScreenUI:setSkipAvailable(enabled: boolean)
 	if not self._available or not self._refs or self._bootFinished then
 		return

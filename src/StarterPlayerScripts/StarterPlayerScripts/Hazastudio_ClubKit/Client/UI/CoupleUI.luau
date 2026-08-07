@@ -1,7 +1,7 @@
 --!strict
 -- Client/UI/CoupleUI.lua
 -- DISPLAY ONLY. Zero logic. Zero remotes.
--- Semua callbacks diset dari CoupleController.
+-- Semua callbacks diset from CoupleController.
 local TweenService = game:GetService("TweenService")
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
 
@@ -50,7 +50,7 @@ type CoupleUIImpl = {
 	_mainWrapper: Frame,
 	_notifWrapper: Frame,
 	_anim: any,
-	-- Callbacks diset dari controller
+	-- Callbacks diset from controller
 	onSendRequest: ((targetUserId: number) -> ())?,
 	onAccept: Callback?,
 	onReject: Callback?,
@@ -103,7 +103,7 @@ function CoupleUI.new(gui: ScreenGui): CoupleUIImpl
 	return self
 end
 -- ============================================================
--- Wire semua button - callbacks diset dari controller
+-- Wire all button - callbacks diset from controller
 -- ============================================================
 function CoupleUI:_wireButtons()
 	local main = self._mainWrapper
@@ -146,7 +146,7 @@ function CoupleUI:_wireButtons()
 				local sendBtn = inputWrapper:FindFirstChild("TextButton") :: TextButton?
 				if sendBtn then
 					sendBtn.MouseButton1Click:Connect(function()
-						-- Ambil dari selected player (diset via populatePlayers)
+						-- Ambil from selected player (diset via populatePlayers)
 						if self._selectedUserId and self.onSendRequest then
 							self.onSendRequest(self._selectedUserId)
 						end
@@ -387,13 +387,13 @@ function CoupleUI:populatePlayers(players: { { userId: number, displayName: stri
 		return
 	end
 	template.Visible = false
-	-- Bersihkan card lama (kecuali template)
+	-- Bersihkan card old (kecuali template)
 	for _, child in ipairs(scrollFrame:GetChildren()) do
 		if child:IsA("TextButton") and child ~= template then
 			child:Destroy()
 		end
 	end
-	-- Buat card untuk tiap player
+	-- Buat card for tiap player
 	for _, playerData in ipairs(players) do
 		local card = template:Clone() :: TextButton
 		card.Visible = true

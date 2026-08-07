@@ -1,15 +1,28 @@
 ﻿# Changelog
 
-Semua perubahan penting Club Kit dicatat di sini.
+All notable Club Kit changes are documented here.
 
-Format mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-Versi mengikuti [Semantic Versioning](https://semver.org/).
+Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+Versioning follows [Semantic Versioning](https://semver.org/).
 
-Versi aktif: lihat file [`VERSION`](VERSION).
+Active version: see [`VERSION`](VERSION).
 
 ---
 
 ## [Unreleased]
+
+## [2.4.73] - 2026-08-08
+
+English localization pass for engine copy + automatic cash leaderboard title from donation provider.
+
+### Added
+- **Cash leaderboard board title auto-branding** — workspace `SaweriaDonationBoard` header now follows `ClubKitConfig.Donation.Provider` (`bagibagi` / `saweria` / `sociabuzz`) via `DonationProviderDomain.applyCashLeaderboardBrand` on paint (e.g. `BAGIBAGI DONATIONS` instead of a hardcoded `SAWERIA DONATIONS` asset label).
+
+### Changed
+- **English-only codebase copy** — comments, agent/docs (except `docs/locales/id.js` and historical `docs/releases/*` folders), warn/log strings, and default runtime player-facing strings translated from Indonesian to English. Product UI emoji preserved (AdminPanel picker, couple announce 💕/💔, preset admin title strings).
+- **Default runtime strings (English)** — couple announce/breakup, donation chat tag (`[DONATION] DONATION RECEIVED`), gift lookup errors, admin test-donation notify text, and related Config defaults.
+- **`ClubKitConfig.luau` template** — buyer-facing comments and section headers in English (keys/values unchanged).
+- **CHANGELOG** — legacy date headers normalized (`?` → `-`); older 2.0–2.2.x bullet entries translated to English.
 
 ## [2.4.72] - 2026-08-08
 
@@ -97,7 +110,7 @@ Audit-driven patch: DataStore data-loss fixes, client boot hardening, and abuse-
 ## [2.4.67] - 2026-07-28
 
 ### Added
-- **MusicCatalog script seed** — isi `Hazastudio_ClubKitConfig/MusicCatalog.luau` (satu baris per track, multi-part `parts` hingga 9). Server merge additive ke DataStore saat boot; default playlist **Legacy**. Manage UI tetap bisa edit/pindah/hapus. Toggle: `ClubKitConfig.Features.MusicCatalogSeed` (schema fill-forward). Delete lewat Manage tidak di-reseed (fingerprint + tombstone).
+- **MusicCatalog script seed** — fill `Hazastudio_ClubKitConfig/MusicCatalog.luau` (one line per track, multi-part `parts` up to 9). Server merge is additive to DataStore on boot; default playlist **Legacy**. Manage UI can still edit/move/delete. Toggle: `ClubKitConfig.Features.MusicCatalogSeed` (schema fill-forward). Deletes via Manage are not re-seeded (fingerprint + tombstone).
 
 ## [2.4.66] - 2026-07-24
 
@@ -403,7 +416,7 @@ Audit-driven patch: DataStore data-loss fixes, client boot hardening, and abuse-
 ## [2.4.31] - 2026-07-14
 
 ### Added
-- **Donation rank chip gradient anim** — opt-in `ClubKitConfig.Features.DonationRankGradientAnim` (default off) → `Config.Overhead.ANIMATE_DONATION_RANK_GRADIENT`. Robux = sheen, Rupiah = prism; no-op jika wrapper tanpa `UIGradient`.
+- **Donation rank chip gradient anim** — opt-in `ClubKitConfig.Features.DonationRankGradientAnim` (default off) → `Config.Overhead.ANIMATE_DONATION_RANK_GRADIENT`. Robux = sheen, Rupiah = prism; no-op if wrapper has no `UIGradient`.
 
 ## [2.4.30] - 2026-07-14
 
@@ -525,7 +538,7 @@ Audit-driven patch: DataStore data-loss fixes, client boot hardening, and abuse-
 ## [2.4.13] - 2026-07-12
 
 ### Changed
-- **Join greeting gelar + chip amount** - second line is `{Gelar} {DisplayName} has entered the space!` (not Welcome back). Role greetings (Owner / Leadership / Content and any roles in those categories) use that role's **display title** from Roles config. Top Robux / Top Cash greetings use `Top Spender #N` / `Top Donor #N` (`Config.JoinGreeting.GELAR_TITLES`). Spender toasts also send `amount` / `amountText` / `amountKind` from overhead totals and show the total on the Universal chip (`Versatilechiptext` append, or a dedicated Amount/Value/Robux/Cash label if present).
+- **Join greeting title + chip amount** - second line is `{Gelar} {DisplayName} has entered the space!` (not Welcome back). Role greetings (Owner / Leadership / Content and any roles in those categories) use that role's **display title** from Roles config. Top Robux / Top Cash greetings use `Top Spender #N` / `Top Donor #N` (`Config.JoinGreeting.GELAR_TITLES`). Spender toasts also send `amount` / `amountText` / `amountKind` from overhead totals and show the total on the Universal chip (`Versatilechiptext` append, or a dedicated Amount/Value/Robux/Cash label if present).
 
 ## [2.4.12] - 2026-07-12
 
@@ -563,7 +576,7 @@ Audit-driven patch: DataStore data-loss fixes, client boot hardening, and abuse-
 - **Join Commun via game-data worker** - preferred source for Join Community modal data is now `GET /game/:gameKey/community/:groupId` on the game-data-api worker (Open Cloud + cached). Returns `memberCount`, `members[]` (display names), optional `emblemUrl` in one call. Allowlist includes `the-basic` (+ `nuwa`). Requires `Secrets.GameDataApiSecret` + deployed worker; Studio without secret still falls back to roproxy `MEMBER_INFO_URL` / `MEMBER_USERS_URL` (DEBUG skip log).
 
 ### Fixed
-- **Join Commun thumbs HTTP 400** - hardened `MEMBER_USERS_URL` fetch for huge groups (e.g. 3996161): default `sortOrder=Asc` (not Desc), clamp limit without using `POOL_SIZE=40`, retry Asc/no-sort/`limit=100`, then fallback `GET /v1/groups/{id}/roles` ? `/roles/{roleSetId}/users`. Fail log always includes final `url`, `statusCode`, `body`, `kitVersion` (once). Note: Roblox HttpService locks `User-Agent` (cannot set browser UA).
+- **Join Commun thumbs HTTP 400** - hardened `MEMBER_USERS_URL` fetch for huge groups (e.g. 3996161): default `sortOrder=Asc` (not Desc), clamp limit without using `POOL_SIZE=40`, retry Asc/no-sort/`limit=100`, then fallback `GET /v1/groups/{id}/roles` — `/roles/{roleSetId}/users`. Fail log always includes final `url`, `statusCode`, `body`, `kitVersion` (once). Note: Roblox HttpService locks `User-Agent` (cannot set browser UA).
 
 ---
 
@@ -634,10 +647,10 @@ Audit-driven patch: DataStore data-loss fixes, client boot hardening, and abuse-
 
 
 ### Added
-- **Join greeting notifications** ? when Owner, Leadership (category id 1), Content (category id 3), top-10 Robux, or top-10 cash spender joins, all clients see a `GreetingNotifications` / `GeneralGreetings` toast (once per session). Role eligibility follows `ROLE_TO_CATEGORY` (buyer-added Leadership/Content roles auto-greet). Toggle: `Features.JoinGreetings` (default on). Sequence: creative message -> fade -> `Welcome back, ?` (Owner: `Welcome back, owner {DisplayName}`) -> dismiss. Toast motion reuses **GenericBroadcast** enter/exit (`UIScale` 0.84->0.9 / 0.81, `GroupTransparency`, Quad 0.28/0.22) + linear **CountDownBar** with role accent; message swap uses `TextTransparency` crossfade (no abrupt `Visible` toggles). Template must be a `CanvasGroup`.
+- **Join greeting notifications** — when Owner, Leadership (category id 1), Content (category id 3), top-10 Robux, or top-10 cash spender joins, all clients see a `GreetingNotifications` / `GeneralGreetings` toast (once per session). Role eligibility follows `ROLE_TO_CATEGORY` (buyer-added Leadership/Content roles auto-greet). Toggle: `Features.JoinGreetings` (default on). Sequence: creative message -> fade -> `Welcome back, ?` (Owner: `Welcome back, owner {DisplayName}`) -> dismiss. Toast motion reuses **GenericBroadcast** enter/exit (`UIScale` 0.84->0.9 / 0.81, `GroupTransparency`, Quad 0.28/0.22) + linear **CountDownBar** with role accent; message swap uses `TextTransparency` crossfade (no abrupt `Visible` toggles). Template must be a `CanvasGroup`.
 
 ### Changed
-- **Join community on load** ? after loading/`enterGameplay`, wait 2s then show custom `16-JoinCommunPrompt` with **Shop/Gift/PaidBroadcast** center-modal motion (`AnimationHelper.presentCenterPanel` / `dismissCenterPanel`: UIScale 0.96->1 Sine, PanelBlur + FOV zoom). **Skip entirely if already in group** (no auto CoreGui). Join CTA dismisses modal first, then `GroupService:PromptJoinAsync`; Close dismisses only. Avatar strip clones up to 8 in-server member headshots; `CounterLeft` `+(total-8)` only when group member count > 8. Replaces v2.3.1 auto-`PromptJoinAsync` after 0.75s. Toggle / `GroupId` gates unchanged. Missing GUI -> warn + skip (no CoreGui fallback).
+- **Join community on load** — after loading/`enterGameplay`, wait 2s then show custom `16-JoinCommunPrompt` with **Shop/Gift/PaidBroadcast** center-modal motion (`AnimationHelper.presentCenterPanel` / `dismissCenterPanel`: UIScale 0.96->1 Sine, PanelBlur + FOV zoom). **Skip entirely if already in group** (no auto CoreGui). Join CTA dismisses modal first, then `GroupService:PromptJoinAsync`; Close dismisses only. Avatar strip clones up to 8 in-server member headshots; `CounterLeft` `+(total-8)` only when group member count > 8. Replaces v2.3.1 auto-`PromptJoinAsync` after 0.75s. Toggle / `GroupId` gates unchanged. Missing GUI -> warn + skip (no CoreGui fallback).
 
 ---
 
@@ -646,175 +659,176 @@ Audit-driven patch: DataStore data-loss fixes, client boot hardening, and abuse-
 
 
 ### Added
-- **Prompt join community on load** ? after loading/`enterGameplay`, client shows Roblox `GroupService:PromptJoinAsync` for `ClubKitConfig.Group.GroupId` (once per session, always prompt even if already a member). Toggle: `Features.PromptJoinCommunityOnLoad` (default on); skipped when `GroupId` is `0`.
+- **Prompt join community on load** — after loading/`enterGameplay`, client shows Roblox `GroupService:PromptJoinAsync` for `ClubKitConfig.Group.GroupId` (once per session, always prompt even if already a member). Toggle: `Features.PromptJoinCommunityOnLoad` (default on); skipped when `GroupId` is `0`.
 
 ---
 
 ## [2.3.0] - 2026-07-11
 
 ### Fixed
-- **ProcessReceipt money safety** ? in-memory purchase dedupe marked only after `PurchaseGranted` (paid broadcast / buy / gift / Robux no longer skip retries after a failed side-effect); shop gifts **peek** pending then **consume after** successful `grantMembership`; Robux LB receipt uses **intent-before-Increment** (`userIncrementStarted` / `communityIncrementStarted`) so progress-fail after Increment cannot double-credit; community credit frozen from receipt claim `communityId` on resume.
-- **Studio DataStore isolation restored (safe default)** ? `USE_STUDIO_DATASTORE_ISOLATION = true` prefixes `Studio_*` keys in Studio Play; set the flag `false` in `Config.luau` only for intentional live-key debug (manual `/setrobux` etc. blocked while writing live). Boot log distinguishes isolated vs live-from-Studio.
-- **Loading enterGameplay miss** ? if LoadingScreenUI never attaches (or already finished), client still calls `enterGameplay` so DanceWarmup / `ClientGameplayReady` are not stuck.
-- **Robux/community LB cache cross-server** ? write path publishes MessagingService invalidation so other shards drop local + MemoryStore LB keys (not only the writing server).
-- **Overhead / AvatarContext CharacterAdded** ? per-player connection maps Disconnect on `PlayerRemoving` (session LuaHeap hygiene).
-- **World VFX memory leaks** ? client single-flight (`WorldEffectFlight`) aborts prior Nuke/Smite4/BlackHole (Destroy clones, stop sounds, disconnect Heartbeats/markers, restore Lighting); BlackHole always `impactVisuals:Destroy()`; AvatarPrewarmPool generation tokens ignore stale loads + Destroy-on-overwrite; UI/DJ/broadcast sounds use `Sound:Play()` + Ended/Debris (not orphaning `PlayLocalSound`).
-- **Gravity / Ungravity scope + permission** ? `/ungravity` and `/gravity` (plus Shift+U / Shift+G) now affect **all players** on the server (including joiners while float mode is active), and are gated to **Owner / Leadership** (`PermissionDomain.canUseAdminPanel` ? same gate as Admin panel). Regular players no longer get self-float.
-- **DataStore join storm** ? live ~4-player joins no longer flood the request queue from boot LB pre-warm + parallel Settings/Stickers/MusicFavorites GetAsync + double SharedProfileLoader enqueue + streak UpdateAsync when already counted.
+- **ProcessReceipt money safety** — in-memory purchase dedupe marked only after `PurchaseGranted` (paid broadcast / buy / gift / Robux no longer skip retries after a failed side-effect); shop gifts **peek** pending then **consume after** successful `grantMembership`; Robux LB receipt uses **intent-before-Increment** (`userIncrementStarted` / `communityIncrementStarted`) so progress-fail after Increment cannot double-credit; community credit frozen from receipt claim `communityId` on resume.
+- **Studio DataStore isolation restored (safe default)** — `USE_STUDIO_DATASTORE_ISOLATION = true` prefixes `Studio_*` keys in Studio Play; set the flag `false` in `Config.luau` only for intentional live-key debug (manual `/setrobux` etc. blocked while writing live). Boot log distinguishes isolated vs live-from-Studio.
+- **Loading enterGameplay miss** — if LoadingScreenUI never attaches (or already finished), client still calls `enterGameplay` so DanceWarmup / `ClientGameplayReady` are not stuck.
+- **Robux/community LB cache cross-server** — write path publishes MessagingService invalidation so other shards drop local + MemoryStore LB keys (not only the writing server).
+- **Overhead / AvatarContext CharacterAdded** — per-player connection maps Disconnect on `PlayerRemoving` (session LuaHeap hygiene).
+- **World VFX memory leaks** — client single-flight (`WorldEffectFlight`) aborts prior Nuke/Smite4/BlackHole (Destroy clones, stop sounds, disconnect Heartbeats/markers, restore Lighting); BlackHole always `impactVisuals:Destroy()`; AvatarPrewarmPool generation tokens ignore stale loads + Destroy-on-overwrite; UI/DJ/broadcast sounds use `Sound:Play()` + Ended/Debris (not orphaning `PlayLocalSound`).
+- **Gravity / Ungravity scope + permission** — `/ungravity` and `/gravity` (plus Shift+U / Shift+G) now affect **all players** on the server (including joiners while float mode is active), and are gated to **Owner / Leadership** (`PermissionDomain.canUseAdminPanel` — same gate as Admin panel). Regular players no longer get self-float.
+- **DataStore join storm** — live ~4-player joins no longer flood the request queue from boot LB pre-warm + parallel Settings/Stickers/MusicFavorites GetAsync + double SharedProfileLoader enqueue + streak UpdateAsync when already counted.
 
 ### Changed
-- **World VFX server queue** ? `WORLD_EFFECT_DURATIONS` per effect (Nuke 90s / Smite4 180s / BlackHole 240s); `NUKE_DEFAULT_DURATION` 20->90. Worker always waits after broadcast. NukeEffectController stays disabled (would double VFX).
-- **LocalNuke fireworks** ? `FIREWORK_COUNT` 140->40 (temp PlaceMemory spike).
-- **Leaderboard boot pre-warm** ? paint empty/loading boards immediately; defer heavy `buildWorkspaceLeaderboardPayload` (~25s); likes metadata GetAsync capped at 20 (identity fallback beyond).
-- **Join reads** ? Settings / Stickers / Music favorites fold into SharedProfileLoader; SyncDance favorites registered before first enqueue (no second enqueue).
-- **Studio DataStore** ? default isolation again (reverses v2.2.2 ?Studio = live? for safety). Opt into live keys explicitly via `USE_STUDIO_DATASTORE_ISOLATION = false`.
+- **World VFX server queue** — `WORLD_EFFECT_DURATIONS` per effect (Nuke 90s / Smite4 180s / BlackHole 240s); `NUKE_DEFAULT_DURATION` 20->90. Worker always waits after broadcast. NukeEffectController stays disabled (would double VFX).
+- **LocalNuke fireworks** — `FIREWORK_COUNT` 140->40 (temp PlaceMemory spike).
+- **Leaderboard boot pre-warm** — paint empty/loading boards immediately; defer heavy `buildWorkspaceLeaderboardPayload` (~25s); likes metadata GetAsync capped at 20 (identity fallback beyond).
+- **Join reads** — Settings / Stickers / Music favorites fold into SharedProfileLoader; SyncDance favorites registered before first enqueue (no second enqueue).
+- **Studio DataStore** — default isolation again (reverses v2.2.2 "Studio = live" for safety). Opt into live keys explicitly via `USE_STUDIO_DATASTORE_ISOLATION = false`.
 
 ---
 
-## [2.2.9] ? 2026-07-11
+## [2.2.9] - 2026-07-11
 
 ### Changed
-- **Music topbar** ? pindah ke strip kanan, order paling kiri (sebelah kiri Command): Music -> Command -> Admin -> Menu.
-- **Community leaderboard credit** ? donasi Robux pakai community efektif sama seperti badge: `/setcommun` **atau** primary Roblox group (kalau `PRIMARY_FALLBACK_ENABLED` dan belum `/clearcommun`).
+- **Music topbar** — moved to the right strip, leftmost order (left of Command): Music -> Command -> Admin -> Menu.
+- **Community leaderboard credit** — Robux donations use the same effective community as badges: `/setcommun` **or** primary Roblox group (when `PRIMARY_FALLBACK_ENABLED` and not yet `/clearcommun`).
 
 ---
 
-## [2.2.8] ? 2026-07-11
+## [2.2.8] - 2026-07-11
 
 ### Fixed
-- **Donation panel rank flicker** ? jangan clear/`#-` pada rank lookup gagal; `assignRobuxTopDonate` align limit 100 + skip miss; `getDonorProfile` pakai `getPlayerRobuxRank`; panel merge overhead supaya nil rank tidak menimpa `#N` saat total > 0. Clear rank saat total benar-benar 0 tetap jalan (v2.2.7).
-- **Duplicate role team/chat colors** ? `RolesDomain` auto-remap `teamColor` + `roleColor.primary` yang bentrok (ClubKitConfig buyer) supaya PlayerList/leaderboard teams dan chat tags unik.
+- **Donation panel rank flicker** — do not clear/`#-` on failed rank lookup; `assignRobuxTopDonate` align limit 100 + skip miss; `getDonorProfile` uses `getPlayerRobuxRank`; panel merges overhead so nil rank does not overwrite `#N` when total > 0. Clear rank when total is actually 0 still works (v2.2.7).
+- **Duplicate role team/chat colors** — `RolesDomain` auto-remaps conflicting `teamColor` + `roleColor.primary` (buyer ClubKitConfig) so PlayerList/leaderboard teams and chat tags stay unique.
 
 ### Changed
-- **Default music volume** ? 50% -> **100%** (settings + music player store). Existing saves still on old default **50** are migrated once to **100**.
-- **Cinematic/freecam topbar icon** ? `Icons.Topbar.Camera` -> `rbxassetid://131545412033411` (menu cinematic + MobileFreecam HP).
-- **Carry template anim IDs** ? `ClubKitConfig.Carry` kit template pakai anim buyer (6 style kit names; legacy CoupleHug/Pasakal/PiggyUpperBack dibuang dari template).
+- **Default music volume** — 50% -> **100%** (settings + music player store). Existing saves still on old default **50** are migrated once to **100**.
+- **Cinematic/freecam topbar icon** — `Icons.Topbar.Camera` -> `rbxassetid://131545412033411` (menu cinematic + MobileFreecam HP).
+- **Carry template anim IDs** — `ClubKitConfig.Carry` kit template uses buyer anims (6 kit style names; legacy CoupleHug/Pasakal/PiggyUpperBack removed from template).
 
 ---
 
-## [2.2.7] ? 2026-07-11
+## [2.2.7] - 2026-07-11
 
 ### Fixed
-- **Donation panel rank sticky** ? merge tidak lagi nempel `#N` saat total sudah 0; overhead juga drop rank chip kalau donated = 0; `/removerobux` invalidate + refresh overhead.
+- **Donation panel rank sticky** — merge no longer keeps `#N` when total is already 0; overhead also drops rank chip when donated = 0; `/removerobux` invalidate + refresh overhead.
 
 ---
 
-## [2.2.6] ? 2026-07-11
+## [2.2.6] - 2026-07-11
 
 ### Fixed
-- **Branding.LogoImage** ? logging target vs default; support ImageButton + nama `LogoImage`/`ClubLogo`; re-apply setelah workspace board paint.
+- **Branding.LogoImage** — logging target vs default; support ImageButton + names `LogoImage`/`ClubLogo`; re-apply after workspace board paint.
 
 ---
 
-## [2.2.5] ? 2026-07-11
+## [2.2.5] - 2026-07-11
 
 ### Added
-- **Branding.LogoImage** ? ganti logo club sekali di `ClubKitConfig.Branding.LogoImage`; boot auto-apply ke ImageLabel yang masih pakai ID bawaan kit (`79426970537296`) di loading / poster / leaderboard.
+- **Branding.LogoImage** — set club logo once in `ClubKitConfig.Branding.LogoImage`; boot auto-applies to ImageLabels still using kit default ID (`79426970537296`) on loading / poster / leaderboard.
 
 ---
 
-## [2.2.4] ? 2026-07-11
+## [2.2.4] - 2026-07-11
 
 ### Fixed
-- **Dance favorites 1KB cap** ? `Validator.favoritesUpdate` tidak lagi pakai `Security.MAX_PAYLOAD_BYTES` (1KB command); limit khusus `Config.Favorites.MAX_PAYLOAD_BYTES` = 32KB (kasus ~54 favorites mentok). Rate limit `FAVORITES_UPDATE` 5/5s -> 15/5s.
-- **Donation burst poll** ? `getNotifPollDelay` (5s / 45s window) sekarang di-wire ke `BackgroundJobScheduler:setInterval` setelah tiap `donation_poll` (sebelumnya dead setelah migrasi scheduler).
-- **Cash LB overhead** ? hapus `refreshAll` rutin setelah leaderboard sync; `assignPlayer`/`clearPlayer` sudah `refreshPlayer` (force path tetap).
-- **Donation notif queue** ? backlog memendekkan display; saat penuh, evict amount terkecil di antrian (bukan drop donasi besar yang baru).
+- **Dance favorites 1KB cap** — `Validator.favoritesUpdate` no longer uses `Security.MAX_PAYLOAD_BYTES` (1KB command); dedicated limit `Config.Favorites.MAX_PAYLOAD_BYTES` = 32KB (~54 favorites case). Rate limit `FAVORITES_UPDATE` 5/5s -> 15/5s.
+- **Donation burst poll** — `getNotifPollDelay` (5s / 45s window) now wired to `BackgroundJobScheduler:setInterval` after each `donation_poll` (previously dead after scheduler migration).
+- **Cash LB overhead** — removed routine `refreshAll` after leaderboard sync; `assignPlayer`/`clearPlayer` already call `refreshPlayer` (force path unchanged).
+- **Donation notif queue** — backlog shortens display; when full, evict smallest amount in queue (not drop large new donations).
 
 ### Added
-- **Studio clear-self donation** ? `/removecash me` / `/removerobux me` (atau `@me`) clear data donasi sendiri; **Studio-only**. Live tetap pakai username/userId (owner).
+- **Studio clear-self donation** — `/removecash me` / `/removerobux me` (or `@me`) clears your own donation data; **Studio-only**. Live still uses username/userId (owner).
 
 ---
 
-## [2.2.3] ? 2026-07-11
+## [2.2.3] - 2026-07-11
 
 ### Fixed
-- **Gravity / Ungravity naming** ? `/ungravity` (+ Shift+U) = float; `/gravity` (+ Shift+G) = restore. Sebelumnya keybind & `/gravity N` terbalik secara makna.
-- **Ungravity -> gravity drop** ? restore tidak lagi nol-kan Y (ngambang dulu); langsung kick ke bawah + Freefall supaya turun lebih cepat.
+- **Gravity / Ungravity naming** — `/ungravity` (+ Shift+U) = float; `/gravity` (+ Shift+G) = restore. Previously keybind & `/gravity N` were reversed in meaning.
+- **Ungravity -> gravity drop** — restore no longer zeroes Y (float first); immediately kicks downward + Freefall for faster descent.
 
 ---
 
-## [2.2.2] ? 2026-07-11
+## [2.2.2] - 2026-07-11
 
 ### Changed
-- **DataStore: Studio = live** ? hapus prefix `Studio_*` / isolation; Play di Studio memakai key production yang sama agar testing mencerminkan live (write dari Studio mempengaruhi data asli).
-- **PlayerList TeamColor unique** ? runtime auto-remap BrickColor bila config role bentrok, supaya player tidak nyasar ke team lain di leaderboard Roblox.
+- **DataStore: Studio = live** — removed `Studio_*` prefix / isolation; Play in Studio uses the same production keys so testing mirrors live (writes from Studio affect real data).
+- **PlayerList TeamColor unique** — runtime auto-remaps BrickColor when config roles collide, so players do not land on the wrong team in Roblox leaderboard.
 
 ---
 
-## [2.2.1] ? 2026-07-11
+## [2.2.1] - 2026-07-11
 
 ### Fixed
-- **Source sync Script.Source limit** ? `MusicPlayerUIBinder.luau` (247k) melebihi batas Roblox 200k; dipecah ke `MusicPlayerUIBinderPart2.luau` agar plugin Update Engine bisa menulis Source.
+- **Source sync Script.Source limit** — `MusicPlayerUIBinder.luau` (247k) exceeded Roblox 200k limit; split into `MusicPlayerUIBinderPart2.luau` so Update Engine plugin can write Source.
 
 ### Changed
-- **Music player UI source split** ? late methods load dari sibling ModuleScript; API binder tidak berubah.
+- **Music player UI source split** — late methods load from sibling ModuleScript; binder API unchanged.
 
 ---
 
-## [2.2.0] ? 2026-07-11
+## [2.2.0] - 2026-07-11
 
 ### Added
-- **Gravity / Ungravity** ? float mode per player: Shift+G (float), Shift+U (restore), `/gravity 0-10`, `/ungravity`. Dance/sync tetap jalan; anim fall di-suppress.
+- **Gravity / Ungravity** — float mode per player: Shift+G (float), Shift+U (restore), `/gravity 0-10`, `/ungravity`. Dance/sync still works; fall anim suppressed.
 
 ### Fixed
-- **Music topbar icon** ? logo bisa hilang meski lagu jalan (global mode): `MusicTopbarIcon.show()` sekarang idempotent, restore parent via `alignmentHolder`, dan re-assert setelah panel boot.
+- **Music topbar icon** — logo could disappear while music played (global mode): `MusicTopbarIcon.show()` is now idempotent, restores parent via `alignmentHolder`, and re-asserts after panel boot.
 
 ### Changed
-- Packager plugin layout ? source di `tools/ClubKitPackagerPlugin/plugin/`, build output di `plugin-build/`
+- Packager plugin layout — source in `tools/ClubKitPackagerPlugin/plugin/`, build output in `plugin-build/`
 
 ---
 
-## [2.1.0] ? 2026-07-10
+## [2.1.0] - 2026-07-10
 
-Studio plugin **Git source sync** ? update engine Luau dari GitHub tag tanpa export/upload RBXM.
+Studio plugin **Git source sync** — update engine Luau from GitHub tag without export/upload RBXM.
 
 ### Added
-- `SourceSyncCore`, `RojoPathMap` ? fetch `.luau` dari GitHub tag, tulis `Source` ke place
+- `SourceSyncCore`, `RojoPathMap` — fetch `.luau` from GitHub tag, write `Source` to place
 - Dovetail UI: `UpdaterPanel`, `PackagerPanel`, `DovetailTheme`, `DovetailUI`
 - Toolbar **Check Update** + **Update Engine**
-- `tools/release.ps1` ? validasi versi + git tag/push dari Cursor
-- `RolesDomain.buildStudioToolFolderList` ? include membership tool folders
+- `tools/release.ps1` — validate version + git tag/push from Cursor
+- `RolesDomain.buildStudioToolFolderList` — include membership tool folders
 
 ### Changed
-- Packager plugin refactor ? panel terpisah, widget Dovetail dark theme
-- `EnsureRoleToolFolders` ? delegasi ke shared studio module
+- Packager plugin refactor — separate panels, Dovetail dark theme widget
+- `EnsureRoleToolFolders` — delegates to shared studio module
 
 ---
 
-## [2.0.0] ? 2026-07-10
+## [2.0.0] - 2026-07-10
 
-Initial git baseline + rilis dev v2. Melanjutkan dari handover v1.3 dengan fix session terbaru.
+Initial git baseline + dev v2 release. Continues from v1.3 handover with latest session fixes.
 
 ### Added
 - Git version control (portable MinGit + `git.ps1`)
 - Release workflow: `AGENTS.md`, `CHANGELOG.md`, `UPGRADE_PROGRESS.md`, `.cursor/rules/clubkit-versioning.mdc`
 
 ### Fixed
-- `/re` ? refresh avatar pakai `LoadCharacter()` + restore posisi & dance sync
-- Command GUI ? keyboard tidak stuck di textbox setelah panel ditutup (PC/laptop)
-- Mobile freecam ? badan avatar tidak ikut gerak saat kamera digerakkan
-- Circular require crash saat boot ? `DonationProviderDomain` lazy-require `Config`
+- `/re` — refresh avatar via `LoadCharacter()` + restore position & dance sync
+- Command GUI — keyboard no longer stuck in textbox after panel close (PC/laptop)
+- Mobile freecam — avatar body no longer moves when camera is moved
+- Circular require crash on boot — `DonationProviderDomain` lazy-requires `Config`
 
 ### Changed
-- Rate limit session command `/re` dll.: `3` -> `10` per 30 detik (`Config.Session.RATE_MAX`)
-- Versi produk: `1.3.0` -> `2.0.0` (semver baru untuk track upgrade via git)
+- Rate limit session commands `/re` etc.: `3` -> `10` per 30 seconds (`Config.Session.RATE_MAX`)
+- Product version: `1.3.0` -> `2.0.0` (new semver track for git-based upgrades)
 
 ---
 
-## [1.3.0] ? 2026-07-09
+## [1.3.0] - 2026-07-09
 
-Rilis baseline handover. Detail audit & fix: [`HANDOVER.md`](HANDOVER.md).
+Handover baseline release. Audit & fix details: [`HANDOVER.md`](HANDOVER.md).
 
 ### Added
 - Donation provider preset (`bagibagi` / `saweria`)
 - `DonationCash` pipeline + leaderboard seeder tool
-- Pisah `AuraTiers` + `WorldEffectTiers`
+- Split `AuraTiers` + `WorldEffectTiers`
 
 ### Fixed
-- Critical audit C1?C6, high severity H1?H13 (lihat HANDOVER)
+- Critical audit C1–C6, high severity H1–H13 (see HANDOVER)
 
 [Unreleased]: compare with VERSION + UPGRADE_PROGRESS.md
+[2.4.73]: docs/releases/2.4.73/
 [2.4.72]: docs/releases/2.4.72/
 [2.0.0]: docs/releases/2.0.0/
 [1.3.0]: HANDOVER.md

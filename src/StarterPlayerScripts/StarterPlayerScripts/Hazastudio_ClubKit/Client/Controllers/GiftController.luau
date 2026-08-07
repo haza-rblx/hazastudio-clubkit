@@ -1,6 +1,6 @@
 --!strict
 -- Client/Controllers/GiftController.lua
--- Wire GiftUI events ke ShopService.
+-- Wire GiftUI events to ShopService.
 -- Handles: tab switch, player list, username resolve, gift send, notif routing.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -16,7 +16,7 @@ local function init(
 	deps: {
 		shopService: ShopService,
 		remotes: Folder,
-		icon: any?, -- TopbarPlus icon (opsional, bisa nil)
+		icon: any?, -- TopbarPlus icon (optional, may be nil)
 	}
 )
 	local shopService = deps.shopService
@@ -31,7 +31,7 @@ local function init(
 	local localPlayer = Players.LocalPlayer
 	local gui = localPlayer.PlayerGui:WaitForChild(Config.Gift.GUI_NAME, 30) :: ScreenGui?
 	if not gui then
-		log:warn("GUI " .. Config.Gift.GUI_NAME .. " tidak ditemukan")
+		log:warn("GUI " .. Config.Gift.GUI_NAME .. " not found")
 		return {
 			show = function() end,
 			hide = function() end,
@@ -40,17 +40,17 @@ local function init(
 	end
 	local ui = GiftUIModule.new(gui)
 	-- Resolve username -> userId secara async lalu promptGift
-	-- Mengembalikan feedback ke UI jika username tidak ditemukan
+	-- Return feedback to UI if username not found
 	local function resolveAndGift(tier: string, username: string)
 		task.spawn(function()
-			-- Beri visual loading state
-			ui:setInputText("Mencari " .. username .. "...")
+			-- Show loading state in the input field
+			ui:setInputText("Looking up " .. username .. "...")
 			local ok, userId = pcall(function()
 				return Players:GetUserIdFromNameAsync(username)
 			end)
 			if not ok or type(userId) ~= "number" then
-				-- Tampilkan error di input field
-				ui:setInputText("Username tidak ditemukan: " .. username)
+				-- Show error in the input field
+				ui:setInputText("Username not found: " .. username)
 				task.delay(2, function()
 					ui:clearInput()
 				end)
@@ -77,14 +77,14 @@ local function init(
 		ui:bindGiftButton(t, function()
 			local userId, username = ui:getTarget()
 			if userId then
-				-- Player dipilih dari list
+				-- Player selected from list
 				shopService:promptGift(t, userId)
 				ui:clearInput()
 			elseif username and #username > 0 then
-				-- Username diketik manual - perlu async lookup
+				-- Username typed manually — async lookup required
 				resolveAndGift(t, username)
 			else
-				log:warn("Tidak ada target gift")
+				log:warn("No gift target")
 			end
 		end)
 	end
@@ -132,7 +132,7 @@ local function init(
 		refreshPlayerList(false)
 	end))
 	-- ============================================================
-	-- Listen ShopGrantNotif - route gift notifications ke GiftUI
+	-- Listen ShopGrantNotif - route gift notifications to GiftUI
 	-- ============================================================
 	shopService:onGranted(function(payload: any)
 		if payload.isGift then

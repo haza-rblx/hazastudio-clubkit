@@ -1,21 +1,21 @@
 --!nocheck
 -- ============================================================
--- PRINT GUI TREE — dump full hierarchy sampai leaf
+-- PRINT GUI TREE — dump full hierarchy to leaf
 -- ============================================================
--- Nge-print struktur lengkap sebuah instance (GUI atau apapun) ke
--- Output, lengkap dengan ClassName + properti penting per node.
--- Berguna buat dokumentasi / debugging layout GUI.
+-- Prints the full structure of an instance (GUI or anything) to
+-- Output, with ClassName + important properties per node.
+-- Useful for GUI layout documentation / debugging.
 --
--- CARA PAKAI:
--- 1. Set TARGET_PATH ke path instance yang mau di-dump (lihat contoh
---    di bawah). Default: cari "OverheadGUIMainTemplateV3" di Workspace.
--- 2. Paste full content ke Command Bar Studio (Edit Mode OK, gak perlu
---    Play) -> Enter. Atau drop ke ServerScriptService & run.
--- 3. Output muncul di Output window. Copy dari situ.
+-- USAGE:
+-- 1. Set TARGET_PATH to the instance path to dump (see examples
+--    below). Default: find "OverheadGUIMainTemplateV3" in Workspace.
+-- 2. Paste full content into Studio Command Bar (Edit Mode OK, no
+--    Play needed) -> Enter. Or drop into ServerScriptService & run.
+-- 3. Output appears in the Output window. Copy from there.
 --
--- CATATAN:
--- - Read-only, gak ngubah apapun. Aman di Edit Mode.
--- - MAX_DEPTH = 0 artinya unlimited (sampai leaf).
+-- NOTES:
+-- - Read-only, changes nothing. Safe in Edit Mode.
+-- - MAX_DEPTH = 0 means unlimited (to leaf).
 -- ============================================================
 
 local Workspace = game:GetService("Workspace")
@@ -24,19 +24,19 @@ local Workspace = game:GetService("Workspace")
 -- CONFIG
 -- ============================================================
 
--- Cara A: kasih nama, dicari di SEARCH_ROOT secara rekursif.
+-- Method A: set name, searched recursively under SEARCH_ROOT.
 local TARGET_NAME = "OverheadGUIMainTemplateV3"
 local SEARCH_ROOT: Instance = Workspace
 
--- Cara B (opsional): kalau mau target instance spesifik, isi langsung.
--- Kalau di-set (bukan nil), ini menang dari TARGET_NAME.
--- Contoh: local TARGET_INSTANCE = workspace.SomeFolder.MyGui
+-- Method B (optional): for a specific instance, set directly.
+-- When set (not nil), this overrides TARGET_NAME.
+-- Example: local TARGET_INSTANCE = workspace.SomeFolder.MyGui
 local TARGET_INSTANCE: Instance? = nil
 
--- 0 = unlimited (sampai leaf). >0 = batasi kedalaman.
+-- 0 = unlimited (to leaf). >0 = limit depth.
 local MAX_DEPTH = 0
 
--- Tampilkan properti detail per node (Text, Image, Size, dst).
+-- Show detailed properties per node (Text, Image, Size, etc.).
 local SHOW_PROPERTIES = true
 
 -- ============================================================
@@ -103,7 +103,7 @@ local function describeProps(inst: Instance): string
 		add("ImageColor3", safeGet(inst, "ImageColor3"))
 	end
 
-	-- Layout / posisi umum untuk GuiObject
+	-- Common layout / position for GuiObject
 	if inst:IsA("GuiObject") then
 		add("Size", safeGet(inst, "Size"))
 		add("Position", safeGet(inst, "Position"))
@@ -178,7 +178,7 @@ local function walk(inst: Instance, depth: number, prefix: string, isLast: boole
 	end
 
 	local children = inst:GetChildren()
-	-- Urutkan biar output stabil: by LayoutOrder (kalau GuiObject) lalu Name.
+	-- Sort for stable output: by LayoutOrder (if GuiObject) then Name.
 	table.sort(children, function(a, b)
 		local la = (a:IsA("GuiObject") and a.LayoutOrder) or 0
 		local lb = (b:IsA("GuiObject") and b.LayoutOrder) or 0
@@ -212,7 +212,7 @@ if not target then
 end
 
 if not target then
-	warn(string.format("[PrintGuiTree] Target '%s' gak ketemu di %s.", TARGET_NAME, SEARCH_ROOT:GetFullName()))
+	warn(string.format("[PrintGuiTree] Target '%s' not found under %s.", TARGET_NAME, SEARCH_ROOT:GetFullName()))
 	return
 end
 

@@ -32,7 +32,7 @@ end
 function CoupleDomain.removeCouple(stored: OverheadStoredData): OverheadStoredData
 	local OverheadDomain = require(script.Parent.OverheadDomain)
 	local NIL = OverheadDomain.NIL
-	-- Pakai NIL sentinel karena pairs() skip nil values
+	-- Pakai NIL sentinel because pairs() skip nil values
 	return OverheadDomain.mergeStored(stored, {
 		couplePartner = NIL,
 		couplePartnerId = NIL,

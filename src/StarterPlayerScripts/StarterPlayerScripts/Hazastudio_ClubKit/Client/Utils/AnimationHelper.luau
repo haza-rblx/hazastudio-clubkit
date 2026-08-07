@@ -193,8 +193,8 @@ function AnimationHelper.new(): AnimationHelper
 	return setmetatable({}, AnimationHelper) :: any
 end
 -- ============================================================
--- Scale Pop In - untuk open panel/modal
--- Tidak ubah Position/AnchorPoint sama sekali
+-- Scale Pop In — for opening panel/modal
+-- Does not change Position/AnchorPoint at all
 -- ============================================================
 function AnimationHelper:scalePop(modal: Frame, onDone: (() -> ())?): ()
 	local uiScale = getOrCreateUIScale(modal)
@@ -213,16 +213,16 @@ function AnimationHelper:scalePop(modal: Frame, onDone: (() -> ())?): ()
 	t:Play()
 end
 -- ============================================================
--- Scale Center Pop - untuk panel content swap (tanpa overshoot, dari tengah)
--- Berbeda dari scalePop: easing Quint.Out + AnchorPoint 0.5,0.5 sementara
--- sehingga frame mengembang dari pusat, bukan dari pojok kiri atas
+-- Scale Center Pop — for panel content swap (no overshoot, from center)
+-- Unlike scalePop: Quint.Out easing + AnchorPoint 0.5,0.5 while
+-- so the frame expands from center, not top-left corner
 -- ============================================================
 local SCALE_CENTER_POP_TIME = 0.4
 function AnimationHelper:scaleCenterPop(modal: Frame, onDone: (() -> ())?): ()
 	local uiScale = getOrCreateUIScale(modal)
 	uiScale.Scale = 0
 	modal.Visible = true
-	-- Kompensasi AnchorPoint -> skala dari tengah selama animasi
+	-- Compensate AnchorPoint -> scale from center during animation
 	local origAnchor = modal.AnchorPoint
 	local pos = modal.Position
 	local sz = modal.Size
@@ -239,7 +239,7 @@ function AnimationHelper:scaleCenterPop(modal: Frame, onDone: (() -> ())?): ()
 		{ Scale = 1 }
 	)
 	t.Completed:Once(function()
-		-- Kembalikan AnchorPoint; UIListLayout akan reset Position
+		-- Restore AnchorPoint; UIListLayout will reset Position
 		modal.AnchorPoint = origAnchor
 		if onDone then
 			onDone()
@@ -248,7 +248,7 @@ function AnimationHelper:scaleCenterPop(modal: Frame, onDone: (() -> ())?): ()
 	t:Play()
 end
 -- ============================================================
--- Scale Out - untuk close panel/modal
+-- Scale Out — for closing panel/modal
 -- ============================================================
 function AnimationHelper:scaleOut(modal: Frame, onDone: (() -> ())?): ()
 	local uiScale = getOrCreateUIScale(modal)
@@ -267,8 +267,8 @@ function AnimationHelper:scaleOut(modal: Frame, onDone: (() -> ())?): ()
 	t:Play()
 end
 -- ============================================================
--- Present/Dismiss Panel - travel sedang tanpa UIScale.
--- Ada settle kecil di akhir supaya terasa gamey, tapi typography tetap stabil.
+-- Present/Dismiss Panel - moderate travel without UIScale.
+-- Small settle at the end for a gamey feel, but typography stays stable.
 -- ============================================================
 function AnimationHelper:presentPanel(modal: Frame, onDone: (() -> ())?): ()
 	local preset = MotionPresets.panelOpen()
@@ -537,7 +537,7 @@ function AnimationHelper:dismissCenterPanel(modal: Frame, onDone: (() -> ())?, o
 	scaleTween:Play()
 end
 -- ============================================================
--- Present/Dismiss Dialog - snap-settle kecil untuk modal lokal.
+-- Present/Dismiss Dialog — small snap-settle for local modals.
 -- ============================================================
 function AnimationHelper:presentDialog(modal: Frame, onDone: (() -> ())?): ()
 	local preset = MotionPresets.dialogOpen()
@@ -604,18 +604,18 @@ function AnimationHelper:dismissDialog(modal: Frame, onDone: (() -> ())?): ()
 	positionTween:Play()
 end
 -- ============================================================
--- Slide Out - panel jatuh ke bawah + scale mengecil
--- Lebih natural untuk dismiss panel besar (shop, gift)
+-- Slide Out - panel drops down + scale shrinks
+-- More natural for dismissing large panels (shop, gift)
 -- ============================================================
 local SLIDE_OUT_TIME = 0.3
-local SLIDE_OUT_OFFSET = 50 -- px ke bawah
+local SLIDE_OUT_OFFSET = 50 -- px downward
 function AnimationHelper:slideOut(modal: Frame, onDone: (() -> ())?): ()
 	local uiScale = getOrCreateUIScale(modal)
 	local origPos = modal.Position
 	local targetPos = UDim2.new(origPos.X.Scale, origPos.X.Offset, origPos.Y.Scale, origPos.Y.Offset + SLIDE_OUT_OFFSET)
 	uiScale.Scale = 1
 	modal.Visible = true
-	-- Slide ke bawah
+	-- Slide downward
 	TweenService
 		:Create(
 			modal,
@@ -623,7 +623,7 @@ function AnimationHelper:slideOut(modal: Frame, onDone: (() -> ())?): ()
 			{ Position = targetPos }
 		)
 		:Play()
-	-- Scale sedikit mengecil + selesaikan
+	-- Slight scale-down + settle
 	local tScale = TweenService:Create(
 		uiScale,
 		makeInfo(SLIDE_OUT_TIME, Enum.EasingStyle.Quint, Enum.EasingDirection.In),
@@ -631,7 +631,7 @@ function AnimationHelper:slideOut(modal: Frame, onDone: (() -> ())?): ()
 	)
 	tScale.Completed:Once(function()
 		modal.Visible = false
-		modal.Position = origPos -- kembalikan posisi
+		modal.Position = origPos -- restore position
 		uiScale.Scale = 1
 		if onDone then
 			onDone()
@@ -640,7 +640,7 @@ function AnimationHelper:slideOut(modal: Frame, onDone: (() -> ())?): ()
 	tScale:Play()
 end
 -- ============================================================
--- Scatter Fragments - untuk Rejected frame dismiss
+-- Scatter Fragments - for Rejected frame dismiss
 -- ============================================================
 function AnimationHelper:scatterFragments(modal: Frame, overlay: Frame, onDone: (() -> ())?): ()
 	task.defer(function()
@@ -682,7 +682,7 @@ function AnimationHelper:scatterFragments(modal: Frame, overlay: Frame, onDone: 
 	end)
 end
 -- ============================================================
--- Swing In - untuk Confirmation notif masuk
+-- Swing In - for Confirmation notification entrance
 -- ============================================================
 function AnimationHelper:swingIn(modal: Frame, overlay: Frame, onDone: (() -> ())?): ()
 	local uiScale = getOrCreateUIScale(modal)
@@ -690,8 +690,8 @@ function AnimationHelper:swingIn(modal: Frame, overlay: Frame, onDone: (() -> ()
 	modal.Visible = true
 	uiScale.Scale = 0.7
 	modal.Rotation = -12
-	-- Tidak fade overlay - biarkan transparent
-	-- overlay dipakai swingIn tapi tidak diubah transparencynya
+	-- Do not fade overlay — leave transparent
+	-- overlay used by swingIn but transparency not changed
 	TweenService:Create(uiScale, makeInfo(SWING_TIME, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 })
 		:Play()
 	local tRot = TweenService:Create(
@@ -707,8 +707,8 @@ function AnimationHelper:swingIn(modal: Frame, overlay: Frame, onDone: (() -> ()
 	tRot:Play()
 end
 -- ============================================================
--- Rotation - infinite spin untuk RotatingBackground
--- speed: detik per 1 putaran penuh (default 5)
+-- Rotation - infinite spin for RotatingBackground
+-- speed: seconds per 1 full rotation (default 5)
 -- ============================================================
 local ROTATION_DEFAULT_SPEED = 5
 function AnimationHelper:startRotation(image: ImageLabel, speed: number?): RotationHandle
@@ -732,8 +732,8 @@ function AnimationHelper:stopRotation(handle: RotationHandle): ()
 	handle.stop()
 end
 -- ============================================================
--- Progress Ring - countdown timeout di Waiting frame
--- Struktur ring yang diharapkan:
+-- Progress Ring - countdown timeout on Waiting frame
+-- Expected ring structure:
 --   ring (Frame)
 -- |-- ArcFrame (Frame, ClipsDescendants = true)
 -- | `-- ArcIndicator (Frame, UICorner radius 0.5, UIStroke)

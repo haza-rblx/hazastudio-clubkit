@@ -312,9 +312,9 @@ local function createCommandLibraryUI(deps: { logger: ILogger })
 			if child:IsA("ImageButton") then
 				refs.icon = child
 			elseif child:IsA("Frame") and child.Name ~= "Icon" then
-				-- Skip Frame "Icon" karena bukan content. Tanpa filter ini,
-				-- refs.content ke-overwrite jadi Icon Frame dan descriptionLabel/
-				-- commandLabel jadi nil → text di card stuck di default template.
+				-- Skip Frame "Icon" because it is not content. Without this filter,
+				-- refs.content overwritten as Icon Frame and descriptionLabel/
+				-- commandLabel becomes nil → card text stuck on default template.
 				refs.content = child
 			end
 		end

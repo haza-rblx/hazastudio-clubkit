@@ -650,8 +650,8 @@ local function createNatureEffect(donatorName, recipientName, donationAmount, do
 		end -- ini sound engga ada idih oon babnget gua kemaren gua hapus
 		impactEffect.ChimeLoop.Playing = true
 		impactEffect.CoinsLoop.Playing = true
-		-- udah ku tambahain tuuu coba ku tes ya
-		-- jadi di roblox tuh kalo ada satu line error
+		-- already ku tambahain tuuu coba ku tes ya
+		-- in Roblox, if there is one line error
 		-- biasanya baris selanjut nya engga di eksekusi
 		local donationFrame = impactEffect.BillboardGuiAnimation.Frame
 		donationFrame.TopText.Visible = true

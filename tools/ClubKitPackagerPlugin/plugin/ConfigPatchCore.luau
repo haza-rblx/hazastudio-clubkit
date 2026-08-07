@@ -397,7 +397,7 @@ function ConfigPatchCore.patchBuyerConfig(): PatchReport
 
 	if newSource == source or #addedAll == 0 then
 		-- Missing at require-time but already present in Source text (e.g. nil assigns) — OK.
-		report.message = "Config merge: added 0 keys (Source already lists schema keys; value lama tetap)"
+		report.message = "Config merge: added 0 keys (Source already lists schema keys; existing values preserved)"
 		return report
 	end
 

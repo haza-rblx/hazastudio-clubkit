@@ -29,7 +29,7 @@ function Result.withRetry<T>(fn: () -> T, maxAttempts: number): Result<T>
 			task.wait(baseDelay + jitter)
 		end
 	end
-	return Result.Err(("Gagal setelah %d percobaan: %s"):format(maxAttempts, lastErr))
+	return Result.Err(("Failed after %d attempts: %s"):format(maxAttempts, lastErr))
 end
 
 return Result

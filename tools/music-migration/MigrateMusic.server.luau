@@ -2,27 +2,27 @@
 -- ============================================================
 -- MUSIC LIBRARY MIGRATION TOOL
 -- ============================================================
--- Tool buat import lagu dari sistem musik lain ke THE BASIC CLUB KIT.
--- Mapping otomatis: normalPlaybackSpeed → playbackSpeed, parts → parts, dst.
+-- Tool to import tracks from another music system into THE BASIC CLUB KIT.
+-- Automatic mapping: normalPlaybackSpeed → playbackSpeed, parts → parts, etc.
 --
--- CARA PAKAI:
--- 1. Edit SOURCE_DATA di bawah dengan data dari sistem lama (lihat
---    example-source.luau buat referensi format).
--- 2. Set MODE = "dry_run" dulu untuk preview tanpa nulis ke DataStore.
--- 3. Run script ini di Roblox Studio Command Bar (server-side context):
---    - Cara A: Drop ke ServerScriptService temporarily, run sekali, hapus.
---    - Cara B: Paste full content ke Command Bar di Studio (Edit Mode
---      gak akan jalan, harus Run/Play Mode supaya DataStore enabled).
--- 4. Verify output di Output window. Kalau OK, ganti MODE = "commit"
---    dan run lagi untuk write beneran.
--- 5. HAPUS script ini setelah migrasi selesai.
+-- USAGE:
+-- 1. Edit SOURCE_DATA below with data from the old system (see
+--    example-source.luau for format reference).
+-- 2. Set MODE = "dry_run" first to preview without writing to DataStore.
+-- 3. Run this script in Roblox Studio Command Bar (server-side context):
+--    - Option A: Drop into ServerScriptService temporarily, run once, delete.
+--    - Option B: Paste full content into Command Bar in Studio (Edit Mode
+--      will not work — must Run/Play Mode so DataStore is enabled).
+-- 4. Verify output in the Output window. If OK, set MODE = "commit"
+--    and run again to write for real.
+-- 5. DELETE this script after migration completes.
 --
 -- SAFETY:
--- - Dry-run by default. Gak bakal nyentuh DataStore kecuali MODE=="commit".
--- - Strategy "merge" (default): preserve existing tracks/playlists, cuma
---   tambah yang baru. Strategy "replace": overwrite SEMUA (HATI-HATI).
--- - Idempotent: re-run dgn data yang sama gak duplicate (pake key
---   "migrationKey" sebagai dedupe).
+-- - Dry-run by default. Does not touch DataStore unless MODE=="commit".
+-- - Strategy "merge" (default): preserve existing tracks/playlists, only
+--   append new ones. Strategy "replace": overwrite ALL (CAUTION).
+-- - Idempotent: re-run with the same data does not duplicate (uses
+--   "migrationKey" for dedupe).
 -- ============================================================
 
 local DataStoreService = game:GetService("DataStoreService")
@@ -30,7 +30,7 @@ local HttpService = game:GetService("HttpService")
 local RunService = game:GetService("RunService")
 
 -- ============================================================
--- CONFIG (edit sebelum run)
+-- CONFIG (edit before run)
 -- ============================================================
 
 -- "dry_run" = preview only, no DataStore writes.
@@ -41,7 +41,7 @@ local MODE: string = "commit"
 -- "replace" = wipe DataStore & write only incoming (DESTRUCTIVE).
 local STRATEGY: string = "merge"
 
--- DataStore identifiers — harus match Config.Music.
+-- DataStore identifiers — must match Config.Music.
 local DATASTORE_NAME = "MusicLibrary_v1"
 local PLAYLIST_KEY = "Playlists"
 local TRACK_KEY = "Tracks"
@@ -49,34 +49,34 @@ local TRACK_KEY = "Tracks"
 -- Max audio asset IDs per track. Match Config.Music.MAX_TRACK_PARTS.
 local MAX_TRACK_PARTS = 9
 
--- Default playlist buat track yang gak punya playlist info di source.
+-- Default playlist for tracks without playlist info in source.
 local DEFAULT_PLAYLIST_NAME = "Imported"
 
--- Tag buat dedupe re-run. Track/playlist yang udah punya tag ini
--- dgn migrationKey yang sama akan di-skip pas merge.
+-- Tag for re-run dedupe. Tracks/playlists that already have this tag
+-- with the same migrationKey are skipped on merge.
 local MIGRATION_TAG = "migration-tool-v1"
 
 -- ============================================================
 -- SOURCE DATA
 -- ============================================================
--- Paste source di sini. Format fleksibel — mapper di bawah akan
--- normalize ke schema internal kit. Lihat example-source.luau buat
--- format yang didukung.
+-- Paste source here. Flexible format — mapper below will
+-- normalize to the kit internal schema. See example-source.luau for
+-- supported formats.
 --
--- Schema yang diharapkan (semua field opsional kecuali yg ditandai *):
+-- Expected schema (all fields optional except those marked *):
 -- {
---   playlists = {                          -- opsional, bisa di-infer
+--   playlists = {                          -- optional, can be inferred
 --     { id?, name*, coverType?, coverValue?, fontFace? },
 --     ...
 --   },
 --   tracks = {
 --     {
---       id?,                               -- opsional, auto-generate
+--       id?,                               -- optional, auto-generated
 --       name*,                             -- string
 --       creator?,                          -- string, default "Unknown"
---       playlistName? | playlistId?,       -- pilih salah satu
---       parts*,                            -- { string } atau { number }
---       normalPlaybackSpeed? | playbackSpeed?, -- number, opsional
+--       playlistName? | playlistId?,       -- use one or the other
+--       parts*,                            -- { string } or { number }
+--       normalPlaybackSpeed? | playbackSpeed?, -- number, optional
 --     },
 --     ...
 --   },
@@ -3078,18 +3078,18 @@ local function nowIso(): string
 	return os.date("!%Y-%m-%dT%H:%M:%SZ") :: string
 end
 
--- Normalize asset ID ke format ANGKA MENTAH (raw digits), e.g. "139198543036165".
--- PENTING: kit (MusicPlayerController) nambahin prefix "rbxassetid://" sendiri
--- saat bikin Sound.SoundId. Jadi parts di DataStore HARUS angka mentah, BUKAN
--- ber-prefix. Kalau ber-prefix, hasilnya dobel ("rbxassetid://rbxassetid://...")
--- dan asset gagal load (HTTP 404).
+-- Normalize asset ID to RAW DIGITS format, e.g. "139198543036165".
+-- IMPORTANT: the kit (MusicPlayerController) adds the "rbxassetid://" prefix
+-- when creating Sound.SoundId. So parts in DataStore MUST be raw digits, NOT
+-- prefixed. If prefixed, result is doubled ("rbxassetid://rbxassetid://...")
+-- and the asset fails to load (HTTP 404).
 -- Accept: "rbxassetid://123", "123", 123, "rbx://123", "rbxasset://123".
 local function normalizeAssetId(raw: any): string?
 	if raw == nil then return nil end
 	local s = tostring(raw):gsub("%s", "")
 	if s == "" then return nil end
 
-	-- Strip common prefixes (bisa muncul berkali-kali kalau data udah korup)
+	-- Strip common prefixes (may appear multiple times if data is corrupted)
 	s = s:gsub("rbxassetid://", "")
 	s = s:gsub("rbxasset://", "")
 	s = s:gsub("rbx://", "")
@@ -3112,7 +3112,7 @@ local function isNonEmptyString(v: any): boolean
 	return type(v) == "string" and trim(v) ~= ""
 end
 
--- Parse playback speed dari berbagai format.
+-- Parse playback speed from various formats.
 -- "2.3", "2.3x", " 0.85 ", 1.25 → number
 -- Empty/invalid → nil
 local function parsePlaybackSpeed(raw: any): number?
@@ -3136,7 +3136,7 @@ local function mapPlaylist(source: { [string]: any }): { [string]: any }?
 	if not source then return nil end
 	local name = source.name or source.playlistName or source.title
 	if not isNonEmptyString(name) then
-		warnLog("Playlist tanpa name di-skip: %s", HttpService:JSONEncode(source))
+		warnLog("Playlist without name skipped: %s", HttpService:JSONEncode(source))
 		return nil
 	end
 
@@ -3189,13 +3189,13 @@ end
 local function mapTrack(source: { [string]: any }, playlistId: string): { [string]: any }?
 	if not source then return nil end
 	if not isNonEmptyString(source.name) then
-		warnLog("Track tanpa name di-skip: %s", HttpService:JSONEncode(source))
+		warnLog("Track without name skipped: %s", HttpService:JSONEncode(source))
 		return nil
 	end
 
 	local parts = mapTrackParts(source)
 	if #parts == 0 then
-		warnLog("Track '%s' gak punya audio asset valid, di-skip", tostring(source.name))
+		warnLog("Track '%s' has no valid audio asset, skipped", tostring(source.name))
 		return nil
 	end
 
@@ -3241,7 +3241,7 @@ end
 
 local function getStoreOrNil(): any?
 	if not RunService:IsServer() then
-		warnLog("DataStore butuh server context. Run dari Play Mode (F5), bukan client.")
+		warnLog("DataStore requires server context. Run from Play Mode (F5), not client.")
 		return nil
 	end
 	local ok, store = pcall(function()
@@ -3325,13 +3325,13 @@ local function buildPlaylistMap(existing: { [string]: any }, source: { [string]:
 				local nameKey = (mapped.name :: string):lower()
 				local existingId = byName[nameKey]
 				if existingId then
-					info("Playlist '%s' udah ada (id=%s), skip create.", mapped.name, existingId)
+					info("Playlist '%s' already exists (id=%s), skip create.", mapped.name, existingId)
 					stats.playlistsSkipped += 1
 				else
 					byId[mapped.id] = mapped
 					byName[nameKey] = mapped.id
 					stats.playlistsAdded += 1
-					info("Playlist baru: %s (id=%s)", mapped.name, mapped.id)
+					info("New playlist: %s (id=%s)", mapped.name, mapped.id)
 				end
 			end
 		end
@@ -3361,13 +3361,13 @@ local function resolvePlaylistId(source: { [string]: any }, playlistMap: any): s
 	if isNonEmptyString(source.playlistName) then
 		local byName = playlistMap.byName[(source.playlistName :: string):lower()]
 		if byName then return byName end
-		-- Auto-create kalau referensi playlist baru
+		-- Auto-create when track references a new playlist
 		local newP = mapPlaylist({ name = source.playlistName })
 		if newP then
 			playlistMap.byId[newP.id] = newP
 			playlistMap.byName[(newP.name :: string):lower()] = newP.id
 			stats.playlistsAdded += 1
-			info("Auto-create playlist dari track ref: %s (id=%s)", newP.name, newP.id)
+			info("Auto-create playlist from track ref: %s (id=%s)", newP.name, newP.id)
 			return newP.id
 		end
 	end
@@ -3395,7 +3395,7 @@ local function processTracks(
 
 	local sourceTracks = source.tracks
 	if type(sourceTracks) ~= "table" then
-		warnLog("SOURCE_DATA.tracks bukan array, gak ada track yang di-import.")
+		warnLog("SOURCE_DATA.tracks is not an array; no tracks imported.")
 		return nextTracks
 	end
 
@@ -3405,13 +3405,13 @@ local function processTracks(
 		if mapped then
 			local dedupeKey = ((mapped.name :: string):lower() .. "|" .. (mapped.creator :: string):lower())
 			if existingByName[dedupeKey] then
-				info("Track '%s' by '%s' udah ada, skip.", mapped.name, mapped.creator)
+				info("Track '%s' by '%s' already exists, skip.", mapped.name, mapped.creator)
 				stats.tracksSkipped += 1
 			else
 				nextTracks[mapped.id] = mapped
 				stats.tracksAdded += 1
 				local speedNote = mapped.playbackSpeed and (" speed=" .. tostring(mapped.playbackSpeed)) or ""
-				info("Track baru: '%s' by '%s' (%d parts%s)", mapped.name, mapped.creator, #(mapped.parts :: { string }), speedNote)
+				info("New track: '%s' by '%s' (%d parts%s)", mapped.name, mapped.creator, #(mapped.parts :: { string }), speedNote)
 			end
 		end
 	end
@@ -3423,8 +3423,8 @@ local function rebuildPlaylistTrackIds(
 	playlists: { [string]: any },
 	tracks: { [string]: any }
 )
-	-- Reset trackIds buat playlist yang di-touch migrasi (syncSource = MIGRATION_TAG)
-	-- atau yang baru ditambah. Existing playlists yang gak di-touch, biarin.
+	-- Reset trackIds for playlists touched by migration (syncSource = MIGRATION_TAG)
+	-- or newly added. Untouched existing playlists are left as-is.
 	local touchedPlaylists: { [string]: boolean } = {}
 	for id, p in pairs(playlists) do
 		if p.syncSource == MIGRATION_TAG then
@@ -3440,7 +3440,7 @@ local function rebuildPlaylistTrackIds(
 			if touchedPlaylists[t.playlistId] then
 				table.insert(target.trackIds, t.id)
 			else
-				-- Existing playlist, append kalau belum ada
+				-- Existing playlist, append if not already present
 				local exists = false
 				for _, tid in ipairs(target.trackIds) do
 					if tid == t.id then exists = true; break end
@@ -3461,15 +3461,15 @@ local function main()
 	info("=== START === mode=%s strategy=%s", MODE, STRATEGY)
 
 	if MODE ~= "dry_run" and MODE ~= "commit" then
-		warnLog("MODE invalid (%s). Harus 'dry_run' atau 'commit'. Abort.", MODE)
+		warnLog("MODE invalid (%s). Must be 'dry_run' or 'commit'. Abort.", MODE)
 		return
 	end
 	if STRATEGY ~= "merge" and STRATEGY ~= "replace" then
-		warnLog("STRATEGY invalid (%s). Harus 'merge' atau 'replace'. Abort.", STRATEGY)
+		warnLog("STRATEGY invalid (%s). Must be 'merge' or 'replace'. Abort.", STRATEGY)
 		return
 	end
 	if STRATEGY == "replace" and MODE == "commit" then
-		warn(LOG_PREFIX, "⚠️  STRATEGY='replace' + MODE='commit' bakal WIPE existing DataStore. Lanjut dalam 5 detik...")
+		warn(LOG_PREFIX, "⚠️  STRATEGY='replace' + MODE='commit' will WIPE existing DataStore. Continuing in 5 seconds...")
 		task.wait(5)
 	end
 
@@ -3508,7 +3508,7 @@ local function main()
 	info("Errors          : %d", stats.errors)
 
 	if MODE == "dry_run" then
-		info("DRY RUN — no DataStore writes performed. Set MODE='commit' untuk apply.")
+		info("DRY RUN — no DataStore writes performed. Set MODE='commit' to apply.")
 		return
 	end
 

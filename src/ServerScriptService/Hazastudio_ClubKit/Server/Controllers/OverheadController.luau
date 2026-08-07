@@ -1,10 +1,10 @@
 --!strict
 -- Server/Controllers/OverheadController.lua
--- Tanggung jawab:
---   1. Clone template BillboardGui ke Character setiap player
---   2. Kirim payload ke client via RemoteEvent
---   3. Handle refresh request dari client (rate limited)
---   4. Cleanup saat player leave
+-- Responsibilities:
+--   1. Clone template BillboardGui onto each player's Character
+--   2. Send payload to client via RemoteEvent
+--   3. Handle refresh request from client (rate limited)
+--   4. Cleanup when player leave
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Teams = game:GetService("Teams")
@@ -57,7 +57,7 @@ end
 	local function createOverheadController(
 		deps: {
 			service: Types.IOverheadService,
-			remotes: Folder, -- Remotes folder di-inject, bukan dibuat di top-level
+			remotes: Folder, -- Remotes folder is injected, not created at top level
 			eventBus: any?,
 			-- Optional: injected by Main.server.luau (task 2.2) after ProximityInterestService
 			-- is constructed. When nil every broadcast is suppressed with an error log (R1.3).
@@ -70,7 +70,7 @@ end
 		local eventBus = deps.eventBus
 		local proximity = deps.proximity
 		local playerSnapshotService = deps.playerSnapshotService
-	-- Remote dibuat di dalam factory, bukan saat module di-require
+	-- Remotes created inside factory, not when module is required
 	local function getOrCreateRemote(name: string): RemoteEvent
 		local existing = remotes:FindFirstChild(name)
 		if existing and existing:IsA("RemoteEvent") then
@@ -81,7 +81,7 @@ end
 		remote.Parent = remotes
 		return remote
 	end
-	-- Server -> Client: kirim payload overhead
+	-- Server -> Client: send overhead payload
 	local RemoteOverheadUpdate = getOrCreateRemote("OverheadUpdate")
 	local RemoteAboutRosterSync = getOrCreateRemote("AboutRosterSync")
 	local RemoteChatTagSync = getOrCreateRemote(
@@ -105,17 +105,17 @@ end
 		logger = log,
 		isServer = true,
 	})
-	-- Client -> Server: minta ulang payload roster live untuk UI yang init belakangan
+	-- Client -> Server: re-request live roster payload for late-init UI
 	local RemoteRosterRequest = getOrCreateRemote("OverheadRosterRequest")
-	-- Client -> Server: minta refresh
+	-- Client -> Server: request refresh
 	local RemoteRequestRefresh = getOrCreateRemote("OverheadRequestRefresh")
 	local limiter = RateLimiter.new(Config.Security.REFRESH_MAX, Config.Security.REFRESH_WINDOW)
 	local rosterLimiter =
 		RateLimiter.new(Config.Overhead.ROSTER_REQUEST_RATE_MAX, Config.Overhead.ROSTER_REQUEST_RATE_WINDOW)
-	-- Track requestId yang sudah diproses (anti-duplicate)
-	-- Gunakan TTL-based dedup seperti AdminController, bukan wipe-all
+	-- Track processed requestIds (anti-duplicate)
+	-- Use TTL-based dedup like AdminController, not wipe-all
 	local processedReqs: { [string]: number } = {} -- value = expiry time
-	-- Track GUI yang aktif per player (untuk cleanup)
+	-- Track active GUI per player (for cleanup)
 	local activeGuis: { [number]: BillboardGui } = {}
 	local subscriptionSignalConnections: { [number]: RBXScriptConnection } = {}
 	local cachedPayloads: { [number]: OverheadPayload } = {}
@@ -440,27 +440,27 @@ end
 		return table.concat(parts, "|")
 	end
 	-- ----------------------------------------------------------
-	-- Ambil template dari ReplicatedStorage
+	-- Fetch template from ReplicatedStorage
 	-- ----------------------------------------------------------
 	local activeVariant = Config.OverheadGuiVariants[Config.Overhead.GUI_TYPE] or Config.OverheadGuiVariants.V1
 	local templateName = activeVariant.templateName or Config.Template.TEMPLATE_NAME
 	local wrapperName = activeVariant.wrapperName or "OverheadGUIMainWrapper"
-	-- Coba direct child dulu (path normal). Kalau gak ketemu, fallback ke
-	-- pencarian rekursif — template kadang ditaruh dalam subfolder
-	-- (mis. ReplicatedStorage/Assets/...). Ambil yang BillboardGui aja.
+	-- Try direct child first (normal path). If not found, fall back to
+	-- recursive search — templates are sometimes placed in subfolders
+	-- (e.g. ReplicatedStorage/Assets/...). Take only the BillboardGui instance.
 	local template = ReplicatedStorage:FindFirstChild(templateName)
 	if not template then
 		local nested = ReplicatedStorage:FindFirstChild(templateName, true)
 		if nested and nested:IsA("BillboardGui") then
 			template = nested
-			log:warn("Template ketemu via pencarian rekursif (bukan direct child ReplicatedStorage)", {
+			log:warn("Template found via recursive search (not direct ReplicatedStorage child)", {
 				name = templateName,
 				path = nested:GetFullName(),
 			})
 		end
 	end
 	if not template then
-		log:error("Template BillboardGui tidak ditemukan di ReplicatedStorage!", {
+		log:error("Template BillboardGui not found in ReplicatedStorage!", {
 			name = templateName,
 		})
 	end
@@ -491,7 +491,7 @@ end
 		end
 	end
 	-- ----------------------------------------------------------
-	-- Clone GUI ke character
+	-- Clone GUI onto character
 	-- ----------------------------------------------------------
 	local function attachGui(player: Player, character: Model): BillboardGui?
 		if not template then
@@ -499,17 +499,17 @@ end
 		end
 		local head = waitForStableHead(character)
 		if not head then
-			log:warn("Head tidak ditemukan", { player = player.Name })
+			log:warn("Head not found", { player = player.Name })
 			return nil
 		end
-		-- Hapus GUI lama jika ada (e.g. respawn)
+		-- Remove old GUI if present (e.g. respawn)
 		local existing = activeGuis[player.UserId]
 		if existing and existing.Parent then
 			existing:Destroy()
 		end
 		cleanupCharacterOverheads(character, nil)
 		local gui = template:Clone() :: BillboardGui
-		gui.Enabled = false -- sembunyikan sampai payload datang
+		gui.Enabled = false -- hide until payload arrives
 		gui.Adornee = head
 		gui.Parent = head
 		activeGuis[player.UserId] = gui
@@ -538,12 +538,12 @@ end
 		return attachGui(player, character)
 	end
 	-- ----------------------------------------------------------
-	-- Build payload untuk satu player
+	-- Build payload for one player
 	-- ----------------------------------------------------------
 	local function buildPayload(player: Player): (OverheadPayload?, boolean, boolean)
 		local meta = service:buildPayloadWithMeta(player)
 		if not meta.result.ok then
-			log:warn("buildPayload gagal", { player = player.Name, err = meta.result.error })
+			log:warn("buildPayload failed", { player = player.Name, err = meta.result.error })
 			return nil, false, false
 		end
 		return meta.result.value, meta.usedFallback, meta.rankLookupOk == true
@@ -551,9 +551,9 @@ end
 	local function buildAndCachePayload(player: Player): (OverheadPayload?, boolean)
 		local userId = player.UserId
 
-		-- S1 (quota-efficiency-pass-2026-06, Phase 1): short-circuit kalau input cache
-		-- state tidak berubah sejak last build. Hash disimpan di storedInputsFingerprints.
-		-- Skip service:buildPayload (yang spawn 5 parallel tasks + DataStore read) kalau
+		-- S1 (quota-efficiency-pass-2026-06, Phase 1): short-circuit if input cache
+		-- state unchanged since last build. Hash stored in storedInputsFingerprints.
+		-- Skip service:buildPayload (spawns 5 parallel tasks + DataStore read) if
 		-- inputs unchanged. Kill switch: Config.Overhead.S1_SHORTCIRCUIT = false.
 		-- Fallback payloads are never short-circuited so the next attempt can load real data.
 		if Config.Overhead.S1_SHORTCIRCUIT ~= false and not payloadWasFallback[userId] then
@@ -562,7 +562,7 @@ end
 			if cached and stored ~= nil then
 				local currentFingerprint = service:computeInputsFingerprint(userId)
 				if currentFingerprint == stored then
-					-- Cache valid, return cached tanpa rebuild (re-publish tag if needed).
+					-- Cache valid, return cached without rebuild (re-publish tag if needed).
 					publishChatTagFromPayload(cached, false, payloadRankLookupOk[userId] == true)
 					return cached, false
 				end
@@ -573,11 +573,11 @@ end
 		if not payload then
 			return nil, false
 		end
-		-- Stability fix: JANGAN downgrade payload yang sudah bagus dengan Guest
-		-- fallback. Kalau load gagal (throttle/budget) dan kita sudah punya cached
-		-- payload non-fallback, return yang lama. Hanya pakai fallback kalau belum
-		-- ada cache sama sekali (first load). Ini cegah "Guest flicker" di chat tags
-		-- saat refreshAll hit transient DataStore failure.
+		-- Stability fix: do NOT downgrade a good payload with Guest
+		-- fallback. If load failed (throttle/budget) and we already have cached
+		-- non-fallback payload, return the old one. Only use fallback if not yet
+		-- cached at all (first load). Prevents "Guest flicker" in chat tags
+		-- when refreshAll hits transient DataStore failure.
 		if usedFallback and cachedPayloads[userId] and not payloadWasFallback[userId] then
 			publishChatTagFromPayload(cachedPayloads[userId], false, payloadRankLookupOk[userId] == true)
 			return cachedPayloads[userId], false
@@ -602,8 +602,8 @@ end
 		end
 		updateAboutRosterFromPayload(player, payload)
 		publishChatTagFromPayload(payload, usedFallback, rankLookupOk)
-		-- Selalu return payload build terbaru (bukan referensi cache lama) supaya
-		-- syncBuiltinPlayerList dapat cash/robux terbaru untuk leaderstats.
+		-- Always return latest built payload (not old cache reference) so
+		-- syncBuiltinPlayerList gets latest cash/robux for leaderstats.
 		return payload, changed
 	end
 	local function getOrCreateLeaderstats(player: Player): Folder
@@ -791,7 +791,7 @@ end
 		if canonical then
 			return canonical
 		end
-		-- Strip suffix " #N" untuk Spender rank ("ROYALE SPENDER #1" → "ROYALE SPENDER").
+		-- Strip suffix " #N" for Spender rank ("ROYALE SPENDER #1" → "ROYALE SPENDER").
 		local lookupTagName = tagName:gsub(" #%d+$", "")
 		local upperLookup = string.upper(lookupTagName)
 		if Config.ChatPrimaryTagLabel[lookupTagName] then
@@ -830,11 +830,11 @@ end
 		return false
 	end
 	local function resolvePlayerTeamRoleKey(payload: OverheadPayload): string
-		-- Gunakan max priority antara group role DAN effectiveMembership.
+		-- Use max priority between group role AND effectiveMembership.
 		-- VIP/VVIP/Exclusive diberikan via grantMembership → stored.membershipBadge → effectiveMembership.
-		-- payload.role saja tidak cukup — player dengan group rank Guest yang beli VIP
-		-- tetap punya role="Guest" di payload, tapi effectiveMembership="Tier1" (VIP).
-		-- Fix: ambil baseRole dari whichever has higher ChatPrimaryTagPriority.
+		-- payload.role alone is not enough — player with Guest group rank who bought VIP
+		-- still has role="Guest" in payload, but effectiveMembership="Tier1" (VIP).
+		-- Fix: take baseRole from whichever has higher ChatPrimaryTagPriority.
 		local groupRole = OverheadDomain.normalizeRoleKey(payload.role) or payload.role
 		local membershipRole = payload.effectiveMembership
 			and OverheadDomain.normalizeRoleKey(payload.effectiveMembership)
@@ -974,7 +974,7 @@ end
 			if color then
 				preferred = BrickColor.new(color)
 			else
-				log:warn("hexToColor3 gagal parse warna untuk tag, team akan pakai warna default", {
+				log:warn("hexToColor3 failed to parse tag color, team will use default color", {
 					tagName = fallbackRoleKey,
 					hex = tostring(chatHex),
 				})
@@ -1026,11 +1026,11 @@ end
 		log:info("Premade PlayerList role teams", { count = created })
 	end
 	local function syncBuiltinPlayerList(player: Player, payload: OverheadPayload)
-		-- Guard: player mungkin sudah leave saat deferred/delayed broadcast
+		-- Guard: player may have left during deferred/delayed broadcast
 		if not player.Parent then
 			return
 		end
-		-- Rank dibuat sebagai leaderstat pertama supaya PlayerList Roblox sort dari role/rank tertinggi.
+		-- Create Rank as first leaderstat so Roblox PlayerList sorts by highest role/rank.
 		local rankValue = getOrCreateRankStat(player)
 		rankValue.Value = resolvePlayerListRankScore(payload)
 		-- Streak
@@ -1049,7 +1049,7 @@ end
 		-- Cash
 		local cashValue = getOrCreateCashStat(player)
 		cashValue.Value = payload.cashDonated
-		-- Team = chatRole (sama judul overhead), bukan chatPrimaryTag membership (Exclusive/VIP).
+		-- Team = chatRole (same as overhead title), not chatPrimaryTag membership (Exclusive/VIP).
 		local teamRoleKey = resolvePlayerTeamRoleKey(payload)
 		local team = getOrCreateTeam(teamRoleKey, teamRoleKey)
 		if team and player.Parent then
@@ -1068,8 +1068,8 @@ end
 		end
 	end
 	-- ----------------------------------------------------------
-	-- Broadcast payload satu player ke semua player di server
-	-- Dipanggil saat player join atau datanya berubah
+	-- Broadcast one player's payload to all players on server
+	-- Called when player joins or their data changes
 	-- ----------------------------------------------------------
 	--
 	-- mode:
@@ -1102,18 +1102,18 @@ end
 			OverheadPremiumBadge.apply(attachedGui, payload)
 		end
 
-		-- SYNCHRONOUS snapshot update (critical path — tidak boleh deferred via EventBus).
-		-- PlayerSnapshotService needs visibleBadges BEFORE the next ACM open agar
-		-- fast-path payload tidak mengembalikan badge kosong.
-		-- EventBus:emit menggunakan task.spawn (deferred), yang menyebabkan race
-		-- condition dimana snapshot belum ter-update saat ACM request datang.
+		-- SYNCHRONOUS snapshot update (critical path — must not be deferred via EventBus).
+		-- PlayerSnapshotService needs visibleBadges BEFORE the next ACM open so
+		-- fast-path payload does not return empty badges.
+		-- EventBus:emit uses task.spawn (deferred), causing a race
+		-- condition where snapshot is not updated when ACM request arrives.
 		if changed or resolvedMode == "recovery" then
 			if playerSnapshotService and type(playerSnapshotService.updateFromOverhead) == "function" then
 				playerSnapshotService:updateFromOverhead(payload)
 			end
 			if eventBus and type(eventBus.emit) == "function" then
-				-- Emit ke downstream non-critical (RoleToolService, MusicService, dll).
-				-- Deferred via task.spawn di EventBus acceptable untuk consumer ini.
+				-- Emit to downstream non-critical consumers (RoleToolService, MusicService, etc).
+				-- Deferred via task.spawn in EventBus is acceptable for this consumer.
 				eventBus:emit("Overhead:Payload", payload)
 			end
 		end
@@ -1179,8 +1179,8 @@ end
 		})
 	end
 	-- ----------------------------------------------------------
-	-- Kirim payload semua player yang sudah ada ke satu client baru
-	-- Dipanggil saat player baru join agar bisa lihat overhead orang lain
+	-- Send all existing players' payloads to one new client
+	-- Called when a new player joins so they can see others' overhead
 	-- OVERHEAD_JOIN_PROXIMITY_ONLY: nearby only; distant via Snapshot-on-enter.
 	-- ----------------------------------------------------------
 	local function getJoinInterestRadius(): number
@@ -1272,9 +1272,9 @@ end
 	-- ----------------------------------------------------------
 	-- PlayerAdded flow
 	-- ----------------------------------------------------------
-	-- Retry attach GUI dengan backoff. Saat avatar besar / humanoid description lambat
-	-- / server high load, Head/HumanoidRootPart bisa muncul setelah timeout 5 detik.
-	-- Tanpa retry overhead sama sekali tidak akan muncul untuk player tersebut.
+	-- Retry GUI attach with backoff. When avatar is large / humanoid description is slow
+	-- / server is under high load, Head/HumanoidRootPart may appear after 5s timeout.
+	-- Without retry, overhead will never appear for that player.
 	local ATTACH_RETRY_DELAYS = { 0.2, 0.5, 1, 1, 1, 1, 1, 1, 1, 1 }
 	local ATTACH_RETRY_TOTAL_TIMEOUT = 12
 
@@ -1322,8 +1322,8 @@ end
 		local respawn = isRespawn == true or hasCompletedInitialSetup[player.UserId] == true
 
 		if respawn then
-			-- Respawn: GUI baru + baseline client hilang. Recovery wajib supaya
-			-- payload tetap terkirim walau S1 short-circuit (changed=false).
+			-- Respawn: new GUI + client baseline lost. Recovery required so
+			-- payload still sends even if S1 short-circuits (changed=false).
 			if not player.Parent then
 				return
 			end
@@ -1348,7 +1348,7 @@ end
 		if proximity and type((proximity :: any).recomputeNow) == "function" then
 			(proximity :: any):recomputeNow()
 		end
-		-- 1. Broadcast overhead player ini ke semua subscriber (delta mode — R6.2).
+		-- 1. Broadcast this player's overhead to all subscribers (delta mode — R6.2).
 		--    The Snapshot-on-enter handler in ProximityInterestService (task 3.2) will
 		--    send a full Snapshot to each viewer when they enter View_Range; this call
 		--    ensures any subscriber who is *already* watching receives the latest delta.
@@ -1385,8 +1385,8 @@ end
 
 	local function onCharacterAdded(player: Player, character: Model)
 		local isRespawn = hasCompletedInitialSetup[player.UserId] == true
-		-- 2E: Safety net hanya untuk join pertama. Respawn tidak perlu menunggu
-		-- DataStore lagi — data sudah di memory.
+		-- 2E: Safety net only for first join. Respawn does not need to wait for
+		-- DataStore again — data is already in memory.
 		if not isRespawn then
 			task.delay(JOIN_DATA_READY_TIMEOUT, function()
 				if player.Parent and not dataReadyPlayers[player.UserId] then
@@ -1410,18 +1410,18 @@ end
 		finishCharacterSetup(player, isRespawn)
 	end
 	local function onPlayerAdded(player: Player)
-		-- Pre-create leaderstats sebelum character muncul. Bug 2026-05-23:
-		-- Roblox PlayerList kadang cuma show DisplayName + Likes karena
-		-- syncBuiltinPlayerList baru jalan setelah first overhead broadcast.
-		-- Kalau client udah subscribe ke leaderstats sebelum
-		-- semua IntValue dibuat, column Streak/Robux/Cash bisa ke-skip di tampilan.
-		-- Pre-create dengan Value=0 di sini bikin folder lengkap dari awal; nilai
-		-- aktual di-isi saat broadcastPayload pertama jalan.
+		-- Pre-create leaderstats before character spawns. Bug 2026-05-23:
+		-- Roblox PlayerList sometimes only shows DisplayName + Likes because
+		-- syncBuiltinPlayerList only runs after first overhead broadcast.
+		-- If client already subscribed to leaderstats before
+		-- all IntValues are created, Streak/Robux/Cash columns may be skipped in display.
+		-- Pre-create with Value=0 here builds complete folder from start; actual
+		-- values filled on first broadcastPayload.
 		--
-		-- URUTAN PENTING: Rank dibuat PERTAMA. Roblox PlayerList sort descending
-		-- berdasarkan IntValue pertama di leaderstats, jadi Rank-first = list
-		-- terurut dari role/rank tertinggi ke terendah sejak awal (sebelum sync).
-		-- Semua kolom premade (selalu ada), bukan on-demand.
+		-- ORDER MATTERS: Rank created FIRST. Roblox PlayerList sorts descending
+		-- based on first IntValue in leaderstats, so Rank-first = list
+		-- by highest to lowest role/rank from the start (before sync).
+		-- All premade columns (always present), not on-demand.
 		do
 			local leaderstats = getOrCreateLeaderstats(player)
 			local _ = leaderstats -- suppress unused warning
@@ -1434,17 +1434,17 @@ end
 			getOrCreateRobuxStat(player)
 			getOrCreateCashStat(player)
 		end
-		-- 2C: Assign default Guest team segera saat player join, sebelum character
-		-- muncul. Sebelumnya player stay Neutral (Roblox default) sampe datastore
-		-- load selesai (15+ detik kalau throttled). Guest team instant → PlayerList
-		-- langsung punya team color. Saat data asli load, syncBuiltinPlayerList
-		-- update ke team yang benar.
+		-- 2C: Assign default Guest team immediately on player join, before character
+		-- spawns. Previously player stayed Neutral (Roblox default) until datastore
+		-- load finished (15+ seconds if throttled). Guest team instant → PlayerList
+		-- gets team color immediately. When real data loads, syncBuiltinPlayerList
+		-- update to correct team.
 		local guestTeam = getOrCreateTeam("Guest", "Guest")
 		if guestTeam then
 			player.Neutral = false
 			player.Team = guestTeam
 		end
-		-- Handle karakter yang sudah ada (join mid-game)
+		-- Handle existing character (join mid-game)
 		if player.Character then
 			task.spawn(onCharacterAdded, player, player.Character)
 		end
@@ -1510,8 +1510,8 @@ end
 		if not validation.valid then
 			return
 		end
-		-- Authorization - hanya player dengan role Admin+ yang bisa manual refresh
-		-- Cegah exploiter spam group cache invalidation
+		-- Authorization — only players with Admin+ role can manual refresh
+		-- Prevent exploiter spam of group cache invalidation
 		local payloadResult = if type(service.getEffectivePayload) == "function"
 			then service:getEffectivePayload(player)
 			else service:buildPayload(player)
@@ -1652,7 +1652,7 @@ end
 
 			-- Ensure snapshot is fresh (mirrors broadcastPayload's synchronous update).
 			-- Snapshot-on-enter happens AFTER the initial broadcastPayload timeout/race,
-			-- jadi update di sini memastikan data tidak hilang.
+			-- so updating here ensures data is not lost.
 			if playerSnapshotService and type(playerSnapshotService.updateFromOverhead) == "function" then
 				playerSnapshotService:updateFromOverhead(payload)
 			end
@@ -1717,19 +1717,19 @@ end
 			finishCharacterSetup(player)
 		end
 	end
-	-- Broadcast overhead player tertentu ke subscribers (e.g. setelah admin set rank).
+	-- Broadcast specific player's overhead to subscribers (e.g. after admin sets rank).
 	-- Pass mode="recovery" to force-reset all per-recipient baselines and send full
 	-- Snapshots (use for avatar refresh, admin rank-change — R6.4).
 	function controller:refreshPlayer(player: Player, mode: ("delta" | "recovery")?)
 		task.spawn(broadcastPayload, player, mode)
 	end
-	-- Broadcast semua player ke subscribers (e.g. setelah leaderboard update).
+	-- Broadcast all players to subscribers (e.g. after leaderboard update).
 	-- Uses delta mode — never resets keys / sends Force_Broadcast (R6.1).
-	-- S2 (quota-efficiency-pass-2026-06, Phase 1): debounced — kalau dipanggil
-	-- <S2_DEBOUNCE_MS dari last call, skip (coalesce donation burst). Set
+	-- S2 (quota-efficiency-pass-2026-06, Phase 1): debounced — if called
+	-- <S2_DEBOUNCE_MS from last call, skip (coalesce donation burst). Set
 	-- Config.Overhead.S2_DEBOUNCE_MS = 0 to disable.
-	-- Patch #2 R5: additional rate-limit REFRESH_ALL_HARD_LIMIT_SEC agar CPU+fireClient
-	-- budget tidak jebol walau fingerprint berubah (e.g. donasi burst >S2 window).
+	-- Patch #2 R5: additional rate-limit REFRESH_ALL_HARD_LIMIT_SEC so CPU+fireClient
+	-- budget is not exceeded even if fingerprint changes (e.g. donation burst >S2 window).
 	local lastRefreshAllAt = 0
 	local REFRESH_ALL_HARD_LIMIT_SEC = 5
 	function controller:refreshAll()

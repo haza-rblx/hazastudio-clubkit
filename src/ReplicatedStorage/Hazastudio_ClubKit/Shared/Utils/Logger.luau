@@ -1,12 +1,12 @@
 --!strict
 -- Shared/Utils/Logger.lua
--- Studio: DEBUG..ERROR. Production: hanya ERROR (merah via TestService), DEBUG/INFO/WARN di-gate.
+-- Studio: DEBUG..ERROR. Production: only ERROR (merah via TestService), DEBUG/INFO/WARN di-gate.
 local RunService = game:GetService("RunService")
 local Types = require(script.Parent.Parent.Domain.Types)
 
 local IS_STUDIO = RunService:IsStudio()
 local LEVELS = { DEBUG = 1, INFO = 2, WARN = 3, ERROR = 4 }
--- Production: hide semua kecuali ERROR (log merah). Studio tetap verbose.
+-- Production: hide all kecuali ERROR (log merah). Studio still verbose.
 local MIN_LEVEL = if IS_STUDIO then LEVELS.DEBUG else LEVELS.ERROR
 
 local Logger = {}
@@ -32,7 +32,7 @@ local function serialize(ctx: { [string]: any }?): string
 	return " | {" .. table.concat(parts, ",") .. "}"
 end
 
--- Merah di Developer Console tanpa throw / crash script (error() akan throw).
+-- Red in Developer Console without throw / script crash (error() throws).
 local function emitError(line: string)
 	local ok = pcall(function()
 		game:GetService("TestService"):Error(line)

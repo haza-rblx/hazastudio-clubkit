@@ -25,7 +25,7 @@ local NotifService = {}
 
 function NotifService.show(payload: NotifPayload): ()
 	if type(payload.message) ~= "string" or #payload.message == 0 then
-		log:warn("show dipanggil dengan message kosong")
+		log:warn("show called with empty message")
 		return
 	end
 

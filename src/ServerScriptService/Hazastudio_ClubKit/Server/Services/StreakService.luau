@@ -1,6 +1,6 @@
 --!strict
 -- Server/Services/StreakService.lua
--- Tanggung jawab: evaluasi + update streak saat player join.
+-- Responsibilities: evaluasi + update streak when player join.
 -- Zero DataStore langsung, zero UI.
 
 local Types         = require(game.ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
@@ -30,7 +30,7 @@ local function createStreakService(deps: {
 		if peek.ok then
 			local peeked = StreakDomain.evaluateStreak(peek.value.streakDays, peek.value.lastLoginAt, now)
 			if peeked.alreadyCounted then
-				log:debug("Streak sudah dihitung hari ini (skip UpdateAsync)", {
+				log:debug("Streak already counted today (skip UpdateAsync)", {
 					player = player.Name,
 					streak = peeked.newStreakDays,
 				})
@@ -52,7 +52,7 @@ local function createStreakService(deps: {
 		end)
 
 		if not updateResult.ok then
-			log:warn("Gagal update data untuk streak", {
+			log:warn("Failed to update data for streak", {
 				player = player.Name,
 				err    = updateResult.error,
 			})
@@ -61,11 +61,11 @@ local function createStreakService(deps: {
 
 		local streakResult = computedResult
 		if not streakResult then
-			return ResultUtil.Err("Gagal menghitung streak")
+			return ResultUtil.Err("Failed to compute streak")
 		end
 
 		if streakResult.alreadyCounted then
-			log:debug("Streak sudah dihitung hari ini", {
+			log:debug("Streak already counted today", {
 				player = player.Name,
 				streak = streakResult.newStreakDays,
 			})

@@ -498,7 +498,7 @@ function DonationSystemUI.new(refs: Refs): DonationSystemUI
 	if refs.productTemplate then
 		refs.productTemplate.Visible = false
 	end
-	-- Default empty state sampai refreshProducts selesai (template tidak pernah ditampilkan langsung).
+	-- Default empty state until refreshProducts finishes (template never shown directly).
 	if refs.notFoundCard then
 		refs.notFoundCard.Visible = true
 	end
@@ -511,10 +511,10 @@ function DonationSystemUI.new(refs: Refs): DonationSystemUI
 	setButtonLabel(refs.saweriaTabButton, getExternalProviderName())
 
 	if refs.avatarViewport then
-		-- Pool dipanggil sebagai side effect (AvatarPrewarmShared.getPool()) saat
-		-- init state di atas — saat itu self._avatarPool sudah ter-set. Defer
-		-- pemanggilan showAvatar ke akhir resumption cycle agar queue prewarm self
-		-- punya kesempatan jalan dulu, sehingga pool hit di kesempatan kedua.
+		-- Pool invoked as side effect (AvatarPrewarmShared.getPool()) when
+		-- init state above — by then self._avatarPool already set. Defer
+		-- showAvatar call to end of resumption cycle so self prewarm queue
+		-- runs first, improving pool hit on second open.
 		local localUserId = Players.LocalPlayer.UserId
 		task.defer(function()
 			self:_showDonationAvatar(localUserId)
@@ -559,19 +559,19 @@ function DonationSystemUI.new(refs: Refs): DonationSystemUI
 	return self
 end
 
--- Tampilkan avatar 3D di donation panel donor profile.
--- Pakai pola pool-or-thumbnail yang sama dengan AvatarContextUI.showAvatar:
---   1. Coba ambil model dari prewarm pool (instant kalau hit).
---   2. Kalau miss, tampilkan ImageLabel thumbnail instan (no YIELD).
---   3. Subscribe ke pool.subscribeModelReady untuk upgrade seamless ke 3D.
---   4. Trigger pool.prewarmOnDemand supaya load berikutnya instant.
--- Tanpa fallback path, race condition antara pool init + viewport load()
--- akan bikin viewport kosong selamanya (lihat investigasi 2026-06-17).
+-- Show 3D avatar in donation panel donor profile.
+-- Same pool-or-thumbnail pattern as AvatarContextUI.showAvatar:
+--   1. Try fetch model from prewarm pool (instant if hit).
+--   2. On miss, show instant ImageLabel thumbnail (no YIELD).
+--   3. Subscribe to pool.subscribeModelReady for seamless 3D upgrade.
+--   4. Trigger pool.prewarmOnDemand so the next load is instant.
+-- Without a fallback path, a race between pool init and viewport load()
+-- will leave viewport empty forever (see investigation 2026-06-17).
 function DonationSystemUI:_showDonationAvatar(userId: number)
 	local viewport = self._refs.avatarViewport
 	if not viewport then return end
 
-	-- Bersihkan subscription upgrade lama (kalau show() dipanggil dua kali).
+	-- Clean up old subscription upgrade (if show() called twice).
 	if self._avatarModelReadyUnsub then
 		self._avatarModelReadyUnsub()
 		self._avatarModelReadyUnsub = nil
@@ -592,7 +592,7 @@ function DonationSystemUI:_showDonationAvatar(userId: number)
 	local success = self._avatarViewport3D:load(userId)
 	if success then return end
 
-	-- Pool miss: tampilkan thumbnail ImageLabel instan.
+	-- Pool miss: show instant ImageLabel thumbnail.
 	local thumbUrl = ("rbxthumb://type=AvatarBust&id=%d&w=420&h=420"):format(userId)
 	if not self._avatarThumbnail then
 		self._avatarThumbnail = Instance.new("ImageLabel")
@@ -610,8 +610,8 @@ function DonationSystemUI:_showDonationAvatar(userId: number)
 
 	if self._avatarPool and type(self._avatarPool.subscribeModelReady) == "function" then
 		self._avatarModelReadyUnsub = self._avatarPool:subscribeModelReady(userId, function()
-			-- Guard: viewport masih hidup & visible (mungkin panel ditutup
-			-- atau GUI di-destroy saat loading).
+			-- Guard: viewport still alive & visible (panel may have been closed
+			-- or the GUI was destroyed while loading).
 			if not viewport.Parent or not viewport.Visible then return end
 			if not self._avatarViewport3D then
 				self._avatarViewport3D = AvatarViewport3D.new(viewport)
@@ -626,7 +626,7 @@ function DonationSystemUI:_showDonationAvatar(userId: number)
 		end)
 	end
 
-	-- Trigger background prewarm supaya click berikutnya instant.
+	-- Trigger background prewarm so the next click is instant.
 	if self._avatarPool and type(self._avatarPool.prewarmOnDemand) == "function" then
 		self._avatarPool:prewarmOnDemand(userId)
 	end
@@ -1011,9 +1011,9 @@ function DonationSystemUI:show()
 		self:refreshProducts(self._productRefreshHandler)
 	end
 	self:_setTab(self._activeTab)
-	-- Re-trigger avatar load di setiap buka. Kalau pool sudah ready, 3D
-	-- tampil instan; kalau belum (mis. dibuka sebelum pool prewarm selesai
-	-- di boot pertama), fallback thumbnail + subscribe upgrade seamless.
+	-- Re-trigger avatar load on each open. If pool already ready, 3D
+	-- show instantly; if not yet (e.g. opened before pool prewarm finishes
+	-- on first boot), fallback thumbnail + seamless upgrade subscribe.
 	if self._refs.avatarViewport then
 		self:_showDonationAvatar(Players.LocalPlayer.UserId)
 	end

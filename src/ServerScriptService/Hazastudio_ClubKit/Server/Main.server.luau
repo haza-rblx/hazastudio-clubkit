@@ -1,6 +1,6 @@
 --!strict
 -- PATH: ServerScriptService/Server/Main.server.lua
--- Entry point server. Wire semua dependencies di sini.
+-- Entry point server. Wire all dependencies here.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -48,7 +48,7 @@ if Config.DataStoreScope.IS_STUDIO and Config.DataStoreScope.USE_STUDIO_ISOLATIO
 		settings = Config.Settings.DATASTORE_KEY,
 	})
 elseif Config.DataStoreScope.IS_STUDIO then
-	log:warn("DataStore scope: LIVE production keys from Studio — testing akan mengubah data player asli", {
+	log:warn("DataStore scope: LIVE production keys from Studio — testing will modify real player data", {
 		robuxLeaderboard = Config.Leaderboards.ROBUX_USER_ORDERED_KEY,
 		overhead = Config.DataStore.OVERHEAD_KEY,
 		settings = Config.Settings.DATASTORE_KEY,
@@ -77,7 +77,7 @@ do
 		sameAsDefault = stats.targetLogo == stats.defaultLogo,
 	})
 	if stats.targetLogo == stats.defaultLogo then
-		log:warn("Branding.LogoImage masih ID bawaan kit — ganti di ClubKitConfig.Branding.LogoImage supaya logo berubah")
+		log:warn("Branding.LogoImage still default kit ID — change ClubKitConfig.Branding.LogoImage so logo updates")
 	end
 end
 
@@ -93,7 +93,7 @@ if type(gameDataApi) == "table" and type(gameDataApi.BASE_URL) == "string" and g
 	and gameDataApi.GROUPS_ENDPOINT_ENABLED == true
 then
 	if type(Secrets.GameDataApiSecret) ~= "string" or Secrets.GameDataApiSecret == "" then
-		log:debug("GameDataApi secret kosong — worker calls akan di-skip (normal di Studio tanpa Secrets)")
+		log:debug("GameDataApi secret empty — worker calls will be skipped (normal in Studio without Secrets)")
 	end
 end
 
@@ -167,10 +167,10 @@ local function ensureUnreliableRemoteEvent(parent: Instance, name: string): Unre
 end
 -- ============================================================
 -- SETUP REMOTE: Notify
--- FireClient = side effect, bukan pure util -> wire di entry point.
+-- FireClient = side effect, not pure util -> wire at entry point.
 -- ============================================================
 local NotifyRemote = ensureRemoteEvent(Remotes, "Notify")
--- Dibuat awal agar client OverheadController bisa subscribe sebelum boot server berat selesai.
+-- Created early so client OverheadController can subscribe before heavy server boot finishes.
 ensureRemoteEvent(Remotes, "OverheadUpdate")
 ensureRemoteEvent(Remotes, (Config.ClientBoot :: any).CLIENT_GAMEPLAY_READY_REMOTE or "ClientGameplayReady")
 local GenericBroadcastRemote = ensureRemoteEvent(Remotes, Config.Announcement.REMOTE_BROADCAST)
@@ -181,7 +181,7 @@ ensureRemoteEvent(Remotes, tostring(joinCommunityPromptCfg.REMOTE_RESPONSE or "J
 ensureRemoteEvent(Remotes, tostring(joinCommunityPromptCfg.REMOTE_VIP_RECHECK or "CommunityVipRecheck"))
 ensureRemoteEvent(Remotes, Config.PaidBroadcast.REMOTE_SUBMIT)
 local _PaidBroadcastResultRemote = ensureRemoteEvent(Remotes, Config.PaidBroadcast.REMOTE_RESULT)
--- Create UnreliableRemoteEvent untuk cosmetic data (particles, VFX hints)
+-- Create UnreliableRemoteEvent for cosmetic data (particles, VFX hints)
 local CosmeticRemote: UnreliableRemoteEvent
 do
 	local existing = Remotes:FindFirstChild("Cosmetic")
@@ -265,7 +265,7 @@ if Config.FeatureFlags.MusicPlayerEnabled then
 end
 -- Late-bound controller remotes: create early so client boot does not wait on heavy server wiring.
 provisionEarlyRemotes(ReplicatedStorage, Remotes, Config)
--- Interface Notify - inject ke controller sebagai deps
+-- Interface Notify - inject into controller as deps
 type NotifyPayload = {
 	message: string,
 	notifType: string?,
@@ -537,7 +537,7 @@ local proximityService = ServerMods.createProximityInterestService.create({
 })
 local overheadController = ServerMods.createOverheadController({
 	service = overheadService,
-	remotes = Remotes, -- inject Remotes folder ke factory
+	remotes = Remotes, -- inject Remotes folder into factory
 	eventBus = eventBus,
 	proximity = proximityService,   -- R1.3: shared ProximityInterestService
 	interest = interestManager,     -- R1.3: shared ServerMods.InterestManager
@@ -1015,10 +1015,10 @@ if Config.FeatureFlags.StickersEnabled ~= false then
 		})
 	)
 end
--- serverLifecycle:startAll() dipanggil setelah semua module ter-register (di bawah)
+-- serverLifecycle:startAll() called after all modules registered (below)
 -- ── Lifecycle startAll ──────────────────────────────────────
--- Panggil onStart() untuk semua module yang terdaftar via trackLifecycle.
--- StickerService dan StickerController ikut di-start di sini.
+-- Call onStart() for all modules registered via trackLifecycle.
+-- StickerService and StickerController also start here.
 serverLifecycle:startAll()
 -- Start the proximity recompute loop (drives ServerMods.InterestManager channel membership).
 -- Must be called AFTER serverLifecycle:startAll() so all other services are live.
@@ -1175,7 +1175,7 @@ sessionCommandService = ServerMods.createSessionCommandService({
 		end
 		else nil,
 })
-sessionCommandService:init() -- wire wirePlayer agar rejoin position restore berfungsi
+sessionCommandService:init() -- wire wirePlayer so rejoin position restore berfungsi
 local afkGuardService: any = nil
 if Config.FeatureFlags.AfkGuardEnabled ~= false and Config.AfkGuard.ENABLED == true then
 	afkGuardService = trackLifecycle(
@@ -1264,7 +1264,7 @@ ServerMods.createDonationController({
 	leaderboardsSnapshotResponseRemote = WorkspaceLeaderboardsSnapshotResponseRemote,
 	workspaceLeaderboardRefresh = workspaceLeaderboardRefresh,
 })
--- Assign overhead tag ke player yang join + sudah ada di leaderboard
+-- Assign overhead tag to joining player already on the leaderboard
 connectionCleaner:add(Players.PlayerAdded:Connect(function(player)
 	donationService:onPlayerAdded(player)
 end))
@@ -1362,8 +1362,8 @@ do
 	})
 end
 -- ============================================================
--- SCRIPT DESTROYING - cleanup saat Rojo hot-reload di Studio
--- Mencegah accumulation ServerMods.NetworkManager + scheduler di Studio
+-- SCRIPT DESTROYING - cleanup when Rojo hot-reloads in Studio
+-- Prevents accumulation of ServerMods.NetworkManager + scheduler in Studio
 -- ============================================================
 script.Destroying:Connect(function()
 	log:info("Server script destroying — cleaning up resources...")
@@ -1394,8 +1394,8 @@ script.Destroying:Connect(function()
 			syncService:destroy()
 		end)
 	end
-	-- Stop DonationService polling threads sebelum ServerMods.NetworkManager destroy,
-	-- agar loop tidak melanjutkan HTTP request saat resource sudah invalid.
+	-- Stop DonationService polling threads before ServerMods.NetworkManager destroy,
+	-- so loop not melanjutkan HTTP request when resource already invalid.
 	if donationService and type(donationService.stopPolling) == "function" then
 		donationService:stopPolling()
 	end
@@ -1426,8 +1426,8 @@ script.Destroying:Connect(function()
 	serverLifecycle:destroyAll()
 end)
 -- ============================================================
--- BIND TO CLOSE - flush semua data player saat server shutdown
--- Wajib ada agar data tidak hilang saat server mati mendadak
+-- BIND TO CLOSE - flush all player data when the server shuts down
+-- Required so data is not lost when the server shuts down unexpectedly
 -- ============================================================
 game:BindToClose(function()
 	if donationService and type(donationService.stopPolling) == "function" then
@@ -1550,7 +1550,7 @@ game:BindToClose(function()
 	end
 
 	if pendingSaves > 0 then
-		log:warn("BindToClose: timeout — beberapa player/repo mungkin tidak tersave", {
+		log:warn("BindToClose: timeout — some player/repo data may not be saved", {
 			remaining = pendingSaves,
 			elapsed = elapsed,
 		})

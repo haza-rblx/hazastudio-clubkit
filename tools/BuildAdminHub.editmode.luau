@@ -4,12 +4,12 @@
 -- ============================================================
 -- Edit Mode Command Bar / MCP execute_luau.
 --
--- CARA PAKAI:
--- 1. Paste SELURUH file ke Command Bar (Edit) → Enter
---    ATAU jalankan via Studio MCP execute_luau.
--- 2. Hasil: StarterGui["04-AdminHub"] (replace jika sudah ada).
--- 3. Semua ImageLabel.Image = "" — isi rbxassetid sendiri nanti.
---    Jangan isi emoji / glyph aneh di icon slots.
+-- USAGE:
+-- 1. Paste the ENTIRE file into the Command Bar (Edit) → Enter
+--    OR run via Studio MCP execute_luau.
+-- 2. Result: StarterGui["04-AdminHub"] (replaces existing if present).
+-- 3. All ImageLabel.Image = "" — fill in your own rbxassetid later.
+--    Do not put emoji / odd glyphs in icon slots.
 --
 -- Sumber: tools/prototypes/admin-hub-v1.html (:root tokens + data-name tree)
 -- ============================================================
@@ -25,7 +25,7 @@ local function face(weight: Enum.FontWeight, style: Enum.FontStyle?): Font
 	return Font.new(FONT_ASSET, weight, style or Enum.FontStyle.Normal)
 end
 
--- —— Tokens (bake dari HTML :root admin-hub-v1.html) ——
+-- —— Tokens (baked from HTML :root admin-hub-v1.html) ——
 local T = {
 	text = Color3.fromRGB(255, 255, 255),
 	ink = Color3.fromRGB(10, 10, 10),

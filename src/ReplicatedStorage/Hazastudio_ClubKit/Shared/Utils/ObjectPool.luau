@@ -2,7 +2,7 @@
 -- ReplicatedStorage/Shared/Utils/ObjectPool.lua
 -- Generic object pool for recycling instances
 
--- Import Logger untuk proper logging
+-- Import Logger for proper logging
 local Logger = require(script.Parent.Logger)
 local log = Logger.new("ObjectPool")
 

@@ -22,18 +22,18 @@ script.FireworksRocket:Destroy()
 local spawnPosition = Vector3.new(0, 0, 0)
 local spreadDistance =  500
 
--- Daftar sound ID untuk ledakan
+-- Sound ID list for explosions
 local explosionSounds = {
 	138080762, 269146157, 160248505, 242458749,
 	160248459, 160248479, 160248493, 4583102108
 }
 
--- Folder untuk organisasi (PENTING!)
+-- Folder for organization (IMPORTANT!)
 local fireworksFolder = Instance.new("Folder")
 fireworksFolder.Name = "ActiveFireworks"
 fireworksFolder.Parent = workspace
 
--- Fungsi untuk membuat firework flare
+-- Function to create a firework flare
 local function createFlare(parentFirework, index)
 	local flare = Instance.new("Part")
 	flare.CastShadow = false
@@ -52,9 +52,9 @@ local function createFlare(parentFirework, index)
 	flare.CFrame = parentFirework.CFrame * CFrame.Angles(math.rad(index * 18), 0, 0)
 	flare.Position = parentFirework.Position
 	flare.Velocity = flare.CFrame.LookVector * 50
-	flare.Parent = fireworksFolder  -- Masukkan ke folder
+	flare.Parent = fireworksFolder  -- Parent to folder
 
-	-- Attachment untuk trail
+	-- Attachment for trail
 	local topAttachment = Instance.new("Attachment")
 	topAttachment.Parent = flare
 	topAttachment.Position = Vector3.new(0, flare.Size.Y * 0.5, 0)
@@ -71,7 +71,7 @@ local function createFlare(parentFirework, index)
 	trail.Lifetime = 2.5
 	trail.Enabled = true
 
-	-- BodyForce untuk gravitasi
+	-- BodyForce for gravity
 	local bodyForce = Instance.new("BodyForce")
 	bodyForce.Parent = flare
 	bodyForce.Force = Vector3.new(0, flare:GetMass() * workspace.Gravity - 40, 0)
@@ -83,7 +83,7 @@ local function createFlare(parentFirework, index)
 	flareParticle.Parent = flare
 	flareParticle.Enabled = true
 
-	-- Cleanup yang lebih cepat
+	-- Faster cleanup
 	task.delay(FLARE_LIFETIME, function()
 		if flare and flare.Parent then
 			trail.Enabled = false
@@ -96,30 +96,30 @@ local function createFlare(parentFirework, index)
 	end)
 end
 
--- Fungsi untuk meluncurkan firework
+-- Function to launch a firework
 local function launchFirework()
 	local firework = fireworkTemplate:Clone()
 
-	-- Set warna random
+	-- Set random color
 	firework.Color = Color3.fromHSV(
 		math.random(0, 100) / 100,
 		math.random(75, 100) / 100,
 		1
 	)
 
-	-- Set posisi spawn random
+	-- Set random spawn position
 	firework.Position = spawnPosition + Vector3.new(
 		math.random(-spreadDistance, spreadDistance),
 		0,
 		math.random(-spreadDistance, spreadDistance)
 	)
 
-	-- Set kecepatan
+	-- Set velocity
 	firework.Velocity = Vector3.new(0, math.random(250, 400), 0)
-	firework.Parent = fireworksFolder  -- Masukkan ke folder
+	firework.Parent = fireworksFolder  -- Parent to folder
 
 	task.spawn(function()
-		-- Terapkan warna ke semua particle effects
+		-- Apply color to all particle effects
 		local colorSequence = ColorSequence.new(firework.Color)
 		firework.Trail.Color = colorSequence
 		firework.Flares1.Color = colorSequence
@@ -134,7 +134,7 @@ local function launchFirework()
 			NumberSequenceKeypoint.new(1, 50, 25)
 		})
 
-		-- BodyForce untuk gravitasi
+		-- BodyForce for gravity
 		firework.BodyForce.Force = Vector3.new(0, firework:GetMass() * workspace.Gravity, 0)
 
 		-- Sound efek peluncuran
@@ -159,10 +159,10 @@ local function launchFirework()
 		firework.Anchored = false
 		launchSound:Play()
 
-		-- Tunggu sebelum meledak
+		-- Wait before exploding
 		task.wait(math.random(EXPLOSION_DELAY_MIN * 100, EXPLOSION_DELAY_MAX * 100) / 100)
 
-		-- Cek apakah firework masih ada
+		-- Check whether firework still exists
 		if not firework or not firework.Parent then
 			return
 		end
@@ -179,7 +179,7 @@ local function launchFirework()
 			math.random(-180, 180)
 		)
 
-		-- Buat flares
+		-- Create flares
 		for i = 1, FLARE_COUNT do
 			createFlare(firework, i)
 		end
@@ -192,7 +192,7 @@ local function launchFirework()
 		firework.SparkleExplosion:Emit(25)
 		explosionSound:Play()
 
-		-- Cleanup lebih cepat
+		-- Faster cleanup
 		task.wait(FIREWORK_CLEANUP_DELAY)
 		if firework and firework.Parent then
 			firework:Destroy()
@@ -207,7 +207,7 @@ task.spawn(function()
 		task.wait(SPAWN_DELAY)
 	end
 
-	-- Cleanup folder setelah semua selesai
+	-- Clean up folder after all complete
 	task.wait(30)
 	if fireworksFolder and fireworksFolder.Parent then
 		fireworksFolder:Destroy()

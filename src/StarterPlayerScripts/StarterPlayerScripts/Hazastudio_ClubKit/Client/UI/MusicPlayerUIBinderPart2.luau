@@ -894,7 +894,7 @@ return function(MusicPlayerUIBinder: any, H: any)
 				(clone :: TextButton).Interactable = true
 			end
 	
-			-- TrackWrapperTemplate structure (dari GUI dump):
+			-- TrackWrapperTemplate structure (from GUI dump):
 			-- TrackInformationWrapper -> TrackInformation -> TrackDetails -> TrackTitle [TextLabel]
 			-- TrackInformation -> AddToQueueWrapper -> AddToQueueButton [TextButton]
 			local infoWrap = clone:FindFirstChild("TrackInformationWrapper")
@@ -1284,8 +1284,8 @@ return function(MusicPlayerUIBinder: any, H: any)
 			for i, partFrame in ipairs(refs.formTrackIdParts) do
 				setTextInput(partFrame, (track.parts and track.parts[i]) or "")
 			end
-			-- Per-track playback speed: kalau track punya nilai sendiri,
-			-- tampilkan di TextBox; kalau nil, biarin kosong (= pakai global).
+			-- Per-track playback speed: if track has its own value,
+			-- show in TextBox; if nil, leave empty (= use global).
 			if refs.formTrackPlaybackSpeedField then
 				local speed = (track :: any).playbackSpeed
 				if typeof(speed) == "number" and speed > 0 then
@@ -1413,9 +1413,9 @@ return function(MusicPlayerUIBinder: any, H: any)
 				table.insert(parts, v)
 			end
 		end
-		-- Per-track playback speed (optional). Tolerant ke input user:
-		--   "2.3", "2.3x", " 0.85 " semua valid. Empty/invalid = nil
-		--   (server fallback ke Config.Music.PLAYBACK_SPEED).
+		-- Per-track playback speed (optional). Tolerant to user input:
+		--   "2.3", "2.3x", " 0.85 " all valid. Empty/invalid = nil
+		--   (server fallback to Config.Music.PLAYBACK_SPEED).
 		local playbackSpeed: number? = nil
 		if refs.formTrackPlaybackSpeedField then
 			local raw = getTextInput(refs.formTrackPlaybackSpeedField)
@@ -2784,14 +2784,14 @@ return function(MusicPlayerUIBinder: any, H: any)
 	end
 	
 	-- ============================================================
-	-- BIND ALL UI EVENTS (dipanggil oleh Controller saat init)
+	-- BIND ALL UI EVENTS (called by Controller at init)
 	-- ============================================================
 	
 	function MusicPlayerUIBinder:bindAll()
 		local refs = self._refs
 		local store = self._store
 	
-		-- Jangan pernah tampilkan template mentah di runtime.
+		-- Never show raw template at runtime.
 		hideIfGuiObject(refs.playlistTemplateNormal)
 		hideIfGuiObject(refs.playlistTemplateSelected)
 		hideIfGuiObject(refs.queueTemplate)
@@ -3449,7 +3449,7 @@ return function(MusicPlayerUIBinder: any, H: any)
 		trackUnsubscriber(
 			self,
 			store:subscribe("isLoading", function(isLoading)
-				-- Disable buttons saat loading
+				-- Disable buttons while loading
 				refs.createPlaylistButton.Interactable = not isLoading
 				refs.uploadTrackButton.Interactable = not isLoading
 				setActionWrapperButtonsInteractable(refs.formPlaylist, "CreateorSavePlaylistButton", not isLoading)
@@ -3470,7 +3470,7 @@ return function(MusicPlayerUIBinder: any, H: any)
 			end)
 		)
 	
-		-- DJ mode gating: saat DJ mode ON, privileged users (Admin/DJ/Owner) tetap bisa akses.
+		-- DJ mode gating: when DJ mode ON, privileged users (Admin/DJ/Owner) still have access.
 		-- Regular player di-block.
 		local function updateDjModeGating()
 			local storeState = store:get()
@@ -3510,8 +3510,8 @@ return function(MusicPlayerUIBinder: any, H: any)
 	
 		-- DraggableIcon: no custom logic, UIDragDetector already handles MainWrapper
 	
-		-- ManageAllowed: disable tab secara visual (data di-push dari controller via store subscribe)
-		-- Manage tab: saat DJ mode ON, privileged users (DJ owner / Admin / Owner) tetap bisa akses.
+		-- ManageAllowed: visually disable tab (data pushed from controller via store subscribe)
+		-- Manage tab: when DJ mode ON, privileged users (DJ owner / Admin / Owner) still have access.
 		local function updateManageTab(allowed: boolean)
 			local storeState = store:get()
 			local localUserId = Players.LocalPlayer and Players.LocalPlayer.UserId

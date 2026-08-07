@@ -5,7 +5,7 @@
 -- ============================================================
 -- Run via Roblox Studio Command Bar in SERVER context:
 --   1. Open Command Bar (View > Command Bar)
---   2. Left dropdown: pilih "Server"
+--   2. Left dropdown: select "Server"
 --   3. Paste the WHOLE script below > Enter
 --   4. The script returns an HttpApiTelemetry table you can call later.
 --

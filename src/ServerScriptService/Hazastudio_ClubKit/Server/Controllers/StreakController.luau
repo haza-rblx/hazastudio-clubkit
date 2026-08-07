@@ -1,6 +1,6 @@
 --!strict
 -- Server/Controllers/StreakController.lua
--- Fire StreakNotif ke client setelah processLogin berhasil.
+-- Fire StreakNotif to client after processLogin succeeds.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)

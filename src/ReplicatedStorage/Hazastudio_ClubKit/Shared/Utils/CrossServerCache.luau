@@ -151,7 +151,7 @@ local function publishRaw(topic: string, payload: { [string]: any })
 		else
 			metrics.throttled += 1
 			warn(string.format(
-				"[CrossServerCache] publish gagal topic=%s err=%s",
+				"[CrossServerCache] publish failed topic=%s err=%s",
 				topic,
 				tostring(err)
 			))
@@ -237,7 +237,7 @@ function CrossServerCache.publish(topic: string, userId: number)
 			end)
 			if not ok then
 				warn(string.format(
-					"[CrossServerCache] publish gagal topic=%s userId=%d err=%s",
+					"[CrossServerCache] publish failed topic=%s userId=%d err=%s",
 					topic,
 					userId,
 					tostring(err)
@@ -309,7 +309,7 @@ function CrossServerCache.subscribe(topic: string, onMessage: (userId: number) -
 		end)
 	end)
 	if not ok then
-		warn(string.format("[CrossServerCache] subscribe gagal topic=%s err=%s", topic, tostring(conn)))
+		warn(string.format("[CrossServerCache] subscribe failed topic=%s err=%s", topic, tostring(conn)))
 		return nil
 	end
 	return conn

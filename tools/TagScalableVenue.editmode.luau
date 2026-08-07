@@ -2,35 +2,35 @@
 -- ============================================================
 -- Tag venue folders for Settings graphics scaling (Edit Mode)
 -- ============================================================
--- Jalankan di NUWA place, Edit Mode, Command Bar.
--- Sesuaikan GEOMETRY_ROOTS dan VFX_ROOTS dengan struktur place.
--- Setelah jalan: File > Save to Roblox / publish place.
+-- Run in NUWA place, Edit Mode, Command Bar.
+-- Adjust GEOMETRY_ROOTS and VFX_ROOTS to match place structure.
+-- After run: File > Save to Roblox / publish place.
 -- ============================================================
 
 local CollectionService = game:GetService("CollectionService")
 
--- === CONFIG: Sesuaikan dengan Explorer structure ===
+-- === CONFIG: Match your Explorer structure ===
 local GEOMETRY_ROOTS = {
-	-- Folder/Model yang berisi venue geometry (walls, floors, props)
+	-- Folder/Model containing venue geometry (walls, floors, props)
 	-- "Map",
 	-- "Club",
 	-- "Venue",
 }
 
 local VFX_ROOTS = {
-	-- Folder yang berisi venue VFX (lasers, particles, beams)
+	-- Folder containing venue VFX (lasers, particles, beams)
 	-- "VFX",
 	-- "Effects",
 }
 
 local DONATION_ROOTS = {
-	-- Folder yang berisi donation VFX roots (particles, beams) untuk graphics scaling
+	-- Folder containing donation VFX roots (particles, beams) for graphics scaling
 	-- "DonationVFX",
 	-- "Effects/Donations",
 }
 
 local DONATION_DISPLAY_ROOTS = {
-	-- Folder yang berisi donation notification display locations
+	-- Folder containing donation notification display locations
 	-- "DonationDisplays",
 }
 -- ===================================================

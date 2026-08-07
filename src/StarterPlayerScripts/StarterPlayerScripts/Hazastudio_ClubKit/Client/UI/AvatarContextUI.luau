@@ -724,11 +724,11 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 			loadingScreenTween = nil
 		end
 
-		-- Jangan disconnect button connections di sini — event order di Roblox:
+		-- Do not disconnect button connections here — Roblox event order:
 		-- InputBegan (mouse down) → handler close panel → Activated (mouse up).
-		-- Kalau connections di-disconnect, Activated ga pernah fire dan
-		-- callback (investigateAvatar, sendFriendRequest, dll) ga jalan.
-		-- Connections akan di-replace otomatis pas setData berikutnya.
+		-- If connections are disconnected, Activated never fires and
+		-- callback (investigateAvatar, sendFriendRequest, etc.) does not run.
+		-- Connections are replaced automatically on next setData.
 
 		stopStatusAnimation(true)
 		statusPopUp.Visible = false
@@ -804,11 +804,11 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 	end
 
 	function ui:setData(payload: AvatarContextPayload)
-		-- setData sekarang HANYA update text/data state. Tidak pernah panggil
-		-- currentViewport:load() (yang yield) atau trigger 3D model loading.
-		-- 3D avatar adalah concern terpisah via showAvatar() yang dipanggil
-		-- dari controller.openPanel. Ini mengeliminasi coupling yang sebelumnya
-		-- memblokir FireServer selama 14 detik.
+		-- setData now ONLY updates text/data state. Never calls
+		-- currentViewport:load() (which yields) or trigger 3D model loading.
+		-- 3D avatar is a separate concern via showAvatar() called
+		-- from controller.openPanel. This eliminates coupling that previously
+		-- blocked FireServer for 14 seconds.
 		currentTargetUserId = payload.userId
 
 		-- Set display name and username
@@ -868,14 +868,14 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 		renderedAvatarUserId = userId
 	end
 
-	-- Active subscription ke pool's subscribeModelReady untuk upgrade
-	-- thumbnail → 3D seamless. Disimpan agar bisa di-unsubscribe saat
-	-- showAvatar dipanggil untuk user berbeda.
+	-- Active subscription to pool's subscribeModelReady for upgrade
+	-- thumbnail → 3D seamless. Stored so it can be unsubscribed when
+	-- showAvatar is called for a different user.
 	local modelReadyUnsub: (() -> ())? = nil
 
 	function ui:showAvatar(userId: number)
-		-- Hentikan subscription lama agar callback tidak fire untuk userId
-		-- yang sudah bukan target lagi (mis. user klik avatar lain).
+		-- Stop old subscription so callback does not fire for userId
+		-- that is no longer the target (e.g. user clicks another avatar).
 		if modelReadyUnsub then
 			modelReadyUnsub()
 			modelReadyUnsub = nil
@@ -901,20 +901,20 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 			return
 		end
 
-		-- Pool miss: fallback ke thumbnail (instant, no YIELD) + subscribe
-		-- ke subscribeModelReady untuk upgrade seamless saat pool ready.
+		-- Pool miss: fallback to thumbnail (instant, no YIELD) + subscribe
+		-- to subscribeModelReady for seamless upgrade when pool is ready.
 		log:debug("Pool miss — using thumbnail, subscribing to model ready", { userId = userId })
 		_showThumbnail(userId)
 
 		if avatarPool and type(avatarPool.subscribeModelReady) == "function" then
 			modelReadyUnsub = avatarPool:subscribeModelReady(userId, function()
-				-- Guard: userId masih jadi target? (mungkin user sudah close
-				-- panel atau pindah ke user lain).
+				-- Guard: is userId still the target? (user may have closed
+				-- panel or switch to another user).
 				if currentTargetUserId ~= userId or not avatar3D.Visible then
 					return
 				end
-				-- Pool sudah ready. Re-attempt load(). Kalau masih miss
-				-- (mis. pool evicted lagi), keep thumbnail.
+				-- Pool already ready. Re-attempt load(). If still miss
+				-- (e.g. pool evicted again), keep the thumbnail.
 				if not currentViewport then
 					currentViewport = AvatarViewport3D.new(avatar3D)
 					currentViewport:setPrewarmPool(avatarPool)
@@ -932,8 +932,8 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 			end)
 		end
 
-		-- Trigger pool prewarm on-demand kalau belum ada di pool / loading.
-		-- Ini membuat subsequent clicks instant (pool akan sudah ready).
+		-- Trigger on-demand pool prewarm if not in pool / loading.
+		-- This makes subsequent clicks instant (pool will already be ready).
 		if avatarPool and type(avatarPool.prewarmOnDemand) == "function" then
 			avatarPool:prewarmOnDemand(userId)
 		end
@@ -1321,7 +1321,7 @@ local function createAvatarContextUI(deps: { logger: ILogger })
 		return uiOrError
 	end
 
-	deps.logger:warn("AvatarContextMenu structure tidak lengkap; panel disabled", {
+	deps.logger:warn("AvatarContextMenu structure incomplete; panel disabled", {
 		error = tostring(uiOrError),
 	})
 	return createDisabledAvatarContextUI()

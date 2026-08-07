@@ -1,18 +1,18 @@
 --!strict
 -- MobileFreecamController — System B (touch-screen freecam)
 --
--- Logika ini SEBELUMNYA hidup sebagai LocalScript di dalam ScreenGui
--- "MobileFreecam" (FreecamScript + Topbar). Sekarang dipindah ke controller
--- repo-managed supaya ScreenGui-nya jadi asset tanpa script.
+-- This logic previously lived as a LocalScript inside the ScreenGui
+-- "MobileFreecam" (FreecamScript + Topbar). It now lives in a controller
+-- so the ScreenGui is an asset without a script.
 --
--- Akses : SEMUA pemain dengan device touch-screen (UserInputService.TouchEnabled).
---         Device non-touch (PC/console murni) pakai System A (FreecamController,
---         Shift+P). Controller ini no-op di device non-touch.
--- Toggle : Topbar icon (mobile) + tombol close di hidecontrols.
--- GUI    : MobileFreecam ScreenGui di PlayerGui (di-clone dari StarterGui).
+-- Access: ALL players with touch-screen devices (UserInputService.TouchEnabled).
+--         Non-touch devices (pure PC/console) use System A (FreecamController,
+--         Shift+P). This controller is no-op on non-touch devices.
+-- Toggle : Topbar icon (mobile) + close button in hidecontrols.
+-- GUI    : MobileFreecam ScreenGui in PlayerGui (cloned from StarterGui).
 --
--- Catatan: gating FreecamConfig.AllowedPlayers yang lama dibuang. Gate sekarang
--- murni device touch-screen sesuai desain.
+-- Note: legacy FreecamConfig.AllowedPlayers gating was removed. Access is now
+-- purely touch-screen device based.
 
 local ContextActionService = game:GetService("ContextActionService")
 local GuiService = game:GetService("GuiService")
@@ -41,7 +41,7 @@ local LEGACY_GUI_NAME = "Freecam"
 local FREECAM_ACTIVE_ATTRIBUTE = "FreecamActive"
 local ICON_IMAGE = Config.Icons.Topbar.Camera
 
--- ── Input priorities & tuning (port dari Roblox Freecam module) ───────────────
+-- ── Input priorities & tuning (ported from Roblox Freecam module) ───────────────
 local INPUT_PRIORITY = Enum.ContextActionPriority.High.Value
 
 local NAV_GAIN = Vector3.new(1, 1, 1) * 64
@@ -109,9 +109,9 @@ local function createMobileFreecamController(deps: {
 	local log = deps.logger or Logger.new("Client.MobileFreecamController")
 	local localPlayer = Players.LocalPlayer
 
-	-- Gate: touch-screen only. Device lain pakai System A.
+	-- Gate: touch-screen only. Other devices use System A.
 	if not UserInputService.TouchEnabled then
-		log:debug("MobileFreecam skipped: device tidak touch-screen")
+		log:debug("MobileFreecam skipped: device not touch-screen")
 		return {
 			isActive = function(): boolean return false end,
 			destroy = function() end,
@@ -323,7 +323,7 @@ local function createMobileFreecamController(deps: {
 		cameraRot = cameraRot + pan * PAN_GAIN * (dt / zoomFactor)
 		cameraRot = Vector2.new(clamp(cameraRot.X, -PITCH_LIMIT, PITCH_LIMIT), cameraRot.Y % (2 * pi))
 
-		-- Roll: Z = tilt kiri, C = tilt kanan, X = reset ke 0 (smooth)
+		-- Roll: Z = tilt left, C = tilt right, X = reset to 0 (smooth)
 		if keyboard.X == 1 then
 			cameraRoll = rollSpring:Update(dt, 0)
 		else
@@ -422,7 +422,7 @@ local function createMobileFreecamController(deps: {
 	local setCoreSaved: { [string]: boolean } = {}
 	local HIDDEN_SET_CORES = { "BadgesNotificationsActive", "PointsNotificationsActive" }
 
-	-- ScreenGui yang TIDAK boleh di-hide saat freecam (UI freecam sendiri + topbar).
+	-- ScreenGuis that must NOT be hidden during freecam (freecam UI itself + topbar).
 	local KEEP_VISIBLE: { [string]: boolean } = {
 		[GUI_NAME] = true,
 		TopbarPlus = true,
@@ -563,7 +563,7 @@ local function createMobileFreecamController(deps: {
 	end
 
 	-- ── GUI resolution ────────────────────────────────────────
-	-- ScreenGui MobileFreecam diharapkan ada di PlayerGui (di-clone dari StarterGui
+	-- MobileFreecam ScreenGui expected in PlayerGui (cloned from StarterGui
 	-- oleh bootstrap). Strukturnya: MobileControls{Movement{forward,back,left,right},
 	-- zoomIn, zoomOut}, hidecontrols{shown, hidden, close, TextButton}.
 	local playerGui = localPlayer:WaitForChild("PlayerGui")
@@ -575,7 +575,7 @@ local function createMobileFreecamController(deps: {
 		end
 	end
 	if not gui or not gui:IsA("ScreenGui") then
-		log:warn("MobileFreecam GUI tidak ditemukan; controller idle")
+		log:warn("MobileFreecam GUI not found; controller idle")
 		return {
 			isActive = function(): boolean return false end,
 			destroy = function() end,
@@ -624,7 +624,7 @@ local function createMobileFreecamController(deps: {
 			bindHold(resolveButton(movement, { "left", "TextButton" }), "A")
 		end
 
-		-- Zoom: hold-to-zoom via render loop flag, lebih halus dari while-wait lama.
+		-- Zoom: hold-to-zoom via render loop flag, smoother than old while-wait.
 		local zoomIn = resolveButton(mobileControls, { "zoomIn", "TextButton" })
 		local zoomOut = resolveButton(mobileControls, { "zoomOut", "TextButton" })
 		local zoomDir = 0
@@ -688,7 +688,7 @@ local function createMobileFreecamController(deps: {
 		end
 	end
 
-	-- hidecontrols: tombol show/hide untuk mobile controls + tombol close (exit).
+	-- hidecontrols: show/hide button for mobile controls + close (exit) button.
 	if hideControls then
 		local closeBtn = hideControls:FindFirstChild("close")
 		if closeBtn and closeBtn:IsA("GuiButton") then
@@ -714,7 +714,7 @@ local function createMobileFreecamController(deps: {
 	-- Start hidden until toggled on.
 	setControlsVisible(false)
 
-	-- Topbar icon: kalau Main belum kasih, bikin sendiri dari iconFactory.
+	-- Topbar icon: if Main has not provided one, create from iconFactory.
 	if not topbarIcon and deps.iconFactory then
 		local ok, created = pcall(function()
 			return deps.iconFactory()

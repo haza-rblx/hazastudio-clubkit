@@ -47,7 +47,7 @@ local reloadPanelButton = toolbar:CreateButton(
 )
 local genToolsButton = toolbar:CreateButton(
 	"Gen Tools",
-	"generate_tools_folder() — buat folder kosong ServerStorage.Tools dari role config",
+	"generate_tools_folder() — create empty ServerStorage.Tools folders from role config",
 	"rbxassetid://96030964846916"
 )
 
@@ -72,7 +72,7 @@ local function runGenerateToolsFolder()
 		and kit.Shared:FindFirstChild("Studio")
 		and kit.Shared.Studio:FindFirstChild("GenerateRoleToolsFolder")
 	if not mod or not mod:IsA("ModuleScript") then
-		warn("[generate_tools_folder] Sync Rojo — module GenerateRoleToolsFolder belum ada.")
+		warn("[generate_tools_folder] Sync Rojo — GenerateRoleToolsFolder module not found yet.")
 		return
 	end
 	local ok, err = pcall(function()

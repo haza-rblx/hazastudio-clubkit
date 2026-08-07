@@ -1,9 +1,9 @@
 # Generate empty Role Tool folders (Rojo / ServerStorage.Tools)
 #
-# Membaca toolFolder dari ClubKitConfig + membership tier defaults,
-# lalu membuat folder kosong dengan init.meta.json (tanpa placeholder Tool).
+# Reads toolFolder from ClubKitConfig + membership tier defaults,
+# then creates empty folders with init.meta.json (no placeholder Tool).
 #
-# Usage (dari root repo):
+# Usage (from repo root):
 #   powershell -File tools/GenerateRoleToolFolders.ps1
 
 $ErrorActionPreference = "Stop"
@@ -17,7 +17,7 @@ $metaContent = @"
 "@
 
 if (-not (Test-Path $configPath)) {
-    Write-Error "ClubKitConfig tidak ditemukan: $configPath"
+    Write-Error "ClubKitConfig not found: $configPath"
 }
 
 $config = Get-Content $configPath -Raw
@@ -30,27 +30,27 @@ function Add-Folder([string]$name) {
     [void]$folderNames.Add($trimmed.ToUpper())
 }
 
-# toolFolder = "..." pada RoleCategories
+# toolFolder = "..." on RoleCategories
 foreach ($m in [regex]::Matches($config, 'toolFolder\s*=\s*"([^"]+)"')) {
     Add-Folder $m.Groups[1].Value
 }
 
-# ToolFolder = "..." pada SpenderRoles
+# ToolFolder = "..." on SpenderRoles
 foreach ($m in [regex]::Matches($config, 'ToolFolder\s*=\s*"([^"]+)"')) {
     Add-Folder $m.Groups[1].Value
 }
 
-# chatTag Owner (SystemRoles.Owner tidak punya toolFolder)
+# chatTag Owner (SystemRoles.Owner has no toolFolder)
 if ($config -match 'Owner\s*=\s*\{[^}]*chatTag\s*=\s*"([^"]+)"') {
     Add-Folder $matches[1]
 }
 
-# Membership tier folders (sama seperti RolesDomain.buildMembershipToolFolders)
+# Membership tier folders (same as RolesDomain.buildMembershipToolFolders)
 Add-Folder "VIP"
 Add-Folder "VVIP"
 Add-Folder "SUPREME"
 
-# Archive bucket (bukan role — untuk folder obsolete)
+# Archive bucket (not a role — for obsolete folders)
 [void]$folderNames.Add("_ARCHIVE")
 
 $ordered = $folderNames | Sort-Object
@@ -84,5 +84,5 @@ foreach ($name in $ordered) {
 }
 
 Write-Host ""
-Write-Host ("Selesai. Created: {0} | Already existed: {1}" -f $created, $existing)
-Write-Host "Sync Rojo → ServerStorage.Tools muncul di Studio (folder kosong, tanpa Tool)."
+Write-Host ("Done. Created: {0} | Already existed: {1}" -f $created, $existing)
+Write-Host "Sync Rojo → ServerStorage.Tools appears in Studio (empty folders, no Tools)."

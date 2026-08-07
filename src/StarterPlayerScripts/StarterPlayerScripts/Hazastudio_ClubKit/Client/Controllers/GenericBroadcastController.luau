@@ -464,9 +464,9 @@ function GenericBroadcastController.init()
 			return
 		end
 		-- Hide flag: respect user's SettingsHideAdminAnnounce preference.
-		-- Sebelumnya admin /announce bypass notification center jadi flag
-		-- SettingsHideAdminAnnounce tidak pernah di-check → toggle di settings
-		-- menu tidak ada efek.
+		-- Previously admin /announce bypassed the notification center so the flag
+		-- SettingsHideAdminAnnounce was never checked → toggle in settings
+		-- menu had no effect.
 		if Players.LocalPlayer:GetAttribute("SettingsHideAdminAnnounce") == true then
 			return
 		end

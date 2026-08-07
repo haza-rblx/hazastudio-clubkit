@@ -110,8 +110,8 @@ function CacheInstance:_ensureCleanup()
 		return
 	end
 	self._cleanupThread = task.spawn(function()
-		-- Auto-cleanup setiap 60 detik. Loop berhenti ketika _destroyed di-flip
-		-- oleh destroy() (dipanggil dari script.Destroying saat teardown/reload).
+		-- Auto-cleanup setiap 60 seconds. Loop berhenti ketika _destroyed di-flip
+		-- oleh destroy() (dipanggil from script.Destroying when teardown/reload).
 		while not self._destroyed do
 			task.wait(60)
 			if self._destroyed then
@@ -177,8 +177,8 @@ function Cache.getNegative(key: string): boolean
 	return singleton():getNegative(key)
 end
 
--- Hentikan cleanup loop + clear store. Dipanggil dari script.Destroying saat
--- teardown/hot-reload agar thread lama tidak orphan dan store lama tidak leak.
+-- Stop cleanup loop + clear store. Called from script.Destroying on
+-- teardown/hot-reload so thread old not orphan dan store old not leak.
 function Cache.destroy()
 	if _singleton then
 		_singleton:destroy()

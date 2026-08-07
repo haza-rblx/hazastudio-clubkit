@@ -6,14 +6,14 @@
   To enable demo in a Studio place: copy ModuleScript into
   ReplicatedStorage.Hazastudio_ClubKit.Shared.Config.ClubKitShowcase
 
-  File ADA     → showcase ON  (leaderboard demo untuk screenshot)
-  File DIHAPUS → real mode   (tanpa demo leaderboard)
-  ACTIVE=false → real mode   (tanpa hapus file)
+  File present → showcase ON  (leaderboard demo for screenshots)
+  File removed → real mode   (no demo leaderboard)
+  ACTIVE=false → real mode   (without removing file)
 
-  Donation.ApiUrl + Secrets tetap bisa diisi — live donasi & social API jalan
-  bersamaan dengan showcase demo board (community/donor showcase).
+  Donation.ApiUrl + Secrets can still be set — live donations & social API run
+  alongside the showcase demo board (community/donor showcase).
 
-  Community leaderboard demo = group milik ClubKitConfig.Group.OwnerUserId.
+  Community leaderboard demo = group owned by ClubKitConfig.Group.OwnerUserId.
 ]]
 
 local ACTIVE = true
@@ -46,8 +46,8 @@ return {
 		RobuxMaxAmount = 50000,
 		LeaderboardLimit = 10,
 		RefreshInterval = 300,
-		-- Biarkan nil agar showcase donor board ambil player server + friend list.
-		-- Isi manual hanya kalau memang ingin daftar demo custom.
+		-- Leave nil so showcase donor board picks server players + friend list.
+		-- Set manually only when you want a custom demo list.
 		Profiles = nil,
 	},
 }

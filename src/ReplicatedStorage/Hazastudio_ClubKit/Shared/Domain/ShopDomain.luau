@@ -118,7 +118,7 @@ function ShopDomain.getBenefitCount(tier: string): number
 	return benefits and #benefits or 0
 end
 
--- Label display tier untuk notifikasi
+-- Label display tier for notifikasi
 function ShopDomain.tierDisplayName(tier: string): string
 	local entry = ShopDomain.getCatalogEntry(tier)
 	if entry then

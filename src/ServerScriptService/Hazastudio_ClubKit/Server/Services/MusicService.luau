@@ -72,8 +72,8 @@ local function createMusicService(deps: {
 	-- Rank cache: fetch once per player on join
 	local rankCache = {} :: { [number]: number }
 
-	-- Role cache: di-update live dari Overhead:Payload eventBus.
-	-- Ini jauh lebih reliable dari DataStore call untuk cek gifted role.
+	-- Role cache: updated live from Overhead:Payload eventBus.
+	-- Ini jauh more reliable from DataStore call for check gifted role.
 	local roleCache = {} :: { [number]: string }
 
 	-- Rate limiters: per-player, shared across all zones to prevent zone-hop bypass
@@ -111,7 +111,7 @@ local function createMusicService(deps: {
 		})
 		local saveResult = repo:savePlaylist(playlist)
 		if not saveResult.ok then
-			log:warn("Gagal bootstrap request history playlist", { error = saveResult.error })
+			log:warn("Failed to bootstrap request history playlist", { error = saveResult.error })
 		else
 			log:info("Request history playlist bootstrapped", { id = SPECIAL_PLAYLIST_REQUEST_HISTORY_ID })
 		end
@@ -125,8 +125,8 @@ local function createMusicService(deps: {
 	local _onQueueUpdated: (({ any }, { Player }) -> ())? = nil
 	local _onStateSync: ((Player, any) -> ())? = nil
 	local _onVoteState: ((Player?, any, { Player }) -> ())? = nil
-	-- Mode resolution: "global" (single session) atau "zone" (per-tagged-zone).
-	-- Default "global" untuk backward-compat.
+	-- Mode resolution: "global" (single session) or "zone" (per-tagged-zone).
+	-- Default "global" for backward-compat.
 	local MUSIC_MODE = if type(config.MODE) == "string" and config.MODE == "zone" then "zone" else "global"
 	local GLOBAL_ZONE_ID = "__global__"
 	local sessions = {} :: { [string]: any }
@@ -152,7 +152,7 @@ local function createMusicService(deps: {
 				end
 			end
 		else
-			log:warn("GroupService:GetGroupsAsync gagal", { player = player.Name })
+			log:warn("GroupService:GetGroupsAsync failed", { player = player.Name })
 		end
 		rankCache[player.UserId] = rank
 		log:debug("Rank cached", { player = player.Name, rank = rank })
@@ -316,8 +316,8 @@ local function createMusicService(deps: {
 			task.spawn(fetchAndCacheRank, player)
 		end
 
-		-- Subscribe ke Overhead:Payload agar roleCache selalu up-to-date
-		-- tanpa perlu DataStore call setiap kali isManageAllowed dipanggil.
+		-- Subscribe to Overhead:Payload so roleCache stays up-to-date
+		-- without a DataStore call every time isManageAllowed runs.
 		if eventBus and type(eventBus.on) == "function" then
 			_eventBusUnsub = eventBus:on("Overhead:Payload", function(payload: any)
 				if type(payload) == "table" and type(payload.userId) == "number" and type(payload.role) == "string" then
@@ -334,7 +334,7 @@ local function createMusicService(deps: {
 
 		local result = repo:loadAll()
 		if not result.ok then
-			log:error("Gagal load music library", { error = result.error })
+			log:error("Failed to load music library", { error = result.error })
 		else
 			local catalogOk, catalogErr = pcall(function()
 				MusicCatalogSeeder.merge({
@@ -570,7 +570,7 @@ local function createMusicService(deps: {
 						}
 						local savePlaylistResult = repo:savePlaylist(updatedPlaylist)
 						if not savePlaylistResult.ok then
-							log:warn("Gagal append track ke request history playlist", {
+							log:warn("Failed to append track to request history playlist", {
 								trackId = trackId,
 								error = savePlaylistResult.error,
 							})
@@ -647,7 +647,7 @@ local function createMusicService(deps: {
 		if not savePlaylistResult.ok then
 			local rollbackResult = repo:deleteTrack(trackId)
 			if not rollbackResult.ok then
-				log:error("Rollback gagal setelah save request history playlist gagal", {
+				log:error("Rollback failed after save request history playlist failed", {
 					trackId = trackId,
 					error = rollbackResult.error,
 				})
@@ -783,7 +783,7 @@ local function createMusicService(deps: {
 		local result = repo:updateTrackDuration(trackId, duration)
 		durationUpdateInFlight[trackId] = nil
 		if not result.ok then
-			log:warn("Gagal update track duration", { trackId = trackId, error = result.error })
+			log:warn("Failed to update track duration", { trackId = trackId, error = result.error })
 			return
 		end
 		log:debug("Track duration updated", { trackId = trackId, duration = duration })
@@ -849,7 +849,7 @@ local function createMusicService(deps: {
 				deletedLookup[trackId] = true
 				local deleteTrackResult = repo:deleteTrack(trackId)
 				if not deleteTrackResult.ok then
-					log:warn("Gagal delete track saat hapus playlist", {
+					log:warn("Failed to delete track when removing playlist", {
 						playlistId = id,
 						trackId = trackId,
 						error = deleteTrackResult.error,
@@ -920,7 +920,7 @@ local function createMusicService(deps: {
 			if not playlistSaveResult.ok then
 				local rollbackResult = repo:deleteTrack(id)
 				if not rollbackResult.ok then
-					log:error("Rollback gagal setelah save playlist music gagal", {
+					log:error("Rollback failed after save playlist music failed", {
 						trackId = id,
 						playlistId = playlist.id,
 						error = rollbackResult.error,

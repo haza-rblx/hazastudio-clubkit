@@ -1,6 +1,6 @@
-# Release TEMPLATE — jangan commit folder ini sebagai versi
+# Release TEMPLATE — do not commit this folder as a version
 
-Salin ke `docs/releases/<VERSION>/` saat rilis.
+Copy to `docs/releases/<VERSION>/` on release.
 
 ---
 
@@ -9,31 +9,31 @@ Salin ke `docs/releases/<VERSION>/` saat rilis.
 ```markdown
 # Upgrade v{OLD} → v{NEW}
 
-**Tanggal:** {DATE}
+**Date:** {DATE}
 
-## Langkah cepat
+## Quick steps
 
-1. **Backup** `Hazastudio_ClubKitConfig` dan `Hazastudio_ClubKitSecrets`
-2. Hapus folder engine lama: `Hazastudio_ClubKit` (semua service)
-3. **Insert** file RBXM baru (`HazastudioClubKit_v{NEW}.rbxm`)
-4. Restore config buyer; merge field baru jika ada di release notes
+1. **Backup** `Hazastudio_ClubKitConfig` and `Hazastudio_ClubKitSecrets`
+2. Remove old engine folders: `Hazastudio_ClubKit` (all services)
+3. **Insert** new RBXM file (`HazastudioClubKit_v{NEW}.rbxm`)
+4. Restore buyer config; merge new fields if listed in release notes
 5. Play test → publish
 
-## Yang baru
+## What's new
 
 - ...
 
-## Perubahan config (jika ada)
+## Config changes (if any)
 
-| Field | Perubahan |
-|-------|-----------|
+| Field | Change |
+|-------|--------|
 
-## File buyer — jangan replace
+## Buyer files — do not replace
 
 - `ReplicatedStorage/Hazastudio_ClubKitConfig/ClubKitConfig.luau`
 - `ServerScriptService/Hazastudio_ClubKitSecrets/Secrets.luau`
 
-## QA setelah upgrade
+## QA after upgrade
 
 - [ ] ...
 ```
@@ -47,23 +47,23 @@ Salin ke `docs/releases/<VERSION>/` saat rilis.
 
 ## Summary
 
-| Metrik | Nilai |
+| Metric | Value |
 |--------|-------|
 | Files changed | N |
 | Breaking | yes/no |
 
-## Core — ganti via RBXM
+## Core — replace via RBXM
 
-| Path | Jenis | Ringkasan |
-|------|-------|-----------|
+| Path | Type | Summary |
+|------|------|---------|
 
-## Buyer-owned — review manual
+## Buyer-owned — review manually
 
 | Path | Action |
 |------|--------|
 
 ## Docs / tools only
 
-| Path | Ringkasan |
-|------|-----------|
+| Path | Summary |
+|------|---------|
 ```
