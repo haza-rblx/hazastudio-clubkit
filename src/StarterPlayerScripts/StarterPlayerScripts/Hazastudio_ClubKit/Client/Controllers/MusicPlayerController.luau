@@ -3043,6 +3043,8 @@ function MusicPlayerController:_resolveRequestAsset(assetIdRaw: string)
 				then "You're resolving IDs too fast. Give it a moment."
 				elseif err == "invalid_asset_id" or err == "asset_not_loadable"
 				then "That doesn't look like a valid audio asset ID."
+				elseif err == "no_permission"
+				then "Only DJs/admins can request tracks by asset ID."
 				else "Couldn't resolve that asset ID."
 			self._log:warn("ResolveRequestAsset failed", { error = err, assetId = assetIdRaw })
 			self:_showNotification({

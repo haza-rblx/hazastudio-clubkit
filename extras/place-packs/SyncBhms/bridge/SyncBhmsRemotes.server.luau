@@ -8,6 +8,11 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local SyncBhmsGate = require(ReplicatedStorage:WaitForChild("SyncBhmsGate"))
+if not SyncBhmsGate.isEnabled() then
+	return
+end
+
 local function ensureFolder(parent: Instance, name: string): Folder
 	local existing = parent:FindFirstChild(name)
 	if existing and existing:IsA("Folder") then

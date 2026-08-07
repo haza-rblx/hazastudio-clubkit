@@ -214,7 +214,10 @@ function StickerRepository.load(userId: number): any
 	local cacheKey = Config.Sticker.KEY_PREFIX .. tostring(userId)
 
 	if Cache.getNegative(cacheKey) then
-		return Result.Ok(defaultData())
+		-- Negative cache only gets set after a real load failure below, so
+		-- treat a hit the same way: fail loudly instead of handing back a
+		-- default snapshot that callers could mistake for the real data.
+		return Result.Err("sticker_load_negative_cache")
 	end
 
 	local cached = Cache.get(cacheKey)
@@ -236,7 +239,10 @@ function StickerRepository.load(userId: number): any
 		if result.error == "budget_low" or result.error == "budget_exhausted" then
 			Cache.setNegative(cacheKey, Config.Budget.NEGATIVE_CACHE_TTL or 10)
 		end
-		return Result.Ok(defaultData())
+		-- Do not seed defaultData() here: callers gate writes on a successful
+		-- load, and an Ok(defaultData()) would look like a real (empty)
+		-- collection and let a later update overwrite the player's real data.
+		return Result.Err(result.error)
 	end
 
 	local data = sanitize(result.value)

@@ -11,6 +11,27 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.72] - 2026-08-08
+
+Audit-driven patch: DataStore data-loss fixes, client boot hardening, and abuse-gate closures found during a full-codebase review. No new player-facing features.
+
+### Fixed
+- **LegacySyncBhms = false** now truly hides place-pack BHMS (topbar Dance + DanceGui). Pack scripts gate via `ReplicatedStorage.SyncBhmsGate`; Club Kit also disables residual `DanceGui` when the flag is off.
+- **Favorites / Music favorites lost on leave** — `FavoritesRepository` / `MusicFavoritesRepository` now keep a `_pendingFlush` payload when the leave-time save fails, instead of discarding the dirty entry once `_loaded` is cleared. `flushAll` retries pending entries on the next autosave/shutdown pass (mirrors `SettingsService.pendingFlushByUserId`).
+- **Sticker collection could be overwritten by a failed load** — `StickerRepository.load` returns `Err` on failure/negative-cache instead of seeding an empty default collection. `StickerService` tracks `_loadedByUserId` and rejects `addSticker` until a load has actually succeeded, so a transient DataStore hiccup can no longer wipe a player's real stickers.
+- **Level XP lost on disconnect** — `Main.server.luau` now calls `levelService:flushPlayer` from `Players.PlayerRemoving`; unsaved XP for players who already left is retried via a new `levelService:flushAllPending()` from the early-shutdown flush and `BindToClose`.
+- **Client boot could hang forever on a missing remote/folder** — `Main.client.luau` kit-folder waits (`Shared`/`Constants`/`Domain`/`UI`/`Utils`) and two synchronous remote waits (`Notify`, AvatarContext like-effect) now use `LoadingConfig.BOOTSTRAP_WAIT_TIMEOUT` and fail into a warn instead of yielding forever. `CoupleController`, `SettingsController`, and `AvatarContextController` apply the same timeout to their remote waits and soft-disable (warn + stub/no-op) instead of erroring when a remote never shows up.
+- **Dance panel crashed on phone layout without the mobile wrapper** — `DancePanelGuiRefs` now falls back to the desktop panel (with a warn) instead of `error()`-ing the whole dance boot task when `DancePanelGUIWrapperv2Mobile` is missing.
+- **HotbarInventoryService connection leak** — character `ChildAdded`/`ChildRemoved` listeners are disconnected before rebinding on every respawn, instead of accumulating for the session.
+- **ConfigBootstrap fill-forward noise on live servers** — the fill-forward summary now goes through `Logger:info` (Studio-only) instead of an unconditional `print` on every server boot.
+- **Mojibake in `KitProduct.Support.Note`** and a doubly-mangled comment in `ClubKitManifest.luau` cleaned up to plain em dashes.
+
+### Security
+- **Sticker global pool** — `addSticker` only pushes into the shared/broadcast global pool for admins or Studio; regular players' own stickers still save to their personal collection as before.
+- **`MusicService:resolveOrCreateTrackForAsset`** — now gated by `isManageAllowed` (admin/DJ-role), matching the other track/playlist-mutating music methods. Previously any player could resolve an arbitrary asset ID into a new shared request-history track.
+- **`CommandLibraryController`** — added a central permission gate before `service:execute`: self-service and already role-gated command aliases pass through, anything else (including any future command wired in without its own check) now requires admin-panel-tier access by default.
+- **`ClubKitConfig` template** — removed the hardcoded developer `OwnerUserId` / `AdminUserIds` entry from the buyer config template (now `0` / empty) so a fresh install no longer silently grants the kit author admin access. Existing places are unaffected (buyer config is never overwritten by engine sync).
+
 ## [2.4.71] - 2026-08-07
 
 ### Added
@@ -794,5 +815,6 @@ Rilis baseline handover. Detail audit & fix: [`HANDOVER.md`](HANDOVER.md).
 - Critical audit C1?C6, high severity H1?H13 (lihat HANDOVER)
 
 [Unreleased]: compare with VERSION + UPGRADE_PROGRESS.md
+[2.4.72]: docs/releases/2.4.72/
 [2.0.0]: docs/releases/2.0.0/
 [1.3.0]: HANDOVER.md

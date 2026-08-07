@@ -8,6 +8,9 @@ local ClubKitConfigSchema = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.
 local ClubKitConfig = require(ReplicatedStorage.Hazastudio_ClubKitConfig.ClubKitConfig)
 local DonationProviderDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.DonationProviderDomain)
 local RoleCategoryBuilder = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Config.RoleCategoryBuilder)
+local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
+
+local log = Logger.new("ConfigBootstrap")
 
 local ConfigBootstrap = {}
 
@@ -111,7 +114,7 @@ local function buildClubKitState(): any
 	local filledPaths: { string } = {}
 	local buyerFilled = ClubKitConfigSchema.fillForward(ClubKitConfigSchema.defaults, ClubKitConfig, filledPaths)
 	if #filledPaths > 0 then
-		print("[ConfigBootstrap] fillForward filled " .. tostring(#filledPaths) .. " path(s): " .. table.concat(filledPaths, ", "))
+		log:info("fillForward filled " .. tostring(#filledPaths) .. " path(s): " .. table.concat(filledPaths, ", "))
 	end
 	local state = deepMerge(ClubKitDefaults, buyerFilled)
 	local showcaseOverlay = loadShowcaseOverlay()

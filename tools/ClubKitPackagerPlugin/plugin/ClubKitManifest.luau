@@ -6,9 +6,9 @@ local ClubKitManifest = {}
 ClubKitManifest.PACKAGE_NAME = "HazastudioClubKit_Package"
 ClubKitManifest.MANIFEST_NAME = "_ClubKitManifest"
 ClubKitManifest.PRODUCT_ID = "hazastudioclubkit"
-ClubKitManifest.KIT_VERSION = "2.4.71"
+ClubKitManifest.KIT_VERSION = "2.4.72"
 -- Soft-update version for the Studio dock (may diverge from KIT_VERSION for plugin-only fixes).
-ClubKitManifest.PLUGIN_VERSION = "2.4.71"
+ClubKitManifest.PLUGIN_VERSION = "2.4.72"
 
 -- Soft-update: fetch these Luau modules from GitHub tags (exclude bootstrap).
 ClubKitManifest.PLUGIN_SOURCE_PREFIX = "tools/ClubKitPackagerPlugin/plugin/"
@@ -24,7 +24,7 @@ ClubKitManifest.SERVICE_ROOTS = {
 	{ service = "StarterPlayerScripts", name = "Hazastudio_ClubKit" },
 }
 
--- Opsional ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â buyer config & secrets (bisa di-skip saat export update).
+-- Opsional — buyer config & secrets (bisa di-skip saat export update).
 ClubKitManifest.OPTIONAL_ROOTS = {
 	{ service = "ReplicatedStorage", name = "Hazastudio_ClubKitConfig", key = "config" },
 	{ service = "ServerScriptService", name = "Hazastudio_ClubKitSecrets", key = "secrets" },

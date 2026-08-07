@@ -513,7 +513,13 @@ local function createMusicService(deps: {
 		return filtered
 	end
 
-	function service:resolveOrCreateTrackForAsset(_player: Player, rawAssetId: any): (boolean, string, TrackInfo?)
+	function service:resolveOrCreateTrackForAsset(player: Player, rawAssetId: any): (boolean, string, TrackInfo?)
+		-- Writes a new track + appends to the shared request-history playlist,
+		-- and spends MarketplaceService budget — same admin/DJ gate as the
+		-- other track/playlist-mutating methods in this service.
+		if not service:isManageAllowed(player) then
+			return false, "no_permission", nil
+		end
 		local assetId = normalizeAssetId(rawAssetId)
 		if not assetId then
 			return false, "invalid_asset_id", nil
@@ -650,7 +656,7 @@ local function createMusicService(deps: {
 		end
 
 		log:info("Request asset resolved to track", {
-			by = _player.Name,
+			by = player.Name,
 			assetId = assetId,
 			trackId = trackId,
 			name = trackName,

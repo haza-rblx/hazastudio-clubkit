@@ -321,10 +321,15 @@ function DancePanelGuiRefs.resolve(playerGui: PlayerGui, config: any?): Refs
 
 	local panelRootCandidate = screenGui:FindFirstChild(panelRootName)
 	if layoutKind == "mobile" and (panelRootCandidate == nil or not panelRootCandidate:IsA("GuiObject")) then
-		error(
+		-- Fall back to the desktop wrapper instead of erroring, so a place
+		-- missing the mobile-only wrapper still boots the dance panel (with
+		-- the desktop layout) instead of killing the whole dance boot task.
+		warn(
 			"[DancePanel] Missing DancePanelGUIWrapperv2Mobile under IconGroup for phone layout. "
-				.. "Add the mobile panel instance to the place or set DANCE_PANEL_USE_MOBILE_LAYOUT = false."
+				.. "Falling back to desktop dance panel layout. Add the mobile panel instance to "
+				.. "the place or set DANCE_PANEL_USE_MOBILE_LAYOUT = false to silence this warning."
 		)
+		panelRootName, layoutKind = getPanelRootName(config, version), "desktop"
 	end
 
 	local panelRoot = expectChild(screenGui, panelRootName, "GuiObject") :: GuiObject

@@ -1300,6 +1300,7 @@ Config.FeatureFlags = {
 	SyncDanceEnabled = true,
 	-- Place-pack SyncBhms (extras/place-packs/SyncBhms): when true, Club Kit does not
 	-- own sync/dance panel/SyncRemotes; ACM Sync Dance uses ReplicatedStorage.SyncBhmsAcmBridge.
+	-- Pack scripts read SyncBhmsGate (same flag); false = BHMS topbar/panel no-op.
 	LegacySyncBhmsEnabled = false,
 	-- WIP Admin Hub (04-AdminHub). false = classic Admin Panel owns topbar.
 	AdminHubEnabled = false,

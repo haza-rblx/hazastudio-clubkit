@@ -115,15 +115,43 @@ local function init(deps: { icon: any? }?): ()
 	-- ============================================================
 	-- Tunggu Remotes
 	-- ============================================================
-	local Remotes = ReplicatedStorage:WaitForChild("Remotes") :: Folder
-	local RemoteSendRequest = Remotes:WaitForChild("CoupleSendRequest") :: RemoteEvent
-	local RemoteRespond = Remotes:WaitForChild("CoupleRespond") :: RemoteEvent
-	local RemoteBreakup = Remotes:WaitForChild("CoupleBreakup") :: RemoteEvent
-	local RemoteOpenPanel = Remotes:WaitForChild("CoupleOpenPanel") :: RemoteEvent
-	local RemoteNotifyRequest = Remotes:WaitForChild("CoupleNotifyRequest") :: RemoteEvent
-	local RemoteNotifyResult = Remotes:WaitForChild("CoupleNotifyResult") :: RemoteEvent
-	local RemoteAnnounce = Remotes:WaitForChild("CoupleAnnounce") :: RemoteEvent
-	local RemotePanelData = Remotes:WaitForChild("CouplePanelData") :: RemoteEvent
+	-- Bounded so a missing/disabled Couple feature on the server soft-disables
+	-- this controller instead of hanging this boot task forever.
+	local bootTimeout = Config.Loading.BOOTSTRAP_WAIT_TIMEOUT
+	local Remotes = ReplicatedStorage:WaitForChild("Remotes", bootTimeout)
+	local RemoteSendRequest = Remotes and Remotes:WaitForChild("CoupleSendRequest", bootTimeout)
+	local RemoteRespond = Remotes and Remotes:WaitForChild("CoupleRespond", bootTimeout)
+	local RemoteBreakup = Remotes and Remotes:WaitForChild("CoupleBreakup", bootTimeout)
+	local RemoteOpenPanel = Remotes and Remotes:WaitForChild("CoupleOpenPanel", bootTimeout)
+	local RemoteNotifyRequest = Remotes and Remotes:WaitForChild("CoupleNotifyRequest", bootTimeout)
+	local RemoteNotifyResult = Remotes and Remotes:WaitForChild("CoupleNotifyResult", bootTimeout)
+	local RemoteAnnounce = Remotes and Remotes:WaitForChild("CoupleAnnounce", bootTimeout)
+	local RemotePanelData = Remotes and Remotes:WaitForChild("CouplePanelData", bootTimeout)
+	if
+		not (Remotes and Remotes:IsA("Folder"))
+		or not (RemoteSendRequest and RemoteSendRequest:IsA("RemoteEvent"))
+		or not (RemoteRespond and RemoteRespond:IsA("RemoteEvent"))
+		or not (RemoteBreakup and RemoteBreakup:IsA("RemoteEvent"))
+		or not (RemoteOpenPanel and RemoteOpenPanel:IsA("RemoteEvent"))
+		or not (RemoteNotifyRequest and RemoteNotifyRequest:IsA("RemoteEvent"))
+		or not (RemoteNotifyResult and RemoteNotifyResult:IsA("RemoteEvent"))
+		or not (RemoteAnnounce and RemoteAnnounce:IsA("RemoteEvent"))
+		or not (RemotePanelData and RemotePanelData:IsA("RemoteEvent"))
+	then
+		log:warn("Couple remotes tidak lengkap dalam waktu tunggu, CoupleController tidak dijalankan")
+		return
+	end
+	-- Re-bind with explicit casts (matches coupleGuiSafe below) so the rest of
+	-- this function doesn't rely on flow-narrowing across 700+ lines.
+	local Remotes = Remotes :: Folder
+	local RemoteSendRequest = RemoteSendRequest :: RemoteEvent
+	local RemoteRespond = RemoteRespond :: RemoteEvent
+	local RemoteBreakup = RemoteBreakup :: RemoteEvent
+	local RemoteOpenPanel = RemoteOpenPanel :: RemoteEvent
+	local RemoteNotifyRequest = RemoteNotifyRequest :: RemoteEvent
+	local RemoteNotifyResult = RemoteNotifyResult :: RemoteEvent
+	local RemoteAnnounce = RemoteAnnounce :: RemoteEvent
+	local RemotePanelData = RemotePanelData :: RemoteEvent
 	-- ============================================================
 	-- Referensi GUI
 	-- ============================================================

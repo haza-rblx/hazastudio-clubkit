@@ -6,6 +6,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local Result = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Result)
+local PermissionDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.PermissionDomain)
 
 local log = Logger.new("Server.StickerService")
 
@@ -96,6 +97,16 @@ local function containsImage(list: { string }, image: string): boolean
 	return false
 end
 
+-- Global pool is shared/broadcast to every player (StickerController re-syncs
+-- everyone after addSticker), so only admins/Studio may seed it. Regular
+-- players still get their own image saved to their personal collection below.
+local function canManageGlobalStickerPool(player: Player): boolean
+	if Config.DataStoreScope.IS_STUDIO then
+		return true
+	end
+	return PermissionDomain.isAdminUser(player.UserId)
+end
+
 function StickerService.new(deps: {
 	logger: any?,
 	repository: any,
@@ -111,6 +122,10 @@ function StickerService.new(deps: {
 	self._displayTokens = {} :: { [number]: number }
 	self._globalStickers = {} :: { string }
 	self._personalByUserId = {} :: { [number]: { stickers: { string }, selectedSticker: string } }
+	-- Tracks whether a userId's personal collection has loaded successfully
+	-- at least once. Writes are refused while false/nil so a failed load can
+	-- never seed/overwrite the player's real collection with an empty one.
+	self._loadedByUserId = {} :: { [number]: boolean }
 	return self
 end
 
@@ -120,19 +135,24 @@ function StickerService:_getPersonalData(userId: number): { stickers: { string }
 		return cached
 	end
 
-	local empty = { stickers = {} :: { string }, selectedSticker = "" }
 	local result = self._repository.load(userId)
-	if result.ok and type(result.value) == "table" then
-		empty = {
-			stickers = if type(result.value.stickers) == "table" then result.value.stickers else {},
-			selectedSticker = if type(result.value.selectedSticker) == "string"
-				then result.value.selectedSticker
-				else "",
-		}
+	if not result.ok or type(result.value) ~= "table" then
+		-- Leave _personalByUserId unset so the next read/write retries the
+		-- load instead of getting stuck on a cached empty snapshot.
+		self._loadedByUserId[userId] = false
+		return { stickers = {} :: { string }, selectedSticker = "" }
 	end
 
-	self._personalByUserId[userId] = empty
-	return empty
+	local loaded = {
+		stickers = if type(result.value.stickers) == "table" then result.value.stickers else {},
+		selectedSticker = if type(result.value.selectedSticker) == "string"
+			then result.value.selectedSticker
+			else "",
+	}
+
+	self._loadedByUserId[userId] = true
+	self._personalByUserId[userId] = loaded
+	return loaded
 end
 
 function StickerService:_isAllowedStickerImage(userId: number, image: string): boolean
@@ -310,7 +330,20 @@ function StickerService:addSticker(player: Player, image: string): any
 		return nil
 	end
 
-	if type(self._repository.addToGlobalPool) == "function" then
+	-- Force a load attempt (no-op if already cached) before gating on it, so
+	-- a player's first add of the session does not spuriously reject.
+	self:_getPersonalData(player.UserId)
+	if not self._loadedByUserId[player.UserId] then
+		self._log:warn("Sticker add rejected, personal collection not loaded", {
+			player = player.Name,
+		})
+		return {
+			stickers = self:_mergeVisibleStickers({}),
+			selectedSticker = "",
+		}
+	end
+
+	if canManageGlobalStickerPool(player) and type(self._repository.addToGlobalPool) == "function" then
 		local globalResult = self._repository.addToGlobalPool(normalized)
 		if globalResult.ok and type(globalResult.value) == "table" then
 			self._globalStickers = globalResult.value.stickers
@@ -492,6 +525,7 @@ function StickerService:onStart()
 		self._activeGuis[player.UserId] = nil
 		self._displayTokens[player.UserId] = nil
 		self._personalByUserId[player.UserId] = nil
+		self._loadedByUserId[player.UserId] = nil
 	end))
 
 	-- Simpan referensi playerConnections agar destroy() bisa cleanup

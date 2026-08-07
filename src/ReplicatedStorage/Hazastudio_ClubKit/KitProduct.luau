@@ -6,8 +6,8 @@ local KitProduct = {
 	ProductId = "hazastudioclubkit",
 	ProductName = "Hazastudio Clubkit",
 	Vendor = "Hazastudio",
-	KitVersion = "2.4.71",
-	BuildId = "20260807",
+	KitVersion = "2.4.72",
+	BuildId = "20260808",
 	LicenseApiProduct = "clubkit",
 	-- v1.3+: server polls donation-api /v2/license/verify. Older kit builds omit this flag.
 	LicenseEnforcementEnabled = true,
@@ -19,7 +19,7 @@ local KitProduct = {
 		Website = "", -- contoh: "https://hazastudio.example"
 		Roblox = "Hazastudio",
 		Email = "",
-		Note = "Club Kit by Hazastudio â€” issues? contact club staff or Hazastudio support.",
+		Note = "Club Kit by Hazastudio — issues? contact club staff or Hazastudio support.",
 	},
 }
 

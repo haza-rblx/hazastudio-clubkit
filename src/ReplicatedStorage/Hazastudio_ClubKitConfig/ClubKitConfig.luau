@@ -38,12 +38,12 @@ ClubKitConfig.Branding = {
 -- =============================================================================
 ClubKitConfig.Group = {
 	GroupId = 0, -- contoh: 12345678  ← WAJIB sebelum live
-	OwnerUserId = 8842050215, -- contoh: 987654321  ← owner place / /showcase
+	OwnerUserId = 0, -- contoh: 987654321  ← owner place / /showcase, WAJIB diisi sebelum live
 	OwnerGroupRank = 255, -- rank Roblox yang dianggap owner di group
 }
 
 ClubKitConfig.AdminUserIds = {
-	[8842050215] = true, -- backup admin tanpa group rank; contoh: [111111] = true,
+	-- backup admin tanpa group rank; contoh: [111111] = true,
 } :: { [number]: boolean }
 
 -- Sementara leaderboard warm-up (opsional): [userId] = rank
@@ -524,9 +524,9 @@ ClubKitConfig.Features = {
 	MusicCatalogSeed = true,
 	SyncDance = true,
 	-- true = place uses extras/place-packs/SyncBhms (ACM Sync Dance → BHMS).
-	-- Disables Club Kit dance panel + SyncService. Default false for all other places.
-	-- THE BASIC TEST 1.3: enabled for SyncBhms playtest.
-	LegacySyncBhms = true,
+	-- Disables Club Kit dance panel + SyncService. false = SyncBhmsGate no-ops pack (hide topbar Dance).
+	-- THE BASIC TEST 1.3: set true only when playtesting SyncBhms pack.
+	LegacySyncBhms = false,
 	-- WIP Admin Hub (04-AdminHub). false = classic Admin Panel owns topbar icon.
 	AdminHub = false,
 	Hotbar = true,

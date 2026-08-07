@@ -2,7 +2,7 @@
 
 Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
 
-**Versi saat ini:** `2.4.71` (lihat [`VERSION`](VERSION))  
+**Versi saat ini:** `2.4.72` (lihat [`VERSION`](VERSION))  
 **Target rilis berikutnya:** _(belum ditetapkan)_  
 **Branch aktif:** `wip/admin-hub`
 
@@ -12,7 +12,6 @@ Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
 
 | Area | Status |
 |------|--------|
-| _(kosong — mulai track fitur berikutnya di sini)_ | |
 
 ---
 
@@ -20,7 +19,6 @@ Scratch pad internal untuk track pekerjaan **sebelum** versi dirilis.
 
 | Path | Change |
 |------|--------|
-| | |
 
 ---
 

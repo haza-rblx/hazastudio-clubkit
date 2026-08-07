@@ -63,7 +63,7 @@
     <div class="hub-hero">
       <div class="hub-kicker">
         <span data-i18n="updates.kicker">Catatan rilis</span>
-        <span class="version-pill" data-i18n="updates.version">Saat ini 2.4.71</span>
+        <span class="version-pill" data-i18n="updates.version">Saat ini 2.4.72</span>
       </div>
       <h1 class="hub-title" data-i18n="updates.title">Updates</h1>
       <p class="hub-lead" data-i18n-html="updates.lead">
@@ -100,7 +100,31 @@
 
     <div class="changelog-list">
 
-      <details class="changelog-item" id="v2-4-71" open>
+      <details class="changelog-item" id="v2-4-72" open>
+        <summary>
+          <span class="changelog-ver">2.4.72</span>
+          <span class="changelog-date">2026-08-08</span>
+          <span class="changelog-blurb" data-i18n="updates.v72.blurb">Audit patch — DataStore data-loss fixes, boot hardening, 3 abuse-gate closures.</span>
+        </summary>
+        <div class="changelog-body">
+          <h4 data-i18n="updates.cat.fixed">Fixed</h4>
+          <ul>
+            <li data-i18n-html="updates.v72.f1">Favorites, stickers, and level XP could be lost if the save failed right as a player disconnected — now retried automatically instead of dropped.</li>
+            <li data-i18n-html="updates.v72.f2">Client could hang on boot (stuck loading screen) if a remote or GUI folder was missing — now times out and soft-disables just that feature.</li>
+            <li data-i18n-html="updates.v72.f3">Dance panel on phones without the mobile wrapper GUI now falls back to the desktop layout instead of breaking dance sync entirely.</li>
+            <li data-i18n="updates.v72.f4">HotbarInventoryService no longer leaks character connections on every respawn.</li>
+          </ul>
+          <h4 data-i18n="updates.cat.security">Security</h4>
+          <ul>
+            <li data-i18n-html="updates.v72.s1">Sticker global pool and resolving a track by raw asset ID are now admin/DJ-gated — regular players' own uploads/requests still work, they just don't write to shared/global state.</li>
+            <li data-i18n-html="updates.v72.s2">Command Library now has a central permission gate, so a future command added without its own check doesn't become open to every player by default.</li>
+            <li data-i18n="updates.v72.s3">Fresh installs no longer inherit the kit developer's UserId as a default admin in the config template.</li>
+          </ul>
+          <p><a href="releases/2.4.72/UPGRADE.md" data-i18n="updates.upgradeGuide">Panduan upgrade</a></p>
+        </div>
+      </details>
+
+      <details class="changelog-item" id="v2-4-71">
         <summary>
           <span class="changelog-ver">2.4.71</span>
           <span class="changelog-date">2026-08-07</span>
@@ -278,7 +302,7 @@
   </main>
 
   <footer class="site-footer">
-    <p class="footer-brand" data-i18n="updates.footer.brand">Hazastudio Clubkit · Updates · engine 2.4.71</p>
+    <p class="footer-brand" data-i18n="updates.footer.brand">Hazastudio Clubkit · Updates · engine 2.4.72</p>
     <p class="footer-tagline" data-i18n="updates.footer.tagline">Docs pusat · Hazastudio</p>
     <div class="footer-links">
       <a href="index.html" data-i18n="nav.home">Home</a>

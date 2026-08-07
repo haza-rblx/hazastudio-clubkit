@@ -95,14 +95,44 @@ local function createSettingsController(deps: {
 	local ui = deps.ui
 	local icon = deps.icon
 	local remotes = deps.remotes
-	local requestRemote = remotes:WaitForChild(Config.Settings.REMOTE_REQUEST) :: RemoteEvent
-	local syncRemote = remotes:WaitForChild(Config.Settings.REMOTE_SYNC) :: RemoteEvent
-	local updateRemote = remotes:WaitForChild(Config.Settings.REMOTE_UPDATE) :: RemoteEvent
-	local resetRemote = remotes:WaitForChild(Config.Settings.REMOTE_RESET) :: RemoteEvent
-	local profileRequestRemote = remotes:WaitForChild(Config.ProfileMenu.REMOTE_REQUEST) :: RemoteEvent
-	local profileSyncRemote = remotes:WaitForChild(Config.ProfileMenu.REMOTE_SYNC) :: RemoteEvent
-	local profileUpdateRemote = remotes:WaitForChild(Config.ProfileMenu.REMOTE_UPDATE) :: RemoteEvent
-	local overheadUpdateRemote = remotes:WaitForChild("OverheadUpdate") :: RemoteEvent
+	-- Bounded so a disabled/broken Settings or ProfileMenu remote soft-disables
+	-- this controller instead of hanging this boot task forever.
+	local bootTimeout = Config.Loading.BOOTSTRAP_WAIT_TIMEOUT
+	local requestRemote = remotes:WaitForChild(Config.Settings.REMOTE_REQUEST, bootTimeout)
+	local syncRemote = remotes:WaitForChild(Config.Settings.REMOTE_SYNC, bootTimeout)
+	local updateRemote = remotes:WaitForChild(Config.Settings.REMOTE_UPDATE, bootTimeout)
+	local resetRemote = remotes:WaitForChild(Config.Settings.REMOTE_RESET, bootTimeout)
+	local profileRequestRemote = remotes:WaitForChild(Config.ProfileMenu.REMOTE_REQUEST, bootTimeout)
+	local profileSyncRemote = remotes:WaitForChild(Config.ProfileMenu.REMOTE_SYNC, bootTimeout)
+	local profileUpdateRemote = remotes:WaitForChild(Config.ProfileMenu.REMOTE_UPDATE, bootTimeout)
+	local overheadUpdateRemote = remotes:WaitForChild("OverheadUpdate", bootTimeout)
+	if
+		not (requestRemote and requestRemote:IsA("RemoteEvent"))
+		or not (syncRemote and syncRemote:IsA("RemoteEvent"))
+		or not (updateRemote and updateRemote:IsA("RemoteEvent"))
+		or not (resetRemote and resetRemote:IsA("RemoteEvent"))
+		or not (profileRequestRemote and profileRequestRemote:IsA("RemoteEvent"))
+		or not (profileSyncRemote and profileSyncRemote:IsA("RemoteEvent"))
+		or not (profileUpdateRemote and profileUpdateRemote:IsA("RemoteEvent"))
+		or not (overheadUpdateRemote and overheadUpdateRemote:IsA("RemoteEvent"))
+	then
+		log:warn("Settings/ProfileMenu remotes tidak lengkap dalam waktu tunggu, SettingsController soft-disabled")
+		-- Stub keeps the trackClientLifecycle(...) :: init() call site in
+		-- Main.client safe — Lifecycle:register() drops a nil module silently
+		-- but the caller still calls :init() unconditionally right after.
+		return {
+			init = function() end,
+			destroy = function() end,
+		}
+	end
+	local requestRemote = requestRemote :: RemoteEvent
+	local syncRemote = syncRemote :: RemoteEvent
+	local updateRemote = updateRemote :: RemoteEvent
+	local resetRemote = resetRemote :: RemoteEvent
+	local profileRequestRemote = profileRequestRemote :: RemoteEvent
+	local profileSyncRemote = profileSyncRemote :: RemoteEvent
+	local profileUpdateRemote = profileUpdateRemote :: RemoteEvent
+	local overheadUpdateRemote = overheadUpdateRemote :: RemoteEvent
 	local localPlayer = Players.LocalPlayer
 	local currentPayload: SettingsPayload = SettingsDomain.merge(nil, nil)
 	local currentProfilePayload: ProfileMenuPayload? = nil

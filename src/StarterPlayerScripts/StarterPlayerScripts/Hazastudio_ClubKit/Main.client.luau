@@ -136,11 +136,27 @@ if not kitRoot then
 	end)
 	return
 end
-local Shared = kitRoot:WaitForChild("Shared")
-local SharedConstants = Shared:WaitForChild("Constants")
-local SharedDomain = Shared:WaitForChild("Domain")
-local SharedUI = Shared:WaitForChild("UI")
-local SharedUtilsEarly = Shared:WaitForChild("Utils")
+-- Config (and therefore LoadingConfig.BOOTSTRAP_WAIT_TIMEOUT) is not loaded
+-- until Config itself resolves below, so 30 mirrors that same budget as a
+-- literal. Fails fast like the kitRoot check above instead of a plain
+-- WaitForChild yielding forever on a broken/partial install.
+local Shared = kitRoot:WaitForChild("Shared", 30)
+local SharedConstants = Shared and Shared:WaitForChild("Constants", 30)
+local SharedDomain = Shared and Shared:WaitForChild("Domain", 30)
+local SharedUI = Shared and Shared:WaitForChild("UI", 30)
+local SharedUtilsEarly = Shared and Shared:WaitForChild("Utils", 30)
+if
+	not (Shared and Shared:IsA("Folder"))
+	or not (SharedConstants and SharedConstants:IsA("Folder"))
+	or not (SharedDomain and SharedDomain:IsA("Folder"))
+	or not (SharedUI and SharedUI:IsA("Folder"))
+	or not (SharedUtilsEarly and SharedUtilsEarly:IsA("Folder"))
+then
+	pcall(function()
+		game:GetService("TestService"):Error("[Main] Hazastudio_ClubKit/Shared subfolders not found in time")
+	end)
+	return
+end
 local Config = require(SharedConstants:WaitForChild("Config"))
 -- Kit-owned sync/dance panel. Off when Features.LegacySyncBhms (BHMS place-pack).
 local legacySyncBhms = Config.FeatureFlags.LegacySyncBhmsEnabled == true
@@ -976,17 +992,35 @@ local uiSoundHelper = trackClientLifecycle(
 	})
 )
 -- === Notif ===
-ClientMods.NotifController.init({
-	notifyRemote = Remotes:WaitForChild("Notify") :: RemoteEvent,
-})
+-- These two remote waits used to run synchronously with no timeout, before
+-- any later trackBootTask registered. A missing remote would hang the whole
+-- boot chunk forever instead of just this one feature. `do...end` keeps the
+-- lookup local scoped to this block instead of adding a top-level local.
+do
+	local notifyRemote = Remotes:WaitForChild("Notify", LoadingConfig.BOOTSTRAP_WAIT_TIMEOUT)
+	if notifyRemote and notifyRemote:IsA("RemoteEvent") then
+		ClientMods.NotifController.init({
+			notifyRemote = notifyRemote :: RemoteEvent,
+		})
+	else
+		studioWarn("[Main] Remotes.Notify not found in time; NotifController disabled")
+	end
+end
 ClientMods.GenericBroadcastController.init()
 JoinGreetingController.init()
 -- === UI SFX ===
 uiSoundHelper:init()
-ClientMods.AvatarLikeWorldEffect.init({
-	logger = Logger.new("AvatarLikeWorldEffect"),
-	remote = Remotes:WaitForChild(Config.AvatarContext.REMOTE_LIKE_EFFECT) :: RemoteEvent,
-})
+do
+	local likeEffectRemote = Remotes:WaitForChild(Config.AvatarContext.REMOTE_LIKE_EFFECT, LoadingConfig.BOOTSTRAP_WAIT_TIMEOUT)
+	if likeEffectRemote and likeEffectRemote:IsA("RemoteEvent") then
+		ClientMods.AvatarLikeWorldEffect.init({
+			logger = Logger.new("AvatarLikeWorldEffect"),
+			remote = likeEffectRemote :: RemoteEvent,
+		})
+	else
+		studioWarn("[Main] AvatarContext like-effect remote not found in time; AvatarLikeWorldEffect disabled")
+	end
+end
 -- World-position nuke VFX (Nuke/Smite/BlackHole). The remote itself is
 -- resolved inside the controller so we don't need to thread it here.
 -- Disabled: world-position VFX is handled by legacy EffectDonate scripts for Bagi-Bagi.
@@ -1738,7 +1772,8 @@ if clubKitOwnedSyncDance then
 		triggerController:init()
 	end)
 end
--- LegacySyncBhms: hide residual Club Kit dance panel GUIs if still in PlayerGui.
+-- LegacySyncBhms ON: hide residual Club Kit dance panel GUIs if still in PlayerGui.
+-- LegacySyncBhms OFF: hide residual place-pack BHMS DanceGui (topbar Icon gated by SyncBhmsGate).
 if legacySyncBhms then
 	trackBootTask("LegacySyncBhmsHideKitDanceUi", function()
 		local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui") :: PlayerGui
@@ -1760,6 +1795,22 @@ if legacySyncBhms then
 		task.delay(2, function()
 			if playerGui.Parent then
 				hideKitDanceUi(playerGui)
+			end
+		end)
+	end)
+else
+	trackBootTask("HideLegacySyncBhmsUi", function()
+		local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui") :: PlayerGui
+		local function hideBhmsDanceGui()
+			local danceGui = playerGui:FindFirstChild("DanceGui")
+			if danceGui and danceGui:IsA("ScreenGui") then
+				(danceGui :: ScreenGui).Enabled = false
+			end
+		end
+		hideBhmsDanceGui()
+		task.delay(2, function()
+			if playerGui.Parent then
+				hideBhmsDanceGui()
 			end
 		end)
 	end)

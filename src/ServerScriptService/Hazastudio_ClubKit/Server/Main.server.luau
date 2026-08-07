@@ -1038,6 +1038,19 @@ connectionCleaner:add(Players.PlayerRemoving:Connect(function(player)
 	if overheadService and type(overheadService.onPlayerRemoving) == "function" then
 		overheadService:onPlayerRemoving(player)
 	end
+	-- Flush pending XP on every leave, not just server shutdown — otherwise a
+	-- player who leaves mid-session loses any XP below the SAVE_BATCH_SIZE
+	-- threshold. A failed flush keeps its pendingXp entry (see LevelService)
+	-- and gets retried by the periodic autosave loop / BindToClose.
+	if levelService and type(levelService.flushPlayer) == "function" then
+		local flushResult = levelService:flushPlayer(player.UserId)
+		if not flushResult.ok then
+			log:warn("PlayerRemoving: level XP flush failed, will retry", {
+				userId = player.UserId,
+				error = flushResult.error,
+			})
+		end
+	end
 	-- Persistence Fabric: flush dirty Overhead/Settings session docs before drop.
 	pcall(function()
 		PersistenceFabricHooks.onPlayerRemoving(player)
@@ -1232,6 +1245,7 @@ end
 _commandLibraryController = ServerMods.createCommandLibraryController({
 	service = commandExecutionService,
 	remotes = Remotes,
+	overheadService = overheadService,
 })
 _commandLibraryController:init()
 -- ============================================================
@@ -1292,12 +1306,15 @@ log:info(
 -- delayed restart (before BindToClose's 30s window).
 -- ============================================================
 local function flushSessionBuffersEarly()
+	-- flushAllPending covers every userId with unsaved XP (online or already
+	-- left), so a departed player's failed on-leave flush gets retried here
+	-- instead of only online players.
+	if levelService and type(levelService.flushAllPending) == "function" then
+		pcall(function()
+			levelService:flushAllPending()
+		end)
+	end
 	for _, player in ipairs(Players:GetPlayers()) do
-		if levelService and type(levelService.flushPlayer) == "function" then
-			pcall(function()
-				levelService:flushPlayer(player.UserId)
-			end)
-		end
 		if settingsService and type(settingsService.flushStored) == "function" then
 			pcall(function()
 				settingsService:flushStored(player)
@@ -1494,6 +1511,14 @@ game:BindToClose(function()
 		if musicFavoritesRepo then
 			launchRepo(function()
 				remaining += musicFavoritesRepo:flushAll()
+			end)
+		end
+		-- Catches XP for players who left earlier in the session with a
+		-- failed flush; the per-player loop above only covers players still
+		-- connected at shutdown.
+		if levelService and type(levelService.flushAllPending) == "function" then
+			launchRepo(function()
+				remaining += levelService:flushAllPending()
 			end)
 		end
 		-- Wait for all parallel repo flushes (bounded by the 25s outer budget).

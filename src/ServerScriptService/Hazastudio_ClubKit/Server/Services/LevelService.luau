@@ -80,6 +80,22 @@ local function createLevelService(deps: {
 		return flush(userId)
 	end
 
+	-- Retries every userId with unsaved XP, including players who already
+	-- left (a failed on-leave flush keeps its pendingXp entry via flush()'s
+	-- own restore-on-failure instead of dropping it). Call from the periodic
+	-- autosave loop and BindToClose so a departed player's XP does not sit
+	-- unsaved in memory indefinitely.
+	function service:flushAllPending(): number
+		local remaining = 0
+		for userId in pairs(pendingXp) do
+			local result = flush(userId)
+			if not result.ok then
+				remaining += 1
+			end
+		end
+		return remaining
+	end
+
 	function service:setLevel(userId: number, level: number): Result<nil>
 		local newLevel = math.clamp(level, 1, Config.Level.MAX_LEVEL > 0 and Config.Level.MAX_LEVEL or math.huge)
 		local updateResult = repo:update(userId, function(current)

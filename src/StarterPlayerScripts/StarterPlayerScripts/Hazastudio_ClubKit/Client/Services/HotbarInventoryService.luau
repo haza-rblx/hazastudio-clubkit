@@ -134,6 +134,11 @@ function HotbarInventoryService.new(deps: {
 	self._backpack = nil :: Backpack?
 	self._character = nil :: Model?
 	self._connections = {} :: { RBXScriptConnection }
+	-- Kept separate from _connections: rebound on every respawn (see
+	-- _bindCharacterToolEvents), so they must be disconnected on their own
+	-- instead of only at service destroy() — otherwise every respawn leaks
+	-- two dead connections pointing at the previous, destroyed character.
+	self._characterConnections = {} :: { RBXScriptConnection }
 	self._boundBackpacks = {} :: { [Backpack]: boolean }
 	self._order = {} :: { string }
 	self._entriesByKey = {} :: { [string]: ToolEntry }
@@ -156,6 +161,37 @@ function HotbarInventoryService:_clearConnections(): ()
 		self._connections[index]:Disconnect()
 	end
 	table.clear(self._connections)
+	self:_clearCharacterConnections()
+end
+
+function HotbarInventoryService:_clearCharacterConnections(): ()
+	for index = #self._characterConnections, 1, -1 do
+		self._characterConnections[index]:Disconnect()
+	end
+	table.clear(self._characterConnections)
+end
+
+-- Rebinds per-character Tool ChildAdded/ChildRemoved listeners. Disconnects
+-- the previous character's listeners first so respawning doesn't leak two
+-- connections (pointing at the now-destroyed old character) every time.
+function HotbarInventoryService:_bindCharacterToolEvents(character: Model): ()
+	self:_clearCharacterConnections()
+	table.insert(
+		self._characterConnections,
+		character.ChildAdded:Connect(function(child: Instance)
+			if child:IsA("Tool") then
+				self:_scheduleRefresh()
+			end
+		end)
+	)
+	table.insert(
+		self._characterConnections,
+		character.ChildRemoved:Connect(function(child: Instance)
+			if child:IsA("Tool") then
+				self:_scheduleRefresh()
+			end
+		end)
+	)
 end
 
 function HotbarInventoryService:_getToolKey(tool: Tool): string
@@ -571,29 +607,11 @@ function HotbarInventoryService:onStart(): ()
 			self:refresh()
 		end)
 
-		self:_track(character.ChildAdded:Connect(function(child: Instance)
-			if child:IsA("Tool") then
-				self:_scheduleRefresh()
-			end
-		end))
-		self:_track(character.ChildRemoved:Connect(function(child: Instance)
-			if child:IsA("Tool") then
-				self:_scheduleRefresh()
-			end
-		end))
+		self:_bindCharacterToolEvents(character)
 	end))
 
 	if self._character then
-		self:_track(self._character.ChildAdded:Connect(function(child: Instance)
-			if child:IsA("Tool") then
-				self:_scheduleRefresh()
-			end
-		end))
-		self:_track(self._character.ChildRemoved:Connect(function(child: Instance)
-			if child:IsA("Tool") then
-				self:_scheduleRefresh()
-			end
-		end))
+		self:_bindCharacterToolEvents(self._character)
 	end
 
 	self:refresh()

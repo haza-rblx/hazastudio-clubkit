@@ -8,17 +8,84 @@ local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local NetworkManager = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.NetworkManager)
 local RateLimiter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.RateLimiter)
 local Validator = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Validator)
+local PermissionDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.PermissionDomain)
 
 type CommandLibraryExecuteRequest = Types.CommandLibraryExecuteRequest
 type CommandLibraryExecuteResponse = Types.CommandLibraryExecuteResponse
 
+-- Aliases that are either fully self-service (bio/status/community/session) or
+-- already gated inside their own handler by a membership/role tier that is
+-- narrower than admin (teleport, announce) or equal to it (gift/setrole –
+-- CommandExecutionService checks PermissionDomain.canGift there already).
+-- Anything NOT listed here falls back to the adminPanel-tier gate below, so a
+-- future command wired into CommandExecutionService without its own
+-- permission check does not become open to every player by default.
+local OPEN_ALIASES: { [string]: boolean } = {
+	[Config.AvatarContext.CMD_SET_BIO] = true,
+	[Config.AvatarContext.CMD_CLEAR_BIO] = true,
+	[Config.AvatarContext.CMD_SET_STATUS] = true,
+	[Config.AvatarContext.CMD_CLEAR_STATUS] = true,
+	[Config.Community.CMD_ALIAS_SET] = true,
+	[Config.Community.CMD_ALIAS_CLEAR] = true,
+	[Config.Session.CMD_ALIAS_REFRESH] = true,
+	[Config.Session.CMD_ALIAS_REJOIN] = true,
+	[Config.Session.CMD_ALIAS_BRING] = true,
+	[Config.Session.CMD_ALIAS_TO] = true,
+	[Config.Announcement.CMD_ALIAS_ANNOUNCE] = true,
+	[Config.Announcement.CMD_ALIAS_ANNOUNCE_SHORT] = true,
+	[Config.Gift.CMD_ALIAS_GIFT] = true,
+	[Config.Gift.CMD_ALIAS_UNGIFT] = true,
+	[Config.SetRole.CMD_ALIAS_SET] = true,
+	[Config.SetRole.CMD_ALIAS_UNSET] = true,
+}
+
+-- Mirrors CommandExecutionService's own splitCommandText just enough to read
+-- the alias for the permission check below; the service still does its own
+-- authoritative parsing afterwards.
+local function extractAlias(commandText: string): string?
+	local trimmed = commandText:match("^%s*(.-)%s*$") or ""
+	if trimmed == "" or string.sub(trimmed, 1, 1) ~= "/" then
+		return nil
+	end
+	local alias = trimmed:match("^/(%S+)")
+	if not alias then
+		return nil
+	end
+	return string.lower(alias)
+end
+
 local function createCommandLibraryController(deps: {
 	service: any,
 	remotes: Folder,
+	overheadService: any?,
 })
 	local service = deps.service
 	local remotes = deps.remotes
+	local overheadService = deps.overheadService
 	local log = Logger.new("CommandLibraryController")
+
+	-- Same gate as Admin panel (Gravity/Drone/Crowd controllers): Owner +
+	-- Leadership category (adminPanel/canGift) + AdminUserIds.
+	local function canUseAdminGatedCommand(player: Player): boolean
+		if overheadService and type(overheadService.getEffectivePayload) == "function" then
+			local payloadResult = overheadService:getEffectivePayload(player)
+			if payloadResult.ok then
+				return PermissionDomain.canUseAdminPanel(payloadResult.value.role, player.UserId)
+			end
+		end
+		if overheadService and type(overheadService.getRawGroupRole) == "function" then
+			return PermissionDomain.canUseAdminPanel(overheadService:getRawGroupRole(player), player.UserId)
+		end
+		return PermissionDomain.canUseAdminPanel(nil, player.UserId)
+	end
+
+	local function isAllowedToExecute(player: Player, commandText: string): boolean
+		local alias = extractAlias(commandText)
+		if not alias or OPEN_ALIASES[alias] then
+			return true
+		end
+		return canUseAdminGatedCommand(player)
+	end
 	local limiter = RateLimiter.new(
 		Config.CommandLibrary.REQUEST_RATE_MAX,
 		Config.CommandLibrary.REQUEST_RATE_WINDOW
@@ -94,6 +161,17 @@ local function createCommandLibraryController(deps: {
 					requestId = request.requestId,
 					ok = false,
 					error = "Rate limit exceeded.",
+				}
+				resultNetwork:fireClient(player, response)
+				return
+			end
+
+			if not isAllowedToExecute(player, request.commandText) then
+				log:warn("Blocked command for non-privileged player", { player = player.Name })
+				local response: CommandLibraryExecuteResponse = {
+					requestId = request.requestId,
+					ok = false,
+					error = "No permission.",
 				}
 				resultNetwork:fireClient(player, response)
 				return

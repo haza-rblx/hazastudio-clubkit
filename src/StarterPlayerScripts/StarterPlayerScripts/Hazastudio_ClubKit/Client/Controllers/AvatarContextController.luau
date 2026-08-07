@@ -134,14 +134,40 @@ local function createAvatarContextController(deps: {
 	end
 
 	function controller:init()
-		local remotes = ReplicatedStorage:WaitForChild("Remotes")
-		local remoteRequest = remotes:WaitForChild(Config.AvatarContext.REMOTE_REQUEST) :: RemoteEvent
-		local remoteResponse = remotes:WaitForChild(Config.AvatarContext.REMOTE_RESPONSE) :: RemoteEvent
-		local profileUpdatedRemote = remotes:WaitForChild(Config.AvatarContext.REMOTE_PROFILE_UPDATED) :: RemoteEvent
-		local updatedRemote = remotes:WaitForChild(Config.AvatarContext.REMOTE_UPDATED) :: RemoteEvent
-		local closeRemote = remotes:WaitForChild(Config.AvatarContext.REMOTE_CLOSE) :: RemoteEvent
-		local likeRequestRemote = remotes:WaitForChild(Config.AvatarContext.REMOTE_LIKE_REQUEST) :: RemoteEvent
-		local likeResultRemote = remotes:WaitForChild(Config.AvatarContext.REMOTE_LIKE_RESULT) :: RemoteEvent
+		-- Bounded so a disabled/broken AvatarContext remote soft-disables this
+		-- controller instead of hanging this boot task forever. Other methods
+		-- (requestLikeToggle, openPanel) guard on controller._remoteRequest /
+		-- controller._likeRequestRemote being set before firing.
+		local bootTimeout = Config.Loading.BOOTSTRAP_WAIT_TIMEOUT
+		local remotes = ReplicatedStorage:WaitForChild("Remotes", bootTimeout)
+		local remoteRequest = remotes and remotes:WaitForChild(Config.AvatarContext.REMOTE_REQUEST, bootTimeout)
+		local remoteResponse = remotes and remotes:WaitForChild(Config.AvatarContext.REMOTE_RESPONSE, bootTimeout)
+		local profileUpdatedRemote = remotes
+			and remotes:WaitForChild(Config.AvatarContext.REMOTE_PROFILE_UPDATED, bootTimeout)
+		local updatedRemote = remotes and remotes:WaitForChild(Config.AvatarContext.REMOTE_UPDATED, bootTimeout)
+		local closeRemote = remotes and remotes:WaitForChild(Config.AvatarContext.REMOTE_CLOSE, bootTimeout)
+		local likeRequestRemote = remotes and remotes:WaitForChild(Config.AvatarContext.REMOTE_LIKE_REQUEST, bootTimeout)
+		local likeResultRemote = remotes and remotes:WaitForChild(Config.AvatarContext.REMOTE_LIKE_RESULT, bootTimeout)
+		if
+			not (remotes and remotes:IsA("Folder"))
+			or not (remoteRequest and remoteRequest:IsA("RemoteEvent"))
+			or not (remoteResponse and remoteResponse:IsA("RemoteEvent"))
+			or not (profileUpdatedRemote and profileUpdatedRemote:IsA("RemoteEvent"))
+			or not (updatedRemote and updatedRemote:IsA("RemoteEvent"))
+			or not (closeRemote and closeRemote:IsA("RemoteEvent"))
+			or not (likeRequestRemote and likeRequestRemote:IsA("RemoteEvent"))
+			or not (likeResultRemote and likeResultRemote:IsA("RemoteEvent"))
+		then
+			log:warn("AvatarContext remotes tidak lengkap dalam waktu tunggu, AvatarContextController soft-disabled")
+			return
+		end
+		local remoteRequest = remoteRequest :: RemoteEvent
+		local remoteResponse = remoteResponse :: RemoteEvent
+		local profileUpdatedRemote = profileUpdatedRemote :: RemoteEvent
+		local updatedRemote = updatedRemote :: RemoteEvent
+		local closeRemote = closeRemote :: RemoteEvent
+		local likeRequestRemote = likeRequestRemote :: RemoteEvent
+		local likeResultRemote = likeResultRemote :: RemoteEvent
 
 		controller._remoteRequest = remoteRequest
 		controller._remoteResponse = remoteResponse
@@ -646,7 +672,9 @@ local function createAvatarContextController(deps: {
 		}
 
 		log:info("Firing request to server", { requestId = requestId, targetUserId = targetUserId })
-		controller._remoteRequest:FireServer(request)
+		if controller._remoteRequest then
+			controller._remoteRequest:FireServer(request)
+		end
 
 		local instantPayload = buildInstantPayload(targetUserId)
 		if instantPayload then
@@ -842,7 +870,9 @@ local function createAvatarContextController(deps: {
 		if type(ui.setLikePending) == "function" then
 			ui:setLikePending(true)
 		end
-		controller._likeRequestRemote:FireServer(request)
+		if controller._likeRequestRemote then
+			controller._likeRequestRemote:FireServer(request)
+		end
 	end
 
 	function controller:inspectAvatar(targetUserId: number)

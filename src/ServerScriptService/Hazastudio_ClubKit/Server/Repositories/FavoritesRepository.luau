@@ -28,6 +28,10 @@ type FavoritesRepositoryImpl = {
 	_memoryJson: { [number]: string },
 	_saveScheduled: { [number]: boolean },
 	_loaded: { [number]: boolean },
+	-- Payloads that failed to save on leave/shutdown. Kept outside `_loaded`
+	-- so a departed player's dirty data survives flushAll retries instead of
+	-- being dropped just because they are no longer online.
+	_pendingFlush: { [number]: string },
 	_ownerSync: OwnerSyncFn?,
 	_key: (self: FavoritesRepositoryImpl, userId: number) -> string,
 	_setMemoryJson: (self: FavoritesRepositoryImpl, userId: number, jsonData: string) -> (),
@@ -53,6 +57,7 @@ function FavoritesRepository.new(deps: { config: any, logger: ILogger })
 		_memoryJson = {} :: { [number]: string },
 		_saveScheduled = {} :: { [number]: boolean },
 		_loaded = {} :: { [number]: boolean },
+		_pendingFlush = {} :: { [number]: string },
 		_ownerSync = nil,
 	}, FavoritesRepository) :: any
 	return self
@@ -143,8 +148,9 @@ function FavoritesRepository.onPlayerRemoving(self: FavoritesRepositoryImpl, pla
 		if type(jsonData) == "string" then
 			local result = self:save(userId, jsonData)
 			if not result.ok then
-				self._dirtyPlayers[userId] = true
-				self._dirtyPayloads[userId] = jsonData
+				-- Record separately so flushAll can retry after _loaded is
+				-- cleared below, instead of dropping this player's data.
+				self._pendingFlush[userId] = jsonData
 			end
 		end
 	end
@@ -154,7 +160,10 @@ function FavoritesRepository.onPlayerRemoving(self: FavoritesRepositoryImpl, pla
 end
 
 function FavoritesRepository.save(self: FavoritesRepositoryImpl, userId: number, jsonData: string): Result<nil>
-	if not self._loaded[userId] then
+	-- Writes are normally gated on a successful load so a not-yet-loaded
+	-- session can never seed/overwrite real data. A queued _pendingFlush
+	-- retry is exempt since that payload was already captured while loaded.
+	if not self._loaded[userId] and self._pendingFlush[userId] == nil then
 		return Result.Err("favorites_not_loaded")
 	end
 	local decodeOk, decoded = pcall(function()
@@ -176,6 +185,7 @@ function FavoritesRepository.save(self: FavoritesRepositoryImpl, userId: number,
 	if not saveResult.ok then
 		self._dirtyPlayers[userId] = true
 		self._dirtyPayloads[userId] = jsonData
+		self._pendingFlush[userId] = jsonData
 		self._logger:error("Favorites save failed", {
 			userId = userId,
 			error = saveResult.error,
@@ -185,6 +195,7 @@ function FavoritesRepository.save(self: FavoritesRepositoryImpl, userId: number,
 
 	self._dirtyPlayers[userId] = nil
 	self._dirtyPayloads[userId] = nil
+	self._pendingFlush[userId] = nil
 	return Result.Ok(nil)
 end
 
@@ -218,23 +229,27 @@ end
 
 function FavoritesRepository.flushAll(self: FavoritesRepositoryImpl): number
 	local remaining = 0
+	-- Union of both tables: an offline player's payload may only live in
+	-- _pendingFlush once _dirtyPayloads is cleared elsewhere, and vice versa.
+	local userIds = {} :: { [number]: boolean }
 	for userId in pairs(self._dirtyPlayers) do
-		if not self._loaded[userId] then
-			self._dirtyPlayers[userId] = nil
-			self._dirtyPayloads[userId] = nil
-			continue
-		end
-		local jsonData = self._dirtyPayloads[userId] or self._memoryJson[userId]
+		userIds[userId] = true
+	end
+	for userId in pairs(self._pendingFlush) do
+		userIds[userId] = true
+	end
+
+	for userId in pairs(userIds) do
+		local jsonData = self._dirtyPayloads[userId] or self._pendingFlush[userId] or self._memoryJson[userId]
 		if type(jsonData) == "string" then
 			local result = self:save(userId, jsonData)
 			if not result.ok then
-				self._dirtyPlayers[userId] = true
-				self._dirtyPayloads[userId] = jsonData
 				remaining += 1
 			end
 		else
 			self._dirtyPlayers[userId] = nil
 			self._dirtyPayloads[userId] = nil
+			self._pendingFlush[userId] = nil
 		end
 	end
 	return remaining
