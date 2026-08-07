@@ -1298,6 +1298,11 @@ Config.StickerAnim = {
 Config.FeatureFlags = {
 	STUDIO_GIFT_BYPASS = IS_STUDIO,
 	SyncDanceEnabled = true,
+	-- Place-pack SyncBhms (extras/place-packs/SyncBhms): when true, Club Kit does not
+	-- own sync/dance panel/SyncRemotes; ACM Sync Dance uses ReplicatedStorage.SyncBhmsAcmBridge.
+	LegacySyncBhmsEnabled = false,
+	-- WIP Admin Hub (04-AdminHub). false = classic Admin Panel owns topbar.
+	AdminHubEnabled = false,
 	MusicPlayerEnabled = true,
 	-- Merge Hazastudio_ClubKitConfig/MusicCatalog into MusicLibrary DataStore on boot.
 	MusicCatalogSeedEnabled = true,

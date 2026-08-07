@@ -142,6 +142,9 @@ local SharedDomain = Shared:WaitForChild("Domain")
 local SharedUI = Shared:WaitForChild("UI")
 local SharedUtilsEarly = Shared:WaitForChild("Utils")
 local Config = require(SharedConstants:WaitForChild("Config"))
+-- Kit-owned sync/dance panel. Off when Features.LegacySyncBhms (BHMS place-pack).
+local legacySyncBhms = Config.FeatureFlags.LegacySyncBhmsEnabled == true
+local clubKitOwnedSyncDance = Config.FeatureFlags.SyncDanceEnabled == true and not legacySyncBhms
 local PermissionDomain = require(SharedDomain:WaitForChild("PermissionDomain"))
 local LoadingScreenUI = require(SharedUI:WaitForChild("LoadingScreenUI"))
 do
@@ -272,7 +275,7 @@ local function isDanceTier1WarmReady(): boolean
 	if ClientBootConfig.DANCE_WARMUP_DURING_LOADING == false then
 		return true
 	end
-	if Config.FeatureFlags.SyncDanceEnabled ~= true then
+	if not clubKitOwnedSyncDance then
 		return true
 	end
 	if not danceWarmupService then
@@ -1034,9 +1037,15 @@ do
 			MobilePanelManager.close(panelId)
 		end)
 	end
-	MobilePanelManager.register("admin", Config.Admin.HUB_GUI_NAME or Config.Admin.GUI_NAME, function()
-		adminIcon:deselect()
-	end)
+	MobilePanelManager.register(
+		"admin",
+		if Config.FeatureFlags.AdminHubEnabled == true
+			then (Config.Admin.HUB_GUI_NAME or Config.Admin.GUI_NAME)
+			else Config.Admin.GUI_NAME,
+		function()
+			adminIcon:deselect()
+		end
+	)
 	MobilePanelManager.register("command", Config.CommandLibrary.GUI_NAME, function()
 		commandLibraryIcon:deselect()
 	end)
@@ -1331,26 +1340,29 @@ trackBootTask("AfkGuardController.init", function()
 		ClientMods.AfkGuardController.init({ remotes = Remotes })
 	end
 end)
--- === Admin Hub (primary) + Admin Panel (title editor) ===
+-- === Admin Hub (optional WIP) + Admin Panel ===
 trackBootTask("AdminController.init", function()
 	adminPanelApi = ClientMods.AdminController.init({
 		remotes = Remotes,
 		icon = adminIcon,
-		bindTopbar = false,
+		-- Hub owns topbar when enabled; otherwise classic panel binds the icon.
+		bindTopbar = Config.FeatureFlags.AdminHubEnabled ~= true,
 	})
 end)
-trackBootTask("AdminHubController.init", function()
-	local hubApi = ClientMods.AdminHubController.init({
-		remotes = Remotes,
-		icon = adminIcon,
-		openTitlePanel = function()
-			if adminPanelApi and type(adminPanelApi.show) == "function" then
-				adminPanelApi.show()
-			end
-		end,
-	})
-	trackClientLifecycle("AdminHubController", hubApi)
-end)
+if Config.FeatureFlags.AdminHubEnabled == true then
+	trackBootTask("AdminHubController.init", function()
+		local hubApi = ClientMods.AdminHubController.init({
+			remotes = Remotes,
+			icon = adminIcon,
+			openTitlePanel = function()
+				if adminPanelApi and type(adminPanelApi.show) == "function" then
+					adminPanelApi.show()
+				end
+			end,
+		})
+		trackClientLifecycle("AdminHubController", hubApi)
+	end)
+end
 trackBootTask("CommandLibraryController.init", function()
 	local commandLibraryService = trackClientLifecycle(
 		"CommandLibraryService",
@@ -1578,7 +1590,8 @@ trackBootTask("HotbarController.init", function()
 	end))
 end)
 -- Sync dance + Lead Dance topbar: controller and requestSync handler must init in the same boot task.
-if Config.FeatureFlags.SyncDanceEnabled then
+-- Skipped when LegacySyncBhms — place pack owns dance UI + Remotes2; ACM uses SyncBhmsAcmBridge.
+if clubKitOwnedSyncDance then
 	trackBootTask("SyncDanceBootstrap", function()
 		local deferDanceWarmup = ClientBootConfig.DEFER_DANCE_WARMUP ~= false
 		danceWarmupService = trackClientLifecycle(
@@ -1725,6 +1738,32 @@ if Config.FeatureFlags.SyncDanceEnabled then
 		triggerController:init()
 	end)
 end
+-- LegacySyncBhms: hide residual Club Kit dance panel GUIs if still in PlayerGui.
+if legacySyncBhms then
+	trackBootTask("LegacySyncBhmsHideKitDanceUi", function()
+		local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui") :: PlayerGui
+		local hideNames = {
+			"DancePanelButton",
+			"DancePanelGUIWrapper",
+			"DancePanelGUIWrapperv2",
+			"DancePanelGUIWrapperv2Mobile",
+		}
+		local function hideKitDanceUi(root: Instance)
+			for _, name in ipairs(hideNames) do
+				local inst = root:FindFirstChild(name, true)
+				if inst and inst:IsA("GuiObject") then
+					(inst :: GuiObject).Visible = false
+				end
+			end
+		end
+		hideKitDanceUi(playerGui)
+		task.delay(2, function()
+			if playerGui.Parent then
+				hideKitDanceUi(playerGui)
+			end
+		end)
+	end)
+end
 -- === AvatarContext ===
 trackBootTask("CarryController.init", function()
 	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui") :: PlayerGui
@@ -1763,6 +1802,20 @@ trackBootTask("AvatarContextController.init", function()
 		avatarContextCtrl:closePanel()
 	end)
 	avatarContextUI:setSyncDanceCallback(function(targetUserId: number)
+		if legacySyncBhms then
+			local bridgeMod = ReplicatedStorage:FindFirstChild("SyncBhmsAcmBridge")
+			if bridgeMod and bridgeMod:IsA("ModuleScript") then
+				local ok, bridge = pcall(require, bridgeMod)
+				if ok and bridge and type(bridge.requestSyncByUserId) == "function" then
+					bridge.requestSyncByUserId(targetUserId)
+				else
+					warn("[ClubKit] SyncBhmsAcmBridge.requestSyncByUserId unavailable")
+				end
+			else
+				warn("[ClubKit] ReplicatedStorage.SyncBhmsAcmBridge missing (LegacySyncBhms)")
+			end
+			return
+		end
 		if not syncDanceController then
 			return
 		end
@@ -1804,7 +1857,7 @@ trackBootTask("AvatarContextController.init", function()
 	avatarContextUI:setBeforeOpenCallback(function(): number
 		return MobilePanelManager.notifyAcmOpen()
 	end)
-	if Config.FeatureFlags.SyncDanceEnabled and type(avatarContextUI.setSyncState) == "function" then
+	if clubKitOwnedSyncDance and type(avatarContextUI.setSyncState) == "function" then
 		local avatarSyncSubscriptions = trackClientLifecycle(
 			"AvatarContextSyncSubscriptions",
 			createSubscriptionGroup("AvatarContextSyncSubscriptions")
@@ -1922,7 +1975,7 @@ if Config.FeatureFlags.MusicPlayerEnabled then
 		runMusicEngineInit()
 	end)
 end
-if Config.FeatureFlags.SyncDanceEnabled then
+if clubKitOwnedSyncDance then
 	local deferDanceWarmup = ClientBootConfig.POST_GAMEPLAY_DANCE_WARMUP ~= false
 		and ClientBootConfig.DEFER_DANCE_WARMUP ~= false
 	if deferDanceWarmup then

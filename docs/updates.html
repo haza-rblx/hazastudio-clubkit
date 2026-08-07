@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title data-i18n-meta="meta.updates.title">Updates — Hazastudio Clubkit</title>
+  <meta name="description" data-i18n-meta="meta.updates.description" content="Catatan rilis Club Kit, langkah Update Engine, dan panduan upgrade." />
+  <meta name="color-scheme" content="light dark" />
+  <script>
+    (function () {
+      try {
+        var key = "clubkit-docs-theme";
+        var saved = localStorage.getItem(key);
+        var theme = saved === "light" || saved === "dark"
+          ? saved
+          : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+        document.documentElement.setAttribute("data-theme", theme);
+      } catch (_) {
+        document.documentElement.setAttribute("data-theme", "light");
+      }
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="theme.css" />
+</head>
+<body data-page="updates" class="doc-page--hub">
+
+  <header class="doc-header">
+    <div class="doc-header-inner">
+      <a class="doc-header-brand" href="index.html">
+        <span class="brand-mark" aria-hidden="true"></span>
+        Hazastudio Clubkit
+      </a>
+      <nav class="doc-header-nav" data-i18n-aria-label="nav.site" aria-label="Navigasi situs">
+        <a class="nav-link" href="index.html" data-i18n="nav.home">Home</a>
+        <a class="nav-link" href="setup.html" data-i18n="nav.setup">Setup</a>
+        <a class="nav-link is-active" href="updates.html" aria-current="page" data-i18n="nav.updates">Updates</a>
+      </nav>
+      <div class="doc-header-actions">
+        <div class="lang-switch" id="langSwitch" role="group" data-i18n-aria-label="lang.label" aria-label="Bahasa">
+          <button type="button" class="lang-btn" data-lang="id" aria-pressed="true">ID</button>
+          <button type="button" class="lang-btn" data-lang="en" aria-pressed="false">EN</button>
+          <button type="button" class="lang-btn" data-lang="ja" aria-pressed="false">JA</button>
+          <button type="button" class="lang-btn" data-lang="es" aria-pressed="false">ES</button>
+        </div>
+        <button type="button" class="theme-toggle" id="themeToggle" data-i18n-aria-label="theme.toggle" data-i18n-title="theme.toggle" aria-label="Ubah mode gelap" title="Ubah mode gelap">
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4"/>
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+          </svg>
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M21 14.5A8.5 8.5 0 1 1 9.5 3a7 7 0 0 0 11.5 11.5z"/>
+          </svg>
+        </button>
+        <a class="btn-primary" href="setup.html#checklist" data-i18n="nav.deploy">Deploy</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="hub-shell">
+    <div class="hub-hero">
+      <div class="hub-kicker">
+        <span data-i18n="updates.kicker">Catatan rilis</span>
+        <span class="version-pill" data-i18n="updates.version">Saat ini 2.4.71</span>
+      </div>
+      <h1 class="hub-title" data-i18n="updates.title">Updates</h1>
+      <p class="hub-lead" data-i18n-html="updates.lead">
+        Cara menarik engine terbaru, highlight perubahan buyer-facing, dan tautan upgrade per versi. Source of truth penuh tetap di <code>CHANGELOG.md</code> + folder <code>docs/releases/</code>.
+      </p>
+    </div>
+
+    <section class="hub-panel" id="how-to-update" aria-labelledby="how-heading">
+      <h2 id="how-heading" data-i18n="updates.how.title">Update Engine (harian)</h2>
+      <ol class="update-steps">
+        <li data-i18n-html="updates.how.1">Backup / pastikan <code>ClubKitConfig</code> &amp; <code>Secrets</code> aman (plugin tidak replace penuh).</li>
+        <li data-i18n-html="updates.how.2">Studio → Club Kit plugin → tab <strong>Engine</strong> → <strong>Check Update</strong>.</li>
+        <li data-i18n-html="updates.how.3">Jalankan <strong>Update Engine</strong>, tunggu selesai (config fill-forward additive jika ada key baru).</li>
+        <li data-i18n-html="updates.how.4"><strong>Save</strong> place. Verifikasi KitVersion (F9) = versi di atas.</li>
+      </ol>
+      <p data-i18n-html="updates.how.note">
+        Fresh install atau kirim GUI/board model → pakai Packager / RBXM (jarang). Detail: <a href="setup.html#deploy">Setup → Deploy</a>.
+      </p>
+    </section>
+
+    <section class="hub-panel" id="buyer-safe" aria-labelledby="safe-heading">
+      <h2 id="safe-heading" data-i18n="updates.safe.title">Yang tidak ikut diganti</h2>
+      <ul>
+        <li data-i18n-html="updates.safe.1"><code>Hazastudio_ClubKitConfig/ClubKitConfig.luau</code> — nilai buyer dipertahankan; key baru diisi default (fill-forward).</li>
+        <li data-i18n-html="updates.safe.2"><code>Hazastudio_ClubKitSecrets/Secrets.luau</code> — tidak di-touch.</li>
+        <li data-i18n="updates.safe.3">StarterGui boards / Workspace models — sync engine Luau saja; asset visual tetap deploy manual bila berubah.</li>
+      </ul>
+    </section>
+
+    <h2 class="section-title" data-i18n="updates.whatsNew">What's new</h2>
+    <p class="section-lead" data-i18n-html="updates.whatsLead">
+      Ringkasan buyer-facing. Buka item untuk detail. Changelog lengkap: <a href="../CHANGELOG.md">CHANGELOG.md</a>.
+    </p>
+
+    <div class="changelog-list">
+
+      <details class="changelog-item" id="v2-4-71" open>
+        <summary>
+          <span class="changelog-ver">2.4.71</span>
+          <span class="changelog-date">2026-08-07</span>
+          <span class="changelog-blurb" data-i18n="updates.v71.blurb">Admin Hub, daily boards, UI motion, plugin Aurora Dusk, docs i18n.</span>
+        </summary>
+        <div class="changelog-body">
+          <h4 data-i18n="updates.cat.added">Added</h4>
+          <ul>
+            <li data-i18n-html="updates.v71.a1"><strong>Admin Hub</strong> — opt-in <code>Features.AdminHub</code> (default off).</li>
+            <li data-i18n-html="updates.v71.a2"><strong>Daily boards ×3</strong> — combined / Robux / cash; format <code>RP </code>.</li>
+            <li data-i18n-html="updates.v71.a3"><strong>UI motion</strong> — MotionPresets, PressFeedback, UISpring.</li>
+            <li data-i18n-html="updates.v71.a4"><strong>Docs hub + i18n</strong> — Home/Setup/Updates · ID/EN/JA/ES.</li>
+            <li data-i18n-html="updates.v71.a5"><strong>Plugin Aurora Dusk</strong> — Swiss-knife panel + Config write-back + hot-reload.</li>
+          </ul>
+          <h4 data-i18n="updates.cat.fixed">Fixed</h4>
+          <ul>
+            <li data-i18n="updates.v71.f1">Cinematic Dock topbar button hidden for non-admin.</li>
+          </ul>
+          <p><a href="releases/2.4.71/UPGRADE.md" data-i18n="updates.upgradeGuide">Panduan upgrade</a></p>
+        </div>
+      </details>
+
+      <details class="changelog-item" id="v2-4-70">
+        <summary>
+          <span class="changelog-ver">2.4.70</span>
+          <span class="changelog-date">2026-08-04</span>
+          <span class="changelog-blurb" data-i18n="updates.v70.blurb">Version nudge — Check Update melihat tag baru.</span>
+        </summary>
+        <div class="changelog-body">
+          <h4 data-i18n="updates.cat.changed">Changed</h4>
+          <ul>
+            <li data-i18n-html="updates.v70.1"><strong>Version nudge</strong> — tidak ada delta fitur vs 2.4.69; bump agar Studio Check Update pick tag fresh.</li>
+          </ul>
+          <p><a href="releases/2.4.70/UPGRADE.md" data-i18n="updates.upgradeGuide">Panduan upgrade</a></p>
+        </div>
+      </details>
+
+      <details class="changelog-item" id="v2-4-69">
+        <summary>
+          <span class="changelog-ver">2.4.69</span>
+          <span class="changelog-date">2026-08-04</span>
+          <span class="changelog-blurb" data-i18n="updates.v69.blurb">World effects toggle, /drone, /crowd, SociaBuzz, plugin panel v2.</span>
+        </summary>
+        <div class="changelog-body">
+          <h4 data-i18n="updates.cat.added">Added</h4>
+          <ul>
+            <li data-i18n-html="updates.v69.a1"><strong>Features.DonationWorldEffects</strong> — master toggle Nuke/Smite/BlackHole (default on).</li>
+            <li data-i18n-html="updates.v69.a2"><strong>/drone start|stop</strong> — freecam bersama staff (pilot stream ~15Hz).</li>
+            <li data-i18n-html="updates.v69.a3"><strong>/crowd &lt;text&gt;</strong> — bubble chat mass untuk semua player (filtered).</li>
+            <li data-i18n-html="updates.v69.a4"><strong>SociaBuzz</strong> cash provider + branding preset.</li>
+          </ul>
+          <h4 data-i18n="updates.cat.changed">Changed</h4>
+          <ul>
+            <li data-i18n="updates.v69.c1">Plugin panel Engine/Tools + status config fill-forward lebih jelas.</li>
+          </ul>
+          <p><a href="releases/2.4.69/UPGRADE.md" data-i18n="updates.upgradeGuide">Panduan upgrade</a></p>
+        </div>
+      </details>
+
+      <details class="changelog-item" id="v2-4-68">
+        <summary>
+          <span class="changelog-ver">2.4.68</span>
+          <span class="changelog-date">2026-07-28</span>
+          <span class="changelog-blurb" data-i18n="updates.v68.blurb">/fakecash · /fakerobux; perbaiki aura gray brick.</span>
+        </summary>
+        <div class="changelog-body">
+          <h4 data-i18n="updates.cat.added">Added</h4>
+          <ul>
+            <li data-i18n-html="updates.v68.a1"><strong>/fakecash</strong> / <strong>/fakerobux</strong> — preview fake donation (admin), tanpa persist board.</li>
+          </ul>
+          <h4 data-i18n="updates.cat.changed">Changed</h4>
+          <ul>
+            <li data-i18n-html="updates.v68.c1"><code>/testcash</code>, <code>/testrobux</code>, dll. jadi alias deprecated.</li>
+          </ul>
+          <h4 data-i18n="updates.cat.fixed">Fixed</h4>
+          <ul>
+            <li data-i18n="updates.v68.f1">Donation aura “gray brick” di kaki karakter.</li>
+          </ul>
+          <p><a href="releases/2.4.68/UPGRADE.md" data-i18n="updates.upgradeGuide">Panduan upgrade</a></p>
+        </div>
+      </details>
+
+      <details class="changelog-item" id="v2-4-67">
+        <summary>
+          <span class="changelog-ver">2.4.67</span>
+          <span class="changelog-date">2026-07-28</span>
+          <span class="changelog-blurb" data-i18n="updates.v67.blurb">MusicCatalog script seed (playlist Legacy).</span>
+        </summary>
+        <div class="changelog-body">
+          <h4 data-i18n="updates.cat.added">Added</h4>
+          <ul>
+            <li data-i18n-html="updates.v67.a1"><strong>MusicCatalogSeed</strong> — seed dari <code>MusicCatalog.luau</code>; toggle Features; Manage UI tetap juara edit.</li>
+          </ul>
+          <p>
+            <a href="releases/2.4.67/UPGRADE.md" data-i18n="updates.upgradeGuide">Panduan upgrade</a>
+            ·
+            <a href="setup.html#features" data-i18n="updates.setupFeatures">Setup → Features</a>
+          </p>
+        </div>
+      </details>
+
+      <details class="changelog-item" id="v2-4-65">
+        <summary>
+          <span class="changelog-ver">2.4.65</span>
+          <span class="changelog-date">2026-07-23</span>
+          <span class="changelog-blurb" data-i18n="updates.v65.blurb">Favorite dance tidak rebuild list.</span>
+        </summary>
+        <div class="changelog-body">
+          <h4 data-i18n="updates.cat.changed">Changed</h4>
+          <ul>
+            <li data-i18n="updates.v65.c1">Star emote hanya toggle badge; list Dance/Pose tidak di-reorder.</li>
+          </ul>
+          <p><a href="releases/2.4.65/UPGRADE.md" data-i18n="updates.upgradeGuide">Panduan upgrade</a></p>
+        </div>
+      </details>
+
+      <details class="changelog-item" id="v2-4-64">
+        <summary>
+          <span class="changelog-ver">2.4.64</span>
+          <span class="changelog-date">2026-07-23</span>
+          <span class="changelog-blurb" data-i18n="updates.v64.blurb">Chat tags, join-storm budget, rank cache Guest.</span>
+        </summary>
+        <div class="changelog-body">
+          <h4 data-i18n="updates.cat.fixed">Fixed</h4>
+          <ul>
+            <li data-i18n-html="updates.v64.f1">Chat tag tidak invent <code>[GUEST]</code> untuk player jauh.</li>
+            <li data-i18n-html="updates.v64.f2">Join-storm false <code>budget_exhausted</code>.</li>
+            <li data-i18n="updates.v64.f3">Rank cache tidak poison Guest 10 menit setelah flake GroupService.</li>
+          </ul>
+          <p><a href="releases/2.4.64/UPGRADE.md" data-i18n="updates.upgradeGuide">Panduan upgrade</a></p>
+        </div>
+      </details>
+
+      <details class="changelog-item" id="v2-4-63">
+        <summary>
+          <span class="changelog-ver">2.4.63</span>
+          <span class="changelog-date">2026-07-23</span>
+          <span class="changelog-blurb" data-i18n="updates.v63.blurb">/re in-place, dance crossfade, Sync config, flush on restart.</span>
+        </summary>
+        <div class="changelog-body">
+          <h4 data-i18n="updates.cat.highlights">Highlights</h4>
+          <ul>
+            <li data-i18n-html="updates.v63.h1"><strong>/re</strong> refresh avatar in-place (tanpa hop SpawnLocation).</li>
+            <li data-i18n-html="updates.v63.h2">Dance crossfade map-style + buyer knobs <code>ClubKitConfig.Sync</code>.</li>
+            <li data-i18n="updates.v63.h3">Early flush buffers saat delayed server restart.</li>
+          </ul>
+          <p><a href="releases/2.4.63/UPGRADE.md" data-i18n="updates.upgradeGuide">Panduan upgrade</a></p>
+        </div>
+      </details>
+
+      <details class="changelog-item" id="v2-4-59">
+        <summary>
+          <span class="changelog-ver">2.4.59</span>
+          <span class="changelog-date">2026-07-19</span>
+          <span class="changelog-blurb" data-i18n-html="updates.v59.blurb">CharacterReady — /re &amp; overhead di map streamed.</span>
+        </summary>
+        <div class="changelog-body">
+          <h4 data-i18n="updates.cat.highlights">Highlights</h4>
+          <ul>
+            <li data-i18n-html="updates.v59.h1"><strong>CharacterReady</strong> shared readiness tiers untuk map besar / streaming.</li>
+            <li data-i18n="updates.v59.h2">Perbaikan /re, bring/to, nametag stream-in, sticker UpperTorso.</li>
+          </ul>
+          <p><a href="releases/2.4.59/UPGRADE.md" data-i18n="updates.upgradeGuide">Panduan upgrade</a></p>
+        </div>
+      </details>
+
+    </div>
+
+    <section class="hub-panel" aria-labelledby="more-heading">
+      <h2 id="more-heading" data-i18n="updates.more.title">Versi lebih lama</h2>
+      <p data-i18n-html="updates.more.body">
+        Semua folder upgrade ada di <a href="releases/">docs/releases/</a>. Riwayat penuh: <a href="../CHANGELOG.md">CHANGELOG.md</a>. Saat development, entry baru masuk <code>[Unreleased]</code> dulu — baru pindah ke section versi saat rilis.
+      </p>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p class="footer-brand" data-i18n="updates.footer.brand">Hazastudio Clubkit · Updates · engine 2.4.71</p>
+    <p class="footer-tagline" data-i18n="updates.footer.tagline">Docs pusat · Hazastudio</p>
+    <div class="footer-links">
+      <a href="index.html" data-i18n="nav.home">Home</a>
+      <a href="setup.html" data-i18n="nav.setup">Setup</a>
+      <a href="../CHANGELOG.md">CHANGELOG.md</a>
+    </div>
+  </footer>
+
+  <script src="docs.js"></script>
+  <script src="i18n.js"></script>
+</body>
+</html>

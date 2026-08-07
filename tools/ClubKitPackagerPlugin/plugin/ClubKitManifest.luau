@@ -6,7 +6,14 @@ local ClubKitManifest = {}
 ClubKitManifest.PACKAGE_NAME = "HazastudioClubKit_Package"
 ClubKitManifest.MANIFEST_NAME = "_ClubKitManifest"
 ClubKitManifest.PRODUCT_ID = "hazastudioclubkit"
-ClubKitManifest.KIT_VERSION = "2.4.70"
+ClubKitManifest.KIT_VERSION = "2.4.71"
+-- Soft-update version for the Studio dock (may diverge from KIT_VERSION for plugin-only fixes).
+ClubKitManifest.PLUGIN_VERSION = "2.4.71"
+
+-- Soft-update: fetch these Luau modules from GitHub tags (exclude bootstrap).
+ClubKitManifest.PLUGIN_SOURCE_PREFIX = "tools/ClubKitPackagerPlugin/plugin/"
+ClubKitManifest.PLUGIN_BOOTSTRAP = "HazastudioClubKit.plugin.luau"
+ClubKitManifest.PLUGIN_APPLIED_TAG_SETTING = "ClubKit_PluginAppliedTag"
 
 -- Folder engine per service (seluruh subtree di-clone).
 ClubKitManifest.SERVICE_ROOTS = {

@@ -14,14 +14,26 @@
     "SourceSyncCore": {
       "$path": "plugin/SourceSyncCore.luau"
     },
+    "PluginSyncCore": {
+      "$path": "plugin/PluginSyncCore.luau"
+    },
     "ConfigPatchCore": {
       "$path": "plugin/ConfigPatchCore.luau"
+    },
+    "ConfigEditCore": {
+      "$path": "plugin/ConfigEditCore.luau"
     },
     "DovetailTheme": {
       "$path": "plugin/DovetailTheme.luau"
     },
     "DovetailUI": {
       "$path": "plugin/DovetailUI.luau"
+    },
+    "ClubKitUI": {
+      "$path": "plugin/ClubKitUI.luau"
+    },
+    "ClubKitPanel": {
+      "$path": "plugin/ClubKitPanel.luau"
     },
     "PanelMotion": {
       "$path": "plugin/PanelMotion.luau"

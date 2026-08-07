@@ -419,6 +419,11 @@ ClubKitConfigSchema.defaults = {
 		MusicPlayer = true,
 		MusicCatalogSeed = true,
 		SyncDance = true,
+		-- Place-only BHMS dance/sync pack. When true: skip Club Kit dance panel + SyncService;
+		-- ACM Sync Dance routes to ReplicatedStorage.SyncBhmsAcmBridge. Default false.
+		LegacySyncBhms = false,
+		-- WIP Admin Hub UI. Default false — classic 04-AdminPanelv2 until hub is ready.
+		AdminHub = false,
 		Hotbar = true,
 		LoadingScreen = true,
 		LevelSystem = true,

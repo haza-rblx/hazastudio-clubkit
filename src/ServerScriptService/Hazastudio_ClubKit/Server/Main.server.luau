@@ -7,6 +7,9 @@ local RunService = game:GetService("RunService")
 local ServerScriptService = game:GetService("ServerScriptService")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local KitProduct = require(ReplicatedStorage.Hazastudio_ClubKit.KitProduct)
+-- Club Kit sync engine (panel/SyncRemotes). Off when place uses LegacySyncBhms pack.
+local clubKitOwnedSyncDance = Config.FeatureFlags.SyncDanceEnabled == true
+	and Config.FeatureFlags.LegacySyncBhmsEnabled ~= true
 
 -- Module bag: keeps Main under Luau 200-local register limit.
 local ServerMods = require(script.Parent.Init.ServerModuleBag)
@@ -574,7 +577,7 @@ sharedProfileLoader:register("likes_summary", function(player: Player)
 end)
 -- Dance favorites must be registered before the first enqueue so SyncDance join
 -- does not need a second sharedProfileLoader:enqueue (which duplicated reads).
-if Config.FeatureFlags.SyncDanceEnabled then
+if clubKitOwnedSyncDance then
 	syncFavoritesRepo = ServerMods.FavoritesRepository.new({
 		config = Config.Favorites,
 		logger = Logger.new("FavoritesRepository"),
@@ -643,7 +646,7 @@ end
 
 local function enqueueSecondaryJoinLoads(player: Player)
 	sharedProfileLoader:enqueueKindDeferred(player, "likes_summary")
-	if Config.FeatureFlags.SyncDanceEnabled then
+	if clubKitOwnedSyncDance then
 		sharedProfileLoader:enqueueKindDeferred(player, "favorites")
 	end
 end
@@ -1063,7 +1066,7 @@ connectionCleaner:add(Players.PlayerRemoving:Connect(function(player)
 	end
 end))
 local _sessionCommandController
-if Config.FeatureFlags.SyncDanceEnabled then
+if clubKitOwnedSyncDance then
 	-- syncFavoritesRepo + "favorites" kind already registered before first enqueue.
 	syncService = ServerMods.createSyncService({
 		config = Config.Sync,
@@ -1136,7 +1139,7 @@ if Config.FeatureFlags.SyncDanceEnabled then
 	end))
 end
 local syncNotificationNetwork: any = nil
-if Config.FeatureFlags.SyncDanceEnabled and syncService then
+if clubKitOwnedSyncDance and syncService then
 	local syncRemotesFolder = ReplicatedStorage:FindFirstChild(Config.Sync.REMOTE_FOLDER)
 	local syncNotificationRemote = if syncRemotesFolder
 		then syncRemotesFolder:FindFirstChild(Config.Sync.REMOTE_NOTIFICATION)

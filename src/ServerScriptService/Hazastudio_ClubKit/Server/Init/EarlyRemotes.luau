@@ -75,7 +75,8 @@ local function provisionRemotesFolder(remotes: Folder, config: any)
 end
 
 local function provisionSyncRemotes(replicatedStorage: ReplicatedStorage, config: any)
-	if not config.FeatureFlags.SyncDanceEnabled then
+	-- LegacySyncBhms place-pack owns Remotes2; do not create Club Kit SyncRemotes.
+	if not config.FeatureFlags.SyncDanceEnabled or config.FeatureFlags.LegacySyncBhmsEnabled == true then
 		return
 	end
 

@@ -523,6 +523,12 @@ ClubKitConfig.Features = {
 	-- false = skip merge (tracks already seeded stay in library).
 	MusicCatalogSeed = true,
 	SyncDance = true,
+	-- true = place uses extras/place-packs/SyncBhms (ACM Sync Dance → BHMS).
+	-- Disables Club Kit dance panel + SyncService. Default false for all other places.
+	-- THE BASIC TEST 1.3: enabled for SyncBhms playtest.
+	LegacySyncBhms = true,
+	-- WIP Admin Hub (04-AdminHub). false = classic Admin Panel owns topbar icon.
+	AdminHub = false,
 	Hotbar = true,
 	LoadingScreen = true,
 	LevelSystem = true,

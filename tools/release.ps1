@@ -61,17 +61,41 @@ function Read-ManifestVersion {
     throw "KIT_VERSION not found in ClubKitManifest.luau"
 }
 
+function Read-ManifestPluginVersion {
+    $manifest = Join-Path $root "tools\ClubKitPackagerPlugin\plugin\ClubKitManifest.luau"
+    if (-not (Test-Path $manifest)) {
+        $manifest = Join-Path $root "tools\ClubKitPackagerPlugin\ClubKitManifest.luau"
+    }
+    if (-not (Test-Path $manifest)) {
+        throw "ClubKitManifest.luau missing."
+    }
+    $content = Get-Content $manifest -Raw
+    if ($content -match 'PLUGIN_VERSION\s*=\s*"([^"]+)"') {
+        return $Matches[1]
+    }
+    # Older manifests before soft-update — fall back to KIT_VERSION
+    if ($content -match 'KIT_VERSION\s*=\s*"([^"]+)"') {
+        return $Matches[1]
+    }
+    throw "PLUGIN_VERSION / KIT_VERSION not found in ClubKitManifest.luau"
+}
+
 $version = Read-VersionFile
 $kitVersion = Read-KitProductVersion
 $manifestVersion = Read-ManifestVersion
+$pluginVersion = Read-ManifestPluginVersion
 
 Write-Host "=== Club Kit Release ===" -ForegroundColor Cyan
 Write-Host "VERSION:           $version"
 Write-Host "KitProduct:        $kitVersion"
 Write-Host "ClubKitManifest:   $manifestVersion"
+Write-Host "PluginManifest:    $pluginVersion"
 
 if ($kitVersion -ne $version -or $manifestVersion -ne $version) {
     Write-Error "Version mismatch. Sync VERSION, KitProduct.KitVersion, and ClubKitManifest.KIT_VERSION before release."
+}
+if ($pluginVersion -ne $version) {
+    Write-Error "PLUGIN_VERSION ($pluginVersion) must match VERSION ($version) on release (soft-update compares PLUGIN_VERSION)."
 }
 
 # Luau rejects UTF-8 BOM (U+FEFF) - e.g. KitProduct parse crash cascading config/main.

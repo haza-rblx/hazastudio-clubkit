@@ -36,7 +36,8 @@ Saat rilis, agent bisa pakai `git diff` / `git log` untuk generate `CHANGED_FILE
 | [`CHANGELOG.md`](CHANGELOG.md) | Changelog user-facing (Keep a Changelog) |
 | [`UPGRADE_PROGRESS.md`](UPGRADE_PROGRESS.md) | Progress development sebelum rilis |
 | [`HANDOVER.md`](HANDOVER.md) | Audit history v1.3 |
-| [`CLUB_KIT_SETUP.md`](CLUB_KIT_SETUP.md) | Setup buyer |
+| [`CLUB_KIT_SETUP.md`](CLUB_KIT_SETUP.md) | Setup buyer (Markdown) |
+| [`docs/index.html`](docs/index.html) | **Central docs hub** (Home → Setup / Updates) |
 | [`docs/releases/`](docs/releases/) | Upgrade guide per versi |
 
 ---
@@ -87,7 +88,7 @@ Atau manual:
 .\git.ps1 push origin v2.1.0
 ```
 
-**Buyer / dev di Studio:** Plugin → **Check Update** → **Update Engine** → Save place.
+**Buyer / dev di Studio:** Plugin → **Settings → Update plugin** (jika outdated) → **Engine → Update Engine** → Save place.
 
 Plugin fetch dari **public GitHub repo** (`ClubKitManifest.UPDATER.githubOwner` / `githubRepo`). Config `ClubKitConfig` dan `Secrets` tidak pernah di-replace utuh. Setelah Update Engine sukses, plugin **fill-forward** key config yang hilang (additive Sources patch) dari `ClubKitConfigSchema`; nilai buyer yang sudah ada tetap. Runtime juga fill-forward di memori via `ConfigBootstrap`. Field config baru → update **schema + template** `ClubKitConfig`. `ClubKitShowcase` = **dev-only** (`tools/dev/`); tidak ikut engine sync / Rojo default; inject manual untuk demo place.
 

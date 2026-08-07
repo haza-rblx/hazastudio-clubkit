@@ -259,6 +259,43 @@ local function getTreeShaForRef(ref: string): (string?, string?)
 	return data.commit.tree.sha, nil
 end
 
+function SourceSyncCore.listLuauFilesAtTag(tag: string, pathPrefix: string, excludeBasenames: { string }?): ({ string }?, string?)
+	local treeSha, treeErr = getTreeShaForRef(tag)
+	if treeErr or not treeSha then
+		return nil, treeErr or "Missing tree sha"
+	end
+
+	local ok, data = requestAsync(apiUrl("/git/trees/" .. treeSha .. "?recursive=1"))
+	if not ok then
+		return nil, data
+	end
+	if type(data) ~= "table" or type(data.tree) ~= "table" then
+		return nil, "Unexpected tree response"
+	end
+
+	local exclude: { [string]: boolean } = {}
+	if type(excludeBasenames) == "table" then
+		for _, name in excludeBasenames do
+			exclude[name] = true
+		end
+	end
+
+	local files: { string } = {}
+	for _, entry in data.tree do
+		local path = entry.path
+		if type(path) == "string" and entry.type == "blob" and string.match(path, "%.luau$") then
+			if string.sub(path, 1, #pathPrefix) == pathPrefix then
+				local base = string.match(path, "([^/]+)$") or path
+				if not exclude[base] then
+					table.insert(files, path)
+				end
+			end
+		end
+	end
+	table.sort(files)
+	return files, nil
+end
+
 function SourceSyncCore.listEngineFilesAtTag(tag: string): ({ string }?, string?)
 	local treeSha, treeErr = getTreeShaForRef(tag)
 	if treeErr or not treeSha then

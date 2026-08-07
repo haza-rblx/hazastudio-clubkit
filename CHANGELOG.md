@@ -11,14 +11,26 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.71] - 2026-08-07
+
 ### Added
+- **Docs i18n (ID / EN / JA / ES)** — `docs/i18n.js` + `docs/locales/{id,en,ja,es}.js`; language switcher; Home, Setup + Updates fully translated
+- **Docs hub (multipage)** — `docs/index.html` Home, `docs/setup.html` (buyer setup guide), `docs/updates.html` (Update Engine + release highlights); shared `docs.js` theme + dark mode
+- Club Kit Swiss-knife Studio plugin panel (Config / Diagnostics / Engine / Tools / Packager / Settings) — Inter font, prototype-parity dock UI; Config+Secrets Source write-back via ConfigEditCore
+- **Plugin dev hot-reload** — `dev-serve.ps1` serves `plugin/*.luau` on `http://127.0.0.1:8798`; toolbar **Reload Panel** (or `reload_clubkit_panel()`) rebuilds the dock in-session via HttpService + loadstring module registry. Falls back to bundled modules when the server is offline; bootstrap itself still needs one RBXM rebuild + restart.
 - **Daily donation boards (3)** — `DailyDonations` (combined Robux+Cash, sort by latest donation), `DailyDonationsRobux`, `DailyDonationsCash`. Combined payload `dailyCombined` with per-row `currencyKind`. Cash rows prefix **`RP `** and hide `RobuxLogo`; Robux rows show the logo.
 - **UI MotionPresets** — shared calm motion tokens (`Client/Utils/MotionPresets`) + thin `Config.UIMotion` (`MOTION_SCALE`, center open/close times). AnimationHelper center/panel/dialog timings read presets.
 - **PressFeedback** — calm press UIScale micro-interaction on Shop/Gift CTAs, TopMenu entries, MenuShell tabs/modal, Dance category tabs.
 - **UISpring** — shared critically-damped UI spring driver (Heartbeat).
-- **Admin Hub (`04-AdminHub`)** — action-first staff panel (gallery + player popup + sheets) wired to CommandLibrary execute; topbar Admin opens hub. Title tile opens existing Admin Panel editor. Gates: mod teleport/announce, admin gift/role/gravity/fake donate, owner ledger/reload boards.
+- **Admin Hub (`04-AdminHub`)** — action-first staff panel (gallery + player popup + sheets) wired to CommandLibrary execute; gated by `Features.AdminHub` (default **false**). Title tile opens existing Admin Panel editor. Gates: mod teleport/announce, admin gift/role/gravity/fake donate, owner ledger/reload boards.
 
 ### Changed
+- **Admin Hub gated** — `Features.AdminHub` / `FeatureFlags.AdminHubEnabled` (default **false**). When off, classic Admin Panel owns the topbar; hub bootstrap is skipped.
+- **Docs visual soften** — reduced outlines/borders and card chrome across Home/Setup/Updates (hairline separators + surface contrast instead of boxed cards; softer focus rings)
+- **Docs hub polish** — Inter-only typography on Home/Setup/Updates (Source Serif 4 dropped from Google Fonts + `theme.css`; Lyon serif token removed), unified site header + primary CTA across the three pages, consistent hub panel/card spacing, changelog toggle chevron, inline styles moved into the stylesheet
+- Plugin panel UI rebuilt for reliable PluginGui rendering — page builders split per tab, only the active page mounts in the scroll canvas; same Config/Diagnostics/Engine/Tools/Packager/Settings wiring
+- **Plugin panel contrast/readability pass** — visible sidebar surface with edge separators, gradient brand logo + version line, nav accent bars, inset Config children, stronger hover/active states; engine update auto-check now runs once per Studio session (no GitHub spam on every hot-reload)
+- **Plugin panel visual redesign ("Aurora Dusk")** — full from-scratch pass on `DovetailTheme` / `ClubKitUI` / `ClubKitPanel`: Inter (`Font.fromId(12187365364, weight)`) everywhere (chrome + body, no more Gotham), cool near-black surfaces with a periwinkle/violet accent duo, borderless card-based layout (elevation via background color, not strokes), tracked small-caps kickers, larger type scale, elevated stat cards, gradient brand mark, animated sticky save bar. Sidebar nav buttons remain direct opaque children of Sidebar (paint-safety rule); content is inset via `ScrollInner` position, not padding alone.
 - **LiveChatDonations Footer** — hidden while idle; donor info root also hidden so message stays centered. Pop in/out polished: Back spring + fade, staggered card/total/footer, soft message settle when returning to idle.
 - **`Leaderboards.DAILY_ROBUX_ENABLED`** default **true**; new **`DAILY_COMBINED_ENABLED`** / **`DAILY_COMBINED_LIMIT`**. Daily SurfaceGui resolve is part-scoped first (shared `DailyDonationsWrapper` name under different parts).
 - Cash amount format on boards: `RP.` → **`RP `** (space).
@@ -28,6 +40,9 @@ Versi aktif: lihat file [`VERSION`](VERSION).
 - **Admin Hub chrome** — propagate MainWrapper polish to player/action popups + toast (panel `#0C0C0C`, corner 18, no stroke, fade headers, danger close).
 - **Admin Hub motion** — hub open/close via `presentCenterPanel`; player/action overlays via `presentDialog` + dim fade; PressFeedback on tiles/sidebar/CTAs. Action feedback uses kit `NotifService` → General Notification Center (not the hub Toast frame).
 - **Admin Hub popups** — closer to HTML prototype: surface `#141414`, soft stroke, larger player/action panels (360×480 / 440×560), clean headers (no white fade), 2-col pick cards + white selected chips, callout title/body variants, donate amount preview.
+
+### Fixed
+- **Top menu Cinematic Dock button** — hide `CinematicDockButton` for non-admin on desktop + phone (`TopBarMenu` / `TopBarMenuPhone`); gate matches Admin Panel (`PermissionDomain.canUseAdminPanel`), refreshed when local role/overhead cache updates.
 
 ## [2.4.70] - 2026-08-04
 

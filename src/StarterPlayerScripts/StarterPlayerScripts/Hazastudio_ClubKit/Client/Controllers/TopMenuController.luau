@@ -14,6 +14,7 @@ local UISpring = require(script.Parent.Parent.Utils.UISpring)
 local LeaderstatsVisibilityService = require(script.Parent.Parent.Services.LeaderstatsVisibilityService)
 local PhoneLayout = require(script.Parent.Parent.Utils.PhoneLayout)
 local TopMenuGuiRefs = require(script.Parent.Parent.UI.TopMenuGuiRefs)
+local OverheadController = require(script.Parent.OverheadController)
 
 local TopMenuController = {}
 local log = Logger.new("TopMenuController")
@@ -32,7 +33,7 @@ type InitDeps = {
 	menuIcon: any,
 	icons: IconsMap,
 	settingsUI: any,
-	-- Kept for API compat; cinematic button stays visible — access gated on click.
+	-- When false, hide CinematicDockButton on desktop + phone top menus.
 	isCinematicVisible: (() -> boolean)?,
 }
 
@@ -45,6 +46,7 @@ local BLUR_OPTIONS = {
 local menuIconRef: any = nil
 local iconsRef: IconsMap? = nil
 local settingsUIRef: any = nil
+local isCinematicVisibleFn: (() -> boolean)? = nil
 local refs: TopMenuGuiRefs.Refs? = nil
 local animHelper: AnimationHelper.AnimationHelper? = nil
 local desktopRestingPosition: UDim2? = nil
@@ -58,9 +60,14 @@ local clickOutsideConnection: RBXScriptConnection? = nil
 local viewportConnection: RBXScriptConnection? = nil
 local blockedMenuIcons: { [any]: boolean } = {}
 local _initConnections: { RBXScriptConnection } = {}
+local _initUnsubs: { () -> () } = {}
 
 local function trackInitConnection(conn: RBXScriptConnection)
 	table.insert(_initConnections, conn)
+end
+
+local function trackInitUnsub(unsub: () -> ())
+	table.insert(_initUnsubs, unsub)
 end
 
 local BUTTONS = Config.TopbarMenu.BUTTONS
@@ -295,11 +302,16 @@ local function applyLayoutVisibility()
 	local isPhone = PhoneLayout.isPhoneLayout()
 	refs.desktopMenu.Visible = (isOpen or isAnimating) and not isPhone
 	refs.phoneMenu.Visible = (isOpen or isAnimating) and isPhone
-	-- CinematicDock stays Visible for all ranks; open is denied with a server toast.
+
+	local cinematicVisible = true
+	if isCinematicVisibleFn then
+		local ok, result = pcall(isCinematicVisibleFn)
+		cinematicVisible = ok and result == true
+	end
 	for _, buttonMap in ipairs({ refs.desktopButtons, refs.phoneButtons }) do
 		local cinematicButton = buttonMap[BUTTONS.CINEMATIC_DOCK]
 		if cinematicButton then
-			cinematicButton.Visible = true
+			cinematicButton.Visible = cinematicVisible
 		end
 	end
 end
@@ -725,6 +737,7 @@ end
 function TopMenuController.init(deps: InitDeps)
 	menuIconRef = deps.menuIcon
 	iconsRef = deps.icons
+	isCinematicVisibleFn = deps.isCinematicVisible
 	if deps.settingsUI ~= nil then
 		settingsUIRef = deps.settingsUI
 	end
@@ -792,6 +805,22 @@ function TopMenuController.init(deps: InitDeps)
 		end)
 		trackInitConnection(viewportConnection)
 	end
+
+	-- Role may arrive after menu resolve; refresh CinematicDockButton visibility.
+	if type(OverheadController.subscribeRoleChanged) == "function" then
+		trackInitUnsub(OverheadController.subscribeRoleChanged(function(userId: number, _role: string?)
+			if userId == player.UserId then
+				applyLayoutVisibility()
+			end
+		end))
+	end
+	if type(OverheadController.subscribeOverheadCacheUpdated) == "function" then
+		trackInitUnsub(OverheadController.subscribeOverheadCacheUpdated(function(userId: number?)
+			if userId == nil or userId == player.UserId then
+				applyLayoutVisibility()
+			end
+		end))
+	end
 end
 
 function TopMenuController.destroy()
@@ -806,6 +835,10 @@ function TopMenuController.destroy()
 		conn:Disconnect()
 	end
 	table.clear(_initConnections)
+	for _, unsub in ipairs(_initUnsubs) do
+		unsub()
+	end
+	table.clear(_initUnsubs)
 end
 
 return TopMenuController

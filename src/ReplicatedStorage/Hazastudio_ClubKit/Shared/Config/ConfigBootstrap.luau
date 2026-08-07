@@ -341,6 +341,8 @@ function ConfigBootstrap.apply(config: any)
 			MusicPlayer = "MusicPlayerEnabled",
 			MusicCatalogSeed = "MusicCatalogSeedEnabled",
 			SyncDance = "SyncDanceEnabled",
+			LegacySyncBhms = "LegacySyncBhmsEnabled",
+			AdminHub = "AdminHubEnabled",
 			Hotbar = "HotbarEnabled",
 			LoadingScreen = "LoadingScreenEnabled",
 			LevelSystem = "LevelSystemEnabled",

@@ -1,0 +1,1914 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hazastudio Club Kit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --page: #000000;
+    --card: #111111;
+    --elevated: #1a1a1a;
+    --text: #ffffff;
+    --muted: #a0a0a0;
+    --faint: #6e6e6e;
+    --blue: #0a84ff;
+    --blue-bright: #64b5ff;
+    --blue-deep: #0071e3;
+    --red: #ff453a;
+    --success: #5abe78;
+    --warning: #e6b446;
+    --error: #e65a5a;
+    --corner: 16px;
+    --pill: 22px;
+    --sep: rgba(255,255,255,0.08);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: #0b0b0d;
+    background-image: radial-gradient(1200px 600px at 70% -10%, rgba(10,132,255,0.10), transparent 60%);
+    display: flex; align-items: center; justify-content: center;
+    font-family: "Inter", "Segoe UI", sans-serif;
+    color: var(--text);
+    padding: 24px;
+  }
+
+  .dock {
+    width: min(1020px, 100%); height: min(700px, calc(100vh - 48px));
+    background: var(--page);
+    border: 1px solid var(--sep);
+    border-radius: 0;
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.03);
+  }
+  .body { flex: 1; display: flex; min-height: 0; }
+
+  /* ===== Sidebar ===== */
+  .sidebar {
+    width: 228px; flex: none;
+    background: var(--card);
+    border-right: 1px solid var(--sep);
+    display: flex; flex-direction: column;
+    padding: 16px 12px;
+    gap: 5px;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; padding: 8px 10px 18px; }
+  .brand .logo {
+    width: 40px; height: 40px; border-radius: 6px; flex: none;
+    background: linear-gradient(135deg, var(--blue), var(--blue-deep));
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 16px;
+    box-shadow: 0 4px 14px rgba(10,132,255,.35);
+  }
+  .brand .name { font-size: 14px; font-weight: 700; line-height: 1.25; }
+  .brand .name span { display: block; font-size: 11.5px; font-weight: 500; color: var(--faint); }
+
+  .nav-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 11px 12px;
+    border-radius: 6px;
+    font-size: 14px; font-weight: 600;
+    color: var(--muted);
+    cursor: pointer;
+    transition: background .15s, color .15s;
+    position: relative;
+  }
+  .nav-item svg { width: 18px; height: 18px; flex: none; opacity: .9; }
+  .nav-item:hover { background: var(--elevated); color: var(--text); }
+  .nav-item.active { background: rgba(10,132,255,0.14); color: var(--text); }
+  .nav-item .badge {
+    margin-left: auto;
+    min-width: 20px; height: 20px; padding: 0 6px;
+    border-radius: 999px;
+    background: var(--red);
+    color: #fff; font-size: 11.5px; font-weight: 700;
+    display: none; align-items: center; justify-content: center;
+  }
+  .nav-item .badge.show { display: flex; }
+  .sidebar .flex-spacer { flex: 1; }
+  .switch {
+    width: 48px; height: 24px; border-radius: 999px;
+    background: #36363b;
+    border: none;
+    position: relative; cursor: pointer;
+    transition: background .2s;
+    flex: none;
+  }
+  .switch::after {
+    content: ""; position: absolute;
+    top: 50%; left: 6px;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: #8e8e93;
+    transform: translateY(-50%);
+    transition: left .18s ease, width .18s ease, height .18s ease, background .18s ease;
+  }
+  .switch.on { background: var(--blue); }
+  .switch.on::after {
+    left: calc(100% - 21px);
+    width: 18px; height: 18px;
+    background: #fff;
+  }
+
+  /* ===== Content ===== */
+  .content { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .content-scroll { flex: 1; overflow-y: auto; padding: 26px 28px 32px; min-height: 0; }
+  .content-scroll::-webkit-scrollbar { width: 8px; }
+  .content-scroll::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 4px; }
+
+  .page { display: none; animation: fadeUp .22s ease; }
+  .page.active { display: block; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  h1 { font-size: 23px; font-weight: 800; letter-spacing: -0.01em; }
+  .subtitle { font-size: 13.5px; color: var(--muted); margin-top: 5px; margin-bottom: 22px; }
+
+  .card {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    margin-bottom: 30px;
+  }
+  .card.elevated { background: transparent; }
+  .sec-head {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--faint);
+    margin: 24px 0 12px;
+  }
+  .card .sec-head:first-child { margin-top: 0; }
+
+  .btn {
+    appearance: none; border: none; cursor: pointer;
+    font-family: inherit; font-weight: 700; font-size: 14.5px;
+    border-radius: var(--pill);
+    padding: 13px 22px;
+    transition: transform .1s, filter .15s, background .15s;
+  }
+  .btn:active { transform: scale(.97); }
+  .btn.primary { background: var(--blue); color: #fff; }
+  .btn.primary:hover { filter: brightness(1.12); }
+  .btn.ghost { background: var(--elevated); color: var(--text); border: 1px solid var(--sep); }
+  .btn.ghost:hover { background: #222; }
+  .btn.small { padding: 9px 17px; font-size: 13px; }
+  .btn:disabled { opacity: .45; cursor: default; }
+
+  .row {
+    display: flex; align-items: center; gap: 14px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--sep);
+  }
+  .row:last-child { border-bottom: none; }
+  .row .grow { flex: 1; min-width: 0; }
+  .row .label { font-size: 14.5px; font-weight: 600; }
+  .row .desc { font-size: 13px; color: var(--faint); margin-top: 3px; }
+  .row .desc code, .inline-code { font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--muted); background: var(--elevated); padding: 1px 6px; border-radius: 5px; }
+
+  .pill {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 7px 15px;
+    border-radius: 999px;
+    font-size: 12.5px; font-weight: 700;
+    border: 1px solid var(--sep);
+    background: var(--elevated);
+    color: var(--muted);
+    cursor: pointer;
+    transition: all .15s;
+    user-select: none;
+  }
+  .pill.selected { background: rgba(10,132,255,.16); border-color: rgba(10,132,255,.5); color: var(--blue-bright); }
+  .pill .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+  .status-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .status-dot.ok { background: var(--success); box-shadow: 0 0 8px rgba(90,190,120,.6); }
+  .status-dot.warn { background: var(--warning); box-shadow: 0 0 8px rgba(230,180,70,.6); }
+  .status-dot.fail { background: var(--error); box-shadow: 0 0 8px rgba(230,90,90,.6); }
+  .status-dot.pending { background: #333; }
+  .status-dot.running { background: var(--blue); box-shadow: 0 0 8px rgba(10,132,255,.7); animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { opacity: .4; } }
+
+  .tag { font-family: "JetBrains Mono", monospace; font-size: 11px; padding: 3px 8px; border-radius: 6px; background: var(--elevated); color: var(--faint); white-space: nowrap; }
+
+  .input {
+    width: 100%;
+    height: 40px;
+    background: var(--elevated);
+    border: 1px solid var(--sep);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: "JetBrains Mono", monospace; font-size: 13.5px;
+    padding: 0 15px;
+    outline: none;
+    transition: border-color .15s;
+  }
+  .input:focus { border-color: rgba(10,132,255,.6); }
+  .input.invalid { border-color: rgba(255,69,58,.6); }
+  .input::placeholder { color: #4a4a4a; font-style: normal; }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 12.5px; font-weight: 700; color: var(--muted); margin-bottom: 7px; letter-spacing: .03em; }
+  .field .hint { font-size: 12px; color: var(--faint); margin-top: 6px; }
+  .field .err { font-size: 12px; color: var(--red); margin-top: 6px; display: none; font-weight: 600; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+  .input.mini { height: 40px; padding: 0 11px; font-size: 12.5px; border-radius: 6px; }
+  .col-cap { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 8px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
+  .savebar { align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid var(--sep); padding-top: 16px; margin-top: 12px; font-size: 13px; font-weight: 600; color: var(--warning); }
+
+  /* ===== Onboarding (full-screen first-run setup) ===== */
+  .dock.onboarding .sidebar { display: none; }
+  .dock.onboarding .content-scroll { padding: 48px 40px; }
+  .dock.onboarding .content-scroll > .page { display: none; }
+  .dock.onboarding .content-scroll > #page-setup { display: block; max-width: 720px; margin: 0 auto; }
+  .import-card {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--card); border: 1px solid var(--sep);
+    border-radius: 6px; padding: 14px 16px; margin-bottom: 24px;
+    transition: border-color .25s;
+  }
+  .import-card .grow { flex: 1; min-width: 0; }
+  .import-card .label { font-size: 14px; font-weight: 700; }
+  .import-card .desc { font-size: 12.5px; color: var(--faint); margin-top: 2px; }
+  .import-card.ok { border-color: rgba(90,190,120,.45); }
+  .import-card.fresh { border-color: rgba(230,180,70,.45); }
+  .import-sim { font-size: 11px; color: var(--faint); text-decoration: underline; cursor: pointer; white-space: nowrap; }
+  .import-sim:hover { color: var(--text); }
+
+  .steps { display: flex; align-items: center; margin-bottom: 26px; padding: 0 4px; }
+  .step-node {
+    position: relative; width: 22px; height: 22px; border-radius: 50%; flex: none;
+    background: var(--elevated); border: 2px solid #2c2c2c;
+    display: flex; align-items: center; justify-content: center;
+    transition: background .3s, border-color .3s;
+    z-index: 1;
+  }
+  .step-node .inner { width: 6px; height: 6px; border-radius: 50%; background: transparent; transition: all .25s; }
+  .step-node.done {
+    background: var(--blue); border-color: var(--blue);
+    box-shadow: 0 0 12px rgba(10,132,255,.45);
+    animation: stepPop .38s cubic-bezier(.34,1.56,.64,1);
+  }
+  .step-node.done .inner {
+    width: 9px; height: 5px; border-radius: 0; background: transparent;
+    border-left: 2px solid #fff; border-bottom: 2px solid #fff;
+    transform: rotate(-45deg) translate(1px, -1px);
+  }
+  .step-node.current { border-color: var(--blue); background: rgba(10,132,255,.15); animation: stepPulse 1.6s ease-out infinite; }
+  .step-node.current .inner { background: var(--blue); }
+  .step-link { flex: 1; height: 3px; border-radius: 2px; background: var(--elevated); margin: 0 6px; position: relative; overflow: hidden; }
+  .step-link::after {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(90deg, var(--blue-deep), var(--blue));
+    transform: scaleX(0); transform-origin: left;
+    transition: transform .45s ease .1s;
+    border-radius: 2px;
+  }
+  .step-link.done::after { transform: scaleX(1); }
+  @keyframes stepPop { 0% { transform: scale(.55); } 60% { transform: scale(1.22); } 100% { transform: scale(1); } }
+  @keyframes stepPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(10,132,255,.4); } 50% { box-shadow: 0 0 0 7px rgba(10,132,255,0); } }
+
+  .wizard-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; }
+  .wiz-step { display: none; }
+  .wiz-step.active { display: block; animation: fadeUp .2s ease; }
+
+  .diag-summary { display: flex; gap: 12px; margin-bottom: 18px; }
+  .stat {
+    flex: 1; background: var(--card); border: 1px solid var(--sep);
+    border-radius: 6px; padding: 18px 20px;
+  }
+  .stat .num { font-size: 27px; font-weight: 800; }
+  .stat .cap { font-size: 11.5px; color: var(--faint); font-weight: 700; text-transform: uppercase; letter-spacing: .08em; margin-top: 4px; }
+  .stat.fail .num { color: var(--error); }
+  .stat.warn .num { color: var(--warning); }
+  .stat.ok .num { color: var(--success); }
+
+  .changelog {
+    background: transparent;
+    padding: 4px 0; max-height: 260px; overflow-y: auto;
+    font-size: 13.5px; color: var(--muted); line-height: 1.6;
+  }
+  .changelog .cl-cap {
+    font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--faint);
+    margin: 16px 0 8px;
+  }
+  .changelog .cl-cap:first-child { margin-top: 2px; }
+  .cl-list { list-style: none; }
+  .cl-list li {
+    position: relative;
+    padding-left: 16px;
+    margin-bottom: 7px;
+  }
+  .cl-list li::before {
+    content: "–";
+    position: absolute; left: 2px; top: 0;
+    color: #3d3d3d; font-weight: 700;
+  }
+  .cl-list b { color: var(--text); font-weight: 600; }
+
+  .progress-track { height: 7px; border-radius: 4px; background: var(--elevated); overflow: hidden; margin-top: 14px; }
+  .progress-track.mini { height: 5px; margin-top: 10px; }
+  .progress-fill { height: 100%; width: 0%; border-radius: 3px; background: var(--blue); transition: width .25s ease; box-shadow: 0 0 10px rgba(10,132,255,.5); }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 34px; transform: translateX(-50%) translateY(20px);
+    background: var(--elevated); border: 1px solid var(--sep); border-radius: 999px;
+    padding: 12px 24px; font-size: 13.5px; font-weight: 600;
+    opacity: 0; pointer-events: none; transition: all .3s ease;
+    box-shadow: 0 10px 30px rgba(0,0,0,.6);
+    z-index: 50;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast b { color: var(--blue-bright); }
+
+  /* ===== Config sub-nav (dropdown under Config) ===== */
+  .nav-item .chev {
+    width: 14px; height: 14px; margin-left: auto; flex: none;
+    opacity: .55; transition: transform .2s;
+  }
+  .nav-item.active .chev { transform: rotate(90deg); }
+  .nav-children {
+    display: none;
+    flex-direction: column;
+    gap: 5px;
+    margin: 1px 0 6px;
+  }
+  .nav-children.open { display: flex; }
+  .nav-child {
+    display: flex; align-items: center; gap: 10px;
+    padding: 11px 12px 11px 44px;
+    border-radius: 6px;
+    font-size: 14px; font-weight: 600;
+    color: var(--muted);
+    cursor: pointer;
+    transition: background .15s, color .15s;
+    user-select: none;
+    position: relative;
+  }
+  .nav-child:hover { background: var(--elevated); color: var(--text); }
+  .nav-child.active { background: rgba(10,132,255,0.14); color: var(--text); }
+  .nav-child .meta { margin-left: auto; display: flex; align-items: center; gap: 7px; }
+  .nav-child .dirty-dot {
+    width: 7px; height: 7px; border-radius: 50%; flex: none;
+    background: var(--warning);
+    box-shadow: 0 0 7px rgba(230,180,70,.7);
+    display: none;
+  }
+  .nav-child .dirty-dot.show { display: block; }
+</style>
+</head>
+<body>
+
+<div class="dock">
+  <div class="body">
+    <!-- ================= SIDEBAR ================= -->
+    <nav class="sidebar">
+      <div class="brand">
+        <div class="logo">CK</div>
+        <div class="name">Club Kit<span>by Hazastudio</span></div>
+      </div>
+
+      <div class="nav-item active" data-page="setup" id="navSetup">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9z"/></svg>
+        Setup
+      </div>
+      <div class="nav-item" data-page="config" id="navConfig">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+        Config
+        <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+      </div>
+      <div class="nav-children" id="configChildren">
+        <div class="nav-child active" data-panel="general">General<span class="meta"><span class="dirty-dot" data-dirty="General"></span></span></div>
+        <div class="nav-child" data-panel="features">Features<span class="meta"><span class="dirty-dot" data-dirty="Features"></span></span></div>
+        <div class="nav-child" data-panel="membership">Membership<span class="meta"><span class="dirty-dot" data-dirty="Membership"></span></span></div>
+        <div class="nav-child" data-panel="donation">Donations<span class="meta"><span class="dirty-dot" data-dirty="Donations"></span></span></div>
+      </div>
+      <div class="nav-item" data-page="diagnostics">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-5"/><circle cx="12" cy="12" r="9"/></svg>
+        Diagnostics
+        <span class="badge" id="diagBadge">0</span>
+      </div>
+      <div class="nav-item" data-page="engine">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-3-6.7"/><path d="M21 3v6h-6"/></svg>
+        Engine
+        <span class="badge" id="engineBadge" style="background:var(--blue)">1</span>
+      </div>
+      <div class="nav-item" data-page="tools">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4.5 4.5 0 00-6 5.6L3 17.6V21h3.4l5.7-5.7a4.5 4.5 0 005.6-6l-2.8 2.8-2.1-2.1z"/></svg>
+        Tools
+      </div>
+      <div class="nav-item seller-only" data-page="packager" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5"/><path d="M12 13v8"/></svg>
+        Packager
+        <span class="tag" style="margin-left:auto">dev</span>
+      </div>
+
+      <div class="flex-spacer"></div>
+
+      <div class="nav-item" data-page="settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33h0a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51h0a1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82v0a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+        Settings
+      </div>
+    </nav>
+
+    <!-- ================= CONTENT ================= -->
+    <main class="content">
+      <div class="content-scroll">
+
+        <!-- ========== SETUP ========== -->
+        <section class="page active" id="page-setup">
+          <h1>Set up your club</h1>
+          <div class="subtitle">One-time setup. Everything here can be changed anytime later in Kit settings.</div>
+
+          <div class="import-card" id="importCard">
+            <div class="grow">
+              <div class="label">Already have a config?</div>
+              <div class="desc" id="importDesc">Import your existing settings — if they're all set, you just review and hit Continue.</div>
+            </div>
+            <button class="btn ghost small" id="btnImport">Import from config</button>
+            <span class="import-sim" id="importSim">simulate configured place</span>
+          </div>
+
+          <div class="steps" id="stepBar"></div>
+
+          <div class="card">
+            <!-- STEP 1: Group & Owner -->
+            <div class="wiz-step" data-step="0">
+              <div class="sec-head">Step 1 — Group &amp; owner</div>
+              <div class="grid2">
+                <div class="field">
+                  <label>Roblox group ID <span class="tag">required</span></label>
+                  <input class="input" id="fGroupId" placeholder="e.g. 35396132" spellcheck="false">
+                  <div class="hint">Find it in your group URL: roblox.com/groups/<b>35396132</b>/…</div>
+                  <div class="err" id="eGroupId">Group ID is required.</div>
+                </div>
+                <div class="field">
+                  <label>Owner user ID</label>
+                  <input class="input" id="fOwnerId" placeholder="e.g. 8842050215" spellcheck="false">
+                  <div class="hint">Your account's user ID — used for owner commands.</div>
+                  <div class="err" id="eOwnerId">Owner user ID is required.</div>
+                </div>
+              </div>
+              <div class="field" style="max-width:280px">
+                <label>Owner group rank</label>
+                <input class="input" id="fOwnerRank" value="255" spellcheck="false">
+              </div>
+              <div class="hint" style="font-size:12.5px; color:var(--faint)">The group determines who becomes mod, admin, and owner in-game.</div>
+            </div>
+
+            <!-- STEP 2: Branding -->
+            <div class="wiz-step" data-step="1">
+              <div class="sec-head">Step 2 — Name &amp; logo</div>
+              <div class="grid2">
+                <div class="field">
+                  <label>Club name</label>
+                  <input class="input" id="fGameName" value="Club" spellcheck="false">
+                  <div class="err" id="eGameName">Club name can't be empty.</div>
+                </div>
+                <div class="field">
+                  <label>Welcome message</label>
+                  <input class="input" id="fWelcome" value="Welcome to the club, %s" spellcheck="false">
+                </div>
+              </div>
+              <div class="field">
+                <label>Community logo</label>
+                <input class="input" id="fLogo" value="rbxassetid://79426970537296" spellcheck="false">
+                <div class="hint">Shown on the loading screen, posters, donation boards, and the join-community prompt.</div>
+                <div class="err" id="eLogo">Still the kit's default logo — use your own club logo.</div>
+              </div>
+            </div>
+
+            <!-- STEP 3: Shop -->
+            <div class="wiz-step" data-step="2">
+              <div class="sec-head">Step 3 — Membership</div>
+              <div class="col-cap">
+                <span>Game Pass ID</span>
+                <span>Product ID (gift)</span>
+                <span>Price (Robux)</span>
+              </div>
+              <div class="field">
+                <label>Tier 1 — VIP</label>
+                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px">
+                  <input class="input mini" id="fT1Pass" placeholder="Not set" spellcheck="false">
+                  <input class="input mini" id="fT1Gift" placeholder="Not set" spellcheck="false">
+                  <input class="input mini" id="fT1Price" value="1" spellcheck="false">
+                </div>
+              </div>
+              <div class="field">
+                <label>Tier 2 — VVIP</label>
+                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px">
+                  <input class="input mini" id="fT2Pass" placeholder="Not set" spellcheck="false">
+                  <input class="input mini" id="fT2Gift" placeholder="Not set" spellcheck="false">
+                  <input class="input mini" id="fT2Price" value="1" spellcheck="false">
+                </div>
+              </div>
+              <div class="field">
+                <label>Tier 3 — Supreme</label>
+                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px">
+                  <input class="input mini" id="fT3Pass" placeholder="Not set" spellcheck="false">
+                  <input class="input mini" id="fT3Gift" placeholder="Not set" spellcheck="false">
+                  <input class="input mini" id="fT3Price" value="1" spellcheck="false">
+                </div>
+              </div>
+              <div class="hint" style="font-size:12.5px; color:var(--faint)">Price is what's shown in the shop — match it with your actual game pass price. IDs can stay empty for now; Diagnostics will remind you later.</div>
+            </div>
+
+            <!-- STEP 4: Donation -->
+            <div class="wiz-step" data-step="3">
+              <div class="sec-head">Step 4 — Donations</div>
+              <div class="field">
+                <label>Donation platform</label>
+                <div style="display:flex; gap:10px" id="providerPills">
+                  <span class="pill selected" data-val="bagibagi">Bagi-Bagi</span>
+                  <span class="pill" data-val="saweria">Saweria</span>
+                  <span class="pill" data-val="sociabuzz">SociaBuzz</span>
+                </div>
+              </div>
+              <div class="grid2">
+                <div class="field">
+                  <label>Donation API address</label>
+                  <input class="input" id="fApiUrl" placeholder="https://your-worker.workers.dev" spellcheck="false">
+                  <div class="hint">Leave empty if you don't have one yet — boards still work, just no live donations.</div>
+                </div>
+                <div class="field">
+                  <label>Your donation page link</label>
+                  <input class="input" id="fProviderLink" placeholder="https://bagibagi.co/your-page" spellcheck="false">
+                </div>
+              </div>
+            </div>
+
+            <!-- STEP 5: Secrets -->
+            <div class="wiz-step" data-step="4">
+              <div class="sec-head">Step 5 — API keys <span class="tag" style="margin-left:6px">secret</span></div>
+              <div class="field">
+                <label>Donation API key</label>
+                <input class="input" id="fApiSecret" type="password" placeholder="from your donation platform dashboard" spellcheck="false">
+                <div class="hint">Stored on the server only — never visible to players.</div>
+              </div>
+              <div class="field">
+                <label>Game data API key <span class="tag">optional</span></label>
+                <input class="input" id="fGameDataSecret" type="password" placeholder="if you use an extra data API" spellcheck="false">
+              </div>
+            </div>
+
+            <!-- STEP 6: Build -->
+            <div class="wiz-step" data-step="5">
+              <div class="sec-head">Step 6 — Build the place</div>
+              <div class="row" style="align-items:flex-start">
+                <span class="status-dot ok" id="dotStage" style="margin-top:14px"></span>
+                <div class="grow">
+                  <div class="label">World effect stage</div>
+                  <div class="desc">Where Nuke/Smite/BlackHole plays for big cash donations. Kit default is filled in — adjust to your stage.</div>
+                  <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-top:10px">
+                    <input class="input mini" id="fStageX" value="-262.2" placeholder="X" spellcheck="false">
+                    <input class="input mini" id="fStageY" value="1.3" placeholder="Y" spellcheck="false">
+                    <input class="input mini" id="fStageZ" value="64.9" placeholder="Z" spellcheck="false">
+                  </div>
+                </div>
+              </div>
+              <div class="row">
+                <span class="status-dot pending" id="dotTools"></span>
+                <div class="grow">
+                  <div class="label">Role tools</div>
+                  <div class="desc" id="toolsDesc">Create StarterPack tools for every role.</div>
+                  <div class="progress-track mini" id="toolsTrack" style="display:none"><div class="progress-fill" id="toolsFill"></div></div>
+                </div>
+                <button class="btn ghost small" id="btnWizTools">Create</button>
+              </div>
+              <div class="row">
+                <span class="status-dot pending" id="dotCarry"></span>
+                <div class="grow">
+                  <div class="label">Carry animations</div>
+                  <div class="desc" id="carryDesc">Scan for broken carry animations and re-upload them.</div>
+                  <div class="progress-track mini" id="carryTrack" style="display:none"><div class="progress-fill" id="carryFill"></div></div>
+                </div>
+                <button class="btn ghost small" id="btnWizCarry">Scan</button>
+              </div>
+              <div class="hint" style="font-size:12.5px; color:var(--faint)">All three can be skipped — they're also available later in the Tools tab.</div>
+            </div>
+
+            <!-- STEP 7: Review -->
+            <div class="wiz-step" data-step="6">
+              <div class="sec-head">Step 7 — Review &amp; save</div>
+              <div id="reviewList"></div>
+              <div class="hint" style="font-size:12.5px; color:var(--faint); margin-top:10px">Your existing settings won't be overwritten.</div>
+            </div>
+
+            <div class="wizard-foot">
+              <span></span>
+              <div style="display:flex; gap:10px">
+                <button class="btn ghost small" id="wizBack">Back</button>
+                <button class="btn primary small" id="wizNext">Continue</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========== CONFIG ========== -->
+        <section class="page" id="page-config">
+          <h1 id="configPanelTitle">General</h1>
+          <div class="subtitle" id="configPanelSubtitle">Club name, group, and owner settings.</div>
+
+          <div class="cfg-panel" id="cfg-general"></div>
+          <div class="cfg-panel" id="cfg-features" style="display:none"></div>
+          <div class="cfg-panel" id="cfg-membership" style="display:none"></div>
+          <div class="cfg-panel" id="cfg-donation" style="display:none"></div>
+
+          <div class="savebar" id="configSaveBar" style="display:none">
+            <span id="configDirtyText">Unsaved changes</span>
+            <div style="display:flex; gap:10px">
+              <button class="btn ghost small" id="configDiscard">Discard</button>
+              <button class="btn primary small" id="configSave">Save changes</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========== DIAGNOSTICS ========== -->
+        <section class="page" id="page-diagnostics">
+          <h1>Diagnostics</h1>
+          <div class="subtitle">Check place readiness before going live — catch problems before players do.</div>
+
+          <div class="diag-summary">
+            <div class="stat fail"><div class="num" id="statFail">–</div><div class="cap">Failed</div></div>
+            <div class="stat warn"><div class="num" id="statWarn">–</div><div class="cap">Warnings</div></div>
+            <div class="stat ok"><div class="num" id="statOk">–</div><div class="cap">Passed</div></div>
+          </div>
+
+          <div style="display:flex; gap:10px; margin-bottom:16px">
+            <button class="btn primary small" id="runChecks">Run checks</button>
+            <button class="btn ghost small" id="copyReport">Copy report</button>
+          </div>
+
+          <div class="card">
+            <div class="sec-head">Configuration</div>
+            <div id="diagConfigRows"></div>
+          </div>
+
+          <div class="card">
+            <div class="sec-head">Structure &amp; versions</div>
+            <div id="diagStructRows"></div>
+          </div>
+        </section>
+
+        <!-- ========== ENGINE ========== -->
+        <section class="page" id="page-engine">
+          <h1>Engine update</h1>
+          <div class="subtitle">Update the kit to the latest version. Your settings and API keys stay untouched.</div>
+
+          <div class="card">
+            <div class="row" style="border:none; padding-top:2px; align-items:center">
+              <div class="grow">
+                <div class="label" style="font-size:19px; font-weight:800; letter-spacing:-0.01em"><span id="engInstalled">2.4.68</span> <span class="tag" style="margin-left:8px">installed</span></div>
+                <div class="desc" id="engLatestDesc">Version 2.4.69 available</div>
+              </div>
+              <span class="tag" id="engChannelLabel">stable</span>
+            </div>
+          </div>
+
+          <div class="card" id="updateCard">
+            <div class="sec-head">What's new in 2.4.69</div>
+            <div class="changelog">
+              <div class="cl-cap">Added</div>
+              <ul class="cl-list">
+                <li><b>Daily donation boards (3)</b> — combined DailyDonations (Robux + cash, sorted by latest), per-row currency, "RP " prefix for cash, Robux logo hidden on cash rows</li>
+                <li><b>UI MotionPresets + UISpring</b> — critically-damped springs, press feedback on CTAs and tabs</li>
+                <li><b>Admin Hub</b> — action-first staff panel (04-AdminHub)</li>
+              </ul>
+              <div class="cl-cap">Changed</div>
+              <ul class="cl-list">
+                <li>LiveChatDonations footer hidden when idle — message stays centered</li>
+                <li><span class="inline-code">DAILY_ROBUX_ENABLED</span> now defaults on; new flags <span class="inline-code">DAILY_COMBINED_ENABLED</span> / <span class="inline-code">DAILY_COMBINED_LIMIT</span></li>
+                <li>TopMenu open/close via UISpring; subpanels use presentCenterPanel</li>
+              </ul>
+            </div>
+            <div style="display:flex; gap:10px; margin-top:16px" id="updateActions">
+              <button class="btn primary" id="btnUpdate">Update to 2.4.69</button>
+              <button class="btn ghost" id="btnPreview">View changes</button>
+            </div>
+            <div class="progress-track" id="updTrack" style="display:none"><div class="progress-fill" id="updFill"></div></div>
+            <div class="hint" style="font-size:12.5px; color:var(--faint); margin-top:10px" id="updStatus"></div>
+          </div>
+
+          <div class="card elevated">
+            <div class="sec-head">Backups</div>
+            <div id="backupRows">
+              <div class="row">
+                <div class="grow">
+                  <div class="label" style="color:var(--faint)">No backups yet</div>
+                  <div class="desc">The previous version is saved automatically before every update — restore anytime.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========== TOOLS ========== -->
+        <section class="page" id="page-tools">
+          <h1>Tools</h1>
+          <div class="subtitle">Utilities to build and repair place components.</div>
+
+          <div class="card">
+            <div class="sec-head">Generate</div>
+            <div class="row">
+              <div class="grow">
+                <div class="label">Generate role tools</div>
+                <div class="desc">Ready-to-use tools for every role (VIP, Mod, Admin, etc.).</div>
+              </div>
+              <button class="btn primary small" id="toolGen">Create</button>
+            </div>
+            <div class="row">
+              <div class="grow">
+                <div class="label">Fix carry animations</div>
+                <div class="desc">Scan &amp; re-upload broken carry animations.</div>
+              </div>
+              <button class="btn ghost small" id="toolCarry">Scan</button>
+            </div>
+            <div class="row">
+              <div class="grow">
+                <div class="label">Quick fixes</div>
+                <div class="desc">Ready-made fixes for signs &amp; glowsticks.</div>
+              </div>
+              <button class="btn ghost small" id="toolFixes">Apply</button>
+            </div>
+          </div>
+
+          <div class="card elevated">
+            <div class="row" style="border:none">
+              <div class="grow">
+                <div class="label">Demo mode</div>
+                <div class="desc">Boards show sample data for preview. Turn off before going live.</div>
+              </div>
+              <div class="switch on" id="showcaseSwitch"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========== PACKAGER ========== -->
+        <section class="page" id="page-packager">
+          <h1>Packager</h1>
+          <div class="subtitle">Pack the kit into a single file to ship to buyers.</div>
+
+          <div class="card">
+            <div class="sec-head">New package</div>
+            <div class="grid2">
+              <div class="field">
+                <label>Package version</label>
+                <input class="input" id="pkgVer" value="2.4.68" spellcheck="false">
+              </div>
+              <div class="field">
+                <label>File name</label>
+                <input class="input" id="pkgOut" value="ClubKit_v2.4.68.rbxm" spellcheck="false">
+              </div>
+            </div>
+            <div class="row">
+              <div class="grow">
+                <div class="label">Include blank config</div>
+                <div class="desc">For buyers doing a fresh install.</div>
+              </div>
+              <div class="switch on" id="pkgOptSwitch"></div>
+            </div>
+            <div class="row">
+              <div class="grow">
+                <div class="label">Skip demo mode</div>
+                <div class="desc">Package runs in live mode right away.</div>
+              </div>
+              <div class="switch on"></div>
+            </div>
+            <div style="margin-top:14px; display:flex; gap:10px; align-items:center">
+              <button class="btn primary" id="btnExport">Create package</button>
+              <span class="tag">All engine components included</span>
+            </div>
+            <div class="progress-track" id="expTrack" style="display:none"><div class="progress-fill" id="expFill"></div></div>
+          </div>
+
+          <div class="card elevated">
+            <div class="sec-head">Open package</div>
+            <div class="row" style="border:none">
+              <div class="grow">
+                <div class="label">Install package into this place</div>
+                <div class="desc">Your existing settings won't be overwritten.</div>
+              </div>
+              <button class="btn ghost small" id="btnUnpack">Choose file…</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========== SETTINGS ========== -->
+        <section class="page" id="page-settings">
+          <h1>Settings</h1>
+          <div class="subtitle">Plugin preferences for this place.</div>
+
+          <div class="card">
+            <div class="sec-head">General</div>
+            <div class="row">
+              <div class="grow">
+                <div class="label">Seller mode</div>
+                <div class="desc">Show the Packager tab for kit distribution. Leave off if you're a buyer.</div>
+              </div>
+              <div class="switch" id="sellerSwitch"></div>
+            </div>
+            <div class="row">
+              <div class="grow">
+                <div class="label">Update channel</div>
+                <div class="desc">Which builds you get when checking for updates. stable recommended.</div>
+              </div>
+              <div style="display:flex; gap:10px" id="channelPills">
+                <span class="pill selected" data-val="stable">stable</span>
+                <span class="pill" data-val="canary">canary</span>
+                <span class="pill" data-val="nightly">nightly</span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="grow">
+                <div class="label">Restart onboarding</div>
+                <div class="desc">Run the first-time setup wizard again.</div>
+              </div>
+              <button class="btn ghost small" id="btnRestartOnboarding">Restart</button>
+            </div>
+          </div>
+
+          <div class="card elevated">
+            <div class="sec-head">About</div>
+            <div class="row">
+              <div class="grow"><div class="label">Plugin version</div></div>
+              <span class="tag">2.4.68</span>
+            </div>
+            <div class="row">
+              <div class="grow"><div class="label">Installed kit version</div></div>
+              <span class="tag" id="setVerEngine">2.4.68</span>
+            </div>
+            <div class="row">
+              <div class="grow"><div class="label">Update source</div></div>
+              <span class="tag">Hazastudio</span>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* =================================================================
+   SHARED STATE — meniru kondisi place nyata:
+   engine 2.4.68 terinstall, config masih default template
+   ================================================================= */
+const KIT_DEFAULT_LOGO = "rbxassetid://79426970537296";
+
+const state = {
+  engineVersion: "2.4.68",
+  latestTag: "2.4.69",
+  updated: false,
+  backups: [],
+  showcase: true,
+  configWritten: false,
+  config: {
+    groupId: 0,
+    ownerUserId: 8842050215,
+    ownerGroupRank: 255,
+    gameName: "Club",
+    welcome: "Welcome to the club, %s",
+    logo: KIT_DEFAULT_LOGO,
+    provider: "bagibagi",
+    apiUrl: "",
+    providerLink: "",
+    apiSecret: "",
+    gameDataSecret: "",
+    t1: { pass: 0, gift: 0, name: "VIP", price: 1 },
+    t2: { pass: 0, gift: 0, name: "VVIP", price: 1 },
+    t3: { pass: 0, gift: 0, name: "Supreme", price: 1 },
+  },
+};
+
+/* log dihilangkan — clog jadi no-op supaya sequence simulasi tetap jalan */
+function clog(kind, msg) {}
+
+function toast(html) {
+  const el = document.getElementById("toast");
+  el.innerHTML = html;
+  el.classList.add("show");
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove("show"), 3200);
+}
+
+/* =================================================================
+   NAV
+   ================================================================= */
+const pages = document.querySelectorAll(".page");
+const navItems = document.querySelectorAll(".nav-item");
+const configChildren = document.getElementById("configChildren");
+navItems.forEach(item => {
+  item.addEventListener("click", () => {
+    navItems.forEach(n => n.classList.remove("active"));
+    item.classList.add("active");
+    pages.forEach(p => p.classList.remove("active"));
+    document.getElementById("page-" + item.dataset.page).classList.add("active");
+    configChildren.classList.toggle("open", item.dataset.page === "config");
+  });
+});
+document.querySelectorAll("#configChildren .nav-child").forEach(child => {
+  child.addEventListener("click", () => {
+    if (!document.getElementById("page-config").classList.contains("active")) {
+      document.getElementById("navConfig").click();
+    }
+    switchConfigPanel(child.dataset.panel);
+  });
+});
+
+const sellerSwitch = document.getElementById("sellerSwitch");
+sellerSwitch.addEventListener("click", () => {
+  const on = sellerSwitch.classList.toggle("on");
+  document.querySelectorAll(".seller-only").forEach(el => el.style.display = on ? "flex" : "none");
+  clog("dim", "[ClubKitPanel] seller mode " + (on ? "on — Packager tab visible" : "off"));
+});
+
+document.querySelectorAll(".switch").forEach(s => {
+  if (s !== sellerSwitch) s.addEventListener("click", () => s.classList.toggle("on"));
+});
+
+/* =================================================================
+   SETUP WIZARD — 6 step, validasi nyata, write ke state.config
+   ================================================================= */
+const WIZ_STEPS = 7;
+const buildState = { stagePos: null, toolsCreated: false, carryFixed: false };
+let wizStep = 0;
+const stepBar = document.getElementById("stepBar");
+function renderStepBar() {
+  stepBar.innerHTML = "";
+  for (let i = 0; i < WIZ_STEPS; i++) {
+    const node = document.createElement("div");
+    node.className = "step-node" + (i < wizStep ? " done" : i === wizStep ? " current" : "");
+    node.innerHTML = '<span class="inner"></span>';
+    stepBar.appendChild(node);
+    if (i < WIZ_STEPS - 1) {
+      const link = document.createElement("div");
+      link.className = "step-link" + (i < wizStep ? " done" : "");
+      stepBar.appendChild(link);
+    }
+  }
+}
+
+const providerPills = document.getElementById("providerPills");
+providerPills.querySelectorAll(".pill").forEach(p => {
+  p.addEventListener("click", () => {
+    providerPills.querySelectorAll(".pill").forEach(x => x.classList.remove("selected"));
+    p.classList.add("selected");
+    state.config.provider = p.dataset.val;
+  });
+});
+
+function showErr(inputId, errId, show) {
+  document.getElementById(inputId).classList.toggle("invalid", show);
+  document.getElementById(errId).style.display = show ? "block" : "none";
+  return !show;
+}
+
+function validateStep(step) {
+  const c = state.config;
+  if (step === 0) {
+    const g = parseInt(document.getElementById("fGroupId").value) || 0;
+    const o = parseInt(document.getElementById("fOwnerId").value) || 0;
+    const okG = showErr("fGroupId", "eGroupId", g <= 0);
+    const okO = showErr("fOwnerId", "eOwnerId", o <= 0);
+    if (okG && okO) { c.groupId = g; c.ownerUserId = o; c.ownerGroupRank = parseInt(document.getElementById("fOwnerRank").value) || 255; }
+    return okG && okO;
+  }
+  if (step === 1) {
+    const name = document.getElementById("fGameName").value.trim();
+    const logo = document.getElementById("fLogo").value.trim();
+    const okN = showErr("fGameName", "eGameName", name.length === 0);
+    const okL = showErr("fLogo", "eLogo", logo === KIT_DEFAULT_LOGO || logo.length === 0);
+    if (okN && okL) { c.gameName = name; c.welcome = document.getElementById("fWelcome").value; c.logo = logo; }
+    return okN && okL;
+  }
+  if (step === 2) {
+    const num = id => parseInt(document.getElementById(id).value) || 0;
+    c.t1.pass = num("fT1Pass"); c.t1.gift = num("fT1Gift"); c.t1.price = num("fT1Price") || c.t1.price;
+    c.t2.pass = num("fT2Pass"); c.t2.gift = num("fT2Gift"); c.t2.price = num("fT2Price") || c.t2.price;
+    c.t3.pass = num("fT3Pass"); c.t3.gift = num("fT3Gift"); c.t3.price = num("fT3Price") || c.t3.price;
+    return true; // shop boleh kosong → warning di diagnostics
+  }
+  if (step === 3) {
+    c.apiUrl = document.getElementById("fApiUrl").value.trim();
+    c.providerLink = document.getElementById("fProviderLink").value.trim();
+    return true;
+  }
+  if (step === 4) {
+    c.apiSecret = document.getElementById("fApiSecret").value.trim();
+    c.gameDataSecret = document.getElementById("fGameDataSecret").value.trim();
+    return true;
+  }
+  if (step === 5) {
+    const v = id => document.getElementById(id).value.trim();
+    const x = v("fStageX"), y = v("fStageY"), z = v("fStageZ");
+    buildState.stagePos = (x && y && z) ? x + ", " + y + ", " + z : null;
+    return true;
+  }
+  return true;
+}
+
+function renderWizard() {
+  document.querySelectorAll(".wiz-step").forEach(el => el.classList.toggle("active", parseInt(el.dataset.step) === wizStep));
+  renderStepBar();
+  document.getElementById("wizBack").disabled = wizStep === 0;
+  document.getElementById("wizNext").textContent = wizStep === WIZ_STEPS - 1 ? "Save" : "Continue";
+  if (wizStep === WIZ_STEPS - 1) renderReview();
+}
+
+function providerLabel(v) {
+  return v === "saweria" ? "Saweria" : v === "sociabuzz" ? "SociaBuzz" : "Bagi-Bagi";
+}
+
+function renderReview() {
+  const c = state.config;
+  const row = (k, v, ok) => '<div class="row"><span class="status-dot ' + (ok ? "ok" : "warn") + '"></span><div class="grow"><div class="label">' + k + '</div><div class="desc">' + v + '</div></div></div>';
+  document.getElementById("reviewList").innerHTML =
+    row("Group & owner", "Group " + c.groupId + " · owner " + c.ownerUserId, c.groupId > 0) +
+    row("Name & logo", '"' + c.gameName + '" · ' + (c.logo === KIT_DEFAULT_LOGO ? "default kit logo" : "custom logo"), c.logo !== KIT_DEFAULT_LOGO) +
+    row("Membership", c.t1.name + " " + (c.t1.pass || "not set") + " · " + c.t2.name + " " + (c.t2.pass || "not set") + " · " + c.t3.name + " " + (c.t3.pass || "not set"), c.t1.pass > 0) +
+    row("Donations", providerLabel(c.provider) + (c.apiUrl ? " · API connected" : " · no live API yet"), true) +
+    row("API keys", c.apiSecret ? "Set" : "Not set", c.apiSecret.length > 0) +
+    row("Build", (buildState.stagePos ? "Stage position set" : "Stage uses kit default") + " · " + (buildState.toolsCreated ? "role tools created" : "role tools not yet") + " · " + (buildState.carryFixed ? "carry fixed" : "carry not scanned"), buildState.stagePos !== null);
+}
+
+function animateBar(trackId, fillId, ms, done) {
+  const track = document.getElementById(trackId);
+  const fill = document.getElementById(fillId);
+  track.style.display = "block";
+  fill.style.width = "0%";
+  let pct = 0;
+  const tick = () => {
+    pct += 20;
+    fill.style.width = Math.min(pct, 100) + "%";
+    if (pct < 100) setTimeout(tick, ms / 5);
+    else setTimeout(done, 180);
+  };
+  setTimeout(tick, 120);
+}
+
+document.getElementById("btnWizTools").addEventListener("click", function () {
+  const btn = this;
+  btn.disabled = true;
+  btn.textContent = "Creating…";
+  animateBar("toolsTrack", "toolsFill", 900, () => {
+    buildState.toolsCreated = true;
+    document.getElementById("dotTools").className = "status-dot ok";
+    document.getElementById("toolsDesc").textContent = "6 role tool folders ready in StarterPack (VIP, VVIP, Supreme, Mod, Admin, Owner).";
+    btn.textContent = "Created";
+  });
+});
+
+document.getElementById("btnWizCarry").addEventListener("click", function () {
+  const btn = this;
+  if (!btn.dataset.scanned) {
+    btn.dataset.scanned = "1";
+    document.getElementById("dotCarry").className = "status-dot warn";
+    document.getElementById("carryDesc").textContent = "3 animations need re-upload.";
+    btn.textContent = "Fix";
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = "Fixing…";
+  animateBar("carryTrack", "carryFill", 1100, () => {
+    buildState.carryFixed = true;
+    document.getElementById("dotCarry").className = "status-dot ok";
+    document.getElementById("carryDesc").textContent = "All carry animations healthy.";
+    btn.textContent = "Fixed";
+  });
+});
+
+document.getElementById("wizBack").addEventListener("click", () => { if (wizStep > 0) { wizStep--; renderWizard(); } });
+document.getElementById("wizNext").addEventListener("click", () => {
+  if (!validateStep(wizStep)) {
+    clog("warn", "[Setup] step " + (wizStep + 1) + " belum valid — cek field merah");
+    return;
+  }
+  if (wizStep < WIZ_STEPS - 1) {
+    wizStep++;
+    renderWizard();
+    return;
+  }
+  // WRITE — additive, meniru ConfigPatchCore fill-forward
+  state.configWritten = true;
+  clog("info", "[Setup] menulis ClubKitConfig.luau (additive patch)…");
+  setTimeout(() => {
+    clog("ok", "[ConfigPatch] Group.GroupId = " + state.config.groupId);
+    clog("ok", "[ConfigPatch] Branding.GameName = \"" + state.config.gameName + "\" · LogoImage custom");
+    clog("ok", "[ConfigPatch] Donation.Provider = \"" + state.config.provider + "\"");
+    if (state.config.apiSecret) clog("ok", "[ConfigPatch] Secrets.DonationApiSecret ditulis (server-only)");
+    clog("ok", "[Setup] write selesai — 5 section di-patch, nilai existing dipertahankan");
+    state.onboarded = true;
+    localStorage.setItem("ck_onboarded", "1");
+    document.querySelector(".dock").classList.remove("onboarding");
+    gotoPage("diagnostics");
+    toast("Setup complete — adjust anytime in <b>Kit settings</b>");
+    runDiagnostics(); // badge langsung refresh
+  }, 500);
+});
+
+/* =================================================================
+   ONBOARDING — import existing config + restart
+   ================================================================= */
+function configLooksFresh(c) {
+  return c.groupId <= 0 && c.logo === KIT_DEFAULT_LOGO && !c.apiSecret && !c.apiUrl
+    && c.t1.pass === 0 && c.t2.pass === 0 && c.t3.pass === 0;
+}
+function fillWizardFromConfig() {
+  const c = state.config;
+  const set = (id, v) => { document.getElementById(id).value = v; };
+  set("fGroupId", c.groupId > 0 ? c.groupId : "");
+  set("fOwnerId", c.ownerUserId > 0 ? c.ownerUserId : "");
+  set("fOwnerRank", c.ownerGroupRank);
+  set("fGameName", c.gameName);
+  set("fWelcome", c.welcome);
+  set("fLogo", c.logo);
+  [["fT1", c.t1], ["fT2", c.t2], ["fT3", c.t3]].forEach(([p, t]) => {
+    set(p + "Pass", t.pass || ""); set(p + "Gift", t.gift || ""); set(p + "Price", t.price);
+  });
+  document.querySelectorAll("#providerPills .pill").forEach(p => p.classList.toggle("selected", p.dataset.val === c.provider));
+  set("fApiUrl", c.apiUrl);
+  set("fProviderLink", c.providerLink);
+  set("fApiSecret", c.apiSecret);
+  set("fGameDataSecret", c.gameDataSecret);
+}
+document.getElementById("btnImport").addEventListener("click", () => {
+  const card = document.getElementById("importCard");
+  const desc = document.getElementById("importDesc");
+  if (configLooksFresh(state.config)) {
+    card.classList.remove("ok");
+    card.classList.add("fresh");
+    desc.textContent = "Your config is still the kit template — nothing to import yet. Let's fill it in together.";
+    return;
+  }
+  fillWizardFromConfig();
+  card.classList.remove("fresh");
+  card.classList.add("ok");
+  desc.textContent = "Existing settings imported — every step is pre-filled. Just Continue to review.";
+});
+document.getElementById("importSim").addEventListener("click", () => {
+  Object.assign(state.config, {
+    groupId: 35396132, ownerUserId: 8842050215, ownerGroupRank: 255,
+    gameName: "The Basic Club", welcome: "Welcome to the club, %s",
+    logo: "rbxassetid://12345678901234", provider: "bagibagi",
+    apiUrl: "https://hazastudio-donation-api.hazastudio.workers.dev/game/the-basic",
+    providerLink: "https://bagibagi.co/thebasic",
+    apiSecret: "sk_live_9f2k", gameDataSecret: "",
+  });
+  state.config.t1 = { pass: 12345678, gift: 87654321, name: "VIP", price: 99 };
+  state.config.t2 = { pass: 0, gift: 0, name: "VVIP", price: 199 };
+  state.config.t3 = { pass: 0, gift: 0, name: "Supreme", price: 499 };
+  document.getElementById("btnImport").click();
+});
+document.getElementById("btnRestartOnboarding").addEventListener("click", () => {
+  state.onboarded = false;
+  localStorage.removeItem("ck_onboarded");
+  wizStep = 0;
+  renderWizard();
+  const card = document.getElementById("importCard");
+  card.classList.remove("ok", "fresh");
+  document.getElementById("importDesc").textContent = "Import your existing settings — if they're all set, you just review and hit Continue.";
+  gotoPage("setup");
+  document.querySelector(".dock").classList.add("onboarding");
+});
+renderWizard();
+
+/* =================================================================
+   DIAGNOSTICS — check nyata terhadap state.config + struktur
+   ================================================================= */
+function buildChecks() {
+  const c = state.config;
+  return {
+    config: [
+      { label: "Group & owner", fail: c.groupId <= 0,
+        descOk: "Group " + c.groupId + " · owner " + c.ownerUserId,
+        descFail: "Group ID is empty — mod/admin/owner roles won't work. Set it in Setup step 1.",
+        fix: () => gotoWizard(0) },
+      { label: "Community logo", fail: c.logo === KIT_DEFAULT_LOGO,
+        descOk: "Using your own logo",
+        descFail: "Still the kit's default logo — replace it before going live.",
+        fix: () => gotoWizard(1) },
+      { label: "Donation API key", warn: c.apiSecret.length === 0 && c.apiUrl.length > 0,
+        fail: c.apiSecret.length === 0 && c.apiUrl.length === 0,
+        descOk: "Set — live donations ready",
+        descWarn: "API address is set but the key is missing — live donations will fail.",
+        descFail: "No key & address yet — live donations off (boards still work).",
+        fix: () => gotoWizard(4) },
+      { label: "Membership game passes", warn: c.t1.pass === 0 || c.t2.pass === 0 || c.t3.pass === 0,
+        descOk: "VIP, VVIP, Supreme ready for purchase",
+        descWarn: "A tier has no game pass yet — players can't buy it.",
+        fix: () => gotoWizard(2) },
+    ],
+    structure: [
+      { label: "Kit components", ok: true, desc: "All engine components installed correctly" },
+      { label: "Kit version", warn: state.updated === false, ok: state.updated,
+        descOk: "Up to date (" + state.engineVersion + ")",
+        descWarn: "Version " + state.engineVersion + " — update " + state.latestTag + " available.",
+        fix: () => gotoPage("engine") },
+      { label: "GUI screens", ok: true, desc: "All 20 screens present, no conflicts" },
+      { label: "Demo mode", warn: state.showcase,
+        descOk: "Off — boards use live data",
+        descWarn: "Still on — boards show sample data. Turn off before going live.",
+        fix: () => gotoPage("tools") },
+    ],
+  };
+}
+
+function checkStatus(chk) {
+  if (chk.fail) return "fail";
+  if (chk.warn) return "warn";
+  return "ok";
+}
+
+let diagRunning = false;
+function renderDiagRows(checks, withPending) {
+  const mk = (chk) => {
+    const st = withPending ? "pending" : checkStatus(chk);
+    const desc = withPending ? "Menunggu…"
+      : st === "ok" ? (chk.descOk || chk.desc)
+      : st === "warn" ? (chk.descWarn || chk.desc)
+      : (chk.descFail || chk.desc);
+    const fixBtn = (!withPending && st !== "ok" && chk.fix) ? '<button class="btn ghost small diag-fix">Fix</button>' : "";
+    return '<div class="row"><span class="status-dot ' + st + '"></span><div class="grow"><div class="label">' + chk.label + '</div><div class="desc">' + desc + '</div></div>' + fixBtn + '</div>';
+  };
+  document.getElementById("diagConfigRows").innerHTML = checks.config.map(mk).join("");
+  document.getElementById("diagStructRows").innerHTML = checks.structure.map(mk).join("");
+  document.querySelectorAll(".diag-fix").forEach((btn, i) => {
+    const allFix = [...checks.config, ...checks.structure].filter(ch => checkStatus(ch) !== "ok" && ch.fix);
+    btn.addEventListener("click", () => allFix[i].fix());
+  });
+}
+
+function updateDiagSummary(checks) {
+  const all = [...checks.config, ...checks.structure];
+  const f = all.filter(c => checkStatus(c) === "fail").length;
+  const w = all.filter(c => checkStatus(c) === "warn").length;
+  const o = all.filter(c => checkStatus(c) === "ok").length;
+  document.getElementById("statFail").textContent = f;
+  document.getElementById("statWarn").textContent = w;
+  document.getElementById("statOk").textContent = o;
+  const badge = document.getElementById("diagBadge");
+  badge.textContent = f + w;
+  badge.classList.toggle("show", f + w > 0);
+}
+
+function runDiagnostics() {
+  if (diagRunning) return;
+  diagRunning = true;
+  const checks = buildChecks();
+  renderDiagRows(checks, true);
+  const all = [...checks.config, ...checks.structure];
+  const dots = document.querySelectorAll("#page-diagnostics .status-dot");
+  clog("info", "[Diagnostics] run — " + all.length + " checks…");
+  let i = 0;
+  const step = () => {
+    if (i >= all.length) {
+      updateDiagSummary(checks);
+      const f = all.filter(c => checkStatus(c) === "fail").length;
+      const w = all.filter(c => checkStatus(c) === "warn").length;
+      clog(f === 0 && w === 0 ? "ok" : "warn", "[Diagnostics] selesai — " + f + " failed, " + w + " warnings, " + (all.length - f - w) + " passed");
+      diagRunning = false;
+      return;
+    }
+    dots[i].className = "status-dot running";
+    setTimeout(() => {
+      const st = checkStatus(all[i]);
+      dots[i].className = "status-dot " + st;
+      const row = dots[i].closest(".row");
+      row.querySelector(".desc").innerHTML = st === "ok" ? (all[i].descOk || all[i].desc) : st === "warn" ? (all[i].descWarn || all[i].desc) : (all[i].descFail || all[i].desc);
+      if (st !== "ok" && all[i].fix && !row.querySelector(".diag-fix")) {
+        const b = document.createElement("button");
+        b.className = "btn ghost small diag-fix";
+        b.textContent = "Fix";
+        b.addEventListener("click", () => all[i].fix());
+        row.appendChild(b);
+      }
+      updateDiagSummary(checks);
+      i++;
+      step();
+    }, 260);
+  };
+  step();
+}
+
+document.getElementById("runChecks").addEventListener("click", runDiagnostics);
+document.getElementById("copyReport").addEventListener("click", () => {
+  const checks = buildChecks();
+  const all = [...checks.config, ...checks.structure];
+  const lines = all.map(c => "[" + checkStatus(c).toUpperCase() + "] " + c.label);
+  clog("dim", "[Diagnostics] report disalin (" + lines.length + " baris)");
+  toast("Report copied to clipboard");
+});
+
+function gotoWizard(step) {
+  wizStep = step;
+  renderWizard();
+  gotoPage("setup");
+}
+function gotoPage(id) {
+  navItems.forEach(n => n.classList.toggle("active", n.dataset.page === id));
+  pages.forEach(p => p.classList.toggle("active", p.id === "page-" + id));
+}
+
+/* =================================================================
+   ENGINE UPDATE — simulasi pull tag 2.4.69 + fill-forward
+   ================================================================= */
+document.getElementById("channelPills").querySelectorAll(".pill").forEach(p => {
+  p.addEventListener("click", () => {
+    document.getElementById("channelPills").querySelectorAll(".pill").forEach(x => x.classList.remove("selected"));
+    p.classList.add("selected");
+    document.getElementById("engChannelLabel").textContent = p.dataset.val;
+  });
+});
+
+document.getElementById("btnPreview").addEventListener("click", () => {
+  toast("Changes in 2.4.69: <b>8 files modified · 2 new</b>");
+  clog("info", "[Updater] changed files 2.4.68 → 2.4.69:");
+  ["src/ServerScriptService/Hazastudio_ClubKit/Server/Controllers/DonationController.luau",
+   "src/ServerScriptService/Hazastudio_ClubKit/Server/Services/DemoDataProvider.luau",
+   "src/StarterPlayerScripts/StarterPlayerScripts/Hazastudio_ClubKit/Client/Controllers/DonationLeaderboardController.luau",
+   "src/StarterPlayerScripts/StarterPlayerScripts/Hazastudio_ClubKit/Client/Controllers/DonationNotificationController.luau",
+   "src/ReplicatedStorage/Hazastudio_ClubKit/Shared/Constants/Config.luau",
+   "src/ReplicatedStorage/Hazastudio_ClubKit/Shared/Leaderboards/WorkspaceLeaderboardRenderer.luau",
+  ].forEach(f => clog("dim", "  M " + f));
+  clog("dim", "  A src/ReplicatedStorage/Hazastudio_ClubKit/Client/Utils/MotionPresets.luau");
+  clog("dim", "  A src/ReplicatedStorage/Hazastudio_ClubKit/Client/Utils/UISpring.luau");
+});
+
+let updating = false;
+document.getElementById("btnUpdate").addEventListener("click", () => {
+  if (updating || state.updated) return;
+  updating = true;
+  const track = document.getElementById("updTrack");
+  const fill = document.getElementById("updFill");
+  const status = document.getElementById("updStatus");
+  const btn = document.getElementById("btnUpdate");
+  btn.disabled = true;
+  track.style.display = "block";
+
+  const seq = [
+    [8,  "Backing up current version…", "[Updater] backup → engine-backup-2.4.68.rbxm (412 instances)"],
+    [22, "Downloading 2.4.69…", "[Updater] GET github.com/haza-rblx/hazastudio-clubkit/releases/tags/v2.4.69"],
+    [46, "Installing update…", "[Updater] set Script.Source — 10 file, 0 konflik"],
+    [64, "Adding new settings…", "[ConfigPatch] + Leaderboards.DAILY_COMBINED_ENABLED = true"],
+    [72, "", "[ConfigPatch] + Leaderboards.DAILY_COMBINED_LIMIT = 50"],
+    [88, "Verifying…", "[Updater] KitProduct.KitVersion = 2.4.69 ✓ manifest ✓"],
+    [100, "Done.", "[Updater] update sukses — Save place untuk persist"],
+  ];
+  let i = 0;
+  const next = () => {
+    if (i >= seq.length) {
+      state.updated = true;
+      state.engineVersion = "2.4.69";
+      state.backups.unshift({ name: "Backup 2.4.68", note: "Created automatically before the 2.4.69 update", rollback: "2.4.68" });
+      document.getElementById("engInstalled").textContent = "2.4.69";
+      document.getElementById("engLatestDesc").textContent = "Kit is up to date.";
+      document.getElementById("setVerEngine").textContent = "2.4.69";
+      document.getElementById("engineBadge").classList.remove("show");
+      document.getElementById("engineBadge").style.display = "none";
+      btn.textContent = "Up to date";
+      renderBackups();
+      toast("Kit updated to <b>2.4.69</b> — backup saved");
+      updating = false;
+      return;
+    }
+    const [pct, uiLine, logLine] = seq[i];
+    fill.style.width = pct + "%";
+    if (uiLine) status.textContent = uiLine;
+    if (logLine) clog(logLine.includes("sukses") ? "ok" : "info", logLine);
+    i++;
+    setTimeout(next, 620);
+  };
+  next();
+});
+
+function renderBackups() {
+  const box = document.getElementById("backupRows");
+  box.innerHTML = "";
+  state.backups.forEach(b => {
+    const row = document.createElement("div");
+    row.className = "row";
+    row.innerHTML = '<div class="grow"><div class="label">' + b.name + '</div><div class="desc">' + b.note + '</div></div><button class="btn ghost small">Restore</button>';
+    row.querySelector("button").addEventListener("click", () => {
+      clog("warn", "[Updater] rollback ke " + b.rollback + " — restore " + b.name);
+      state.engineVersion = b.rollback;
+      state.updated = false;
+      document.getElementById("engInstalled").textContent = b.rollback;
+      document.getElementById("engLatestDesc").textContent = "Version 2.4.69 available";
+      document.getElementById("setVerEngine").textContent = b.rollback;
+      document.getElementById("btnUpdate").disabled = false;
+      document.getElementById("btnUpdate").textContent = "Update to 2.4.69";
+      document.getElementById("updFill").style.width = "0%";
+      document.getElementById("updStatus").textContent = "";
+      toast("Restored to <b>" + b.rollback + "</b>");
+    });
+    box.appendChild(row);
+  });
+}
+
+/* =================================================================
+   TOOLS
+   ================================================================= */
+document.getElementById("toolGen").addEventListener("click", () => {
+  clog("info", "[generate_tools_folder] baca ClubKitConfig.Roles…");
+  setTimeout(() => {
+    clog("ok", "[generate_tools_folder] 6 role → StarterPack/Hazastudio_ClubKitTools (VIP, VVIP, Supreme, Mod, Admin, Owner)");
+    toast("Role tools generated");
+  }, 500);
+});
+document.getElementById("toolCarry").addEventListener("click", () => {
+  clog("info", "[CarryFix] scan KeyframeSequences di ServerStorage/Tools…");
+  setTimeout(() => {
+    clog("warn", "[CarryFix] 3 Carry sequence butuh re-upload — pakai CreateAssetAsync (beta). Lanjutkan?");
+    toast("<b>3 carry animations</b> need re-upload");
+  }, 450);
+});
+document.getElementById("toolFixes").addEventListener("click", () => {
+  clog("info", "[PlaceFix] apply RemakeSignAndGlowColor.editmode…");
+  setTimeout(() => clog("dim", "  ✓ SignGui + DualGlowColorGui (StarterGui templates)"), 350);
+  setTimeout(() => clog("dim", "  ✓ SoftenDualGlowTrails — trail fade + taper"), 700);
+  setTimeout(() => { clog("ok", "[PlaceFix] selesai"); toast("Fixes applied"); }, 950);
+});
+document.getElementById("showcaseSwitch").addEventListener("click", function() {
+  state.showcase = this.classList.contains("on");
+  clog(state.showcase ? "warn" : "ok", "[Showcase] " + (state.showcase ? "ON — leaderboard pakai data demo" : "OFF — live mode"));
+});
+
+/* =================================================================
+   PACKAGER
+   ================================================================= */
+let exporting = false;
+document.getElementById("btnExport").addEventListener("click", () => {
+  if (exporting) return;
+  exporting = true;
+  const track = document.getElementById("expTrack");
+  const fill = document.getElementById("expFill");
+  const includeOpt = document.getElementById("pkgOptSwitch").classList.contains("on");
+  const out = document.getElementById("pkgOut").value;
+  track.style.display = "block";
+  clog("info", "[Packager] collect → HazastudioClubKit_Package…");
+  const seq = [
+    [18, "  ✓ ReplicatedFirst/Hazastudio_ClubKit (38)"],
+    [36, "  ✓ ReplicatedStorage/Hazastudio_ClubKit + Icon (214)"],
+    [54, "  ✓ ServerScriptService/Hazastudio_ClubKit (96)"],
+    [70, "  ✓ StarterPlayerScripts/Hazastudio_ClubKit (64)"],
+    [84, includeOpt ? "  ✓ optional roots: config template + secrets (kosong)" : "  – optional roots skipped"],
+    [96, "  ✓ _ClubKitManifest written (KIT_VERSION " + document.getElementById("pkgVer").value + ")"],
+  ];
+  let i = 0;
+  const next = () => {
+    if (i >= seq.length) {
+      clog("ok", "[Packager] export selesai → " + out + " (412 instances)");
+      toast("Export selesai — <b>" + out + "</b>");
+      exporting = false;
+      return;
+    }
+    fill.style.width = seq[i][0] + "%";
+    clog("dim", seq[i][1]);
+    i++;
+    setTimeout(next, 420);
+  };
+  next();
+});
+document.getElementById("btnUnpack").addEventListener("click", () => {
+  clog("info", "[Packager] unpack — Config & Secrets existing di-preserve (shouldPreserveOnUnpack)");
+});
+
+/* =================================================================
+   KIT CONFIG EDITOR — General / Features / Membership / Roles / Donations
+   ================================================================= */
+const GENERAL_NUM_FIELDS = { groupId: 1, ownerUserId: 1, ownerGroupRank: 1 };
+function renderGeneral() {
+  const box = document.getElementById("cfg-general");
+  const c = state.config;
+  box.innerHTML = "";
+  const sec = (t) => {
+    const h = document.createElement("div");
+    h.className = "sec-head";
+    h.textContent = t;
+    box.appendChild(h);
+  };
+  const mkField = (label, field, val, hint, mini, ph) => {
+    const f = document.createElement("div");
+    f.className = "field";
+    f.innerHTML = "<label>" + label + "</label>";
+    const inp = document.createElement("input");
+    inp.className = mini ? "input mini" : "input";
+    inp.value = (GENERAL_NUM_FIELDS[field] && !val) ? "" : val;
+    if (ph) inp.placeholder = ph;
+    inp.spellcheck = false;
+    inp.dataset.gfield = field;
+    f.appendChild(inp);
+    if (hint) {
+      const h = document.createElement("div");
+      h.className = "hint";
+      h.textContent = hint;
+      f.appendChild(h);
+    }
+    return f;
+  };
+  sec("Club");
+  box.appendChild(mkField("Club name", "gameName", c.gameName, null, false, "e.g. The Basic Club"));
+  box.appendChild(mkField("Welcome message", "welcome", c.welcome, null, false, "Welcome to the club, %s"));
+  box.appendChild(mkField("Community logo", "logo", c.logo, "Shown on the loading screen, posters, donation boards, and the join-community prompt.", false, "rbxassetid://…"));
+  sec("Group & owner");
+  const grid = document.createElement("div");
+  grid.className = "grid2";
+  grid.appendChild(mkField("Roblox group ID", "groupId", c.groupId, null, true, "Not set"));
+  grid.appendChild(mkField("Owner user ID", "ownerUserId", c.ownerUserId, null, true, "Not set"));
+  box.appendChild(grid);
+  const rankF = mkField("Owner group rank", "ownerGroupRank", c.ownerGroupRank, null, true, "255");
+  rankF.style.maxWidth = "200px";
+  box.appendChild(rankF);
+}
+document.getElementById("cfg-general").addEventListener("input", (e) => {
+  const inp = e.target;
+  if (!inp.dataset.gfield) return;
+  const f = inp.dataset.gfield;
+  state.config[f] = GENERAL_NUM_FIELDS[f] ? (parseInt(inp.value) || 0) : inp.value;
+  markDirty("General");
+});
+
+
+const FEATURE_GROUPS = [
+  { name: "Music & dance", items: [
+    ["MusicPlayer", "Music player", "", true],
+    ["MusicCatalogSeed", "Default playlist", "", true],
+    ["SyncDance", "Sync dance", "", true],
+  ]},
+  { name: "Interface", items: [
+    ["Hotbar", "Hotbar", "", true],
+    ["LoadingScreen", "Loading screen", "", true],
+    ["Settings", "Settings menu", "", true],
+    ["JoinGreetings", "Join greetings", "", true],
+    ["PromptJoinCommunityOnLoad", "Join community prompt", "", true],
+  ]},
+  { name: "Social & progression", items: [
+    ["Couples", "Couple system", "", true],
+    ["Stickers", "Stickers", "", true],
+    ["LevelSystem", "Level & XP", "", true],
+  ]},
+  { name: "Monetization", items: [
+    ["Shop", "Shop", "", true],
+    ["Leaderboards", "Donation boards", "", true],
+    ["DonationCash", "Cash donations", "", true],
+    ["DonationRobux", "Robux donations", "", true],
+    ["DonationWorldEffects", "Donation world effects", "", true],
+  ]},
+  { name: "More", items: [
+    ["Gravity", "Gravity tool", "", true],
+    ["VipOnCommunityJoin", "Free VIP for group members", "", false],
+    ["DonationRankGradientAnim", "Donor rank animation", "", false],
+    ["AfkGuard", "AFK guard", "", true],
+  ]},
+];
+state.features = {};
+FEATURE_GROUPS.forEach(g => g.items.forEach(([k, , , def]) => state.features[k] = def));
+
+state.donation = {
+  cashEnabled: true,
+  robuxEnabled: true,
+  minAmount: 1000,
+  worldTiers: [
+    { effect: "Nuke", min: 100000 },
+    { effect: "Smite4", min: 250000 },
+    { effect: "BlackHole", min: 500000 },
+  ],
+  auraTiers: [
+    { level: 1, min: 10, idrMin: 0, idrMax: 9999, duration: 4 },
+    { level: 3, min: 80, idrMin: 10000, idrMax: 19999, duration: 4 },
+    { level: 4, min: 150, idrMin: 20000, idrMax: 29999, duration: 4 },
+    { level: 5, min: 250, idrMin: 30000, idrMax: 49999, duration: 5 },
+    { level: 6, min: 500, idrMin: 50000, idrMax: 99999, duration: 5 },
+    { level: 7, min: 1000, idrMin: 100000, idrMax: 199999, duration: 6 },
+    { level: 8, min: 2000, idrMin: 200000, idrMax: 299999, duration: 6 },
+    { level: 9, min: 3000, idrMin: 300000, idrMax: 499999, duration: 8 },
+    { level: 10, min: 5000, idrMin: 500000, idrMax: 999999, duration: 8 },
+    { level: 11, min: 10000, idrMin: 1000000, idrMax: "math.huge", duration: 8 },
+  ],
+};
+
+function renderDonation() {
+  const box = document.getElementById("cfg-donation");
+  const d = state.donation;
+  box.innerHTML = "";
+
+  const mkSwitchRow = (label, desc, field, extraTag) => {
+    const row = document.createElement("div");
+    row.className = "row";
+    row.innerHTML = '<div class="grow"><div class="label">' + label + (extraTag ? ' <span class="tag" style="margin-left:6px">' + extraTag + '</span>' : '') + '</div><div class="desc">' + desc + '</div></div>';
+    const sw = document.createElement("div");
+    sw.className = "switch" + (d[field] ? " on" : "");
+    sw.addEventListener("click", () => {
+      d[field] = !d[field];
+      sw.classList.toggle("on", d[field]);
+      markDirty("Donations");
+    });
+    row.appendChild(sw);
+    return row;
+  };
+
+  const head0 = document.createElement("div");
+  head0.className = "sec-head";
+  head0.textContent = "Platform & API";
+  box.appendChild(head0);
+
+  const prow = document.createElement("div");
+  prow.className = "row";
+  prow.innerHTML = '<div class="grow"><div class="label">Donation platform</div></div>';
+  const pills = document.createElement("div");
+  pills.style.cssText = "display:flex; gap:10px";
+  [["bagibagi", "Bagi-Bagi"], ["saweria", "Saweria"], ["sociabuzz", "SociaBuzz"]].forEach(([val, name]) => {
+    const p = document.createElement("span");
+    p.className = "pill" + (state.config.provider === val ? " selected" : "");
+    p.textContent = name;
+    p.addEventListener("click", () => {
+      state.config.provider = val;
+      pills.querySelectorAll(".pill").forEach(x => x.classList.remove("selected"));
+      p.classList.add("selected");
+      markDirty("Donations");
+    });
+    pills.appendChild(p);
+  });
+  prow.appendChild(pills);
+  box.appendChild(prow);
+
+  const mkCfgRow = (label, desc, val, cfield, isPw, ph) => {
+    const row = document.createElement("div");
+    row.className = "row";
+    row.innerHTML = '<div class="grow"><div class="label">' + label + '</div><div class="desc">' + desc + '</div></div>';
+    const inp = document.createElement("input");
+    inp.className = "input mini";
+    inp.style.maxWidth = "240px";
+    if (isPw) inp.type = "password";
+    inp.value = val;
+    if (ph) inp.placeholder = ph;
+    inp.spellcheck = false;
+    inp.dataset.cfield = cfield;
+    row.appendChild(inp);
+    return row;
+  };
+  box.appendChild(mkCfgRow("Donation API address", "Leave empty for boards-only mode.", state.config.apiUrl, "apiUrl", false, "https://your-worker.workers.dev"));
+  box.appendChild(mkCfgRow("Donation page link", "Shown on the cash donate prompt.", state.config.providerLink, "providerLink", false, "https://bagibagi.co/your-page"));
+
+  const headKeys = document.createElement("div");
+  headKeys.className = "sec-head";
+  headKeys.textContent = "API keys (server only)";
+  box.appendChild(headKeys);
+  box.appendChild(mkCfgRow("Donation API key", "From your platform dashboard.", state.config.apiSecret, "apiSecret", true, "Not set"));
+  box.appendChild(mkCfgRow("Game data API key", "Optional extra data API.", state.config.gameDataSecret, "gameDataSecret", true, "Optional"));
+
+  const head1 = document.createElement("div");
+  head1.className = "sec-head";
+  head1.textContent = "Donation channels";
+  box.appendChild(head1);
+  box.appendChild(mkSwitchRow("Cash donations", "Bagi-Bagi, Saweria, or SociaBuzz", "cashEnabled"));
+  box.appendChild(mkSwitchRow("Robux donations", "Donations via in-game Robux products", "robuxEnabled"));
+
+  const minRow = document.createElement("div");
+  minRow.className = "row";
+  minRow.innerHTML = '<div class="grow"><div class="label">Minimum recorded donation</div><div class="desc">Cash donations below this amount won\'t appear in notifications &amp; boards.</div></div>';
+  const minInp = document.createElement("input");
+  minInp.className = "input mini";
+  minInp.style.maxWidth = "140px";
+  minInp.value = d.minAmount;
+  minInp.spellcheck = false;
+  minInp.dataset.dfield = "minAmount";
+  minRow.appendChild(minInp);
+  box.appendChild(minRow);
+
+  const head2 = document.createElement("div");
+  head2.className = "sec-head";
+  head2.textContent = "World effects (cash donations)";
+  box.appendChild(head2);
+  const flagHint = document.createElement("div");
+  flagHint.className = "hint";
+  flagHint.style.cssText = "font-size:12px; color:var(--faint); margin:2px 2px 8px";
+  flagHint.innerHTML = "The master switch lives in the <b>Features</b> tab — 'Donation world effects'. Here you set when each effect triggers.";
+  box.appendChild(flagHint);
+  d.worldTiers.forEach((t, i) => {
+    const row = document.createElement("div");
+    row.className = "row";
+    row.innerHTML = '<div class="grow"><div class="label">' + t.effect + '</div><div class="desc">Triggers from this donation amount (IDR).</div></div>';
+    const inp = document.createElement("input");
+    inp.className = "input mini";
+    inp.style.maxWidth = "140px";
+    inp.value = t.min;
+    inp.spellcheck = false;
+    inp.dataset.wi = i;
+    row.appendChild(inp);
+    box.appendChild(row);
+  });
+  const hintRobux = document.createElement("div");
+  hintRobux.className = "hint";
+  hintRobux.style.cssText = "font-size:12px; color:var(--faint); margin:6px 2px 0";
+  hintRobux.textContent = "Robux donations don't use world effects — cash only.";
+  box.appendChild(hintRobux);
+
+  const head3 = document.createElement("div");
+  head3.className = "sec-head";
+  head3.textContent = "Aura effect tiers";
+  box.appendChild(head3);
+  const cols = document.createElement("div");
+  cols.style.cssText = "display:grid; grid-template-columns:44px 1fr 1fr 1fr 0.7fr; gap:10px; padding:0 0 6px; font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--faint)";
+  cols.innerHTML = "<span>Tier</span><span>Min Robux</span><span>Min IDR</span><span>Max IDR</span><span>Duration</span>";
+  box.appendChild(cols);
+  d.auraTiers.forEach((t, i) => {
+    const row = document.createElement("div");
+    row.style.cssText = "display:grid; grid-template-columns:44px 1fr 1fr 1fr 0.7fr; gap:10px; padding:8px 0; border-bottom:1px solid var(--sep); align-items:center";
+    row.innerHTML = '<span class="tag">' + t.level + '</span>';
+    [["min", t.min], ["idrMin", t.idrMin], ["idrMax", t.idrMax], ["duration", t.duration]].forEach(([field, val]) => {
+      const inp = document.createElement("input");
+      inp.className = "input mini";
+      inp.value = val;
+      inp.spellcheck = false;
+      inp.dataset.ai = i;
+      inp.dataset.field = field;
+      row.appendChild(inp);
+    });
+    box.appendChild(row);
+  });
+}
+document.getElementById("cfg-donation").addEventListener("input", (e) => {
+  const inp = e.target;
+  const d = state.donation;
+  if (inp.dataset.cfield) {
+    state.config[inp.dataset.cfield] = inp.value;
+  } else if (inp.dataset.dfield) {
+    d[inp.dataset.dfield] = parseInt(inp.value) || 0;
+  } else if (inp.dataset.wi !== undefined) {
+    d.worldTiers[inp.dataset.wi].min = parseInt(inp.value) || 0;
+  } else if (inp.dataset.ai !== undefined) {
+    const t = d.auraTiers[inp.dataset.ai];
+    const f = inp.dataset.field;
+    t[f] = (f === "idrMax" && inp.value.trim() === "math.huge") ? "math.huge" : (parseInt(inp.value) || 0);
+  } else {
+    return;
+  }
+  markDirty("Donations");
+});
+
+const dirtyPanels = new Set();
+let cfgSnapshot = null;
+function takeSnapshot() {
+  return JSON.parse(JSON.stringify({ config: state.config, features: state.features, donation: state.donation }));
+}
+function markDirty(panel) {
+  dirtyPanels.add(panel);
+  document.getElementById("configDirtyText").textContent = "Unsaved — " + [...dirtyPanels].join(", ");
+  document.getElementById("configSaveBar").style.display = "flex";
+  const dot = document.querySelector('.dirty-dot[data-dirty="' + panel + '"]');
+  if (dot) dot.classList.add("show");
+}
+function clearDirty() {
+  dirtyPanels.clear();
+  document.getElementById("configSaveBar").style.display = "none";
+  document.querySelectorAll(".dirty-dot").forEach(d => d.classList.remove("show"));
+}
+
+function renderFeatures() {
+  const box = document.getElementById("cfg-features");
+  box.innerHTML = "";
+  FEATURE_GROUPS.forEach(g => {
+    const head = document.createElement("div");
+    head.className = "sec-head";
+    head.textContent = g.name;
+    box.appendChild(head);
+    g.items.forEach(([key, display]) => {
+      const row = document.createElement("div");
+      row.className = "row";
+      row.innerHTML = '<div class="grow"><div class="label">' + display + '</div></div>';
+      const sw = document.createElement("div");
+      sw.className = "switch" + (state.features[key] ? " on" : "");
+      sw.addEventListener("click", () => {
+        state.features[key] = !state.features[key];
+        sw.classList.toggle("on", state.features[key]);
+        markDirty("Features");
+      });
+      row.appendChild(sw);
+      box.appendChild(row);
+    });
+  });
+}
+
+const TIER_META = [
+  ["t1", "Tier 1"], ["t2", "Tier 2"], ["t3", "Tier 3"],
+];
+function renderMembership() {
+  const box = document.getElementById("cfg-membership");
+  box.innerHTML = "";
+  TIER_META.forEach(([tk, label]) => {
+    const t = state.config[tk];
+    const head = document.createElement("div");
+    head.className = "sec-head";
+    head.textContent = label + " — " + (t.name || "?");
+    box.appendChild(head);
+    const grid = document.createElement("div");
+    grid.className = "grid2";
+    grid.style.marginBottom = "8px";
+    const mkField = (cap, field, val, isNum, ph) => {
+      const f = document.createElement("div");
+      f.className = "field";
+      f.innerHTML = "<label>" + cap + "</label>";
+      const inp = document.createElement("input");
+      inp.className = "input mini";
+      inp.value = (isNum && !val) ? "" : val;
+      if (ph) inp.placeholder = ph;
+      inp.spellcheck = false;
+      inp.dataset.tier = tk;
+      inp.dataset.field = field;
+      inp.dataset.num = isNum ? "1" : "";
+      f.appendChild(inp);
+      return f;
+    };
+    grid.appendChild(mkField("Display name", "name", t.name, false, "e.g. VIP"));
+    grid.appendChild(mkField("Price (Robux)", "price", t.price, true, "0"));
+    grid.appendChild(mkField("Game Pass (self-buy)", "pass", t.pass, true, "Not set"));
+    grid.appendChild(mkField("Product (gifting)", "gift", t.gift, true, "Not set"));
+    box.appendChild(grid);
+  });
+}
+document.getElementById("cfg-membership").addEventListener("input", (e) => {
+  const inp = e.target;
+  if (!inp.dataset.tier) return;
+  const t = state.config[inp.dataset.tier];
+  t[inp.dataset.field] = inp.dataset.num ? (parseInt(inp.value) || 0) : inp.value;
+  markDirty("Membership");
+});
+
+
+const CONFIG_PANEL_META = {
+  general: { title: "General", subtitle: "Club name, group, and owner settings." },
+  features: { title: "Features", subtitle: "Turn kit features on or off for your place." },
+  membership: { title: "Membership", subtitle: "Tier names, prices, and game pass IDs." },
+  donation: { title: "Donations", subtitle: "Provider, API keys, and world effect tiers." },
+};
+
+function switchConfigPanel(panelId) {
+  document.querySelectorAll("#configChildren .nav-child").forEach(x => {
+    x.classList.toggle("active", x.dataset.panel === panelId);
+  });
+  ["general", "features", "membership", "donation"].forEach(id => {
+    document.getElementById("cfg-" + id).style.display = id === panelId ? "block" : "none";
+  });
+  const meta = CONFIG_PANEL_META[panelId];
+  if (meta) {
+    document.getElementById("configPanelTitle").textContent = meta.title;
+    document.getElementById("configPanelSubtitle").textContent = meta.subtitle;
+  }
+  if (panelId === "general") renderGeneral();
+  if (panelId === "features") renderFeatures();
+  if (panelId === "membership") renderMembership();
+  if (panelId === "donation") renderDonation();
+}
+
+document.getElementById("configSave").addEventListener("click", () => {
+  const panels = [...dirtyPanels];
+  panels.forEach(p => {
+    if (p === "Features") {
+      const off = Object.values(state.features).filter(v => !v).length;
+      clog("ok", "[ConfigPatch] Features ditulis — " + off + " off dari " + Object.keys(state.features).length + " flags");
+    }
+    if (p === "Membership") clog("ok", "[ConfigPatch] Shop.Products Tier1/2/3 — name, price, GamePass & Gift IDs ditulis");
+    if (p === "General") clog("ok", "[ConfigPatch] Branding + Group ditulis");
+    if (p === "Donations") clog("ok", "[ConfigPatch] Donation ditulis — channels, MinAmount, " + state.donation.worldTiers.length + " world tiers, " + state.donation.auraTiers.length + " aura tiers");
+  });
+  clearDirty();
+  cfgSnapshot = takeSnapshot();
+  updateDiagSummary(buildChecks());
+  toast("Settings saved — <b>" + panels.join(", ") + "</b>");
+});
+document.getElementById("configDiscard").addEventListener("click", () => {
+  if (cfgSnapshot) {
+    state.config = JSON.parse(JSON.stringify(cfgSnapshot.config));
+    state.features = JSON.parse(JSON.stringify(cfgSnapshot.features));
+    state.donation = JSON.parse(JSON.stringify(cfgSnapshot.donation));
+    renderGeneral(); renderFeatures(); renderMembership(); renderDonation();
+  }
+  clearDirty();
+  toast("Changes discarded");
+});
+
+renderGeneral();
+renderFeatures();
+renderMembership();
+renderDonation();
+cfgSnapshot = takeSnapshot();
+
+/* =================================================================
+   BOOT
+   ================================================================= */
+state.onboarded = localStorage.getItem("ck_onboarded") === "1";
+document.getElementById("navSetup").style.display = "none";
+if (!state.onboarded) document.querySelector(".dock").classList.add("onboarding");
+document.getElementById("engineBadge").classList.add("show");
+runDiagnostics();
+clog("info", "[ClubKitPackager] Toolbar: Open Panel · Gen Tools — engine " + state.engineVersion + " terdeteksi");
+</script>
+</body>
+</html>
