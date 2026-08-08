@@ -11,6 +11,13 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.75] - 2026-08-08
+
+Hotfix: server boot blocked by stray syntax in DonationController.
+
+### Fixed
+- **DonationController boot crash** — stray `er` token after `return createDonationController` caused `Expected <eof>, got 'er'`, blocking server `Main` and leaving clients stuck on the loading screen.
+
 ## [2.4.74] - 2026-08-08
 
 Plugin Config Features panel driven from engine schema manifest (Admin Hub + Legacy SyncBhms visible in UI).

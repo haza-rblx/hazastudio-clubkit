@@ -1910,4 +1910,3 @@ local function createDonationController(deps: {
 	return {}
 end
 return createDonationController
-er
