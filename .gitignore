@@ -18,6 +18,7 @@ Thumbs.db
 # Tool output / scratch
 .tools/analyze-output.txt
 .tools/analyze-roblox.txt
+.tmp/
 
 # Node (donation-api admin panel, game-data-api)
 node_modules/
