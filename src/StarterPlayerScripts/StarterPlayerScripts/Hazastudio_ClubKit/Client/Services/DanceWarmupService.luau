@@ -300,6 +300,17 @@ function createDanceWarmupService:_setReadyState(isPreparing: boolean, isReady: 
 		return
 	end
 
+	-- Don't clobber an in-flight emote prepare flag from catalog warmup completion.
+	if isPreparing == false then
+		local pending = self.store:get().pendingAnimationName
+		if type(pending) == "string" and pending ~= "" and self.store:get().isDancePreparing == true then
+			self.store:set({
+				isDanceReady = isReady,
+			})
+			return
+		end
+	end
+
 	self.store:set({
 		isDancePreparing = isPreparing,
 		isDanceReady = isReady,

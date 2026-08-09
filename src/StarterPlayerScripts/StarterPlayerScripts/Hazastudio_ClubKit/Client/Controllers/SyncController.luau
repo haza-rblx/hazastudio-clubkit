@@ -203,9 +203,8 @@ function SyncController:_handleNotification(payload: any)
 			currentAnim = currentAnim,
 			visualAnim = currentAnim,
 			isDancePreparing = false,
-			pendingAnimationName = nil,
-			pendingAnimationObject = nil,
 			syncTargetUserId = payload.targetUserId,
+			_clear = { "pendingAnimationName", "pendingAnimationObject" },
 		})
 		local leaderLabel = payload.leaderDisplay or payload.leaderName or "target"
 		local waitingForDance = currentAnim == ""
@@ -225,10 +224,8 @@ function SyncController:_handleNotification(payload: any)
 	elseif notifType == "unsync_success" then
 		self.store:set({
 			isSyncing = false,
-			leaderName = nil,
-			leaderDisplay = nil,
 			visualAnim = self.store:get().currentAnim,
-			syncTargetUserId = nil,
+			_clear = { "leaderName", "leaderDisplay", "syncTargetUserId" },
 		})
 		NotifService.show({
 			message = "Dance sync stopped.",
@@ -247,13 +244,15 @@ function SyncController:_handleNotification(payload: any)
 			or (if type(payload.leaderName) == "string" then payload.leaderName else "your leader")
 		self.store:set({
 			isSyncing = false,
-			leaderName = nil,
-			leaderDisplay = nil,
 			visualAnim = self.store:get().currentAnim,
-			syncTargetUserId = nil,
-			pendingAnimationName = nil,
-			pendingAnimationObject = nil,
 			isDancePreparing = false,
+			_clear = {
+				"leaderName",
+				"leaderDisplay",
+				"syncTargetUserId",
+				"pendingAnimationName",
+				"pendingAnimationObject",
+			},
 		})
 		NotifService.show({
 			message = tostring(leaderLabel) .. " left. Dance sync stopped.",
@@ -310,8 +309,7 @@ function SyncController:_handleNotification(payload: any)
 				visualAnim = animName,
 				isPanelOpen = true,
 				isDancePreparing = false,
-				pendingAnimationName = nil,
-				pendingAnimationObject = nil,
+				_clear = { "pendingAnimationName", "pendingAnimationObject" },
 			})
 		elseif result == "stopped" then
 			-- Ignore stop ack while a newer play selection is in flight.
@@ -331,8 +329,7 @@ function SyncController:_handleNotification(payload: any)
 				currentAnim = "",
 				visualAnim = "",
 				isDancePreparing = false,
-				pendingAnimationName = nil,
-				pendingAnimationObject = nil,
+				_clear = { "pendingAnimationName", "pendingAnimationObject" },
 			})
 		else
 			-- error / rate_limited — revert preparing only if still on that request
@@ -342,9 +339,8 @@ function SyncController:_handleNotification(payload: any)
 			self:_cancelClickWarm()
 			self.store:set({
 				isDancePreparing = false,
-				pendingAnimationName = nil,
-				pendingAnimationObject = nil,
 				visualAnim = self.store:get().currentAnim,
+				_clear = { "pendingAnimationName", "pendingAnimationObject" },
 			})
 		end
 	end
@@ -430,8 +426,7 @@ function SyncController:stopLoadingLocalDances()
 		currentAnim = "",
 		visualAnim = "",
 		isDancePreparing = false,
-		pendingAnimationName = nil,
-		pendingAnimationObject = nil,
+		_clear = { "pendingAnimationName", "pendingAnimationObject" },
 	})
 end
 
@@ -494,11 +489,13 @@ function SyncController:onEmoteSelected(animation: Animation)
 	local now = os.clock()
 
 	-- Toggle off when this row is the selected one (playing OR preparing), unless syncing.
+	-- pendingAnimationName only counts while preparing — a stale uncleared pending must
+	-- not block re-play after stop (SyncStore historically could not assign nil).
 	local isSameSelected = not state.isSyncing
 		and (
 			state.visualAnim == animationName
 			or state.currentAnim == animationName
-			or state.pendingAnimationName == animationName
+			or (state.isDancePreparing == true and state.pendingAnimationName == animationName)
 		)
 	if isSameSelected then
 		-- Wutwut: rapid re-click of the acked-playing emote = restart (chain window).
@@ -507,7 +504,7 @@ function SyncController:onEmoteSelected(animation: Animation)
 		local isWutwut = self.config.WUTWUT_ENABLED == true
 			and state.currentAnim == animationName
 			and self._lastEmoteClickName == animationName
-			and (now - self._lastEmoteClickTime) <= (self.config.WUTWUT_CHAIN_WINDOW or 0.32)
+			and (now - self._lastEmoteClickTime) <= (self.config.WUTWUT_CHAIN_WINDOW or 0.45)
 		if isWutwut then
 			if (now - self._lastWutwutFireTime) >= (self.config.WUTWUT_CLIENT_MIN_FIRE_INTERVAL or 0.04) then
 				self._lastWutwutFireTime = now
@@ -522,8 +519,7 @@ function SyncController:onEmoteSelected(animation: Animation)
 			currentAnim = "",
 			visualAnim = "",
 			isDancePreparing = false,
-			pendingAnimationName = nil,
-			pendingAnimationObject = nil,
+			_clear = { "pendingAnimationName", "pendingAnimationObject" },
 		})
 		self:_fireAnimationAction(animation, false)
 		return
@@ -628,14 +624,16 @@ function SyncController:onUnsync()
 	self.startSyncRE:FireServer(nil, false)
 	self.store:set({
 		isSyncing = false,
-		leaderName = nil,
-		leaderDisplay = nil,
-		currentAnim = nil,
-		visualAnim = nil,
-		pendingAnimationName = nil,
-		pendingAnimationObject = nil,
+		currentAnim = "",
+		visualAnim = "",
 		isDancePreparing = false,
-		syncTargetUserId = nil,
+		_clear = {
+			"leaderName",
+			"leaderDisplay",
+			"pendingAnimationName",
+			"pendingAnimationObject",
+			"syncTargetUserId",
+		},
 	})
 end
 

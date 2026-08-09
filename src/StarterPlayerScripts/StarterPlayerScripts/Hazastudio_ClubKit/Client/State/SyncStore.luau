@@ -9,17 +9,30 @@ local function createStore(initialState: { [string]: any })
 		return state
 	end
 
+	-- Luau cannot put nil into a table literal/assignment map — `pending = nil` is a
+	-- no-op (key absent). Pass `_clear = { "pendingAnimationName", ... }` to assign nil.
 	function store:set(changes: { [string]: any })
 		local previous = state
-		local nextState = table.clone(state :: any)
-		
-		-- Use next() to iterate all keys including those with empty string values
+		local nextState = table.clone(state :: any) :: { [string]: any }
+
+		local clearList = (changes :: any)._clear
+		if type(clearList) == "table" then
+			for _, clearKey in ipairs(clearList) do
+				if type(clearKey) == "string" then
+					nextState[clearKey] = nil
+				end
+			end
+		end
+
+		-- Use next() so empty-string values are applied (pairs is fine too; next matches legacy).
 		local key = next(changes)
 		while key ~= nil do
-			nextState[key] = changes[key]
+			if key ~= "_clear" then
+				nextState[key] = changes[key]
+			end
 			key = next(changes, key)
 		end
-		
+
 		state = table.freeze(nextState)
 
 		for subscriberKey, callbacks in pairs(subscribers) do

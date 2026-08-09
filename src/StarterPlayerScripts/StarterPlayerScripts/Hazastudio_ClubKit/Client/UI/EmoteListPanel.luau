@@ -176,7 +176,13 @@ function EmoteListPanel:updateDisplay()
 				mainButton.Text = animation.Name
 				mainButton.Activated:Connect(function()
 					local now = os.clock()
-					if now - self._lastEmoteSelectionAt < (Config.Sync.SWITCH_INPUT_COOLDOWN or 0.15) then
+					-- Wutwut: same-emote spam must beat WUTWUT_CHAIN_WINDOW (0.45s).
+					-- SWITCH_INPUT_COOLDOWN (often 0.55) would make restarts unreachable.
+					local cooldown = Config.Sync.SWITCH_INPUT_COOLDOWN or 0.15
+					if Config.Sync.WUTWUT_ENABLED == true and animation.Name == self._lastSelectedAnimationName then
+						cooldown = Config.Sync.WUTWUT_CLIENT_MIN_FIRE_INTERVAL or 0.04
+					end
+					if now - self._lastEmoteSelectionAt < cooldown then
 						return
 					end
 					self._lastEmoteSelectionAt = now

@@ -957,7 +957,7 @@ Config.Sync = {
 	-- Buyer-gated (ClubKitConfig.Features.WutwutDance); engine default OFF.
 	WUTWUT_ENABLED = false,
 	WUTWUT_STOP_ARM_WINDOW = 0.24, -- reserved (unused: stop path unchanged in v1)
-	WUTWUT_CHAIN_WINDOW = 0.32,
+	WUTWUT_CHAIN_WINDOW = 0.45,
 	WUTWUT_RESTART_FADE = 0,
 	WUTWUT_MIN_REQUEST_INTERVAL = 0.05,
 	WUTWUT_CLIENT_MIN_FIRE_INTERVAL = 0.04,

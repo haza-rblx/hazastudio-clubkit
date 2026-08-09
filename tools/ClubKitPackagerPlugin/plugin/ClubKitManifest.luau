@@ -6,9 +6,9 @@ local ClubKitManifest = {}
 ClubKitManifest.PACKAGE_NAME = "HazastudioClubKit_Package"
 ClubKitManifest.MANIFEST_NAME = "_ClubKitManifest"
 ClubKitManifest.PRODUCT_ID = "hazastudioclubkit"
-ClubKitManifest.KIT_VERSION = "2.4.78"
+ClubKitManifest.KIT_VERSION = "2.4.79"
 -- Soft-update version for the Studio dock (may diverge from KIT_VERSION for plugin-only fixes).
-ClubKitManifest.PLUGIN_VERSION = "2.4.78"
+ClubKitManifest.PLUGIN_VERSION = "2.4.79"
 
 -- Soft-update: fetch these Luau modules from GitHub tags (exclude bootstrap).
 ClubKitManifest.PLUGIN_SOURCE_PREFIX = "tools/ClubKitPackagerPlugin/plugin/"

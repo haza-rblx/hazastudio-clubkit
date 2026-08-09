@@ -108,7 +108,7 @@ local function createSyncController(deps: {
 			end
 
 			-- Wutwut restarts use their own bucket: ANIM_START (5/2s) would kill
-			-- legit ~0.32s chain clicks after ~2 restarts.
+			-- legit ~0.45s chain clicks after ~2 restarts.
 			local limiter = if actionIntent == "restart" then rateLimiters.WUTWUT_RESTART else rateLimiters.ANIM_START
 			if not limiter:check(player.UserId) then
 				networkManager:fireClient(player, { type = "anim_result", result = "rate_limited" })

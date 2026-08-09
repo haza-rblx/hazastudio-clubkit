@@ -11,6 +11,17 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.79] - 2026-08-10
+
+Wutwut reliability + comfort: panel cooldown no longer blocks restarts; SyncStore can clear pending; chain window 0.45s.
+
+### Fixed
+- **Wutwut spam blocked by SwitchInputCooldown** — with `Features.WutwutDance = true`, same-emote re-clicks in the dance panel use the short `WUTWUT_CLIENT_MIN_FIRE_INTERVAL` instead of `Sync.SwitchInputCooldown`, so rapid restarts can land inside `WUTWUT_CHAIN_WINDOW` (0.45s). Different-emote switches still use the normal cooldown.
+- **Same-dance click stuck after stop (neutral)** — `SyncStore:set({ pendingAnimationName = nil })` was a no-op in Luau (nil keys are dropped), so `pending` stayed set after stop/ack and the next same-emote click always took the toggle-off path. Store now supports `_clear = { ... }`; same-selected only treats pending while `isDancePreparing`. Warmup completion no longer clobbers an in-flight prepare flag.
+
+### Changed
+- **Wutwut chain window** — `Config.Sync.WUTWUT_CHAIN_WINDOW` raised `0.32` → `0.45` for a more comfortable same-emote spam restart.
+
 ## [2.4.78] - 2026-08-09
 
 Wutwut gate moves to a proper Features toggle (plugin panel visible).
