@@ -199,6 +199,7 @@ function ConfigBootstrap.apply(config: any)
 		applyFadeSeconds("SWITCH_FADE_OUT", syncDance.SwitchFadeOut)
 		applyFadeSeconds("SYNC_JOIN_FADE_IN", syncDance.SyncJoinFade or syncDance.SyncJoinFadeIn)
 		applyFadeSeconds("SWITCH_INPUT_COOLDOWN", syncDance.SwitchInputCooldown)
+		-- Legacy alias (2.4.77): canonical gate is Features.WutwutDance (applied below).
 		if type(syncDance.WutwutEnabled) == "boolean" then
 			config.Sync.WUTWUT_ENABLED = syncDance.WutwutEnabled
 		end
@@ -374,6 +375,12 @@ function ConfigBootstrap.apply(config: any)
 		-- Overhead donation chip gradient anim (not a FeatureFlags module kill-switch).
 		if type(features.DonationRankGradientAnim) == "boolean" and type(config.Overhead) == "table" then
 			config.Overhead.ANIMATE_DONATION_RANK_GRADIENT = features.DonationRankGradientAnim
+		end
+		-- Wutwut rapid dance restart (not a FeatureFlags module kill-switch; gate lives in
+		-- Config.Sync). Fill-forwarded false by default; legacy Sync.WutwutEnabled=true
+		-- (2.4.77 alias, applied above) still forces it on.
+		if type(features.WutwutDance) == "boolean" and type(config.Sync) == "table" then
+			config.Sync.WUTWUT_ENABLED = features.WutwutDance or config.Sync.WUTWUT_ENABLED == true
 		end
 	end
 

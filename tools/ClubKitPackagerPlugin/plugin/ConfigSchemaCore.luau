@@ -17,6 +17,7 @@ local FALLBACK_FEATURE_MANIFEST = {
 			{ key = "MusicCatalogSeed", label = "Default playlist" },
 			{ key = "SyncDance", label = "Sync dance" },
 			{ key = "LegacySyncBhms", label = "Legacy SyncBhms place-pack" },
+			{ key = "WutwutDance", label = "Wutwut dance restart" },
 		},
 	},
 	{

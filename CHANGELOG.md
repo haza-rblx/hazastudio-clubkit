@@ -11,6 +11,13 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.78] - 2026-08-09
+
+Wutwut gate moves to a proper Features toggle (plugin panel visible).
+
+### Changed
+- **Wutwut gate is now a Features toggle** — canonical key is `ClubKitConfig.Features.WutwutDance` (default `false`), listed in `FEATURE_MANIFEST` so it appears in the plugin **Config → Features** panel ("Wutwut dance restart", group "Music & dance"). The 2.4.77 `ClubKitConfig.Sync.WutwutEnabled` key remains as a legacy alias: an explicit `true` there still enables the feature.
+
 ## [2.4.77] - 2026-08-09
 
 Wutwut rapid dance restart returns as an opt-in feature (default off).

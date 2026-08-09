@@ -505,10 +505,6 @@ ClubKitConfig.JoinCommunity = {
 --     Minimum delay between emote clicks (seconds). Set >= SwitchFadeIn/Out so
 --     spam clicks do not stack tracks (avoids broken-arm artifacts).
 --
---   WutwutEnabled
---     Rapid re-click of the PLAYING emote hard-restarts it (fade 0 stutter).
---     false = classic behavior (same-emote click toggles off). Default false.
---
 ClubKitConfig.Sync = {
 	FadeIn = 0.45, -- idle → dance (fade in)
 	FadeOut = 0.45, -- dance → idle (fade out)
@@ -516,7 +512,6 @@ ClubKitConfig.Sync = {
 	SwitchFadeOut = 0.55, -- dance A→B: A fades out (match SwitchFadeIn)
 	SyncJoinFade = 0.4, -- join / sync to leader
 	SwitchInputCooldown = 0.55, -- emote click cooldown; >= SwitchFade*
-	WutwutEnabled = false, -- rapid same-emote re-click restarts dance (stutter)
 }
 
 -- =============================================================================
@@ -528,6 +523,9 @@ ClubKitConfig.Features = {
 	-- false = skip merge (tracks already seeded stay in library).
 	MusicCatalogSeed = true,
 	SyncDance = true,
+	-- Rapid re-click of the PLAYING emote hard-restarts it (fade 0 "wutwut" stutter).
+	-- false = classic behavior (same-emote click toggles the dance off). Default false.
+	WutwutDance = false,
 	-- true = place uses extras/place-packs/SyncBhms (ACM Sync Dance → BHMS).
 	-- Disables Club Kit dance panel + SyncService. false = SyncBhmsGate no-ops pack (hide topbar Dance).
 	-- THE BASIC TEST 1.3: set true only when playtesting SyncBhms pack.

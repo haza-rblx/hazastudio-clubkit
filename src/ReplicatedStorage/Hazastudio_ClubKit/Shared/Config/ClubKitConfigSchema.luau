@@ -415,8 +415,6 @@ ClubKitConfigSchema.defaults = {
 		SwitchFadeOut = 0.55,
 		SyncJoinFade = 0.4,
 		SwitchInputCooldown = 0.55,
-		-- Wutwut rapid same-emote restart. Fill-forward OFF: never auto-enables.
-		WutwutEnabled = false,
 	},
 	Features = {
 		MusicPlayer = true,
@@ -426,6 +424,9 @@ ClubKitConfigSchema.defaults = {
 		-- ACM Sync Dance routes to ReplicatedStorage.SyncBhmsAcmBridge.
 		-- When false: SyncBhmsGate makes pack scripts no-op (topbar Dance / DanceGui off). Default false.
 		LegacySyncBhms = false,
+		-- Wutwut: rapid same-emote re-click hard-restarts the playing dance (fade 0 stutter).
+		-- Default false — classic same-emote click toggles the dance off.
+		WutwutDance = false,
 		-- WIP Admin Hub UI. Default false — classic 04-AdminPanelv2 until hub is ready.
 		AdminHub = false,
 		Hotbar = true,
@@ -468,6 +469,7 @@ ClubKitConfigSchema.FEATURE_MANIFEST = {
 			{ key = "MusicCatalogSeed", label = "Default playlist" },
 			{ key = "SyncDance", label = "Sync dance" },
 			{ key = "LegacySyncBhms", label = "Legacy SyncBhms place-pack" },
+			{ key = "WutwutDance", label = "Wutwut dance restart" },
 		},
 	},
 	{
