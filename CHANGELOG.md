@@ -1,4 +1,4 @@
-﻿# Changelog
+# Changelog
 
 All notable Club Kit changes are documented here.
 
@@ -10,6 +10,13 @@ Active version: see [`VERSION`](VERSION).
 ---
 
 ## [Unreleased]
+
+## [2.4.77] - 2026-08-09
+
+Wutwut rapid dance restart returns as an opt-in feature (default off).
+
+### Added
+- **Wutwut rapid dance restart (opt-in)** — re-clicking the currently playing emote within `WUTWUT_CHAIN_WINDOW` (0.32s) hard-restarts it (fade 0 stutter); a slower re-click still toggles the dance off, and switching to a different emote keeps the normal crossfade. Restarts replicate to sync followers through the existing BFS path. Buyer-gated: `ClubKitConfig.Sync.WutwutEnabled` (default `false`; engine `Config.Sync.WUTWUT_ENABLED`, schema fill-forward adds it as `false`). Restart traffic uses its own rate bucket (`SyncRateLimit.WUTWUT_RESTART` 20/2s) and server interval (`WUTWUT_MIN_REQUEST_INTERVAL` 0.05s), so normal play/stop throttling is unchanged.
 
 ## [2.4.76] - 2026-08-09
 

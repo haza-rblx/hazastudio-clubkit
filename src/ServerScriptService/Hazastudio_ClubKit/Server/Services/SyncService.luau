@@ -226,12 +226,12 @@ local function create(deps: {
 	-- ============================================================
 	-- THROTTLE
 	-- ============================================================
-	local function canProcessRequest(player: Player): boolean
+	local function canProcessRequest(player: Player, minInterval: number?): boolean
 		if processingRequests[player.UserId] then
 			return false
 		end
 		local last = lastRequestTime[player.UserId] or 0
-		if (os.clock() - last) < MIN_REQUEST_INTERVAL then
+		if (os.clock() - last) < (minInterval or MIN_REQUEST_INTERVAL) then
 			return false
 		end
 		return true
@@ -648,11 +648,12 @@ local function create(deps: {
 	local function replicateAnimation(
 		rootPlayer: Player,
 		animation: Animation?,
-		opts: { isSyncJoin: boolean?, speed: number?, fade: number?, stopFade: number?, timePosition: number? }?
+		opts: { isSyncJoin: boolean?, speed: number?, fade: number?, stopFade: number?, timePosition: number?, restart: boolean? }?
 	)
 		local t0 = os.clock()
 		opts = opts or {}
 		local isSyncJoin = (opts :: any).isSyncJoin == true
+		local isRestart = (opts :: any).restart == true
 		local fade = (opts :: any).fade
 		local forcedPhase = (opts :: any).timePosition
 		if type(forcedPhase) ~= "number" then
@@ -772,6 +773,24 @@ local function create(deps: {
 				track.Looped = true
 				track.Priority = config.ANIM_PRIORITY
 
+				-- Wutwut: hard restart — stop, rewind, replay with fade 0 (stutter).
+				-- Skips crossfade prep; stopOtherDances(0) clears any mid-fade zombies.
+				if isRestart then
+					pcall(function()
+						AnimatorUtils.stopOtherDances(animator, track, prewarmAnimations, 0)
+					end)
+					pcall(function()
+						track:Stop(0)
+						track.TimePosition = 0
+						track:Play(fade, 1, leaderSpeed)
+					end)
+					setDanceWalkSpeed(syncedPlayer)
+					if syncedPlayer ~= leader and syncedPlayer.Character then
+						syncedPlayer.Character:SetAttribute("Syncing", leader.Name)
+					end
+					return
+				end
+
 				-- Matching Stop+Play fade (Roblox crossfade). Soft path clears mid-fade
 				-- zombies first so rapid switches cannot stack Action4 weights.
 				if type(stopFade) == "number" and stopFade > 0 then
@@ -886,10 +905,17 @@ local self = {} :: any
 		animation: Animation,
 		shouldPlay: boolean,
 		speed: number,
-		_intent: string?,
+		intent: string?,
 		_loadedAnimations: { [string]: any }?
 	): Result<string>
-		if not canProcessRequest(player) then
+		-- Wutwut restart gets its own tight interval; play/stop/switch keep the
+		-- >= switch-fade cooldown so crossfades cannot stack.
+		if
+			not canProcessRequest(
+				player,
+				if intent == "restart" then (config.WUTWUT_MIN_REQUEST_INTERVAL or 0.05) else nil
+			)
+		then
 			return ResultModule.Err("rate_limited")
 		end
 		startProcessing(player)
@@ -931,6 +957,27 @@ local self = {} :: any
 		if typeof(animation) ~= "Instance" or not animation:IsA("Animation") then
 			endProcessing(player)
 			return ResultModule.Err("error")
+		end
+
+		-- Wutwut: hard-restart the currently-playing emote (fade 0 stutter).
+		if intent == "restart" then
+			if not config.WUTWUT_ENABLED then
+				endProcessing(player)
+				return ResultModule.Err("wutwut_disabled")
+			end
+			if activeAnimations[player.Name] ~= animation.Name then
+				endProcessing(player)
+				return ResultModule.Err("not_active")
+			end
+			activeSpeeds[player.Name] = clampedSpeed
+			replicateAnimation(player, animation, {
+				speed = clampedSpeed,
+				fade = config.WUTWUT_RESTART_FADE or 0,
+				stopFade = 0,
+				restart = true,
+			})
+			endProcessing(player)
+			return ResultModule.Ok("restarted")
 		end
 
 		-- Toggle off if same animation already active

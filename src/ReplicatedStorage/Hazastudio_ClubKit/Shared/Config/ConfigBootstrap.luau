@@ -199,6 +199,9 @@ function ConfigBootstrap.apply(config: any)
 		applyFadeSeconds("SWITCH_FADE_OUT", syncDance.SwitchFadeOut)
 		applyFadeSeconds("SYNC_JOIN_FADE_IN", syncDance.SyncJoinFade or syncDance.SyncJoinFadeIn)
 		applyFadeSeconds("SWITCH_INPUT_COOLDOWN", syncDance.SwitchInputCooldown)
+		if type(syncDance.WutwutEnabled) == "boolean" then
+			config.Sync.WUTWUT_ENABLED = syncDance.WutwutEnabled
+		end
 	end
 
 	config.AdminUserIds = clubKit.AdminUserIds or {}

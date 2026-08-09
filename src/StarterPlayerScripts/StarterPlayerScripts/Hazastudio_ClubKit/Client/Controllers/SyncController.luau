@@ -41,6 +41,11 @@ function SyncController.create(deps: {
 	self._knownDanceAnimationIds = {} :: { [string]: boolean }
 	self._knownDanceAnimationNames = {} :: { [string]: boolean }
 
+	-- Wutwut chain tracking (rapid same-emote re-click = restart)
+	self._lastEmoteClickName = ""
+	self._lastEmoteClickTime = 0
+	self._lastWutwutFireTime = 0
+
 	if self.animationLoader then
 		local function indexAnimations(list: { Animation })
 			for _, animation in ipairs(list) do
@@ -116,12 +121,12 @@ function SyncController:_applyFavoritesJson(jsonData: any)
 	end
 end
 
-function SyncController:_fireAnimationAction(animation: Animation, shouldPlay: boolean)
+function SyncController:_fireAnimationAction(animation: Animation, shouldPlay: boolean, intent: string?)
 	if not self.animationStartRE then
 		return
 	end
-	-- intent kept as "play" for server-side compat; restart path was removed.
-	self.animationStartRE:FireServer(animation, shouldPlay, self.store:get().currentSpeed, "play")
+	-- intent: "play" (default) or "restart" (wutwut; server validates WUTWUT_ENABLED).
+	self.animationStartRE:FireServer(animation, shouldPlay, self.store:get().currentSpeed, intent or "play")
 end
 
 function SyncController:_cancelClickWarm()
@@ -292,6 +297,10 @@ function SyncController:_handleNotification(payload: any)
 	elseif notifType == "anim_result" then
 		local result = payload.result
 		local animName = payload.animationName
+		if result == "restarted" then
+			-- Wutwut ack: store already reflects the playing dance; nothing to change.
+			return
+		end
 		if result == "playing" then
 			if self:_isStaleAnimAck(animName) then
 				return
@@ -482,6 +491,7 @@ function SyncController:onEmoteSelected(animation: Animation)
 
 	local state = self.store:get()
 	local animationName = animation.Name
+	local now = os.clock()
 
 	-- Toggle off when this row is the selected one (playing OR preparing), unless syncing.
 	local isSameSelected = not state.isSyncing
@@ -491,7 +501,23 @@ function SyncController:onEmoteSelected(animation: Animation)
 			or state.pendingAnimationName == animationName
 		)
 	if isSameSelected then
+		-- Wutwut: rapid re-click of the acked-playing emote = restart (chain window).
+		-- Gate on currentAnim (not visualAnim/pendingAnimationName) so a restart never
+		-- fires while the play request is still in flight (stale-ack race).
+		local isWutwut = self.config.WUTWUT_ENABLED == true
+			and state.currentAnim == animationName
+			and self._lastEmoteClickName == animationName
+			and (now - self._lastEmoteClickTime) <= (self.config.WUTWUT_CHAIN_WINDOW or 0.32)
+		if isWutwut then
+			if (now - self._lastWutwutFireTime) >= (self.config.WUTWUT_CLIENT_MIN_FIRE_INTERVAL or 0.04) then
+				self._lastWutwutFireTime = now
+				self:_fireAnimationAction(animation, true, "restart")
+			end
+			self._lastEmoteClickTime = now -- re-arm chain
+			return -- store untouched; track is still playing
+		end
 		self:_cancelClickWarm()
+		self._lastEmoteClickTime = 0 -- disarm chain
 		self.store:set({
 			currentAnim = "",
 			visualAnim = "",
@@ -512,6 +538,8 @@ function SyncController:onEmoteSelected(animation: Animation)
 		pendingAnimationObject = animation,
 	})
 	self:_fireAnimationAction(animation, true)
+	self._lastEmoteClickName = animationName
+	self._lastEmoteClickTime = now
 	self:_warmClickedAnimation(animation)
 end
 

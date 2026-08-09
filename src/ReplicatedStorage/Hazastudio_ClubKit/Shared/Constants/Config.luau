@@ -953,7 +953,10 @@ Config.Sync = {
 	DEFAULT_SPEED = 1.0,
 	-- Keep >= switch fade so rapid clicks cannot stack mid-crossfade tracks.
 	SWITCH_INPUT_COOLDOWN = 0.55,
-	WUTWUT_STOP_ARM_WINDOW = 0.24,
+	-- Wutwut: rapid same-emote re-click hard-restarts the dance (fade 0 stutter).
+	-- Buyer-gated (ClubKitConfig.Sync.WutwutEnabled); engine default OFF.
+	WUTWUT_ENABLED = false,
+	WUTWUT_STOP_ARM_WINDOW = 0.24, -- reserved (unused: stop path unchanged in v1)
 	WUTWUT_CHAIN_WINDOW = 0.32,
 	WUTWUT_RESTART_FADE = 0,
 	WUTWUT_MIN_REQUEST_INTERVAL = 0.05,

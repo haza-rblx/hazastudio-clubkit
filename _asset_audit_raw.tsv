@@ -1,0 +1,558 @@
+﻿AssetId	FileCount	Files
+123	3	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\README.md | tools\music-migration\RepairTrackParts.server.luau
+1001	1	tools\music-migration\example-source.luau
+1002	1	tools\music-migration\example-source.luau
+1003	1	tools\music-migration\example-source.luau
+1004	1	tools\music-migration\example-source.luau
+1005	1	tools\music-migration\example-source.luau
+1006	1	tools\music-migration\example-source.luau
+1007	1	tools\music-migration\example-source.luau
+1008	1	tools\music-migration\example-source.luau
+1009	1	tools\music-migration\example-source.luau
+123456789	1	tools\ClubKitPackagerPlugin\prototypes\setup-onboarding-v1.html
+180435571	1	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+507766388	1	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+947384308	1	src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\Effects\EffectDonate\LocalNuke\Scripts\SpawnFireworks.client.luau
+1111111111	1	tools\music-migration\example-source.luau
+1234567890	2	tools\music-migration\example-source.luau | tools\music-migration\README.md
+1234567891	1	tools\music-migration\example-source.luau
+2222222222	1	tools\music-migration\example-source.luau
+3333333333	1	tools\music-migration\example-source.luau
+4444444444	1	tools\music-migration\example-source.luau
+5555555555	1	tools\music-migration\example-source.luau
+6035193736	4	tools\CarryAnimUploaderPlugin\init.server.luau | tools\ClubKitPackagerPlugin\dist\HazastudioClubKitPackager.plugin.luau | tools\ClubKitPackagerPlugin\test-minimal.plugin.luau | tools\ClubKitStudioTools\init.server.luau
+9876543210	1	tools\music-migration\example-source.luau
+12187365364	2	CHANGELOG.md | tools\BuildAdminHub.editmode.luau
+12187365977	4	src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\Controllers\CinematicDockController.luau | src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\AvatarContextUI.luau | src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\MusicPlayerUIBinder.luau | src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\NotificationCenterBuilder.luau
+12345678901234	1	tools\plugin-prototype\clubkit-panel-prototype.html
+70457204831369	1	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+70498532378498	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+70692404618828	1	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+70859487025367	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+71042309337335	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+71059173431937	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+71622181024510	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+71634976881165	1	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Domain\DonationProviderDomain.luau
+71654241254125	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+71798689403807	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+72355900784464	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+72481977505543	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+72484100745582	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+72586797386027	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+72764514743517	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+73035049515129	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+73049045961531	1	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+73080633602786	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+73256531629232	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+73375841073827	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+73570849297657	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+73598133071651	1	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+73758824607206	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+73765732150950	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+73860247068335	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+74140021917149	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+74668509238621	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+74687624322129	1	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+74837628655784	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+74906160437466	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+75017340535017	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+75111024606758	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+75227824736229	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+75260824005866	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+75785242438363	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+76421319383025	1	src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\MenuSettingsCore.luau
+76499268510555	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+76613108780239	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+76765563287964	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+76817788515061	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+76830643565730	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+76894660473432	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+77054316583229	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+77277966482334	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+77419798144679	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+77626172072479	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+77665126263855	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+77806724400554	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+78413252827794	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+78416657618448	11	.tmp\chunk1.luau | .tmp\mcp-args-for-call.json | .tmp\mcp-call-args.json | .tmp\mcp-full-args.json | .tmp\mcp-set-source.json | .tmp\mcp-stdout-args.json | .tmp\payload-args.json | .tmp\source-only.luau | src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Config\ClubKitConfigSchema.luau | src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau | src\ReplicatedStorage\Hazastudio_ClubKitConfig\ClubKitConfig.luau
+78658480396249	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+78687207102588	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+78942627651539	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+79033402234527	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+79050518541152	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+79198334134139	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+79299732780138	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+79354735077597	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+79366863686652	1	src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\MenuSettingsCore.luau
+79378375562712	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+79426970537296	16	.tmp\chunk1.luau | .tmp\mcp-args-for-call.json | .tmp\mcp-call-args.json | .tmp\mcp-full-args.json | .tmp\mcp-set-source.json | .tmp\mcp-stdout-args.json | .tmp\payload-args.json | .tmp\source-only.luau | docs\releases\2.4.1\UPGRADE.md | src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Config\ClubKitConfigSchema.luau | src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Config\ConfigBootstrap.luau | src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau | src\ReplicatedStorage\Hazastudio_ClubKit\Shared\UI\LoadingScreenUI.luau | src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Utils\BrandLogoApplier.luau | src\ReplicatedStorage\Hazastudio_ClubKitConfig\ClubKitConfig.luau | tools\plugin-prototype\clubkit-panel-prototype.html
+79567306451613	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+79631668866606	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+79952514827895	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+80012670805748	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+80110478033486	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+80252299939668	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+80668165153575	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+80685424914335	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+80857292367083	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+81064655499630	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+81358904806271	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+81962485426601	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+82055367817517	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+82255159675259	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+82655670841185	1	src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\MenuSettingsCore.luau
+82830326136845	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+82870800941987	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+82918228895128	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+83297703641064	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+83433403369297	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+83508718654097	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+83511432721953	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+83586385799189	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+83642398616066	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+84120496876687	1	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+84129183197022	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+84191522929427	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+84273429518203	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+84280080279541	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+84494880468556	2	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau | tools\music-migration\example-source.luau
+84626856927289	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+84725645651375	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+84779165708793	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+84780868733381	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+84904300053078	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+84945657664140	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+85100603709478	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+85169559155153	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+85352571609750	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+85507244624658	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+85556299825033	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+85582100164434	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+85629253532981	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+85653022686146	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+85836790369289	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+85843138393081	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+86021929503475	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+86167953108468	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+86427900994334	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+86435599657253	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+86517389574513	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+86559011695923	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+86605068236501	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+86690848572706	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+86847974415304	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+86858695998793	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+87093303390106	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+87113600160668	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+87272651050606	1	src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\MenuSettingsCore.luau
+87479186690180	1	src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\MenuSettingsCore.luau
+87564015964556	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+87580498164681	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+87851989951921	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+87891634204092	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+87955266459325	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+88041988117416	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+88077786618202	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+88144373916205	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+88243067420901	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+88458339833863	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+88593066954172	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+88633822284501	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+88859481874361	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+88905305584033	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+88930773001935	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+88952811351848	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+88989558021681	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+89022611566090	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+89501044548302	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+89608244623873	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+89835158598558	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+89859954108173	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+89866756163244	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+89993709480858	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+90029406212084	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+90255045824059	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+90264300328905	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+90272459511423	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+90319531481606	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+90608036640566	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+90613947229054	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+90675213599937	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+90963463102528	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+91317743641632	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+91350921009448	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+91509787279883	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+91548415080634	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+91849485497937	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+91914343358826	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+91957489130406	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+91959561797432	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+92149324289018	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+92199791496065	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+92211457051494	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+92294527571093	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+92693049053888	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+92875500805983	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+92936351611631	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+92966144631012	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+92972908830332	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+93179940669038	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+93611960870847	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+93650419056099	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+93660593558582	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+93848083497956	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+94172849540376	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+94227935854947	1	src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\MenuSettingsCore.luau
+94251158934765	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+94281844058750	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+94710314017697	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+94838891388631	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+94866673660756	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+94928591392266	1	src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\MenuSettingsCore.luau
+94981296627916	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+95197472444098	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+95268354998882	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+95302693960087	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+95666074801870	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+95835041367696	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+95993251170123	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+96030964846916	3	tools\ClubKitPackagerPlugin\dist\HazastudioClubKitPackager.plugin.luau | tools\ClubKitPackagerPlugin\plugin\HazastudioClubKit.plugin.luau | tools\ClubKitPackagerPlugin\plugin-build\HazastudioClubKit\init.plugin.luau
+96552356249655	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+96570434526540	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+96704654425176	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+96866149253124	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+97010760863727	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+97086182055223	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+97115057548605	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+97140044150959	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+97204148114909	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+97235222818748	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+97265721800039	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+97626860274119	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+97632704118524	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+97634997767032	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+98038448248022	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+98112707961349	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+98275401496616	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+98915891817339	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+99040610695519	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+99143048206723	1	src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\MenuSettingsCore.luau
+99156766998265	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+99176099070776	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+99290326021334	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+99512429033957	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+99519935816911	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+99574010529979	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+99732460170028	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+99832044843928	3	tools\ClubKitPackagerPlugin\dist\HazastudioClubKitPackager.plugin.luau | tools\ClubKitPackagerPlugin\plugin\HazastudioClubKit.plugin.luau | tools\ClubKitPackagerPlugin\plugin-build\HazastudioClubKit\init.plugin.luau
+99907904483750	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+100191052517606	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+100275714657610	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+100297909099774	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+100299374957307	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+100423064390711	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+100440758621739	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+100791306432432	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+100861952834183	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+100969230857659	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+100969882114517	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+101058549443995	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+101114934768971	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+101268994273611	1	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+101862221409871	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+101906294438076	2	src\ReplicatedStorage\Hazastudio_ClubKit\Icon\Elements\Caption.luau | src\ReplicatedStorage\Icon\Elements\Caption.luau
+102385551432331	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+102495222067016	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+102718586939172	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+102836019089423	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+102935562944391	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+103564065857673	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+103789418979024	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+103891108435688	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+103938635813019	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+104108137787492	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+104123885208694	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+104150488769816	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+104263288070410	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+104298372146559	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+104313600944179	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+104368298266529	1	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+104370052644889	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+104572654745007	1	src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\MenuSettingsCore.luau
+104653065913052	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+104939386447026	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+105022388634049	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+105174738530191	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+105239913123221	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+105259185543051	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+105332257572128	1	src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\MenuSettingsCore.luau
+105383892732692	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+105512961160214	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+105739255266194	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+105809276083298	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+105868972310187	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+105979524722742	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+106165469986263	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+106245973758286	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+106511081072026	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+106539327353468	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+107057352571926	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+107059739450818	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+107196193395084	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+107348347495503	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+107420072607549	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+107450970790359	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+107629225021909	1	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+107965479361362	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+108193488708045	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+108298889776274	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+108332677522687	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+108376174394858	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+108386325043753	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+108601194272398	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+108925540327913	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+109011701024857	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+109551061189295	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+109631342844042	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+109703706311990	1	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+109817620881965	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+109821069411968	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+109847084382411	1	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+109895180885969	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+109912030580774	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+110044063790768	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+110144100641430	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+110604269097290	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+110871342873234	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+110899271153357	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+111084358456516	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+111130481525459	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+111292035549103	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+111294428515900	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+111546991085962	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+111556163077365	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+111716594600092	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+111828790369037	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+111883394196706	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+112006753837233	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+112458229515184	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+112527212980043	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+112604873445730	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+112621683432310	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+112629203929705	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+112713722798134	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+112822790602709	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+113174257336117	1	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Domain\DonationProviderDomain.luau
+113375710791495	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+113422852596471	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+113514169488622	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+113540442408412	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+113671860390854	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+113775820465439	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+113869254733627	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+113893088623669	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+113959817509221	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+114020405798613	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+114074615085456	1	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+114103807209146	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+114163840181400	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+114195248684580	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+114197074365012	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+114442273558721	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+114551208161867	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+114603078735039	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+114740146443045	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+114863975922747	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+114978549287049	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+115073608543235	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+115096763935676	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+115097860720592	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+115170420165282	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+115188266058867	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+115565082142650	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+115696416196138	1	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+115993822736978	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+116157581392411	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+116287959058955	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+116350652866888	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+116810101071363	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+117080522293694	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+117144665787031	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+117506563527359	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+117632491427699	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+117967516896441	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+118125487107817	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+118196125326891	1	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+118218718578688	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+118233263927268	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+118399712162798	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+118569215442572	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+118576921627363	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+118701328116095	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+118748029942622	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+118760641732878	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+118909173648221	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+118968727745359	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+118979112683030	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+119078635423997	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+119219253317473	1	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+119321746546183	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+119333364168132	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+119423339775965	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+119650461903108	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+119665459305661	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+119712684242104	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+119818854083162	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+119850510256931	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+120181247918895	1	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+120195356293422	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+120372744407925	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+120636513903929	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+120764558637483	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+120836619403429	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+121165549956000	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+121280969667561	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+121400165012142	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+121538506430273	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+121710338767724	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+121877764253010	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+121924180718900	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+121944863348050	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+121965261422321	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+122361822964776	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+122562857796568	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+122594563714833	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+122633203386236	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+122686734315165	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+122923486151566	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+122938843104415	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+123147803157179	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+123159710530164	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+123366677200778	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+123487291482835	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+123693826982962	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+124300957930147	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+124392921024385	1	src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\MenuSettingsCore.luau
+124643429703789	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+124709540818201	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+124709720510839	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+124732913540797	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+124746262726459	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+124864383413098	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+124920646932671	2	src\ReplicatedStorage\Hazastudio_ClubKit\Icon\Elements\Caption.luau | src\ReplicatedStorage\Icon\Elements\Caption.luau
+124985830252662	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+125080307474747	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+125136999876794	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+125290849042794	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+125381993282812	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+126036899818489	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+126281074508689	1	src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\MenuSettingsCore.luau
+126413055980742	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+126866972878520	1	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+126967586899529	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+127008827107754	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+127184246882567	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+127187959840332	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+127571217150913	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+127577509957881	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+127587019305114	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+127758438322693	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+127870653544082	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+128015565546224	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+128064290174311	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+128955089402116	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+128974433957013	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+129054513355554	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+129222470793693	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+129298703036591	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+129538175579052	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+129760476145797	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+129921225917496	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+129940298052569	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+129981655509625	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+129981906004388	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+129986770708641	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+130090601262346	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+130101482767002	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+130260178705696	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+130557598125592	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+130592077020666	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+130636879834914	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+130655428676186	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+130714068337535	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+130717530186081	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+130720578754721	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+130759214751998	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+131105389265320	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+131205612858406	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+131307365418579	1	tools\place-fixes\FixBrokenTools.editmode.luau
+131314326818127	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+131368228122181	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+131418684232867	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+131545412033411	2	CHANGELOG.md | src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+131546047206193	1	tools\ClubKitPackagerPlugin\plugin\DovetailTheme.luau
+131684708813634	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+131696385415837	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+131713618866607	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+131726577920685	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+131809572214330	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+131862449230790	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+131905255689169	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+131932347779384	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+131961719288987	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+132007487625545	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+132216748532588	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+132401905689089	1	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+132410784218664	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+132553119513039	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+132595833148246	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+132600999999748	1	src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\MenuSettingsCore.luau
+132638645041950	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+132853873182991	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+133142959645215	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+133162419798847	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+133442239433150	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+133694273509671	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+134303843072560	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+134433996374075	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+134576985206004	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+134937924523939	1	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+135193838429269	1	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+135209871313586	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+135256403264233	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+135323103883291	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+135584724948838	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+135697536961722	1	src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\MusicPlayerUIBinder.luau
+135728286770178	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+136167426171120	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+136351215255381	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+136435287467211	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+136605705189964	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+136658418890203	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+136686951768261	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+136835719508404	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+136837823078011	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+136848744273375	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+137095705806436	1	src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\MenuSettingsCore.luau
+137125982161369	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+137271831883881	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+137330618189563	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+137389209582387	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+137401410195458	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+137479951758633	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+137616374837393	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+137856937636254	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+138239415866430	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+138296681512966	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+138899752344528	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+138956368560507	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+139198543036165	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+139271910064058	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+139562038241659	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+139719285604291	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+139762230068948	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+140288797433821	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+140474502351911	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+140545336142185	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+140609165953141	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua
+140714528066113	2	tools\music-migration\MigrateMusic.server.luau | tools\music-migration\SOURCE_DATA.generated.lua

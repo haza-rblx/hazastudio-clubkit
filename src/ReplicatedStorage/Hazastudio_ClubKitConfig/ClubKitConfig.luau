@@ -505,6 +505,10 @@ ClubKitConfig.JoinCommunity = {
 --     Minimum delay between emote clicks (seconds). Set >= SwitchFadeIn/Out so
 --     spam clicks do not stack tracks (avoids broken-arm artifacts).
 --
+--   WutwutEnabled
+--     Rapid re-click of the PLAYING emote hard-restarts it (fade 0 stutter).
+--     false = classic behavior (same-emote click toggles off). Default false.
+--
 ClubKitConfig.Sync = {
 	FadeIn = 0.45, -- idle → dance (fade in)
 	FadeOut = 0.45, -- dance → idle (fade out)
@@ -512,6 +516,7 @@ ClubKitConfig.Sync = {
 	SwitchFadeOut = 0.55, -- dance A→B: A fades out (match SwitchFadeIn)
 	SyncJoinFade = 0.4, -- join / sync to leader
 	SwitchInputCooldown = 0.55, -- emote click cooldown; >= SwitchFade*
+	WutwutEnabled = false, -- rapid same-emote re-click restarts dance (stutter)
 }
 
 -- =============================================================================

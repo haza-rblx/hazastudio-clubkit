@@ -415,6 +415,8 @@ ClubKitConfigSchema.defaults = {
 		SwitchFadeOut = 0.55,
 		SyncJoinFade = 0.4,
 		SwitchInputCooldown = 0.55,
+		-- Wutwut rapid same-emote restart. Fill-forward OFF: never auto-enables.
+		WutwutEnabled = false,
 	},
 	Features = {
 		MusicPlayer = true,

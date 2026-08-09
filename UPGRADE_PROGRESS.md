@@ -1,8 +1,8 @@
-﻿# Upgrade Progress — Club Kit
+# Upgrade Progress — Club Kit
 
 Internal scratch pad to track work **before** a version is released.
 
-**Current version:** `2.4.76` (see [`VERSION`](VERSION))  
+**Current version:** `2.4.77` (see [`VERSION`](VERSION))  
 **Next release target:** _(not set)_  
 **Active branch:** `main`
 

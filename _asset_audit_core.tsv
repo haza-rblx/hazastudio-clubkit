@@ -1,0 +1,51 @@
+﻿AssetId	Bucket	Files
+123456789	tools	tools\ClubKitPackagerPlugin\prototypes\setup-onboarding-v1.html
+180435571	core_src	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+507766388	core_src	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+947384308	core_src	src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\Effects\EffectDonate\LocalNuke\Scripts\SpawnFireworks.client.luau
+6035193736	tools	tools\CarryAnimUploaderPlugin\init.server.luau | tools\ClubKitPackagerPlugin\dist\HazastudioClubKitPackager.plugin.luau | tools\ClubKitPackagerPlugin\test-minimal.plugin.luau | tools\ClubKitStudioTools\init.server.luau
+12187365977	core_src	src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\Controllers\CinematicDockController.luau | src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\AvatarContextUI.luau | src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\MusicPlayerUIBinder.luau | src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\NotificationCenterBuilder.luau
+12345678901234	tools	tools\plugin-prototype\clubkit-panel-prototype.html
+70457204831369	core_src	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+70692404618828	core_src	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+71634976881165	core_src	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Domain\DonationProviderDomain.luau
+73049045961531	core_src	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+73598133071651	core_src	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+74687624322129	core_src	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+76421319383025	core_src	src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\MenuSettingsCore.luau
+79366863686652	core_src	src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\MenuSettingsCore.luau
+82655670841185	core_src	src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\MenuSettingsCore.luau
+84120496876687	core_src	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+87272651050606	core_src	src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\MenuSettingsCore.luau
+87479186690180	core_src	src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\MenuSettingsCore.luau
+94227935854947	core_src	src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\MenuSettingsCore.luau
+94928591392266	core_src	src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\MenuSettingsCore.luau
+96030964846916	tools	tools\ClubKitPackagerPlugin\dist\HazastudioClubKitPackager.plugin.luau | tools\ClubKitPackagerPlugin\plugin\HazastudioClubKit.plugin.luau | tools\ClubKitPackagerPlugin\plugin-build\HazastudioClubKit\init.plugin.luau
+99143048206723	core_src	src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\MenuSettingsCore.luau
+99832044843928	tools	tools\ClubKitPackagerPlugin\dist\HazastudioClubKitPackager.plugin.luau | tools\ClubKitPackagerPlugin\plugin\HazastudioClubKit.plugin.luau | tools\ClubKitPackagerPlugin\plugin-build\HazastudioClubKit\init.plugin.luau
+101268994273611	core_src	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+101906294438076	core_src	src\ReplicatedStorage\Hazastudio_ClubKit\Icon\Elements\Caption.luau | src\ReplicatedStorage\Icon\Elements\Caption.luau
+104368298266529	core_src	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+104572654745007	core_src	src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\MenuSettingsCore.luau
+105332257572128	core_src	src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\MenuSettingsCore.luau
+107629225021909	core_src	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+109703706311990	core_src	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+109847084382411	core_src	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+113174257336117	core_src	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Domain\DonationProviderDomain.luau
+114074615085456	core_src	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+115696416196138	core_src	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+118196125326891	core_src	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+119219253317473	core_src	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+120181247918895	core_src	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+124392921024385	core_src	src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\MenuSettingsCore.luau
+124920646932671	core_src	src\ReplicatedStorage\Hazastudio_ClubKit\Icon\Elements\Caption.luau | src\ReplicatedStorage\Icon\Elements\Caption.luau
+126281074508689	core_src	src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\MenuSettingsCore.luau
+126866972878520	core_src	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+131307365418579	tools	tools\place-fixes\FixBrokenTools.editmode.luau
+131546047206193	tools	tools\ClubKitPackagerPlugin\plugin\DovetailTheme.luau
+132401905689089	core_src	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+132600999999748	core_src	src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\MenuSettingsCore.luau
+134937924523939	core_src	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+135193838429269	core_src	src\ReplicatedStorage\Hazastudio_ClubKit\Shared\Constants\Config.luau
+135697536961722	core_src	src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\MusicPlayerUIBinder.luau
+137095705806436	core_src	src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\MenuSettingsCore.luau
