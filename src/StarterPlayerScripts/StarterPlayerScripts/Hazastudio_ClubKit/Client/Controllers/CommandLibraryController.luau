@@ -47,8 +47,20 @@ local function createCommandLibraryController(deps: {
 		if type(cachedRole) == "string" then
 			return (cachedRole :: any) :: RoleKey
 		end
-		local rank = player:GetRankInGroup(Config.Group.GROUP_ID)
-		return OverheadDomain.resolveRole(rank, player.UserId)
+		-- Studio / flaky network: GetRankInGroup can throw HttpError: NetFail and
+		-- used to abort CommandLibraryController.init before the topbar icon wired,
+		-- so the button looked clickable but did nothing.
+		local ok, rankOrErr = pcall(function()
+			return player:GetRankInGroup(Config.Group.GROUP_ID)
+		end)
+		if not ok then
+			log:warn("GetRankInGroup failed; CommandLibrary falling back to Guest until overhead/cache fills", {
+				error = tostring(rankOrErr),
+				groupId = Config.Group.GROUP_ID,
+			})
+			return "Guest"
+		end
+		return OverheadDomain.resolveRole(rankOrErr, player.UserId)
 	end
 
 	local function canExecute(text: string): boolean

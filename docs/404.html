@@ -1,11 +1,12 @@
-<!DOCTYPE html>
-<html lang="id" data-theme="dark">
+﻿<!DOCTYPE html>
+<html lang="id">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title data-i18n-meta="meta.home.title">Hazastudio Clubkit — Docs</title>
-  <meta name="description" data-i18n-meta="meta.home.description" content="Dokumentasi Hazastudio Club Kit: setup, update engine, dan referensi konfigurasi." />
-  <meta name="color-scheme" content="dark light" />
+  <title data-i18n-meta="meta.notfound.title">Halaman tidak ditemukan — Hazastudio Clubkit</title>
+  <meta name="description" data-i18n-meta="meta.notfound.description" content="Halaman yang kamu cari tidak ada atau sudah dipindahkan." />
+  <meta name="robots" content="noindex" />
+  <meta name="color-scheme" content="light dark" />
   <script>
     (function () {
       try {
@@ -13,7 +14,7 @@
         var saved = localStorage.getItem(key);
         var theme = saved === "light" || saved === "dark"
           ? saved
-          : "dark"; // Dovetail default = dark
+          : "dark";
         document.documentElement.setAttribute("data-theme", theme);
       } catch (_) {
         document.documentElement.setAttribute("data-theme", "dark");
@@ -25,7 +26,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="theme.css" />
 </head>
-<body data-page="home" class="doc-page--hub dock-page">
+<body data-page="notfound" class="doc-page--hub dock-page">
 
   <nav class="dock" data-i18n-aria-label="nav.site" aria-label="Navigasi situs">
       <a class="dock-item is-active" href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><span>Docs</span></a>
@@ -48,64 +49,19 @@
     </nav>
 
   <main class="hub-shell">
-    <article class="hub-hero">
-      <h1 class="hub-title" data-i18n="home.title">Hazastudio Club Kit</h1>
-      <p class="hub-lead" data-i18n="home.lead">
-        Setup place kamu, atur fitur, dan update engine. Config &amp; Secrets kamu tidak pernah diganti penuh saat Update Engine.
-      </p>
-    </article>
-
-    <dl class="meta-list">
-      <div class="meta-row">
-        <dt class="meta-key" data-i18n="home.stat.engine.label">Engine version</dt>
-        <dd class="meta-value"><span data-i18n="home.stat.engine.value">2.4.75</span></dd>
+    <div class="hub-hero">
+      <div class="hub-kicker">
+        <span data-i18n="notfound.kicker">404</span>
       </div>
-      <div class="meta-row">
-        <dt class="meta-key" data-i18n="home.stat.safe.label">Config &amp; Secrets</dt>
-        <dd class="meta-value" data-i18n="home.stat.safe.desc">Tidak pernah diganti penuh saat update</dd>
-      </div>
-      <div class="meta-row">
-        <dt class="meta-key" data-i18n="home.stat.path.label">Update path</dt>
-        <dd class="meta-value" data-i18n="home.stat.path.desc">Plugin → Check Update → Update Engine</dd>
-      </div>
-    </dl>
-
-    <section class="hub-panel" aria-labelledby="topics-heading">
-      <h2 id="topics-heading" data-i18n="home.topics.title">Topik utama</h2>
-      <ul class="hub-topic-list">
-        <li class="hub-topic-item">
-          <a href="setup.html" data-i18n="home.topics.setup.title">Setup place (satu alur)</a>
-          <p data-i18n="home.topics.setup.desc">Satu panduan dari insert kit sampai publish — branding, membership, donasi, play test, checklist.</p>
-        </li>
-        <li class="hub-topic-item">
-          <a href="updates.html" data-i18n="home.topics.updates.title">Update Engine &amp; changelog</a>
-          <p data-i18n="home.topics.updates.desc">Cara menarik engine terbaru dari plugin dan ringkasan perubahan per versi.</p>
-        </li>
-        <li class="hub-topic-item">
-          <a href="reference.html" data-i18n="home.topics.reference.title">Commands &amp; Features</a>
-          <p data-i18n="home.topics.reference.desc">Daftar lengkap command, feature toggle plugin, dan privilege.</p>
-        </li>
-      </ul>
-    </section>
-
-    <section class="hub-panel" aria-labelledby="latest-heading">
-      <h2 id="latest-heading" data-i18n="home.latest.title">Terbaru: 2.4.75</h2>
-      <p data-i18n-html="home.latest.body">
-        Hotfix: menghapus token sintaks stray di DonationController yang memblok server boot dan menahan client di loading screen.
+      <h1 class="hub-title" data-i18n="notfound.title">Halaman tidak ditemukan</h1>
+      <p class="hub-lead" data-i18n="notfound.lead">
+        Halaman ini tidak ada atau sudah dipindahkan. Coba mulai dari salah satu tautan berikut.
       </p>
-      <p class="hub-actions">
-        <a class="btn-secondary" href="updates.html#v2-4-75" data-i18n="home.latest.read">Baca catatan rilis</a>
-      </p>
-    </section>
-
-    <section class="hub-panel" aria-labelledby="workflow-heading">
-      <h2 id="workflow-heading" data-i18n="home.workflow.title">Alur umum</h2>
-      <ol class="update-steps">
-        <li data-i18n-html="home.workflow.1">Setup satu kali via <a href="setup.html">panduan setup</a>.</li>
-        <li data-i18n-html="home.workflow.2">Update engine harian: <a href="updates.html">Check Update → Update Engine</a> di plugin Studio.</li>
-        <li data-i18n-html="home.workflow.3">Simpan dan publish; verifikasi KitVersion di console (F9).</li>
-      </ol>
-    </section>
+      <div class="hub-actions">
+        <a class="btn-primary" href="index.html" data-i18n="notfound.home">Ke halaman utama</a>
+        <a class="btn-secondary" href="setup.html" data-i18n="home.cta.setup">Mulai setup</a>
+      </div>
+    </div>
   </main>
 
   <script src="docs.js"></script>

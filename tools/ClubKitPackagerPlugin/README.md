@@ -4,6 +4,8 @@ Roblox Studio plugin to **export** and **unpack** the full Club Kit v1.3 asset s
 
 ## Automatically packed
 
+Main template pack (`Create package`) — **SyncBhms excluded** (`DanceGui`, bridge scripts). Workspace **`hazastudioBoard`** folder packed as one unit.
+
 | Service | Contents |
 |---------|----------|
 | `ReplicatedFirst` | `Hazastudio_ClubKit` |
@@ -12,7 +14,11 @@ Roblox Studio plugin to **export** and **unpack** the full Club Kit v1.3 asset s
 | `StarterPlayerScripts` | `Hazastudio_ClubKit` |
 | `StarterGui` | GUI `01-` … `15-`, `IconGroup`, `HotbarGUI`, `CommandLibraryGUI`, etc. |
 | `ServerStorage` | `Tools`, `DonationEffects`, `DonationSounds` |
-| `Workspace` | Leaderboard boards, Top1–3 posters, `LiveChatDonations`, `RunningText` |
+| `Workspace` | `hazastudioBoard` folder, Top1–3 posters, `LiveChatDonations`, `RunningText` |
+
+**SyncBhms add-on** (`Create SyncBhms add-on`): BHMS dance place-pack only — ship separately from main template.
+
+Full delivery guide: [`docs/delivery/TEMPLATE_PLACE.md`](../../docs/delivery/TEMPLATE_PLACE.md)
 
 ## Install plugin
 

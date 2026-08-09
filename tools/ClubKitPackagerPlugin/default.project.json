@@ -38,6 +38,9 @@
     "ClubKitPanel": {
       "$path": "plugin/ClubKitPanel.luau"
     },
+    "CarryUploadCore": {
+      "$path": "plugin/CarryUploadCore.luau"
+    },
     "PanelMotion": {
       "$path": "plugin/PanelMotion.luau"
     },

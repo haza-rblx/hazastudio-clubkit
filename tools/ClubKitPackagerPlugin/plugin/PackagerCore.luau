@@ -6,6 +6,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
 local StarterGui = game:GetService("StarterGui")
 local StarterPlayer = game:GetService("StarterPlayer")
+local Workspace = game:GetService("Workspace")
 
 local Manifest = require(script.Parent.ClubKitManifest)
 
@@ -15,6 +16,8 @@ export type ExportOptions = {
 	includeConfig: boolean,
 	includeSecrets: boolean,
 }
+
+export type SyncBhmsAddonExportOptions = {}
 
 export type UnpackOptions = {
 	replaceExisting: boolean,
@@ -54,7 +57,26 @@ local function getService(serviceName: string): Instance?
 	return nil
 end
 
-local function ensureServiceFolder(packageRoot: Folder, serviceName: string): Folder
+local function removeExistingPackage(name: string)
+	for _, parent in ipairs({ Workspace, ServerStorage }) do
+		local old = parent:FindFirstChild(name)
+		if old then
+			old:Destroy()
+		end
+	end
+end
+
+local function createPackageModel(name: string): Model
+	local packageRoot = Instance.new("Model")
+	packageRoot.Name = name
+	return packageRoot
+end
+
+local function parentPackageModel(packageRoot: Model)
+	packageRoot.Parent = Workspace
+end
+
+local function ensureServiceFolder(packageRoot: Instance, serviceName: string): Folder
 	local existing = packageRoot:FindFirstChild(serviceName)
 	if existing and existing:IsA("Folder") then
 		return existing
@@ -113,6 +135,125 @@ local function findWorkspaceModelRoot(name: string): Instance?
 	return hit
 end
 
+local bhmsExcludeSet: { [string]: boolean }? = nil
+
+local function isBhmsExcluded(name: string): boolean
+	if not bhmsExcludeSet then
+		bhmsExcludeSet = {}
+		for _, n in ipairs(Manifest.BHMS_EXCLUDE_NAMES or {}) do
+			bhmsExcludeSet[n] = true
+		end
+	end
+	return bhmsExcludeSet[name] == true
+end
+
+local function isCollectExcluded(serviceName: string, instanceName: string): boolean
+	if isBhmsExcluded(instanceName) then
+		return true
+	end
+	for _, block in ipairs(Manifest.COLLECT_EXCLUDE or {}) do
+		if block.service == serviceName then
+			for _, name in ipairs(block.names) do
+				if name == instanceName then
+					return true
+				end
+			end
+		end
+	end
+	return false
+end
+
+local function isWorkspaceSkipped(name: string): boolean
+	for _, skipName in ipairs(Manifest.WORKSPACE_SKIP or {}) do
+		if skipName == name then
+			return true
+		end
+	end
+	return name == Manifest.PACKAGE_NAME or name == Manifest.SYNC_BHMS_ADDON_PACKAGE_NAME
+end
+
+local function stripShowcase(root: Instance): number
+	local stripped = 0
+	for _, desc in root:GetDescendants() do
+		if desc.Name == "ClubKitShowcase" and desc:IsA("ModuleScript") then
+			desc:Destroy()
+			stripped += 1
+		end
+	end
+	return stripped
+end
+
+local function blankTemplateConfigSource(source: string): string
+	local src = source
+	src = src:gsub("OwnerUserId%s*=%s*%d+", "OwnerUserId = 0")
+	src = src:gsub("AdminUserIds%s*=%s*{[^}]*}", "AdminUserIds = {} :: { [number]: boolean }")
+	src = src:gsub("LegacySyncBhms%s*=%s*true", "LegacySyncBhms = false")
+	return src
+end
+
+local function shouldSkipMainPackChild(serviceName: string, instanceName: string, options: ExportOptions): (boolean, string?)
+	if isBhmsExcluded(instanceName) then
+		return true, "bhms"
+	end
+	if serviceName == "Workspace" and isWorkspaceSkipped(instanceName) then
+		return true, "skip"
+	end
+	if not options.includeSecrets and serviceName == "ServerScriptService" and instanceName == "Hazastudio_ClubKitSecrets" then
+		return true, "secrets"
+	end
+	if options.includeConfig and serviceName == "ReplicatedStorage" and instanceName == "Hazastudio_ClubKitConfig" then
+		return true, "config_later"
+	end
+	if not options.includeConfig and serviceName == "ReplicatedStorage" and instanceName == "Hazastudio_ClubKitConfig" then
+		return true, "no_config"
+	end
+	return false, nil
+end
+
+local function cloneServiceChildrenForPack(
+	svc: Instance,
+	dest: Folder,
+	serviceName: string,
+	options: ExportOptions,
+	report: CollectReport
+)
+	for _, child in ipairs(svc:GetChildren()) do
+		local skip, reason = shouldSkipMainPackChild(serviceName, child.Name, options)
+		if skip then
+			if reason == "bhms" then
+				logWarn(report, ("Excluded (BHMS): %s/%s"):format(serviceName, child.Name))
+			end
+			continue
+		end
+		local okClone, clone = pcall(function()
+			return cloneInto(dest, child)
+		end)
+		if not okClone then
+			logWarn(report, ("Cannot clone %s/%s"):format(serviceName, child.Name))
+			continue
+		end
+		if child.Name == "Hazastudio_ClubKit" then
+			local stripped = stripShowcase(clone)
+			if stripped > 0 then
+				logWarn(report, ("Stripped ClubKitShowcase x%d"):format(stripped))
+			end
+		end
+		logOk(report, ("%s/%s"):format(serviceName, child.Name), clone)
+	end
+end
+
+local function isUnderWorkspaceBoardFolder(inst: Instance): boolean
+	local folderName = Manifest.WORKSPACE_BOARD_FOLDER
+	if type(folderName) ~= "string" or folderName == "" then
+		return false
+	end
+	local boardFolder = workspace:FindFirstChild(folderName)
+	if not boardFolder then
+		return false
+	end
+	return inst == boardFolder or inst:IsDescendantOf(boardFolder)
+end
+
 local function verifyKitFingerprint(): (boolean, string?)
 	local kitFolder = ReplicatedStorage:FindFirstChild("Hazastudio_ClubKit")
 	if not kitFolder then
@@ -132,7 +273,7 @@ local function verifyKitFingerprint(): (boolean, string?)
 	return true, product.KitVersion
 end
 
-local function writeManifestModule(packageRoot: Folder, version: string?, exportOptions: ExportOptions)
+local function writeManifestModule(packageRoot: Instance, version: string?, exportOptions: ExportOptions)
 	local old = packageRoot:FindFirstChild(Manifest.MANIFEST_NAME)
 	if old then
 		old:Destroy()
@@ -146,6 +287,7 @@ local function writeManifestModule(packageRoot: Folder, version: string?, export
 		("\texportedAt = %d,"):format(os.time()),
 		("\tincludeConfig = %s,"):format(tostring(exportOptions.includeConfig)),
 		("\tincludeSecrets = %s,"):format(tostring(exportOptions.includeSecrets)),
+		'\tcollectMode = "full_service",',
 		"}",
 	}
 
@@ -166,7 +308,7 @@ local function readManifest(packageRoot: Instance): { [string]: any }?
 	return nil
 end
 
-function PackagerCore.collect(options: ExportOptions): (Folder?, CollectReport)
+function PackagerCore.collect(options: ExportOptions): (Model?, CollectReport)
 	local report: CollectReport = {
 		ok = {},
 		missing = {},
@@ -179,149 +321,40 @@ function PackagerCore.collect(options: ExportOptions): (Folder?, CollectReport)
 		logWarn(report, versionOrErr :: string)
 	end
 
-	local old = ServerStorage:FindFirstChild(Manifest.PACKAGE_NAME)
-	if old then
-		old:Destroy()
-	end
+	removeExistingPackage(Manifest.PACKAGE_NAME)
 
-	local packageRoot = Instance.new("Folder")
-	packageRoot.Name = Manifest.PACKAGE_NAME
+	local packageRoot = createPackageModel(Manifest.PACKAGE_NAME)
 
-	for _, target in ipairs(Manifest.SERVICE_ROOTS) do
-		local svc = getService(target.service)
-		local dest = ensureServiceFolder(packageRoot, target.service)
+	for _, serviceName in ipairs(Manifest.FULL_SERVICE_PACK or {}) do
+		local svc = getService(serviceName)
 		if not svc then
-			logMissing(report, ("service %s"):format(target.service))
+			logMissing(report, ("service %s"):format(serviceName))
 			continue
 		end
-		local src = svc:FindFirstChild(target.name)
-		if not src then
-			logMissing(report, ("%s/%s"):format(target.service, target.name))
-			continue
-		end
-		local clone = cloneInto(dest, src)
-		-- Strip buyer-unwanted demo modules from full kit clone (any depth).
-		if target.service == "ReplicatedStorage" and target.name == "Hazastudio_ClubKit" then
-			local stripped = 0
-			for _, desc in clone:GetDescendants() do
-				if desc.Name == "ClubKitShowcase" and desc:IsA("ModuleScript") then
-					desc:Destroy()
-					stripped += 1
-				end
-			end
-			if stripped > 0 then
-				logWarn(report, ("Stripped ClubKitShowcase x%d (not shipped to buyers)"):format(stripped))
-			end
-		end
-		logOk(report, ("%s/%s [%d instances]"):format(target.service, target.name, countDescendants(clone)), clone)
+		local dest = ensureServiceFolder(packageRoot, serviceName)
+		cloneServiceChildrenForPack(svc, dest, serviceName, options, report)
 	end
 
-	for _, target in ipairs(Manifest.OPTIONAL_ROOTS) do
-		local include = (target.key == "config" and options.includeConfig)
-			or (target.key == "secrets" and options.includeSecrets)
-		if not include then
-			continue
-		end
-		local svc = getService(target.service)
-		local dest = ensureServiceFolder(packageRoot, target.service)
-		if not svc then
-			logMissing(report, ("service %s"):format(target.service))
-			continue
-		end
-		local src = svc:FindFirstChild(target.name)
-		if not src then
-			logMissing(report, ("%s/%s"):format(target.service, target.name))
-			continue
-		end
-		local clone = cloneInto(dest, src)
-		logOk(report, ("%s/%s [%d instances]"):format(target.service, target.name, countDescendants(clone)), clone)
-	end
-
-	-- ReplicatedStorage / WorldEffects (folder or separate children).
-	local rsFolder = ensureServiceFolder(packageRoot, "ReplicatedStorage")
-	local worldEffects = ReplicatedStorage:FindFirstChild("WorldEffects")
-	if worldEffects then
-		local clone = cloneInto(rsFolder, worldEffects)
-		logOk(report, ("ReplicatedStorage/WorldEffects [%d instances]"):format(countDescendants(clone)), clone)
+	local starterPlayerScripts = StarterPlayer:FindFirstChild("StarterPlayerScripts")
+	if starterPlayerScripts then
+		local dest = ensureServiceFolder(packageRoot, "StarterPlayerScripts")
+		cloneServiceChildrenForPack(starterPlayerScripts, dest, "StarterPlayerScripts", options, report)
 	else
-		local wrapper = Instance.new("Folder")
-		wrapper.Name = "WorldEffects"
-		wrapper.Parent = rsFolder
-		local foundAny = false
-		for _, effectName in ipairs(Manifest.WORLD_EFFECTS) do
-			local src = ReplicatedStorage:FindFirstChild(effectName)
-			if src then
-				cloneInto(wrapper, src)
-				foundAny = true
-				logOk(report, ("ReplicatedStorage/%s"):format(effectName), src)
-			else
-				logMissing(report, ("ReplicatedStorage/%s"):format(effectName))
+		logMissing(report, "StarterPlayerScripts")
+	end
+
+	if options.includeConfig then
+		local configSrc = ReplicatedStorage:FindFirstChild("Hazastudio_ClubKitConfig")
+		if configSrc then
+			local dest = ensureServiceFolder(packageRoot, "ReplicatedStorage")
+			local clone = cloneInto(dest, configSrc)
+			local configMod = clone:FindFirstChild("ClubKitConfig")
+			if configMod and configMod:IsA("ModuleScript") then
+				configMod.Source = blankTemplateConfigSource(configMod.Source)
 			end
-		end
-		if not foundAny then
-			wrapper:Destroy()
-		end
-	end
-
-	-- StarterGui
-	local sgFolder = ensureServiceFolder(packageRoot, "StarterGui")
-	local guiSeen: { [string]: boolean } = {}
-	for _, guiName in ipairs(Manifest.STARTER_GUI_EXACT) do
-		if guiSeen[guiName] then
-			continue
-		end
-		local src = StarterGui:FindFirstChild(guiName)
-		if src then
-			guiSeen[guiName] = true
-			local clone = cloneInto(sgFolder, src)
-			logOk(report, ("StarterGui/%s"):format(guiName), clone)
-		end
-	end
-	for _, child in ipairs(StarterGui:GetChildren()) do
-		if child:IsA("ScreenGui") and string.match(child.Name, "^%d%d%-") and not guiSeen[child.Name] then
-			guiSeen[child.Name] = true
-			local clone = cloneInto(sgFolder, child)
-			logOk(report, ("StarterGui/%s (auto)"):format(child.Name), clone)
-		end
-	end
-
-	-- ServerStorage
-	local ssFolder = ensureServiceFolder(packageRoot, "ServerStorage")
-	for _, name in ipairs(Manifest.SERVER_STORAGE_EXACT) do
-		local src = ServerStorage:FindFirstChild(name)
-		if src then
-			local clone = cloneInto(ssFolder, src)
-			logOk(report, ("ServerStorage/%s [%d instances]"):format(name, countDescendants(clone)), clone)
+			logOk(report, "ReplicatedStorage/Hazastudio_ClubKitConfig (blank template)", clone)
 		else
-			logMissing(report, ("ServerStorage/%s"):format(name))
-		end
-	end
-
-	-- Workspace
-	local wsFolder = ensureServiceFolder(packageRoot, "Workspace")
-	for _, name in ipairs(Manifest.WORKSPACE_EXACT) do
-		local src = findWorkspaceModelRoot(name)
-		if src then
-			local clone = cloneInto(wsFolder, src)
-			logOk(report, ("Workspace/%s"):format(name), clone)
-		else
-			logMissing(report, ("Workspace/%s"):format(name))
-		end
-	end
-	for _, name in ipairs(Manifest.WORKSPACE_MULTI) do
-		local found = false
-		local counter = 0
-		for _, descendant in ipairs(workspace:GetDescendants()) do
-			if descendant.Name == name then
-				found = true
-				counter += 1
-				local destName = if counter == 1 then name else ("%s__%d"):format(name, counter)
-				local clone = cloneInto(wsFolder, descendant, destName)
-				logOk(report, ("Workspace/%s @ %s"):format(destName, descendant:GetFullName()), clone)
-			end
-		end
-		if not found then
-			logMissing(report, ("Workspace/%s"):format(name))
+			logMissing(report, "ReplicatedStorage/Hazastudio_ClubKitConfig")
 		end
 	end
 
@@ -333,14 +366,99 @@ function PackagerCore.collect(options: ExportOptions): (Folder?, CollectReport)
 	end
 
 	writeManifestModule(packageRoot, if valid then versionOrErr else nil, options)
-	packageRoot.Parent = ServerStorage
+	parentPackageModel(packageRoot)
 
 	return packageRoot, report
 end
 
+-- SyncBhms add-on: legacy BHMS dance pack (extras/place-packs/SyncBhms). Ship separately from main template.
+function PackagerCore.collectSyncBhmsAddon(_options: SyncBhmsAddonExportOptions?): (Model?, CollectReport)
+	local report: CollectReport = {
+		ok = {},
+		missing = {},
+		warnings = {},
+		instanceCount = 0,
+	}
+
+	local valid, versionOrErr = verifyKitFingerprint()
+	if not valid then
+		logWarn(report, versionOrErr :: string)
+	end
+
+	removeExistingPackage(Manifest.SYNC_BHMS_ADDON_PACKAGE_NAME)
+
+	local packageRoot = createPackageModel(Manifest.SYNC_BHMS_ADDON_PACKAGE_NAME)
+
+	local bhmsServices = {
+		"ReplicatedStorage",
+		"ServerScriptService",
+		"StarterGui",
+		"StarterPlayerScripts",
+		"Workspace",
+	}
+
+	for _, serviceName in ipairs(bhmsServices) do
+		local svc = getService(serviceName)
+		if not svc then
+			logMissing(report, ("service %s"):format(serviceName))
+			continue
+		end
+		local dest = ensureServiceFolder(packageRoot, serviceName)
+		local foundAny = false
+		for _, child in ipairs(svc:GetChildren()) do
+			if not isBhmsExcluded(child.Name) then
+				continue
+			end
+			local okClone, clone = pcall(function()
+				return cloneInto(dest, child)
+			end)
+			if not okClone then
+				logWarn(report, ("Cannot clone %s/%s"):format(serviceName, child.Name))
+				continue
+			end
+			foundAny = true
+			if child.Name == "SyncBhms" then
+				logOk(report, ("Workspace/SyncBhms (full place-pack model) [%d instances]"):format(countDescendants(clone)), clone)
+			else
+				logOk(report, ("%s/%s"):format(serviceName, child.Name), clone)
+			end
+		end
+		if not foundAny and #dest:GetChildren() == 0 then
+			dest:Destroy()
+		end
+	end
+
+	if #packageRoot:GetChildren() == 0 then
+		logMissing(report, "No SyncBhms instances found in place (see extras/place-packs/SyncBhms/)")
+	end
+
+	local mod = Instance.new("ModuleScript")
+	mod.Name = Manifest.MANIFEST_NAME
+	mod.Source = table.concat({
+		"-- Generated by Hazastudio Club Kit Packager (SyncBhms add-on). Do not edit manually.",
+		"return {",
+		('\tproductId = "%s",'):format(Manifest.PRODUCT_ID),
+		('\tkitVersion = "%s",'):format(if valid then versionOrErr else Manifest.KIT_VERSION),
+		("\texportedAt = %d,"):format(os.time()),
+		'\tpackageKind = "sync_bhms_addon",',
+		'\tcollectMode = "bhms_only",',
+		"}",
+	}, "\n")
+	mod.Parent = packageRoot
+
+	parentPackageModel(packageRoot)
+	logWarn(report, "SyncBhms add-on = BHMS dance pack only. Set ClubKitConfig.Features.LegacySyncBhms = true after unpack.")
+
+	return packageRoot, report
+end
+
+function PackagerCore.collectGroupAddon(options: SyncBhmsAddonExportOptions?): (Model?, CollectReport)
+	return PackagerCore.collectSyncBhmsAddon(options)
+end
+
 function PackagerCore.findPackageRoot(instances: { Instance }): Instance?
 	for _, inst in ipairs(instances) do
-		if inst.Name == Manifest.PACKAGE_NAME then
+		if inst.Name == Manifest.PACKAGE_NAME or inst.Name == Manifest.SYNC_BHMS_ADDON_PACKAGE_NAME then
 			return inst
 		end
 	end
@@ -350,7 +468,10 @@ function PackagerCore.findPackageRoot(instances: { Instance }): Instance?
 		end
 	end
 	for _, inst in ipairs(instances) do
-		if inst:IsA("Folder") and inst:FindFirstChild("ReplicatedStorage") and inst:FindFirstChild("ServerScriptService") then
+		if (inst:IsA("Folder") or inst:IsA("Model"))
+			and inst:FindFirstChild("ReplicatedStorage")
+			and inst:FindFirstChild("ServerScriptService")
+		then
 			return inst
 		end
 	end
@@ -440,6 +561,7 @@ function PackagerCore.unpack(packageRoot: Instance, options: UnpackOptions): Unp
 		"StarterGui",
 		"ServerStorage",
 		"Workspace",
+		"Lighting",
 	}
 
 	for _, serviceName in ipairs(serviceNames) do

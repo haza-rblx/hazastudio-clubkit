@@ -998,11 +998,8 @@ function UpdaterPanel.create(parent: Instance, opts: CreateOpts?): PanelApi
 		if opts.onCarryFix then
 			opts.onCarryFix()
 		else
-			warn(
-				"[ClubKitPanel] Carry fix: use toolbar Hazastudio Club Kit → Carry Upload (local plugin + CreateAssetAsync beta)."
-			)
-			print("[ClubKitPanel] Carry fix — open Carry Upload from the Plugins toolbar.")
-			setStatus("Carry fix — open Carry Upload on toolbar")
+			print("[ClubKitPanel] Carry fix lives under Tools → Carry animations (Open Panel).")
+			setStatus("Carry fix — Open Panel → Tools")
 		end
 	end)
 

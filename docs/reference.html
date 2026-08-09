@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title data-i18n-meta="meta.reference.title">Reference — Hazastudio Clubkit</title>
+  <meta name="description" data-i18n-meta="meta.reference.description" content="Daftar command, feature toggle, dan privilege Hazastudio Club Kit." />
+  <meta name="color-scheme" content="light dark" />
+  <script>
+    (function () {
+      try {
+        var key = "clubkit-docs-theme";
+        var saved = localStorage.getItem(key);
+        var theme = saved === "light" || saved === "dark" ? saved : "dark";
+        document.documentElement.setAttribute("data-theme", theme);
+      } catch (_) {
+        document.documentElement.setAttribute("data-theme", "dark");
+      }
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="theme.css" />
+</head>
+<body data-page="reference" class="dock-page">
+
+  <div class="read-progress" id="readProgress" aria-hidden="true"></div>
+
+  <nav class="dock" data-i18n-aria-label="nav.site" aria-label="Navigasi situs">
+      <a class="dock-item" href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><span>Docs</span></a>
+      <a class="dock-item" href="setup.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg><span>Setup</span></a>
+      <a class="dock-item is-active" href="reference.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M8 7h8"/><path d="M8 11h8"/><path d="M8 15h5"/></svg><span data-i18n="nav.reference">Reference</span></a>
+      <a class="dock-item" href="updates.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg><span>Updates</span></a>
+      <div class="dock-divider"></div>
+      <div class="dock-actions">
+      <div class="lang-switch" id="langSwitch" role="group" data-i18n-aria-label="lang.label" aria-label="Bahasa">
+          <button type="button" class="lang-btn" data-lang="id" aria-pressed="true">ID</button>
+          <button type="button" class="lang-btn" data-lang="en" aria-pressed="false">EN</button>
+          <button type="button" class="lang-btn" data-lang="ja" aria-pressed="false">JA</button>
+          <button type="button" class="lang-btn" data-lang="es" aria-pressed="false">ES</button>
+        </div>
+      <button type="button" class="dock-item theme-toggle" id="themeToggle" aria-label="Toggle theme" title="Toggle theme">
+      <span class="icon-sun"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg></span>
+      <span class="icon-moon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></span>
+    </button>
+      </div>
+    </nav>
+
+  <div class="doc-shell doc-shell--ref">
+
+    <aside class="sidebar" data-i18n-aria-label="ref.side.aria" aria-label="Reference">
+      <div class="sidebar-group">
+        <div class="sidebar-label" data-i18n="ref.side.label">Reference</div>
+        <a class="sidebar-link" href="#commands" data-i18n="ref.side.commands">Commands</a>
+        <a class="sidebar-link" href="#features" data-i18n="ref.side.features">Features</a>
+        <a class="sidebar-link" href="#privileges" data-i18n="ref.side.privileges">Privileges</a>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="page-header">
+        <h1 class="page-title" data-i18n="ref.title">Reference</h1>
+        <p class="section-lead" data-i18n-html="ref.lead">Daftar command, toggle <code>Features</code> (sama dengan plugin Config → Features), dan privilege per kategori role. Untuk panduan setup, lihat <a href="setup.html">Setup</a>.</p>
+      </header>
+
+      <section id="commands">
+        <h2 class="section-title" data-i18n="ref.cmd.title">Commands</h2>
+        <p class="section-body" data-i18n-html="ref.cmd.lead">Sumber: Command Library in-game. Deskripsi di bawah ikut copy English engine. Access = gate permission (bukan nama role mentah).</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th data-i18n="ref.cmd.th.cmd">Command</th>
+                <th data-i18n="ref.cmd.th.access">Access</th>
+                <th data-i18n="ref.cmd.th.desc">Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td><code>/setbio &lt;text&gt;</code></td><td data-i18n="ref.gate.public">public</td><td>Set your profile bio.</td></tr>
+              <tr><td><code>/clearbio</code></td><td data-i18n="ref.gate.public">public</td><td>Remove your current profile bio.</td></tr>
+              <tr><td><code>/status &lt;text&gt;</code></td><td data-i18n="ref.gate.public">public</td><td>Set your profile status.</td></tr>
+              <tr><td><code>/clearstatus</code></td><td data-i18n="ref.gate.public">public</td><td>Remove your current profile status.</td></tr>
+              <tr><td><code>/setcommun &lt;name&gt;</code></td><td data-i18n="ref.gate.public">public</td><td>Set your community badge.</td></tr>
+              <tr><td><code>/clearcommun</code></td><td data-i18n="ref.gate.public">public</td><td>Remove your current community badge.</td></tr>
+              <tr><td><code>/re</code></td><td data-i18n="ref.gate.public">public</td><td>Refresh your avatar without leaving this server.</td></tr>
+              <tr><td><code>/rejoin</code></td><td data-i18n="ref.gate.public">public</td><td>Rejoin this server and return to your last saved position.</td></tr>
+              <tr><td><code>/bring &lt;player&gt;</code></td><td data-i18n="ref.gate.canTeleport">canTeleport</td><td>Bring another player to your position.</td></tr>
+              <tr><td><code>/to &lt;player&gt;</code></td><td data-i18n="ref.gate.canTeleport">canTeleport</td><td>Move yourself to another player.</td></tr>
+              <tr><td><code>/gravity</code></td><td data-i18n="ref.gate.admin">admin</td><td>Restore gravity for everyone. Shift+G also works.</td></tr>
+              <tr><td><code>/ungravity [1-10]</code></td><td data-i18n="ref.gate.admin">admin</td><td>Float everyone. Optional speed 1–10. Shift+U / /gravity to restore.</td></tr>
+              <tr><td><code>/drone start|stop</code></td><td data-i18n="ref.gate.admin">admin</td><td>Shared freecam — you pilot, everyone sees your view.</td></tr>
+              <tr><td><code>/crowd &lt;text&gt;</code></td><td data-i18n="ref.gate.admin">admin</td><td>Make every player show the same chat bubble.</td></tr>
+              <tr><td><code>/announce &lt;msg&gt;</code></td><td data-i18n="ref.gate.canAnnounce">canAnnounce</td><td>Broadcast a server announcement (alias /a).</td></tr>
+              <tr><td><code>/gift &lt;player|all&gt; &lt;tier&gt;</code></td><td data-i18n="ref.gate.admin">admin</td><td>Give a membership tier (or gift everyone with all).</td></tr>
+              <tr><td><code>/ungift &lt;player&gt; &lt;tier&gt;</code></td><td data-i18n="ref.gate.admin">admin</td><td>Remove a gifted membership.</td></tr>
+              <tr><td><code>/setrole &lt;player&gt; &lt;role&gt;</code></td><td data-i18n="ref.gate.admin">admin</td><td>Set a role override for another player.</td></tr>
+              <tr><td><code>/unsetrole &lt;player&gt;</code></td><td data-i18n="ref.gate.admin">admin</td><td>Remove a role override.</td></tr>
+              <tr><td><code>/fakecash [player] &lt;idr&gt; [message]</code></td><td data-i18n="ref.gate.admin">admin</td><td>Preview IDR donation (notif + aura + world VFX) — does not persist.</td></tr>
+              <tr><td><code>/fakerobux [player] &lt;robux&gt; [message]</code></td><td data-i18n="ref.gate.admin">admin</td><td>Preview Robux donation (notif + aura) — does not persist.</td></tr>
+              <tr><td><code>/testcash / /testsaweria / /testdonate</code></td><td data-i18n="ref.gate.admin">admin</td><td>Deprecated aliases → /fakecash.</td></tr>
+              <tr><td><code>/testrobux</code></td><td data-i18n="ref.gate.admin">admin</td><td>Deprecated alias → /fakerobux.</td></tr>
+              <tr><td><code>/setrobux &lt;player&gt; &lt;amount&gt;</code></td><td data-i18n="ref.gate.owner">owner</td><td>Add Robux to a player's leaderboard total (persist).</td></tr>
+              <tr><td><code>/removerobux &lt;player|me&gt; [amount]</code></td><td data-i18n="ref.gate.owner">owner</td><td>Remove Robux adjustment. me = Studio-only self clear.</td></tr>
+              <tr><td><code>/donatecash &lt;player&gt; &lt;amount&gt; [message]</code></td><td data-i18n="ref.gate.owner">owner</td><td>Persist IDR + notif + VFX.</td></tr>
+              <tr><td><code>/addcash &lt;player&gt; &lt;amount&gt;</code></td><td data-i18n="ref.gate.owner">owner</td><td>Persist IDR to leaderboard only (no VFX).</td></tr>
+              <tr><td><code>/removecash &lt;player|me&gt; [amount]</code></td><td data-i18n="ref.gate.owner">owner</td><td>Remove IDR manual adjustment.</td></tr>
+              <tr><td><code>/donatebagibagi / /addbagibagi / /removebagibagi</code></td><td data-i18n="ref.gate.owner">owner</td><td>Deprecated aliases → /donatecash / /addcash / /removecash.</td></tr>
+              <tr><td><code>/refreshleaderboard &lt;type&gt;</code></td><td data-i18n="ref.gate.owner">owner</td><td>Refresh boards: all | robux | community | bagibagi | likes | audit.</td></tr>
+              <tr><td><code>/showcase on|off|status</code></td><td data-i18n="ref.gate.owner">owner</td><td>Dev/demo only if ClubKitShowcase is present — not required for go-live.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card">
+          <div class="card-title" data-i18n="ref.cmd.note.title">Preview vs persist</div>
+          <p data-i18n-html="ref.cmd.note.body"><code>/fakecash</code> &amp; <code>/fakerobux</code> = preview saja (board tidak berubah). Persist: <code>/addcash</code>, <code>/donatecash</code>, <code>/setrobux</code>.</p>
+        </div>
+      </section>
+
+      <section id="features">
+        <h2 class="section-title" data-i18n="ref.feat.title">Feature manifest</h2>
+        <p class="section-body" data-i18n-html="ref.feat.lead">Sama dengan <code>ClubKitConfigSchema.FEATURE_MANIFEST</code> — daftar yang muncul di plugin <strong>Config → Features</strong>. Set di <code>ClubKitConfig.Features</code> (<code>true</code>/<code>false</code>). Alias legacy <code>DonationSaweria</code> tidak ditampilkan di panel (tetap dibaca runtime sebagai alias <code>DonationCash</code>).</p>
+        <h3 class="ref-subhead" data-i18n="ref.feat.g1">Music &amp; dance</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th data-i18n="ref.feat.th.key">Key</th><th data-i18n="ref.feat.th.label">Label (plugin)</th></tr></thead>
+            <tbody>
+              <tr><td><code>MusicPlayer</code></td><td>Music player</td></tr>
+              <tr><td><code>MusicCatalogSeed</code></td><td>Default playlist</td></tr>
+              <tr><td><code>SyncDance</code></td><td>Sync dance</td></tr>
+              <tr><td><code>LegacySyncBhms</code></td><td>Legacy SyncBhms place-pack</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h3 class="ref-subhead" data-i18n="ref.feat.g2">Interface</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th data-i18n="ref.feat.th.key">Key</th><th data-i18n="ref.feat.th.label">Label (plugin)</th></tr></thead>
+            <tbody>
+              <tr><td><code>Hotbar</code></td><td>Hotbar</td></tr>
+              <tr><td><code>LoadingScreen</code></td><td>Loading screen</td></tr>
+              <tr><td><code>Settings</code></td><td>Settings menu</td></tr>
+              <tr><td><code>JoinGreetings</code></td><td>Join greetings</td></tr>
+              <tr><td><code>PromptJoinCommunityOnLoad</code></td><td>Join community prompt</td></tr>
+              <tr><td><code>AdminHub</code></td><td>Admin Hub (04-AdminHub)</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h3 class="ref-subhead" data-i18n="ref.feat.g3">Social &amp; progression</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th data-i18n="ref.feat.th.key">Key</th><th data-i18n="ref.feat.th.label">Label (plugin)</th></tr></thead>
+            <tbody>
+              <tr><td><code>Couples</code></td><td>Couple system</td></tr>
+              <tr><td><code>Stickers</code></td><td>Stickers</td></tr>
+              <tr><td><code>LevelSystem</code></td><td>Level &amp; XP</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h3 class="ref-subhead" data-i18n="ref.feat.g4">Monetization</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th data-i18n="ref.feat.th.key">Key</th><th data-i18n="ref.feat.th.label">Label (plugin)</th></tr></thead>
+            <tbody>
+              <tr><td><code>Shop</code></td><td>Shop</td></tr>
+              <tr><td><code>Leaderboards</code></td><td>Donation boards</td></tr>
+              <tr><td><code>DonationCash</code></td><td>Cash donations</td></tr>
+              <tr><td><code>DonationRobux</code></td><td>Robux donations</td></tr>
+              <tr><td><code>DonationWorldEffects</code></td><td>Donation world effects</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h3 class="ref-subhead" data-i18n="ref.feat.g5">More</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th data-i18n="ref.feat.th.key">Key</th><th data-i18n="ref.feat.th.label">Label (plugin)</th></tr></thead>
+            <tbody>
+              <tr><td><code>Gravity</code></td><td>Gravity tool</td></tr>
+              <tr><td><code>VipOnCommunityJoin</code></td><td>Free VIP for group members</td></tr>
+              <tr><td><code>DonationRankGradientAnim</code></td><td>Donor rank animation</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="privileges">
+        <h2 class="section-title" data-i18n="ref.priv.title">Privileges</h2>
+        <p class="section-body" data-i18n-html="ref.priv.lead">Privilege diatur per <strong>kategori role</strong> di <code>ClubKitConfig</code>, bukan per role individual. Command admin/owner juga memakai gate terpisah (lihat kolom Access di atas).</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Key</th><th data-i18n="ref.priv.th.effect">Effect</th></tr></thead>
+            <tbody>
+              <tr><td><code>canGift</code></td><td data-i18n="ref.priv.canGift"> /setrole, /gift, /ungift (also gated by admin panel roles)</td></tr>
+              <tr><td><code>canAnnounce</code></td><td data-i18n="ref.priv.canAnnounce">/announce and paid broadcast icon</td></tr>
+              <tr><td><code>canTeleport</code></td><td data-i18n="ref.priv.canTeleport">/bring, /to</td></tr>
+              <tr><td><code>adminPanel</code></td><td data-i18n="ref.priv.adminPanel">Admin panel + cinematic dock</td></tr>
+              <tr><td><code>musicManage</code></td><td data-i18n="ref.priv.musicManage">DJ / music player management</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const sections = document.querySelectorAll("section[id]");
+    const sidebarLinks = document.querySelectorAll(".sidebar-link");
+    const progressBar = document.getElementById("readProgress");
+    const navObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        const id = entry.target.id;
+        sidebarLinks.forEach((link) => {
+          link.classList.toggle("active", link.getAttribute("href") === "#" + id);
+        });
+      });
+    }, { rootMargin: "-15% 0px -75% 0px" });
+    sections.forEach((s) => navObserver.observe(s));
+    function updateProgress() {
+      const doc = document.documentElement;
+      const scrollTop = doc.scrollTop || document.body.scrollTop;
+      const height = doc.scrollHeight - doc.clientHeight;
+      if (progressBar && height > 0) progressBar.style.width = ((scrollTop / height) * 100) + "%";
+    }
+    window.addEventListener("scroll", updateProgress, { passive: true });
+    updateProgress();
+  </script>
+  <script src="docs.js"></script>
+  <script src="i18n.js"></script>
+</body>
+</html>

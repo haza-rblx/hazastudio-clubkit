@@ -1,14 +1,21 @@
 --!nocheck
--- Manifest aset Club Kit v1.3 untuk export / unpack otomatis.
+-- Club Kit asset manifest for automated export / unpack.
 
 local ClubKitManifest = {}
 
 ClubKitManifest.PACKAGE_NAME = "HazastudioClubKit_Package"
 ClubKitManifest.MANIFEST_NAME = "_ClubKitManifest"
 ClubKitManifest.PRODUCT_ID = "hazastudioclubkit"
-ClubKitManifest.KIT_VERSION = "2.4.71"
+ClubKitManifest.KIT_VERSION = "2.4.76"
+-- Soft-update version for the Studio dock (may diverge from KIT_VERSION for plugin-only fixes).
+ClubKitManifest.PLUGIN_VERSION = "2.4.76"
 
--- Folder engine per service (seluruh subtree di-clone).
+-- Soft-update: fetch these Luau modules from GitHub tags (exclude bootstrap).
+ClubKitManifest.PLUGIN_SOURCE_PREFIX = "tools/ClubKitPackagerPlugin/plugin/"
+ClubKitManifest.PLUGIN_BOOTSTRAP = "HazastudioClubKit.plugin.luau"
+ClubKitManifest.PLUGIN_APPLIED_TAG_SETTING = "ClubKit_PluginAppliedTag"
+
+-- Engine folder per service (entire subtree cloned).
 ClubKitManifest.SERVICE_ROOTS = {
 	{ service = "ReplicatedFirst", name = "Hazastudio_ClubKit" },
 	{ service = "ReplicatedStorage", name = "Hazastudio_ClubKit" },
@@ -17,7 +24,7 @@ ClubKitManifest.SERVICE_ROOTS = {
 	{ service = "StarterPlayerScripts", name = "Hazastudio_ClubKit" },
 }
 
--- Opsional ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â buyer config & secrets (bisa di-skip saat export update).
+-- Optional — buyer config & secrets (can be skipped on export update).
 ClubKitManifest.OPTIONAL_ROOTS = {
 	{ service = "ReplicatedStorage", name = "Hazastudio_ClubKitConfig", key = "config" },
 	{ service = "ServerScriptService", name = "Hazastudio_ClubKitSecrets", key = "secrets" },
@@ -60,11 +67,62 @@ ClubKitManifest.WORKSPACE_EXACT = {
 	"Top3Cash",
 }
 
--- Bisa ada banyak instance dengan nama sama (mis. beberapa RunningText).
+-- Multiple instances may share the same name (e.g. several RunningText).
 ClubKitManifest.WORKSPACE_MULTI = {
 	"LiveChatDonations",
 	"RunningText",
 }
+
+-- Pack entire board folder (preserves hazastudioBoard layout). Individual WORKSPACE_EXACT
+-- entries under this folder are skipped when the folder is packed.
+ClubKitManifest.WORKSPACE_BOARD_FOLDER = "hazastudioBoard"
+
+-- Never ship in the main template pack (SyncBhms place-pack — see extras/place-packs/SyncBhms/).
+ClubKitManifest.BHMS_EXCLUDE_NAMES = {
+	"SyncBhmsGate",
+	"SyncBhmsAcmBridge",
+	"Remotes2",
+	"StoredAnimations",
+	"SyncSettings",
+	"SyncBhmsRemotes",
+	"SyncServer",
+	"DanceGui",
+	"SyncBhms",
+	"TopbarDance",
+	"danceDraging",
+	"danceDraging1",
+	"BeatDanceClient",
+}
+
+-- Legacy per-service exclude table (unpack / docs); BHMS_EXCLUDE_NAMES is authoritative for template pack.
+ClubKitManifest.COLLECT_EXCLUDE = {
+	{ service = "ReplicatedStorage", names = { "SyncBhmsGate", "SyncBhmsAcmBridge", "Remotes2", "StoredAnimations", "SyncSettings" } },
+	{ service = "ServerScriptService", names = { "SyncBhmsRemotes", "SyncServer" } },
+	{ service = "StarterGui", names = { "DanceGui" } },
+	{ service = "StarterPlayerScripts", names = { "TopbarDance", "danceDraging", "danceDraging1", "BeatDanceClient" } },
+	{ service = "Workspace", names = { "SyncBhms" } },
+}
+
+-- Template place: clone every child in these services (not manifest pick-list).
+ClubKitManifest.FULL_SERVICE_PACK = {
+	"ReplicatedFirst",
+	"ReplicatedStorage",
+	"ServerScriptService",
+	"ServerStorage",
+	"StarterGui",
+	"Workspace",
+	"Lighting",
+}
+
+ClubKitManifest.WORKSPACE_SKIP = {
+	"Camera",
+	"Terrain",
+}
+
+ClubKitManifest.SYNC_BHMS_ADDON_PACKAGE_NAME = "HazastudioClubKit_SyncBhmsAddon"
+
+-- Deprecated alias (was Group config — add-on is SyncBhms only).
+ClubKitManifest.GROUP_ADDON_PACKAGE_NAME = ClubKitManifest.SYNC_BHMS_ADDON_PACKAGE_NAME
 
 ClubKitManifest.SERVER_STORAGE_EXACT = {
 	"Tools",
@@ -84,7 +142,7 @@ ClubKitManifest.SERVICE_ALIASES = {
 	Workspace = "Workspace",
 }
 
--- Source-sync updater (GitHub tag ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ set Script.Source in place).
+-- Source-sync updater (GitHub tag → set Script.Source in place).
 ClubKitManifest.UPDATER = {
 	githubOwner = "haza-rblx",
 	githubRepo = "hazastudio-clubkit",

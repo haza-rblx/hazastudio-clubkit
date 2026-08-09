@@ -1,0 +1,7 @@
+name = "hazastudio-clubkit-docs"
+compatibility_date = "2026-08-08"
+
+[assets]
+directory = "./"
+not_found_handling = "404-page"
+html_handling = "auto-trailing-slash"

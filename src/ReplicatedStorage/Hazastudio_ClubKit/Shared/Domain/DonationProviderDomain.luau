@@ -38,13 +38,12 @@ DonationProviderDomain.PRESETS = {
 		illustrationHeight = 200,
 		illustrationGradientEnabled = false,
 	},
-	-- Temporary illustration = Bagibagi asset until a SociaBuzz-branded image exists.
 	sociabuzz = {
 		key = "sociabuzz",
 		name = "SociaBuzz",
 		donorLabel = "nama SociaBuzz",
-		illustrationImage = "rbxassetid://71634976881165",
-		illustrationHeight = 120,
+		illustrationImage = "rbxassetid://113679135532210",
+		illustrationHeight = 160,
 		illustrationGradientEnabled = true,
 	},
 } :: { [string]: ProviderPreset }

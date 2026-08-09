@@ -1,0 +1,14 @@
+# Dev / tooling — never publish
+node_modules/
+.wrangler/
+package.json
+package-lock.json
+wrangler.toml
+*.7z
+
+# Seller / internal — kept in repo, not on the public site
+DEPLOY.md
+PERSISTENCE_FABRIC_QA.md
+audits/
+delivery/
+releases/

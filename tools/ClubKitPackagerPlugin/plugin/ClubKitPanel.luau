@@ -23,6 +23,7 @@ local ConfigEditCore = require(script.Parent.ConfigEditCore)
 local SourceSyncCore = require(script.Parent.SourceSyncCore)
 local PluginSyncCore = require(script.Parent.PluginSyncCore)
 local PackagerCore = require(script.Parent.PackagerCore)
+local CarryUploadCore = require(script.Parent.CarryUploadCore)
 local Manifest = require(script.Parent.ClubKitManifest)
 
 local ClubKitPanel = {}
@@ -31,7 +32,6 @@ export type CreateOpts = {
 	plugin: Plugin,
 	onDismiss: (() -> ())?,
 	onGenerateTools: (() -> ())?,
-	onCarryFix: (() -> ())?,
 	mountFromSources: ((sources: { [string]: string }) -> boolean)?,
 	applyPluginSoftUpdate: ((tag: string, onProgress: any) -> any)?,
 }
@@ -902,26 +902,9 @@ local function buildToolsPage(ctx, page: Frame)
 	})
 	UI.row({
 		parent = genBody,
-		label = "Fix carry animations",
-		desc = "Scan & re-upload broken carry animations.",
-		order = 3,
-		right = UI.button({
-			text = "Scan",
-			variant = "ghost",
-			small = true,
-			onClick = function()
-				if ctx.opts.onCarryFix then
-					ctx.opts.onCarryFix()
-				end
-				ctx.toast("Open <font color='#64b5ff'>Carry Upload</font> from the Plugins toolbar")
-			end,
-		}),
-	})
-	UI.row({
-		parent = genBody,
 		label = "Quick fixes",
 		desc = "Ready-made fixes for signs & glowsticks.",
-		order = 4,
+		order = 3,
 		noBorder = true,
 		right = UI.button({
 			text = "Apply",
@@ -934,7 +917,181 @@ local function buildToolsPage(ctx, page: Frame)
 		}),
 	})
 
-	local _c2, previewBody = UI.card({ parent = page, order = 3 })
+	local _carryCard, carryBody = UI.card({ parent = page, order = 3 })
+	UI.cardTitle(carryBody, "Carry animations", "Scan KeyframeSequences and re-upload via CreateAssetAsync.", 1)
+
+	local carryStatus = UI.label({
+		parent = carryBody,
+		text = "Source: ReplicatedStorage.Carry (or Selection)",
+		textSize = Theme.sizes.hint,
+		weight = "medium",
+		color = Theme.colors.muted,
+		wrap = true,
+		autoHeight = true,
+		order = 2,
+		size = UDim2.new(1, 0, 0, 0),
+	})
+
+	local groupIdText = ""
+	UI.field({
+		parent = carryBody,
+		label = "Group ID",
+		placeholder = "Optional — blank = personal inventory",
+		order = 3,
+		onChanged = function(v)
+			groupIdText = v
+		end,
+	})
+
+	local dryRun = true
+	UI.row({
+		parent = carryBody,
+		label = "Dry run",
+		desc = "Scan only — turn off to upload and patch ClubKitConfig.",
+		order = 4,
+		rightWidth = 54,
+		right = UI.switch({
+			on = true,
+			onChanged = function(on)
+				dryRun = on
+			end,
+		}),
+	})
+
+	local logFrame = Instance.new("ScrollingFrame")
+	logFrame.Name = "CarryLog"
+	logFrame.BackgroundColor3 = Theme.colors.elevated
+	logFrame.BorderSizePixel = 0
+	logFrame.Size = UDim2.new(1, 0, 0, 160)
+	logFrame.ScrollBarThickness = 4
+	logFrame.ScrollBarImageColor3 = Theme.colors.scrollbar
+	logFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+	logFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	logFrame.ScrollingDirection = Enum.ScrollingDirection.Y
+	logFrame.LayoutOrder = 5
+	logFrame.Parent = carryBody
+	UI.corner(logFrame)
+	UI.pad(logFrame, 8)
+	UI.vlist(logFrame, 3)
+
+	local logOrder = 0
+	local function clearCarryLog()
+		for _, child in ipairs(logFrame:GetChildren()) do
+			if child:IsA("TextLabel") or child:IsA("TextBox") then
+				child:Destroy()
+			end
+		end
+		logOrder = 0
+	end
+
+	local function carryLogLine(text: string, color: Color3?)
+		logOrder += 1
+		local line = Instance.new("TextLabel")
+		line.BackgroundTransparency = 1
+		line.BorderSizePixel = 0
+		line.Size = UDim2.new(1, -4, 0, 0)
+		line.AutomaticSize = Enum.AutomaticSize.Y
+		line.FontFace = Theme.fontFaces.mono
+		line.TextSize = 11
+		line.TextColor3 = color or Theme.colors.muted
+		line.TextXAlignment = Enum.TextXAlignment.Left
+		line.TextWrapped = true
+		line.Text = text
+		line.LayoutOrder = logOrder
+		line.Parent = logFrame
+		task.defer(function()
+			logFrame.CanvasPosition =
+				Vector2.new(0, math.max(0, logFrame.AbsoluteCanvasSize.Y - logFrame.AbsoluteSize.Y))
+		end)
+	end
+
+	local carryBusy = false
+	local btnRow = Instance.new("Frame")
+	btnRow.Name = "CarryActions"
+	btnRow.BackgroundTransparency = 1
+	btnRow.BorderSizePixel = 0
+	btnRow.Size = UDim2.new(1, 0, 0, 36)
+	btnRow.LayoutOrder = 6
+	btnRow.Parent = carryBody
+	UI.hlist(btnRow, 8)
+
+	local scanBtn = UI.button({
+		text = "Scan",
+		variant = "ghost",
+		parent = btnRow,
+		size = UDim2.new(0.5, -4, 1, 0),
+		order = 1,
+		onClick = function()
+			local result = CarryUploadCore.planUploads()
+			carryStatus.Text = result.sourceLabel
+			clearCarryLog()
+			for _, line in ipairs(CarryUploadCore.formatPlanLines(result)) do
+				carryLogLine(line.text, line.color)
+			end
+			ctx.toast(if #result.planned > 0 then "Scan complete" else "Nothing to upload — see log")
+		end,
+	})
+	scanBtn.Size = UDim2.new(0.5, -4, 1, 0)
+
+	local uploadBtn = UI.button({
+		text = "Upload + patch",
+		variant = "primary",
+		parent = btnRow,
+		size = UDim2.new(0.5, -4, 1, 0),
+		order = 2,
+		onClick = function()
+			if carryBusy then
+				return
+			end
+			carryBusy = true
+			uploadBtn.Text = "Working…"
+			task.spawn(function()
+				local result = CarryUploadCore.planUploads()
+				carryStatus.Text = result.sourceLabel
+				clearCarryLog()
+				for _, line in ipairs(CarryUploadCore.formatPlanLines(result)) do
+					carryLogLine(line.text, line.color)
+				end
+
+				local groupId = tonumber(groupIdText)
+				if groupIdText ~= "" and not groupId then
+					carryLogLine("Invalid Group ID.", Theme.colors.error)
+					ctx.toast("Invalid Group ID")
+					carryBusy = false
+					uploadBtn.Text = "Upload + patch"
+					return
+				end
+
+				local report = CarryUploadCore.runUpload(result.planned, {
+					dryRun = dryRun,
+					groupId = groupId,
+					onLog = carryLogLine,
+				})
+
+				if report.abortReason == "dry_run" then
+					ctx.toast("Dry run — turn off Dry run to upload")
+				elseif report.okCount > 0 then
+					ctx.toast(
+						string.format(
+							"Uploaded <font color='#64b5ff'>%d</font> · failed %d",
+							report.okCount,
+							report.failCount
+						)
+					)
+				elseif report.abortReason == "empty" then
+					ctx.toast("Nothing to upload — see log")
+				elseif report.failCount > 0 then
+					ctx.toast("Upload failed — check CreateAssetAsync beta")
+				end
+
+				carryBusy = false
+				uploadBtn.Text = "Upload + patch"
+			end)
+		end,
+	})
+	uploadBtn.Size = UDim2.new(0.5, -4, 1, 0)
+
+	local _c2, previewBody = UI.card({ parent = page, order = 4 })
 	UI.cardTitle(previewBody, "Preview", nil, 1)
 	UI.row({
 		parent = previewBody,
@@ -989,8 +1146,8 @@ local function buildPackagerPage(ctx, page: Frame)
 	})
 	UI.row({
 		parent = newBody,
-		label = "Ready to package",
-		desc = "Builds a folder in ServerStorage ready to right-click → Save to File.",
+		label = "Main template pack",
+		desc = "Clone full service contents into Workspace model. Only SyncBhms/BHMS excluded.",
 		order = 4,
 		noBorder = true,
 		right = UI.button({
@@ -1004,11 +1161,32 @@ local function buildPackagerPage(ctx, page: Frame)
 				})
 				PackagerCore.printCollectReport(report)
 				if folder then
-					folder.Parent = game:GetService("ServerStorage")
 					Selection:Set({ folder })
-					ctx.toast("Package created in ServerStorage — <font color='#64b5ff'>right-click → Save to File</font>")
+					ctx.toast("Template pack ready in <font color='#64b5ff'>Workspace</font>")
 				else
 					ctx.toast("Package failed — see Output")
+				end
+			end,
+		}),
+	})
+	UI.row({
+		parent = newBody,
+		label = "SyncBhms add-on",
+		desc = "Legacy BHMS dance pack only (DanceGui, SyncServer, bridges). Optional — unpack + LegacySyncBhms = true.",
+		order = 5,
+		noBorder = true,
+		right = UI.button({
+			text = "Create SyncBhms add-on",
+			variant = "secondary",
+			small = true,
+			onClick = function()
+				local folder, report = PackagerCore.collectSyncBhmsAddon({})
+				PackagerCore.printCollectReport(report)
+				if folder then
+					Selection:Set({ folder })
+					ctx.toast("SyncBhms add-on ready in <font color='#64b5ff'>Workspace</font>")
+				else
+					ctx.toast("SyncBhms add-on failed — see Output")
 				end
 			end,
 		}),

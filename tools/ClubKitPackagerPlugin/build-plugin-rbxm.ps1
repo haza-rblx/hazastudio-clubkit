@@ -1,11 +1,13 @@
 # Bundle plugin (nested Script + modules + UpdatePluginGUI) -> Plugins .rbxm
 param(
-    [string]$OutPath = (Join-Path $env:LOCALAPPDATA "Roblox\Plugins\HazastudioClubKitPackager.rbxm")
+    [string]$OutPath = (Join-Path $env:LOCALAPPDATA "Roblox\Plugins\HazastudioClubKitPackager.rbxm"),
+    [switch]$CopyToDeliver
 )
 
 $ErrorActionPreference = "Stop"
 $here = $PSScriptRoot
-$rojo = Join-Path (Split-Path (Split-Path $here -Parent) -Parent) ".tools\rojo\rojo.exe"
+$root = Split-Path (Split-Path $here -Parent) -Parent
+$rojo = Join-Path $root ".tools\rojo\rojo.exe"
 
 if (-not (Test-Path $rojo)) {
     Write-Error "Rojo not found at $rojo"
@@ -31,4 +33,17 @@ try {
 
 $size = (Get-Item $OutPath).Length
 Write-Host "Installed: $OutPath ($size bytes)"
+
+if ($CopyToDeliver) {
+    $version = (Get-Content (Join-Path $root "VERSION") -Raw).Trim()
+    $deliverDir = Join-Path $root "deliver"
+    if (-not (Test-Path $deliverDir)) {
+        New-Item -ItemType Directory -Path $deliverDir | Out-Null
+    }
+    $deliverName = "HazastudioClubKit_Plugin_v$version.rbxm"
+    $deliverPath = Join-Path $deliverDir $deliverName
+    Copy-Item -Path $OutPath -Destination $deliverPath -Force
+    Write-Host "Delivery copy: $deliverPath" -ForegroundColor Green
+}
+
 Write-Host "Restart Roblox Studio, then check Manage Plugins / Open Panel"

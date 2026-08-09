@@ -6,9 +6,9 @@ local ClubKitManifest = {}
 ClubKitManifest.PACKAGE_NAME = "HazastudioClubKit_Package"
 ClubKitManifest.MANIFEST_NAME = "_ClubKitManifest"
 ClubKitManifest.PRODUCT_ID = "hazastudioclubkit"
-ClubKitManifest.KIT_VERSION = "2.4.75"
+ClubKitManifest.KIT_VERSION = "2.4.76"
 -- Soft-update version for the Studio dock (may diverge from KIT_VERSION for plugin-only fixes).
-ClubKitManifest.PLUGIN_VERSION = "2.4.75"
+ClubKitManifest.PLUGIN_VERSION = "2.4.76"
 
 -- Soft-update: fetch these Luau modules from GitHub tags (exclude bootstrap).
 ClubKitManifest.PLUGIN_SOURCE_PREFIX = "tools/ClubKitPackagerPlugin/plugin/"
@@ -72,6 +72,57 @@ ClubKitManifest.WORKSPACE_MULTI = {
 	"LiveChatDonations",
 	"RunningText",
 }
+
+-- Pack entire board folder (preserves hazastudioBoard layout). Individual WORKSPACE_EXACT
+-- entries under this folder are skipped when the folder is packed.
+ClubKitManifest.WORKSPACE_BOARD_FOLDER = "hazastudioBoard"
+
+-- Never ship in the main template pack (SyncBhms place-pack — see extras/place-packs/SyncBhms/).
+ClubKitManifest.BHMS_EXCLUDE_NAMES = {
+	"SyncBhmsGate",
+	"SyncBhmsAcmBridge",
+	"Remotes2",
+	"StoredAnimations",
+	"SyncSettings",
+	"SyncBhmsRemotes",
+	"SyncServer",
+	"DanceGui",
+	"SyncBhms",
+	"TopbarDance",
+	"danceDraging",
+	"danceDraging1",
+	"BeatDanceClient",
+}
+
+-- Legacy per-service exclude table (unpack / docs); BHMS_EXCLUDE_NAMES is authoritative for template pack.
+ClubKitManifest.COLLECT_EXCLUDE = {
+	{ service = "ReplicatedStorage", names = { "SyncBhmsGate", "SyncBhmsAcmBridge", "Remotes2", "StoredAnimations", "SyncSettings" } },
+	{ service = "ServerScriptService", names = { "SyncBhmsRemotes", "SyncServer" } },
+	{ service = "StarterGui", names = { "DanceGui" } },
+	{ service = "StarterPlayerScripts", names = { "TopbarDance", "danceDraging", "danceDraging1", "BeatDanceClient" } },
+	{ service = "Workspace", names = { "SyncBhms" } },
+}
+
+-- Template place: clone every child in these services (not manifest pick-list).
+ClubKitManifest.FULL_SERVICE_PACK = {
+	"ReplicatedFirst",
+	"ReplicatedStorage",
+	"ServerScriptService",
+	"ServerStorage",
+	"StarterGui",
+	"Workspace",
+	"Lighting",
+}
+
+ClubKitManifest.WORKSPACE_SKIP = {
+	"Camera",
+	"Terrain",
+}
+
+ClubKitManifest.SYNC_BHMS_ADDON_PACKAGE_NAME = "HazastudioClubKit_SyncBhmsAddon"
+
+-- Deprecated alias (was Group config — add-on is SyncBhms only).
+ClubKitManifest.GROUP_ADDON_PACKAGE_NAME = ClubKitManifest.SYNC_BHMS_ADDON_PACKAGE_NAME
 
 ClubKitManifest.SERVER_STORAGE_EXACT = {
 	"Tools",

@@ -75,12 +75,6 @@ local updaterApi = UpdaterPanel.create(widget, {
 		widget.Enabled = false
 	end,
 	onGenerateTools = runGenerateToolsFolder,
-	onCarryFix = function()
-		warn(
-			"[ClubKitPanel] Carry fix: use toolbar Hazastudio Club Kit → Carry Upload (local plugin + CreateAssetAsync beta)."
-		)
-		print("[ClubKitPanel] Open Carry Upload from the Plugins toolbar to scan/upload Carry KeyframeSequences.")
-	end,
 })
 
 openPanelButton.Click:Connect(function()

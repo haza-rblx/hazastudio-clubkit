@@ -11,6 +11,27 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.76] - 2026-08-09
+
+Carry upload inside the main Club Kit plugin; Command Library Studio fix; docs + SociaBuzz art.
+
+### Added
+- **Template place delivery** — full service clone main pack (BHMS excluded); separate **SyncBhms add-on** model. Guide: `docs/delivery/TEMPLATE_PLACE.md`.
+- **Carry upload in Club Kit panel** — Tools → Carry animations (scan / CreateAssetAsync upload / patch ClubKitConfig). No separate Carry Upload toolbar plugin required.
+
+### Fixed
+- **Command Library topbar click did nothing** — `CommandLibraryController.init` aborted when `Player:GetRankInGroup` threw `HttpError: NetFail` (common in Studio), so `icon.selected` never connected. `resolveRole` now pcalls `GetRankInGroup` and falls back to Guest until overhead/cache fills.
+
+### Changed
+- **Docs setup is one detailed flow** — removed Quick Start + parallel topic sections (Group/Roles/Donation/Commands/…). `setup.html` is now steps 1–9 only (insert → publish) with full detail inline; sidebar = step list; home topics reduced to Setup + Updates + Reference.
+- **Docs reference page** — new `reference.html`: full command list (Command Library + owner extras), `FEATURE_MANIFEST` (plugin Config → Features), and privilege keys. Added to dock nav (ID/EN/JA/ES).
+- **Docs aligned with plugin** — No showcase/demo as required step; NukeWorldPosition, Membership Game Pass, Diagnostics, and Source-only PaidBroadcast covered inside the flow. Applied across ID/EN/JA/ES.
+- **SociaBuzz cash-tab illustration** — donation panel `3-SaweriaTab` now uses branded asset `rbxassetid://113679135532210` at height 160 (was temporary Bagibagi art). Gold gradient stays on.
+- **Docs hub visual pass** — filled cards and tinted panels replaced by hairline separators and left rules; headings capped at 24px (page title) / 20px (section title); home page stat cards replaced by a plain key/value meta list. Language switch and theme toggle in the floating dock now keep readable contrast in light mode.
+- **Docs voice is now game-owner only** — every page addresses the place owner directly instead of describing a "buyer". Seller framing removed. Applied across all four locales (ID/EN/JA/ES).
+- **Docs no longer link repo-only markdown** — the 11 `releases/<version>/UPGRADE.md` links, the `docs/releases/` index link, and the `../CHANGELOG.md` links were removed from the Updates and Home pages. Release detail now lives entirely in the on-page "What's new" accordion.
+- **Carry fix no longer redirects to a missing toolbar button** — logic lives in `CarryUploadCore`; standalone `CarryAnimUploaderPlugin` is deprecated.
+
 ## [2.4.75] - 2026-08-08
 
 Hotfix: server boot blocked by stray syntax in DonationController.
