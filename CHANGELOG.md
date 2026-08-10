@@ -11,6 +11,22 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-08-10
+
+Cash currency (IDR/PHP), Admin Hub goes fully editable via ActionTemplates, Plugin gets Unpack RBXM, and Gravity/Ungravity get independent gears.
+
+### Added
+- **Plugin Unpack RBXM…** — Packager panel can pick a `.rbxm` / `.rbxmx` Club Kit package, deserialize it, and unpack into the place in one step (config/secrets preserved).
+- **Cash currency: IDR + PHP** — new `ClubKitConfig.Donation.Currency` (`"IDR"` | `"PHP"`, default `"IDR"`) drives the cash symbol, thousands grouping, chip word, and spender-role label everywhere cash is shown: donation notifications, leaderboard boards, workspace boards, overhead chips, join greetings, the Settings "Name Tag Details" toggle, Command Library descriptions, admin chat command replies (`/fakecash`, `/donatecash`, `/addcash`, `/removecash`, `/dumpbagibagi`, `/listbagibagi`), and Admin Hub previews. Backed by new `CashCurrencyDomain` (currency presets) and an extended `DonationAmountFormat` (`formatCash`, `formatCashBoard`, `formatCashCompact`, `formatGrouped`); all previous `"Rp "` / `"RP "` / `"RUPIAH"` / `"Top Rupiah"` / `"IDR"` hardcodes now route through these. Display-only — amounts stay untagged integers and are **not** converted, so `MinAmount`, `AuraTiers` (`idrMin`/`idrMax`), and `WorldEffectTiers` must be retuned by hand when switching currency. Plugin **Donations** tab gets a **Cash currency** dropdown (`IDR (Rp)` / `PHP (₱)`) that writes `Donation.Currency`. Missing/unknown `Currency` fills forward to `IDR`, so existing buyer configs are unaffected.
+- **Admin dashboard per-game currency** — `donation-api` gains a `games.currency` column (migration `0009_game_currency.sql`, default `IDR`) plus a `currency` dropdown in the Games table and the "Quick create" modal. The React admin panel's `formatIdr` helper was replaced by a currency-aware `formatCash`, used across overview totals, donation tables, leaderboard, donor detail, and adjust-amount modals. This is a display-only label for the ops dashboard — the in-game `ClubKitConfig.Donation.Currency` remains the source of truth and is not synced from it.
+- **Admin Hub ActionTemplates** — editable sheet bodies under `StarterGui/04-AdminHub` (`ActionTemplates/*` **or** design-in-place masters on `04-ActionPopup.SheetBody` with `ActionId`). `openSheet` clones the matching master into `SheetContent` and never destroys the masters. Donate Fake preview no longer needs a player target (attributes to the admin); Manual/credit asks for a player only after that mode is selected.
+
+### Changed
+- **Separate Ungravity / Gravity gear dials** — Ungravity gear sets rise speed only; Gravity gear sets drop intensity only. Labels sync independently; Gravity tile uses restore dial, Ungravity uses float dial.
+- **Admin Hub SelectedPlayerInfo** — runtime clones the redesigned `SheetBody.SelectedPlayerInfo` template (`PlayerProfilePicture` / `1-Title` / `2-SubTitle` / `ChangeButton`) instead of rebuilding an older script chip.
+- **Admin Hub sheet binding** — announce / set role / gift / float speed / donations bind named children (`AnnounceMessage`, `PickGrid`/`PickKey`, `ChipRow`/`ChipValue`, donate `ModeList` + `Panel_*`) instead of always rebuilding UI from script.
+- **Admin Hub shell** — section filters move from removed `01-SidebarWrapper` to top-header `Option1`–`Option5` slider (`Filter` = `all` / `utilities` / `access` / `identity` / `donations`); labels **All / Utilities / Access / Identity / Donations** via shared `SliderSelectorUtil` + `BackgroundPill` (same pattern as Music/Dance/Gift); close button binds from shell header; gallery tiles use `GroupId` for section filtering.
+
 ## [2.4.80] - 2026-08-10
 
 Wutwut press UI softer; default A→B switch fade slightly snappier.

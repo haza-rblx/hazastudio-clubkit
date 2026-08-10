@@ -35,6 +35,7 @@ export type Snapshot = {
 	},
 	donation: {
 		provider: string,
+		currency: string,
 		providerLink: string,
 		apiUrl: string,
 		cashEnabled: boolean,
@@ -257,6 +258,7 @@ function ConfigEditCore.read(): Snapshot
 		},
 		donation = {
 			provider = "bagibagi",
+			currency = "IDR",
 			providerLink = "",
 			apiUrl = "",
 			cashEnabled = true,
@@ -336,6 +338,7 @@ function ConfigEditCore.read(): Snapshot
 
 	local don = cfg.Donation or {}
 	snap.donation.provider = tostring(don.Provider or "bagibagi")
+	snap.donation.currency = string.upper(tostring(don.Currency or "IDR"))
 	snap.donation.providerLink = tostring(don.ProviderLink or "")
 	snap.donation.apiUrl = tostring(don.ApiUrl or "")
 	snap.donation.minAmount = tonumber(don.MinAmount) or 1000
@@ -463,6 +466,7 @@ export type WritePayload = {
 	shop: { [string]: { pass: number, gift: number, buyId: number, price: number } }?,
 	donation: {
 		provider: string?,
+		currency: string?,
 		providerLink: string?,
 		apiUrl: string?,
 		cashEnabled: boolean?,
@@ -578,6 +582,12 @@ function ConfigEditCore.write(payload: WritePayload): WriteReport
 			source, ok = patchAssignment(source, "Provider", quoteString(d.provider))
 			if ok then
 				note("Donation.Provider")
+			end
+		end
+		if d.currency then
+			source, ok = patchAssignment(source, "Currency", quoteString(string.upper(d.currency)))
+			if ok then
+				note("Donation.Currency")
 			end
 		end
 		if d.providerLink ~= nil then

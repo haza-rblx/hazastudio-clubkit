@@ -25,6 +25,7 @@ local function createGravityController(_deps: { freecamScript: ModuleScript? }?)
 	local commandRemote: RemoteEvent? = nil
 	local moduleConnections: { RBXScriptConnection } = {}
 	local freecamScript = _deps and _deps.freecamScript
+	local lastSpeed = tonumber(gravityConfig.DEFAULT_SPEED) or 3
 
 	local function canUseGravity(): boolean
 		local role = OverheadController.getPlayerRole(localPlayer.UserId)
@@ -47,6 +48,9 @@ local function createGravityController(_deps: { freecamScript: ModuleScript? }?)
 		end
 		if not canUseGravity() then
 			return
+		end
+		if type(speed) == "number" and speed > 0 then
+			lastSpeed = speed
 		end
 		commandRemote:FireServer({
 			requestId = HttpService:GenerateGUID(false),
@@ -77,11 +81,12 @@ local function createGravityController(_deps: { freecamScript: ModuleScript? }?)
 
 		if input.KeyCode == UNGRAVITY_MACRO_KB[#UNGRAVITY_MACRO_KB] then
 			checkMacro(UNGRAVITY_MACRO_KB, function()
+				lastSpeed = tonumber(gravityConfig.DEFAULT_SPEED) or lastSpeed
 				fireCommand("enable_default")
 			end)
 		elseif input.KeyCode == GRAVITY_MACRO_KB[#GRAVITY_MACRO_KB] then
 			checkMacro(GRAVITY_MACRO_KB, function()
-				fireCommand("disable")
+				fireCommand("disable", lastSpeed)
 			end)
 		end
 

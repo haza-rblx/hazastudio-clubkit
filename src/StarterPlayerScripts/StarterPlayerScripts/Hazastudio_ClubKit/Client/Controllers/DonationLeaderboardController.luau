@@ -10,6 +10,7 @@ local TweenService = game:GetService("TweenService")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local LeaderboardIdentity = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.LeaderboardIdentity)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
+local DonationAmountFormat = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DonationAmountFormat)
 local WorkspaceLeaderboardRenderer = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Leaderboards.WorkspaceLeaderboardRenderer)
 
 local log = Logger.new("Client.WorkspaceLeaderboards")
@@ -284,25 +285,11 @@ local function ensurePodiumLoop(gui: SurfaceGui, spec: BoardSpec)
 	end)
 end
 
-local function formatGrouped(value: number): string
-	local raw = tostring(math.floor(math.max(value, 0)))
-	local result = ""
-	local len = #raw
-	for index = 1, len do
-		if index > 1 and (len - index + 1) % 3 == 0 then
-			result ..= "."
-		end
-		result ..= raw:sub(index, index)
-	end
-	return result
-end
-
 local function formatDonationValue(kind: string, value: number): string
-	local grouped = formatGrouped(value)
 	if kind == "saweria" or kind == "saweriaPoster" then
-		return "RP " .. grouped
+		return DonationAmountFormat.formatCashBoard(value)
 	end
-	return grouped
+	return DonationAmountFormat.formatGrouped(value)
 end
 
 -- Generic GUI names that should not be used for global lookup; they are too
@@ -732,7 +719,7 @@ local function setValue(root: Instance, kind: string, value: number, shouldPulse
 	local label = findValueLabel(root, kind)
 	if label then
 		local normalizedValue = math.floor(math.max(value, 0))
-		local text = formatGrouped(normalizedValue)
+		local text = DonationAmountFormat.formatGrouped(normalizedValue)
 		local previous = lastValueTextByLabel[label]
 		valueNumberByLabel[label] = normalizedValue
 		nextValueCounterGeneration(label)

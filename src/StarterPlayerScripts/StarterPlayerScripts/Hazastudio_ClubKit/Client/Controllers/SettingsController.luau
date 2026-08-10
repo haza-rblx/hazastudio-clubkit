@@ -10,6 +10,7 @@ local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
+local CashCurrencyDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.CashCurrencyDomain)
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local SettingsDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.SettingsDomain)
@@ -167,7 +168,7 @@ local function createSettingsController(deps: {
 		SpecialTitle = "Custom Title",
 		BadgeGroup = "Badges",
 		SpecialRank = "Special Rank",
-		TopSpender = "Top Rupiah",
+		TopSpender = CashCurrencyDomain.getActive().shortRoleLabel,
 		TopDonate = "Top Robux",
 		Rank = "Role",
 		DisplayName = "Player Name",

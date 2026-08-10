@@ -8,6 +8,7 @@ local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local DonationProviderDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.DonationProviderDomain)
+local DonationAmountFormat = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DonationAmountFormat)
 local LeaderboardIdentity = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.LeaderboardIdentity)
 local LeaderboardDisplayState = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Leaderboards.LeaderboardDisplayState)
 
@@ -212,25 +213,11 @@ local function warnOnce(key: string, message: string, payload: any?)
 	end
 end
 
-local function formatGrouped(value: number): string
-	local raw = tostring(math.floor(math.max(value, 0)))
-	local result = ""
-	local len = #raw
-	for index = 1, len do
-		if index > 1 and (len - index + 1) % 3 == 0 then
-			result ..= "."
-		end
-		result ..= raw:sub(index, index)
-	end
-	return result
-end
-
 local function formatDonationValue(kind: string, value: number): string
-	local grouped = formatGrouped(value)
 	if kind == "saweria" or kind == "saweriaPoster" then
-		return "RP " .. grouped
+		return DonationAmountFormat.formatCashBoard(value)
 	end
-	return grouped
+	return DonationAmountFormat.formatGrouped(value)
 end
 
 local function isGenericGuiName(name: string): boolean
@@ -578,7 +565,7 @@ local function getPosterFallbackSubtext(spec: PosterSpec): string
 end
 
 local function getPosterFallbackValue(spec: PosterSpec): string
-	return if spec.kind == "saweriaPoster" then "RP 0" else "0"
+	return if spec.kind == "saweriaPoster" then DonationAmountFormat.formatCashBoard(0) else "0"
 end
 
 local function hasLeaderboardEntries(entries: any): boolean

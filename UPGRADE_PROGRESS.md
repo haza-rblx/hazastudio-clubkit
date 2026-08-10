@@ -2,8 +2,8 @@
 
 Internal scratch pad to track work **before** a version is released.
 
-**Current version:** `2.4.80` (see [`VERSION`](VERSION))  
-**Next release target:** _(not set)_  
+**Current version:** `2.5.0` (see [`VERSION`](VERSION))
+**Next release target:** _(not set)_
 **Active branch:** `main`
 
 ---
@@ -12,7 +12,6 @@ Internal scratch pad to track work **before** a version is released.
 
 | Area | Status |
 |------|--------|
-| _(empty)_ | — |
 
 ---
 
@@ -20,7 +19,6 @@ Internal scratch pad to track work **before** a version is released.
 
 | Path | Change |
 |------|--------|
-| _(none yet)_ | |
 
 ---
 

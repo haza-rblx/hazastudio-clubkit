@@ -2,6 +2,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local CashCurrencyDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.CashCurrencyDomain)
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local PermissionDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.PermissionDomain)
 local RolesDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.RolesDomain)
@@ -131,6 +132,10 @@ local function makeEntry(props: {
 	}) :: CommandLibraryEntry
 end
 
+-- Cash commands below describe amounts in the active Donation.Currency unit (default "IDR").
+local ACTIVE_CASH_UNIT = CashCurrencyDomain.getActive().adminHint
+local ACTIVE_CASH_PLACEHOLDER = "<" .. string.lower(ACTIVE_CASH_UNIT) .. ">"
+
 local REGISTRY = table.freeze({
 	makeEntry({
 		id = "setbio",
@@ -225,7 +230,7 @@ local REGISTRY = table.freeze({
 	makeEntry({
 		id = "gravity",
 		alias = Config.Gravity.CMD_ALIAS,
-		description = "Restore gravity for everyone (staff+). Shift+G also works.",
+		description = "Restore gravity for everyone (staff+). Optional /gravity 1-10 sets drop strength (1 soft → 10 hard). Shift+G also works.",
 		category = "Admin",
 		needsArguments = false,
 		iconKey = "admin_announce",
@@ -324,7 +329,7 @@ local REGISTRY = table.freeze({
 	makeEntry({
 		id = "donatecash",
 		alias = Config.Donation.CMD_DONATE_CASH,
-		description = "Manual IDR donation with notif + VFX. /donatecash <player> <amount> [message]",
+		description = "Manual " .. ACTIVE_CASH_UNIT .. " donation with notif + VFX. /donatecash <player> <amount> [message]",
 		category = "Admin",
 		needsArguments = true,
 		iconKey = "admin_donation",
@@ -333,7 +338,7 @@ local REGISTRY = table.freeze({
 	makeEntry({
 		id = "addcash",
 		alias = Config.Donation.CMD_ADD_CASH,
-		description = "Add IDR to leaderboard only (no donation card/VFX). /addcash <player> <amount>",
+		description = "Add " .. ACTIVE_CASH_UNIT .. " to leaderboard only (no donation card/VFX). /addcash <player> <amount>",
 		category = "Admin",
 		needsArguments = true,
 		iconKey = "admin_donation",
@@ -342,7 +347,7 @@ local REGISTRY = table.freeze({
 	makeEntry({
 		id = "removecash",
 		alias = Config.Donation.CMD_REMOVE_CASH,
-		description = "Remove IDR from manual cash adjustment. /removecash <player|me> [amount] — `me` Studio-only clear self",
+		description = "Remove " .. ACTIVE_CASH_UNIT .. " from manual cash adjustment. /removecash <player|me> [amount] — `me` Studio-only clear self",
 		category = "Admin",
 		needsArguments = true,
 		iconKey = "admin_donation",
@@ -378,7 +383,11 @@ local REGISTRY = table.freeze({
 	makeEntry({
 		id = "fakecash",
 		alias = Config.Donation.CMD_FAKE_CASH,
-		description = "Fake IDR/cash donation preview (notif + aura + world VFX, no persist). /fakecash [player] <idr> [message]",
+		description = "Fake "
+			.. ACTIVE_CASH_UNIT
+			.. "/cash donation preview (notif + aura + world VFX, no persist). /fakecash [player] "
+			.. ACTIVE_CASH_PLACEHOLDER
+			.. " [message]",
 		category = "Admin",
 		needsArguments = true,
 		iconKey = "admin_donation",
@@ -396,7 +405,7 @@ local REGISTRY = table.freeze({
 	makeEntry({
 		id = "testcash",
 		alias = "testcash",
-		description = "Deprecated alias for /fakecash. /testcash [player] <idr> [message]",
+		description = "Deprecated alias for /fakecash. /testcash [player] " .. ACTIVE_CASH_PLACEHOLDER .. " [message]",
 		category = "Admin",
 		needsArguments = true,
 		iconKey = "admin_donation",
@@ -405,7 +414,7 @@ local REGISTRY = table.freeze({
 	makeEntry({
 		id = "testsaweria",
 		alias = "testsaweria",
-		description = "Deprecated alias for /fakecash. /testsaweria [player] <idr> [message]",
+		description = "Deprecated alias for /fakecash. /testsaweria [player] " .. ACTIVE_CASH_PLACEHOLDER .. " [message]",
 		category = "Admin",
 		needsArguments = true,
 		iconKey = "admin_donation",
@@ -423,7 +432,7 @@ local REGISTRY = table.freeze({
 	makeEntry({
 		id = "testdonate",
 		alias = "testdonate",
-		description = "Deprecated alias for /fakecash. /testdonate [player] <idr> [message]",
+		description = "Deprecated alias for /fakecash. /testdonate [player] " .. ACTIVE_CASH_PLACEHOLDER .. " [message]",
 		category = "Admin",
 		needsArguments = true,
 		iconKey = "admin_donation",

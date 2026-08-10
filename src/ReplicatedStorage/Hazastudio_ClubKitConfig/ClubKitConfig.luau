@@ -60,12 +60,18 @@ ClubKitConfig.Donation = {
 	Provider = "bagibagi", -- "bagibagi" | "saweria" | "sociabuzz" — donor name & label auto-set
 	ProviderLink = "", -- example: "https://bagibagi.co/your-page" or "https://sociabuzz.com/username"
 	ApiUrl = "https://hazastudio-donation-api.hazastudio.workers.dev/game/the-basic",
+	-- Cash display currency: "IDR" (Rp) or "PHP" (₱). Saweria supports both (register with
+	-- the matching account currency); Bagi-Bagi is IDR-only; SociaBuzz settles per creator
+	-- country. Display-only (symbol/grouping/chip word) — amounts are NOT converted, so
+	-- MinAmount / AuraTiers idrMin/idrMax / WorldEffectTiers below must be retuned in the
+	-- new unit yourself when switching currencies.
+	Currency = "IDR",
 	Cash = { Enabled = true },
 	Robux = { Enabled = true },
 	-- Optional: manual Robux donation product list. Empty = auto from dashboard.
 	RobuxProducts = {} :: { { ProductId: number, Name: string?, Price: number? } },
 
-	-- Min IDR to appear in notifications + leaderboard (not aura tier).
+	-- Min amount (in Currency above) to appear in notifications + leaderboard (not aura tier).
 	MinAmount = 1000,
 
 	-- World stage position for Rocket / Hammer / BlackHole VFX (impact / anchor).
@@ -73,7 +79,8 @@ ClubKitConfig.Donation = {
 	NukeWorldPosition = Vector3.new(-262.2, 1.285, 64.9),
 
 	-- Aura per player (folder ServerStorage.DonationEffects/LevelN).
-	-- min = Robux | idrMin/idrMax = Bagi-Bagi range | effect/sound = asset folder name.
+	-- min = Robux | idrMin/idrMax = cash range in Currency above (field name kept for
+	-- compatibility) | effect/sound = asset folder name.
 	AuraTiers = {
 		{ level = 1, min = 10, idrMin = 0, idrMax = 9999, effect = "Level1", sound = "Level1", duration = 4, cameraDuration = 0 },
 		{ level = 3, min = 80, idrMin = 10000, idrMax = 19999, effect = "Level3", sound = "Level3", duration = 4, cameraDuration = 0 },
@@ -87,11 +94,12 @@ ClubKitConfig.Donation = {
 		{ level = 11, min = 10000, idrMin = 1000000, idrMax = math.huge, effect = "Level11", sound = "Level11", duration = 8, cameraDuration = 8 },
 	},
 
-	-- World VFX for Bagi-Bagi (models in ReplicatedStorage.WorldEffects). Robux does not use this.
+	-- World VFX for cash donations (models in ReplicatedStorage.WorldEffects). Robux does not use this.
+	-- Thresholds are in Currency above — retune these when switching currency.
 	WorldEffectTiers = {
-		{ min = 500000, effect = "BlackHole" }, -- 500k+ IDR
-		{ min = 250000, effect = "Smite4" }, -- 250k+ IDR (hammer)
-		{ min = 100000, effect = "Nuke" }, -- 100k+ IDR (rocket)
+		{ min = 500000, effect = "BlackHole" }, -- 500k+
+		{ min = 250000, effect = "Smite4" }, -- 250k+ (hammer)
+		{ min = 100000, effect = "Nuke" }, -- 100k+ (rocket)
 	},
 }
 

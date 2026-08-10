@@ -5,6 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
+local SliderSelectorUtil = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.SliderSelectorUtil)
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
 local MotionPresets = require(script.Parent.Parent.Utils.MotionPresets)
 local PressFeedback = require(script.Parent.Parent.Utils.PressFeedback)
@@ -25,6 +26,29 @@ export type SheetFootButton = {
 
 local FONT_ASSET = "rbxassetid://" .. tostring(Config.TopbarMenu.FONT_ASSET_ID or 12187365364)
 local DIM_TARGET_T = 0.45 -- HTML --dim rgba(0,0,0,0.55)
+
+-- Top-header 2-SliderSelector tabs (Option1–5). Same shell as Music / Dance / Gift.
+local FILTER_TAB_SPECS = {
+	{ filter = "all", optionIndex = 1, label = "All", headerTitle = "Admin Panel" },
+	{ filter = "utilities", optionIndex = 2, label = "Utilities", headerTitle = "Utilities" },
+	{ filter = "access", optionIndex = 3, label = "Access", headerTitle = "Access" },
+	{ filter = "identity", optionIndex = 4, label = "Identity", headerTitle = "Identity" },
+	{ filter = "donations", optionIndex = 5, label = "Donations", headerTitle = "Donations" },
+}
+
+local FILTER_HEADER_TITLES: { [string]: string } = {}
+for _, spec in ipairs(FILTER_TAB_SPECS) do
+	FILTER_HEADER_TITLES[spec.filter] = spec.headerTitle
+end
+
+local function applyFilterTabLabel(button: TextButton, labelText: string)
+	local label = button:FindFirstChildWhichIsA("TextLabel", true)
+	if label and label:IsA("TextLabel") then
+		label.Text = labelText
+	else
+		button.Text = labelText
+	end
+end
 
 -- Tokens aligned to tools/prototypes/admin-hub-v1.html :root
 local COLORS = {
@@ -169,29 +193,60 @@ function AdminHubUI.new(gui: ScreenGui)
 	self._mainWrapper = waitChild(gui, "MainWrapper") :: Frame
 	local content = waitChild(self._mainWrapper, "02-MainContentWrapper") :: Frame
 	self._content = content
-	self._headerTitle = waitChild(waitChild(content, "01-HeaderWrapper"), "1-HeaderTitle") :: TextLabel
-	self._searchInput = waitChild(waitChild(waitChild(content, "01-HeaderWrapper"), "02-SearchBox"), "Input") :: TextBox
-	self._closeButton = waitChild(waitChild(content, "01-HeaderWrapper"), "3-CloseModalButton") :: TextButton
+	-- Inner content chrome (title + search). Close + section tabs live on the
+	-- top shell header (MainWrapper.01-HeaderWrapper) after the sidebar redesign.
+	local contentHeader = waitChild(content, "01-HeaderWrapper") :: Frame
+	local shellHeader = waitChild(self._mainWrapper, "01-HeaderWrapper") :: Frame
+	self._headerTitle = waitChild(contentHeader, "1-HeaderTitle") :: TextLabel
+	self._searchInput = waitChild(waitChild(contentHeader, "02-SearchBox"), "Input") :: TextBox
+	self._closeButton = waitChild(shellHeader, "3-CloseModalButton") :: TextButton
 	self._gallery = waitChild(content, "02-GalleryScroll") :: ScrollingFrame
 	self._dim = waitChild(content, "DimOverlay") :: Frame
 	self._playerPopup = waitChild(content, "03-PlayerPopup") :: Frame
 	self._actionPopup = waitChild(content, "04-ActionPopup") :: Frame
 
 	self._popupTitle = waitChild(waitChild(self._playerPopup, "01-Header"), "1-Title") :: TextLabel
-	self._popupClose = waitChild(waitChild(self._playerPopup, "01-Header"), "CloseModalButton") :: TextButton
+	-- Close may live on the popup root (current shell) or inside 01-Header (older layouts).
+	local popupClose = self._playerPopup:FindFirstChild("CloseModalButton")
+	if not (popupClose and popupClose:IsA("TextButton")) then
+		popupClose = waitChild(waitChild(self._playerPopup, "01-Header"), "CloseModalButton")
+	end
+	self._popupClose = popupClose :: TextButton
 	self._popupSearch = waitChild(waitChild(self._playerPopup, "02-SearchBox"), "Input") :: TextBox
 	self._playerList = waitChild(self._playerPopup, "ScrollablePlayerList") :: ScrollingFrame
 	self._playerCardTemplate = waitChild(self._playerList, "PlayerSelectorCard") :: TextButton
 
 	self._sheetHead = waitChild(self._actionPopup, "SheetHead") :: Frame
 	self._sheetIconCircle = waitChild(self._sheetHead, "IconCircle") :: Frame
+	self._sheetIcon = self._sheetIconCircle:FindFirstChild("Icon") :: ImageLabel?
 	self._sheetTitle = waitChild(self._sheetHead, "1-Title") :: TextLabel
 	self._sheetClose = waitChild(self._sheetHead, "CloseModalButton") :: TextButton
 	self._sheetBody = waitChild(self._actionPopup, "SheetBody") :: ScrollingFrame
 	self._sheetFoot = waitChild(self._actionPopup, "SheetFoot") :: Frame
 	self._targetTemplate = self._sheetBody:FindFirstChild("SelectedPlayerInfo") :: TextButton?
 
-	self._sidebar = waitChild(self._mainWrapper, "01-SidebarWrapper") :: Frame
+	-- Section tabs: Option1–5 under the top slider (same 2-SliderSelector + BackgroundPill shell as Music/Dance/Gift).
+	local sliderOuter = waitChild(shellHeader, "2-SliderSelector") :: Frame
+	self._sliderOuter = sliderOuter
+	self._sidebar = SliderSelectorUtil.getOptionsContainer(sliderOuter) :: Frame
+	self._backgroundPill = SliderSelectorUtil.getBackgroundPill(sliderOuter)
+	self._tabButtons = {} :: { TextButton }
+
+	local allButtons = SliderSelectorUtil.collectTabButtons(self._sidebar)
+	for _, spec in ipairs(FILTER_TAB_SPECS) do
+		local button = SliderSelectorUtil.resolveTabButton(self._sidebar, {
+			optionIndex = spec.optionIndex,
+			defaultLabel = spec.label,
+		}, allButtons)
+		if button then
+			button.LayoutOrder = spec.optionIndex - 1
+			button:SetAttribute("Filter", spec.filter)
+			applyFilterTabLabel(button, spec.label)
+			-- Keep hits transparent — selection is communicated by BackgroundPill, not button fill.
+			button.BackgroundTransparency = 1
+			table.insert(self._tabButtons, button)
+		end
+	end
 
 	-- Legacy Toast frame in shell is unused — feedback goes through NotifService /
 	-- GeneralNotificationCenter (99-NotificationCenter).
@@ -206,10 +261,13 @@ function AdminHubUI.new(gui: ScreenGui)
 	self._players = {} :: { PlayerEntry }
 	self._allowedActions = {} :: { [string]: boolean }
 	self._floatSpeed = tonumber(Config.Gravity.DEFAULT_SPEED) or 3
+	self._restoreSpeed = tonumber(Config.Gravity.DEFAULT_SPEED) or 3
 	self._overlay = nil :: string?
 	self._keepDim = false
 	self._dimTween = nil :: Tween?
+	self._greetingRole = "Player"
 	self._pressHandles = {} :: { { Destroy: (self: any) -> () } }
+	self._footConnections = {} :: { RBXScriptConnection }
 	self._onPlayerPicked = nil :: ((PlayerEntry) -> ())?
 	self._onAction = nil :: ((string) -> ())?
 	self._onGear = nil :: ((string) -> ())?
@@ -220,6 +278,12 @@ function AdminHubUI.new(gui: ScreenGui)
 	self._playerCardTemplate.Visible = false
 	if self._targetTemplate then
 		self._targetTemplate.Visible = false
+	end
+	-- Hide SheetBody design masters (ActionId frames) so they don't flash before openSheet.
+	for _, child in ipairs(self._sheetBody:GetChildren()) do
+		if child:IsA("GuiObject") and type(child:GetAttribute("ActionId")) == "string" then
+			child.Visible = false
+		end
 	end
 	self._dim.Visible = false
 	self._dim.Active = true
@@ -232,7 +296,7 @@ function AdminHubUI.new(gui: ScreenGui)
 	self:_bindStatic()
 	self:_bindPressFeedback()
 	self:_syncGearLabels()
-	self:_applyFilterVisibility()
+	self:setFilter("all")
 
 	return self
 end
@@ -329,7 +393,8 @@ function AdminHubUI:_forceCloseOverlays()
 	self._dim.BackgroundTransparency = DIM_TARGET_T
 	self._overlay = nil
 	self._onPlayerPicked = nil
-	clearChildren(self._sheetFoot)
+	self:_disconnectFoot()
+	clearChildren(self._sheetFoot, { GhostButton = true, PrimaryButton = true, UIListLayout = true, UIPadding = true, UICorner = true })
 end
 
 function AdminHubUI:_track(conn: RBXScriptConnection)
@@ -427,40 +492,69 @@ function AdminHubUI:getFloatSpeed(): number
 	return self._floatSpeed
 end
 
+function AdminHubUI:setRestoreSpeed(speed: number)
+	self._restoreSpeed = speed
+	self:_syncGearLabels()
+end
+
+function AdminHubUI:getRestoreSpeed(): number
+	return self._restoreSpeed
+end
+
 function AdminHubUI:_syncGearLabels()
+	-- Separate dials: Ungravity gear → float/rise speed, Gravity gear → drop intensity.
 	for _, desc in ipairs(self._gallery:GetDescendants()) do
-		if desc:IsA("TextButton") and desc.Name == "GearButton" then
-			local label = desc:FindFirstChildWhichIsA("TextLabel", true)
-			if label then
-				label.Text = tostring(self._floatSpeed)
-			elseif desc.Text == "" or tonumber(desc.Text) ~= nil then
-				desc.Text = tostring(self._floatSpeed)
+		if desc:IsA("TextButton") and string.sub(desc.Name, 1, 11) == "ActionTile_" then
+			local gear = desc:FindFirstChild("GearButton")
+			if not (gear and gear:IsA("TextButton")) then
+				continue
+			end
+			local actionId = tostring(desc:GetAttribute("ActionId") or "")
+			local value = if actionId == "gravity" then self._restoreSpeed else self._floatSpeed
+			local label = gear:FindFirstChild("Value")
+			if not (label and label:IsA("TextLabel")) then
+				label = gear:FindFirstChildWhichIsA("TextLabel", true)
+			end
+			if label and label:IsA("TextLabel") then
+				label.Text = tostring(value)
+			elseif gear.Text == "" or tonumber(gear.Text) ~= nil then
+				gear.Text = tostring(value)
 			end
 		end
 	end
 end
 
+function AdminHubUI:setGreetingRole(role: string?)
+	self._greetingRole = if type(role) == "string" and role ~= "" then role else "Player"
+	self:_refreshHeaderTitle()
+end
+
+function AdminHubUI:_refreshHeaderTitle()
+	local role = self._greetingRole or "Player"
+	local displayName = Players.LocalPlayer.DisplayName
+	self._headerTitle.Text = string.format("Hi, %s %s!", role, displayName)
+end
+
 function AdminHubUI:setFilter(filter: string)
 	self._filter = filter
-	for _, child in ipairs(self._sidebar:GetChildren()) do
-		if child:IsA("TextButton") and child:GetAttribute("Filter") ~= nil then
-			local isCurrent = tostring(child:GetAttribute("Filter")) == filter
-			child.BackgroundTransparency = if isCurrent then 0 else 1
-			child.BackgroundColor3 = if isCurrent then COLORS.accent else COLORS.fill
-			local corner = child:FindFirstChildOfClass("UICorner")
-			if corner then
-				corner.CornerRadius = UDim.new(1, 0)
-			end
+	local selectedButton: TextButton? = nil
+	for _, button in ipairs(self._tabButtons) do
+		local isCurrent = tostring(button:GetAttribute("Filter")) == filter
+		SliderSelectorUtil.setTabButtonSelected(button, isCurrent)
+		button.BackgroundTransparency = 1
+		if isCurrent then
+			selectedButton = button
 		end
 	end
-	local groupLabels = {
-		all = "Admin Panel",
-		utilities = "Utilities",
-		access = "Access",
-		identity = "Identity",
-		donations = "Donations",
-	}
-	self._headerTitle.Text = groupLabels[filter] or "Admin Panel"
+	if self._backgroundPill and selectedButton then
+		task.defer(function()
+			if selectedButton.Parent and self._backgroundPill and self._backgroundPill.Parent then
+				SliderSelectorUtil.animateSlidingPill(self._backgroundPill, selectedButton, self._tabButtons)
+			end
+		end)
+	end
+	-- Keep designer greeting on 1-HeaderTitle (not section names).
+	self:_refreshHeaderTitle()
 	self:_applyFilterVisibility()
 end
 
@@ -508,6 +602,8 @@ end
 function AdminHubUI:show()
 	self._gui.Enabled = true
 	self._mainWrapper.Visible = true
+	-- Re-assert pill after layout is visible (same pattern as Dance/Music).
+	self:setFilter(self._filter)
 	self._anim:presentCenterPanel(self._mainWrapper, nil, {
 		enableBlur = true,
 		blurName = "AdminHubUIBlur",
@@ -572,7 +668,8 @@ function AdminHubUI:openPlayerPopup(title: string, onPick: (PlayerEntry) -> ())
 	-- Switching from sheet → player: snap-hide sheet, keep dim
 	if self._actionPopup.Visible then
 		self:_snapHideModal(self._actionPopup)
-		clearChildren(self._sheetFoot)
+		self:_disconnectFoot()
+		clearChildren(self._sheetFoot, { GhostButton = true, PrimaryButton = true, UIListLayout = true, UIPadding = true, UICorner = true })
 	end
 	self._overlay = "player"
 	self:_showDim()
@@ -670,15 +767,101 @@ function AdminHubUI:_renderPlayers()
 	end
 end
 
-function AdminHubUI:openSheet(actionId: string, title: string, buildBody: (ScrollingFrame) -> (), footButtons: { SheetFootButton }?)
-	self._sheetTitle.Text = title
-	self._sheetIconCircle.BackgroundColor3 = ACTION_COLORS[actionId] or COLORS.gBlue
-	clearChildren(self._sheetBody, { SelectedPlayerInfo = true })
+function AdminHubUI:_sheetBodyKeepNames(): { [string]: boolean }
+	-- Preserve in-SheetBody design masters (ActionId frames) + SelectedPlayerInfo.
+	-- Ephemeral SheetContent clones are destroyed on each open.
+	local keep: { [string]: boolean } = { SelectedPlayerInfo = true }
+	for _, child in ipairs(self._sheetBody:GetChildren()) do
+		if child:IsA("GuiObject") and type(child:GetAttribute("ActionId")) == "string" then
+			keep[child.Name] = true
+			child.Visible = false
+		end
+	end
 	if self._targetTemplate then
 		self._targetTemplate.Visible = false
 	end
-	clearChildren(self._sheetFoot)
-	buildBody(self._sheetBody)
+	return keep
+end
+
+function AdminHubUI:_findActionTemplate(actionId: string): GuiObject?
+	local templates = self._gui:FindFirstChild("ActionTemplates")
+	if templates then
+		local nested = templates:FindFirstChild(actionId, true)
+		if nested and nested:IsA("GuiObject") and nested.Name == actionId then
+			return nested
+		end
+	end
+	-- Design-in-place: masters live directly under SheetBody (ActionId attr).
+	local direct = self._sheetBody:FindFirstChild(actionId)
+	if direct and direct:IsA("GuiObject") then
+		return direct
+	end
+	return nil
+end
+
+function AdminHubUI:_findActionTile(actionId: string): TextButton?
+	for _, desc in ipairs(self._gallery:GetDescendants()) do
+		if desc:IsA("TextButton") and string.sub(desc.Name, 1, 11) == "ActionTile_" then
+			if tostring(desc:GetAttribute("ActionId") or "") == actionId then
+				return desc
+			end
+		end
+	end
+	return nil
+end
+
+function AdminHubUI:_applySheetChrome(chromeActionId: string)
+	-- Match SheetHead IconCircle/Icon to the gallery ActionTile the user opened.
+	local fallbackColor = ACTION_COLORS[chromeActionId] or COLORS.gBlue
+	self._sheetIconCircle.BackgroundColor3 = fallbackColor
+
+	local tile = self:_findActionTile(chromeActionId)
+	if tile then
+		local circle = tile:FindFirstChild("IconCircle", true)
+		if circle and circle:IsA("GuiObject") then
+			self._sheetIconCircle.BackgroundColor3 = circle.BackgroundColor3
+			local tileIcon = circle:FindFirstChild("Icon")
+			if tileIcon and (tileIcon:IsA("ImageLabel") or tileIcon:IsA("ImageButton")) then
+				local sheetIcon = self._sheetIcon
+				if not (sheetIcon and sheetIcon:IsA("ImageLabel")) then
+					sheetIcon = self._sheetIconCircle:FindFirstChild("Icon") :: ImageLabel?
+					self._sheetIcon = sheetIcon
+				end
+				if sheetIcon and sheetIcon:IsA("ImageLabel") and tileIcon.Image ~= "" then
+					sheetIcon.Image = tileIcon.Image
+				end
+			end
+		end
+	end
+end
+
+function AdminHubUI:openSheet(
+	actionId: string,
+	title: string,
+	buildBody: (GuiObject) -> (),
+	footButtons: { SheetFootButton }?,
+	chromeActionId: string?
+)
+	self._sheetTitle.Text = title
+	self:_applySheetChrome(chromeActionId or actionId)
+	clearChildren(self._sheetBody, self:_sheetBodyKeepNames())
+	clearChildren(self._sheetFoot, { GhostButton = true, PrimaryButton = true, UIListLayout = true, UIPadding = true, UICorner = true })
+	-- Prefer editable sheet masters (ActionTemplates/* or SheetBody/<actionId>).
+	-- Fallback root is SheetBody itself for legacy script builders / places without templates.
+	local contentRoot: GuiObject = self._sheetBody
+	local template = self:_findActionTemplate(actionId)
+	if template then
+		local clone = template:Clone()
+		clone.Name = "SheetContent"
+		clone.Visible = true
+		clone.Parent = self._sheetBody
+		contentRoot = clone
+		local attrTitle = clone:GetAttribute("SheetTitle")
+		if type(attrTitle) == "string" and attrTitle ~= "" and (title == "" or title == "Action") then
+			self._sheetTitle.Text = attrTitle
+		end
+	end
+	buildBody(contentRoot)
 	if footButtons then
 		self:setSheetFoot(footButtons)
 	end
@@ -691,7 +874,8 @@ function AdminHubUI:openSheet(actionId: string, title: string, buildBody: (Scrol
 end
 
 function AdminHubUI:closeSheet(keepDim: boolean?)
-	clearChildren(self._sheetFoot)
+	self:_disconnectFoot()
+	clearChildren(self._sheetFoot, { GhostButton = true, PrimaryButton = true, UIListLayout = true, UIPadding = true, UICorner = true })
 	if not self._actionPopup.Visible then
 		if keepDim then
 			-- stay dimmed for player popup
@@ -727,7 +911,75 @@ function AdminHubUI:closeOverlay(force: boolean?)
 	end
 end
 
+function AdminHubUI:_disconnectFoot()
+	if self._footConnections then
+		for _, conn in ipairs(self._footConnections) do
+			conn:Disconnect()
+		end
+		table.clear(self._footConnections)
+	end
+end
+
 function AdminHubUI:setSheetFoot(buttons: { SheetFootButton })
+	self:_disconnectFoot()
+	self._footConnections = {} :: { RBXScriptConnection }
+
+	local ghost = self._sheetFoot:FindFirstChild("GhostButton")
+	local primary = self._sheetFoot:FindFirstChild("PrimaryButton")
+	local useTemplateFoot = ghost and ghost:IsA("TextButton") and primary and primary:IsA("TextButton")
+
+	if useTemplateFoot then
+		local ghostBtn = ghost :: TextButton
+		local primaryBtn = primary :: TextButton
+		local secondaryDef: SheetFootButton? = nil
+		local primaryDef: SheetFootButton? = nil
+		for _, def in ipairs(buttons) do
+			if def.primary == false then
+				secondaryDef = def
+			else
+				primaryDef = def
+			end
+		end
+		if #buttons == 1 and not secondaryDef then
+			primaryDef = buttons[1]
+		elseif #buttons >= 2 then
+			-- Prefer last primary; first non-primary as ghost
+			for _, def in ipairs(buttons) do
+				if def.primary == true then
+					primaryDef = def
+				elseif def.primary == false then
+					secondaryDef = def
+				end
+			end
+			if not primaryDef then
+				primaryDef = buttons[#buttons]
+			end
+			if not secondaryDef and #buttons >= 2 then
+				secondaryDef = buttons[1]
+			end
+		end
+
+		if secondaryDef then
+			ghostBtn.Visible = true
+			ghostBtn.Text = secondaryDef.text
+			table.insert(
+				self._footConnections,
+				ghostBtn.MouseButton1Click:Connect(secondaryDef.onClick)
+			)
+		else
+			ghostBtn.Visible = false
+		end
+		if primaryDef then
+			primaryBtn.Visible = true
+			primaryBtn.Text = primaryDef.text
+			table.insert(
+				self._footConnections,
+				primaryBtn.MouseButton1Click:Connect(primaryDef.onClick)
+			)
+		end
+		return
+	end
+
 	clearChildren(self._sheetFoot)
 	local count = #buttons
 	for i, def in ipairs(buttons) do
@@ -757,80 +1009,122 @@ function AdminHubUI:showSelectedPlayer(parent: Instance, entry: PlayerEntry?, on
 	if not entry then
 		return
 	end
-	-- HTML .target chip
-	local row = makeButton(parent, "SelectedPlayerInfoLive", "", {
-		Size = UDim2.new(1, 0, 0, SPACE.av + SPACE.s2 * 2),
-		BackgroundColor3 = COLORS.fill,
-		BackgroundTransparency = 0.94,
-		Text = "",
-		AutoButtonColor = onChange ~= nil,
-		LayoutOrder = -10,
-	})
-	local corner = row:FindFirstChildOfClass("UICorner")
-	if corner then
-		corner.CornerRadius = UDim.new(0, SPACE.rMd)
+
+	local existing = parent:FindFirstChild("SelectedPlayerInfo")
+	if existing and existing ~= self._targetTemplate then
+		existing:Destroy()
 	end
-	local pad = Instance.new("UIPadding")
-	pad.PaddingLeft = UDim.new(0, SPACE.s3)
-	pad.PaddingRight = UDim.new(0, SPACE.s3)
-	pad.PaddingTop = UDim.new(0, SPACE.s2)
-	pad.PaddingBottom = UDim.new(0, SPACE.s2)
-	pad.Parent = row
-	local layout = Instance.new("UIListLayout")
-	layout.FillDirection = Enum.FillDirection.Horizontal
-	layout.VerticalAlignment = Enum.VerticalAlignment.Center
-	layout.Padding = UDim.new(0, SPACE.s3)
-	layout.Parent = row
 
-	local avatar = Instance.new("ImageLabel")
-	avatar.Name = "Avatar"
-	avatar.BackgroundColor3 = COLORS.surfaceRaised
-	avatar.BorderSizePixel = 0
-	avatar.Size = UDim2.fromOffset(SPACE.av, SPACE.av)
-	avatar.ImageTransparency = 1
-	avatar.LayoutOrder = 1
-	avatar.Parent = row
-	local avCorner = Instance.new("UICorner")
-	avCorner.CornerRadius = UDim.new(1, 0)
-	avCorner.Parent = avatar
-
-	local info = Instance.new("Frame")
-	info.BackgroundTransparency = 1
-	info.Size = UDim2.new(1, -(SPACE.av + 72), 1, 0)
-	info.LayoutOrder = 2
-	info.Parent = row
-	local infoLay = Instance.new("UIListLayout")
-	infoLay.FillDirection = Enum.FillDirection.Vertical
-	infoLay.VerticalAlignment = Enum.VerticalAlignment.Center
-	infoLay.Padding = UDim.new(0, SPACE.titleSub)
-	infoLay.Parent = info
-	makeLabel(info, "Title", entry.displayName, 14, Enum.FontWeight.Bold, COLORS.text, {
-		AutomaticSize = Enum.AutomaticSize.None,
-		Size = UDim2.new(1, 0, 0, 18),
-		TextTruncate = Enum.TextTruncate.AtEnd,
-	})
-	makeLabel(info, "Sub", "@" .. entry.username, 12, Enum.FontWeight.Medium, COLORS.muted, {
-		AutomaticSize = Enum.AutomaticSize.None,
-		Size = UDim2.new(1, 0, 0, 16),
-		TextTruncate = Enum.TextTruncate.AtEnd,
-	})
-
-	makeLabel(row, "Change", if onChange then "Change" else "", 12, Enum.FontWeight.SemiBold, COLORS.muted, {
-		AutomaticSize = Enum.AutomaticSize.None,
-		Size = UDim2.fromOffset(56, 20),
-		TextXAlignment = Enum.TextXAlignment.Right,
-		LayoutOrder = 3,
-	})
-
-	task.spawn(function()
-		local ok, url = pcall(function()
-			return Players:GetUserThumbnailAsync(entry.userId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
-		end)
-		if ok and type(url) == "string" and avatar.Parent then
-			avatar.Image = url
-			avatar.ImageTransparency = 0
+	local row: TextButton
+	local template = self._targetTemplate
+	if template and template:IsA("GuiButton") then
+		-- Prefer the designer SheetBody/SelectedPlayerInfo chrome.
+		row = template:Clone() :: TextButton
+		row.Name = "SelectedPlayerInfo"
+		row.Visible = true
+		row.LayoutOrder = -10
+		row.AutoButtonColor = onChange ~= nil
+		row.Parent = parent
+	else
+		-- Legacy fallback if the place template is missing.
+		row = makeButton(parent, "SelectedPlayerInfo", "", {
+			Size = UDim2.new(1, 0, 0, SPACE.av + SPACE.s2 * 2),
+			BackgroundColor3 = COLORS.fill,
+			BackgroundTransparency = 0.94,
+			Text = "",
+			AutoButtonColor = onChange ~= nil,
+			LayoutOrder = -10,
+		})
+		local corner = row:FindFirstChildOfClass("UICorner")
+		if corner then
+			corner.CornerRadius = UDim.new(0, SPACE.rMd)
 		end
-	end)
+		local pad = Instance.new("UIPadding")
+		pad.PaddingLeft = UDim.new(0, SPACE.s3)
+		pad.PaddingRight = UDim.new(0, SPACE.s3)
+		pad.PaddingTop = UDim.new(0, SPACE.s2)
+		pad.PaddingBottom = UDim.new(0, SPACE.s2)
+		pad.Parent = row
+		local layout = Instance.new("UIListLayout")
+		layout.FillDirection = Enum.FillDirection.Horizontal
+		layout.VerticalAlignment = Enum.VerticalAlignment.Center
+		layout.Padding = UDim.new(0, SPACE.s3)
+		layout.Parent = row
+
+		local avatarFb = Instance.new("ImageLabel")
+		avatarFb.Name = "PlayerProfilePicture"
+		avatarFb.BackgroundColor3 = COLORS.surfaceRaised
+		avatarFb.BorderSizePixel = 0
+		avatarFb.Size = UDim2.fromOffset(SPACE.av, SPACE.av)
+		avatarFb.ImageTransparency = 1
+		avatarFb.LayoutOrder = 1
+		avatarFb.Parent = row
+		local avCorner = Instance.new("UICorner")
+		avCorner.CornerRadius = UDim.new(1, 0)
+		avCorner.Parent = avatarFb
+
+		local info = Instance.new("Frame")
+		info.Name = "TargetInfoWrapper"
+		info.BackgroundTransparency = 1
+		info.Size = UDim2.new(1, -(SPACE.av + 72), 1, 0)
+		info.LayoutOrder = 2
+		info.Parent = row
+		local infoLay = Instance.new("UIListLayout")
+		infoLay.FillDirection = Enum.FillDirection.Vertical
+		infoLay.VerticalAlignment = Enum.VerticalAlignment.Center
+		infoLay.Padding = UDim.new(0, SPACE.titleSub)
+		infoLay.Parent = info
+		makeLabel(info, "1-Title", entry.displayName, 14, Enum.FontWeight.Bold, COLORS.text, {
+			AutomaticSize = Enum.AutomaticSize.None,
+			Size = UDim2.new(1, 0, 0, 18),
+			TextTruncate = Enum.TextTruncate.AtEnd,
+		})
+		makeLabel(info, "2-SubTitle", "@" .. entry.username, 12, Enum.FontWeight.Medium, COLORS.muted, {
+			AutomaticSize = Enum.AutomaticSize.None,
+			Size = UDim2.new(1, 0, 0, 16),
+			TextTruncate = Enum.TextTruncate.AtEnd,
+		})
+		makeLabel(row, "ChangeButton", if onChange then "Change" else "", 12, Enum.FontWeight.SemiBold, COLORS.muted, {
+			AutomaticSize = Enum.AutomaticSize.None,
+			Size = UDim2.fromOffset(56, 20),
+			TextXAlignment = Enum.TextXAlignment.Right,
+			LayoutOrder = 3,
+		})
+	end
+
+	local title = row:FindFirstChild("1-Title", true)
+	if title and title:IsA("TextLabel") then
+		title.Text = entry.displayName
+	end
+	local sub = row:FindFirstChild("2-SubTitle", true)
+	if sub and sub:IsA("TextLabel") then
+		sub.Text = "@" .. entry.username
+	end
+	local change = row:FindFirstChild("ChangeButton", true)
+	if change and change:IsA("TextLabel") then
+		change.Visible = onChange ~= nil
+	end
+
+	local avatar = row:FindFirstChild("PlayerProfilePicture", true)
+	if not (avatar and avatar:IsA("ImageLabel")) then
+		avatar = row:FindFirstChild("Avatar", true)
+	end
+	if avatar and avatar:IsA("ImageLabel") then
+		avatar.ImageTransparency = 1
+		task.spawn(function()
+			local ok, url = pcall(function()
+				return Players:GetUserThumbnailAsync(
+					entry.userId,
+					Enum.ThumbnailType.HeadShot,
+					Enum.ThumbnailSize.Size48x48
+				)
+			end)
+			if ok and type(url) == "string" and avatar.Parent then
+				avatar.Image = url
+				avatar.ImageTransparency = 0
+			end
+		end)
+	end
 
 	if onChange then
 		PressFeedback.bindPressScale(row)
@@ -1206,7 +1500,224 @@ function AdminHubUI:addChipRow(
 	end
 end
 
+function AdminHubUI:usesActionTemplate(root: GuiObject): boolean
+	return root.Name == "SheetContent" or type(root:GetAttribute("ActionId")) == "string"
+end
+
+function AdminHubUI:findChipRowContaining(parent: Instance, chipValue: string): Frame?
+	for _, node in ipairs(parent:GetDescendants()) do
+		if node:IsA("Frame") and node.Name == "ChipRow" then
+			for _, child in ipairs(node:GetChildren()) do
+				if child:IsA("GuiButton") and tostring(child:GetAttribute("ChipValue") or "") == chipValue then
+					return node
+				end
+			end
+		end
+	end
+	return nil
+end
+
+function AdminHubUI:applyPickCardLabels(host: Instance, options: { { key: string, label: string, desc: string? } })
+	for _, opt in ipairs(options) do
+		local btn: TextButton? = nil
+		local named = host:FindFirstChild("Pick_" .. opt.key, true)
+		if named and named:IsA("TextButton") then
+			btn = named
+		else
+			for _, d in ipairs(host:GetDescendants()) do
+				if d:IsA("TextButton") and tostring(d:GetAttribute("PickKey") or "") == opt.key then
+					btn = d
+					break
+				end
+			end
+		end
+		if not btn then
+			continue
+		end
+		local title = btn:FindFirstChild("1-Title", true)
+		if title and title:IsA("TextLabel") then
+			title.Text = opt.label
+		end
+		if type(opt.desc) == "string" then
+			local sub = btn:FindFirstChild("2-SubTitle", true)
+			if sub and sub:IsA("TextLabel") then
+				sub.Text = opt.desc
+			end
+		end
+	end
+end
+
+function AdminHubUI:bindPickCards(
+	host: Instance,
+	initialKey: string,
+	onChanged: (string) -> (),
+	allowedKeys: { [string]: boolean }?
+): () -> string
+	local buttons: { TextButton } = {}
+	for _, d in ipairs(host:GetDescendants()) do
+		if d:IsA("TextButton") then
+			local key = d:GetAttribute("PickKey")
+			if type(key) == "string" and key ~= "" then
+				if allowedKeys and not allowedKeys[key] then
+					d.Visible = false
+				else
+					d.Visible = true
+					table.insert(buttons, d)
+				end
+			end
+		end
+	end
+
+	local picked = initialKey
+	local hasInitial = false
+	for _, btn in ipairs(buttons) do
+		if tostring(btn:GetAttribute("PickKey") or "") == picked then
+			hasInitial = true
+			break
+		end
+	end
+	if not hasInitial and buttons[1] then
+		picked = tostring(buttons[1]:GetAttribute("PickKey") or picked)
+	end
+
+	local function sync()
+		for _, btn in ipairs(buttons) do
+			local key = tostring(btn:GetAttribute("PickKey") or "")
+			local on = key == picked
+			btn.BackgroundTransparency = if on then 0.90 else 0.96
+			btn.BackgroundColor3 = COLORS.fill
+			local stroke = btn:FindFirstChildOfClass("UIStroke")
+			if stroke then
+				stroke.Transparency = if on then 0 else 1
+				stroke.Color = COLORS.ring
+				stroke.Thickness = 1.5
+			end
+		end
+	end
+
+	for _, btn in ipairs(buttons) do
+		btn.MouseButton1Click:Connect(function()
+			picked = tostring(btn:GetAttribute("PickKey") or picked)
+			sync()
+			onChanged(picked)
+		end)
+		PressFeedback.bindPressScale(btn)
+	end
+	sync()
+	return function()
+		return picked
+	end
+end
+
+function AdminHubUI:bindChipRowTemplate(
+	wrap: Frame,
+	initial: string,
+	onChanged: (string) -> (),
+	allowedValues: { [string]: boolean }?
+): () -> string
+	local chips: { TextButton } = {}
+	for _, child in ipairs(wrap:GetChildren()) do
+		if child:IsA("TextButton") then
+			local value = tostring(child:GetAttribute("ChipValue") or child.Text)
+			if allowedValues and not allowedValues[value] then
+				child.Visible = false
+			else
+				child.Visible = true
+				table.insert(chips, child)
+			end
+		end
+	end
+
+	local picked = initial
+	local hasInitial = false
+	for _, chip in ipairs(chips) do
+		if tostring(chip:GetAttribute("ChipValue") or chip.Text) == picked then
+			hasInitial = true
+			break
+		end
+	end
+	if not hasInitial and chips[1] then
+		picked = tostring(chips[1]:GetAttribute("ChipValue") or chips[1].Text)
+	end
+
+	local function sync()
+		for _, chip in ipairs(chips) do
+			local on = tostring(chip:GetAttribute("ChipValue") or chip.Text) == picked
+			chip.BackgroundTransparency = if on then 0 else 0.94
+			chip.BackgroundColor3 = if on then COLORS.cta else COLORS.fill
+			chip.TextColor3 = if on then COLORS.ink else COLORS.muted
+		end
+	end
+
+	for _, chip in ipairs(chips) do
+		chip.MouseButton1Click:Connect(function()
+			picked = tostring(chip:GetAttribute("ChipValue") or chip.Text)
+			sync()
+			onChanged(picked)
+		end)
+		PressFeedback.bindPressScale(chip)
+	end
+	sync()
+	return function()
+		return picked
+	end
+end
+
+function AdminHubUI:fillChipRow(
+	wrap: Frame,
+	values: { string },
+	initial: string,
+	onChanged: (string) -> ()
+): () -> string
+	for _, child in ipairs(wrap:GetChildren()) do
+		if child:IsA("GuiButton") then
+			child:Destroy()
+		end
+	end
+	local picked = initial
+	local chips: { TextButton } = {}
+	local function sync()
+		for _, chip in ipairs(chips) do
+			local on = tostring(chip:GetAttribute("ChipValue") or chip.Text) == picked
+			chip.BackgroundTransparency = if on then 0 else 0.94
+			chip.BackgroundColor3 = if on then COLORS.cta else COLORS.fill
+			chip.TextColor3 = if on then COLORS.ink else COLORS.muted
+		end
+	end
+	for i, value in ipairs(values) do
+		local chip = makeButton(wrap, "Chip_" .. value, value, {
+			Size = UDim2.fromOffset(0, SPACE.ctrl),
+			AutomaticSize = Enum.AutomaticSize.X,
+			TextSize = 12,
+			LayoutOrder = i,
+			BackgroundTransparency = 0.94,
+			FontFace = face(Enum.FontWeight.SemiBold),
+		})
+		chip:SetAttribute("ChipValue", value)
+		local corner = chip:FindFirstChildOfClass("UICorner")
+		if corner then
+			corner.CornerRadius = UDim.new(1, 0)
+		end
+		local pad = Instance.new("UIPadding")
+		pad.PaddingLeft = UDim.new(0, SPACE.s3)
+		pad.PaddingRight = UDim.new(0, SPACE.s3)
+		pad.Parent = chip
+		chip.MouseButton1Click:Connect(function()
+			picked = value
+			sync()
+			onChanged(picked)
+		end)
+		PressFeedback.bindPressScale(chip)
+		table.insert(chips, chip)
+	end
+	sync()
+	return function()
+		return picked
+	end
+end
+
 function AdminHubUI:destroy()
+	self:_disconnectFoot()
 	for _, handle in ipairs(self._pressHandles) do
 		handle:Destroy()
 	end

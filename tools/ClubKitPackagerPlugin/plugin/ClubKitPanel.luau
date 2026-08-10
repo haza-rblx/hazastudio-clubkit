@@ -300,13 +300,33 @@ local function buildConfigPage(ctx, page: Frame)
 			rightWidth = 300,
 			right = pillHost,
 		})
+		local currencyPillHost = UI.pillGroup({
+			parent = b1,
+			options = {
+				{ "IDR", "IDR (Rp)" },
+				{ "PHP", "PHP (₱)" },
+			},
+			selected = draft.donation.currency,
+			onSelect = function(value)
+				draft.donation.currency = value
+				markDirty()
+			end,
+		})
+		UI.row({
+			parent = b1,
+			label = "Cash currency",
+			desc = "Display only — amounts are not converted. Saweria supports IDR/PHP; retune MinAmount + tiers after switching.",
+			order = 3,
+			rightWidth = 300,
+			right = currencyPillHost,
+		})
 		UI.field({
 			parent = b1,
 			label = "Donation API address",
 			value = draft.donation.apiUrl,
 			placeholder = "https://your-worker.workers.dev",
 			hint = "Leave empty for boards-only mode.",
-			order = 3,
+			order = 4,
 			onChanged = function(v)
 				draft.donation.apiUrl = v
 				markDirty()
@@ -317,7 +337,7 @@ local function buildConfigPage(ctx, page: Frame)
 			label = "Donation page link",
 			value = draft.donation.providerLink,
 			placeholder = "https://bagibagi.co/your-page",
-			order = 4,
+			order = 5,
 			onChanged = function(v)
 				draft.donation.providerLink = v
 				markDirty()
@@ -449,6 +469,7 @@ local function buildConfigPage(ctx, page: Frame)
 			shop = draft.shop,
 			donation = {
 				provider = draft.donation.provider,
+				currency = draft.donation.currency,
 				providerLink = draft.donation.providerLink,
 				apiUrl = draft.donation.apiUrl,
 				cashEnabled = draft.donation.cashEnabled,
@@ -1196,9 +1217,41 @@ local function buildPackagerPage(ctx, page: Frame)
 	UI.cardTitle(unpackBody, "Unpack", nil, 1)
 	UI.row({
 		parent = unpackBody,
-		label = "Install package into this place",
-		desc = "Select a Club Kit package folder first. Existing config & secrets are preserved.",
+		label = "Unpack RBXM file",
+		desc = "Pick HazastudioClubKit_Package.rbxm (or SyncBhms add-on). Inserts + unpacks in one step. Config & secrets preserved.",
 		order = 2,
+		noBorder = true,
+		right = UI.button({
+			text = "Unpack RBXM…",
+			variant = "primary",
+			small = true,
+			onClick = function()
+				ChangeHistoryService:SetWaypoint("ClubKit before Unpack RBXM")
+				local report, err = PackagerCore.promptAndUnpackFromRbxm({
+					replaceExisting = true,
+					keepBuyerConfig = true,
+					keepBuyerSecrets = true,
+				})
+				if err == "cancelled" then
+					ctx.toast("Unpack cancelled")
+					return
+				end
+				if err or not report then
+					ctx.toast(err or "Unpack RBXM failed")
+					warn("[ClubKitPackager] Unpack RBXM failed: " .. tostring(err))
+					return
+				end
+				PackagerCore.printUnpackReport(report)
+				ChangeHistoryService:SetWaypoint("ClubKit after Unpack RBXM")
+				ctx.toast("Unpack RBXM finished — see Output")
+			end,
+		}),
+	})
+	UI.row({
+		parent = unpackBody,
+		label = "Unpack selection",
+		desc = "Select a Club Kit package already in Workspace, then unpack. Existing config & secrets are preserved.",
+		order = 3,
 		noBorder = true,
 		right = UI.button({
 			text = "Unpack",
@@ -1210,12 +1263,14 @@ local function buildPackagerPage(ctx, page: Frame)
 					ctx.toast("Select a Club Kit package folder first")
 					return
 				end
+				ChangeHistoryService:SetWaypoint("ClubKit before Unpack selection")
 				local report = PackagerCore.unpack(root, {
 					replaceExisting = true,
 					keepBuyerConfig = true,
 					keepBuyerSecrets = true,
 				})
 				PackagerCore.printUnpackReport(report)
+				ChangeHistoryService:SetWaypoint("ClubKit after Unpack selection")
 				ctx.toast("Unpack finished — see Output")
 			end,
 		}),

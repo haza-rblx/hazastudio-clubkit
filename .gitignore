@@ -19,6 +19,11 @@ Thumbs.db
 .tools/analyze-output.txt
 .tools/analyze-roblox.txt
 .tmp/
+.tmp-*/
+.tmp_*
+.local/
+deliver/
+deliverables/
 
 # Node (donation-api admin panel, game-data-api)
 node_modules/

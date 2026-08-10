@@ -49,7 +49,16 @@ const navItems = [
   { id: "settings", label: "Settings", icon: Settings },
 ];
 
-const formatIdr = (n) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
+// Display-only presets — mirrors Club Kit's CashCurrencyDomain (Luau). Amounts are
+// never converted; this only controls how a game's own totals are rendered here.
+const CASH_CURRENCY_PRESETS = {
+  IDR: { symbol: "Rp ", locale: "id-ID" },
+  PHP: { symbol: "₱", locale: "en-PH" },
+};
+const formatCash = (n, currency) => {
+  const preset = CASH_CURRENCY_PRESETS[String(currency || "").toUpperCase()] || CASH_CURRENCY_PRESETS.IDR;
+  return `${preset.symbol}${Number(n || 0).toLocaleString(preset.locale)}`;
+};
 const formatDateTime = (value) => {
   if (!value) return "-";
   const ms = typeof value === "number" ? value * 1000 : Date.parse(value);
@@ -80,6 +89,7 @@ function buildClubKitConfigText(game) {
     'ClubKitConfig.Donation = {',
     '  Provider = "bagibagi", -- "bagibagi" | "saweria" | "sociabuzz"',
     `  ApiUrl = "${game?.clubkit?.donation_api_url || ""}",`,
+    `  ${game?.clubkit?.donation_currency || 'Currency = "IDR",'} -- "IDR" | "PHP"`,
     "}",
     "ClubKitConfig.GameDataApi = {",
     `  GameKey = "${game?.clubkit?.social_game_key || ""}",`,
@@ -223,7 +233,7 @@ export default function App() {
   const [rankSearch, setRankSearch] = useState("");
   const [donationSearch, setDonationSearch] = useState("");
   const [modal, setModal] = useState(null);
-  const [newGame, setNewGame] = useState({ id: "", display_name: "", saweria_link: "" });
+  const [newGame, setNewGame] = useState({ id: "", display_name: "", saweria_link: "", currency: "IDR" });
   const [linkForm, setLinkForm] = useState({ saweria_name: "", roblox_username: "", roblox_user_id: "" });
   const [adjustForm, setAdjustForm] = useState({ saweria_name: "", current_total: 0, delta_amount: "", reason: "" });
   const [tokenReveal, setTokenReveal] = useState(null);
@@ -415,11 +425,21 @@ export default function App() {
     await run(async () => loadPageData(page, gameId), "Game changed.");
   }
 
+  async function changeGameCurrency(gameId, currency) {
+    await run(async () => {
+      await api(baseUrl, token, `/admin/games/${gameId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ currency }),
+      });
+      await loadGames(selectedGame);
+    }, "Currency updated.");
+  }
+
   async function createGame(e) {
     e.preventDefault();
     await run(async () => {
       const res = await api(baseUrl, token, "/admin/games", { method: "POST", body: JSON.stringify(newGame) });
-      setNewGame({ id: "", display_name: "", saweria_link: "" });
+      setNewGame({ id: "", display_name: "", saweria_link: "", currency: "IDR" });
       const createdToken = res.admin_token;
       if (createdToken) {
         setTokenReveal({ token: createdToken, label: `Admin token for ${res.game?.display_name || newGame.id}` });
@@ -874,6 +894,7 @@ export default function App() {
             <DonationsPage
               rows={filteredDonations}
               total={totalDonations}
+              currency={activeGame?.currency}
               search={donationSearch}
               setSearch={setDonationSearch}
               refresh={() => refreshCurrent()}
@@ -888,6 +909,7 @@ export default function App() {
             <LeaderboardPage
               rankings={rankings}
               total={rankTotal}
+              currency={activeGame?.currency}
               search={rankSearch}
               setSearch={setRankSearch}
               applyFilter={() => run(async () => loadPageData("leaderboard", selectedGame))}
@@ -931,6 +953,7 @@ export default function App() {
               games={games}
               selectedGame={selectedGame}
               changeGame={changeGame}
+              changeGameCurrency={changeGameCurrency}
               openCreate={() => setModal("createGame")}
               openDelivery={openNewDelivery}
               scope={scope}
@@ -984,6 +1007,16 @@ export default function App() {
                 onChange={(e) => setNewGame({ ...newGame, saweria_link: e.target.value })}
                 placeholder="https://saweria.co/..."
               />
+            </label>
+            <label>
+              <span>Cash currency</span>
+              <select
+                value={newGame.currency}
+                onChange={(e) => setNewGame({ ...newGame, currency: e.target.value })}
+              >
+                <option value="IDR">IDR (Rp)</option>
+                <option value="PHP">PHP (₱)</option>
+              </select>
             </label>
             <div className="modal-actions">
               <button className="button ghost" type="button" onClick={() => setModal(null)}>
@@ -1040,7 +1073,7 @@ export default function App() {
           <form className="modal-form" onSubmit={applyAdjustment}>
             <div className="adjust-summary">
               <span>{adjustForm.saweria_name}</span>
-              <strong>{formatIdr(adjustForm.current_total)}</strong>
+              <strong>{formatCash(adjustForm.current_total, activeGame?.currency)}</strong>
             </div>
             <label>
               <span>Adjustment amount</span>
@@ -1063,7 +1096,7 @@ export default function App() {
             </label>
             <div className="new-total">
               <span>New total</span>
-              <strong>{formatIdr(adjustForm.current_total + Number(adjustForm.delta_amount || 0))}</strong>
+              <strong>{formatCash(adjustForm.current_total + Number(adjustForm.delta_amount || 0), activeGame?.currency)}</strong>
             </div>
             <p className="modal-note">This updates manual adjustment only. Live donation rows stay unchanged.</p>
             <div className="modal-actions">
@@ -1187,7 +1220,7 @@ export default function App() {
         <Modal title={`Donor: ${donorDetail.donor?.saweria_name || ""}`} onClose={() => setDonorDetail(null)}>
           <div className="modal-form">
             <div className="kpi-grid" style={{ marginBottom: 16 }}>
-              <KpiCard label="Total" value={formatIdr(donorDetail.donor?.total_amount)} helper={`${donorDetail.donor?.total_donations} donations`} icon={Activity} />
+              <KpiCard label="Total" value={formatCash(donorDetail.donor?.total_amount, activeGame?.currency)} helper={`${donorDetail.donor?.total_donations} donations`} icon={Activity} />
               <KpiCard label="Rank" value={`#${donorDetail.donor?.rank || "-"}}`} helper="Leaderboard position" icon={Trophy} />
             </div>
             {donorDetail.donor?.roblox_username ? (
@@ -1201,7 +1234,7 @@ export default function App() {
                   {(donorDetail.donations || []).map((d) => (
                     <tr key={d.id}>
                       <td>{formatDateTime(d.donation_at)}</td>
-                      <td className="numeric">{formatIdr(d.amount)}</td>
+                      <td className="numeric">{formatCash(d.amount, activeGame?.currency)}</td>
                       <td className="message-cell">{d.message || "-"}</td>
                     </tr>
                   ))}
@@ -1323,6 +1356,7 @@ function DeliveryPage({
             <Copy size={18} />
           </div>
           <EndpointRow label="Donation.ApiUrl" value={game.clubkit?.donation_api_url} />
+          <EndpointRow label="Donation.Currency" value={game.clubkit?.donation_currency} />
           <EndpointRow label="GameDataApi.GameKey" value={game.clubkit?.social_game_key} />
           <EndpointRow label="DonationApiSecret" value={game.clubkit?.donation_api_secret} />
           <EndpointRow label="GameDataApiSecret" value={game.clubkit?.social_api_secret} />
@@ -1515,14 +1549,14 @@ function OverviewPage({
       <div className="kpi-grid">
         <KpiCard
           label="Recent volume"
-          value={formatIdr(totalDonations)}
+          value={formatCash(totalDonations, activeGame?.currency)}
           helper={`${donations.length} recent rows`}
           icon={Activity}
         />
         <KpiCard label="Ranked donors" value={rankTotal} helper="Merged leaderboard" icon={Trophy} />
         <KpiCard
           label="Manual adjustment"
-          value={formatIdr(totalAdjustments)}
+          value={formatCash(totalAdjustments, activeGame?.currency)}
           helper="Seed layer total"
           icon={ArrowDownUp}
         />
@@ -1542,9 +1576,9 @@ function OverviewPage({
         {gameStats ? (
           <div className="kpi-grid">
             <KpiCard label="Total donations" value={gameStats.total_donations} helper="All time" icon={Activity} />
-            <KpiCard label="Total amount" value={formatIdr(gameStats.total_amount)} helper="Successful only" icon={Trophy} />
+            <KpiCard label="Total amount" value={formatCash(gameStats.total_amount, activeGame?.currency)} helper="Successful only" icon={Trophy} />
             <KpiCard label="Unique donors" value={gameStats.unique_donors} helper="Distinct names" icon={Users} />
-            <KpiCard label="Combined total" value={formatIdr(gameStats.combined_total)} helper="Live + seed" icon={Database} />
+            <KpiCard label="Combined total" value={formatCash(gameStats.combined_total, activeGame?.currency)} helper="Live + seed" icon={Database} />
           </div>
         ) : (
           <p className="muted" style={{ padding: "0 16px 16px" }}>Click "Load stats" to fetch donation analytics.</p>
@@ -1625,6 +1659,7 @@ function OverviewPage({
           <Copy size={18} />
         </div>
         <EndpointRow label="ClubKitConfig" value={activeGame.clubkit?.donation_api_url} />
+        <EndpointRow label="ClubKitConfig" value={activeGame.clubkit?.donation_currency} />
         <EndpointRow label="ClubKitConfig" value={activeGame.clubkit?.social_game_key} />
         <EndpointRow label="Secrets.luau" value={activeGame.clubkit?.donation_api_secret} />
         <EndpointRow label="Secrets.luau" value={activeGame.clubkit?.social_api_secret} />
@@ -1657,7 +1692,7 @@ function OverviewPage({
             <MiniList
               rows={rankings.map((row) => ({
                 label: `#${row.rank} ${row.saweria_name}`,
-                value: formatIdr(row.total_amount),
+                value: formatCash(row.total_amount, activeGame?.currency),
               }))}
             />
           ) : (
@@ -1671,19 +1706,19 @@ function OverviewPage({
       </div>
       <section className="panel">
         <TableHeader title="Recent donations" detail="Latest events received by the selected game." />
-        <DonationTable rows={donations} />
+        <DonationTable rows={donations} currency={activeGame?.currency} />
       </section>
     </section>
   );
 }
 
-function DonationsPage({ rows, total, search, setSearch, refresh, toggleVoid, selectedDonations, toggleDonationSelect, toggleAllDonations, bulkVoid }) {
+function DonationsPage({ rows, total, currency, search, setSearch, refresh, toggleVoid, selectedDonations, toggleDonationSelect, toggleAllDonations, bulkVoid }) {
   return (
     <section className="page-stack">
       <PageHeader
         eyebrow="Donations"
         title="Live donation events"
-        detail={`${rows.length} rows loaded · ${formatIdr(total)} active amount`}
+        detail={`${rows.length} rows loaded · ${formatCash(total, currency)} active amount`}
       />
       <section className="panel">
         <TableToolbar>
@@ -1702,13 +1737,13 @@ function DonationsPage({ rows, total, search, setSearch, refresh, toggleVoid, se
             Refresh
           </button>
         </TableToolbar>
-        <DonationTable rows={rows} toggleVoid={toggleVoid} actions selectedDonations={selectedDonations} toggleDonationSelect={toggleDonationSelect} toggleAllDonations={toggleAllDonations} />
+        <DonationTable rows={rows} currency={currency} toggleVoid={toggleVoid} actions selectedDonations={selectedDonations} toggleDonationSelect={toggleDonationSelect} toggleAllDonations={toggleAllDonations} />
       </section>
     </section>
   );
 }
 
-function LeaderboardPage({ rankings, total, search, setSearch, applyFilter, exportRankings, openAdjust, leaderboardTab, setLeaderboardTab, dailyLeaderboard, loadDailyLeaderboard }) {
+function LeaderboardPage({ rankings, total, currency, search, setSearch, applyFilter, exportRankings, openAdjust, leaderboardTab, setLeaderboardTab, dailyLeaderboard, loadDailyLeaderboard }) {
   const isDaily = leaderboardTab === "daily";
   const displayRankings = isDaily ? dailyLeaderboard : rankings;
   return (
@@ -1767,15 +1802,15 @@ function LeaderboardPage({ rankings, total, search, setSearch, applyFilter, expo
                   <td><strong>{row.saweria_name}</strong></td>
                   {isDaily ? (
                     <>
-                      <td className="numeric">{formatIdr(row.total)}</td>
-                      <td className="numeric"><strong>{formatIdr(row.total)}</strong></td>
+                      <td className="numeric">{formatCash(row.total, currency)}</td>
+                      <td className="numeric"><strong>{formatCash(row.total, currency)}</strong></td>
                       <td>{row.last_at || "-"}</td>
                     </>
                   ) : (
                     <>
-                      <td className="numeric">{formatIdr(row.live_total)}</td>
-                      <td className="numeric">{formatIdr(row.seed_total)}</td>
-                      <td className="numeric"><strong>{formatIdr(row.total_amount)}</strong></td>
+                      <td className="numeric">{formatCash(row.live_total, currency)}</td>
+                      <td className="numeric">{formatCash(row.seed_total, currency)}</td>
+                      <td className="numeric"><strong>{formatCash(row.total_amount, currency)}</strong></td>
                       <td>{formatDateTime(row.last_donation_at)}</td>
                       <td className="action-cell">
                         <button className="row-action" onClick={() => openAdjust(row)} title="Adjust donor total">
@@ -1854,7 +1889,7 @@ function LinksPage({ links, openAdd, openBulkAdd, loadDonorDetail }) {
   );
 }
 
-function GamesPage({ games, selectedGame, changeGame, openCreate, openDelivery, scope, openGenerateLink }) {
+function GamesPage({ games, selectedGame, changeGame, changeGameCurrency, openCreate, openDelivery, scope, openGenerateLink }) {
   const canCreate = scope !== "game";
   return (
     <section className="page-stack">
@@ -1886,6 +1921,7 @@ function GamesPage({ games, selectedGame, changeGame, openCreate, openDelivery, 
                 <th>Game</th>
                 <th>Game ID</th>
                 <th>Saweria link</th>
+                <th>Currency</th>
                 <th>Created</th>
                 <th className="action-cell">Actions</th>
               </tr>
@@ -1900,6 +1936,16 @@ function GamesPage({ games, selectedGame, changeGame, openCreate, openDelivery, 
                     <code>{game.id}</code>
                   </td>
                   <td>{game.saweria_link || "-"}</td>
+                  <td>
+                    <select
+                      value={game.currency || "IDR"}
+                      onChange={(e) => changeGameCurrency(game.id, e.target.value)}
+                      title="Display only — admin dashboard labels. Does not change in-game ClubKitConfig."
+                    >
+                      <option value="IDR">IDR (Rp)</option>
+                      <option value="PHP">PHP (₱)</option>
+                    </select>
+                  </td>
                   <td>{formatDateTime(game.created_at)}</td>
                   <td className="action-cell">
                     <button className="row-action" onClick={() => changeGame(game.id)}>
@@ -2231,7 +2277,7 @@ function SettingsPage({
   );
 }
 
-function DonationTable({ rows, toggleVoid, actions = false, selectedDonations, toggleDonationSelect, toggleAllDonations }) {
+function DonationTable({ rows, currency, toggleVoid, actions = false, selectedDonations, toggleDonationSelect, toggleAllDonations }) {
   const hasSelection = typeof toggleDonationSelect === "function";
   const allSelected = hasSelection && rows.length > 0 && selectedDonations && selectedDonations.size === rows.length;
   return (
@@ -2266,7 +2312,7 @@ function DonationTable({ rows, toggleVoid, actions = false, selectedDonations, t
               ) : null}
               <td>{formatDateTime(row.received_at)}</td>
               <td><strong>{row.saweria_name}</strong></td>
-              <td className="numeric">{formatIdr(row.amount)}</td>
+              <td className="numeric">{formatCash(row.amount, currency)}</td>
               <td><StatusTag status={row.is_voided ? "voided" : row.status} /></td>
               <td className="message-cell">{row.message || "-"}</td>
               {actions ? (

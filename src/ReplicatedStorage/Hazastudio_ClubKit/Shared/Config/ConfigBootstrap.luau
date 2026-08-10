@@ -7,6 +7,7 @@ local ClubKitDefaults = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Conf
 local ClubKitConfigSchema = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Config.ClubKitConfigSchema)
 local ClubKitConfig = require(ReplicatedStorage.Hazastudio_ClubKitConfig.ClubKitConfig)
 local DonationProviderDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.DonationProviderDomain)
+local CashCurrencyDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.CashCurrencyDomain)
 local RoleCategoryBuilder = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Config.RoleCategoryBuilder)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 
@@ -219,6 +220,7 @@ function ConfigBootstrap.apply(config: any)
 	if type(config.Donation) == "table" and type(donation) == "table" then
 		local providerKey = DonationProviderDomain.inferProviderKey(donation)
 		DonationProviderDomain.applyToConfig(config.Donation, providerKey)
+		config.Donation.CASH_CURRENCY = CashCurrencyDomain.normalize(donation.Currency)
 		if type(donation.ProviderLink) == "string" then
 			config.Donation.PROVIDER_LINK = donation.ProviderLink
 			config.Donation.SAWERIA_LINK = donation.ProviderLink

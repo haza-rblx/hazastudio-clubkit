@@ -4,6 +4,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 
+local CashCurrencyDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.CashCurrencyDomain)
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local DonationProviderDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.DonationProviderDomain)
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
@@ -355,7 +356,7 @@ local SECTION_DEFS: { SettingsSectionDef } = {
 			{
 				kind = "toggle",
 				field = "overheadLayerVisible.TopSpender",
-				label = "Top Rupiah",
+				label = CashCurrencyDomain.getActive().shortRoleLabel,
 				requiresOverheadFeature = "TopSpender",
 			},
 			{

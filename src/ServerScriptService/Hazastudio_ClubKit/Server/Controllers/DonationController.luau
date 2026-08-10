@@ -7,6 +7,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local ServerScriptService = game:GetService("ServerScriptService")
 local IS_STUDIO = RunService:IsStudio()
+local CashCurrencyDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.CashCurrencyDomain)
 local Config         = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Logger         = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local NetworkManager = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.NetworkManager)
@@ -22,6 +23,9 @@ local WorkspaceLeaderboardRenderService = require(script.Parent.Parent.Services.
 local WorkspaceLeaderboardRenderer = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Leaderboards.WorkspaceLeaderboardRenderer)
 local BrandLogoApplier = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.BrandLogoApplier)
 local LeaderboardScaleAudit = require(script.Parent.Parent.Debug.LeaderboardScaleAudit)
+-- Manual/fake cash command copy below is in the active Donation.Currency unit (default "IDR").
+local ACTIVE_CASH_UNIT = CashCurrencyDomain.getActive().adminHint
+local ACTIVE_CASH_UNIT_LOWER = string.lower(ACTIVE_CASH_UNIT)
 type INotify = {
 	player: (Player, string, string?) -> (),
 	all   : (string, string?) -> (),
@@ -889,16 +893,17 @@ local function createDonationController(deps: {
 				local userId = tonumber(entry.userId) or 0
 				local total = tonumber(entry.total) or 0
 				local line = string.format(
-					"[%d] %s (userId=%d, total=%d IDR)",
+					"[%d] %s (userId=%d, total=%d %s)",
 					rank,
 					username,
 					userId,
-					total
+					total,
+					ACTIVE_CASH_UNIT
 				)
 				notify.player(player, line, "INFO")
 				print(tag .. " " .. line)
 			end
-			print(tag .. " Leaderboard above already includes manual IDR adjustment (if any).")
+			print(tag .. " Leaderboard above already includes manual " .. ACTIVE_CASH_UNIT .. " adjustment (if any).")
 			notify.player(
 				player,
 				tag .. " Details printed to server Output (Studio).",
@@ -1243,10 +1248,11 @@ local function createDonationController(deps: {
 			notify.player(
 				player,
 				string.format(
-					"[%s] %s +%d IDR -> notif + aura + world VFX (preview only, does not persist).%s",
+					"[%s] %s +%d %s -> notif + aura + world VFX (preview only, does not persist).%s",
 					labelPrefix,
 					who,
 					math.floor(amount),
+					ACTIVE_CASH_UNIT,
 					extra
 				),
 				"SUCCESS"
@@ -1301,7 +1307,7 @@ local function createDonationController(deps: {
 
 	local function handleFakeCash(player: Player, rawText: string, labelPrefix: string, cmdName: string)
 		local userId, username, amount, message =
-			parseFakeDonationArgs(player, rawText, labelPrefix, "IDR", cmdName)
+			parseFakeDonationArgs(player, rawText, labelPrefix, ACTIVE_CASH_UNIT, cmdName)
 		if not userId or not amount then
 			return
 		end
@@ -1576,9 +1582,10 @@ local function createDonationController(deps: {
 			notify.player(
 				player,
 				string.format(
-					"[%s] Usage: /%s <username|userId> <idr amount> [optional message]",
+					"[%s] Usage: /%s <username|userId> <%s amount> [optional message]",
 					label,
-					label:lower()
+					label:lower(),
+					ACTIVE_CASH_UNIT_LOWER
 				),
 				"WARNING"
 			)
@@ -1586,7 +1593,7 @@ local function createDonationController(deps: {
 		end
 		local amount = tonumber(amountStr)
 		if not amount or amount <= 0 then
-			notify.player(player, string.format("[%s] Amount must be a positive number (IDR).", label), "WARNING")
+			notify.player(player, string.format("[%s] Amount must be a positive number (%s).", label, ACTIVE_CASH_UNIT), "WARNING")
 			return
 		end
 		local messageParts = {}
@@ -1626,10 +1633,11 @@ local function createDonationController(deps: {
 			notify.player(
 				player,
 				string.format(
-					"[%s] %s +%d IDR → notif + donation effects (manual total=%d).%s",
+					"[%s] %s +%d %s → notif + donation effects (manual total=%d).%s",
 					label,
 					resolvedName or tostring(userId),
 					math.floor(amount),
+					ACTIVE_CASH_UNIT,
 					totalAdj or 0,
 					extra
 				),
@@ -1649,14 +1657,14 @@ local function createDonationController(deps: {
 		if not target or not amountStr then
 			notify.player(
 				player,
-				string.format("[%s] Usage: /%s <username|userId> <idr amount>", label, label:lower()),
+				string.format("[%s] Usage: /%s <username|userId> <%s amount>", label, label:lower(), ACTIVE_CASH_UNIT_LOWER),
 				"WARNING"
 			)
 			return
 		end
 		local amount = tonumber(amountStr)
 		if not amount or amount <= 0 then
-			notify.player(player, string.format("[%s] Amount must be a positive number (IDR).", label), "WARNING")
+			notify.player(player, string.format("[%s] Amount must be a positive number (%s).", label, ACTIVE_CASH_UNIT), "WARNING")
 			return
 		end
 		task.spawn(function()
@@ -1689,10 +1697,11 @@ local function createDonationController(deps: {
 			notify.player(
 				player,
 				string.format(
-					"[%s] %s +%d IDR (manual total=%d) → leaderboard & overhead sync.",
+					"[%s] %s +%d %s (manual total=%d) → leaderboard & overhead sync.",
 					label,
 					resolvedName or tostring(userId),
 					math.floor(amount),
+					ACTIVE_CASH_UNIT,
 					totalAdj or 0
 				),
 				"SUCCESS"
@@ -1712,9 +1721,10 @@ local function createDonationController(deps: {
 			notify.player(
 				player,
 				string.format(
-					"[%s] Usage: /%s <username|userId|me> [idr amount] — `me` = clear self (Studio only)",
+					"[%s] Usage: /%s <username|userId|me> [%s amount] — `me` = clear self (Studio only)",
 					label,
-					label:lower()
+					label:lower(),
+					ACTIVE_CASH_UNIT_LOWER
 				),
 				"WARNING"
 			)
@@ -1747,10 +1757,11 @@ local function createDonationController(deps: {
 			notify.player(
 				player,
 				string.format(
-					"[%s] %s adjustment is now %d IDR%s.",
+					"[%s] %s adjustment is now %d %s%s.",
 					label,
 					resolvedName or tostring(userId),
 					remaining or 0,
+					ACTIVE_CASH_UNIT,
 					if isSelfAlias and amount == nil then " (cleared self)" else ""
 				),
 				"SUCCESS"
@@ -1779,7 +1790,7 @@ local function createDonationController(deps: {
 	end)
 
 	registerOwnerManualCommands({ donationCfg.CMD_LIST_BAGIBAGI }, function(player: Player, _rawText: string)
-		listManualValueMap(player, "ListBagibagi", donationCfg.MANUAL_BAGIBAGI_ADJUSTMENTS, "IDR")
+		listManualValueMap(player, "ListBagibagi", donationCfg.MANUAL_BAGIBAGI_ADJUSTMENTS, ACTIVE_CASH_UNIT)
 	end)
 
 	registerOwnerManualCommands({ donationCfg.CMD_LIST_ROBUX }, function(player: Player, _rawText: string)

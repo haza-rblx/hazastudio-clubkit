@@ -108,22 +108,23 @@ Membership = {
 
 Adjust `RoleCategories`, `SpenderRoles`, and `CommandAliases` if you rename roles.
 
-### 4. Cash donations (IDR — Bagi-Bagi / Saweria / SociaBuzz)
+### 4. Cash donations (IDR/PHP — Bagi-Bagi / Saweria / SociaBuzz)
 
 ```lua
 Donation = {
     Provider = "bagibagi", -- "bagibagi" | "saweria" | "sociabuzz" — donor name & labels auto-set
     ProviderLink = "https://bagibagi.co/your-page", -- or https://sociabuzz.com/username
     ApiUrl = "https://xxx.workers.dev/game/clubkit-key",
+    Currency = "IDR", -- "IDR" | "PHP" — display only (symbol/grouping/chip word); amounts are NOT converted
     Cash = { Enabled = true },
     Robux = { Enabled = true },
-    MinAmount = 1000, -- notification + leaderboard threshold (IDR)
-    -- Character aura (Robux + cash IDR)
+    MinAmount = 1000, -- notification + leaderboard threshold (in Currency unit)
+    -- Character aura (Robux + cash — cash unit follows Currency)
     AuraTiers = {
         { level = 1, min = 10, idrMin = 0, idrMax = 9999, effect = "Level1", sound = "Level1", duration = 4, cameraDuration = 0 },
-        -- min = Robux | idrMin/idrMax = IDR range
+        -- min = Robux | idrMin/idrMax = cash range (field name kept for compatibility)
     },
-    -- Global world VFX (all cash IDR)
+    -- Global world VFX (all cash — unit follows Currency)
     WorldEffectTiers = {
         { min = 100000, effect = "Nuke" },
         { min = 250000, effect = "Smite4" },
@@ -132,6 +133,14 @@ Donation = {
 },
 ```
 
+**Currency (`IDR` | `PHP`):** display-only — it swaps the symbol/grouping/chip word (`Rp 10.000` vs `₱10,000`, "RUPIAH"/"PESO" chip, "Top Rupiah/Peso Spender" role fallback) across notifications, boards, chips, Admin Hub, and join greetings. It does **not** convert amounts. Match it to how your donation platform actually settles:
+
+- **Saweria** — supports both; register/verify your Saweria account in the matching currency, then set `Currency` to match.
+- **Bagi-Bagi** — IDR-only; leave `Currency = "IDR"`.
+- **SociaBuzz** — settles per creator's registered country; set `Currency` to match that account.
+
+Switching `Currency` is **display-only and instant** — it does not touch stored totals. If you switch on a `game_key` with existing donation history, old totals just get re-labelled with the new symbol (e.g. old `Rp` totals show as `₱` unchanged). Retune `MinAmount`, `AuraTiers` `idrMin`/`idrMax`, and `WorldEffectTiers` thresholds for the new unit yourself (no auto-convert). Prefer switching **before** you go live, or start a fresh `game_key` if you need a clean break on a live game.
+
 For **SociaBuzz**: set `Provider = "sociabuzz"`, paste `sociabuzz_webhook` from the donation admin panel into TRIBE → Integrations (Webhook URL), fill **Webhook Token** from the URL/admin, then Test Notification. Cash tab title/donor label follow `Provider`.
 
 **Aura vs world (behavior matrix):**
@@ -139,7 +148,7 @@ For **SociaBuzz**: set `Provider = "sociabuzz"`, paste `sociabuzz_webhook` from 
 | Source | Character aura | World VFX |
 |--------|---------------|-----------|
 | **Robux** | Yes (`min` Robux) | **No** |
-| **Cash IDR** (Bagi-Bagi / Saweria / SociaBuzz) | Yes (`idrMin`..`idrMax`) | Yes (`min` IDR) |
+| **Cash** (Bagi-Bagi / Saweria / SociaBuzz) | Yes (`idrMin`..`idrMax`) | Yes (`min`, unit follows `Currency`) |
 
 Legacy keys `RobuxAuraTiers` / `SaweriaWorldTiers` are still read as aliases.
 

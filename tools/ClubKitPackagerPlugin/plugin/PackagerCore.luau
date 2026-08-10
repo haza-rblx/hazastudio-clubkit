@@ -3,9 +3,11 @@
 
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local SerializationService = game:GetService("SerializationService")
 local ServerStorage = game:GetService("ServerStorage")
 local StarterGui = game:GetService("StarterGui")
 local StarterPlayer = game:GetService("StarterPlayer")
+local StudioService = game:GetService("StudioService")
 local Workspace = game:GetService("Workspace")
 
 local Manifest = require(script.Parent.ClubKitManifest)
@@ -607,6 +609,74 @@ function PackagerCore.unpack(packageRoot: Instance, options: UnpackOptions): Unp
 	end
 
 	return report
+end
+
+--- Prompt for a .rbxm/.rbxmx Club Kit package, deserialize into Workspace, unpack into services.
+-- Temporary package model is removed after unpack. Returns (report, errMessage).
+-- errMessage is "cancelled" when the user closes the file dialog.
+function PackagerCore.promptAndUnpackFromRbxm(options: UnpackOptions): (UnpackReport?, string?)
+	local file: File?
+	local promptOk, promptResult = pcall(function()
+		if type((StudioService :: any).PromptImportFileAsync) == "function" then
+			return (StudioService :: any):PromptImportFileAsync({ "rbxm", "rbxmx" })
+		end
+		return StudioService:PromptImportFile({ "rbxm", "rbxmx" })
+	end)
+	if not promptOk then
+		return nil, ("File prompt failed: %s"):format(tostring(promptResult))
+	end
+	file = promptResult
+	if file == nil then
+		return nil, "cancelled"
+	end
+
+	local binaryOk, binaryOrErr = pcall(function()
+		return file:GetBinaryContents()
+	end)
+	if not binaryOk or type(binaryOrErr) ~= "string" or binaryOrErr == "" then
+		return nil, ("Could not read file contents: %s"):format(tostring(binaryOrErr))
+	end
+
+	local buf = buffer.fromstring(binaryOrErr :: string)
+	local deserOk, instancesOrErr = pcall(function()
+		if type((SerializationService :: any).DeserializeInstancesAsync) == "function" then
+			return (SerializationService :: any):DeserializeInstancesAsync(buf)
+		end
+		return (SerializationService :: any):DeserializeInstances(buf)
+	end)
+	if not deserOk then
+		return nil, ("RBXM deserialize failed: %s"):format(tostring(instancesOrErr))
+	end
+	local instances = instancesOrErr :: { Instance }
+	if type(instances) ~= "table" or #instances == 0 then
+		return nil, "RBXM contained no instances"
+	end
+
+	-- Parent under a disposable folder so we can clean up even if findPackageRoot fails.
+	local staging = Instance.new("Folder")
+	staging.Name = "_ClubKitUnpackStaging"
+	staging.Parent = Workspace
+	for _, inst in ipairs(instances) do
+		inst.Parent = staging
+	end
+
+	local packageRoot = PackagerCore.findPackageRoot(instances)
+	if not packageRoot or packageRoot == staging then
+		staging:Destroy()
+		return nil, "No Club Kit package model found inside RBXM (expected HazastudioClubKit_Package)"
+	end
+	local looksLikePackage = packageRoot.Name == Manifest.PACKAGE_NAME
+		or packageRoot.Name == Manifest.SYNC_BHMS_ADDON_PACKAGE_NAME
+		or packageRoot:FindFirstChild(Manifest.MANIFEST_NAME) ~= nil
+		or (packageRoot:FindFirstChild("ReplicatedStorage") ~= nil and packageRoot:FindFirstChild("ServerScriptService") ~= nil)
+	if not looksLikePackage then
+		staging:Destroy()
+		return nil, "RBXM does not look like a Club Kit package"
+	end
+
+	local report = PackagerCore.unpack(packageRoot, options)
+	staging:Destroy()
+	return report, nil
 end
 
 function PackagerCore.printCollectReport(report: CollectReport)

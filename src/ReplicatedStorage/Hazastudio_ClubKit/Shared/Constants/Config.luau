@@ -1344,7 +1344,7 @@ Config.Demo = {
 	LEADERBOARD_USE_OWNER_ONLY = false,
 	-- UserId whose friend list populates demo data. 0 = use first player who joins.
 	SOURCE_USER_ID = 0,
-	-- Random donation amount range (IDR / Bagi-Bagi)
+	-- Random donation amount range (cash unit follows CASH_CURRENCY)
 	MIN_AMOUNT = 100000,
 	MAX_AMOUNT = 10000000,
 	-- Random Robux donation range
@@ -1768,12 +1768,17 @@ Config.Gravity = {
 	MAX_SPEED = 10,
 	FLOAT_SPEED_AT_MIN = 3,
 	FLOAT_SPEED_AT_MAX = 18,
-	-- On /gravity: push downward (studs/s) so players do not float briefly first.
+	-- On /gravity [1-10]: downward kick scales with its own restore intensity argument —
+	-- independent of /ungravity's float speed (separate dials/gears on the Admin Hub).
+	-- Soft (1) ≈ RESTORE_DOWNWARD_AT_MIN, hard (10) ≈ RESTORE_DOWNWARD_AT_MAX (studs/s, negative).
+	RESTORE_DOWNWARD_AT_MIN = -12,
+	RESTORE_DOWNWARD_AT_MAX = -90,
+	-- Legacy single-kick fallback when intensity is missing (mid-ish slam).
 	RESTORE_DOWNWARD_VELOCITY = -45,
 	RESTORE_HORIZONTAL_DAMP = 0.35,
 	RATE_MAX = 12,
 	RATE_WINDOW = 5,
-	MSG_USAGE = "[Gravity] Staff only. /ungravity or /ungravity 1-10 = float everyone. /gravity or Shift+G = restore. Shift+U = float.",
+	MSG_USAGE = "[Gravity] Staff only. /ungravity or /ungravity 1-10 = float everyone. /gravity or /gravity 1-10 = restore (1 soft → 10 hard drop). Shift+U float / Shift+G restore.",
 	MSG_STATUS = "[Ungravity] Server floating at speed %d. Use /gravity or Shift+G to restore.",
 	MSG_ENABLED = "[Ungravity] Everyone floating at speed %d.",
 	MSG_DISABLED = "[Gravity] Gravity restored for everyone.",
@@ -2274,7 +2279,10 @@ Config.Donation = {
 	-- recordRobuxDonation, etc.) short-circuit and return Err("ds_throttled") for this many seconds.
 	-- Callers fall back to TTL cache. 60s is enough for Roblox BudgetGate re-budget.
 	DATASTORE_THROTTLE_COOLDOWN = 60,
-	-- Minimum donation amount (Rupiah) to process for notifications/leaderboard
+	-- Cash display currency ("IDR" | "PHP"); buyer override via ClubKitConfig.Donation.Currency
+	-- → ConfigBootstrap. Display-only (symbol/grouping/chip word) — see CashCurrencyDomain.
+	CASH_CURRENCY = "IDR",
+	-- Minimum donation amount (in CASH_CURRENCY unit) to process for notifications/leaderboard
 	MIN_AMOUNT = 1000,
 	-- Number of leaderboard entries tracked
 	LEADERBOARD_LIMIT = 10,
@@ -2368,8 +2376,9 @@ Config.Donation = {
 	RUNNING_TEXT_DEBUG = false,
 	-- Donation aura/effect assets live in ServerStorage.DonationEffects / DonationSounds.
 	-- Folder structure: ServerStorage > DonationEffects (Model) > DonationEffects (Folder) > Level1..Level11
-	-- Aura tier resolution (AURA_TIERS): highest `min` for Robux; idrMin..idrMax for Bagi-Bagi/Saweria.
-	-- Approx. 1 Robux = Rp 100. Robux cinematic effects start at Level3 (80 Robux).
+	-- Aura tier resolution (AURA_TIERS): highest `min` for Robux; idrMin..idrMax for cash
+	-- (field name kept for compatibility — unit follows CASH_CURRENCY, not always IDR).
+	-- Approx. 1 Robux = Rp 100 (IDR default). Robux cinematic effects start at Level3 (80 Robux).
 	ROBUX_EFFECTS_FOLDER = "DonationEffects",
 	ROBUX_EFFECT_SOUNDS_FOLDER = "DonationSounds",
 	-- World-position VFX (Rocket/Hammer/Blackhole) for Bagi-Bagi/Saweria only (WORLD_EFFECT_TIERS).
@@ -2391,7 +2400,7 @@ Config.Donation = {
 		Smite4 = 180,
 		BlackHole = 240,
 	},
-	-- Saweria/Bagi-Bagi IDR thresholds for world VFX (highest match wins).
+	-- Cash thresholds for world VFX (highest match wins), unit follows CASH_CURRENCY.
 	-- Nuke = Rocket (100k–249k), Smite4 = Hammer (250k–499k), BlackHole = 500k+.
 	WORLD_EFFECT_TIERS = {
 		{ min = 500000, effect = "BlackHole" },

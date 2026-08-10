@@ -7,6 +7,7 @@ local TweenService = game:GetService("TweenService")
 
 local Types = require(game.ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local Config = require(game.ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
+local CashCurrencyDomain = require(game.ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.CashCurrencyDomain)
 local LoadingScreenUI = require(game.ReplicatedStorage.Hazastudio_ClubKit.Shared.UI.LoadingScreenUI)
 local UIShadowHelper = require(script.Parent.Parent.Utils.UIShadowHelper)
 local SpecialTitleRenderer = require(game.ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.SpecialTitleRenderer)
@@ -1041,9 +1042,15 @@ local function setDonationLayers(wrapper: GuiObject, payload: OverheadPayload)
 		setChipGradientAnim(chip, wrapperName, show and animEnabled)
 	end
 
-	-- Robux ranking = topDonateRank, Rupiah/Saweria ranking = topSpenderRank
+	-- Robux ranking = topDonateRank, cash/Saweria ranking = topSpenderRank
 	applyChip("RobuxRankWrapper", "RobuxRanking", payload.topDonateRank, "ROBUX", "TopDonate")
-	applyChip("RupiahRankWrapper", "RupiahRank", payload.topSpenderRank, "RUPIAH", "TopSpender")
+	applyChip(
+		"RupiahRankWrapper",
+		"RupiahRank",
+		payload.topSpenderRank,
+		CashCurrencyDomain.getActive().chipSuffix,
+		"TopSpender"
+	)
 
 	-- Hide container if both empty, so it does not consume layout slot.
 	local anyVisible = false

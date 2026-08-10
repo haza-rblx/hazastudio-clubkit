@@ -45,7 +45,7 @@ function PackagerPanel.create(parent: Instance): PanelApi
 
 	UI.bodyText(
 		card,
-		"Export: toolbar Export RBXM, then save the file.\nUnpack: toolbar Unpack RBXM, then pick a .rbxm file.",
+		"Export: create package in Workspace, then save Model as .rbxm.\nUnpack: Packager → Unpack RBXM… to pick a .rbxm file (insert + unpack).",
 		9
 	)
 

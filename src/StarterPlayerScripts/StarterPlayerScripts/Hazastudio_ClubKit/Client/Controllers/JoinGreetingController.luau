@@ -10,6 +10,8 @@ local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local RolesDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.RolesDomain)
+local CashCurrencyDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.CashCurrencyDomain)
+local DonationAmountFormat = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DonationAmountFormat)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 
 local log = Logger.new("JoinGreetingController")
@@ -222,7 +224,7 @@ local function resolveAmountText(payload: Payload): string
 		return tostring(math.floor(amount)) .. " Robux"
 	end
 	if kind == "cash" or kind == "SpenderCash" then
-		return "Rp " .. tostring(math.floor(amount))
+		return DonationAmountFormat.formatCash(amount)
 	end
 	return tostring(math.floor(amount))
 end
@@ -260,7 +262,7 @@ local function resolveGelarFromPayload(payload: Payload): string
 		if kind == "SpenderRobux" then
 			return ("Top Robux Donator #%d"):format(rank or 0)
 		end
-		return ("Top Rupiah Spender #%d"):format(rank or 0)
+		return (CashCurrencyDomain.getActive().roleLabel .. " #%d"):format(rank or 0)
 	end
 
 	local roleKey = tostring(payload.roleKey or "")

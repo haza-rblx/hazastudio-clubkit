@@ -78,6 +78,18 @@ local function createGravityService(deps: {
 		return gravityConfig.FLOAT_SPEED_AT_MIN + t * (gravityConfig.FLOAT_SPEED_AT_MAX - gravityConfig.FLOAT_SPEED_AT_MIN)
 	end
 
+	local function speedToRestoreVelocity(intensity: number): number
+		local minSpeed = gravityConfig.MIN_SPEED
+		local maxSpeed = gravityConfig.MAX_SPEED
+		local atMin = tonumber(gravityConfig.RESTORE_DOWNWARD_AT_MIN) or -12
+		local atMax = tonumber(gravityConfig.RESTORE_DOWNWARD_AT_MAX) or -90
+		local clamped = math.clamp(intensity, minSpeed, maxSpeed)
+		local span = math.max(maxSpeed - minSpeed, 1)
+		local t = (clamped - minSpeed) / span
+		-- More intensity → harder downward kick (more negative).
+		return atMin + t * (atMax - atMin)
+	end
+
 	local function stopFallTracks(humanoid: Humanoid): ()
 		local animator = humanoid:FindFirstChildOfClass("Animator")
 		if animator == nil then
@@ -121,12 +133,13 @@ local function createGravityService(deps: {
 		state.savedHumanoid = nil
 	end
 
-	local function disableUngravity(player: Player, silent: boolean?): Result<nil>
+	local function disableUngravity(player: Player, silent: boolean?, restoreIntensity: number?): Result<nil>
 		local state = activeStates[player.UserId]
 		if state == nil or state.speed <= 0 then
 			return Result.Ok(nil)
 		end
 
+		local intensityBefore = state.speed
 		clearPhysics(state)
 		restoreHumanoid(player, state)
 		state.speed = 0
@@ -136,8 +149,14 @@ local function createGravityService(deps: {
 		if hrp then
 			local velocity = hrp.AssemblyLinearVelocity
 			local damp = math.clamp(tonumber(gravityConfig.RESTORE_HORIZONTAL_DAMP) or 0.35, 0, 1)
-			local dropY = tonumber(gravityConfig.RESTORE_DOWNWARD_VELOCITY) or -45
-			-- Snap out of float: damp horizontal drift + immediate downward kick.
+			local intensity = if type(restoreIntensity) == "number" and restoreIntensity > 0
+				then restoreIntensity
+				else intensityBefore
+			if intensity <= 0 then
+				intensity = tonumber(gravityConfig.DEFAULT_SPEED) or 3
+			end
+			local dropY = speedToRestoreVelocity(intensity)
+			-- Snap out of float: damp horizontal drift + downward kick scaled by intensity.
 			hrp.AssemblyLinearVelocity = Vector3.new(velocity.X * damp, math.min(velocity.Y, dropY), velocity.Z * damp)
 		end
 		if humanoid then
@@ -255,7 +274,7 @@ local function createGravityService(deps: {
 	end
 
 	--- Toggle server-wide float. speed <= 0 restores gravity for everyone.
-	function service:setServerMode(actor: Player, speed: number, options: { silent: boolean?, skipRateLimit: boolean? }?): Result<nil>
+	function service:setServerMode(actor: Player, speed: number, options: { silent: boolean?, skipRateLimit: boolean?, restoreIntensity: number? }?): Result<nil>
 		if Config.FeatureFlags.GravityEnabled ~= true then
 			return Result.Err("feature_disabled")
 		end
@@ -267,14 +286,23 @@ local function createGravityService(deps: {
 		end
 
 		if speed <= 0 then
+			local intensity = options and options.restoreIntensity
+			if type(intensity) ~= "number" or intensity <= 0 then
+				intensity = if serverModeSpeed > 0 then serverModeSpeed else (tonumber(gravityConfig.DEFAULT_SPEED) or 3)
+			end
+			intensity = math.clamp(
+				math.floor(intensity + 0.5),
+				tonumber(gravityConfig.MIN_SPEED) or 1,
+				tonumber(gravityConfig.MAX_SPEED) or 10
+			)
 			serverModeSpeed = 0
 			for _, player in ipairs(Players:GetPlayers()) do
-				disableUngravity(player, true)
+				disableUngravity(player, true, intensity)
 			end
 			if not silent then
 				notify.all(gravityConfig.MSG_DISABLED, "SUCCESS")
 			end
-			log:info("gravity_restored_all", { actor = actor.Name })
+			log:info("gravity_restored_all", { actor = actor.Name, restoreIntensity = intensity })
 			return Result.Ok(nil)
 		end
 
@@ -299,8 +327,8 @@ local function createGravityService(deps: {
 		return service:setServerMode(player, gravityConfig.DEFAULT_SPEED)
 	end
 
-	function service:disable(player: Player): Result<nil>
-		return service:setServerMode(player, 0)
+	function service:disable(player: Player, restoreIntensity: number?): Result<nil>
+		return service:setServerMode(player, 0, { restoreIntensity = restoreIntensity })
 	end
 
 	function service:handleCommand(player: Player, args: string): Result<nil>

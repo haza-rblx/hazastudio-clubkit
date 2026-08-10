@@ -94,12 +94,13 @@ new module files that are not yet in the RBXM — those still need rebuild + one
 
 ### Unpack (target / buyer place)
 
-1. **Hazastudio Club Kit** toolbar → **Unpack RBXM**.
-2. Select the exported `.rbxm` file.
-3. The plugin places instances in the correct services.
-4. Default: does **not** overwrite buyer `ClubKitConfig` and `Secrets` if they already exist.
+1. Open the venue place in Studio.
+2. **Hazastudio Club Kit** panel → **Packager** → **Unpack RBXM…**
+3. Pick `HazastudioClubKit_Package.rbxm` (or SyncBhms add-on).
+4. The plugin deserializes the file and unpacks into the correct services.
+5. Default: does **not** overwrite buyer `ClubKitConfig` and `Secrets` if they already exist.
 
-Alternative: import `.rbxm` manually into Explorer → select package folder → **Unpack Selection**.
+Alternative: import `.rbxm` manually into Explorer → select package model → **Unpack** (selection).
 
 ## After unpack (buyer)
 

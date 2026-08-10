@@ -12,6 +12,7 @@ local TextService = game:GetService("TextService")
 local TextChatService = game:GetService("TextChatService")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local DonationProviderDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.DonationProviderDomain)
+local DonationAmountFormat = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DonationAmountFormat)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local DonationEffectTierResolver = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DonationEffectTierResolver)
 local DonationExperiencePrefs = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DonationExperiencePrefs)
@@ -165,27 +166,11 @@ local function applyExternalProviderText(root: Instance)
 	DonationProviderDomain.applyDisplayText(root)
 end
 
-local function formatGrouped(amount: number): string
-	local s = tostring(math.floor(math.max(amount, 0)))
-	local result = ""
-	local len = #s
-	for i = 1, len do
-		if i > 1 and (len - i + 1) % 3 == 0 then
-			result = result .. "."
-		end
-		result = result .. s:sub(i, i)
-	end
-	return result
-end
-local function formatRupiah(amount: number): string
-	return "Rp " .. formatGrouped(amount)
-end
-
 local function formatDonationAmount(payload: DonationNotifPayload): string
 	if payload.source == "robux" then
-		return formatGrouped(payload.amount) .. " Robux"
+		return DonationAmountFormat.formatGrouped(payload.amount) .. " Robux"
 	end
-	return formatRupiah(payload.amount)
+	return DonationAmountFormat.formatCash(payload.amount)
 end
 
 local function formatTotalDonation(amount: number?, source: string?): string
@@ -193,9 +178,9 @@ local function formatTotalDonation(amount: number?, source: string?): string
 		return DEFAULT_TOTAL_DONATION
 	end
 	if source == "robux" then
-		return "Total : " .. formatGrouped(amount) .. " Robux"
+		return "Total : " .. DonationAmountFormat.formatGrouped(amount) .. " Robux"
 	end
-	return "Total : " .. formatRupiah(amount)
+	return "Total : " .. DonationAmountFormat.formatCash(amount)
 end
 local function normalizeMessage(message: string?): string?
 	if type(message) ~= "string" then
@@ -932,7 +917,9 @@ local function populateGui(refs: GuiRefs, payload: DonationNotifPayload)
 	end
 	if refs.donationValue then
 		local isRobux = payload.source == "robux"
-		refs.donationValue.Text = if isRobux then formatGrouped(payload.amount) else formatRupiah(payload.amount)
+		refs.donationValue.Text = if isRobux
+			then DonationAmountFormat.formatGrouped(payload.amount)
+			else DonationAmountFormat.formatCash(payload.amount)
 		refs.donationValue.TextSize = if payload.amount >= 1_000_000
 			then 31
 			elseif payload.amount >= 100_000 then 38
@@ -1071,7 +1058,7 @@ local function populateWorkspaceSurfaces(refs: WorkspaceSurfaceRefs, payload: Do
 		refs.liveUsername.Text = usernameText
 	end
 	if refs.liveTotalDonations then
-		refs.liveTotalDonations.Text = formatGrouped(payload.amount)
+		refs.liveTotalDonations.Text = DonationAmountFormat.formatGrouped(payload.amount)
 	end
 	if refs.liveDonationMessage then
 		refs.liveDonationMessage.Text = string.upper(messageText)

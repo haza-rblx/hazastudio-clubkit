@@ -48,6 +48,12 @@ function toLc(v) {
   return cleanString(v).toLowerCase();
 }
 
+const CASH_CURRENCIES = new Set(["IDR", "PHP"]);
+function normalizeCurrency(value, fallback = "IDR") {
+  const code = cleanString(value).toUpperCase();
+  return CASH_CURRENCIES.has(code) ? code : fallback;
+}
+
 function randomToken(prefix) {
   const bytes = new Uint8Array(24);
   crypto.getRandomValues(bytes);
@@ -142,6 +148,7 @@ function clubKitConfigLines(game, baseUrl, socialBaseUrl) {
   );
   return {
     donation_api_url: `ApiUrl = "${baseUrl}/game/${key}",`,
+    donation_currency: `Currency = "${normalizeCurrency(game.currency)}",`,
     donation_api_secret: `Secrets.DonationApiSecret = "${game.secret}",`,
     social_game_key: `GameKey = "${key}",`,
     social_api_secret: `Secrets.GameDataApiSecret = "${cleanString(game.social_secret)}",`,
@@ -153,6 +160,7 @@ function gamePayload(game, baseUrl, socialBaseUrl) {
   return {
     id: game.game_key,
     display_name: game.name,
+    currency: normalizeCurrency(game.currency),
     secret: game.secret,
     social_secret: cleanString(game.social_secret),
     webhook_token: game.webhook_token,
@@ -289,17 +297,18 @@ async function handleAdmin(req, env, url, parts) {
         return json(req, env, { ok: false, error: "invalid_game_key" }, 422);
       const name = cleanString(body.display_name || body.name, gameKey);
       const providerLink = cleanString(body.saweria_link || body.providerLink);
+      const currency = normalizeCurrency(body.currency);
       const adminToken = randomToken("adm");
       const socialSecret = randomToken("soc");
       // On conflict, preserve the existing admin_token to avoid invalidating a
       // token that has already been shared with the game owner. Name and link
       // are still updated to match previous behaviour.
       await env.DB.prepare(
-        `INSERT INTO games (game_key, name, webhook_token, secret, provider_link, admin_token, social_secret)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(game_key) DO UPDATE SET name = excluded.name, provider_link = excluded.provider_link`,
+        `INSERT INTO games (game_key, name, webhook_token, secret, provider_link, admin_token, social_secret, currency)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(game_key) DO UPDATE SET name = excluded.name, provider_link = excluded.provider_link, currency = excluded.currency`,
       )
-        .bind(gameKey, name, randomToken("wh"), randomToken("rbx"), providerLink, adminToken, socialSecret)
+        .bind(gameKey, name, randomToken("wh"), randomToken("rbx"), providerLink, adminToken, socialSecret, currency)
         .run();
       await ensureSocialSecrets(env.DB);
       const game = await getGameByKey(env.DB, gameKey);
@@ -344,8 +353,9 @@ async function handleAdmin(req, env, url, parts) {
     const body = await parseJson(req);
     const name = cleanString(body.display_name || body.name, game.name);
     const providerLink = cleanString(body.saweria_link || body.providerLink, game.provider_link || "");
-    await env.DB.prepare("UPDATE games SET name = ?, provider_link = ? WHERE id = ?")
-      .bind(name, providerLink, game.id)
+    const currency = normalizeCurrency(body.currency, normalizeCurrency(game.currency));
+    await env.DB.prepare("UPDATE games SET name = ?, provider_link = ?, currency = ? WHERE id = ?")
+      .bind(name, providerLink, currency, game.id)
       .run();
     const next = await getGameByKey(env.DB, gameKey);
     return json(req, env, { ok: true, game: gamePayload(next, baseUrl, socialBaseUrl) });

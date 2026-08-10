@@ -5,6 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local RolesDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.RolesDomain)
+local CashCurrencyDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.CashCurrencyDomain)
 local DonationAmountFormat = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DonationAmountFormat)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 
@@ -149,7 +150,7 @@ local function resolveChip(match: Match): string
 		if kind == "SpenderRobux" then
 			return ("Top Robux Donator #%d"):format(rank or 0)
 		end
-		return ("Top Rupiah Spender #%d"):format(rank or 0)
+		return (CashCurrencyDomain.getActive().roleLabel .. " #%d"):format(rank or 0)
 	end
 
 	local labeled = labels[roleKey]
@@ -228,7 +229,7 @@ local function spenderGelarFromConfig(kind: CategoryKind, rank: number?): string
 	if kind == "SpenderRobux" then
 		return ("Top Robux Donator #%d"):format(rank or 0)
 	end
-	return ("Top Rupiah Spender #%d"):format(rank or 0)
+	return (CashCurrencyDomain.getActive().roleLabel .. " #%d"):format(rank or 0)
 end
 
 -- Short public title for the entered-the-space second line (not the chip label).
@@ -274,7 +275,7 @@ local function resolveAmountFields(match: Match, overheadPayload: any): (number?
 		if amount <= 0 then
 			return nil, nil, nil
 		end
-		return amount, "Rp " .. DonationAmountFormat.formatCompact(amount), "cash"
+		return amount, DonationAmountFormat.formatCashCompact(amount), "cash"
 	end
 	return nil, nil, nil
 end

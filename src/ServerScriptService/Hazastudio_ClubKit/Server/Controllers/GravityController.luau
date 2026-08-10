@@ -84,12 +84,24 @@ local function createGravityController(deps: {
 			return
 		end
 
-		-- /gravity = restore all. /ungravity [1-10] = float all.
-		commandExecutionService:registerRawHandler(gravityConfig.CMD_ALIAS, function(player: Player, _rawText: string)
+		-- /gravity [1-10] = restore all (optional drop intensity). /ungravity [1-10] = float all.
+		commandExecutionService:registerRawHandler(gravityConfig.CMD_ALIAS, function(player: Player, rawText: string)
 			if denyIfUnauthorized(player) then
 				return
 			end
-			service:disable(player)
+			local args = splitArgs(rawText)
+			table.remove(args, 1)
+			local intensityText = args[1]
+			local intensity: number? = nil
+			if intensityText and intensityText ~= "" then
+				local parsed = tonumber(intensityText)
+				if parsed == nil or parsed <= 0 then
+					notify.player(player, gravityConfig.MSG_INVALID_SPEED, "WARNING")
+					return
+				end
+				intensity = parsed
+			end
+			service:disable(player, intensity)
 		end)
 
 		commandExecutionService:registerRawHandler(gravityConfig.CMD_ALIAS_UNGRAVITY, function(player: Player, rawText: string)
@@ -145,7 +157,8 @@ local function createGravityController(deps: {
 
 		local action = payload.action
 		if action == "disable" then
-			service:disable(player)
+			local restoreIntensity = payload.speed
+			service:disable(player, if type(restoreIntensity) == "number" then restoreIntensity else nil)
 			return
 		end
 		if action == "enable_default" then
