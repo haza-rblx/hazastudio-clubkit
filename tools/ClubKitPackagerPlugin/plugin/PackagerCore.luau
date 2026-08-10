@@ -193,6 +193,14 @@ local function blankTemplateConfigSource(source: string): string
 	return src
 end
 
+-- Secrets are always blanked before packaging, even when the dev's own place has
+-- real values filled in — a distributed package must never carry live API secrets.
+-- Matches "Secrets.<FieldName> = "..."" assignments; leaves everything else intact.
+local function blankTemplateSecretsSource(source: string): string
+	local src = source:gsub('(Secrets%.%w+%s*=%s*)"[^"]*"', '%1""')
+	return src
+end
+
 local function shouldSkipMainPackChild(serviceName: string, instanceName: string, options: ExportOptions): (boolean, string?)
 	if isBhmsExcluded(instanceName) then
 		return true, "bhms"
@@ -343,6 +351,16 @@ function PackagerCore.collect(options: ExportOptions): (Model?, CollectReport)
 		cloneServiceChildrenForPack(starterPlayerScripts, dest, "StarterPlayerScripts", options, report)
 	else
 		logMissing(report, "StarterPlayerScripts")
+	end
+
+	if options.includeSecrets then
+		local serverScriptFolder = packageRoot:FindFirstChild("ServerScriptService")
+		local secretsPkg = serverScriptFolder and serverScriptFolder:FindFirstChild("Hazastudio_ClubKitSecrets")
+		local secretsMod = secretsPkg and secretsPkg:FindFirstChild("Secrets")
+		if secretsMod and secretsMod:IsA("ModuleScript") then
+			secretsMod.Source = blankTemplateSecretsSource(secretsMod.Source)
+			logOk(report, "ServerScriptService/Hazastudio_ClubKitSecrets (blank template)", secretsPkg)
+		end
 	end
 
 	if options.includeConfig then

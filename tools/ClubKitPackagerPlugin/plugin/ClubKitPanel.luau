@@ -1143,6 +1143,7 @@ local function buildPackagerPage(ctx, page: Frame)
 	})
 
 	local includeBlankConfig = true
+	local includeBlankSecrets = true
 
 	local _c1, newBody = UI.card({ parent = page, order = 2 })
 	UI.cardTitle(newBody, "New package", nil, 1)
@@ -1167,9 +1168,22 @@ local function buildPackagerPage(ctx, page: Frame)
 	})
 	UI.row({
 		parent = newBody,
+		label = "Include blank secrets",
+		desc = "Ships Hazastudio_ClubKitSecrets with empty values — never your own live keys.",
+		order = 4,
+		rightWidth = 54,
+		right = UI.switch({
+			on = true,
+			onChanged = function(on)
+				includeBlankSecrets = on
+			end,
+		}),
+	})
+	UI.row({
+		parent = newBody,
 		label = "Main template pack",
 		desc = "Clone full service contents into Workspace model. Only SyncBhms/BHMS excluded.",
-		order = 4,
+		order = 5,
 		noBorder = true,
 		right = UI.button({
 			text = "Create package",
@@ -1178,7 +1192,7 @@ local function buildPackagerPage(ctx, page: Frame)
 			onClick = function()
 				local folder, report = PackagerCore.collect({
 					includeConfig = includeBlankConfig,
-					includeSecrets = false,
+					includeSecrets = includeBlankSecrets,
 				})
 				PackagerCore.printCollectReport(report)
 				if folder then
@@ -1194,7 +1208,7 @@ local function buildPackagerPage(ctx, page: Frame)
 		parent = newBody,
 		label = "SyncBhms add-on",
 		desc = "Legacy BHMS dance pack only (DanceGui, SyncServer, bridges). Optional — unpack + LegacySyncBhms = true.",
-		order = 5,
+		order = 6,
 		noBorder = true,
 		right = UI.button({
 			text = "Create SyncBhms add-on",

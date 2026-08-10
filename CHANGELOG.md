@@ -11,6 +11,11 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.5.1] - 2026-08-10
+
+### Added
+- **Packager "Include blank secrets" toggle** — Create package now ships `ServerScriptService/Hazastudio_ClubKitSecrets` by default (blank template, matching the existing "Include blank config" behavior). New `PackagerCore.collect` always blanks any filled-in `Secrets.<Field>` values before packaging (`blankTemplateSecretsSource`), so a distributed package can never carry a dev's own live API keys even if the toggle is left on for a place with real secrets configured.
+
 ## [2.5.0] - 2026-08-10
 
 Cash currency (IDR/PHP), Admin Hub goes fully editable via ActionTemplates, Plugin gets Unpack RBXM, and Gravity/Ungravity get independent gears.
