@@ -508,10 +508,10 @@ ClubKitConfig.JoinCommunity = {
 ClubKitConfig.Sync = {
 	FadeIn = 0.45, -- idle → dance (fade in)
 	FadeOut = 0.45, -- dance → idle (fade out)
-	SwitchFadeIn = 0.55, -- dance A→B: B fades in
-	SwitchFadeOut = 0.55, -- dance A→B: A fades out (match SwitchFadeIn)
+	SwitchFadeIn = 0.45, -- dance A→B: B fades in
+	SwitchFadeOut = 0.45, -- dance A→B: A fades out (match SwitchFadeIn)
 	SyncJoinFade = 0.4, -- join / sync to leader
-	SwitchInputCooldown = 0.55, -- emote click cooldown; >= SwitchFade*
+	SwitchInputCooldown = 0.45, -- emote click cooldown; >= SwitchFade*
 }
 
 -- =============================================================================

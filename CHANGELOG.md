@@ -11,6 +11,14 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.4.80] - 2026-08-10
+
+Wutwut press UI softer; default A→B switch fade slightly snappier.
+
+### Changed
+- **Wutwut dance row highlight is press-held** — with `Features.WutwutDance = true`, the row no longer sticks on solid white/"played" while dancing. Press uses a soft gray tint (~30% toward white) with short fade in/out instead of the full played inversion. Desktop and mobile dance panels share this binder. With wutwut off, sticky selected behavior is unchanged.
+- **Default switch crossfade** — engine / schema / template `Sync.SwitchFadeIn` / `SwitchFadeOut` / `SwitchInputCooldown` `0.55` → `0.45`. Existing buyer `ClubKitConfig` values are not overwritten by Update Engine; change manually if you still have `0.55`/`0.30` and want the new default feel.
+
 ## [2.4.79] - 2026-08-10
 
 Wutwut reliability + comfort: panel cooldown no longer blocks restarts; SyncStore can clear pending; chain window 0.45s.

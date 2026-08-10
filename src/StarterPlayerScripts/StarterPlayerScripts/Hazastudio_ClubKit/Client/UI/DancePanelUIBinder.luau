@@ -21,6 +21,10 @@ local ROW_STATE_TWEEN = TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDi
 local ROW_FAST_TWEEN = TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
 local ROW_IMAGE_TWEEN = TweenInfo.new(0.25, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
 local ROW_GRADIENT_TWEEN = TweenInfo.new(4, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1)
+-- Wutwut press feedback: soft gray tint (not full played white) + short fade.
+local WUTWUT_PRESS_BLEND = 0.3
+local WUTWUT_PRESS_TWEEN = TweenInfo.new(0.07, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local WUTWUT_RELEASE_TWEEN = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local SPEED_STEP = 0.01
 local PANEL_OPEN_SCALE = 1
 local SPEED_HANDLE_AUTO_HIDE_DELAY = 2
@@ -254,10 +258,13 @@ function DancePanelUIBinder.new(deps: {
 	self._currentSpeed = self.config.DEFAULT_SPEED
 	self._searchQuery = ""
 	self._currentAnimName = nil :: string?
+	-- Wutwut: white/"played" visual is press-held only (not sticky selected).
+	self._pressedAnimName = nil :: string?
 	self._activeRows = {}
 	self._activeRowsByName = {}
 	self._rowPool = nil -- Will be initialized after refs are available
 	self._rowPressConnections = {}
+	self._rowPressVisualConnections = {}
 	self._favoritePressConnections = {}
 	self._descendantsCache = {} -- Cache for row descendants (key = row instance)
 	self._rowGradientTweens = {}
@@ -267,6 +274,15 @@ function DancePanelUIBinder.new(deps: {
 	self._sliderEndConn = nil
 	self._customSpeedFocusLostConn = nil
 	self._resetSpeedConn = nil
+	self._wutwutPressEndConn = UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then
+			return
+		end
+		if self._pressedAnimName == nil then
+			return
+		end
+		self:_setRowPressed(nil)
+	end)
 	self._isSliderHovered = false
 	self._isSliderDragging = false
 	self._isOpen = false
@@ -908,9 +924,69 @@ function DancePanelUIBinder:_applyTabVisuals()
 	end
 end
 
+function DancePanelUIBinder:_isRowPlayedVisual(animationName: string): boolean
+	-- Wutwut never uses the full sticky/played (solid white) template — soft press tint instead.
+	if self.config.WUTWUT_ENABLED == true then
+		return false
+	end
+	return self._currentAnimName == animationName
+end
+
+function DancePanelUIBinder:_getRowBaseReference(animationName: string): GuiButton
+	if self._favoritedAnims[animationName] == true then
+		return self.refs.rowRefs.favorited
+	end
+	return self.refs.rowRefs.normal
+end
+
+function DancePanelUIBinder:_applyWutwutPressTint(row: GuiButton, animationName: string, pressed: boolean)
+	local baseRef = self:_getRowBaseReference(animationName)
+	local tweenInfo = if pressed then WUTWUT_PRESS_TWEEN else WUTWUT_RELEASE_TWEEN
+	local targetBg = if pressed
+		then baseRef.BackgroundColor3:Lerp(Color3.new(1, 1, 1), WUTWUT_PRESS_BLEND)
+		else baseRef.BackgroundColor3
+
+	tweenProperties(row, {
+		BackgroundColor3 = targetBg,
+		BackgroundTransparency = baseRef.BackgroundTransparency,
+	}, tweenInfo)
+
+	local label = getRowLabel(row)
+	local baseLabel = getRowLabel(baseRef)
+	if label and baseLabel then
+		-- Keep light text; slight soft dim only — no black/white inversion flash.
+		local targetText = if pressed
+			then baseLabel.TextColor3:Lerp(Color3.fromRGB(210, 210, 210), 0.2)
+			else baseLabel.TextColor3
+		tweenProperties(label, {
+			TextColor3 = targetText,
+		}, tweenInfo)
+	end
+end
+
+function DancePanelUIBinder:_setRowPressed(animationName: string?)
+	local previous = self._pressedAnimName
+	if previous == animationName then
+		return
+	end
+	self._pressedAnimName = animationName
+	if previous then
+		local prevRow = self._activeRowsByName[previous]
+		if prevRow and prevRow.Parent then
+			self:_applyWutwutPressTint(prevRow, previous, false)
+		end
+	end
+	if animationName then
+		local nextRow = self._activeRowsByName[animationName]
+		if nextRow and nextRow.Parent then
+			self:_applyWutwutPressTint(nextRow, animationName, true)
+		end
+	end
+end
+
 function DancePanelUIBinder:_getStateReference(animationName: string): GuiButton
 	local isFavorited = self._favoritedAnims[animationName] == true
-	local isCurrent = self._currentAnimName == animationName
+	local isCurrent = self:_isRowPlayedVisual(animationName)
 
 	if isFavorited and isCurrent then
 		return self.refs.rowRefs.favoritedPlayed
@@ -966,6 +1042,14 @@ function DancePanelUIBinder:_disconnectRowConnections(row: GuiButton)
 	if rowConnection then
 		rowConnection:Disconnect()
 		self._rowPressConnections[row] = nil
+	end
+
+	local visualConnections = self._rowPressVisualConnections[row]
+	if visualConnections then
+		for _, connection in ipairs(visualConnections) do
+			connection:Disconnect()
+		end
+		self._rowPressVisualConnections[row] = nil
 	end
 
 	local favoriteConnection = self._favoritePressConnections[row]
@@ -1052,6 +1136,9 @@ end
 
 function DancePanelUIBinder:_clearActiveRows()
 	-- Release rows back to pool instead of destroying
+	if self._pressedAnimName ~= nil then
+		self._pressedAnimName = nil
+	end
 	for _, row in ipairs(self._activeRows) do
 		self:_disconnectRowConnections(row)
 		self:_stopRowGradient(row)
@@ -1098,6 +1185,27 @@ function DancePanelUIBinder:_createRow(animation: AnimationEntry, layoutOrder: n
 			self._emoteSelected(animation)
 		end
 	end)
+
+	-- Wutwut: soft press tint only while pressed (mouse/finger down).
+	-- Release is handled by a single panel-level InputEnded connection.
+	local visualConns: { RBXScriptConnection } = {}
+	table.insert(visualConns, row.InputBegan:Connect(function(input)
+		if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then
+			return
+		end
+		if self.config.WUTWUT_ENABLED ~= true then
+			return
+		end
+		if not self:_isRowInputAllowed(row, input) then
+			return
+		end
+		local favButton = getFavoriteButton(row)
+		if favButton and isPointInside(favButton, getInputPosition(input)) then
+			return
+		end
+		self:_setRowPressed(animation.Name)
+	end))
+	self._rowPressVisualConnections[row] = visualConns
 
 	local favoriteButton = getFavoriteButton(row)
 	if favoriteButton then
@@ -1256,7 +1364,12 @@ function DancePanelUIBinder:_syncRowVisualState(row: GuiButton, animationName: s
 		favoriteButton.AutoButtonColor = false
 	end
 
-	self:_syncRowGradient(row, self._currentAnimName == animationName)
+	self:_syncRowGradient(row, self:_isRowPlayedVisual(animationName))
+
+	-- Re-apply soft press tint if this row is currently held (wutwut).
+	if self.config.WUTWUT_ENABLED == true and self._pressedAnimName == animationName then
+		self:_applyWutwutPressTint(row, animationName, true)
+	end
 end
 
 function DancePanelUIBinder:_resetScrollPosition()
@@ -1612,6 +1725,11 @@ function DancePanelUIBinder:destroy()
 		self._resetSpeedConn:Disconnect()
 		self._resetSpeedConn = nil
 	end
+	if self._wutwutPressEndConn then
+		self._wutwutPressEndConn:Disconnect()
+		self._wutwutPressEndConn = nil
+	end
+	self._pressedAnimName = nil
 
 	-- Clear active rows
 	self:_clearActiveRows()
@@ -1623,6 +1741,7 @@ function DancePanelUIBinder:destroy()
 	end
 
 	table.clear(self._rowPressConnections)
+	table.clear(self._rowPressVisualConnections)
 	table.clear(self._favoritePressConnections)
 	table.clear(self._rowGradientTweens)
 

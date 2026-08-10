@@ -943,8 +943,8 @@ Config.Sync = {
 	-- Salon-style crossfade (matching Stop+Play). Longer = smoother blend.
 	FADE_IN = 0.45,
 	FADE_OUT = 0.45,
-	SWITCH_FADE_IN = 0.55,
-	SWITCH_FADE_OUT = 0.55,
+	SWITCH_FADE_IN = 0.45,
+	SWITCH_FADE_OUT = 0.45,
 	SYNC_JOIN_FADE_IN = 0.4,
 	SWITCH_TRANSITION_LEAD_TIME = 0.06,
 	DANCE_WALK_SPEED = 16,
@@ -952,7 +952,7 @@ Config.Sync = {
 	MAX_SPEED = 2.0,
 	DEFAULT_SPEED = 1.0,
 	-- Keep >= switch fade so rapid clicks cannot stack mid-crossfade tracks.
-	SWITCH_INPUT_COOLDOWN = 0.55,
+	SWITCH_INPUT_COOLDOWN = 0.45,
 	-- Wutwut: rapid same-emote re-click hard-restarts the dance (fade 0 stutter).
 	-- Buyer-gated (ClubKitConfig.Features.WutwutDance); engine default OFF.
 	WUTWUT_ENABLED = false,

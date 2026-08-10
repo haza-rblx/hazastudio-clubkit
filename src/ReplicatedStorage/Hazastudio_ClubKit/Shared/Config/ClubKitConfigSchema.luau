@@ -411,10 +411,10 @@ ClubKitConfigSchema.defaults = {
 	Sync = {
 		FadeIn = 0.45,
 		FadeOut = 0.45,
-		SwitchFadeIn = 0.55,
-		SwitchFadeOut = 0.55,
+		SwitchFadeIn = 0.45,
+		SwitchFadeOut = 0.45,
 		SyncJoinFade = 0.4,
-		SwitchInputCooldown = 0.55,
+		SwitchInputCooldown = 0.45,
 	},
 	Features = {
 		MusicPlayer = true,
