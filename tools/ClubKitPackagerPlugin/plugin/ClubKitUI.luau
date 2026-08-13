@@ -305,7 +305,7 @@ function ClubKitUI.button(props: {
 	variant: ("primary" | "ghost" | "danger")?,
 	small: boolean?,
 	order: number?,
-	onClick: (() -> ())?,
+	onClick: ((TextButton) -> ())?,
 }): TextButton
 	local variant = props.variant or "primary"
 	local primary = variant == "primary"
@@ -338,7 +338,7 @@ function ClubKitUI.button(props: {
 	end
 	b.MouseButton1Click:Connect(function()
 		if props.onClick then
-			props.onClick()
+			props.onClick(b)
 		end
 	end)
 	b.MouseEnter:Connect(function()

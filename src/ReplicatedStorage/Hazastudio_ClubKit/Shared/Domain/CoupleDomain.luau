@@ -32,7 +32,8 @@ end
 function CoupleDomain.removeCouple(stored: OverheadStoredData): OverheadStoredData
 	local OverheadDomain = require(script.Parent.OverheadDomain)
 	local NIL = OverheadDomain.NIL
-	-- Pakai NIL sentinel because pairs() skip nil values
+	-- NIL sentinel: pairs() skips plain nil. Clear partner ids so chatCoupleTag
+	-- and overhead CoupleName rebuild as uncoupled on next payload.
 	return OverheadDomain.mergeStored(stored, {
 		couplePartner = NIL,
 		couplePartnerId = NIL,

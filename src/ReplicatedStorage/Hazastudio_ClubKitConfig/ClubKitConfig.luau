@@ -31,6 +31,9 @@ ClubKitConfig.Branding = {
 	-- Change once here → loading, poster, leaderboard, Join Community modal.
 	-- Replace the kit default ID with your community logo.
 	LogoImage = "rbxassetid://79426970537296",
+	-- Top Menu → Community row (15-TopMenuGUI). Empty = keep placeholder, link box hidden.
+	-- Accepts "discord.gg/invite", "https://discord.gg/invite", or invite code only.
+	DiscordInvite = "", -- example: "discord.gg/your-invite"
 }
 
 -- =============================================================================

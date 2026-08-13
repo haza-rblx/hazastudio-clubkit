@@ -1082,6 +1082,8 @@ local function createOverheadService(deps: {
 					.. "|"
 					.. tostring((stored :: any).couplePartnerId or "")
 					.. "|"
+					.. tostring((stored :: any).couplePartner or "")
+					.. "|"
 					.. tostring((stored :: any).topDonateRank or "")
 					.. "|"
 					.. tostring((stored :: any).topSpenderRank or "")
@@ -1096,6 +1098,14 @@ local function createOverheadService(deps: {
 			)
 		else
 			table.insert(parts, "s=none")
+		end
+
+		-- Profile relationshipMode — couple accept forces Taken; must bust S1 cache.
+		local profile = Cache.get("profile_" .. tostring(userId))
+		if type(profile) == "table" then
+			table.insert(parts, "rm=" .. tostring((profile :: any).relationshipMode or ""))
+		else
+			table.insert(parts, "rm=none")
 		end
 
 		-- 2. Groups (cached array) — hash Id+Rank+count

@@ -48,6 +48,8 @@ Branding = {
     -- REQUIRED: replace with your community logo (loading / poster / leaderboard / Join Community modal).
     -- Do not leave the kit default ID (79426970537296) on a live place.
     LogoImage = "rbxassetid://YOUR_COMMUNITY_LOGO_ID",
+    -- Top Menu → Community Discord chip. Empty = hide link box.
+    DiscordInvite = "discord.gg/your-invite",
 },
 
 Group = {
@@ -186,13 +188,24 @@ Features = {
 
 **World effects off:** set `Features.DonationWorldEffects = false` in `ClubKitConfig` for maps that should not show world VFX. Donor aura, announce, and highlight still work. Settings “World Effects” row is hidden too.
 
-**Music catalog (bulk script add):** fill `ReplicatedStorage/Hazastudio_ClubKitConfig/MusicCatalog.luau`. One track **per line**; `parts` may be multi-part (max 9). Default playlist **Legacy**. After seed, Manage UI can still edit/move playlists. Disable new merges via `Features.MusicCatalogSeed = false` (existing library remains).
+**Music catalog (bulk script add):** fill `ReplicatedStorage/Hazastudio_ClubKitConfig/MusicCatalog.luau`. Prefer **grouped playlists** (name once, then tracks). Flat `tracks` with optional `playlistName` still works (default playlist **Legacy**). Multi-part: up to 9 IDs in `parts`. After seed, Manage UI can still edit/move playlists. Disable new merges via `Features.MusicCatalogSeed = false` (existing library remains).
 
 ```lua
--- MusicCatalog.luau (example)
-tracks = {
-    { name = "Song A", creator = "Artist", parts = { "1234567890" } },
-    { name = "Song B", creator = "Artist", parts = { "111", "222", "333" }, playbackSpeed = 0.85 },
+-- MusicCatalog.luau (preferred)
+playlists = {
+    {
+        name = "Chill",
+        tracks = {
+            { name = "Song A", creator = "Artist", parts = { "1234567890" } },
+            { name = "Song B", creator = "Artist", parts = { "111", "222", "333" }, playbackSpeed = 0.85 },
+        },
+    },
+    {
+        name = "HIPHOP & RNB",
+        tracks = {
+            { name = "Song C", creator = "Artist", parts = { "4444444444" } },
+        },
+    },
 },
 ```
 

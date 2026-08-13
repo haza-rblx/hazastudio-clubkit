@@ -11,6 +11,26 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.5.2] - 2026-08-13
+
+Gravity dial feels right, couples stay consistent, MusicCatalog groups playlists, Discord invite from config.
+
+### Added
+- **Roles & Ranks slide guide** — `docs/roles-guide.html` (+ hub / setup links) for adding roles via `ClubKitConfig`.
+
+### Fixed
+- **Gravity drop intensity + fall anim** — `/gravity 1-10` now uses a controlled idle-down descent (PlatformStand + LinearVelocity, fall tracks suppressed) scaled by the Gravity dial; lands when near ground. No longer one-shot freefall kick (which made 1–10 feel identical and played the fall animation).
+- **Gravity soft landing** — drop eases out near the floor (`RESTORE_SOFT_BRAKE_HEIGHT`), finishes slightly above ground, zeros vertical velocity, and snaps to stand height so the character no longer buries into the ground before release.
+- **License timeout no longer bricks cash donations** — if license verify never succeeds (Studio timeout / network flake), features fail open instead of disabling `donation_http`; first-check-in-flight is optimistic so `donation_poll` is not a no-op.
+- **Couple chat tag stuck after breakup** — flush no longer wipes session when DataStore flush fails; overhead cache no longer republishes a stale `[💕 Partner]` under Guest-fallback protection; immediate `ChatTagSync` clear via `patchCouplePresentation`; client optimistic `ChatTagStore.setCoupleTag(nil)` on breakup (initiator + partner NotifyResult).
+- **Couple partner title missing on accept** — `OverheadDomain` always resolves coupled players to `relationshipMode = Taken` (Single/Fun no longer hide partner title); accept forces Taken with retry and skips needless profile cache invalidate; recovery overhead refresh + immediate presentation patch.
+- **Packager Carry Upload + patch** — `ClubKitUI.button` passes the `TextButton` into `onClick`, so Carry upload no longer errors with `attempt to index nil with 'Text'`.
+
+### Changed
+- **MusicCatalog grouped playlists** — prefer `playlists = { { name = "Chill", tracks = { ... } } }` so you do not repeat `playlistName` on every line; flat `tracks` + `playlistName` still supported (legacy).
+- **Top Menu Discord invite from ClubKitConfig** — set `Branding.DiscordInvite` (e.g. `discord.gg/your-invite`); Top Menu Community chip text + click open browser. Empty hides the link chip.
+- **Admin Hub / Join Community mobile scale** — `04-AdminHub` root UIScale: phone **0.44** / desktop **0.88**; `16-JoinCommunPrompt`: phone **0.48** / desktop **1**. Both follow `MobileScaleService` + `PhoneLayout` (ChildAdded + viewport refresh). Admin Hub already uses `MobilePanelManager` exclusive focus via the topbar icon on phone.
+
 ## [2.5.1] - 2026-08-10
 
 ### Added

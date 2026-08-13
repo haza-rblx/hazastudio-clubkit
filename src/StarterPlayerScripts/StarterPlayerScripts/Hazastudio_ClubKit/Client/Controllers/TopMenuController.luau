@@ -1,6 +1,7 @@
 --!strict
 
 local Lighting = game:GetService("Lighting")
+local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
@@ -701,6 +702,97 @@ local function bindButton(button: TextButton?, action: () -> ())
 	end)
 end
 
+local function trimString(value: string): string
+	return (string.gsub(string.gsub(value, "^%s+", ""), "%s+$", ""))
+end
+
+-- Returns display text (discord.gg/...) and https URL for OpenBrowserWindow.
+local function normalizeDiscordInvite(raw: string): (string, string)
+	local s = trimString(raw)
+	if s == "" then
+		return "", ""
+	end
+	s = string.gsub(s, "^[Hh][Tt][Tt][Pp][Ss]?://", "")
+	local lower = string.lower(s)
+	if string.find(lower, "discord.gg/", 1, true) == nil and string.find(s, "/", 1, true) == nil then
+		-- Invite code only → discord.gg/<code>
+		s = "discord.gg/" .. s
+	end
+	return s, "https://" .. s
+end
+
+local function isDiscordInviteLabelText(text: string): boolean
+	local lower = string.lower(text)
+	return string.find(lower, "discord.gg", 1, true) ~= nil
+		or string.find(lower, "yourlinkhere", 1, true) ~= nil
+end
+
+local function openDiscordInvite(url: string)
+	if url == "" then
+		return
+	end
+	local ok, err = pcall(function()
+		GuiService:OpenBrowserWindow(url)
+	end)
+	if not ok then
+		log:warn("Open Discord invite failed", { error = tostring(err), url = url })
+	end
+end
+
+local function bindGuiObjectClick(target: GuiObject, action: () -> ())
+	if target:IsA("GuiButton") then
+		local button = target :: GuiButton
+		PressFeedback.bindPressScale(button)
+		button.Activated:Connect(function()
+			closeMenuThen(action)
+		end)
+		return
+	end
+	target.Active = true
+	target.InputBegan:Connect(function(input: InputObject)
+		if input.UserInputType ~= Enum.UserInputType.MouseButton1
+			and input.UserInputType ~= Enum.UserInputType.Touch then
+			return
+		end
+		closeMenuThen(action)
+	end)
+end
+
+local function applyDiscordInvite(menuRoot: Instance)
+	local branding = Config.Branding or {}
+	local display, url = normalizeDiscordInvite(tostring(branding.DISCORD_INVITE or ""))
+
+	for _, d in ipairs(menuRoot:GetDescendants()) do
+		if d:IsA("TextLabel") and isDiscordInviteLabelText(d.Text) then
+			if display ~= "" then
+				d.Text = display
+			end
+		end
+	end
+
+	-- Section3 has TextButton CommunityButton (row) + Frame CommunityButton (link chip).
+	local function visit(parent: Instance)
+		for _, child in ipairs(parent:GetChildren()) do
+			if child.Name == BUTTONS.COMMUNITY and child:IsA("GuiObject") then
+				local gui = child :: GuiObject
+				if display == "" then
+					-- Hide invite chip only (Frame), keep row label.
+					if not gui:IsA("GuiButton") then
+						gui.Visible = false
+					end
+				else
+					gui.Visible = true
+					bindGuiObjectClick(gui, function()
+						openDiscordInvite(url)
+					end)
+				end
+			end
+			visit(child)
+		end
+	end
+	visit(menuRoot)
+end
+
 local function wireButtons(buttonMap: TopMenuGuiRefs.ButtonMap)
 	local icons = iconsRef
 	if not icons then
@@ -782,6 +874,8 @@ function TopMenuController.init(deps: InitDeps)
 
 	wireButtons(refs.desktopButtons)
 	wireButtons(refs.phoneButtons)
+	applyDiscordInvite(refs.desktopMenu)
+	applyDiscordInvite(refs.phoneMenu)
 
 	local menuIcon = deps.menuIcon
 	if menuIcon.selected and type(menuIcon.selected.Connect) == "function" then

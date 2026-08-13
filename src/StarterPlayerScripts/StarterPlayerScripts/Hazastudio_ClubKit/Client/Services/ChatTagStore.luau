@@ -83,6 +83,24 @@ function ChatTagStore.get(userId: number): ChatTagEntry?
 	return byUserId[userId]
 end
 
+--- Optimistic clear/set of coupleTag without waiting for ChatTagSync.
+--- Keeps rev so a slightly older server upsert is not dropped forever; server
+--- rev still advances on the next authoritative publish.
+function ChatTagStore.setCoupleTag(userId: number, coupleTag: string?)
+	local existing = byUserId[userId]
+	if not existing then
+		return
+	end
+	local nextTag = if type(coupleTag) == "string" and coupleTag ~= "" then coupleTag else nil
+	if existing.coupleTag == nextTag then
+		return
+	end
+	local cloned = table.clone(existing)
+	cloned.coupleTag = nextTag
+	byUserId[userId] = cloned
+	notify(userId)
+end
+
 function ChatTagStore.subscribe(fn: (userId: number?) -> ()): () -> ()
 	table.insert(listeners, fn)
 	return function()

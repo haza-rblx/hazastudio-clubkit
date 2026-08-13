@@ -191,6 +191,7 @@ end
 local function rememberGood(userId: number, record: TagRecord)
 	-- Only promote ChatTagStore-backed records. Overhead proximity payloads can be
 	-- unresolved Guest and must not stick in lastGood after the speaker leaves range.
+	-- Always replace (including coupleTag = nil) so breakup clears lastGood.
 	if type(record.primaryTag) == "string" and record.primaryTag ~= "" then
 		lastGoodByUserId[userId] = record
 	end

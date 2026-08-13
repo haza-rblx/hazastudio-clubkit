@@ -99,6 +99,22 @@ local function applyAdminPanelLayout(gui: Instance): ()
 	getOrCreateRootScale(gui).Scale = scale
 end
 
+local function applyAdminHubLayout(gui: Instance): ()
+	local cfg = Config.Admin
+	local scale = if isPhoneLayout()
+		then (tonumber(cfg.HUB_GUI_SCALE_MOBILE) or ms.ADMIN_HUB_GUI)
+		else (tonumber(cfg.HUB_GUI_SCALE_DESKTOP) or 0.88)
+	getOrCreateRootScale(gui).Scale = scale
+end
+
+local function applyJoinCommunLayout(gui: Instance): ()
+	local cfg = Config.JoinCommunityPrompt
+	local scale = if isPhoneLayout()
+		then (tonumber(cfg.GUI_SCALE_MOBILE) or ms.JOIN_COMMUN_GUI)
+		else (tonumber(cfg.GUI_SCALE_DESKTOP) or 1)
+	getOrCreateRootScale(gui).Scale = scale
+end
+
 local function applyBackpackLayout(gui: Instance): ()
 	local cfg = Config.Backpack
 	local wrapper = gui:FindFirstChild(cfg.WRAPPER_NAME, true)
@@ -243,6 +259,18 @@ local function applyToGui(child: Instance): ()
 		return
 	end
 
+	local hubName = Config.Admin.HUB_GUI_NAME
+	if type(hubName) == "string" and name == hubName then
+		applyAdminHubLayout(child)
+		return
+	end
+
+	local joinName = Config.JoinCommunityPrompt.GUI_NAME
+	if type(joinName) == "string" and name == joinName then
+		applyJoinCommunLayout(child)
+		return
+	end
+
 	if name == Config.Backpack.GUI_NAME then
 		applyBackpackLayout(child)
 		return
@@ -277,6 +305,14 @@ local function processPlayerGuiChild(child: Instance): ()
 	if child.Name == Config.Admin.GUI_NAME then
 		applyAdminPanelLayout(child)
 	end
+	local hubName = Config.Admin.HUB_GUI_NAME
+	if type(hubName) == "string" and child.Name == hubName then
+		applyAdminHubLayout(child)
+	end
+	local joinName = Config.JoinCommunityPrompt.GUI_NAME
+	if type(joinName) == "string" and child.Name == joinName then
+		applyJoinCommunLayout(child)
+	end
 	if child.Name == Config.Backpack.GUI_NAME then
 		applyBackpackLayout(child)
 	end
@@ -307,6 +343,20 @@ function MobileScaleService.init(playerGui: PlayerGui): ()
 			if adminPanel then
 				applyAdminPanelLayout(adminPanel)
 			end
+			local hubName = Config.Admin.HUB_GUI_NAME
+			if type(hubName) == "string" then
+				local adminHub = playerGui:FindFirstChild(hubName)
+				if adminHub then
+					applyAdminHubLayout(adminHub)
+				end
+			end
+			local joinName = Config.JoinCommunityPrompt.GUI_NAME
+			if type(joinName) == "string" then
+				local joinGui = playerGui:FindFirstChild(joinName)
+				if joinGui then
+					applyJoinCommunLayout(joinGui)
+				end
+			end
 			local backpackGui = playerGui:FindFirstChild(Config.Backpack.GUI_NAME)
 			if backpackGui then
 				applyBackpackLayout(backpackGui)
@@ -317,6 +367,14 @@ end
 
 function MobileScaleService.applyAdminPanelLayout(gui: Instance): ()
 	applyAdminPanelLayout(gui)
+end
+
+function MobileScaleService.applyAdminHubLayout(gui: Instance): ()
+	applyAdminHubLayout(gui)
+end
+
+function MobileScaleService.applyJoinCommunLayout(gui: Instance): ()
+	applyJoinCommunLayout(gui)
 end
 
 function MobileScaleService.applyBackpackLayout(gui: Instance): ()

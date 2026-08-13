@@ -22,6 +22,7 @@ local OverheadPremiumBadge = require(ReplicatedStorage.Hazastudio_ClubKit.Shared
 local HttpApiCounter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.HttpApiCounter)
 local NetworkPerfCounters = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.NetworkPerfCounters)
 local CharacterReady = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.CharacterReady)
+local Cache = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Cache)
 type OverheadPayload = Types.OverheadPayload
 -- Structural type for the optional ProximityInterestService dependency injected by
 -- Main.server.luau (task 2.2). We declare only the subset of the API used here so that
@@ -578,9 +579,39 @@ end
 		-- non-fallback payload, return the old one. Only use fallback if not yet
 		-- cached at all (first load). Prevents "Guest flicker" in chat tags
 		-- when refreshAll hits transient DataStore failure.
+		--
+		-- Couple exception: if durable/session store already cleared the couple
+		-- but cached payload still has partner fields, do not republish the stale
+		-- chat couple tag — patch couple fields off and publish the clear.
 		if usedFallback and cachedPayloads[userId] and not payloadWasFallback[userId] then
-			publishChatTagFromPayload(cachedPayloads[userId], false, payloadRankLookupOk[userId] == true)
-			return cachedPayloads[userId], false
+			local cached = cachedPayloads[userId]
+			local stored = Cache.get("overhead:" .. tostring(userId))
+			local storedCoupled = type(stored) == "table"
+				and ((stored :: any).couplePartner ~= nil or (stored :: any).couplePartnerId ~= nil)
+			local cachedCoupled = cached.isCoupled == true
+				or (type(cached.couplePartner) == "string" and cached.couplePartner ~= "")
+				or (type(cached.chatCoupleTag) == "string" and cached.chatCoupleTag ~= "")
+			if cachedCoupled and type(stored) == "table" and not storedCoupled then
+				local patched = table.clone(cached)
+				patched.isCoupled = false
+				patched.couplePartner = nil
+				patched.couplePartnerId = nil
+				patched.chatCoupleTag = nil
+				if patched.relationshipMode == "Taken" then
+					patched.relationshipMode = "Single"
+				end
+				local fingerprint = fingerprintPayload(patched)
+				local changed = payloadFingerprints[userId] ~= fingerprint
+				cachedPayloads[userId] = patched
+				payloadFingerprints[userId] = fingerprint
+				payloadWasFallback[userId] = true
+				storedInputsFingerprints[userId] = nil
+				chatTagFingerprints[userId] = nil
+				publishChatTagFromPayload(patched, false, payloadRankLookupOk[userId] == true)
+				return patched, changed
+			end
+			publishChatTagFromPayload(cached, false, payloadRankLookupOk[userId] == true)
+			return cached, false
 		end
 
 		-- Unresolved first-paint (DS fallback + rank unknown): do not install as
@@ -1723,6 +1754,81 @@ end
 	function controller:refreshPlayer(player: Player, mode: ("delta" | "recovery")?)
 		task.spawn(broadcastPayload, player, mode)
 	end
+
+	--- Bust S1 / chat-tag fingerprints so the next refresh rebuilds after couple mutations.
+	function controller:invalidateBuildCache(userId: number)
+		storedInputsFingerprints[userId] = nil
+		payloadFingerprints[userId] = nil
+		chatTagFingerprints[userId] = nil
+	end
+
+	--- Immediate couple presentation patch + ChatTagSync upsert (before/alongside full refresh).
+	--- Keeps chat couple tags and overhead cache honest when accept/breakup races DS fallback.
+	function controller:patchCouplePresentation(
+		userId: number,
+		opts: {
+			coupled: boolean,
+			partnerName: string?,
+		}
+	)
+		local emoji = tostring(Config.Chat.COUPLE_TAG_EMOJI or "💕")
+		local partnerName = if type(opts.partnerName) == "string" and opts.partnerName ~= ""
+			then opts.partnerName
+			else nil
+		local nextCoupleTag = if opts.coupled and partnerName then (emoji .. " " .. partnerName) else nil
+
+		local cached = cachedPayloads[userId]
+		if cached then
+			local patched = table.clone(cached)
+			if opts.coupled and partnerName then
+				patched.isCoupled = true
+				patched.couplePartner = partnerName
+				patched.relationshipMode = "Taken"
+				patched.showCoupleName = true
+				patched.chatCoupleTag = nextCoupleTag
+				local layers = table.clone(patched.publicOverheadLayerVisible or {})
+				layers.CoupleName = true
+				patched.publicOverheadLayerVisible = layers
+			else
+				patched.isCoupled = false
+				patched.couplePartner = nil
+				patched.couplePartnerId = nil
+				patched.chatCoupleTag = nil
+				if patched.relationshipMode == "Taken" then
+					patched.relationshipMode = "Single"
+				end
+			end
+			cachedPayloads[userId] = patched
+			payloadFingerprints[userId] = nil
+			storedInputsFingerprints[userId] = nil
+			chatTagFingerprints[userId] = nil
+			publishChatTagFromPayload(patched, false, true)
+			return
+		end
+
+		local existing = chatTagEntries[userId]
+		if existing then
+			local nextRev = (chatTagRevs[userId] or 0) + 1
+			local entry: Types.ChatTagEntry = {
+				userId = userId,
+				displayName = existing.displayName,
+				primaryTag = existing.primaryTag,
+				coupleTag = nextCoupleTag,
+				role = existing.role,
+				effectiveMembership = existing.effectiveMembership,
+				rev = nextRev,
+			}
+			chatTagFingerprints[userId] = chatTagFingerprint(entry)
+			chatTagRevs[userId] = nextRev
+			chatTagEntries[userId] = entry
+			chatTagNetwork:fireAllClients({
+				kind = "chattag_upsert",
+				userId = userId,
+				entry = entry,
+			})
+		end
+	end
+
 	-- Broadcast all players to subscribers (e.g. after leaderboard update).
 	-- Uses delta mode — never resets keys / sends Force_Broadcast (R6.1).
 	-- S2 (quota-efficiency-pass-2026-06, Phase 1): debounced — if called

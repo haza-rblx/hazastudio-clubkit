@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Roles &amp; Ranks — Panduan Slide | Hazastudio Clubkit</title>
+  <meta name="description" content="Overview role/rank Club Kit dan langkah step-by-step menambah role baru lewat ClubKitConfig." />
+  <meta name="color-scheme" content="light dark" />
+  <script>
+    (function () {
+      try {
+        var key = "clubkit-docs-theme";
+        var saved = localStorage.getItem(key);
+        var theme = saved === "light" || saved === "dark" ? saved : "dark";
+        document.documentElement.setAttribute("data-theme", theme);
+      } catch (_) {
+        document.documentElement.setAttribute("data-theme", "dark");
+      }
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="theme.css" />
+  <style>
+    /* Roles & Ranks slide deck — page-scoped layout, reuses theme.css tokens */
+    body.deck-page { padding-bottom: 0; }
+
+    .deck-chrome {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 250;
+      background: var(--header-bg);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-hairline);
+    }
+
+    .deck-progress { height: 2px; background: var(--border-hairline); }
+    .deck-progress > span {
+      display: block;
+      height: 100%;
+      width: 0%;
+      background: var(--color-accent);
+      transition: width 0.25s ease;
+    }
+
+    .deck-chrome-row {
+      max-width: var(--layout-max);
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-16);
+      padding: 10px var(--spacing-24);
+    }
+
+    .deck-back {
+      font-size: var(--text-caption);
+      font-weight: 500;
+      color: var(--text-muted);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .deck-back:hover { color: var(--text-primary); text-decoration: none; }
+
+    .deck-dots {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex: 1;
+      min-width: 0;
+      justify-content: center;
+      overflow-x: auto;
+      scrollbar-width: none;
+      padding: 4px 0;
+    }
+    .deck-dots::-webkit-scrollbar { display: none; }
+
+    .deck-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--border-subtle);
+      border: none;
+      padding: 0;
+      flex-shrink: 0;
+      cursor: pointer;
+      transition: background var(--transition), transform var(--transition);
+    }
+    .deck-dot:hover { background: var(--text-muted); }
+    .deck-dot.is-active { background: var(--color-accent); transform: scale(1.35); }
+    .deck-dot:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+    .deck-controls {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-8);
+      flex-shrink: 0;
+    }
+
+    .deck-nav-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px;
+      height: 30px;
+      border-radius: var(--radius-buttons);
+      border: 1px solid var(--border-subtle);
+      background: transparent;
+      color: var(--text-primary);
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+      transition: background var(--transition), border-color var(--transition), opacity var(--transition);
+    }
+    .deck-nav-btn:hover { background: var(--hover-fill); border-color: var(--color-smoke); }
+    .deck-nav-btn:disabled { opacity: 0.35; cursor: default; }
+    .deck-nav-btn:disabled:hover { background: transparent; border-color: var(--border-subtle); }
+    .deck-nav-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+    .deck-counter {
+      font-family: var(--font-jetbrains-mono);
+      font-size: var(--text-caption);
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+      min-width: 4.5em;
+      text-align: right;
+    }
+
+    .deck { min-height: 100vh; }
+
+    .slide { display: none; }
+
+    .slide.is-active {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: var(--spacing-16);
+      width: 100%;
+      max-width: 760px;
+      margin: 0 auto;
+      min-height: 100vh;
+      padding: 118px var(--spacing-24) 140px;
+      box-sizing: border-box;
+    }
+
+    .slide-kicker {
+      font-family: var(--font-jetbrains-mono);
+      font-size: var(--text-caption);
+      letter-spacing: var(--tracking-caption);
+      text-transform: uppercase;
+      color: var(--color-accent);
+    }
+
+    .slide-title {
+      font-family: var(--font-inter);
+      font-size: var(--text-heading-lg);
+      font-weight: 600;
+      line-height: var(--leading-heading-lg);
+      letter-spacing: var(--tracking-heading-lg);
+      color: var(--text-primary);
+    }
+    .slide-title code { font-size: 0.6em; }
+
+    .slide-title--hero {
+      font-size: var(--text-display-sm);
+      letter-spacing: var(--tracking-display-sm);
+      line-height: var(--leading-display-sm);
+    }
+
+    .slide-lead {
+      font-size: var(--text-heading-sm);
+      line-height: var(--leading-heading-sm);
+      color: var(--text-secondary);
+      max-width: 46rem;
+    }
+
+    .slide-hint { font-size: var(--text-body-sm); color: var(--text-muted); }
+
+    .slide-note {
+      font-size: var(--text-body-sm);
+      line-height: var(--leading-body-sm);
+      color: var(--text-secondary);
+      max-width: 46rem;
+    }
+
+    .slide-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-12);
+      border-top: 1px solid var(--border-hairline);
+    }
+    .slide-list li {
+      padding: var(--spacing-12) 0 0;
+      font-size: var(--text-body);
+      line-height: var(--leading-body);
+      color: var(--text-secondary);
+    }
+    .slide-list li strong { color: var(--text-primary); font-weight: 600; }
+
+    .slide-trio {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--spacing-24);
+      margin-top: var(--spacing-8);
+    }
+    .slide-trio-item { border-top: 1px solid var(--border-hairline); padding-top: var(--spacing-12); }
+    .slide-trio-item h3 {
+      font-size: var(--text-body);
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: var(--spacing-4);
+    }
+    .slide-trio-item p {
+      font-size: var(--text-body-sm);
+      line-height: var(--leading-body-sm);
+      color: var(--text-secondary);
+    }
+
+    .slide-goal {
+      border-left: 2px solid var(--color-accent);
+      padding-left: var(--spacing-16);
+      font-size: var(--text-heading-sm);
+      line-height: var(--leading-heading-sm);
+      color: var(--text-primary);
+    }
+
+    .slide-pitfalls {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-12);
+    }
+    .slide-pitfalls li {
+      border-left: 2px solid var(--warn-title);
+      padding-left: var(--spacing-16);
+      font-size: var(--text-body-sm);
+      line-height: var(--leading-body-sm);
+      color: var(--text-secondary);
+    }
+    .slide-pitfalls li strong { color: var(--text-primary); }
+
+    .slide-footer-link { font-size: var(--text-body-sm); color: var(--text-muted); }
+
+    @media (max-width: 900px) {
+      .deck-chrome-row { padding: 8px var(--spacing-12); gap: var(--spacing-8); }
+      .slide.is-active { padding: 108px var(--spacing-16) 168px; }
+      .slide-trio { grid-template-columns: 1fr; gap: var(--spacing-16); }
+      .slide-title--hero { font-size: var(--text-heading-lg); }
+    }
+
+    @media (max-width: 560px) {
+      .deck-back span { display: none; }
+    }
+  </style>
+</head>
+<body data-page="roles-guide" class="dock-page deck-page">
+
+  <nav class="dock" data-i18n-aria-label="nav.site" aria-label="Navigasi situs">
+      <a class="dock-item" href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><span>Docs</span></a>
+      <a class="dock-item" href="setup.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg><span>Setup</span></a>
+      <a class="dock-item" href="reference.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M8 7h8"/><path d="M8 11h8"/><path d="M8 15h5"/></svg><span data-i18n="nav.reference">Reference</span></a>
+      <a class="dock-item" href="updates.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg><span>Updates</span></a>
+      <div class="dock-divider"></div>
+      <div class="dock-actions">
+      <div class="lang-switch" id="langSwitch" role="group" data-i18n-aria-label="lang.label" aria-label="Bahasa">
+          <button type="button" class="lang-btn" data-lang="id" aria-pressed="true">ID</button>
+          <button type="button" class="lang-btn" data-lang="en" aria-pressed="false">EN</button>
+          <button type="button" class="lang-btn" data-lang="ja" aria-pressed="false">JA</button>
+          <button type="button" class="lang-btn" data-lang="es" aria-pressed="false">ES</button>
+        </div>
+      <button type="button" class="dock-item theme-toggle" id="themeToggle" aria-label="Toggle theme" title="Toggle theme">
+      <span class="icon-sun"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg></span>
+      <span class="icon-moon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></span>
+    </button>
+      </div>
+    </nav>
+
+  <div class="deck-chrome">
+    <div class="deck-progress" aria-hidden="true"><span id="deckProgressFill"></span></div>
+    <div class="deck-chrome-row">
+      <a class="deck-back" href="setup.html#step-7">← <span>Setup</span></a>
+      <div class="deck-dots" id="deckDots" role="tablist" aria-label="Navigasi slide">
+        <button class="deck-dot" type="button" data-goto="1" role="tab" aria-label="Slide 1"></button>
+        <button class="deck-dot" type="button" data-goto="2" role="tab" aria-label="Slide 2"></button>
+        <button class="deck-dot" type="button" data-goto="3" role="tab" aria-label="Slide 3"></button>
+        <button class="deck-dot" type="button" data-goto="4" role="tab" aria-label="Slide 4"></button>
+        <button class="deck-dot" type="button" data-goto="5" role="tab" aria-label="Slide 5"></button>
+        <button class="deck-dot" type="button" data-goto="6" role="tab" aria-label="Slide 6"></button>
+        <button class="deck-dot" type="button" data-goto="7" role="tab" aria-label="Slide 7"></button>
+        <button class="deck-dot" type="button" data-goto="8" role="tab" aria-label="Slide 8"></button>
+        <button class="deck-dot" type="button" data-goto="9" role="tab" aria-label="Slide 9"></button>
+        <button class="deck-dot" type="button" data-goto="10" role="tab" aria-label="Slide 10"></button>
+        <button class="deck-dot" type="button" data-goto="11" role="tab" aria-label="Slide 11"></button>
+        <button class="deck-dot" type="button" data-goto="12" role="tab" aria-label="Slide 12"></button>
+        <button class="deck-dot" type="button" data-goto="13" role="tab" aria-label="Slide 13"></button>
+        <button class="deck-dot" type="button" data-goto="14" role="tab" aria-label="Slide 14"></button>
+      </div>
+      <div class="deck-controls">
+        <button class="deck-nav-btn" id="deckPrev" type="button" aria-label="Slide sebelumnya">‹</button>
+        <span class="deck-counter" id="deckCounter" aria-live="polite">01 / 14</span>
+        <button class="deck-nav-btn" id="deckNext" type="button" aria-label="Slide berikutnya">›</button>
+      </div>
+    </div>
+  </div>
+
+  <main class="deck" id="deck" role="region" aria-roledescription="carousel" aria-label="Roles &amp; Ranks — slide deck">
+
+    <section class="slide" data-slide="1" aria-label="Slide 1 dari 14">
+      <p class="slide-kicker">Panduan singkat · 14 slide</p>
+      <h1 class="slide-title slide-title--hero">Club Kit — Roles &amp; Ranks</h1>
+      <p class="slide-lead">Cara kerja role/rank sekarang, dan langkah step-by-step nambah role baru lewat <code>ClubKitConfig</code>.</p>
+      <p class="slide-hint">Pakai <code>←</code> / <code>→</code>, <code>Space</code>, atau titik navigasi di atas untuk pindah slide.</p>
+    </section>
+
+    <section class="slide" data-slide="2" aria-label="Slide 2 dari 14">
+      <p class="slide-kicker">Bagian A — Overview</p>
+      <h2 class="slide-title">Satu file yang diedit: <code>ClubKitConfig</code></h2>
+      <ul class="slide-list">
+        <li>Path: <code>ReplicatedStorage/Hazastudio_ClubKitConfig/ClubKitConfig</code>.</li>
+        <li>File ini <strong>milikmu selamanya</strong> — Update Engine tidak pernah menimpa isinya; key baru cuma di-fill-forward.</li>
+        <li>Section yang relevan buat role/rank: <code>Group</code>, <code>AdminUserIds</code>, <code>RoleCategories</code>, <code>SystemRoles</code>, <code>SpenderRoles</code>, dan alias (<code>CommandAliases</code> / <code>LegacyAliases</code>).</li>
+      </ul>
+    </section>
+
+    <section class="slide" data-slide="3" aria-label="Slide 3 dari 14">
+      <p class="slide-kicker">Bagian A — Overview</p>
+      <h2 class="slide-title">3 konsep yang sering ketuker</h2>
+      <div class="slide-trio">
+        <div class="slide-trio-item">
+          <h3>Group rank</h3>
+          <p>Rank Roblox di group kamu. Runtime cuma pakai ini buat <strong>Owner</strong> &amp; <strong>Guest</strong>.</p>
+        </div>
+        <div class="slide-trio-item">
+          <h3>Kit role (<code>/setrole</code>)</h3>
+          <p>Staff, CoOwner, Moderator, DJ, dst. Di-assign manual — ini sumber privilege command.</p>
+        </div>
+        <div class="slide-trio-item">
+          <h3>Membership</h3>
+          <p>VIP / VVIP / Supreme dari Shop (beli/gift). Cosmetic + perk, <strong>bukan</strong> privilege staff.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" data-slide="4" aria-label="Slide 4 dari 14">
+      <p class="slide-kicker">Bagian A — Overview</p>
+      <h2 class="slide-title">Yang otomatis dari group: cuma 2</h2>
+      <ul class="slide-list">
+        <li><strong>Owner</strong> — <code>Group.OwnerUserId</code> (match langsung, apapun rank-nya) atau rank ada di <code>SystemRoles.Owner.groupRanks</code> (default <code>{255}</code>).</li>
+        <li><strong>Guest</strong> — rank ada di <code>SystemRoles.Guest.groupRanks</code> (default <code>{0}</code>) / bukan member group.</li>
+        <li>Role lain — Staff, CoOwner, Moderator, DJ, Lead Dance, Streamer, Influencer, <strong>dan role baru yang kamu tambah</strong> — semuanya manual lewat <code>/setrole</code>. Tidak ada yang otomatis dari rank group.</li>
+      </ul>
+      <pre class="slide-code"><code><span class="key">ClubKitConfig</span>.<span class="key">Group</span>.<span class="key">OwnerUserId</span> = <span class="num">987654321</span> <span class="cmt">-- selalu Owner, apapun rank-nya</span>
+
+<span class="key">ClubKitConfig</span>.<span class="key">SystemRoles</span>.<span class="key">Owner</span>.<span class="key">groupRanks</span> = { <span class="num">255</span> } <span class="cmt">-- rank ini di group = Owner</span>
+<span class="key">ClubKitConfig</span>.<span class="key">SystemRoles</span>.<span class="key">Guest</span>.<span class="key">groupRanks</span> = { <span class="num">0</span> }   <span class="cmt">-- rank ini di group = Guest</span></code></pre>
+    </section>
+
+    <section class="slide" data-slide="5" aria-label="Slide 5 dari 14">
+      <p class="slide-kicker">Bagian A — Overview</p>
+      <h2 class="slide-title">5 flag privilege (per kategori role)</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Key</th><th>Ngatur apa</th></tr></thead>
+          <tbody>
+            <tr><td><code>canGift</code></td><td><code>/setrole</code>, <code>/gift</code>, <code>/ungift</code> (ikut gate admin panel juga)</td></tr>
+            <tr><td><code>canAnnounce</code></td><td><code>/announce</code> + ikon paid broadcast</td></tr>
+            <tr><td><code>canTeleport</code></td><td><code>/bring</code>, <code>/to</code></td></tr>
+            <tr><td><code>adminPanel</code></td><td>Admin panel + cinematic dock</td></tr>
+            <tr><td><code>musicManage</code></td><td>Kontrol DJ / music player</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="slide-hint">Daftar command lengkap: <a href="reference.html#privileges">Reference → Privileges</a>.</p>
+    </section>
+
+    <section class="slide" data-slide="6" aria-label="Slide 6 dari 14">
+      <p class="slide-kicker">Bagian A — Overview</p>
+      <h2 class="slide-title">3 kategori default</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Kategori</th><th>Privilege aktif</th><th>Role</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Leadership</strong></td><td>Semua 5 flag</td><td>CoOwner, Staff</td></tr>
+            <tr><td><strong>Moderation</strong></td><td><code>canAnnounce</code>, <code>canTeleport</code></td><td>Moderator</td></tr>
+            <tr><td><strong>Content</strong></td><td><code>musicManage</code></td><td>DJ, Lead Dance, Streamer, Influencer</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="slide-hint">Privilege nempel di <strong>kategori</strong> — semua role dalam satu kategori otomatis dapet privilege yang sama.</p>
+    </section>
+
+    <section class="slide" data-slide="7" aria-label="Slide 7 dari 14">
+      <p class="slide-kicker">Bagian B — Nambah role</p>
+      <h2 class="slide-title">Goal contoh: tambah role Host</h2>
+      <p class="slide-goal">Host bisa <code>/announce</code> &amp; <code>/bring</code>/<code>/to</code>, tapi <strong>tidak</strong> bisa gift atau buka admin panel.</p>
+      <ul class="slide-list">
+        <li>Persis privilege kategori <strong>Moderation</strong> yang sudah ada (<code>canAnnounce</code> + <code>canTeleport</code>, tanpa <code>canGift</code>/<code>adminPanel</code>).</li>
+        <li>Jadi kita tinggal tambah role baru <strong>di dalam</strong> kategori Moderation — tidak perlu bikin kategori baru atau ubah privilege apa pun.</li>
+      </ul>
+    </section>
+
+    <section class="slide" data-slide="8" aria-label="Slide 8 dari 14">
+      <p class="slide-kicker">Bagian B — Langkah 1 dari 6</p>
+      <h2 class="slide-title">Buka ClubKitConfig</h2>
+      <ul class="slide-list">
+        <li>Explorer → <code>ReplicatedStorage</code> → <code>Hazastudio_ClubKitConfig</code> → <code>ClubKitConfig</code> (buka Script Source).</li>
+        <li>Scroll ke section <code>ClubKitConfig.RoleCategories</code>.</li>
+        <li>Alternatif: plugin Club Kit → Config (kalau panel Roles sudah tersedia) — path hierarchy-nya tetap sama.</li>
+      </ul>
+      <pre class="path-tree">ReplicatedStorage
+└─ Hazastudio_ClubKitConfig
+   └─ ClubKitConfig  ← edit di sini</pre>
+    </section>
+
+    <section class="slide" data-slide="9" aria-label="Slide 9 dari 14">
+      <p class="slide-kicker">Bagian B — Langkah 2 dari 6</p>
+      <h2 class="slide-title">Copy blok role, ganti identitasnya</h2>
+      <p class="slide-note">Di dalam kategori <strong>Moderation</strong>, copy salah satu blok <code>roles[]</code> yang ada (misal Moderator), tempel di bawahnya, lalu ganti field identitasnya.</p>
+      <pre class="slide-code"><code><span class="cmt">-- ClubKitConfig.RoleCategories[2] ("Moderation").roles</span>
+{
+    <span class="key">key</span> = <span class="str">"Host"</span>,
+    <span class="key">label</span> = <span class="str">"Host"</span>,
+    <span class="key">chatTag</span> = <span class="str">"HOST"</span>,
+    <span class="key">toolFolder</span> = <span class="str">"HOST"</span>,   <span class="cmt">-- opsional, lihat langkah 3</span>
+    <span class="key">teamColor</span> = <span class="str">"Electric blue"</span>,
+    <span class="key">enabled</span> = <span class="kw">true</span>,
+    <span class="key">roleColor</span> = { <span class="key">primary</span> = <span class="str">"#3B82F6"</span>, <span class="key">secondary</span> = <span class="str">"#93C5FD"</span> },
+},</code></pre>
+      <p class="slide-hint"><code>key</code> harus unik dan tanpa spasi — ini yang dicocokkan oleh <code>/setrole</code>.</p>
+    </section>
+
+    <section class="slide" data-slide="10" aria-label="Slide 10 dari 14">
+      <p class="slide-kicker">Bagian B — Langkah 3 dari 6</p>
+      <h2 class="slide-title">Siapkan folder tools (opsional)</h2>
+      <ul class="slide-list">
+        <li>Kalau Host butuh Tool: buat folder <code>ServerStorage/Tools/HOST/</code> lalu isi Tool yang mau di-hand out. Nama folder dicocokkan ke <code>toolFolder</code> (case-insensitive).</li>
+        <li>Kalau Host tidak butuh Tool sama sekali: kosongkan <code>toolFolder = ""</code> atau biarkan foldernya tidak ada — role tetap jalan (tag, warna, privilege kategori tetap aktif), cuma tidak ada Tool yang diberikan.</li>
+      </ul>
+    </section>
+
+    <section class="slide" data-slide="11" aria-label="Slide 11 dari 14">
+      <p class="slide-kicker">Bagian B — Langkah 4 dari 6 (opsional)</p>
+      <h2 class="slide-title">Alias command</h2>
+      <p class="slide-lead" style="font-size: var(--text-body-sm); color: var(--text-secondary);">Perlu kalau kamu mau <code>/setrole</code> menerima variasi ketikan lain buat <code>Host</code> (huruf kecil, singkatan, nama lama).</p>
+      <pre class="slide-code"><code><span class="key">ClubKitConfig</span>.<span class="key">CommandAliases</span> = {
+    <span class="cmt">-- ...existing...</span>
+    <span class="key">host</span> = <span class="str">"Host"</span>,
+}</code></pre>
+      <p class="slide-hint"><code>LegacyAliases</code> dipakai kalau kamu <strong>rename</strong> role yang sudah punya data lama tersimpan — bukan buat role yang benar-benar baru.</p>
+    </section>
+
+    <section class="slide" data-slide="12" aria-label="Slide 12 dari 14">
+      <p class="slide-kicker">Bagian B — Langkah 5 dari 6</p>
+      <h2 class="slide-title">Assign ke player</h2>
+      <ul class="slide-list">
+        <li>Chat command: <code>/setrole &lt;player&gt; Host</code> (owner/admin only).</li>
+        <li>Atau: buka <strong>Admin Hub</strong> → tile <strong>Set role</strong> → pilih player → pilih role.</li>
+        <li>Tersimpan sebagai <code>giftedRole</code> di DataStore — override role hasil rank group, persist sampai di-<code>/unsetrole</code>.</li>
+      </ul>
+      <pre class="slide-code"><code><span class="cmt">/setrole HazaBuilds Host
+/unsetrole HazaBuilds</span></code></pre>
+    </section>
+
+    <section class="slide" data-slide="13" aria-label="Slide 13 dari 14">
+      <p class="slide-kicker">Bagian B — Langkah 6 dari 6</p>
+      <h2 class="slide-title">Verify checklist</h2>
+      <ul class="slide-list">
+        <li>Overhead / chat tag player berubah jadi <strong>HOST</strong>.</li>
+        <li>Kalau kamu isi <code>toolFolder</code>: Tool <code>HOST</code> muncul di backpack player.</li>
+        <li>Privilege kategori Moderation jalan: Host bisa <code>/announce</code> &amp; <code>/bring</code>/<code>/to</code>, tapi <code>/gift</code> &amp; admin panel tetap ditolak.</li>
+      </ul>
+      <div class="tutorial-verify"><strong>Berhasil jika:</strong> ketiga poin di atas benar dan tidak ada warning role di Output.</div>
+    </section>
+
+    <section class="slide" data-slide="14" aria-label="Slide 14 dari 14">
+      <p class="slide-kicker">Bagian B — Pitfalls</p>
+      <h2 class="slide-title">4 hal yang gampang salah</h2>
+      <ul class="slide-pitfalls">
+        <li>Rank group 1–254 (selain <code>255</code>) <strong>tidak</strong> otomatis jadi Staff/Host apa pun — cuma <code>/setrole</code> yang mengubah role kit.</li>
+        <li>Privilege nempel di <strong>kategori</strong>, bukan per role/player — dua role di kategori yang sama selalu punya privilege yang sama.</li>
+        <li>Jangan edit folder engine <code>Hazastudio_ClubKit</code> buat urusan role — semuanya cukup lewat <code>ClubKitConfig</code>.</li>
+        <li>Update Engine <strong>tidak pernah</strong> menimpa <code>ClubKitConfig</code> kamu secara penuh — role custom aman lintas update.</li>
+      </ul>
+      <p class="slide-footer-link">Daftar command &amp; privilege lengkap: <a href="reference.html#privileges">Reference</a>. Alur setup lengkap: <a href="setup.html#step-7">Setup langkah 7</a>.</p>
+    </section>
+
+  </main>
+
+  <script>
+    (function () {
+      var slides = Array.prototype.slice.call(document.querySelectorAll(".slide[data-slide]"));
+      var total = slides.length;
+      var dots = Array.prototype.slice.call(document.querySelectorAll(".deck-dot"));
+      var prevBtn = document.getElementById("deckPrev");
+      var nextBtn = document.getElementById("deckNext");
+      var counter = document.getElementById("deckCounter");
+      var fill = document.getElementById("deckProgressFill");
+      var current = 1;
+
+      function pad(n) { return n < 10 ? "0" + n : String(n); }
+
+      function parseHash() {
+        var m = /s=(\d+)/.exec(location.hash || "");
+        var n = m ? parseInt(m[1], 10) : 1;
+        if (!n || n < 1 || n > total) return 1;
+        return n;
+      }
+
+      function render() {
+        slides.forEach(function (el, i) { el.classList.toggle("is-active", i === current - 1); });
+        dots.forEach(function (el, i) {
+          var on = i === current - 1;
+          el.classList.toggle("is-active", on);
+          el.setAttribute("aria-selected", on ? "true" : "false");
+        });
+        if (counter) counter.textContent = pad(current) + " / " + pad(total);
+        if (fill) fill.style.width = (current / total * 100) + "%";
+        if (prevBtn) prevBtn.disabled = current <= 1;
+        if (nextBtn) nextBtn.disabled = current >= total;
+      }
+
+      function goTo(n, force) {
+        n = Math.max(1, Math.min(total, n));
+        if (n === current && !force) return;
+        current = n;
+        render();
+        try { history.replaceState(null, "", "#s=" + current); } catch (_) { /* ignore */ }
+        window.scrollTo(0, 0);
+      }
+
+      if (prevBtn) prevBtn.addEventListener("click", function () { goTo(current - 1); });
+      if (nextBtn) nextBtn.addEventListener("click", function () { goTo(current + 1); });
+      dots.forEach(function (el, i) { el.addEventListener("click", function () { goTo(i + 1); }); });
+
+      document.addEventListener("keydown", function (e) {
+        var tag = e.target && e.target.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || (e.target && e.target.isContentEditable)) return;
+        if (e.key === "ArrowRight" || e.key === "PageDown") { e.preventDefault(); goTo(current + 1); }
+        else if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); goTo(current - 1); }
+        else if (e.key === " ") {
+          if (tag === "BUTTON" || tag === "A") return;
+          e.preventDefault();
+          goTo(e.shiftKey ? current - 1 : current + 1);
+        } else if (e.key === "Home") { e.preventDefault(); goTo(1); }
+        else if (e.key === "End") { e.preventDefault(); goTo(total); }
+      });
+
+      window.addEventListener("hashchange", function () { goTo(parseHash(), true); });
+
+      goTo(parseHash(), true);
+    })();
+  </script>
+  <script src="docs.js"></script>
+  <script src="i18n.js"></script>
+</body>
+</html>

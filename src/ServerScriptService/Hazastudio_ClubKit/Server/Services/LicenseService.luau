@@ -73,8 +73,14 @@ end
 
 local function applyOfflinePolicy()
 	if _lastSuccessWallClock <= 0 then
+		-- Never verified successfully (timeout / DNS / Studio flake). Fail OPEN so a
+		-- flaky license endpoint does not brick cash donation polling when ApiUrl+secret
+		-- are otherwise valid. Explicit expired/revoked only apply after a successful reply.
 		_state.status = "unknown"
-		_state.features = allFeaturesDisabled()
+		_state.features = allFeaturesEnabled()
+		if RunService:IsStudio() then
+			_state.enforcementActive = false
+		end
 		return
 	end
 	if os.time() - _lastSuccessWallClock > OFFLINE_GRACE_SECONDS then
@@ -183,8 +189,10 @@ function LicenseService.isFeatureEnabled(feature: string): boolean
 		return true
 	end
 
+	-- Optimistic while the first verify is still in flight — otherwise donation_poll
+	-- no-ops for the whole boot window (and forever if verify hangs/times out first).
 	if _state.checkedAt <= 0 then
-		return false
+		return true
 	end
 
 	if _state.status == "offline" or _state.status == "unknown" then

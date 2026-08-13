@@ -55,26 +55,32 @@ local function createCoupleController(deps: {
 
 	--- After a new couple forms, force profile relationshipMode to Taken so
 	--- overhead/settings no longer show a prior Single / Fun choice.
+	--- Do NOT invalidate profile cache after a successful update — update already
+	--- Cache.set's; wiping forces a DS re-read that can miss Taken under budget pressure.
 	local function forceTakenRelationshipMode(userId: number): boolean
 		if not profileRepository or type(profileRepository.update) ~= "function" then
 			return false
 		end
-		local saved = profileRepository:update(userId, function(current: any)
-			local nextProfile = table.clone(current)
-			nextProfile.relationshipMode = "Taken"
-			return nextProfile
-		end)
-		if not saved.ok then
-			log:warn("Failed to force Taken after couple accept", {
-				userId = userId,
-				error = tostring(saved.error),
-			})
-			return false
+		local function tryOnce(): boolean
+			local saved = profileRepository:update(userId, function(current: any)
+				local nextProfile = table.clone(current)
+				nextProfile.relationshipMode = "Taken"
+				return nextProfile
+			end)
+			if not saved.ok then
+				log:warn("Failed to force Taken after couple accept", {
+					userId = userId,
+					error = tostring(saved.error),
+				})
+				return false
+			end
+			return true
 		end
-		if type(profileRepository.invalidateCache) == "function" then
-			profileRepository:invalidateCache(userId)
+		if tryOnce() then
+			return true
 		end
-		return true
+		task.wait(0.4)
+		return tryOnce()
 	end
 
 	local function syncProfileMenuIfOnline(player: Player?)
@@ -88,17 +94,46 @@ local function createCoupleController(deps: {
 
 	--- Persist session write-behind BEFORE invalidateCache. Invalidating clears
 	--- the dirty session and would drop couple accept/breakup before DataStore flush.
-	local function flushThenInvalidate(userId: number)
+	--- On flush failure: keep the session (authoritative mutation) and skip invalidate
+	--- so refresh can still read the coupled/cleared state.
+	local function flushThenInvalidate(userId: number): boolean
 		if type(repo.flushSession) == "function" then
 			local flushed = repo:flushSession(userId)
 			if not flushed.ok then
-				log:warn("Couple session flush failed before invalidate", {
+				task.wait(0.35)
+				flushed = repo:flushSession(userId)
+			end
+			if not flushed.ok then
+				log:warn("Couple session flush failed; keeping session for refresh", {
 					userId = userId,
 					error = tostring(flushed.error),
 				})
+				return false
 			end
 		end
 		repo:invalidateCache(userId)
+		return true
+	end
+
+	local function refreshCouplePresentation(
+		player: Player?,
+		userId: number,
+		opts: {
+			coupled: boolean,
+			partnerName: string?,
+		}
+	)
+		if type(overheadController.invalidateBuildCache) == "function" then
+			overheadController:invalidateBuildCache(userId)
+		end
+		if type(overheadController.patchCouplePresentation) == "function" then
+			overheadController:patchCouplePresentation(userId, opts)
+		end
+		flushThenInvalidate(userId)
+		if player then
+			-- recovery: full Snapshot so nearby clients get couple fields, not a skipped delta.
+			overheadController:refreshPlayer(player, "recovery")
+		end
 	end
 	-- ============================================================
 	-- Setup Remotes — from injected folder, not WaitForChild
@@ -241,19 +276,44 @@ local function createCoupleController(deps: {
 				end
 				local senderUserId = result.value.senderUserId
 				local senderName   = result.value.senderName
-				-- Force Taken + display couple name already set in CoupleDomain.applyCouple.
-				forceTakenRelationshipMode(player.UserId)
-				forceTakenRelationshipMode(senderUserId)
-				notifyResultNetwork:fireClient(player, { accepted = true, partnerName = senderName })
+				-- Force Taken (retry). Domain also resolves coupled → Taken even if this fails.
+				if not forceTakenRelationshipMode(player.UserId) then
+					log:warn("Taken mode not persisted for acceptor; overhead still forces Taken while coupled", {
+						userId = player.UserId,
+					})
+				end
+				if not forceTakenRelationshipMode(senderUserId) then
+					log:warn("Taken mode not persisted for sender; overhead still forces Taken while coupled", {
+						userId = senderUserId,
+					})
+				end
+				notifyResultNetwork:fireClient(player, {
+					accepted = true,
+					partnerName = senderName,
+					partnerId = senderUserId,
+				})
 				local sender = findPlayerById(senderUserId)
 				if sender then
-					notifyResultNetwork:fireClient(sender, { accepted = true, partnerName = player.DisplayName })
-					flushThenInvalidate(senderUserId)
-					overheadController:refreshPlayer(sender)
+					notifyResultNetwork:fireClient(sender, {
+						accepted = true,
+						partnerName = player.DisplayName,
+						partnerId = player.UserId,
+					})
+					refreshCouplePresentation(sender, senderUserId, {
+						coupled = true,
+						partnerName = player.DisplayName,
+					})
 					syncProfileMenuIfOnline(sender)
+				else
+					refreshCouplePresentation(nil, senderUserId, {
+						coupled = true,
+						partnerName = player.DisplayName,
+					})
 				end
-				flushThenInvalidate(player.UserId)
-				overheadController:refreshPlayer(player)
+				refreshCouplePresentation(player, player.UserId, {
+					coupled = true,
+					partnerName = senderName,
+				})
 				syncProfileMenuIfOnline(player)
 				announceToAll(Config.Couple.ANNOUNCE_COUPLED:format(senderName, player.DisplayName))
 			else
@@ -292,22 +352,39 @@ local function createCoupleController(deps: {
 				return
 			end
 			notify.player(player, Config.Couple.MSG_BREAKUP_DONE:format(partnerName or "your partner"), "WARNING")
-			flushThenInvalidate(player.UserId)
-			overheadController:refreshPlayer(player)
+			-- Initiator also gets NotifyResult so client can clear chat couple tag immediately.
+			notifyResultNetwork:fireClient(player, {
+				accepted = false,
+				partnerName = partnerName or "",
+				partnerId = partnerId,
+				isBreakup = true,
+			})
+			refreshCouplePresentation(player, player.UserId, {
+				coupled = false,
+				partnerName = nil,
+			})
 			-- Use only partnerId (unique) to resolve partner.
 			-- Do not fall back to DisplayName (not unique — may target wrong player).
 			-- If partnerId nil (legacy data), partner treated as offline — their overhead
 			-- refreshes when they log back in.
 			local resolvedPartner: Player? = partnerPlayer
 			if resolvedPartner then
-				flushThenInvalidate(resolvedPartner.UserId)
-				overheadController:refreshPlayer(resolvedPartner)
+				refreshCouplePresentation(resolvedPartner, resolvedPartner.UserId, {
+					coupled = false,
+					partnerName = nil,
+				})
 				notifyResultNetwork:fireClient(resolvedPartner, {
 					accepted    = false,
 					partnerName = player.DisplayName,
+					partnerId = player.UserId,
 					isBreakup   = true,
 				})
 				notify.player(resolvedPartner, "[Couple] " .. player.DisplayName .. " ended the couple.", "WARNING")
+			elseif type(partnerId) == "number" then
+				refreshCouplePresentation(nil, partnerId, {
+					coupled = false,
+					partnerName = nil,
+				})
 			end
 			if partnerName then
 				announceToAll(Config.Couple.ANNOUNCE_BREAKUP:format(player.DisplayName, partnerName))

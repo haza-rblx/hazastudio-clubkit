@@ -50,6 +50,8 @@ Config.Branding = {
 	DEFAULT_LOGO_IMAGE = "rbxassetid://79426970537296",
 	-- Buyer override from ClubKitConfig.Branding.LogoImage (same as default until changed).
 	LOGO_IMAGE = "rbxassetid://79426970537296",
+	-- Top Menu Community Discord invite (ClubKitConfig.Branding.DiscordInvite).
+	DISCORD_INVITE = "",
 }
 -- ============================================================
 -- MEMBERSHIP TIERS (system-wide presentation config)
@@ -240,6 +242,9 @@ Config.Announcement = {
 -- JOIN COMMUNITY PROMPT (custom 16-JoinCommunPrompt modal)
 -- ============================================================
 Config.JoinCommunityPrompt = {
+	GUI_NAME = "16-JoinCommunPrompt",
+	GUI_SCALE_MOBILE = 0.48,
+	GUI_SCALE_DESKTOP = 1,
 	REMOTE_REQUEST = "JoinCommunityMembersRequest",
 	REMOTE_RESPONSE = "JoinCommunityMembersResponse",
 	-- Client → server after PromptJoinAsync (or anytime): re-check IsInGroup + grant VIP if flag on.
@@ -1768,14 +1773,20 @@ Config.Gravity = {
 	MAX_SPEED = 10,
 	FLOAT_SPEED_AT_MIN = 3,
 	FLOAT_SPEED_AT_MAX = 18,
-	-- On /gravity [1-10]: downward kick scales with its own restore intensity argument —
-	-- independent of /ungravity's float speed (separate dials/gears on the Admin Hub).
+	-- On /gravity [1-10]: controlled downward LinearVelocity (idle-down, not freefall anim),
+	-- scaled by its own restore intensity — independent of /ungravity float speed.
 	-- Soft (1) ≈ RESTORE_DOWNWARD_AT_MIN, hard (10) ≈ RESTORE_DOWNWARD_AT_MAX (studs/s, negative).
-	RESTORE_DOWNWARD_AT_MIN = -12,
-	RESTORE_DOWNWARD_AT_MAX = -90,
+	RESTORE_DOWNWARD_AT_MIN = -8,
+	RESTORE_DOWNWARD_AT_MAX = -72,
 	-- Legacy single-kick fallback when intensity is missing (mid-ish slam).
 	RESTORE_DOWNWARD_VELOCITY = -45,
 	RESTORE_HORIZONTAL_DAMP = 0.35,
+	-- Soft landing: start easing within this feet-clearance (studs), finish slightly above floor.
+	RESTORE_SOFT_BRAKE_HEIGHT = 10,
+	RESTORE_LAND_CLEARANCE = 0.55,
+	RESTORE_SETTLE_SPEED = -2.5,
+	-- Safety: force-land controlled drop if never near ground (void / stuck).
+	RESTORE_DROP_MAX_SECONDS = 45,
 	RATE_MAX = 12,
 	RATE_WINDOW = 5,
 	MSG_USAGE = "[Gravity] Staff only. /ungravity or /ungravity 1-10 = float everyone. /gravity or /gravity 1-10 = restore (1 soft → 10 hard drop). Shift+U float / Shift+G restore.",
@@ -1837,6 +1848,9 @@ Config.Admin = {
 	GUI_SCALE_BAKED = 0.82,
 	GUI_SCALE_MOBILE = 0.54,
 	GUI_SCALE_DESKTOP = 0.84,
+	-- 04-AdminHub root UIScale (PhoneLayout); MainWrapper keeps presentCenterPanel motion.
+	HUB_GUI_SCALE_MOBILE = 0.44,
+	HUB_GUI_SCALE_DESKTOP = 0.88,
 	TOPBAR_ORDER = 3,
 	REMOTE_SET_TITLE = "AdminSetTitle",
 	REMOTE_SEND_GIFTCARD = "AdminSendGiftcard",
@@ -3241,6 +3255,8 @@ Config.MobileScale = {
 	HOTBAR_GUI = 0.8, -- 10-HotbarGUI / HotbarGUI
 	BACKPACK_GUI = 0.9, -- 14-BackpackGUI HotbarWrapper.UIScale
 	ADMIN_GUI = 0.54, -- 04-AdminPanel root UIScale on phone layout
+	ADMIN_HUB_GUI = 0.44, -- 04-AdminHub root UIScale on phone layout
+	JOIN_COMMUN_GUI = 0.48, -- 16-JoinCommunPrompt root UIScale on phone layout
 	STICKER_GUI = 0.8, -- 11-StickerSystemGUI
 	NOTIF_GUI = 0.75, -- 99-NotificationCenter
 	COMMAND_GUI = 0.8, -- CommandLibraryGUI

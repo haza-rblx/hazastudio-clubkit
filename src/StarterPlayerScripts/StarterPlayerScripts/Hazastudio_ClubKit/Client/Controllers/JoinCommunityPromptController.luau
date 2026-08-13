@@ -16,12 +16,13 @@ local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Con
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local BrandLogoApplier = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.BrandLogoApplier)
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
+local MobileScaleService = require(script.Parent.Parent.Services.MobileScaleService)
 
 local log = Logger.new("JoinCommunityPrompt")
 
 local PROMPT_DELAY_SEC = 2
 local GUI_WAIT_TIMEOUT = 8
-local ROOT_GUI_NAME = "16-JoinCommunPrompt"
+local ROOT_GUI_NAME = (Config.JoinCommunityPrompt and Config.JoinCommunityPrompt.GUI_NAME) or "16-JoinCommunPrompt"
 local MAX_THUMBNAILS = 8
 local BODY_NAME_LIMIT = 3
 local SERVER_SAMPLE_TIMEOUT = 8
@@ -904,6 +905,8 @@ local function showModal(groupId: number)
 
 	-- Gift / PaidBroadcast: enable ScreenGui, hide panel, then presentCenterPanel
 	-- (UIScale open 0.96→1 Sine Out + blur/zoom via MODAL_BLUR_OPTIONS).
+	-- Root ScreenGui UIScale is owned by MobileScaleService (phone/desktop).
+	MobileScaleService.applyJoinCommunLayout(r.root)
 	r.root.Enabled = true
 	anim:cancelPanel(r.mainWrapper)
 	r.mainWrapper.Visible = false

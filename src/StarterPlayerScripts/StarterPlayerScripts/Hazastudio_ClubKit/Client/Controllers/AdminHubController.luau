@@ -13,6 +13,7 @@ local DonationAmountFormat = require(ReplicatedStorage.Hazastudio_ClubKit.Shared
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local OverheadController = require(script.Parent.OverheadController)
 local AdminHubUI = require(script.Parent.Parent.UI.AdminHubUI)
+local MobileScaleService = require(script.Parent.Parent.Services.MobileScaleService)
 local createCommandLibraryService = require(script.Parent.Parent.Services.CommandLibraryService)
 local NotifService = require(script.Parent.Parent.Services.NotifService)
 
@@ -112,6 +113,7 @@ local function init(deps: {
 		return {}
 	end
 
+	MobileScaleService.applyAdminHubLayout(gui)
 	local ui = AdminHubUI.new(gui)
 	local selectedPlayer: PlayerEntry? = nil
 	local donateMode = "test"

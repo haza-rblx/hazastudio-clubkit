@@ -821,11 +821,12 @@ function OverheadDomain.buildPayload(
 	local showCoupleName = stored.showCoupleName ~= false
 	local publicLayerVisible = sanitizeBoolMap(stored.publicOverheadLayerVisible, DEFAULT_PUBLIC_LAYER_VISIBLE)
 	local publicBadgeVisible = sanitizeBoolMap(stored.publicOverheadBadgeVisible, DEFAULT_PUBLIC_BADGE_VISIBLE)
-	local resolvedRelationshipMode = if relationshipMode == "Fun"
-		then "Fun"
-		elseif relationshipMode == "Single" then "Single"
-		elseif relationshipMode == "Taken" and isCoupled then "Taken"
-		else if isCoupled then "Taken" else "Single"
+	-- Coupled always wins: Single/Fun must not hide partner title / CoupleName row.
+	-- Profile Taken without an active couple falls back to Single (legacy "Taken" alone).
+	local resolvedRelationshipMode: ProfileRelationshipMode = if isCoupled
+		then "Taken"
+		elseif relationshipMode == "Fun" then "Fun"
+		else "Single"
 
 	local resolvedLevel = if Config.FeatureFlags.LevelSystemEnabled == true
 		then OverheadDomain.normalizeLevel(stored.level)

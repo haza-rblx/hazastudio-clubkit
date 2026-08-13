@@ -2,6 +2,10 @@
 -- PATH: ServerScriptService/.../Server/Services/MusicCatalogSeeder.luau
 -- Additive merge of buyer MusicCatalog ModuleScript → MusicRepository (DataStore).
 -- Does not overwrite existing tracks (Manage edits stick). Skips tombstoned fingerprints.
+--
+-- Supports two catalog shapes (both can be used together):
+--   1) Grouped (preferred): playlists = { { name = "Chill", tracks = { ... } } }
+--   2) Flat (legacy):      tracks = { { name = "...", playlistName = "Chill", parts = {...} } }
 
 local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -11,6 +15,13 @@ local MusicDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.M
 
 type TrackInfo = MusicDomain.TrackInfo
 type PlaylistInfo = MusicDomain.PlaylistInfo
+
+type SeedWorkItem = {
+	raw: { [string]: any },
+	indexLabel: string,
+	-- When set (grouped seed), used unless the track itself sets playlistId/playlistName.
+	groupPlaylistName: string?,
+}
 
 export type SeedSummary = {
 	added: number,
@@ -168,6 +179,54 @@ local function buildFingerprintSet(
 	return seen
 end
 
+--- Flatten grouped + legacy flat catalog entries into one work list.
+local function collectSeedWorkItems(catalog: { [string]: any }): ({ SeedWorkItem }, number)
+	local work: { SeedWorkItem } = {}
+	local malformedGroups = 0
+
+	local catalogPlaylists = catalog.playlists
+	if type(catalogPlaylists) == "table" then
+		for groupIndex, entry in ipairs(catalogPlaylists) do
+			if type(entry) ~= "table" then
+				malformedGroups += 1
+				continue
+			end
+			local groupName = if type(entry.name) == "string" then trim(entry.name) else ""
+			local nestedTracks = entry.tracks
+			if type(nestedTracks) == "table" then
+				for trackIndex, raw in ipairs(nestedTracks) do
+					if type(raw) == "table" then
+						table.insert(work, {
+							raw = raw,
+							indexLabel = string.format("playlists[%d].tracks[%d]", groupIndex, trackIndex),
+							groupPlaylistName = if groupName ~= "" then groupName else nil,
+						})
+					else
+						malformedGroups += 1
+					end
+				end
+			end
+		end
+	end
+
+	local flatTracks = catalog.tracks
+	if type(flatTracks) == "table" then
+		for trackIndex, raw in ipairs(flatTracks) do
+			if type(raw) == "table" then
+				table.insert(work, {
+					raw = raw,
+					indexLabel = string.format("tracks[%d]", trackIndex),
+					groupPlaylistName = nil,
+				})
+			else
+				malformedGroups += 1
+			end
+		end
+	end
+
+	return work, malformedGroups
+end
+
 function MusicCatalogSeeder.merge(deps: {
 	repo: any,
 	config: any?,
@@ -221,11 +280,27 @@ function MusicCatalogSeeder.merge(deps: {
 		return summary
 	end
 
-	local tracksSource = catalog.tracks
-	if type(tracksSource) ~= "table" then
-		summary.skippedReason = "no_tracks"
-		info("MusicCatalogSeed skipped (tracks not an array)")
-		return summary
+	local workItems, malformed = collectSeedWorkItems(catalog)
+	if malformed > 0 then
+		summary.errors += malformed
+		warn("MusicCatalogSeed skipped malformed entries", { count = malformed })
+	end
+	if #workItems == 0 then
+		-- Still allow playlist-only ensure (empty groups / name-only playlists).
+		local hasPlaylistNames = false
+		if type(catalog.playlists) == "table" then
+			for _, entry in ipairs(catalog.playlists) do
+				if type(entry) == "table" and type(entry.name) == "string" and trim(entry.name) ~= "" then
+					hasPlaylistNames = true
+					break
+				end
+			end
+		end
+		if not hasPlaylistNames then
+			summary.skippedReason = "no_tracks"
+			info("MusicCatalogSeed skipped (no grouped or flat tracks)")
+			return summary
+		end
 	end
 
 	local playlistsResult = repo:getPlaylists()
@@ -253,10 +328,9 @@ function MusicCatalogSeeder.merge(deps: {
 	local newPlaylists: { PlaylistInfo } = {}
 	local newTracks: { TrackInfo } = {}
 	local appendToExisting: { [string]: { string } } = {}
-	-- Playlists created in this pass (id → mutable trackIds list used before bulkSeed)
 	local pendingPlaylists: { [string]: PlaylistInfo } = {}
 
-	local function ensurePlaylist(name: string): string?
+	local function ensurePlaylist(name: string, visibility: string?): string?
 		local key = string.lower(name)
 		local existingId = byName[key]
 		if existingId then
@@ -268,10 +342,11 @@ function MusicCatalogSeeder.merge(deps: {
 			end
 		end
 		local id = HttpService:GenerateGUID(false)
+		local vis = if type(visibility) == "string" and trim(visibility) ~= "" then trim(visibility) else "public"
 		local playlist = MusicDomain.buildPlaylist({
 			id = id,
 			name = name,
-			visibility = "public",
+			visibility = vis,
 			trackIds = {},
 		})
 		pendingPlaylists[id] = playlist
@@ -281,39 +356,37 @@ function MusicCatalogSeeder.merge(deps: {
 		return id
 	end
 
-	-- Ensure optional catalog.playlists exist first
+	-- Ensure all named playlists exist first (grouped shells + legacy name-only entries).
 	local catalogPlaylists = catalog.playlists
 	if type(catalogPlaylists) == "table" then
 		for _, entry in ipairs(catalogPlaylists) do
 			if type(entry) == "table" and type(entry.name) == "string" and trim(entry.name) ~= "" then
-				ensurePlaylist(trim(entry.name))
+				local vis = if type(entry.visibility) == "string" then entry.visibility else nil
+				ensurePlaylist(trim(entry.name), vis)
 			end
 		end
 	end
 
-	for index, raw in ipairs(tracksSource) do
-		if type(raw) ~= "table" then
-			summary.errors += 1
-			warn("MusicCatalogSeed track skipped (not a table)", { index = index })
-			continue
-		end
+	for _, item in ipairs(workItems) do
+		local raw = item.raw
+		local indexLabel = item.indexLabel
 
 		local name = if type(raw.name) == "string" then trim(raw.name) else ""
 		local creatorRaw = raw.creator or raw.artist or raw.author or "Unknown"
 		local creator = trim(tostring(creatorRaw))
 		if name == "" or creator == "" then
 			summary.errors += 1
-			warn("MusicCatalogSeed track skipped (name/creator)", { index = index })
+			warn("MusicCatalogSeed track skipped (name/creator)", { index = indexLabel })
 			continue
 		end
 
 		local parts, truncated = collectParts(raw, maxParts)
 		if truncated then
-			warn("MusicCatalogSeed truncated parts", { index = index, name = name, max = maxParts })
+			warn("MusicCatalogSeed truncated parts", { index = indexLabel, name = name, max = maxParts })
 		end
 		if #parts < 1 then
 			summary.errors += 1
-			warn("MusicCatalogSeed track skipped (no valid parts)", { index = index, name = name })
+			warn("MusicCatalogSeed track skipped (no valid parts)", { index = indexLabel, name = name })
 			continue
 		end
 
@@ -331,7 +404,7 @@ function MusicCatalogSeeder.merge(deps: {
 			else
 				summary.errors += 1
 				warn("MusicCatalogSeed track skipped (playlistId not found)", {
-					index = index,
+					index = indexLabel,
 					name = name,
 					playlistId = wantId,
 				})
@@ -339,6 +412,12 @@ function MusicCatalogSeeder.merge(deps: {
 			end
 		elseif type(raw.playlistName) == "string" and trim(raw.playlistName) ~= "" then
 			playlistId = ensurePlaylist(trim(raw.playlistName))
+			if not playlistId then
+				summary.errors += 1
+				continue
+			end
+		elseif type(item.groupPlaylistName) == "string" and item.groupPlaylistName ~= "" then
+			playlistId = ensurePlaylist(item.groupPlaylistName)
 			if not playlistId then
 				summary.errors += 1
 				continue
@@ -374,7 +453,7 @@ function MusicCatalogSeeder.merge(deps: {
 		local okValidate, validateErr = MusicDomain.validateTrack(track)
 		if not okValidate then
 			summary.errors += 1
-			warn("MusicCatalogSeed track invalid", { index = index, name = name, error = validateErr })
+			warn("MusicCatalogSeed track invalid", { index = indexLabel, name = name, error = validateErr })
 			continue
 		end
 

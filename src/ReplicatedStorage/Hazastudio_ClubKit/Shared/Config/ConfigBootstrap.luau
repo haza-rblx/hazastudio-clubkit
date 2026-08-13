@@ -163,6 +163,10 @@ function ConfigBootstrap.apply(config: any)
 		config.Branding = config.Branding or {}
 		config.Branding.LOGO_IMAGE = branding.LogoImage
 	end
+	if type(branding.DiscordInvite) == "string" then
+		config.Branding = config.Branding or {}
+		config.Branding.DISCORD_INVITE = branding.DiscordInvite
+	end
 	if type(config.Branding) == "table" and type(config.Branding.DEFAULT_LOGO_IMAGE) ~= "string" then
 		config.Branding.DEFAULT_LOGO_IMAGE = "rbxassetid://79426970537296"
 	end

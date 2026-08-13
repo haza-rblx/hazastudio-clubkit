@@ -8,25 +8,44 @@
 -- Toggle master switch: ClubKitConfig.Features.MusicCatalogSeed
 -- Local pause (keep data, skip merge): enabled = false below
 --
--- Default playlist for tracks without playlistName / playlistId: "Legacy"
--- (auto-created if missing). Override per-track with playlistName or playlistId.
+-- PREFERRED — group tracks under each playlist (no playlistName per line):
+--   playlists = {
+--     { name = "Chill", tracks = {
+--       { name = "Song A", creator = "Artist", parts = { "123" } },
+--     }},
+--   }
 --
--- Track rows: keep EACH TRACK ON ONE LINE for easy paste of 200+.
--- Multi-part: put up to 9 asset IDs in parts = { "id1", "id2", ... }.
+-- LEGACY — flat list still works (default playlist "Legacy" if no playlistName):
+--   tracks = {
+--     { name = "Song B", creator = "Artist", playlistName = "Chill", parts = { "456" } },
+--   }
+--
+-- Both shapes can be used together. Multi-part: up to 9 IDs in parts = { ... }.
 -- Asset IDs: raw digits, number, or "rbxassetid://..." (normalized to digits).
 
 return {
 	enabled = true,
 
-	-- Optional playlists to ensure exist before tracks (besides default "Legacy").
-	-- playlists = {
-	-- 	{ name = "Chill", visibility = "public" },
-	-- },
+	playlists = {
+		-- Example grouped seed (delete / replace with your library):
+		-- {
+		-- 	name = "Chill",
+		-- 	visibility = "public",
+		-- 	tracks = {
+		-- 		{ name = "Song A", creator = "Artist", parts = { "1234567890" } },
+		-- 		{ name = "Song B", creator = "Artist", parts = { "1111111111", "2222222222" }, playbackSpeed = 0.85 },
+		-- 	},
+		-- },
+		-- {
+		-- 	name = "HIPHOP & RNB",
+		-- 	tracks = {
+		-- 		{ name = "Song C", creator = "Artist", parts = { "4444444444" } },
+		-- 	},
+		-- },
+	},
 
+	-- Optional flat list (legacy). Tracks without playlistName go to "Legacy".
 	tracks = {
-		-- Examples (delete / replace with your library):
-		-- { name = "Song A", creator = "Artist", parts = { "1234567890" } },
-		-- { name = "Song B", creator = "Artist", parts = { "1111111111", "2222222222", "3333333333" }, playbackSpeed = 0.85 },
-		-- { name = "Song C", creator = "Artist", playlistName = "Chill", parts = { "4444444444" } },
+		-- { name = "Song D", creator = "Artist", playlistName = "Chill", parts = { "5555555555" } },
 	},
 }

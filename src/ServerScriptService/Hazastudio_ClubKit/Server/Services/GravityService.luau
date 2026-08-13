@@ -3,6 +3,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Result = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Result)
@@ -21,6 +22,7 @@ type SavedHumanoidState = {
 
 type ActiveGravityState = {
 	speed: number,
+	dropIntensity: number,
 	savedHumanoid: SavedHumanoidState?,
 	linearVelocity: LinearVelocity?,
 	attachment: Attachment?,
@@ -86,8 +88,22 @@ local function createGravityService(deps: {
 		local clamped = math.clamp(intensity, minSpeed, maxSpeed)
 		local span = math.max(maxSpeed - minSpeed, 1)
 		local t = (clamped - minSpeed) / span
-		-- More intensity → harder downward kick (more negative).
+		-- More intensity → harder downward (more negative).
 		return atMin + t * (atMax - atMin)
+	end
+
+	local function resolveDropIntensity(restoreIntensity: number?, fallback: number): number
+		local intensity = if type(restoreIntensity) == "number" and restoreIntensity > 0
+			then restoreIntensity
+			else fallback
+		if intensity <= 0 then
+			intensity = tonumber(gravityConfig.DEFAULT_SPEED) or 3
+		end
+		return math.clamp(
+			math.floor(intensity + 0.5),
+			tonumber(gravityConfig.MIN_SPEED) or 1,
+			tonumber(gravityConfig.MAX_SPEED) or 10
+		)
 	end
 
 	local function stopFallTracks(humanoid: Humanoid): ()
@@ -133,37 +149,199 @@ local function createGravityService(deps: {
 		state.savedHumanoid = nil
 	end
 
-	local function disableUngravity(player: Player, silent: boolean?, restoreIntensity: number?): Result<nil>
-		local state = activeStates[player.UserId]
-		if state == nil or state.speed <= 0 then
-			return Result.Ok(nil)
+	local function getFeetClearance(player: Player, humanoid: Humanoid, hrp: BasePart): (number?, number?)
+		local character = player.Character
+		if character == nil then
+			return nil, nil
+		end
+		local hip = humanoid.HipHeight
+		if hip <= 0 then
+			hip = 2
+		end
+		local softBrake = tonumber(gravityConfig.RESTORE_SOFT_BRAKE_HEIGHT) or 10
+		local probe = math.max(hip + softBrake + 6, 16)
+		local params = RaycastParams.new()
+		params.FilterType = Enum.RaycastFilterType.Exclude
+		params.FilterDescendantsInstances = { character }
+		params.IgnoreWater = true
+		local hit = Workspace:Raycast(hrp.Position, Vector3.new(0, -probe, 0), params)
+		if hit == nil then
+			return nil, nil
+		end
+		-- Positive = feet still above ground; 0 = standing height; negative = sunk.
+		local clearance = (hrp.Position.Y - hit.Position.Y) - hip
+		return clearance, hit.Position.Y
+	end
+
+	local function finishDrop(player: Player, state: ActiveGravityState): ()
+		local humanoid = getHumanoid(player)
+		local hrp = getRootPart(player)
+		local groundY: number? = nil
+		if humanoid and hrp then
+			local _, gy = getFeetClearance(player, humanoid, hrp)
+			groundY = gy
 		end
 
-		local intensityBefore = state.speed
 		clearPhysics(state)
 		restoreHumanoid(player, state)
 		state.speed = 0
+		state.dropIntensity = 0
 
-		local humanoid = getHumanoid(player)
-		local hrp = getRootPart(player)
 		if hrp then
-			local velocity = hrp.AssemblyLinearVelocity
 			local damp = math.clamp(tonumber(gravityConfig.RESTORE_HORIZONTAL_DAMP) or 0.35, 0, 1)
-			local intensity = if type(restoreIntensity) == "number" and restoreIntensity > 0
-				then restoreIntensity
-				else intensityBefore
-			if intensity <= 0 then
-				intensity = tonumber(gravityConfig.DEFAULT_SPEED) or 3
+			local velocity = hrp.AssemblyLinearVelocity
+			-- Kill vertical slam; keep a bit of horizontal damp only.
+			hrp.AssemblyLinearVelocity = Vector3.new(velocity.X * damp, 0, velocity.Z * damp)
+
+			if humanoid and groundY ~= nil then
+				local hip = humanoid.HipHeight
+				if hip <= 0 then
+					hip = 2
+				end
+				local standY = groundY + hip
+				local pos = hrp.Position
+				if math.abs(pos.Y - standY) < 4 then
+					hrp.CFrame = CFrame.new(pos.X, standY, pos.Z) * (hrp.CFrame - pos)
+				end
 			end
-			local dropY = speedToRestoreVelocity(intensity)
-			-- Snap out of float: damp horizontal drift + downward kick scaled by intensity.
-			hrp.AssemblyLinearVelocity = Vector3.new(velocity.X * damp, math.min(velocity.Y, dropY), velocity.Z * damp)
 		end
 		if humanoid then
 			pcall(function()
-				humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
+				humanoid:ChangeState(Enum.HumanoidStateType.Running)
 			end)
 		end
+	end
+
+	local function beginControlledDrop(player: Player, state: ActiveGravityState, intensity: number): ()
+		local humanoid = getHumanoid(player)
+		local hrp = getRootPart(player)
+		if humanoid == nil or hrp == nil then
+			finishDrop(player, state)
+			return
+		end
+
+		clearPhysics(state)
+		state.speed = 0
+		state.dropIntensity = intensity
+
+		if state.savedHumanoid == nil then
+			state.savedHumanoid = {
+				platformStand = humanoid.PlatformStand,
+				walkSpeed = humanoid.WalkSpeed,
+				jumpPower = humanoid.JumpPower,
+				autoRotate = humanoid.AutoRotate,
+			}
+		end
+
+		-- Same idle-down stance as float: PlatformStand + suppress fall tracks.
+		humanoid.PlatformStand = true
+		humanoid.AutoRotate = true
+		stopFallTracks(humanoid)
+
+		local damp = math.clamp(tonumber(gravityConfig.RESTORE_HORIZONTAL_DAMP) or 0.35, 0, 1)
+		local velocity = hrp.AssemblyLinearVelocity
+		hrp.AssemblyLinearVelocity = Vector3.new(velocity.X * damp, 0, velocity.Z * damp)
+
+		local dropY = speedToRestoreVelocity(intensity)
+
+		local attachment = Instance.new("Attachment")
+		attachment.Name = "ClubKitGravityAttachment"
+		attachment.Parent = hrp
+
+		local linearVelocity = Instance.new("LinearVelocity")
+		linearVelocity.Name = "ClubKitGravityDrop"
+		linearVelocity.Attachment0 = attachment
+		linearVelocity.RelativeTo = Enum.ActuatorRelativeTo.World
+		linearVelocity.VectorVelocity = Vector3.new(0, dropY, 0)
+		linearVelocity.MaxForce = math.huge
+		linearVelocity.Parent = hrp
+
+		state.attachment = attachment
+		state.linearVelocity = linearVelocity
+
+		state.stateConnection = humanoid.StateChanged:Connect(function(_, newState)
+			if newState == Enum.HumanoidStateType.Freefall or newState == Enum.HumanoidStateType.FallingDown then
+				stopFallTracks(humanoid)
+			end
+		end)
+
+		local startedAt = os.clock()
+		local maxSeconds = tonumber(gravityConfig.RESTORE_DROP_MAX_SECONDS) or 45
+		local softBrakeHeight = tonumber(gravityConfig.RESTORE_SOFT_BRAKE_HEIGHT) or 10
+		local landClearance = tonumber(gravityConfig.RESTORE_LAND_CLEARANCE) or 0.55
+
+		state.heartbeatConnection = RunService.Heartbeat:Connect(function()
+			if not player.Parent or player.Character ~= humanoid.Parent then
+				return
+			end
+			if state.dropIntensity <= 0 then
+				return
+			end
+
+			stopFallTracks(humanoid)
+
+			local currentHrp = getRootPart(player)
+			local currentHumanoid = getHumanoid(player)
+			if currentHrp == nil or currentHumanoid == nil then
+				finishDrop(player, state)
+				return
+			end
+
+			local fullSpeed = speedToRestoreVelocity(state.dropIntensity)
+			local y = fullSpeed
+			local clearance = getFeetClearance(player, currentHumanoid, currentHrp)
+
+			if clearance ~= nil then
+				if clearance <= landClearance then
+					finishDrop(player, state)
+					return
+				end
+				-- Ease out as feet approach the floor so we don't bury into the ground.
+				if clearance < softBrakeHeight then
+					local span = math.max(softBrakeHeight - landClearance, 0.01)
+					local t = math.clamp((clearance - landClearance) / span, 0, 1)
+					t = t * t * (3 - 2 * t) -- smoothstep
+					y = fullSpeed * t
+					-- Keep a gentle settle so we still reach landClearance.
+					local settle = tonumber(gravityConfig.RESTORE_SETTLE_SPEED) or -2.5
+					if y > settle then
+						y = settle
+					end
+				end
+			end
+
+			if state.linearVelocity and state.linearVelocity.Parent then
+				state.linearVelocity.VectorVelocity = Vector3.new(0, y, 0)
+			end
+
+			if (os.clock() - startedAt) >= maxSeconds then
+				finishDrop(player, state)
+			end
+		end)
+	end
+
+	local function disableUngravity(player: Player, silent: boolean?, restoreIntensity: number?): Result<nil>
+		local state = activeStates[player.UserId]
+		if state == nil then
+			return Result.Ok(nil)
+		end
+
+		-- Already dropping: retune intensity only (separate Gravity dial).
+		if state.dropIntensity > 0 then
+			local intensity = resolveDropIntensity(restoreIntensity, state.dropIntensity)
+			beginControlledDrop(player, state, intensity)
+			if not silent then
+				notify.player(player, gravityConfig.MSG_DISABLED, "SUCCESS")
+			end
+			return Result.Ok(nil)
+		end
+
+		if state.speed <= 0 then
+			return Result.Ok(nil)
+		end
+
+		local intensity = resolveDropIntensity(restoreIntensity, state.speed)
+		beginControlledDrop(player, state, intensity)
 
 		if not silent then
 			notify.player(player, gravityConfig.MSG_DISABLED, "SUCCESS")
@@ -188,11 +366,11 @@ local function createGravityService(deps: {
 
 		local state = activeStates[player.UserId]
 		if state == nil then
-			state = { speed = 0 }
+			state = { speed = 0, dropIntensity = 0 }
 			activeStates[player.UserId] = state
 		end
 
-		if state.speed <= 0 then
+		if state.speed <= 0 and state.dropIntensity <= 0 then
 			state.savedHumanoid = {
 				platformStand = humanoid.PlatformStand,
 				walkSpeed = humanoid.WalkSpeed,
@@ -203,6 +381,7 @@ local function createGravityService(deps: {
 
 		clearPhysics(state)
 		state.speed = speed
+		state.dropIntensity = 0
 
 		humanoid.PlatformStand = true
 		humanoid.AutoRotate = true
@@ -286,14 +465,9 @@ local function createGravityService(deps: {
 		end
 
 		if speed <= 0 then
-			local intensity = options and options.restoreIntensity
-			if type(intensity) ~= "number" or intensity <= 0 then
-				intensity = if serverModeSpeed > 0 then serverModeSpeed else (tonumber(gravityConfig.DEFAULT_SPEED) or 3)
-			end
-			intensity = math.clamp(
-				math.floor(intensity + 0.5),
-				tonumber(gravityConfig.MIN_SPEED) or 1,
-				tonumber(gravityConfig.MAX_SPEED) or 10
+			local intensity = resolveDropIntensity(
+				options and options.restoreIntensity,
+				if serverModeSpeed > 0 then serverModeSpeed else (tonumber(gravityConfig.DEFAULT_SPEED) or 3)
 			)
 			serverModeSpeed = 0
 			for _, player in ipairs(Players:GetPlayers()) do
@@ -368,6 +542,7 @@ local function createGravityService(deps: {
 		local state = activeStates[player.UserId]
 		if state then
 			state.speed = 0
+			state.dropIntensity = 0
 			state.savedHumanoid = nil
 			clearPhysics(state)
 		end

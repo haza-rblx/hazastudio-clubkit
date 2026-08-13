@@ -1060,12 +1060,12 @@ local function buildToolsPage(ctx, page: Frame)
 		parent = btnRow,
 		size = UDim2.new(0.5, -4, 1, 0),
 		order = 2,
-		onClick = function()
+		onClick = function(btn: TextButton)
 			if carryBusy then
 				return
 			end
 			carryBusy = true
-			uploadBtn.Text = "Working…"
+			btn.Text = "Working…"
 			task.spawn(function()
 				local result = CarryUploadCore.planUploads()
 				carryStatus.Text = result.sourceLabel
@@ -1079,7 +1079,7 @@ local function buildToolsPage(ctx, page: Frame)
 					carryLogLine("Invalid Group ID.", Theme.colors.error)
 					ctx.toast("Invalid Group ID")
 					carryBusy = false
-					uploadBtn.Text = "Upload + patch"
+					btn.Text = "Upload + patch"
 					return
 				end
 
@@ -1106,7 +1106,7 @@ local function buildToolsPage(ctx, page: Frame)
 				end
 
 				carryBusy = false
-				uploadBtn.Text = "Upload + patch"
+				btn.Text = "Upload + patch"
 			end)
 		end,
 	})

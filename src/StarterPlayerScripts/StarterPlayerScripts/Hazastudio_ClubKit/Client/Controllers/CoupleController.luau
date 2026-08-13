@@ -8,6 +8,7 @@ local TweenService = game:GetService("TweenService")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
+local ChatTagStore = require(script.Parent.Parent.Services.ChatTagStore)
 local log = Logger.new("Client.CoupleController")
 
 local _connections: { RBXScriptConnection } = {}
@@ -22,6 +23,22 @@ local function destroy()
 		conn:Disconnect()
 	end
 	table.clear(_connections)
+end
+
+local function coupleTagText(partnerDisplayName: string): string
+	local emoji = tostring(Config.Chat.COUPLE_TAG_EMOJI or "💕")
+	return emoji .. " " .. partnerDisplayName
+end
+
+local function applyLocalCoupleChatTag(userId: number?, partnerDisplayName: string?)
+	if type(userId) ~= "number" then
+		return
+	end
+	if type(partnerDisplayName) == "string" and partnerDisplayName ~= "" then
+		ChatTagStore.setCoupleTag(userId, coupleTagText(partnerDisplayName))
+	else
+		ChatTagStore.setCoupleTag(userId, nil)
+	end
 end
 
 local localPlayer = Players.LocalPlayer
@@ -783,12 +800,16 @@ local function init(deps: { icon: any? }?): ()
 	-- Breakup
 	-- ============================================================
 	breakupBtn.Activated:Connect(function()
+		local previousPartnerId = partnerId
 		RemoteBreakup:FireServer({
 			requestId = HttpService:GenerateGUID(false),
 		})
 		isCoupled = false
 		partnerName = ""
 		partnerId = nil
+		-- Optimistic chat-tag clear (server also publishes ChatTagSync).
+		applyLocalCoupleChatTag(localPlayer.UserId, nil)
+		applyLocalCoupleChatTag(previousPartnerId, nil)
 		hideNotif()
 		showPanel(false)
 	end)
@@ -822,9 +843,12 @@ local function init(deps: { icon: any? }?): ()
 		end
 		hideNotif()
 		if data.isBreakup == true then
+			local otherId = tonumber(data.partnerId)
 			isCoupled = false
 			partnerName = ""
 			partnerId = nil
+			applyLocalCoupleChatTag(localPlayer.UserId, nil)
+			applyLocalCoupleChatTag(otherId, nil)
 			return
 		end
 		if data.accepted == true then
@@ -833,6 +857,13 @@ local function init(deps: { icon: any? }?): ()
 			partnerId = type(data.partnerId) == "number" and data.partnerId or nil
 			currentCoupleLbl.Text = "Your current couple: " .. partnerName
 			refreshPartnerPhoto()
+			if partnerName ~= "" then
+				applyLocalCoupleChatTag(localPlayer.UserId, partnerName)
+			end
+			if partnerId and localPlayer.DisplayName ~= "" then
+				-- Partner's chat tag shows our name while server recovery refresh lands.
+				applyLocalCoupleChatTag(partnerId, localPlayer.DisplayName)
+			end
 		else
 			local rejectedName = tostring(data.partnerName)
 			if rejectedPartnerPfp and selectedUserId then

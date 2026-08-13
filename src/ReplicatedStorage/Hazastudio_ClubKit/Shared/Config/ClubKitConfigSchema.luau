@@ -36,6 +36,7 @@ ClubKitConfigSchema.defaults = {
 		WelcomeMessage = "Welcome to the club, %s",
 		Greeting = "Welcome to the club, %s",
 		LogoImage = "rbxassetid://79426970537296",
+		DiscordInvite = "",
 	},
 	Group = {
 		GroupId = 0,
