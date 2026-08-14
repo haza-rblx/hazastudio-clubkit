@@ -1,6 +1,6 @@
 --!strict
 -- PATH: ServerScriptService/Server/Services/MusicSession.lua
--- Per-zone playback session. Owns queue, state, and vote logic for one zone.
+-- Global playback session. Owns queue, state, and vote logic for the server.
 -- Shared resources (repo, rate limiters, rank) are injected by MusicService manager.
 
 local HttpService = game:GetService("HttpService")
@@ -15,14 +15,12 @@ type QueueEntry = MusicDomain.QueueEntry
 type PlaybackTiming = MusicDomain.PlaybackTiming
 
 local function createMusicSession(deps: {
-	zoneId: string,
 	repo: any,
 	logger: any,
 	config: any,
 	getMembers: () -> { Player },
 	isManageAllowed: (player: Player) -> boolean,
 })
-	local zoneId = deps.zoneId
 	local repo = deps.repo
 	local log = deps.logger
 	local config = deps.config
@@ -192,7 +190,7 @@ local function createMusicSession(deps: {
 		end
 		local result = repo:getTracks()
 		if not result.ok then
-			log:warn("Failed to fetch track for idle fallback", { error = result.error, zoneId = zoneId })
+			log:warn("Failed to fetch track for idle fallback", { error = result.error })
 			return nil
 		end
 		local preferredCandidates: { string } = {}
@@ -227,7 +225,7 @@ local function createMusicSession(deps: {
 		end
 		table.insert(autoBuffer, MusicDomain.newSystemQueueEntry(trackId, newEntryId(), SYSTEM_ASSIGNER_LABEL))
 		lastSystemTrackId = trackId
-		log:debug("System assigned idle track", { trackId = trackId, zoneId = zoneId })
+		log:debug("System assigned idle track", { trackId = trackId })
 		return true
 	end
 
@@ -311,7 +309,7 @@ local function createMusicSession(deps: {
 				return
 			end
 			if state.currentTrackId == trackId and state.isPlaying then
-				log:debug("Auto-advance at expected end", { trackId = trackId, zoneId = zoneId })
+				log:debug("Auto-advance at expected end", { trackId = trackId })
 				session:advanceQueue()
 			end
 		end)
@@ -386,7 +384,6 @@ local function createMusicSession(deps: {
 		log:warn("Unresolvable current track, advancing", {
 			trackId = trackId,
 			source = source,
-			zoneId = zoneId,
 		})
 		state.currentTrackId = nil
 		state.currentEntry = nil
@@ -558,7 +555,7 @@ local function createMusicSession(deps: {
 		resetTiming()
 		clearPlaybackFinishVotes()
 		cancelAutoAdvance()
-		log:info("Queue habis - playback berhenti", { zoneId = zoneId })
+		log:info("Queue habis - playback berhenti")
 		broadcastQueueUpdated()
 		syncStateToAllMembers()
 	end
@@ -637,7 +634,6 @@ local function createMusicSession(deps: {
 				skipVotes = skipVotes,
 				totalVotes = totalVotes,
 				requiredVotes = requiredVotes,
-				zoneId = zoneId,
 			})
 			session:advanceQueue("vote_skip")
 		end
@@ -683,7 +679,7 @@ local function createMusicSession(deps: {
 				return
 			end
 			clearVoteSession("failed")
-			log:debug("Vote skip expired", { zoneId = zoneId })
+			log:debug("Vote skip expired")
 		end)
 	end
 
@@ -750,7 +746,7 @@ local function createMusicSession(deps: {
 				state.isPlaying = false
 				resetTiming()
 				state.voteSkipVoters = {}
-				log:info("Queue habis — playback berhenti", { zoneId = zoneId })
+				log:info("Queue habis — playback berhenti")
 				broadcastQueueUpdated()
 				syncStateToAllMembers()
 				return
@@ -761,7 +757,6 @@ local function createMusicSession(deps: {
 				skipped += 1
 				log:warn("Skipping track with invalid audio asset metadata", {
 					trackId = nextEntry.trackId,
-					zoneId = zoneId,
 					usePreload = usePreloadValidate,
 				})
 				continue
@@ -773,7 +768,6 @@ local function createMusicSession(deps: {
 				entryId = nextEntry.entryId,
 				queueSize = #state.queue,
 				autoBufferSize = #autoBuffer,
-				zoneId = zoneId,
 			})
 			if shouldMaintainAutoBuffer() then
 				ensureAutoBufferDepth(getAutoQueueDepth())
@@ -783,7 +777,7 @@ local function createMusicSession(deps: {
 			return
 		end
 
-		log:warn("advanceQueue stopped after max asset skips", { zoneId = zoneId, skipped = skipped })
+		log:warn("advanceQueue stopped after max asset skips", { skipped = skipped })
 		state.isPlaying = false
 		resetTiming()
 		cancelAutoAdvance()
@@ -901,7 +895,6 @@ local function createMusicSession(deps: {
 			and deletedLookup[state.currentTrackId :: string] == true
 		if prunedQueueCount > 0 or prunedBufferCount > 0 or currentTrackDeleted then
 			log:info("Pruned deleted tracks from session", {
-				zoneId = zoneId,
 				prunedQueueCount = prunedQueueCount,
 				prunedBufferCount = prunedBufferCount,
 				currentTrackDeleted = currentTrackDeleted,
@@ -962,7 +955,6 @@ local function createMusicSession(deps: {
 			reportedWallDuration = wallDuration,
 			previousExpectedEnd = state.expectedEndServerTime,
 			nextExpectedEnd = newExpectedEnd,
-			zoneId = zoneId,
 		})
 		return applyTimingUpdate(newExpectedEnd, trackId)
 	end
@@ -1005,7 +997,6 @@ local function createMusicSession(deps: {
 				trackId = trackId,
 				finishCount = finishCount,
 				memberCount = memberCount,
-				zoneId = zoneId,
 			})
 			session:advanceQueue()
 			return true, "advanced"
@@ -1062,7 +1053,7 @@ local function createMusicSession(deps: {
 
 		table.insert(state.queue, entry)
 		broadcastQueueUpdated()
-		log:debug("Track requested", { player = player.Name, trackId = trackId, zoneId = zoneId })
+		log:debug("Track requested", { player = player.Name, trackId = trackId })
 		return true, "", {
 			track = track,
 			outcome = "queued",
@@ -1120,7 +1111,6 @@ local function createMusicSession(deps: {
 			rejectVotes = countMapEntries(voteSession.rejectVotes),
 			requiredVotes = getRequiredVoteCount(voteSession.totalVotes),
 			totalVotes = voteSession.totalVotes,
-			zoneId = zoneId,
 		})
 		broadcastActiveVoteState("updated")
 		maybeResolveVoteSession()
@@ -1146,7 +1136,6 @@ local function createMusicSession(deps: {
 		log:debug("Client track failure recorded (no global skip)", {
 			trackId = trackId,
 			reason = failureReason,
-			zoneId = zoneId,
 		})
 		return true, "recorded"
 	end
@@ -1158,7 +1147,7 @@ local function createMusicSession(deps: {
 		end
 		state.isDjMode = nextValue
 		state.djOwnerUserId = if nextValue and player then player.UserId else nil
-		log:info("DJ mode updated", { enabled = nextValue, djOwnerUserId = state.djOwnerUserId, zoneId = zoneId })
+		log:info("DJ mode updated", { enabled = nextValue, djOwnerUserId = state.djOwnerUserId })
 		if nextValue then
 			clearAutoBuffer()
 			if isSystemEntry(state.currentEntry) then
@@ -1253,7 +1242,7 @@ local function createMusicSession(deps: {
 		_onQueueUpdated = nil
 		_onStateSync = nil
 		_onVoteState = nil
-		log:debug("MusicSession destroyed", { zoneId = zoneId })
+		log:debug("MusicSession destroyed")
 	end
 
 	return session

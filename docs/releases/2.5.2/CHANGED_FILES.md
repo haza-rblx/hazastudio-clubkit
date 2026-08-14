@@ -26,6 +26,9 @@
 | `src/.../Client/Services/MobileScaleService.luau` | AdminHub / JoinCommun layout |
 | `src/.../Client/Controllers/AdminHubController.luau` | Apply hub layout on init |
 | `src/.../Client/Controllers/JoinCommunityPromptController.luau` | Apply join layout on open |
+| `src/.../Client/Controllers/MusicPlayerController.luau` | `_loadLibraryData` — playlists then tracks + 1-frame wait |
+| `src/.../Client/UI/MusicPlayerUIBinder.luau` | Virtual list rebind when window height was 0 |
+| `src/.../Client/UI/MusicPlayerUIBinderPart2.luau` | TrackLength under TrackDetails; clear cover placeholders |
 
 ## Buyer-owned — review manually, do not replace
 | Path | Action |
@@ -50,4 +53,7 @@
 | `VERSION` | `2.5.2` |
 | `docs/releases/2.5.2/` | This folder |
 | `docs/roles-guide.html` | New Roles & Ranks slide guide |
-| `docs/index.html` / `docs/setup.html` / locales | Link to roles guide |
+| `docs/index.html` / `docs/updates.html` / locales | Hub version → 2.5.2 + changelog entry |
+| `docs/setup.html` / locales | Branding step includes `DiscordInvite` |
+| `docs/delivery/TEMPLATE_PLACE.md` / `PLUGIN.md` | Delivery bundle paths for v2.5.2 |
+| `deliver/README.md` | Current delivery file list |

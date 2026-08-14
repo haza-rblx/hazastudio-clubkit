@@ -39,6 +39,13 @@ On release, agents can use `git diff` / `git log` to generate `CHANGED_FILES.md`
 | [`CLUB_KIT_SETUP.md`](CLUB_KIT_SETUP.md) | Buyer setup (Markdown) |
 | [`docs/index.html`](docs/index.html) | **Central docs hub** (Home → Setup / Updates) |
 | [`docs/releases/`](docs/releases/) | Per-version upgrade guides |
+| [`CONTEXT.md`](CONTEXT.md) | Domain glossary — use its vocabulary in code names and conversation |
+| [`docs/adr/`](docs/adr/) | Architecture Decision Records (0001 buyer config, 0002 Init bags) |
+
+## Domain docs & agent skills
+
+- Read `CONTEXT.md` when a term is unfamiliar; update it (and offer an ADR) when a decision crystallizes — don't let jargon drift.
+- Project skills live in `.mimocode/skills/`: `grill-with-docs` (plan before non-trivial changes), `diagnosing-bugs` (feedback-loop-first debugging), `code-review` (two-axis gate before release), `tdd-luau` (red-green for pure Luau logic).
 
 ---
 

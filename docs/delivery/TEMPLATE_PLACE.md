@@ -1,16 +1,18 @@
-# Template place delivery — full pack + SyncBhms add-on
+﻿# Template place delivery — full pack + SyncBhms add-on
 
-Ship **two Workspace models** for a standard Club Kit template delivery (no RBXM export required):
+Ship **two Workspace models** (or their `.rbxm` exports) for a standard Club Kit template delivery:
 
-| Model (Workspace) | Contents |
-|-------------------|----------|
-| `HazastudioClubKit_Package` | Full place kit (everything per service, **no BHMS**) |
-| `HazastudioClubKit_SyncBhmsAddon` | **Optional** — legacy SyncBhms / BHMS dance place-pack only |
+| Model / file | Contents |
+|--------------|----------|
+| `HazastudioClubKit_Package` → `deliver/HazastudioClubKit_Package_v2.5.3.rbxm` | Full place kit (everything per service, **no BHMS**) |
+| `HazastudioClubKit_SyncBhmsAddon` → `deliver/HazastudioClubKit_SyncBhmsAddon_v2.5.3.rbxm` | **Optional** — legacy SyncBhms / BHMS dance place-pack only |
+
+Also ship the plugin separately: `deliver/HazastudioClubKit_Plugin_v2.5.3.rbxm` (see [`PLUGIN.md`](PLUGIN.md)).
 
 **Not included** in the main template (by design):
 
 - SyncBhms instances (see add-on model above)
-- Buyer `Secrets` (never ship production secrets)
+- Buyer `Secrets` (never ship production secrets — packager blanks them)
 
 Group / roles / shop IDs live in the main pack `ClubKitConfig` (blank template or filled before publish).
 
@@ -21,7 +23,7 @@ Group / roles / shop IDs live in the main pack `ClubKitConfig` (blank template o
 **Do not pack from the live dev place directly.**
 
 1. Open your dev kit place (e.g. `THE BASIC TEST 1.3`).
-2. **File → Save to File As…** (or **Publish to Roblox As…**) → name e.g. `ClubKit Template v2.4.75`.
+2. **File → Save to File As…** (or **Publish to Roblox As…**) → name e.g. `ClubKit Template v2.5.3`.
 3. All delivery work happens in the **duplicate** only.
 
 ---
@@ -41,17 +43,18 @@ Optional: blank `Group.GroupId = 0` / `OwnerUserId = 0` in config when shipping 
 
 ## Step 2 — Update engine & plugin
 
-1. Plugin → **Update plugin** → **Update Engine** → latest tag (e.g. `v2.4.75`).
-2. Rebuild plugin if needed: `.\tools\ClubKitPackagerPlugin\build-plugin-rbxm.ps1`
+1. Plugin → **Update plugin** → **Update Engine** → latest tag (e.g. `v2.5.3`).
+2. Rebuild plugin if needed: `.\tools\ClubKitPackagerPlugin\build-plugin-rbxm.ps1 -CopyToDeliver`
 3. Enable **Settings → Seller mode** → **Packager** tab.
 
 ---
 
 ## Step 3 — Create main template pack
 
-1. Packager → **Main template pack** → **Create package**.
+1. Packager → **Main template pack** → **Create package** (include blank config + blank secrets).
 2. Output: **`Workspace/HazastudioClubKit_Package`** (Model)
-3. Check **Output** for BHMS exclusions logged and no critical `missing` lines.
+3. Export RBXM → `deliver/HazastudioClubKit_Package_v2.5.3.rbxm`
+4. Check **Output** for BHMS exclusions logged and no critical `missing` lines.
 
 ### What the main pack includes
 
@@ -61,7 +64,7 @@ Optional: blank `Group.GroupId = 0` / `OwnerUserId = 0` in config when shipping 
 |---------|------|
 | `ReplicatedFirst` | All children |
 | `ReplicatedStorage` | All children (except BHMS; Config = blank template if enabled) |
-| `ServerScriptService` | All children (except BHMS + Secrets) |
+| `ServerScriptService` | All children (except BHMS + live secrets blanked) |
 | `ServerStorage` | All children |
 | `StarterGui` | All kit UI (except `DanceGui`) |
 | `StarterPlayerScripts` | All scripts (except BHMS dance clients) |
@@ -76,7 +79,7 @@ Optional: blank `Group.GroupId = 0` / `OwnerUserId = 0` in config when shipping 
 
 1. Same duplicate place (must still have BHMS instances in live services).
 2. Packager → **SyncBhms add-on** → **Create SyncBhms add-on**.
-3. Output: **`Workspace/HazastudioClubKit_SyncBhmsAddon`** (Model) — includes **`Workspace/SyncBhms`** from `extras/place-packs/SyncBhms/SyncBhms.rbxm` when present in the place.
+3. Output: **`Workspace/HazastudioClubKit_SyncBhmsAddon`** → export `deliver/HazastudioClubKit_SyncBhmsAddon_v2.5.3.rbxm`
 
 Buyer install:
 
@@ -90,9 +93,9 @@ Guide: [`extras/place-packs/SyncBhms/README.md`](../../extras/place-packs/SyncBh
 
 ## Step 5 — Buyer install (main only)
 
-1. Copy **main template** model → Plugin → **Unpack**.
+1. Plugin → **Unpack RBXM…** → pick `HazastudioClubKit_Package_v2.5.3.rbxm`
 2. Fill `Secrets.luau` on the buyer universe.
-3. Edit `ClubKitConfig` (Group, shop IDs, donation URL).
+3. Edit `ClubKitConfig` (Group, shop IDs, donation URL, optional `Branding.DiscordInvite`).
 4. Enable **HttpService** → Publish → test.
 
 ---
@@ -103,3 +106,5 @@ Guide: [`extras/place-packs/SyncBhms/README.md`](../../extras/place-packs/SyncBh
 - [ ] Main pack: BHMS exclusions logged; no BHMS instances inside main model
 - [ ] SyncBhms add-on model contains bridges + DanceGui + SyncServer + **`Workspace/SyncBhms`** (full rbxm pack)
 - [ ] `LegacySyncBhms = false` on main-only install → Club Kit dance panel works
+- [ ] Music Library first open shows real tracks (not Studio placeholders)
+- [ ] KitVersion / `_ClubKitManifest.kitVersion` = `2.5.3`

@@ -51,7 +51,7 @@
     <div class="hub-hero">
       <div class="hub-kicker">
         <span data-i18n="updates.kicker">Catatan rilis</span>
-        <span class="version-pill" data-i18n="updates.version">Saat ini 2.4.75</span>
+        <span class="version-pill" data-i18n="updates.version">Saat ini 2.5.3</span>
       </div>
       <h1 class="hub-title" data-i18n="updates.title">Updates</h1>
       <p class="hub-lead" data-i18n-html="updates.lead">
@@ -88,7 +88,50 @@
 
     <div class="changelog-list">
 
-      <details class="changelog-item" id="v2-4-75" open>
+      <details class="changelog-item" id="v2-5-3" open>
+        <summary>
+          <span class="changelog-ver">2.5.3</span>
+          <span class="changelog-date">2026-08-14</span>
+          <span class="changelog-blurb" data-i18n="updates.v253.blurb">Music global-only — vestigial zone mode removed.</span>
+        </summary>
+        <div class="changelog-body">
+          <h4 data-i18n="updates.cat.removed">Removed</h4>
+          <ul>
+            <li data-i18n-html="updates.v253.r1"><strong>Zone-based music</strong> — single server-wide session; removed <code>Music.MODE</code>, <code>ZoneTrackerService</code>, <code>MusicZoneChanged</code>, client zone handlers. Buyer <code>ClubKitConfig</code> unaffected.</li>
+          </ul>
+          <p><a href="releases/2.5.3/UPGRADE.md" data-i18n="updates.upgradeGuide">Upgrade guide</a></p>
+        </div>
+      </details>
+
+      <details class="changelog-item" id="v2-5-2">
+        <summary>
+          <span class="changelog-ver">2.5.2</span>
+          <span class="changelog-date">2026-08-13</span>
+          <span class="changelog-blurb" data-i18n="updates.v252.blurb">Gravity, license/donations, couples, MusicCatalog, Discord invite, Music Library first-open, mobile Admin Hub.</span>
+        </summary>
+        <div class="changelog-body">
+          <h4 data-i18n="updates.cat.fixed">Fixed</h4>
+          <ul>
+            <li data-i18n-html="updates.v252.f1"><strong>Gravity</strong> — dial-scaled idle-down drop + soft landing (no floor bury).</li>
+            <li data-i18n-html="updates.v252.f2"><strong>License</strong> — verify timeout no longer disables cash donation polling (fail-open).</li>
+            <li data-i18n-html="updates.v252.f3"><strong>Couples</strong> — chat tag clears on breakup; partner title shows on accept (<code>Taken</code>).</li>
+            <li data-i18n-html="updates.v252.f4"><strong>Music Library</strong> — first open no longer sticks on Studio placeholders (<code>Playlist Name</code> / <code>05:26</code>).</li>
+          </ul>
+          <h4 data-i18n="updates.cat.changed">Changed</h4>
+          <ul>
+            <li data-i18n-html="updates.v252.c1"><strong>MusicCatalog</strong> — prefer <code>playlists = { { name, tracks = {...} } }</code> (flat list still works).</li>
+            <li data-i18n-html="updates.v252.c2"><strong>Top Menu Discord</strong> — set <code>Branding.DiscordInvite</code>; empty hides the chip.</li>
+            <li data-i18n-html="updates.v252.c3"><strong>Mobile</strong> — Admin Hub / JoinCommun phone UIScale.</li>
+          </ul>
+          <h4 data-i18n="updates.cat.added">Added</h4>
+          <ul>
+            <li data-i18n-html="updates.v252.a1"><strong>Roles guide</strong> — <a href="roles-guide.html">docs/roles-guide.html</a>.</li>
+          </ul>
+          <p><a href="releases/2.5.2/UPGRADE.md" data-i18n="updates.upgradeGuide">Upgrade guide</a></p>
+        </div>
+      </details>
+
+      <details class="changelog-item" id="v2-4-75">
         <summary>
           <span class="changelog-ver">2.4.75</span>
           <span class="changelog-date">2026-08-08</span>

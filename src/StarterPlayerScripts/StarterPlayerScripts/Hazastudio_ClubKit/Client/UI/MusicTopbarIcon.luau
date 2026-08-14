@@ -316,8 +316,7 @@ function MusicTopbarIcon.new(deps: Deps): MusicTopbarIcon
 	task.delay(0.5, cacheWidget)
 	task.delay(1, cacheWidget)
 
-	-- Start hidden; MusicPlayerController shows it after engine/panel boot
-	-- (global mode) or on zone enter (zone mode).
+	-- Start hidden; MusicPlayerController shows it after engine/panel boot.
 	self:hide()
 
 	return (self :: any) :: MusicTopbarIcon

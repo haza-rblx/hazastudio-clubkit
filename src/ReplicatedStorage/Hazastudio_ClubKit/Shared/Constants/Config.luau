@@ -2768,18 +2768,7 @@ Config.Music = {
 	-- MusicCatalog seed (ClubKitConfig.Features.MusicCatalogSeed)
 	CATALOG_DEFAULT_PLAYLIST_NAME = "Legacy",
 	CATALOG_SYNC_SOURCE = "music-catalog-seeder",
-	-- Mode: "global" (single server-wide session, every player hears the same
-	-- track) or "zone" (per-tagged-zone sessions, players only hear music
-	-- when inside a tagged BasePart). "global" recommended for club games,
-	-- "zone" for world games with multiple distinct areas.
-	MODE = "global",
-	-- Music zones (only used when MODE = "zone")
-	ZONE_TAG = "MusicZone",
-	ZONE_ID_ATTRIBUTE = "ZoneId",
-	ZONE_DISPLAY_NAME_ATTRIBUTE = "DisplayName",
-	ZONE_TICK_INTERVAL = 0.2,
-	DEFAULT_ZONE_DISPLAY_NAME = "Music Zone",
-	MSG_NOT_IN_ZONE = "You're not in a music zone yet. Step into one to start listening.",
+	-- Music is global: single server-wide session, every player hears the same track.
 	-- Ranks allowed to access Manage tab
 	-- Owner=255, CoOwner=254, Developer=200, Admin=100
 	-- Add DJ rank here when the role is created
@@ -2828,7 +2817,6 @@ Config.Music = {
 	REMOTE_MANAGE_PLAYLIST = "MusicManagePlaylist", -- C->S (admin only, RE)
 	REMOTE_MANAGE_TRACK = "MusicManageTrack", -- C->S (admin only, RE)
 	REMOTE_RESOLVE_REQUEST_ASSET = "MusicResolveRequestAsset", -- C->S (RE)
-	REMOTE_ZONE_CHANGED = "MusicZoneChanged", -- S->C
 	-- 30s: get_state / get_playlists / get_tracks yield through MusicRepository
 	-- (DataStore cache miss = ~500ms, BudgetGate defer up to 5s) plus per-track
 	-- thumbnail resolution. 10s tripped on cold boot.

@@ -13,6 +13,7 @@
 - **Gravity** — controlled idle-down drop scaled by dial + soft landing (no bury into floor)
 - **License** — verify timeout no longer disables cash donation polling
 - **Couples** — chat tag clears on breakup; partner title shows on accept (`Taken`)
+- **Music Library** — first open no longer sticks on Studio placeholders (`Playlist Name` / `05:26`)
 - **MusicCatalog** — grouped playlists (no per-line `playlistName`)
 - **Top Menu Discord** — `Branding.DiscordInvite` drives chip text + open browser
 - **Mobile** — Admin Hub / JoinCommun phone UIScale
@@ -34,5 +35,6 @@
 - [ ] Couple accept → partner title; breakup → chat tag clears for both
 - [ ] Top Menu Community shows Discord invite from config; click opens browser
 - [ ] MusicCatalog grouped seed merges without duplicating (additive)
+- [ ] Music Library first open shows real covers/durations (not `Playlist Name` / `05:26`)
 - [ ] Admin Hub / JoinCommun readable on phone layout
 - [ ] Plugin → Carry → Upload + patch (no Text nil error) after plugin update

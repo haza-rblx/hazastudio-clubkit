@@ -10,7 +10,6 @@ local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local HttpService = game:GetService("HttpService")
 local NotifService = require(script.Parent.Parent.Services.NotifService)
-local MobilePanelManager = require(script.Parent.Parent.Services.MobilePanelManager)
 local MusicAssetLoadService = require(script.Parent.Parent.Services.MusicAssetLoadService)
 local MusicAssetCache = require(script.Parent.Parent.Services.MusicAssetCache)
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -240,13 +239,11 @@ function MusicPlayerController.create(
 	self._managePlRE = nil :: RemoteEvent?
 	self._manageTrRE = nil :: RemoteEvent?
 	self._resolveRequestAssetRE = nil :: RemoteEvent?
-	self._zoneChangedRE = nil :: RemoteEvent?
 	self._connections = {} :: { RBXScriptConnection }
 	self._unsubscribers = {} :: { () -> () }
 	self._pendingMusicRequests = {} :: { [string]: any }
 	self._isPanelOpen = false
 	self._panelSessionId = 0
-	self._hasReceivedZoneEvent = false -- true after first _zoneChangedRE fire
 	self._playlistsLoadedAt = 0
 	self._playlistsCache = {} :: any
 	self._tracksCacheByPlaylist = {} :: { [string]: { loadedAt: number, data: any } }
@@ -1073,95 +1070,6 @@ function MusicPlayerController:_onTrackChanged(data: any)
 	-- Pass through startServerTime; _seekToElapsed computes elapsed fresh.
 	self:_seekToElapsed(track, startServerTime)
 	self:_schedulePrefetchFromStore(track)
-end
-
-function MusicPlayerController:_showNotInZoneNotification()
-	local message = tostring(
-		self._config.MSG_NOT_IN_ZONE or "You're not in a music zone yet. Step into one to start listening."
-	)
-	self:_showNotification({
-		message = message,
-		title = "Music",
-		description = message,
-		domain = "music",
-		dedupeKey = "music_not_in_zone",
-	}, "warning")
-end
-
-function MusicPlayerController:_onZoneChanged(zoneId: string?, displayName: string?)
-	local previousZoneId = self._store:get().activeZoneId
-	if previousZoneId == zoneId then
-		self._store:set({
-			activeZoneDisplayName = if displayName == nil then self._store.NONE else displayName,
-		})
-		return
-	end
-
-	self._log:info("Music zone changed", {
-		previousZoneId = tostring(previousZoneId),
-		zoneId = tostring(zoneId),
-		displayName = tostring(displayName),
-	})
-	local NONE = self._store.NONE
-	self._store:set({
-		activeZoneId = if zoneId == nil then NONE else zoneId,
-		activeZoneDisplayName = if displayName == nil then NONE else displayName,
-		currentTrack = NONE,
-		currentEntry = NONE,
-		startServerTime = 0,
-		expectedEndServerTime = 0,
-		playbackTiming = NONE,
-		isPlaying = false,
-		queue = {},
-	})
-	self:_stopAllSounds(self._trackFadeOutTime)
-	self._currentTrackId = nil
-	self._playbackStartKey = nil
-	self._partDurations = {}
-	self:_invalidateLibraryCache()
-
-	self._binder:updateTrackDisplay(nil)
-	self._binder:stopProgressTracking()
-	self._binder:renderQueue({})
-
-	if zoneId == nil then
-		-- Force-close panel synchronously, regardless of _isPanelOpen state.
-		-- Hide icon IMMEDIATELY (not via async subscriber) to guarantee removal.
-		-- IMPORTANT: Do NOT call binder:closePanel() here because
-		-- dismissCenterPanel sets mainWrapper.Visible=true for its animation,
-		-- causing a visible flicker. Instead, force-hide and cleanup directly.
-		MobilePanelManager.close("music")
-		self._isPanelOpen = false
-		self._panelSessionId += 1
-		self._store:set({ isOpen = false })
-		if self._refs and self._refs.mainWrapper then
-			self._refs.mainWrapper.Visible = false
-		end
-		-- Release binder resources without triggering dismiss animation.
-		if self._binder and type(self._binder.releaseListPools) == "function" then
-			self._binder:releaseListPools()
-		end
-		if self._topbarIcon then
-			if type(self._topbarIcon.hide) == "function" then
-				self._topbarIcon:hide()
-			end
-		end
-		return
-	end
-
-	-- Entering a zone: ensure icon is visible (respects DJ mode permission).
-	self:_setMusicIconVisible(self:_computeIconVisible())
-
-	if self._isPanelOpen and self._store:get().activeTab == "request" then
-		local panelSessionId = self._panelSessionId
-		local selectedPlaylistId = self._store:get().selectedPlaylistId
-		task.spawn(function()
-			self:_loadPlaylists(panelSessionId)
-		end)
-		task.spawn(function()
-			self:_loadTracks(selectedPlaylistId, true, panelSessionId)
-		end)
-	end
 end
 
 function MusicPlayerController:_computeIconVisible()
@@ -2347,7 +2255,6 @@ function MusicPlayerController:initEngine()
 	self._managePlRE = self:_waitMusicRemote(config.REMOTE_MANAGE_PLAYLIST)
 	self._manageTrRE = self:_waitMusicRemote(config.REMOTE_MANAGE_TRACK)
 	self._resolveRequestAssetRE = self:_waitMusicRemote(config.REMOTE_RESOLVE_REQUEST_ASSET)
-	-- Central server mode: no zone changed remote
 
 	if
 		not self._trackChangedRE
@@ -2390,8 +2297,6 @@ function MusicPlayerController:initEngine()
 	self:_connectRemoteEvent(self._timingUpdatedRE, function(data)
 		self:_onTimingUpdated(data)
 	end)
-
-	-- Central server mode: zone changed remote removed, no zone events
 
 	self:_connectRemoteEvent(self._queueUpdatedRE, function(data)
 		if type(data) == "table" then
@@ -2720,9 +2625,6 @@ function MusicPlayerController:initPanel()
 		end
 		self:_setMusicIconVisible(self:_computeIconVisible())
 	end))
-	self:_trackUnsubscriber(store:subscribe("activeZoneId", function(zoneId)
-		self:_setMusicIconVisible(self:_computeIconVisible())
-	end))
 	self:_trackUnsubscriber(store:subscribe("isManageAllowed", function()
 		self:_setMusicIconVisible(self:_computeIconVisible())
 	end))
@@ -2811,7 +2713,6 @@ function MusicPlayerController:_openPanel()
 	end
 	local binder = self._binder
 	local store = self._store
-	-- Central server mode: no zone check needed
 
 	self._isPanelOpen = true
 	self._panelSessionId += 1
@@ -2845,10 +2746,7 @@ function MusicPlayerController:_openPanel()
 		self:_renderRequestSnapshot()
 		local selectedPlaylistId = store:get().selectedPlaylistId
 		task.spawn(function()
-			self:_loadPlaylists(panelSessionId)
-		end)
-		task.spawn(function()
-			self:_loadTracks(selectedPlaylistId, false, panelSessionId)
+			self:_loadLibraryData(selectedPlaylistId, panelSessionId)
 		end)
 	end
 end
@@ -2877,10 +2775,7 @@ function MusicPlayerController:_onTabSelected(tab: string)
 		self:_renderRequestSnapshot()
 		local selectedPlaylistId = self._store:get().selectedPlaylistId
 		task.spawn(function()
-			self:_loadPlaylists(panelSessionId)
-		end)
-		task.spawn(function()
-			self:_loadTracks(selectedPlaylistId, false, panelSessionId)
+			self:_loadLibraryData(selectedPlaylistId, panelSessionId)
 		end)
 	elseif tab == "manage" then
 		self:_renderManageSnapshot()
@@ -2907,6 +2802,7 @@ function MusicPlayerController:_loadPlaylists(expectedSessionId: number?)
 		store:set({ playlists = result })
 		self._binder:renderPlaylists(result, store:get().searchQuery)
 		if store:get().activeTab == "request" then
+			-- Re-render tracks once playlists arrive so covers/duration bind correctly.
 			self._binder:renderTracks(store:get().tracks, store:get().searchQuery)
 		end
 	end
@@ -2920,7 +2816,38 @@ function MusicPlayerController:_loadTracks(playlistId: string?, forceRefresh: bo
 	if result and self:_isPanelSessionActive(expectedSessionId) then
 		local store = self._store
 		store:set({ tracks = result })
+		-- Prefer playlists already in store; if empty, wait for _loadPlaylists re-render.
 		self._binder:renderTracks(result, store:get().searchQuery)
+	end
+end
+
+-- Library tab: load playlists first, then tracks, so covers are not blank on first paint.
+function MusicPlayerController:_loadLibraryData(playlistId: string?, expectedSessionId: number?)
+	if not self:_isPanelSessionActive(expectedSessionId) then
+		return
+	end
+	local playlists = self:_fetchPlaylists(false)
+	if not self:_isPanelSessionActive(expectedSessionId) then
+		return
+	end
+	if playlists then
+		self._store:set({ playlists = playlists })
+		self._binder:renderPlaylists(playlists, self._store:get().searchQuery)
+	end
+
+	-- Wait one frame so SelectSongFrame AbsoluteWindowSize is non-zero before virtual list binds.
+	task.wait()
+	if not self:_isPanelSessionActive(expectedSessionId) then
+		return
+	end
+
+	local tracks = self:_fetchTracks(playlistId, false)
+	if not self:_isPanelSessionActive(expectedSessionId) then
+		return
+	end
+	if tracks then
+		self._store:set({ tracks = tracks })
+		self._binder:renderTracks(tracks, self._store:get().searchQuery)
 	end
 end
 

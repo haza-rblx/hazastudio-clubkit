@@ -113,7 +113,7 @@
             <div class="tutorial-step-body" data-i18n-html="setup.flow.s2.html">
 <p>Tanpa Group/Owner banyak fitur (command owner, community board) tidak jalan. Logo community wajib diganti sebelum go-live — jangan biarkan logo bawaan kit di place live.</p>
 <ol>
-<li>Cara termudah: buka <strong>Club Kit plugin → Config → General</strong> dan <strong>Branding</strong>. Isi <code>GameName</code>, greeting, dan <strong>LogoImage</strong> (asset logo venue kamu).</li>
+<li>Cara termudah: buka <strong>Club Kit plugin → Config → General</strong> dan <strong>Branding</strong>. Isi <code>GameName</code>, greeting, <strong>LogoImage</strong>, dan opsional <strong>DiscordInvite</strong> (chip Top Menu Community).</li>
 <li>Set <code>GroupId</code> = ID group Roblox venue kamu, dan <code>OwnerUserId</code> = UserId owner. Opsional: tambah admin di <code>AdminUserIds</code>.</li>
 <li>Alternatif Source: Explorer → <code>ReplicatedStorage/Hazastudio_ClubKitConfig/ClubKitConfig</code> → edit langsung.</li>
 <li>Jalankan plugin <strong>Diagnostics</strong>. Fail paling umum: <code>GROUP_ID</code> invalid / masih <code>0</code>.</li>
@@ -121,6 +121,7 @@
 <pre><code><span class="key">ClubKitConfig</span>.<span class="key">Branding</span> = {
     <span class="key">GameName</span> = <span class="str">"Nama Club Kamu"</span>,
     <span class="key">LogoImage</span> = <span class="str">"rbxassetid://YOUR_COMMUNITY_LOGO_ID"</span>,
+    <span class="key">DiscordInvite</span> = <span class="str">"discord.gg/your-invite"</span>,
 }
 <span class="key">ClubKitConfig</span>.<span class="key">Group</span> = {
     <span class="key">GroupId</span> = <span class="num">12345678</span>,

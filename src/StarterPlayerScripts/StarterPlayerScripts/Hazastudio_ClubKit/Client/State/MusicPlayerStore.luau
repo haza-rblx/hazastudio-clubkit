@@ -68,10 +68,6 @@ return createStore({
 	isOpen    = false,
 	activeTab = "nowplaying",  -- "nowplaying" | "request" | "manage"
 
-	-- Music zone
-	activeZoneId          = nil, -- string?
-	activeZoneDisplayName = nil, -- string?
-
 	-- Now Playing
 	currentTrack    = nil,     -- TrackInfo?
 	currentEntry    = nil,     -- QueueEntry?

@@ -4,13 +4,11 @@
 -- Central server mode: single global session for all players, no zones.
 
 local Players = game:GetService("Players")
-local CollectionService = game:GetService("CollectionService")
 local GroupService = game:GetService("GroupService")
 local HttpService = game:GetService("HttpService")
 local RunService = game:GetService("RunService")
 local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local ServerScriptService = game:GetService("ServerScriptService")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local MusicDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicDomain)
 local PermissionDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.PermissionDomain)
@@ -76,7 +74,7 @@ local function createMusicService(deps: {
 	-- Ini jauh more reliable from DataStore call for check gifted role.
 	local roleCache = {} :: { [number]: string }
 
-	-- Rate limiters: per-player, shared across all zones to prevent zone-hop bypass
+	-- Rate limiters: per-player, shared across the whole server
 	local voteSkipLimiter = RateLimiter.new(config.VOTE_SKIP_RATE_MAX, config.VOTE_SKIP_RATE_WINDOW)
 	local requestTrackLimiter = RateLimiter.new(config.REQUEST_TRACK_RATE_MAX, config.REQUEST_TRACK_RATE_WINDOW)
 	local manageLimiter = RateLimiter.new(config.MANAGE_RATE_MAX, config.MANAGE_RATE_WINDOW)
@@ -118,19 +116,15 @@ local function createMusicService(deps: {
 		return playlist
 	end
 
-	-- Callbacks forwarded from sessions to controller
+	-- Callbacks forwarded from the session to the controller
 	-- skipReason: optional string for client notification (vote_skip, admin_skip, etc.)
 	local _onTrackChanged: ((any, { Player }, string?) -> ())? = nil
 	local _onTimingUpdated: ((any, { Player }) -> ())? = nil
 	local _onQueueUpdated: (({ any }, { Player }) -> ())? = nil
 	local _onStateSync: ((Player, any) -> ())? = nil
 	local _onVoteState: ((Player?, any, { Player }) -> ())? = nil
-	-- Mode resolution: "global" (single session) or "zone" (per-tagged-zone).
-	-- Default "global" for backward-compat.
-	local MUSIC_MODE = if type(config.MODE) == "string" and config.MODE == "zone" then "zone" else "global"
-	local GLOBAL_ZONE_ID = "__global__"
-	local sessions = {} :: { [string]: any }
-	service.sessions = sessions
+	-- Single global session for all players (lazy-created on first use).
+	local session: any? = nil
 
 	-- ============================================================
 	-- RANK / PERMISSION
@@ -183,28 +177,15 @@ local function createMusicService(deps: {
 	end
 
 	-- ============================================================
-	-- ZONE MEMBERSHIP
+	-- SESSION (single global session)
 	-- ============================================================
 
-	-- Tracks which zone each player is currently in (zone mode only).
-	local playerZone: { [number]: string } = {}
-
-	local function getZoneMembers(zoneId: string): { Player }
-		if MUSIC_MODE == "global" then
-			return Players:GetPlayers()
-		end
-		local members: { Player } = {}
-		for _, player in ipairs(Players:GetPlayers()) do
-			if playerZone[player.UserId] == zoneId then
-				table.insert(members, player)
-			end
-		end
-		return members
+	local function getMembers(): { Player }
+		return Players:GetPlayers()
 	end
 
-	local function buildSession(zoneId: string, getMembers: () -> { Player }): any
+	local function buildSession(): any
 		local sess = createMusicSession({
-			zoneId = zoneId,
 			repo = repo,
 			logger = log,
 			config = config,
@@ -235,29 +216,16 @@ local function createMusicService(deps: {
 		return sess
 	end
 
-	local function ensureSession(zoneId: string): any
-		local existing = sessions[zoneId]
-		if existing then return existing end
-		local sess = buildSession(zoneId, function()
-			return getZoneMembers(zoneId)
-		end)
-		sessions[zoneId] = sess
-		return sess
-	end
-
-	local function resolveSessionForPlayer(player: Player): any?
-		if MUSIC_MODE == "global" then
-			return ensureSession(GLOBAL_ZONE_ID)
+	local function getOrCreateSession(): any
+		if session then
+			return session
 		end
-		local zoneId = playerZone[player.UserId]
-		if not zoneId then
-			return nil
-		end
-		return ensureSession(zoneId)
+		session = buildSession()
+		return session
 	end
 
 	local function startGlobalSession()
-		local sess = ensureSession(GLOBAL_ZONE_ID)
+		local sess = getOrCreateSession()
 		for _, player in ipairs(Players:GetPlayers()) do
 			task.spawn(function()
 				local waited = 0
@@ -270,27 +238,7 @@ local function createMusicService(deps: {
 				end
 			end)
 		end
-		log:info("MusicService: central server mode active", { zoneId = GLOBAL_ZONE_ID })
-	end
-
-	local function startZoneSessions()
-		-- Zone mode pre-creates a session for each tagged BasePart.
-		-- Players don't auto-enter; a future ZoneTracker controller is responsible
-		-- for calling service:enterZone(player, zoneId) on volume detection.
-		local zoneTag = if type(config.ZONE_TAG) == "string" then config.ZONE_TAG else "MusicZone"
-		local zoneIdAttr = if type(config.ZONE_ID_ATTRIBUTE) == "string" then config.ZONE_ID_ATTRIBUTE else "ZoneId"
-		local zonesFound = 0
-		for _, part in ipairs(CollectionService:GetTagged(zoneTag)) do
-			if part:IsA("BasePart") then
-				local zoneIdAttrVal = part:GetAttribute(zoneIdAttr)
-				local zoneId = if type(zoneIdAttrVal) == "string" and zoneIdAttrVal ~= ""
-					then zoneIdAttrVal
-					else part:GetFullName()
-				ensureSession(zoneId)
-				zonesFound += 1
-			end
-		end
-		log:info("MusicService: zone mode active", { zoneTag = zoneTag, zonesFound = zonesFound })
+		log:info("MusicService: global session active")
 	end
 
 	-- ============================================================
@@ -326,11 +274,7 @@ local function createMusicService(deps: {
 			end)
 		end
 
-		if MUSIC_MODE == "zone" then
-			startZoneSessions()
-		else
-			startGlobalSession()
-		end
+		startGlobalSession()
 
 		local result = repo:loadAll()
 		if not result.ok then
@@ -369,14 +313,11 @@ local function createMusicService(deps: {
 			if favoritesRepo and type(favoritesRepo.onPlayerRemoving) == "function" then
 				favoritesRepo:onPlayerRemoving(player)
 			end
-			for _, sess in pairs(sessions) do
-				sess:onPlayerLeft(player)
+			if session then
+				session:onPlayerLeft(player)
 			end
 			rankCache[userId] = nil
 			roleCache[userId] = nil
-			-- Clear the zone membership entry so it doesn't leak across the
-			-- server lifetime (zone mode only).
-			playerZone[userId] = nil
 		end)
 	end
 
@@ -394,51 +335,24 @@ local function createMusicService(deps: {
 			pcall(_eventBusUnsub)
 			_eventBusUnsub = nil
 		end
-		-- Destroy all music sessions (each holds autoBuffer, queue, callbacks).
-		for _, sess in pairs(sessions) do
-			if type((sess :: any).destroy) == "function" then
-				pcall(function()
-					(sess :: any):destroy()
-				end)
-			end
+		-- Destroy the music session (holds autoBuffer, queue, callbacks).
+		if session and type((session :: any).destroy) == "function" then
+			pcall(function()
+				(session :: any):destroy()
+			end)
 		end
-		table.clear(sessions)
-		table.clear(playerZone)
+		session = nil
 		table.clear(rankCache)
 		table.clear(roleCache)
 	end
 
-	function service:getMusicZoneDebug(): { [string]: any }
-		local sess = sessions[GLOBAL_ZONE_ID]
-		return {
-			mode = "central_server",
-			globalSessionActive = sess ~= nil,
-			playerCount = #Players:GetPlayers(),
-		}
+	function service:getState(_player: Player?): any
+		return getOrCreateSession():getState()
 	end
 
-	function service:getState(player: Player?): any
-		local sess = if player then resolveSessionForPlayer(player) else nil
-		if not sess then
-			return {
-				track = nil,
-				startServerTime = 0,
-				isPlaying = false,
-				isDjMode = false,
-				queue = {},
-				zoneId = nil,
-				zoneDisplayName = nil,
-			}
-		end
-		local state = sess:getState()
-		state.zoneId = nil
-		state.zoneDisplayName = nil
-		return state
-	end
-
-	function service:getPlaybackIncidentSnapshot(player: Player?): any?
-		local sess = if player then resolveSessionForPlayer(player) else ensureSession(GLOBAL_ZONE_ID)
-		if not sess or type(sess.getIncidentSnapshot) ~= "function" then
+	function service:getPlaybackIncidentSnapshot(_player: Player?): any?
+		local sess = getOrCreateSession()
+		if type(sess.getIncidentSnapshot) ~= "function" then
 			return nil
 		end
 		return sess:getIncidentSnapshot()
@@ -474,8 +388,8 @@ local function createMusicService(deps: {
 			})
 			return false, result.error
 		end
-		for _, sess in pairs(sessions) do
-			sess:onLibraryReloaded()
+		if session then
+			session:onLibraryReloaded()
 		end
 		return true, ""
 	end
@@ -685,30 +599,24 @@ local function createMusicService(deps: {
 			local allowed, _ = requestTrackLimiter:check(player.UserId)
 			if not allowed then return false, "rate_limited", nil end
 		end
-		local sess = resolveSessionForPlayer(player)
-		if not sess then return false, "not_in_zone", nil end
-		return sess:requestTrack(player, trackId)
+		return getOrCreateSession():requestTrack(player, trackId)
 	end
 
 	function service:voteSkip(player: Player, voteType: string?): (boolean, string)
 		local allowed, _ = voteSkipLimiter:check(player.UserId)
 		if not allowed then return false, "rate_limited" end
-		local sess = resolveSessionForPlayer(player)
-		if not sess then return false, "not_in_zone" end
-		return sess:voteSkip(player, voteType)
+		return getOrCreateSession():voteSkip(player, voteType)
 	end
 
 	function service:adminSkip(player: Player): (boolean, string)
 		if not service:isManageAllowed(player) then return false, "no_permission" end
-		local sess = resolveSessionForPlayer(player)
-		if not sess then return false, "not_in_zone" end
 		log:info("AdminSkip by " .. player.Name)
-		return sess:adminSkip()
+		return getOrCreateSession():adminSkip()
 	end
 
 	-- Telegram / external admin skip: global session only, no in-game player permission.
 	function service:adminSkipGlobal(): (boolean, string)
-		local sess = ensureSession(GLOBAL_ZONE_ID)
+		local sess = getOrCreateSession()
 		log:info("AdminSkip via global command")
 		return sess:adminSkip()
 	end
@@ -718,36 +626,27 @@ local function createMusicService(deps: {
 	function service:reportTrackFailure(player: Player, trackId: string, reason: string?): (boolean, string)
 		local allowed, _ = voteSkipLimiter:check(player.UserId)
 		if not allowed then return false, "rate_limited" end
-		local sess = resolveSessionForPlayer(player)
-		if not sess then return false, "not_in_zone" end
-		return sess:reportTrackFailure(player, trackId, reason)
+		return getOrCreateSession():reportTrackFailure(player, trackId, reason)
 	end
 
 	function service:setDjMode(player: Player, enabled: boolean): (boolean, string, boolean)
 		if not service:isManageAllowed(player) then
-			local sess = resolveSessionForPlayer(player)
-			local currentDjMode = sess and (sess:getState().isDjMode == true) or false
+			local currentDjMode = session ~= nil and (session:getState().isDjMode == true) or false
 			return false, "no_permission", currentDjMode
 		end
-		local sess = resolveSessionForPlayer(player)
-		if not sess then return false, "not_in_zone", false end
-		return sess:setDjMode(enabled, player)
+		return getOrCreateSession():setDjMode(enabled, player)
 	end
 
 	-- DJ effect sync: server-authoritative. DJ changes effect → server stores +
 	-- broadcasts to all members via stateSync. Listeners apply to local Sound.
 	function service:setDjEffect(player: Player, effectId: string, action: string, itemId: string?, value: any): (boolean, string)
 		if not service:isManageAllowed(player) then return false, "no_permission" end
-		local sess = resolveSessionForPlayer(player)
-		if not sess then return false, "not_in_zone" end
-		return sess:setDjEffect(effectId, action, itemId, value)
+		return getOrCreateSession():setDjEffect(effectId, action, itemId, value)
 	end
 
 	function service:setDjPlaybackSpeed(player: Player, speed: number): (boolean, string)
 		if not service:isManageAllowed(player) then return false, "no_permission" end
-		local sess = resolveSessionForPlayer(player)
-		if not sess then return false, "not_in_zone" end
-		return sess:setDjPlaybackSpeed(speed)
+		return getOrCreateSession():setDjPlaybackSpeed(speed)
 	end
 
 	function service:reportDuration(trackId: string, duration: number)
@@ -762,8 +661,8 @@ local function createMusicService(deps: {
 			return
 		end
 
-		for _, sess in pairs(sessions) do
-			sess:onDurationUpdated(trackId, duration)
+		if session then
+			session:onDurationUpdated(trackId, duration)
 		end
 
 		local libraryDuration = tonumber(track.totalDuration) or 0
@@ -790,11 +689,7 @@ local function createMusicService(deps: {
 	end
 
 	function service:reportPlaybackFinished(player: Player, trackId: string): (boolean, string)
-		local sess = resolveSessionForPlayer(player)
-		if not sess then
-			return false, "not_in_zone"
-		end
-		return sess:reportPlaybackFinished(player, trackId)
+		return getOrCreateSession():reportPlaybackFinished(player, trackId)
 	end
 
 	function service:managePlaylist(player: Player, action: string, data: { [string]: any }): (boolean, string, any)
@@ -859,8 +754,8 @@ local function createMusicService(deps: {
 			end
 			local result = repo:deletePlaylist(id)
 			if not result.ok then return false, "delete_failed", nil end
-			for _, sess in pairs(sessions) do
-				sess:pruneDeletedTracks(deletedLookup)
+			if session then
+				session:pruneDeletedTracks(deletedLookup)
 			end
 			log:info("Playlist deleted", {
 				by = player.Name,
@@ -1009,8 +904,8 @@ local function createMusicService(deps: {
 			local result = repo:deleteTrack(id)
 			if not result.ok then return false, "delete_failed", nil end
 			local deletedLookup: { [string]: true } = { [id] = true }
-			for _, sess in pairs(sessions) do
-				sess:pruneDeletedTracks(deletedLookup)
+			if session then
+				session:pruneDeletedTracks(deletedLookup)
 			end
 			log:info("Track deleted", { by = player.Name, id = id })
 			return true, "", nil
@@ -1023,8 +918,8 @@ local function createMusicService(deps: {
 		if not player.Parent then
 			return
 		end
-		local sess = resolveSessionForPlayer(player)
-		if sess and type(sess.onPlayerEntered) == "function" then
+		local sess = getOrCreateSession()
+		if type(sess.onPlayerEntered) == "function" then
 			sess:onPlayerEntered(player)
 		end
 	end
@@ -1034,58 +929,17 @@ local function createMusicService(deps: {
 			favoritesRepo:onPlayerAdded(player)
 		end
 		task.spawn(fetchAndCacheRank, player)
-		-- Global mode: auto-enter the single session once rank is cached.
-		-- Zone mode: caller (ZoneTracker) is responsible for service:enterZone(...).
-		if MUSIC_MODE == "global" then
-			task.spawn(function()
-				local waited = 0
-				while rankCache[player.UserId] == nil and waited < 5 do
-					task.wait(0.2)
-					waited += 0.2
-				end
-				if player.Parent then
-					ensureSession(GLOBAL_ZONE_ID):onPlayerEntered(player)
-				end
-			end)
-		end
-	end
-
-	--- Zone mode entry point. Call from ZoneTracker when a player enters a
-	--- tagged BasePart. No-op in global mode.
-	function service:enterZone(player: Player, zoneId: string)
-		if MUSIC_MODE ~= "zone" then return end
-		if type(zoneId) ~= "string" or zoneId == "" then return end
-		local previous = playerZone[player.UserId]
-		if previous == zoneId then return end
-		if previous then
-			local prevSess = sessions[previous]
-			if prevSess and type(prevSess.onPlayerLeft) == "function" then
-				prevSess:onPlayerLeft(player)
+		-- Auto-enter the global session once rank is cached.
+		task.spawn(function()
+			local waited = 0
+			while rankCache[player.UserId] == nil and waited < 5 do
+				task.wait(0.2)
+				waited += 0.2
 			end
-		end
-		playerZone[player.UserId] = zoneId
-		local sess = ensureSession(zoneId)
-		if sess and type(sess.onPlayerEntered) == "function" then
-			sess:onPlayerEntered(player)
-		end
-	end
-
-	--- Zone mode exit point. No-op in global mode.
-	function service:leaveZone(player: Player)
-		if MUSIC_MODE ~= "zone" then return end
-		local previous = playerZone[player.UserId]
-		if not previous then return end
-		playerZone[player.UserId] = nil
-		local sess = sessions[previous]
-		if sess and type(sess.onPlayerLeft) == "function" then
-			sess:onPlayerLeft(player)
-		end
-	end
-
-	--- Read the active mode (used by client for UI gating, e.g. hiding zone
-	--- prompts when mode is global).
-	function service:getMode(): string
-		return MUSIC_MODE
+			if player.Parent then
+				getOrCreateSession():onPlayerEntered(player)
+			end
+		end)
 	end
 
 	-- Callback registration (forwarded to controller)
@@ -1111,20 +965,6 @@ local function createMusicService(deps: {
 	end
 
 
-
-	local debugFunction = ServerScriptService:FindFirstChild("MusicZoneDebug")
-	if debugFunction and not debugFunction:IsA("BindableFunction") then
-		debugFunction:Destroy()
-		debugFunction = nil
-	end
-	if not debugFunction then
-		debugFunction = Instance.new("BindableFunction")
-		debugFunction.Name = "MusicZoneDebug"
-		debugFunction.Parent = ServerScriptService
-	end
-	(debugFunction :: BindableFunction).OnInvoke = function()
-		return service:getMusicZoneDebug()
-	end
 
 	if RunService:IsStudio() then
 		_G.musicService = service

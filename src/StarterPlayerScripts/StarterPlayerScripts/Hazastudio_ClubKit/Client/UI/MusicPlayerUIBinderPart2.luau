@@ -908,22 +908,23 @@ return function(MusicPlayerUIBinder: any, H: any)
 							local label = titleLabel :: TextLabel
 							applyVirtualTrackTitle(label, track.name or "")
 						end
-	
+
 						local creatorLabel = details:FindFirstChild("TrackCreator")
 						if creatorLabel and creatorLabel:IsA("TextLabel") then
 							(creatorLabel :: TextLabel).Text = track.creator or ""
 						end
-					end
-					local addWrap = info:FindFirstChild("AddToQueueWrapper")
-					if addWrap then
-						local trackLengthLabel = addWrap:FindFirstChild("TrackLength")
+
+						-- TrackLength lives under TrackDetails (not AddToQueueWrapper).
+						local trackLengthLabel = details:FindFirstChild("TrackLength")
 						if trackLengthLabel and trackLengthLabel:IsA("TextLabel") then
 							local totalSeconds = math.max(0, math.floor(tonumber(track.totalDuration) or 0))
 							local minutes = math.floor(totalSeconds / 60)
 							local seconds = totalSeconds % 60
 							(trackLengthLabel :: TextLabel).Text = string.format("%02d:%02d", minutes, seconds)
 						end
-	
+					end
+					local addWrap = info:FindFirstChild("AddToQueueWrapper")
+					if addWrap then
 						local addBtn = addWrap:FindFirstChild("AddToQueueButton")
 						local addIcon = if addBtn then addBtn:FindFirstChild("AddToQueueIconBefore") else nil
 						resetRequestTrackFeedback(addBtn, addIcon)
@@ -966,13 +967,19 @@ return function(MusicPlayerUIBinder: any, H: any)
 				end
 			end
 	
-			-- Apply cover style to track's playlist cover if available
-			if coverSource then
-				local coverElement = clone:FindFirstChild("PlaylistCover")
-					or clone:FindFirstChild("TrackCover")
-					or clone:FindFirstChild("RelatedPlaylistCover")
-				if coverElement then
+			-- Apply cover style (or clear Studio template placeholders like "Playlist Name").
+			local coverElement = clone:FindFirstChild("RelatedPlaylistCover")
+				or clone:FindFirstChild("PlaylistCover")
+				or clone:FindFirstChild("TrackCover")
+			if coverElement then
+				if coverSource then
 					self:applyCoverStyle(coverElement, coverSource, { listThumb = true })
+				else
+					local coverText = findCoverTextLabel(coverElement)
+					if coverText then
+						coverText.Text = ""
+						coverText.Visible = false
+					end
 				end
 			end
 	
@@ -1586,7 +1593,14 @@ return function(MusicPlayerUIBinder: any, H: any)
 
 		-- Default to gradient if no coverType specified
 		local coverType = playlist.coverType or "gradient"
-		local textLabel = if imageLabel then findCoverTextLabel(imageLabel) else nil
+		-- Cover may be ImageLabel itself, or a Frame wrapping one.
+		if not imageLabel then
+			local nested = coverElement:FindFirstChildWhichIsA("ImageLabel", true)
+			if nested and nested:IsA("ImageLabel") then
+				imageLabel = nested
+			end
+		end
+		local textLabel = findCoverTextLabel(if imageLabel then imageLabel else coverElement)
 		local backgroundGradient = coverElement:FindFirstChild("BackgroundNowPlaying(DependsonPlaylist)", true)
 		local targetGradient = if imageLabel
 			then (imageLabel :: ImageLabel):FindFirstChildOfClass("UIGradient")
@@ -1599,7 +1613,7 @@ return function(MusicPlayerUIBinder: any, H: any)
 				return
 			end
 			textLabel.Visible = coverType ~= "image"
-			textLabel.Text = playlist.name or ""
+			textLabel.Text = tostring(playlist.name or "")
 
 			local success = applyNamedFont(textLabel, tostring(playlist.fontFace or "Original"))
 			if not success then
@@ -1665,10 +1679,14 @@ return function(MusicPlayerUIBinder: any, H: any)
 			end
 		else
 			-- Gradient mode: enable UIGradient, set colors
-			local gradientIndex = playlist.coverValue or 1
 			local gradients = config.COVER_GRADIENTS
-
-			if gradients and gradientIndex >= 1 and gradientIndex <= #gradients then
+			local gradientIndex = tonumber(playlist.coverValue) or 1
+			if not gradients or #gradients < 1 then
+				applyCoverText()
+			else
+				if gradientIndex < 1 or gradientIndex > #gradients then
+					gradientIndex = 1
+				end
 				local gradient = gradients[gradientIndex]
 
 				local uiGradient = targetGradient

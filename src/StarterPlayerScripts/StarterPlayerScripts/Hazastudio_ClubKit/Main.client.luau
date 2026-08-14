@@ -1160,7 +1160,7 @@ local musicTopbarIcon: any = nil
 
 if Config.FeatureFlags.MusicPlayerEnabled then
 	-- Music topbar icon is owned by a dedicated wrapper that creates/destroys
-	-- the TopbarPlus instance on zone enter/leave. This is the only reliable
+	-- the TopbarPlus instance on show/hide. This is the only reliable
 	-- way to fully hide it across TopbarPlus versions — setEnabled(false) does
 	-- not work consistently on every build, and widget-resolver hides depend on
 	-- internal property names that vary. The controller calls show()/hide()

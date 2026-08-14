@@ -728,7 +728,10 @@ local function renderVirtualList(self: any, options: VirtualListRenderOptions)
 		for _, entry in ipairs(nextEntries) do
 			local layoutOrder = VIRTUAL_ROW_LAYOUT_BASE + entry.itemIndex
 			local existing = runtime.renderedById[entry.id]
-			if existing and existing.boundItemId == entry.id then
+			-- Rebind when layout was not ready (windowH was 0) — otherwise first Library
+			-- open keeps Studio template placeholders (cover text / duration) forever.
+			local mustRebind = runtime.lastWindowH <= 0 or windowH <= 0
+			if existing and existing.boundItemId == entry.id and not mustRebind then
 				if existing.instance.LayoutOrder ~= layoutOrder then
 					existing.instance.LayoutOrder = layoutOrder
 				end

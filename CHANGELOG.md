@@ -11,6 +11,13 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.5.3] - 2026-08-14
+
+Music is global-only; vestigial zone mode removed.
+
+### Removed
+- **Zone-based music system** — music is now global-only: single server-wide session, every player hears the same track. Removes the vestigial zone mode (`Music.MODE`, `MusicZone`-tagged parts, `ZoneTrackerService`, `MusicZoneChanged` remote, `not_in_zone` errors, `MusicZoneDebug` bindable, client zone handlers + store fields). **Breaking:** if you edited engine `Config.luau` to set `Music.MODE = "zone"`, that option no longer exists — delete any `MusicZone`-tagged parts from your place. Buyer `ClubKitConfig` is unaffected (it never had zone keys).
+
 ## [2.5.2] - 2026-08-13
 
 Gravity dial feels right, couples stay consistent, MusicCatalog groups playlists, Discord invite from config.
@@ -19,6 +26,7 @@ Gravity dial feels right, couples stay consistent, MusicCatalog groups playlists
 - **Roles & Ranks slide guide** — `docs/roles-guide.html` (+ hub / setup links) for adding roles via `ClubKitConfig`.
 
 ### Fixed
+- **Music Library first-open placeholders** — Library no longer sticks on Studio template covers (`Playlist Name`) / duration (`05:26`) on first open. Loads playlists before tracks, waits one frame for layout, rebinds virtual rows when scroll window was 0, and reads `TrackLength` from `TrackDetails`.
 - **Gravity drop intensity + fall anim** — `/gravity 1-10` now uses a controlled idle-down descent (PlatformStand + LinearVelocity, fall tracks suppressed) scaled by the Gravity dial; lands when near ground. No longer one-shot freefall kick (which made 1–10 feel identical and played the fall animation).
 - **Gravity soft landing** — drop eases out near the floor (`RESTORE_SOFT_BRAKE_HEIGHT`), finishes slightly above ground, zeros vertical velocity, and snaps to stand height so the character no longer buries into the ground before release.
 - **License timeout no longer bricks cash donations** — if license verify never succeeds (Studio timeout / network flake), features fail open instead of disabling `donation_http`; first-check-in-flight is optimistic so `donation_poll` is not a no-op.

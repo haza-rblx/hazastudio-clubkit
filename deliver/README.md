@@ -1,20 +1,18 @@
-# Delivery output
+# Delivery output — v2.5.2
 
-## Template place (Workspace models)
+Built from template place **THE BASIC TEST 1.3** (engine includes Music Library first-open fix).
 
-- `HazastudioClubKit_Package` — main full template (full service clone, no BHMS)
-- `HazastudioClubKit_SyncBhmsAddon` — optional SyncBhms / BHMS dance add-on
+| File | Purpose |
+|------|---------|
+| `HazastudioClubKit_Package_v2.5.2.rbxm` | Main full template (config + blank secrets; no BHMS) |
+| `HazastudioClubKit_SyncBhmsAddon_v2.5.2.rbxm` | Optional SyncBhms / BHMS dance add-on |
+| `HazastudioClubKit_Plugin_v2.5.2.rbxm` | Studio plugin (install once) |
 
-See [`docs/delivery/TEMPLATE_PLACE.md`](../docs/delivery/TEMPLATE_PLACE.md).
+## Buyer install (main)
 
-## Studio plugin (RBXM)
+1. Plugin → **Unpack RBXM…** → pick `HazastudioClubKit_Package_v2.5.2.rbxm`
+2. Fill `Secrets.luau` + `ClubKitConfig` (Group, shop, donation)
+3. Optional: unpack SyncBhms add-on → set `Features.LegacySyncBhms = true`
+4. Enable HttpService → Publish → test
 
-- `HazastudioClubKit_Plugin_vX.Y.Z.rbxm` — buyer installs once into `%LOCALAPPDATA%\Roblox\Plugins\`
-
-Build:
-
-```powershell
-.\tools\ClubKitPackagerPlugin\build-plugin-rbxm.ps1 -CopyToDeliver
-```
-
-See [`docs/delivery/PLUGIN.md`](../docs/delivery/PLUGIN.md).
+Docs: [`docs/delivery/TEMPLATE_PLACE.md`](../docs/delivery/TEMPLATE_PLACE.md) · [`docs/delivery/PLUGIN.md`](../docs/delivery/PLUGIN.md)

@@ -1,4 +1,4 @@
-# Plugin delivery — Hazastudio Club Kit Packager
+﻿# Plugin delivery — Hazastudio Club Kit Packager
 
 Ship the **Studio plugin** separately from the template place. Buyers install it once; engine updates happen in-app.
 
@@ -103,10 +103,12 @@ Set `UPDATER.githubOwner` / `githubRepo` in `ClubKitManifest.luau` before buyers
 
 ```
 deliver/
-  HazastudioClubKit_Plugin_v2.4.75.rbxm   ← plugin (install once)
-  README or link to docs                     ← CLUB_KIT_SETUP.md
+  HazastudioClubKit_Plugin_v2.5.3.rbxm
+  HazastudioClubKit_Package_v2.5.3.rbxm
+  HazastudioClubKit_SyncBhmsAddon_v2.5.3.rbxm   ← optional
+  README.md
 ```
 
-Template place: publish to Roblox **or** send place file — models `HazastudioClubKit_Package` + optional `HazastudioClubKit_SyncBhmsAddon` can stay in Workspace for reference or be unpacked once then deleted.
+Template place: publish to Roblox **or** send the `.rbxm` packs above. Models `HazastudioClubKit_Package` + optional `HazastudioClubKit_SyncBhmsAddon` can stay in Workspace for reference or be unpacked once then deleted.
 
 See also: [`TEMPLATE_PLACE.md`](TEMPLATE_PLACE.md) · [`../../CLUB_KIT_SETUP.md`](../../CLUB_KIT_SETUP.md)

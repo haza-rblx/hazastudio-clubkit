@@ -1,4 +1,4 @@
-# Hazastudio Club Kit v2.4.72 — Setup Guide
+# Hazastudio Club Kit v2.5.2 — Setup Guide
 
 This guide is for **buyers / venue owners** installing the kit in their Roblox place.
 
@@ -375,4 +375,4 @@ Workspace/                           ← RobuxDonationBoard, SaweriaDonationBoar
 
 ---
 
-Hazastudio · Club Kit v2.4.72
+Hazastudio · Club Kit v2.5.2

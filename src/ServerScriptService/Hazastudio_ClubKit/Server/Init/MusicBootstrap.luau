@@ -1,7 +1,7 @@
 --!strict
 -- Server/Init/MusicBootstrap.luau
 --
--- Wires MusicService + MusicController + ZoneTracker + favorites ProfileLoader
+-- Wires MusicService + MusicController + favorites ProfileLoader
 -- outside Main.server's top-level local register set (Luau limit 200).
 -- Main only keeps hoisted musicFavoritesRepo / _musicService handles.
 
@@ -31,7 +31,6 @@ local MusicBootstrap = {}
 
 function MusicBootstrap.start(deps: MusicBootstrapDeps): MusicBootstrapResult
 	local createMusicService = require(script.Parent.Parent.Services.MusicService)
-	local createZoneTrackerService = require(script.Parent.Parent.Services.ZoneTrackerService)
 	local createMusicController = require(script.Parent.Parent.Controllers.MusicController)
 	local MusicRepository = require(script.Parent.Parent.Repositories.MusicRepository)
 	local MusicFavoritesRepository = require(script.Parent.Parent.Repositories.MusicFavoritesRepository)
@@ -106,16 +105,6 @@ function MusicBootstrap.start(deps: MusicBootstrapDeps): MusicBootstrapResult
 	if not musicControllerOk then
 		log:error("MusicController init failed", { error = tostring(musicControllerErr) })
 	end
-
-	-- Zone tracker: detects which tagged BasePart each player is inside and
-	-- routes them to the matching MusicSession. No-op when Music.MODE = "global".
-	deps.trackLifecycle(
-		"ZoneTrackerService",
-		createZoneTrackerService.create({
-			musicService = musicService,
-			logger = Logger.new("ZoneTrackerService"),
-		})
-	)
 
 	-- Session/rank sync only — favorites load via SharedProfileLoader above.
 	connectionCleaner:add(Players.PlayerAdded:Connect(function(player)

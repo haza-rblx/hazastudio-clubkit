@@ -84,12 +84,6 @@ end
 
 local function getMusicFailureNotification(action: string, reason: string, config: any?): (string, string)
 	local queueLimit = math.max(1, tonumber(config and config.REQUEST_TRACK_MAX_PER_USER_QUEUE) or 3)
-	if reason == "not_in_zone" then
-		local message = if config and type(config.MSG_NOT_IN_ZONE) == "string"
-			then config.MSG_NOT_IN_ZONE
-			else "You're not in a music zone yet. Step into one to start listening."
-		return message, "WARNING"
-	end
 
 	if action == "request" then
 		if reason == "rate_limited" then
