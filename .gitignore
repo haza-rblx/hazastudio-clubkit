@@ -25,6 +25,12 @@ Thumbs.db
 deliver/
 deliverables/
 
+# One-off ops/migration scripts (internal, never published — e.g. wx likes/robux migration)
+tools/migrate-*.luau
+
+# Cursor planner artifacts (rules/ stays tracked)
+.cursor/plans/
+
 # Node (donation-api admin panel, game-data-api)
 node_modules/
 dist/

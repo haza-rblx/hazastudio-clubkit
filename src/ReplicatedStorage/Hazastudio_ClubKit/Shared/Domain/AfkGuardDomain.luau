@@ -24,6 +24,12 @@ export type AfkRejoinRequest = {
 	reportedIdleSec: number,
 }
 
+-- Client-side retry budget for one idle streak; reset by real user input.
+export type ClientRetryState = {
+	lastRequestAt: number?,
+	attempts: number,
+}
+
 local ANIMATION_ID_PATTERN = "^rbxassetid://%d+$"
 local MAX_ANIMATION_NAME_LEN = 128
 
@@ -54,6 +60,36 @@ end
 
 function AfkGuardDomain.isBelowTeleportAbortIdle(reportedIdleSec: number): boolean
 	return reportedIdleSec < (19 * 60)
+end
+
+-- Pure decision for the client: may we fire a rejoin request on this Idled tick?
+-- True only when at/above the rejoin threshold, under the attempt cap, and past
+-- the backoff window since the last request. Returns the next state either way.
+function AfkGuardDomain.canRequestRejoin(
+	state: ClientRetryState,
+	idleSec: number,
+	nowSec: number
+): (boolean, ClientRetryState)
+	local cfg = getAfkConfig()
+	local maxAttempts = tonumber(cfg.MAX_CLIENT_ATTEMPTS) or 3
+	local backoffSec = tonumber(cfg.CLIENT_RETRY_BACKOFF_SEC) or 60
+
+	if not AfkGuardDomain.isRejoinThreshold(idleSec) then
+		return false, state
+	end
+
+	if state.attempts >= maxAttempts then
+		return false, state
+	end
+
+	if state.lastRequestAt ~= nil and (nowSec - state.lastRequestAt) < backoffSec then
+		return false, state
+	end
+
+	return true, {
+		lastRequestAt = nowSec,
+		attempts = state.attempts + 1,
+	}
 end
 
 function AfkGuardDomain.validateRequestId(requestId: any): boolean

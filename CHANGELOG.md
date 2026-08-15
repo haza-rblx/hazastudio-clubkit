@@ -11,6 +11,22 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.6.0] - 2026-08-16
+
+External Admin Bridge (Adonis/Kohl's), free-announce membership gate, top-50 workspace boards; AFK rejoin teleport, DJ crackle, and boot fixes.
+
+### Added
+- **External Admin Bridge** — `ClubKitConfig.ExternalAdmin.Provider` selects `"Adonis"`, `"Kohls"`, or `"None"`. Engine exposes `ExternalAdminFacade` for optional place-pack bridge modules; Club Kit staff role changes sync one-way to the chosen admin, and `:cksetrole`/`:ckgift`/`:ckannounce` (Adonis) or `;cksetrole`/`;ckgift`/`;ckannounce` (Kohl's) run through Club Kit's own permission gates. Optional `ExternalAdminSelector` boot-gate script keeps the non-chosen admin fully off (UI included) without deleting it. See `extras/place-packs/ExternalAdminBridge/`. Membership and Spender roles never sync.
+- **`ClubKitConfig.Announcement.MinMembership`** — buyer gate for free `/announce` + free broadcast panel (`Tier1`/`VIP`, `Tier2`/`VVIP`, `Tier3`/`Supreme`). Default remains VVIP+. Staff / Leadership `canAnnounce` and top spenders stay free.
+
+### Changed
+- **Workspace boards show top 50** — cash, Robux, community, and likes SurfaceGui boards paint 50 rows (was 10 cash/community, 20 Robux/likes). Fetch/cache still capped at `MAX_LIMIT` 100. Overhead top-spender tags and join-greeting top-10 are unchanged.
+
+### Fixed
+- **AFK auto-rejoin sometimes never teleports** — rejoin teleports used deprecated `TeleportToPlaceInstance`/`Teleport` behind a `pcall` only, but Roblox reports async teleport-init failures (e.g. `Flooded` throttling) exclusively via `TeleportService.TeleportInitFailed` — never as an error. A queued-but-failed teleport was treated as success: no retry, no fallback, no notification, and the in-flight flag stuck (locking the player out until they moved). Same-server and fallback teleports now use `TeleportAsync` + `TeleportOptions.ServerInstanceId` with a scoped `TeleportInitFailed` watcher (timeout resolves as success so a teleport is never double-fired). The client also retries a denied/failed request up to 3× per idle streak (60s backoff, `Player.Idled` keeps ticking while idle) instead of latching until mouse input, and transient server denials (in-flight, carry active) no longer consume the 15-minute rate window. `/rejoin` had the same pcall-only teleport bug and is fixed the same way. New engine config keys (not buyer-facing): `AfkGuard.TELEPORT_INIT_TIMEOUT_SEC`, `CLIENT_RETRY_BACKOFF_SEC`, `MAX_CLIENT_ATTEMPTS`.
+- **DJ effect sliders + toggles crackle audio** — effect sliders and enable toggles no longer churn the audio DSP graph: effect instances are created once per sound and mutated in place (values guarded to actual changes; server echo replays are now no-ops when nothing changed), and effect/pitch toggles flip the `Enabled` flag instead of destroying/creating the node. Reported as crackling when typing (Kohl's side, see pack snippet) and when adjusting DJ effects.
+- **ConfigBootstrap Announcement wiring** — resolve `MinMembership` without requiring `OverheadDomain` during `Config` load (was recursive module require / kit fail to boot).
+
 ## [2.5.3] - 2026-08-14
 
 Music is global-only; vestigial zone mode removed.

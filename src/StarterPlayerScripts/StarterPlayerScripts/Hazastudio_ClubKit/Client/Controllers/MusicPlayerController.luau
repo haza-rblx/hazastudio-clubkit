@@ -74,13 +74,6 @@ local function trimNotificationText(text: string): string
 	return text:match("^%s*(.-)%s*$") or ""
 end
 
-local function destroySoundChild(sound: Sound, childName: string)
-	local child = sound:FindFirstChild(childName)
-	if child then
-		child:Destroy()
-	end
-end
-
 local function findDjConfigItem(config: any, itemId: string?): any?
 	if type(config) ~= "table" or type(config.DJ) ~= "table" or type(itemId) ~= "string" or itemId == "" then
 		return nil
@@ -1194,49 +1187,97 @@ end
 
 function MusicPlayerController:_applyDjSoundSettings(sound: Sound)
 	sound.PlaybackSpeed = self._playbackSpeed
-	destroySoundChild(sound, "MusicPlayerTempPitchShift")
-	for _, child in ipairs(sound:GetChildren()) do
-		if child:IsA("SoundEffect") and child.Name:match("^MusicPlayerDjEffect_") then
-			child:Destroy()
+
+	-- Audio graph stability: SoundEffect instances are created ONCE per sound
+	-- and toggled via their Enabled flag. Destroying/creating DSP nodes on a
+	-- playing Sound produces audible clicks/crackle (user report: crackle on DJ
+	-- effect toggles and slider drags, low-end clients).
+	local pitchName = "MusicPlayerTempPitchShift"
+	local pitchEffect = sound:FindFirstChild(pitchName)
+	if pitchEffect and not pitchEffect:IsA("PitchShiftSoundEffect") then
+		pitchEffect:Destroy()
+		pitchEffect = nil
+	end
+	local pitchActive = self._pitchSemitones ~= 0
+	if not pitchEffect and pitchActive then
+		pitchEffect = Instance.new("PitchShiftSoundEffect")
+		pitchEffect.Name = pitchName
+		pitchEffect.Parent = sound
+	end
+	if pitchEffect then
+		if (pitchEffect :: PitchShiftSoundEffect).Enabled ~= pitchActive then
+			(pitchEffect :: PitchShiftSoundEffect).Enabled = pitchActive
+		end
+		if (pitchEffect :: PitchShiftSoundEffect).Octave ~= self._pitchOctave then
+			(pitchEffect :: PitchShiftSoundEffect).Octave = self._pitchOctave
 		end
 	end
 
-	if self._pitchSemitones ~= 0 then
-		local pitchEffect = Instance.new("PitchShiftSoundEffect")
-		pitchEffect.Name = "MusicPlayerTempPitchShift"
-		pitchEffect.Octave = self._pitchOctave
-		pitchEffect.Parent = sound
+	-- Collect present DJ effect instances; destroy only on config/class
+	-- mismatch (effect removed from config or className changed).
+	local present: { [string]: SoundEffect } = {}
+	for _, child in ipairs(sound:GetChildren()) do
+		if child:IsA("SoundEffect") then
+			local effectId = child.Name:match("^MusicPlayerDjEffect_(.+)$")
+			if effectId then
+				local effectConfig = findDjEffectConfig(self._config, effectId)
+				if effectConfig ~= nil and child.ClassName == tostring(effectConfig.className) then
+					present[effectId] = child
+				else
+					child:Destroy()
+				end
+			end
+		end
 	end
 
 	for _, effectConfig in ipairs(getDjEffectsConfig(self._config)) do
 		local effectId = tostring(effectConfig.id or "")
 		local className = tostring(effectConfig.className or "")
-		if effectId ~= "" and className ~= "" and self._djEffectEnabledById[effectId] == true then
-			local ok, soundEffect = pcall(function()
-				return Instance.new(className)
+		if effectId == "" or className == "" then
+			continue
+		end
+
+		local soundEffect = present[effectId]
+		if not soundEffect then
+			local created: any = nil
+			local ok = pcall(function()
+				created = Instance.new(className)
 			end)
-			if ok and soundEffect and soundEffect:IsA("SoundEffect") then
-				soundEffect.Name = "MusicPlayerDjEffect_" .. effectId
-				if type(effectConfig.priority) == "number" then
-					(soundEffect :: SoundEffect).Priority = effectConfig.priority
-				end
-				local effectValues = self._djEffectValues[effectId] or {}
-				if type(effectConfig.items) == "table" then
-					for _, item in ipairs(effectConfig.items) do
-						if type(item) == "table" then
-							local propertyName = tostring(item.property or "")
-							local itemId = tostring(item.id or propertyName)
-							local value = effectValues[itemId]
-							if propertyName ~= "" and type(value) == "number" then
-								pcall(function()
-									(soundEffect :: any)[propertyName] = value
-								end)
+			if not (ok and created and created:IsA("SoundEffect")) then
+				continue
+			end
+			created.Name = "MusicPlayerDjEffect_" .. effectId
+			created.Enabled = false
+			if type(effectConfig.priority) == "number" then
+				(created :: SoundEffect).Priority = effectConfig.priority
+			end
+			created.Parent = sound
+			soundEffect = created
+		end
+
+		-- Values first (so an enable flip lands on correct params), writes
+		-- guarded to actual changes only.
+		local effectValues = self._djEffectValues[effectId] or {}
+		if type(effectConfig.items) == "table" then
+			for _, item in ipairs(effectConfig.items) do
+				if type(item) == "table" then
+					local propertyName = tostring(item.property or "")
+					local itemId = tostring(item.id or propertyName)
+					local value = effectValues[itemId]
+					if propertyName ~= "" and type(value) == "number" then
+						pcall(function()
+							if (soundEffect :: any)[propertyName] ~= value then
+								(soundEffect :: any)[propertyName] = value
 							end
-						end
+						end)
 					end
 				end
-				(soundEffect :: SoundEffect).Parent = sound
 			end
+		end
+
+		local enabled = self._djEffectEnabledById[effectId] == true
+		if (soundEffect :: SoundEffect).Enabled ~= enabled then
+			(soundEffect :: SoundEffect).Enabled = enabled
 		end
 	end
 end
@@ -1266,7 +1307,11 @@ end
 
 --- Set the DJ multiplier (called from DJ slider). Recomputes actual speed.
 function MusicPlayerController:_setDjSpeedMultiplier(multiplier: number)
-	self._djSpeedMultiplier = math.clamp(tonumber(multiplier) or 1, 0.25, 2)
+	local nextMultiplier = math.clamp(tonumber(multiplier) or 1, 0.25, 2)
+	if self._djSpeedMultiplier == nextMultiplier then
+		return
+	end
+	self._djSpeedMultiplier = nextMultiplier
 	self._playbackSpeed = self._baseSpeed * self._djSpeedMultiplier
 	self:_refreshActiveDjSoundSettings()
 	if self._binder and self._binder.setDjPlaybackSpeed then
@@ -1279,7 +1324,11 @@ function MusicPlayerController:_setDjEffectEnabled(effectId: string, enabled: bo
 	if key == "" or not findDjEffectConfig(self._config, key) then
 		return
 	end
-	self._djEffectEnabledById[key] = enabled == true
+	local nextEnabled = enabled == true
+	if self._djEffectEnabledById[key] == nextEnabled then
+		return
+	end
+	self._djEffectEnabledById[key] = nextEnabled
 	self:_refreshActiveDjSoundSettings()
 	if self._binder and self._binder.setDjEffectEnabled then
 		self._binder:setDjEffectEnabled(key, self._djEffectEnabledById[key])
@@ -1302,6 +1351,11 @@ function MusicPlayerController:_setDjEffectValue(effectId: string, itemId: strin
 	if not values then
 		values = {}
 		self._djEffectValues[effectKey] = values
+	end
+	-- Skip the DSP refresh when nothing actually changed (server echo replays
+	-- the full effect state, so unguarded refreshes churned the audio graph).
+	if values[itemKey] == nextValue then
+		return
 	end
 	values[itemKey] = nextValue
 	self:_refreshActiveDjSoundSettings()

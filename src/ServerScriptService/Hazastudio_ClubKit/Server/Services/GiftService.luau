@@ -23,11 +23,26 @@ export type IGiftService = {
 local function createGiftService(deps: {
 	repo: IOverheadRepository,
 	overheadService: IOverheadService,
+	-- Optional pub/sub (External Admin Bridge listens on "Gift:RoleChanged").
+	-- Nil-safe: emits are skipped when no bus is injected.
+	eventBus: any?,
 }): IGiftService
 	local repo = deps.repo
 	local overheadService = deps.overheadService
+	local eventBus = deps.eventBus
 	local log = Logger.new("GiftService")
 	local service = {} :: IGiftService
+
+	local function emitRoleChanged(target: Player, roleKey: string?, giver: Player, action: string)
+		if eventBus and type(eventBus.emit) == "function" then
+			eventBus:emit("Gift:RoleChanged", {
+				userId = target.UserId,
+				roleKey = roleKey,
+				giverUserId = giver.UserId,
+				action = action,
+			})
+		end
+	end
 
 	local function isStudioBypass(): boolean
 		return Config.FeatureFlags.STUDIO_GIFT_BYPASS == true
@@ -84,6 +99,7 @@ local function createGiftService(deps: {
 		end
 
 		overheadService:invalidateGroupCache(target.UserId)
+		emitRoleChanged(target, normalizedRole, giver, "give")
 
 		log:info("Gift role applied", {
 			giver = giver.Name,
@@ -135,6 +151,7 @@ local function createGiftService(deps: {
 		end
 
 		overheadService:invalidateGroupCache(target.UserId)
+		emitRoleChanged(target, oldRole, giver, "remove")
 
 		log:info("Gift role removed", {
 			giver = giver.Name,

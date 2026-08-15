@@ -26,3 +26,10 @@ Domain glossary for agents. Terms only — no implementation details, no workflo
 - **Init bag** — a module under `Client/Init/*` or `Server/Init/*` that returns a table of related modules from one `require`, keeping top-level `local` counts low in Main scripts.
 - **Register budget** — Luau's ~200 local-registers-per-chunk limit; the structural pressure behind Init bags (see `docs/adr/0002`). Frozen at ≥170 top-level locals in a file, blocker at ≥185.
 - **Versioned DataStore keys** — player-data keys carry a version; bumping one is a breaking migration for existing buyers' live data.
+
+## External admin bridge
+
+- **External admin** — a third-party moderation system (Adonis or Kohl's Admin) installed by the buyer. The Kit does not own it and does not fork it.
+- **Facade** — the engine-side `ExternalAdminFacade` singleton: a stable API surface that external admin plugins/addons call to run Club Kit actions (`setRole`, `announce`, etc.).
+- **Provider** — `ClubKitConfig.ExternalAdmin.Provider` value (`"Adonis"`, `"Kohls"`, `"None"`); runtime gate only.
+- **Rank sync** — one-way mirroring of Club Kit staff role changes into the chosen external admin's ranks, driven by the `Gift:RoleChanged` event.

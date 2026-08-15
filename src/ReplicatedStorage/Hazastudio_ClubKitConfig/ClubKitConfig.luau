@@ -49,6 +49,26 @@ ClubKitConfig.AdminUserIds = {
 	-- backup admins without group rank; example: [111111] = true,
 } :: { [number]: boolean }
 
+-- =============================================================================
+-- EXTERNAL ADMIN BRIDGE (optional — Adonis / Kohl's)
+-- =============================================================================
+ClubKitConfig.ExternalAdmin = {
+	-- Which external admin system is bridged to Club Kit. Runtime gate only:
+	-- it never installs/removes the admin itself (setup: extras/place-packs/ExternalAdminBridge).
+	Provider = "None", -- "Adonis" | "Kohls" | "None"
+	SyncStaffRoles = true, -- /setrole of staff roles also ranks up in the external admin
+	SyncContentRoles = false, -- opt-in: also sync content roles like DJ (add them to RankMap first)
+	-- Club Kit role → external rank. Membership (VIP/VVIP/Supreme) and Spender
+	-- roles are never synced, even if added here (Kohl's "vip" collision).
+	RankMap = {
+		Owner = { adonis = 900, kohls = "creator" },
+		CoOwner = { adonis = 300, kohls = "superadmin" },
+		Staff = { adonis = 200, kohls = "admin" },
+		Moderator = { adonis = 100, kohls = "mod" },
+		-- DJ = { adonis = 50, kohls = "content" }, -- opt-in low-power example (needs SyncContentRoles = true)
+	},
+}
+
 -- Temporary leaderboard warm-up (optional): [userId] = rank
 ClubKitConfig.TopSpenders = {} :: { [number]: number }
 
@@ -184,6 +204,15 @@ ClubKitConfig.Shop = {
 -- =============================================================================
 ClubKitConfig.PaidBroadcast = {
 	ProductId = 3503700307, -- replace with Product ID from Creator Dashboard
+}
+
+-- =============================================================================
+-- ANNOUNCEMENT (free /announce + free broadcast panel gate)
+-- MinMembership = lowest paid tier that can announce free without Robux.
+-- "Tier1"/"VIP", "Tier2"/"VVIP", "Tier3"/"Supreme". Staff+ / top spenders still free.
+-- =============================================================================
+ClubKitConfig.Announcement = {
+	MinMembership = "Tier2", -- default VVIP+; set "Tier3" / "Supreme" for Supreme-only free announce
 }
 
 -- =============================================================================

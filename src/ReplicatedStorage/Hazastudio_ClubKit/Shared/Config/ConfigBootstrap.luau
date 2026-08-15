@@ -212,6 +212,9 @@ function ConfigBootstrap.apply(config: any)
 
 	config.AdminUserIds = clubKit.AdminUserIds or {}
 	config.TopSpenders = clubKit.TopSpenders or {}
+	if type(clubKit.ExternalAdmin) == "table" then
+		config.ExternalAdmin = clubKit.ExternalAdmin
+	end
 
 	local gameDataApi = clubKit.GameDataApi
 	if type(config.GameDataApi) == "table" and type(gameDataApi) == "table" then
@@ -345,6 +348,41 @@ function ConfigBootstrap.apply(config: any)
 		local productId = tonumber(paidBroadcast.ProductId)
 		if productId and productId > 0 then
 			config.PaidBroadcast.PRODUCT_ID = productId
+		end
+	end
+
+	local announcement = clubKit.Announcement
+	if type(config.Announcement) == "table" and type(announcement) == "table" then
+		local minRaw = announcement.MinMembership
+		if type(minRaw) == "string" and minRaw ~= "" then
+			-- Resolve without requiring OverheadDomain (Config is still loading → recursive require).
+			local aliases = config.Membership and config.Membership.ALIASES
+			local mapped = if type(aliases) == "table"
+				then aliases[minRaw] or aliases[string.lower(minRaw)]
+				else nil
+			local minTier = if type(mapped) == "string" then mapped else minRaw
+			local tiers = config.Membership and config.Membership.Tiers
+			local paid = config.Membership and config.Membership.PAID_TIERS
+			if type(tiers) == "table" and type(tiers[minTier]) ~= "table" then
+				local lowered = string.lower(minRaw)
+				for key, cfg in pairs(tiers) do
+					if type(key) == "string" and type(cfg) == "table" then
+						local label = cfg.label
+						if type(label) == "string" and string.lower(label) == lowered then
+							minTier = key
+							break
+						end
+					end
+				end
+			end
+			if type(paid) == "table" and paid[minTier] == true then
+				config.Announcement.MIN_MEMBERSHIP_TIER = minTier
+				local tierCfg = tiers and tiers[minTier]
+				local label = if type(tierCfg) == "table" and type(tierCfg.label) == "string" and tierCfg.label ~= ""
+					then tierCfg.label
+					else minTier
+				config.Announcement.MSG_NO_PERM = "[Announcement] This command is " .. label .. "-only and above."
+			end
 		end
 	end
 

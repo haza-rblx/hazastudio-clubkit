@@ -91,6 +91,12 @@ Guide: [`extras/place-packs/SyncBhms/README.md`](../../extras/place-packs/SyncBh
 
 ---
 
+## Owner intake form
+
+Before filling `ClubKitConfig` / `Secrets`, send the owner [`OWNER_ONBOARDING.txt`](OWNER_ONBOARDING.txt) (also in `deliver/`). They fill `Field = value` and return it. Secrets (`DonationApiSecret`, `GameDataApiSecret`) must come in a private message, not a public group.
+
+---
+
 ## Step 5 — Buyer install (main only)
 
 1. Plugin → **Unpack RBXM…** → pick `HazastudioClubKit_Package_v2.5.3.rbxm`

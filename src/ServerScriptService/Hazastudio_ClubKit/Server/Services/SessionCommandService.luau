@@ -40,6 +40,81 @@ local function createSessionCommandService(deps: {
 	-- True while a /re in-place appearance refresh is in flight.
 	local pendingReSyncRestore: { [number]: boolean } = {}
 
+	-- === Safe teleport (pcall + TeleportInitFailed watch) ===
+	-- Async init failures never throw for ANY TeleportService API; they only fire
+	-- TeleportInitFailed. pcall alone treats a queued-but-failed teleport as success.
+	-- https://create.roblox.com/docs/en-us/projects/teleport#handle-failed-teleports
+	type TeleportWatch = {
+		done: boolean,
+		errMessage: string?,
+	}
+	local teleportWatchers: { [number]: TeleportWatch } = {}
+	local teleportFailedConn: RBXScriptConnection? = nil
+
+	local function onTeleportInitFailed(
+		player: Player,
+		teleportResult: Enum.TeleportResult,
+		errorMessage: string
+	)
+		local watch = teleportWatchers[player.UserId]
+		if not watch or watch.done then
+			return
+		end
+		watch.done = true
+		watch.errMessage = ("%s: %s"):format(tostring(teleportResult), tostring(errorMessage))
+	end
+
+	-- Attempt a teleport and wait for a definitive init outcome.
+	-- sameServer=true targets this exact JobId via TeleportOptions.ServerInstanceId;
+	-- false lets Roblox pick any public server. Returns (true, nil) on success
+	-- (player left or no failure within the watch window — never double-teleport
+	-- on ambiguity), (false, err) on pcall throw or reported init failure.
+	local function safeTeleportAsync(
+		player: Player,
+		teleportData: { [string]: any },
+		sameServer: boolean
+	): (boolean, string?)
+		local timeoutSec = math.max(3, tonumber(Config.AfkGuard.TELEPORT_INIT_TIMEOUT_SEC) or 10)
+		local watch: TeleportWatch = { done = false, errMessage = nil }
+		teleportWatchers[player.UserId] = watch
+
+		local ok, err = pcall(function()
+			local options = Instance.new("TeleportOptions")
+			options:SetTeleportData(teleportData)
+			if sameServer then
+				options.ServerInstanceId = game.JobId
+			end
+			TeleportService:TeleportAsync(game.PlaceId, { player }, options)
+		end)
+		if not ok then
+			teleportWatchers[player.UserId] = nil
+			return false, tostring(err)
+		end
+
+		local deadline = os.clock() + timeoutSec
+		while os.clock() < deadline do
+			if watch.done then
+				teleportWatchers[player.UserId] = nil
+				log:warn("teleport_init_failed", {
+					player = player.Name,
+					userId = player.UserId,
+					error = watch.errMessage,
+				})
+				return false, watch.errMessage or "teleport_init_failed"
+			end
+			if player.Parent == nil then
+				-- Player left the server — the teleport took them.
+				teleportWatchers[player.UserId] = nil
+				return true, nil
+			end
+			task.wait(0.25)
+		end
+
+		-- No failure reported within the window; assume the teleport proceeds.
+		teleportWatchers[player.UserId] = nil
+		return true, nil
+	end
+
 	local service = {}
 
 	local function serializeCFrame(cframe: CFrame): { number }
@@ -389,6 +464,10 @@ local function createSessionCommandService(deps: {
 			wirePlayer(player)
 		end
 		Players.PlayerAdded:Connect(wirePlayer)
+
+		if not teleportFailedConn then
+			teleportFailedConn = TeleportService.TeleportInitFailed:Connect(onTeleportInitFailed)
+		end
 	end
 
 	function service:onPlayerRemoving(player: Player)
@@ -397,6 +476,7 @@ local function createSessionCommandService(deps: {
 		pendingAfkSyncRestore[player.UserId] = nil
 		pendingReSyncRestore[player.UserId] = nil
 		restoreFlightId[player.UserId] = nil
+		teleportWatchers[player.UserId] = nil
 	end
 
 	function service:handleRefresh(player: Player): Result<nil>
@@ -510,9 +590,7 @@ local function createSessionCommandService(deps: {
 
 		notify.player(player, Config.Session.MSG_REJOINING, "INFO")
 
-		local success, err = pcall(function()
-			TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, player, nil, teleportData)
-		end)
+		local success, err = safeTeleportAsync(player, teleportData, true)
 
 		if not success then
 			log:error("Rejoin teleport failed", {
@@ -569,13 +647,7 @@ local function createSessionCommandService(deps: {
 		})
 
 		local function trySameServer(): (boolean, string?)
-			local ok, err = pcall(function()
-				TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, player, nil, teleportData)
-			end)
-			if ok then
-				return true, nil
-			end
-			return false, tostring(err)
+			return safeTeleportAsync(player, teleportData, true)
 		end
 
 		local success, err = trySameServer()
@@ -595,9 +667,7 @@ local function createSessionCommandService(deps: {
 		end
 
 		if afkConfig.TELEPORT_FALLBACK_NEW_SERVER == true and canRetry and player.Parent then
-			local fallbackOk, fallbackErr = pcall(function()
-				TeleportService:Teleport(game.PlaceId, player, teleportData)
-			end)
+			local fallbackOk, fallbackErr = safeTeleportAsync(player, teleportData, false)
 			if fallbackOk then
 				log:warn("afk_teleport_fallback_new_server", {
 					player = player.Name,

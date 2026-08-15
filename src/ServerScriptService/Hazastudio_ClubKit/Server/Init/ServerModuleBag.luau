@@ -47,6 +47,7 @@ return {
 	createJoinGreetingService = require(Server.Services.JoinGreetingService),
 	createJoinCommunityMembersService = require(Server.Services.JoinCommunityMembersService),
 	createCommunityVipService = require(Server.Services.CommunityVipService),
+	ExternalAdminFacade = require(Server.ExternalAdminFacade),
 
 	-- Controllers
 	createOverheadController = require(Server.Controllers.OverheadController),

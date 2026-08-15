@@ -1,0 +1,147 @@
+HAZASTUDIO CLUB KIT — FORM OWNER
+================================
+Isi lalu kirim balik (Discord / WhatsApp / email).
+Jangan ubah nama field di kiri tanda =  (itu yang dipetakan ke ClubKitConfig).
+Kosong = pakai default kit / dilewati.
+
+Cara isi:
+  Field    = nilai kamu
+  Ya/Tidak = Ya atau Tidak
+  0 / kosong = belum ada / tidak dipakai
+
+KIRIM TERPISAH (jangan di grup publik):
+  DonationApiSecret, GameDataApiSecret
+
+
+A. IDENTITAS PLACE
+------------------
+PlaceName          =
+PlaceId            =          (Creator Dashboard → Places, opsional)
+OwnerRobloxName    =
+OwnerUserId        =          (wajib — profil Roblox, angka)
+ContactDiscord     =
+
+
+B. BRANDING  →  ClubKitConfig.Branding
+--------------------------------------
+GameName           =          (nama club di UI / VFX)
+WelcomeMessage     =          (tap to continue; boleh pakai %s = nama player)
+Greeting           =          (loading screen; boleh pakai %s)
+LogoImage          =          (rbxassetid://……  setelah upload logo ke Roblox)
+DiscordInvite      =          (contoh: discord.gg/xxxx  — kosong = chip Discord disembunyikan)
+
+
+C. GROUP  →  ClubKitConfig.Group   (WAJIB sebelum go-live)
+----------------------------------------------------------
+GroupId            =          (ID group Roblox venue, angka)
+OwnerGroupRank     = 255      (biasanya 255 = Owner di group)
+ExtraAdminUserIds  =          (opsional, pisah koma: 111,222)
+
+
+D. MEMBERSHIP / SHOP  →  ClubKitConfig.Shop + Membership
+--------------------------------------------------------
+Self-buy = Game Pass. Gift ke orang lain = Developer Product.
+Buat di Creator Dashboard → Monetization.
+
+Tier1_Label        = VIP
+Tier1_BuyGamePassId=
+Tier1_GiftId       =          (Developer Product)
+Tier1_PriceRobux   =          (tampilan UI, opsional)
+
+Tier2_Label        = VVIP
+Tier2_BuyGamePassId=
+Tier2_GiftId       =
+Tier2_PriceRobux   =
+
+Tier3_Label        = Supreme
+Tier3_BuyGamePassId=
+Tier3_GiftId       =
+Tier3_PriceRobux   =
+
+ShopEnabled        = Ya       (Tidak = tombol shop dimatikan)
+
+
+E. PAID BROADCAST  →  ClubKitConfig.PaidBroadcast
+-------------------------------------------------
+Developer Product terpisah (bukan Game Pass, bukan gift membership).
+
+BroadcastProductId =
+BroadcastEnabled   = Ya
+
+
+F. DONASI CASH  (opsional)
+--------------------------
+Kalau belum pakai Bagi-Bagi / Saweria / SociaBuzz: isi DonationCash = Tidak, skip sisanya.
+
+DonationCash       = Ya
+DonationRobux      = Ya
+Provider           =          (bagibagi | saweria | sociabuzz)
+ProviderLink       =          (URL halaman donasi publik)
+Currency           = IDR      (IDR atau PHP — tampilan saja, jumlah tidak dikonversi)
+MinAmount          = 1000     (minimal masuk notif + leaderboard)
+NukeWorldPosition  =          (X, Y, Z — posisi VFX panggung; kosong = default template)
+
+ApiUrl             =          (isi bersama Hazastudio / worker)
+DonationApiSecret  =          (KIRIM PRIVAT — Secrets.DonationApiSecret)
+
+
+G. GAME DATA / JOIN COMMUNITY  (opsional, isi bersama Hazastudio)
+-----------------------------------------------------------------
+GameKey            =          (ClubKitConfig.GameDataApi.GameKey)
+GameDataApiSecret  =          (KIRIM PRIVAT — Secrets.GameDataApiSecret)
+
+
+H. FITUR ON/OFF  →  ClubKitConfig.Features
+------------------------------------------
+Ya / Tidak. Kosong = default kit.
+
+MusicPlayer              = Ya
+MusicCatalogSeed         = Ya    (playlist default kit)
+SyncDance                = Ya
+LegacySyncBhms           = Tidak (Ya hanya jika unpack add-on BHMS)
+WutwutDance              = Tidak
+Hotbar                   = Ya
+LoadingScreen            = Ya
+Settings                 = Ya
+JoinGreetings            = Ya
+PromptJoinCommunityOnLoad= Ya
+AdminHub                 = Tidak
+Couples                  = Ya
+Stickers                 = Ya
+LevelSystem              = Ya
+Leaderboards             = Ya
+DonationWorldEffects     = Ya
+Gravity                  = Ya
+VipOnCommunityJoin       = Tidak (VIP gratis kalau join group)
+DonationRankGradientAnim = Tidak
+
+
+I. ROLES & RANKS  (opsional)
+----------------------------
+Kosongkan seluruh blok ini kalau pakai role bawaan kit
+(Owner, Co-Owner, Staff, Moderator, DJ, Lead Dance, Streamer, Influencer).
+
+KeepKitDefaultRoles = Ya
+
+Kalau Tidak: isi per baris  RoleKey | Label di game | Rank group Roblox
+Contoh:  DJ | DJ | 50
+Role1              =
+Role2              =
+Role3              =
+Role4              =
+Role5              =
+
+
+J. CATATAN
+----------
+(apa pun: nama membership beda, role extra, map belum siap, dll.)
+
+
+
+
+CHECKLIST OWNER (sebelum kirim)
+[ ] OwnerUserId + GroupId terisi (bukan 0)
+[ ] Logo sudah jadi rbxassetid (bukan file PNG mentah)
+[ ] Game Pass + Gift Product ID per tier (kalau shop dipakai)
+[ ] Broadcast Product ID (kalau broadcast dipakai)
+[ ] Secret donasi / game-data dikirim di chat privat, bukan di form publik

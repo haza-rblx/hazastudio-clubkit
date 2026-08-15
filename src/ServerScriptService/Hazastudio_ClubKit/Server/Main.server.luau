@@ -443,6 +443,7 @@ trackLifecycle(
 local _giftService = ServerMods.createGiftService({
 	repo = repo,
 	overheadService = overheadService,
+	eventBus = eventBus,
 })
 local streakService = ServerMods.createStreakService({ repo = repo })
 local levelService: any = nil
@@ -670,6 +671,16 @@ local shopService = ServerMods.createShopService({
 local membershipCommandService = ServerMods.createMembershipCommandService({
 	repo = repo,
 	overheadService = overheadService,
+})
+-- External Admin Bridge facade (Adonis/Kohl's plugins require this singleton).
+-- Registered before startAll so onStart detection runs; no-op when Provider = "None".
+trackLifecycle("ExternalAdminFacade", ServerMods.ExternalAdminFacade)
+ServerMods.ExternalAdminFacade._init({
+	giftService = _giftService,
+	membershipCommandService = membershipCommandService,
+	genericBroadcastService = genericBroadcastService,
+	overheadService = overheadService,
+	eventBus = eventBus,
 })
 local communityCommandService = ServerMods.createCommunityCommandService({
 	repo = repo,

@@ -81,16 +81,9 @@ local function createAfkGuardService(deps: {
 		end
 		processedRequests:add(request.requestId)
 
-		if not limiter:check(player.UserId) then
-			log:info("afk_rejoin_denied", {
-				player = player.Name,
-				userId = player.UserId,
-				reason = "rate_limited",
-			})
-			notify.player(player, afkConfig.MSG_REJOIN_FAILED, "WARNING")
-			return
-		end
-
+		-- Free server-state checks run before the rate limiter: a token is an
+		-- attempt budget for genuine teleports, not a request budget. Transitory
+		-- denials (in-flight, carry) must not burn the 15-minute window.
 		if inFlightAfkRejoin[player.UserId] then
 			log:info("afk_rejoin_denied", {
 				player = player.Name,
@@ -106,6 +99,16 @@ local function createAfkGuardService(deps: {
 				player = player.Name,
 				userId = player.UserId,
 				reason = blockReason,
+			})
+			notify.player(player, afkConfig.MSG_REJOIN_FAILED, "WARNING")
+			return
+		end
+
+		if not limiter:check(player.UserId) then
+			log:info("afk_rejoin_denied", {
+				player = player.Name,
+				userId = player.UserId,
+				reason = "rate_limited",
 			})
 			notify.player(player, afkConfig.MSG_REJOIN_FAILED, "WARNING")
 			return

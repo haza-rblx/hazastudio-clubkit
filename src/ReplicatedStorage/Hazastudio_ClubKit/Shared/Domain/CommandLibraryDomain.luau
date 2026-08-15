@@ -266,7 +266,7 @@ local REGISTRY = table.freeze({
 	makeEntry({
 		id = "announce",
 		alias = Config.Announcement.CMD_ALIAS_ANNOUNCE,
-		description = "Broadcast a server announcement (Tier2+). Type /announce or /a followed by your message.",
+		description = "Broadcast a server announcement. Type /announce or /a followed by your message.",
 		category = "Admin",
 		needsArguments = true,
 		iconKey = "admin_announce",

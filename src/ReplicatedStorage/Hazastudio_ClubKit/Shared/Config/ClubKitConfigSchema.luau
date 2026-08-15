@@ -45,6 +45,17 @@ ClubKitConfigSchema.defaults = {
 	},
 	AdminUserIds = {} :: { [number]: boolean },
 	TopSpenders = {} :: { [number]: number },
+	ExternalAdmin = {
+		Provider = "None", -- "Adonis" | "Kohls" | "None"
+		SyncStaffRoles = true,
+		SyncContentRoles = false,
+		RankMap = {
+			Owner = { adonis = 900, kohls = "creator" },
+			CoOwner = { adonis = 300, kohls = "superadmin" },
+			Staff = { adonis = 200, kohls = "admin" },
+			Moderator = { adonis = 100, kohls = "mod" },
+		},
+	},
 	GameDataApi = {
 		GameKey = "the-basic",
 	},
@@ -140,6 +151,10 @@ ClubKitConfigSchema.defaults = {
 	},
 	PaidBroadcast = {
 		ProductId = 0,
+	},
+	-- Free /announce + free broadcast UI. Tier1=VIP, Tier2=VVIP, Tier3=Supreme (or label).
+	Announcement = {
+		MinMembership = "Tier2",
 	},
 	Membership = {
 		Tier1 = { Label = "VIP", Enabled = true, Priority = 40 },

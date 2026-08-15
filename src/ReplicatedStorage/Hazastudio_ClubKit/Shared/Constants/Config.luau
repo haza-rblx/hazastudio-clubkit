@@ -218,7 +218,10 @@ Config.Announcement = {
 	REMOTE_BROADCAST = "GenericBroadcast",
 	CMD_ALIAS_ANNOUNCE = "announce",
 	CMD_ALIAS_ANNOUNCE_SHORT = "a",
-	MIN_GROUP_RANK = 40, -- Tier2+
+	-- Free /announce + free broadcast panel. Buyer override: ClubKitConfig.Announcement.MinMembership
+	-- ("Tier1"/"VIP", "Tier2"/"VVIP", "Tier3"/"Supreme"). Default Tier2 = VVIP+.
+	MIN_MEMBERSHIP_TIER = "Tier2",
+	MIN_GROUP_RANK = 40, -- legacy hint; gate uses MIN_MEMBERSHIP_TIER
 	MAX_MESSAGE_LENGTH = 180,
 	RATE_MAX = 2,
 	RATE_WINDOW = 30,
@@ -234,6 +237,17 @@ Config.Announcement = {
 	-- GenericBroadcast wrapper offset while donation notification is visible.
 	BROADCAST_WRAPPER_POSITION_DURING_DONATION = UDim2.new(0.5, 0, 0.87, 0),
 	BROADCAST_WRAPPER_ANCHOR_DURING_DONATION = Vector2.new(0.5, 1),
+}
+-- ============================================================
+-- EXTERNAL ADMIN BRIDGE (Adonis / Kohl's)
+-- Buyer override: ClubKitConfig.ExternalAdmin (fill-forward via ConfigBootstrap).
+-- Runtime gate only — never installs/removes the admin. Normalized via ExternalAdminDomain.
+-- ============================================================
+Config.ExternalAdmin = {
+	Provider = "None", -- "Adonis" | "Kohls" | "None"
+	SyncStaffRoles = true,
+	SyncContentRoles = false,
+	RankMap = {},
 }
 -- ============================================================
 -- JOIN GREETINGS (toast when Owner / Leadership / Content / top-10 spender joins)
@@ -1716,6 +1730,11 @@ Config.AfkGuard = {
 	AUTO_REJOIN_RATE_WINDOW = 900,
 	RETRY_DELAY_SEC = 30,
 	MAX_RETRY = 1,
+	-- Teleport init failures are async (TeleportInitFailed); give up waiting after this long.
+	TELEPORT_INIT_TIMEOUT_SEC = 10,
+	-- Client re-request backoff per idle streak (Player.Idled keeps firing while idle).
+	CLIENT_RETRY_BACKOFF_SEC = 60,
+	MAX_CLIENT_ATTEMPTS = 3,
 	SYNC_FALLBACK_TOP_LEADER = true,
 	SYNC_REQUIRE_LEADER_DANCING = true,
 	TELEPORT_PREFER_SAME_SERVER = true,
@@ -2587,7 +2606,7 @@ Config.Leaderboards = {
 	ADMIN_REFRESH_RATE_WINDOW = 30,
 	CMD_REFRESH = "refreshleaderboard",
 	CMD_SHOWCASE = "showcase",
-	DEFAULT_LIMIT = 10,
+	DEFAULT_LIMIT = 50,
 	MAX_LIMIT = 100,
 	-- Patch #2 R1: Unify robux leaderboard cache key. Previously ROBUX_LIMIT=10 was used
 	-- for overhead top-donate, while DONOR_PROFILE_RANK_LOOKUP_LIMIT=100 was used
@@ -2595,11 +2614,11 @@ Config.Leaderboards = {
 	-- Set to MAX_LIMIT so all callers share one cache entry (robux:100).
 	ROBUX_LIMIT = 100,
 	-- Workspace SurfaceGui rows painted (fetch may still use ROBUX_LIMIT for DS/cache).
-	ROBUX_PAINT_LIMIT = 20,
-	COMMUNITY_LIMIT = 10,
-	SAWERIA_LIMIT = 10,
+	ROBUX_PAINT_LIMIT = 50,
+	COMMUNITY_LIMIT = 50,
+	SAWERIA_LIMIT = 50,
 	LIKES_LIMIT = 50,
-	LIKES_PAINT_LIMIT = 20,
+	LIKES_PAINT_LIMIT = 50,
 	LIKES_BACKFILL_MAX_KEYS = 500,
 	LIKES_BACKFILL_COOLDOWN = 300,
 	ROBUX_USER_ORDERED_KEY = scopedDataStoreKey("RobuxDonationLeaderboard_User_v1"),

@@ -15,7 +15,9 @@ local log = Logger.new("AfkGuardController")
 
 local _connections: { RBXScriptConnection } = {}
 local warnShown = false
-local rejoinInProgress = false
+-- Retry budget for one idle streak; Idled keeps firing (~every 30s) while idle,
+-- so a denied/failed request retries on a later tick after the backoff window.
+local retryState: AfkGuardDomain.ClientRetryState = { lastRequestAt = nil, attempts = 0 }
 
 local function track(conn: RBXScriptConnection): RBXScriptConnection
 	table.insert(_connections, conn)
@@ -24,7 +26,7 @@ end
 
 local function resetIdleState()
 	warnShown = false
-	rejoinInProgress = false
+	retryState = { lastRequestAt = nil, attempts = 0 }
 end
 
 local function destroy()
@@ -40,7 +42,7 @@ local function init(deps: { remotes: Folder })
 	if not afkConfig or afkConfig.ENABLED ~= true then
 		return
 	end
-	if Config.FeatureFlags.AfkGuardEnabled ~= true then
+	if Config.FeatureFlags.AfkGuardEnabled == false then
 		return
 	end
 
@@ -59,25 +61,23 @@ local function init(deps: { remotes: Folder })
 	end))
 
 	track(player.Idled:Connect(function(idleTime: number)
-		if rejoinInProgress then
-			return
-		end
-
 		if AfkGuardDomain.isWarnThreshold(idleTime) and not warnShown then
 			warnShown = true
 			log:info("afk_warn_shown", { idleTime = idleTime })
 			NotifService.warn(afkConfig.MSG_WARN or "[Session] You're AFK. Move to stay connected.")
 		end
 
-		if not AfkGuardDomain.isRejoinThreshold(idleTime) then
+		local canRequest, nextState = AfkGuardDomain.canRequestRejoin(retryState, idleTime, os.clock())
+		retryState = nextState
+		if not canRequest then
 			return
 		end
 
-		rejoinInProgress = true
 		local requestId = HttpService:GenerateGUID(false)
 		log:info("afk_rejoin_requested", {
 			requestId = requestId,
 			reportedIdleSec = idleTime,
+			attempt = retryState.attempts,
 		})
 		NotifService.info(afkConfig.MSG_REJOINING or "[Session] AFK rejoin in progress...")
 
@@ -88,7 +88,6 @@ local function init(deps: { remotes: Folder })
 			})
 		end)
 		if not ok then
-			rejoinInProgress = false
 			log:warn("afk_rejoin_fire_failed", { error = tostring(err) })
 			NotifService.error(afkConfig.MSG_REJOIN_FAILED or "[Session] AFK rejoin failed.")
 		end

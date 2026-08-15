@@ -1,0 +1,15 @@
+{
+  "name": "ExternalAdminBridge",
+  "tree": {
+    "$className": "Folder",
+    "Server-ClubKitBridge": {
+      "$path": "adonis/Server-ClubKitBridge.luau"
+    },
+    "ClubKitAddon": {
+      "$path": "kohls/ClubKitAddon.luau"
+    },
+    "ExternalAdminSelector": {
+      "$path": "ExternalAdminSelector.server.luau"
+    }
+  }
+}

@@ -124,9 +124,11 @@ function PermissionDomain.canAnnounce(roleKey: string?, effectiveMembership: str
 		return true
 	end
 	local OverheadDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.OverheadDomain)
+	local minTierRaw = Config.Announcement and Config.Announcement.MIN_MEMBERSHIP_TIER
+	local minTier = OverheadDomain.normalizeMembershipTier(minTierRaw) or "Tier2"
 	return OverheadDomain.hasRolePriorityAtLeast(roleKey, "Staff")
-		or OverheadDomain.hasMembershipAtLeast(effectiveMembership, "Tier2")
-		or OverheadDomain.hasMembershipAtLeast(roleKey, "Tier2")
+		or OverheadDomain.hasMembershipAtLeast(effectiveMembership, minTier)
+		or OverheadDomain.hasMembershipAtLeast(roleKey, minTier)
 end
 
 function PermissionDomain.canTeleport(roleKey: string?, effectiveMembership: string?): boolean

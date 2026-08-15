@@ -176,6 +176,14 @@ Luau crashes with `Out of local registers` if a function/chunk exceeds ~200 loca
 - Treat ≥170 top-level `^local` as freeze; ≥185 as treat-as-blocker before merge.
 - Check: `.\tools\count-locals.ps1` (optional `-FailAt 185`).
 
+### Live audio instances — mutate, never rebuild
+
+Destroying/recreating DSP nodes (`SoundEffect` children) or swapping `Sound` instances while they play causes audible clicks/crackle, especially on low-end clients (user-reported: DJ effect sliders + toggles, v-unreleased fix). Rules:
+
+- `SoundEffect` on a live `Sound`: create once, toggle via `Enabled`, change values via property writes guarded to actual changes.
+- Setters driven by server state syncs: return early when the value is unchanged — server echoes replay full state, not deltas (see `MusicPlayerController` DJ guards).
+- One-shot sounds (UI clicks, soundboard) are fine to create/destroy per event — the ban is on churning nodes of *playing* audio.
+
 ## Sensitive areas
 
 - `Config.luau` — shared constants; buyers usually use `ClubKitConfig.luau`
