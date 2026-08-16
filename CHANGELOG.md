@@ -11,6 +11,13 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+### Added
+- **Packager plugin automation hooks** — `_G.clubkit_update_engine()` runs the same flow as the "Update engine" button (check → apply → config merge) for command-bar / MCP automation; poll `_G.clubkit_engine_update_status` (`state` = `checking`/`updating`/`done`/`error`, `progress`/`total`, `report`). Used to drive a v2.6.0 update from MiMoCode over robloxstudio-mcp without clicking the dock.
+
+### Fixed
+- **AFK auto-rejoin latched after one cycle** — post-2.6.0 report: rejoin fired once, then never again. Three causes, all server/client trust gaps: (1) `inFlightAfkRejoin` was set before `handleAfkRejoin` and only cleared on the error path or `PlayerRemoving` — a teleport that resolved ambiguously (or a `handleAfkRejoin` throw, which was never pcalled) left the flag stuck and every later request died silently as `in_flight`; (2) the request remote was fire-and-forget, so the client could not tell `rate_limited` ("wait for the 15-min token") from a fatal failure — after a successful rejoin the Roblox idle counter still reads >17 min, so the next `Idled` tick re-fires, gets rate-limited, burns all 3 attempts in ~2 min of blind 60s backoff, and latches until physical input; (3) `ClientRetryState`'s own comment claimed a reset path that did not exist. Fix: new `AfkRejoinResponse` remote carries the gate outcome back to the client (`allowed`/`denied_rate_limited`/… + `retryAfterSec` from the rate limiter); transient denials no longer burn the attempt budget — the client re-schedules from the server's hint (with jitter) and re-arms on `allowed`/`rejoin_failed`; `handleAfkRejoin` is now pcalled; the in-flight flag is cleared after `handleAfkRejoin` returns on success or error and reaped if it outlives the teleport window (stale watchdog). **Known limitation:** Roblox's native 20-minute idle kick is client-side and is *not* prevented by teleport rejoins (the idle counter survives a same-server teleport); preventing it requires synthetic input (`VirtualUser`), which Roblox's own docs call unmaintained and unreliable — this guard restores position + dance sync for semi-active players, it is not an AFK-kick bypass.
+- **Dance sync lost on native respawn** — `pendingAfkSyncRestore` only fired from the teleport `wirePlayer` path (`GetJoinData`), so a native respawn (Reset button / `LoadCharacter` / reconnect) restored position but dropped the AFK dance sync. `CharacterAdded` now also restores the pending sync payload when no teleport restore is queued.
+
 ## [2.6.0] - 2026-08-16
 
 External Admin Bridge (Adonis/Kohl's), free-announce membership gate, top-50 workspace boards; AFK rejoin teleport, DJ crackle, and boot fixes.

@@ -1740,6 +1740,7 @@ Config.AfkGuard = {
 	TELEPORT_PREFER_SAME_SERVER = true,
 	TELEPORT_FALLBACK_NEW_SERVER = true,
 	REMOTE_REQUEST = "AfkRejoinRequest",
+	REMOTE_RESPONSE = "AfkRejoinResponse",
 	MSG_WARN = "[Session] You're AFK. Move to stay, or we'll rejoin you automatically.",
 	MSG_REJOINING = "[Session] AFK rejoin in progress...",
 	MSG_REJOIN_FAILED = "[Session] AFK rejoin failed. Move your mouse to stay connected.",

@@ -452,10 +452,39 @@ local function createSessionCommandService(deps: {
 			-- Keep pending until pivot succeeds. Each CharacterAdded starts a new
 			-- flight that supersedes the previous loop (no double-pivot race).
 			local pending = pendingRespawnRestore[player.UserId] or pendingJoinRestore[player.UserId]
-			if not pending then
+			local syncPayload = pendingAfkSyncRestore[player.UserId]
+			if not pending and not syncPayload then
 				return
 			end
-			restoreAfterCharacterAdded(player, pending)
+			if pending then
+				restoreAfterCharacterAdded(player, pending)
+				return
+			end
+			-- Native respawn (Reset button / LoadCharacter / reconnect) carries no
+			-- teleport JoinData, so position restore above has no payload — but the
+			-- AFK sync snapshot may still be pending. Restore the dance sync too.
+			-- Single-flight guard: supersede any older flight for this user.
+			local flight = (restoreFlightId[player.UserId] or 0) + 1
+			restoreFlightId[player.UserId] = flight
+			task.defer(function()
+				if restoreFlightId[player.UserId] ~= flight or not player.Parent then
+					return
+				end
+				pendingAfkSyncRestore[player.UserId] = nil
+				if syncService and type(syncService.restoreAfterAfkRejoin) == "function" then
+					local options: AfkSyncRestoreOptions = {
+						fireSyncNotification = syncNotify,
+						notifyPlayer = function(target: Player, message: string, kind: string?)
+							notify.player(target, message, kind)
+						end,
+					}
+					syncService:restoreAfterAfkRejoin(player, syncPayload, options)
+					log:info("afk_restore_sync_native_respawn", {
+						player = player.Name,
+						userId = player.UserId,
+					})
+				end
+			end)
 		end)
 	end
 

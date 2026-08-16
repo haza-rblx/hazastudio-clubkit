@@ -24,7 +24,27 @@ export type AfkRejoinRequest = {
 	reportedIdleSec: number,
 }
 
+-- Server -> client outcome for one rejoin request (REMOTE_RESPONSE).
+-- Transient denials (rate/in-flight/carry/service) must NOT burn the client's
+-- attempt budget — the client re-schedules using retryAfterSec instead.
+export type RejoinOutcome =
+	"allowed"
+	| "denied_rate_limited"
+	| "denied_in_flight"
+	| "denied_carry_active"
+	| "denied_service_unavailable"
+	| "denied_invalid"
+	| "rejoin_failed"
+
+export type RejoinResponse = {
+	requestId: string,
+	outcome: RejoinOutcome,
+	retryAfterSec: number?,
+}
+
 -- Client-side retry budget for one idle streak; reset by real user input.
+-- Attempts are ALSO re-armed on server feedback (allowed / rejoin_failed) so
+-- a no-input session never dead-ends on a transient denial.
 export type ClientRetryState = {
 	lastRequestAt: number?,
 	attempts: number,
@@ -56,6 +76,28 @@ function AfkGuardDomain.isRejoinThreshold(idleSec: number): boolean
 	local cfg = getAfkConfig()
 	local threshold = tonumber(cfg.IDLE_THRESHOLD_SEC) or (17 * 60)
 	return idleSec >= threshold
+end
+
+-- Is this outcome a transient denial (worth retrying later without burning
+-- the attempt budget)? Rate-limit / in-flight / carry all resolve on their own.
+function AfkGuardDomain.isTransientDenial(outcome: RejoinOutcome): boolean
+	return outcome == "denied_rate_limited"
+		or outcome == "denied_in_flight"
+		or outcome == "denied_carry_active"
+end
+
+-- Delay (seconds) before the client may fire the next request after `outcome`.
+-- Uses the server-supplied hint when present; falls back to configured backoff.
+function AfkGuardDomain.nextRetryDelaySec(outcome: RejoinOutcome, retryAfterSec: number?): number
+	local cfg = getAfkConfig()
+	local backoffSec = tonumber(cfg.CLIENT_RETRY_BACKOFF_SEC) or 60
+	local base = retryAfterSec
+	if type(base) ~= "number" or base <= 0 then
+		base = backoffSec
+	end
+	-- Jitter +-10% so a burst of idle clients does not re-fire in lockstep.
+	local jitter = base * (math.random() * 0.2 - 0.1)
+	return math.max(1, base + jitter)
 end
 
 function AfkGuardDomain.isBelowTeleportAbortIdle(reportedIdleSec: number): boolean

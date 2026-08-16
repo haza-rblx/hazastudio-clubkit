@@ -231,6 +231,7 @@ ensureRemoteEvent(Remotes, Config.Sticker.REMOTE_ADD)
 ensureRemoteEvent(Remotes, Config.Sticker.REMOTE_REQUEST)
 ensureRemoteEvent(Remotes, Config.Sticker.REMOTE_SYNC)
 ensureRemoteEvent(Remotes, Config.AfkGuard.REMOTE_REQUEST or "AfkRejoinRequest")
+local AfkRejoinResponseRemote = ensureRemoteEvent(Remotes, Config.AfkGuard.REMOTE_RESPONSE or "AfkRejoinResponse")
 -- Settings remotes
 ensureRemoteEvent(Remotes, Config.Settings.REMOTE_REQUEST)
 ensureRemoteEvent(Remotes, Config.Settings.REMOTE_SYNC)
@@ -1195,6 +1196,7 @@ if Config.FeatureFlags.AfkGuardEnabled ~= false and Config.AfkGuard.ENABLED == t
 			sessionCommandService = sessionCommandService,
 			carryService = carryService,
 			remotes = Remotes,
+			responseRemote = AfkRejoinResponseRemote,
 		})
 	)
 	afkGuardService:init()

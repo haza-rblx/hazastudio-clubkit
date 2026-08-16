@@ -28,7 +28,9 @@ type RateLimiterImpl = {
 	_buckets       : { [number]: Bucket },
 	_cleanupThread : thread,
 	_running       : boolean,
-	check          : (self: RateLimiterImpl, userId: number) -> (boolean, string?),
+	-- Third return = seconds until a token becomes available (only set when
+	-- denied). Existing callers that ignore it are unaffected.
+	check          : (self: RateLimiterImpl, userId: number) -> (boolean, string?, number?),
 	cleanup        : (self: RateLimiterImpl) -> (),
 	destroy        : (self: RateLimiterImpl) -> (),
 }
@@ -51,13 +53,13 @@ function RateLimiter.new(max: number, window: number): RateLimiterImpl
 	return self
 end
 
-function RateLimiter:check(userId: number): (boolean, string?)
+function RateLimiter:check(userId: number): (boolean, string?, number?)
 	local now = os.clock()
 	local b = self._buckets[userId]
 
 	if not b then
 		self._buckets[userId] = { tokens = self._max - 1, lastRefill = now }
-		return true, nil
+		return true, nil, nil
 	end
 
 	-- Refill tokens based on elapsed time
@@ -71,11 +73,11 @@ function RateLimiter:check(userId: number): (boolean, string?)
 	if b.tokens < 1 then
 		local deficit = 1 - b.tokens
 		local waitSec = math.ceil(deficit / self._refillRate)
-		return false, ("Rate limit. Tunggu %ds"):format(waitSec)
+		return false, ("Rate limit. Tunggu %ds"):format(waitSec), waitSec
 	end
 
 	b.tokens -= 1
-	return true, nil
+	return true, nil, nil
 end
 
 function RateLimiter:cleanup()

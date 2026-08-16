@@ -879,6 +879,65 @@ local function buildEnginePage(ctx, page: Frame)
 	ctx.hooks.engineSetChannel = function(ch: string)
 		channelTag.Text = ch
 	end
+
+	-- Automation hook (command bar / MCP execute-luau): start the same flow as
+	-- the "Update engine" button, then poll _G.clubkit_engine_update_status().
+	do
+		local auto = { state = "idle" }
+		_G.clubkit_engine_update_status = auto
+		_G.clubkit_update_engine = function()
+			if updateBusy then
+				return "busy"
+			end
+			task.spawn(function()
+				auto.state = "checking"
+				refreshCheck()
+				if pluginNeedsUpdate then
+					auto.state = "error"
+					auto.message = "Plugin outdated — update under Settings first"
+					return
+				end
+				if not pendingTag then
+					auto.state = "done"
+					auto.message = "Already up to date"
+					return
+				end
+				updateBusy = true
+				progressApi.busy()
+				status.Text = "Updating…"
+				auto.state = "updating"
+				auto.tag = pendingTag
+				local report = SourceSyncCore.applyEngineUpdate(pendingTag, function(msg, i, total)
+					if total and total > 0 then
+						progressApi.set(i, total)
+					end
+					status.Text = tostring(msg or "")
+					auto.progress = i
+					auto.total = total
+				end)
+				updateBusy = false
+				progressApi.hide()
+				local ok = report and #(report.errors or {}) == 0
+				auto.state = if ok then "done" else "error"
+				auto.report = {
+					version = report and report.version or nil,
+					okCount = report and #report.ok or 0,
+					errors = report and report.errors or {},
+					configPatch = report and report.configPatch or nil,
+				}
+				if ok then
+					pendingTag = nil
+					ctx.badges.engine.Visible = false
+					installed.Text = SourceSyncCore.getLocalVersion() or Manifest.KIT_VERSION
+					latestDesc.Text = "Kit is up to date."
+					status.Text = auto.report.configPatch or "Done — save the place to persist."
+				else
+					status.Text = tostring(auto.report.errors[1] or "Update failed")
+				end
+			end)
+			return "started"
+		end
+	end
 	if _G.__clubkitEngineAutoChecked ~= true then
 		_G.__clubkitEngineAutoChecked = true
 		task.defer(refreshCheck)
