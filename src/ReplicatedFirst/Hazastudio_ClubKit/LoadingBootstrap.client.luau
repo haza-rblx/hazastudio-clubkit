@@ -39,8 +39,8 @@ local Config = require(configModule)
 
 -- AFK auto-rejoin: skip the loading screen entirely so the rejoin lands seamlessly.
 do
-	local sessionFolder = sharedRoot:FindFirstChild("Session")
-	local rejoinModeModule = sessionFolder and sessionFolder:FindFirstChild("RejoinMode")
+	local sessionFolder = sharedRoot:WaitForChild("Session", DEFAULT_BOOTSTRAP_WAIT_TIMEOUT)
+	local rejoinModeModule = sessionFolder and sessionFolder:WaitForChild("RejoinMode", DEFAULT_BOOTSTRAP_WAIT_TIMEOUT)
 	if rejoinModeModule and rejoinModeModule:IsA("ModuleScript") then
 		local okRejoin, RejoinMode = pcall(require, rejoinModeModule)
 		if okRejoin and RejoinMode and type(RejoinMode.isAfkRejoin) == "function" then
