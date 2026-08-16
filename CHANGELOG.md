@@ -11,6 +11,9 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+### Added
+- **Delivery bundle for v2.6.2** — `deliver/HazastudioClubKit_Plugin_v2.6.2.rbxm` + refreshed `deliver/README.md` (notes for v2.6.0/2.6.1/2.6.2). `OWNER_ONBOARDING.txt` gains an AFK / auto-rejoin note (engine-only, not buyer-toggleable; clarifies the rejoin does not bypass Roblox's native 20-min kick). Place/SyncBhms RBXM packs not rebuilt — engine updates ship via Update Engine.
+
 ## [2.6.2] - 2026-08-16
 
 Seamless AFK rejoin (no loading/prompt interruptions) + solo dancers converge to the top leader.
