@@ -102,6 +102,24 @@ function Handle-Request {
         return
     }
 
+    # /repo/<relative-path> — serve any file under the repo root (test injection).
+    if ($path -match "^/repo/(.+)$") {
+        $rel = $Matches[1] -replace "/", "\"
+        # $Root = <repo>\tools\ClubKitPackagerPlugin\plugin → repo root is 3 levels up.
+        $repoRoot = Split-Path (Split-Path (Split-Path $Root -Parent) -Parent) -Parent
+        $file = Join-Path $repoRoot $rel
+        # Guard: only serve files that actually live under the repo root.
+        if ((Test-Path $file) -and ((Resolve-Path $file).Path.StartsWith($repoRoot))) {
+            $body = [System.IO.File]::ReadAllText($file)
+            Send-Response -Stream $stream -Status 200 -StatusText "OK" -Body $body
+            Write-Host "[$stamp] GET $path -> 200 ($((Get-Item $file).Length) bytes)"
+        } else {
+            Send-Response -Stream $stream -Status 404 -StatusText "Not Found" -Body "not found: $rel"
+            Write-Host "[$stamp] GET $path -> 404"
+        }
+        return
+    }
+
     Send-Response -Stream $stream -Status 404 -StatusText "Not Found" -Body "unknown route: $path"
     Write-Host "[$stamp] GET $path -> 404"
 }

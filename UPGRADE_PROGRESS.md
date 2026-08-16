@@ -12,7 +12,7 @@ Internal scratch pad to track work **before** a version is released.
 
 | Area | Status |
 |------|--------|
-| _(empty — no unreleased work yet)_ | |
+| Seamless AFK rejoin (skip loading + prompt + instant dance/music restore) | done (unreleased) |
 
 ---
 
@@ -20,7 +20,11 @@ Internal scratch pad to track work **before** a version is released.
 
 | Path | Change |
 |------|--------|
-| _(empty)_ | |
+| `src/ReplicatedStorage/.../Shared/Session/RejoinMode.luau` | NEW — read+cache `afkRejoin` flag from teleport data (client) |
+| `src/ReplicatedFirst/.../LoadingBootstrap.client.luau` | skip loading screen entirely on AFK rejoin |
+| `src/StarterPlayerScripts/.../Client/Controllers/JoinCommunityPromptController.luau` | `tryPromptAfterGameplay` returns early on AFK rejoin |
+| `src/StarterPlayerScripts/.../Main.client.luau` | read rejoin flag; bypass music-engine delay + force dance warmup on rejoin |
+| `CHANGELOG.md` | `[Unreleased]` entry |
 
 ---
 

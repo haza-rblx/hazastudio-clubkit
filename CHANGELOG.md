@@ -11,6 +11,9 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+### Added
+- **Seamless AFK rejoin** — an AFK auto-rejoin now lands without replaying the first-join interruptions. New `Shared/Session/RejoinMode.luau` reads the `afkRejoin` flag from the teleport data once (client-side, previously server-only) and three consumers branch on it: `LoadingBootstrap` skips the loading screen entirely on rejoin, `JoinCommunityPromptController.tryPromptAfterGameplay` never shows the join modal on rejoin (it still shows on a normal join for non-members), and `Main.client` bypasses the music-engine start delay and forces dance warmup to run immediately so `SyncService.restoreAfterAfkRejoin` re-syncs to the last dance/leader without the usual post-gameplay defer. Normal joins are unaffected (loading screen, prompt, and warmup schedule all unchanged when the flag is absent).
+
 ## [2.6.1] - 2026-08-16
 
 AFK auto-rejoin latch fix (verified in playtest) + Packager automation hooks.

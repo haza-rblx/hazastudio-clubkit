@@ -15,6 +15,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local BrandLogoApplier = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.BrandLogoApplier)
+local RejoinMode = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Session.RejoinMode)
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
 local MobileScaleService = require(script.Parent.Parent.Services.MobileScaleService)
 
@@ -934,6 +935,10 @@ end
 
 local function tryPromptAfterGameplay()
 	if promptedThisSession then
+		return
+	end
+	-- AFK auto-rejoin: never interrupt a seamless rejoin with the join prompt.
+	if RejoinMode.isAfkRejoin() then
 		return
 	end
 	if Config.FeatureFlags.PromptJoinCommunityOnLoadEnabled ~= true then

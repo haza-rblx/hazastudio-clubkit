@@ -158,6 +158,11 @@ then
 	return
 end
 local Config = require(SharedConstants:WaitForChild("Config"))
+local RejoinMode = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Session.RejoinMode)
+-- True when this client arrived via an AFK auto-rejoin teleport; used to skip
+-- first-join interruptions (loading/prompt handled elsewhere) and restore
+-- dance/music instantly.
+local isAfkRejoin = RejoinMode.isAfkRejoin()
 -- Kit-owned sync/dance panel. Off when Features.LegacySyncBhms (BHMS place-pack).
 local legacySyncBhms = Config.FeatureFlags.LegacySyncBhmsEnabled == true
 local clubKitOwnedSyncDance = Config.FeatureFlags.SyncDanceEnabled == true and not legacySyncBhms
@@ -2020,6 +2025,10 @@ if Config.FeatureFlags.MusicPlayerEnabled then
 		if ClientBootConfig.DEFER_MUSIC_PLAYER ~= false then
 			delaySeconds = math.max(0, tonumber(ClientBootConfig.MUSIC_ENGINE_DELAY_AFTER_GAMEPLAY) or 0)
 		end
+		-- AFK rejoin: skip the music engine delay so audio resumes immediately.
+		if isAfkRejoin then
+			delaySeconds = 0
+		end
 		if delaySeconds > 0 then
 			task.wait(delaySeconds)
 		end
@@ -2027,7 +2036,10 @@ if Config.FeatureFlags.MusicPlayerEnabled then
 	end)
 end
 if clubKitOwnedSyncDance then
-	local deferDanceWarmup = ClientBootConfig.POST_GAMEPLAY_DANCE_WARMUP ~= false
+	-- AFK rejoin: warm dances immediately (no defer) so the dance sync restores
+	-- without waiting for the normal post-gameplay warmup schedule.
+	local deferDanceWarmup = not isAfkRejoin
+		and ClientBootConfig.POST_GAMEPLAY_DANCE_WARMUP ~= false
 		and ClientBootConfig.DEFER_DANCE_WARMUP ~= false
 	if deferDanceWarmup then
 		local warmDuringLoading = ClientBootConfig.DANCE_WARMUP_DURING_LOADING ~= false
@@ -2050,6 +2062,12 @@ if clubKitOwnedSyncDance then
 			if danceWarmupService and type(danceWarmupService.beginWarmup) == "function" then
 				danceWarmupService:beginWarmup(nil, "tier2")
 			end
+		end)
+	elseif isAfkRejoin and danceWarmupService and type(danceWarmupService.beginWarmup) == "function" then
+		-- Rejoin path: kick off tier1 right away (assets already warm from the
+		-- prior session's preload cache) so sync restore isn't gated on warmup.
+		task.defer(function()
+			danceWarmupService:beginWarmup(nil, "tier1")
 		end)
 	end
 end

@@ -36,6 +36,23 @@ if not (configModule and configModule:IsA("ModuleScript")) then
 end
 
 local Config = require(configModule)
+
+-- AFK auto-rejoin: skip the loading screen entirely so the rejoin lands seamlessly.
+do
+	local sessionFolder = sharedRoot:FindFirstChild("Session")
+	local rejoinModeModule = sessionFolder and sessionFolder:FindFirstChild("RejoinMode")
+	if rejoinModeModule and rejoinModeModule:IsA("ModuleScript") then
+		local okRejoin, RejoinMode = pcall(require, rejoinModeModule)
+		if okRejoin and RejoinMode and type(RejoinMode.isAfkRejoin) == "function" then
+			local okCheck, isRejoin = pcall(RejoinMode.isAfkRejoin)
+			if okCheck and isRejoin == true then
+				ReplicatedFirst:RemoveDefaultLoadingScreen()
+				return
+			end
+		end
+	end
+end
+
 do
 	local kitProductModule = kitRoot:FindFirstChild("KitProduct")
 	local earlyUtils = sharedRoot:FindFirstChild("Utils")
