@@ -1760,7 +1760,59 @@ local self = {} :: any
 			end
 		end
 
+		-- Try to sync this player to the current top leader (most followers,
+		-- dancing). Returns true when the sync was applied. `lastLeaderName`
+		-- picks the notify variant: fallback wording only makes sense when
+		-- there was a previous leader to replace.
+		local function trySyncTopLeader(lastLeaderName: string?): boolean
+			if afkConfig.SYNC_FALLBACK_TOP_LEADER ~= true then
+				return false
+			end
+			local topLeader = self:getTopLeaderByFollowerCount(player.UserId)
+			if not topLeader or not isLeaderEligible(topLeader) then
+				return false
+			end
+			local result = self:handleSyncRequest(player, topLeader, true)
+			if not result.ok then
+				return false
+			end
+			fireSyncSuccess(result.value, topLeader.UserId)
+			if notifyPlayer then
+				if lastLeaderName then
+					notifyPlayer(
+						player,
+						string.format(
+							afkConfig.MSG_SYNC_FALLBACK or "[Session] %s left — synced to %s.",
+							lastLeaderName,
+							self:getLeaderDisplayName(result.value)
+						),
+						"INFO"
+					)
+				else
+					notifyPlayer(
+						player,
+						string.format(afkConfig.MSG_SYNC_RESTORED or "[Session] Synced back to %s.", self:getLeaderDisplayName(result.value)),
+						"SUCCESS"
+					)
+				end
+			end
+			logger:info("afk_restore_sync_top_leader", {
+				player = player.Name,
+				userId = player.UserId,
+				leaderUserId = topLeader.UserId,
+			})
+			return true
+		end
+
 		if not snapshot.wasSyncing then
+			-- Wasn't following a leader before the rejoin. If they were dancing
+			-- solo, pull them onto the current top leader (per user request);
+			-- a fully-idle player (no animation) just restores solo (no-op).
+			if snapshot.animationName then
+				if trySyncTopLeader(nil) then
+					return
+				end
+			end
 			restoreSoloAnimation(player, snapshot)
 			logger:info("afk_restore_sync_solo_fallback", {
 				player = player.Name,
@@ -1795,32 +1847,8 @@ local self = {} :: any
 			end
 		end
 
-		if afkConfig.SYNC_FALLBACK_TOP_LEADER == true then
-			local topLeader = self:getTopLeaderByFollowerCount(player.UserId)
-			if topLeader and isLeaderEligible(topLeader) then
-				local result = self:handleSyncRequest(player, topLeader, true)
-				if result.ok then
-					fireSyncSuccess(result.value, topLeader.UserId)
-					if notifyPlayer then
-						local oldLeaderName = if lastLeader then lastLeader.DisplayName else "Your leader"
-						notifyPlayer(
-							player,
-							string.format(
-								afkConfig.MSG_SYNC_FALLBACK or "[Session] %s left — synced to %s.",
-								oldLeaderName,
-								self:getLeaderDisplayName(result.value)
-							),
-							"INFO"
-						)
-					end
-					logger:info("afk_restore_sync_top_leader", {
-						player = player.Name,
-						userId = player.UserId,
-						leaderUserId = topLeader.UserId,
-					})
-					return
-				end
-			end
+		if trySyncTopLeader(lastLeader and lastLeader.DisplayName or nil) then
+			return
 		end
 
 		restoreSoloAnimation(player, snapshot)

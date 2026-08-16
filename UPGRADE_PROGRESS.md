@@ -13,6 +13,7 @@ Internal scratch pad to track work **before** a version is released.
 | Area | Status |
 |------|--------|
 | Seamless AFK rejoin (skip loading + prompt + instant dance/music restore) | done (unreleased) |
+| AFK rejoin: solo dancers auto-sync to top leader | done (unreleased) |
 
 ---
 
@@ -20,11 +21,12 @@ Internal scratch pad to track work **before** a version is released.
 
 | Path | Change |
 |------|--------|
-| `src/ReplicatedStorage/.../Shared/Session/RejoinMode.luau` | NEW — read+cache `afkRejoin` flag from teleport data (client) |
-| `src/ReplicatedFirst/.../LoadingBootstrap.client.luau` | skip loading screen entirely on AFK rejoin |
+| `src/ReplicatedStorage/.../Shared/Session/RejoinMode.luau` | NEW — read+cache `afkRejoin` flag from teleport data (client, dual-source) |
+| `src/ReplicatedFirst/.../LoadingBootstrap.client.luau` | skip loading screen entirely on AFK rejoin (WaitForChild — replication race fix) |
 | `src/StarterPlayerScripts/.../Client/Controllers/JoinCommunityPromptController.luau` | `tryPromptAfterGameplay` returns early on AFK rejoin |
 | `src/StarterPlayerScripts/.../Main.client.luau` | read rejoin flag; bypass music-engine delay + force dance warmup on rejoin |
-| `CHANGELOG.md` | `[Unreleased]` entry |
+| `src/ServerScriptService/.../Server/Services/SyncService.luau` | solo dancers try top leader on rejoin; extracted shared `trySyncTopLeader` helper |
+| `CHANGELOG.md` | `[Unreleased]` entries |
 
 ---
 
