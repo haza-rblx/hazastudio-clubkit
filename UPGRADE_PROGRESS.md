@@ -2,7 +2,7 @@
 
 Internal scratch pad to track work **before** a version is released.
 
-**Current version:** `2.6.2` (see [`VERSION`](VERSION))
+**Current version:** `2.6.3` (see [`VERSION`](VERSION))
 **Next release target:** _(not set)_
 **Active branch:** `main`
 
@@ -21,6 +21,12 @@ Internal scratch pad to track work **before** a version is released.
 | Path | Change |
 |------|--------|
 | _(empty)_ | |
+
+---
+
+## Backlog (not scheduled)
+
+- **Packager `collect()` bundles installed admin loaders** (`Adonis_Loader` / `Kohl's Admin`) into the main template pack — these are buyer-choice and should be excluded like BHMS. Caused a leftover Kohl's to ship into a buyer place. Consider adding admin loaders to the Packager exclusion list.
 
 ---
 

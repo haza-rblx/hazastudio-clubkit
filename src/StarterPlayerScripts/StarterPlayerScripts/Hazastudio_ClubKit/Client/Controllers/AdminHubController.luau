@@ -244,9 +244,7 @@ local function init(deps: {
 				box = ui:addTextBox(body, "AnnounceMessage", "Say something to the server…", true)
 				ui:addHint(body, "Max " .. tostring(maxLen) .. " characters (Config.Announcement).")
 			end
-			if box.Text == "" then
-				box.Text = "Welcome to the club!"
-			end
+			-- No default message: leave the box empty so the placeholder shows.
 			ui:setSheetFoot({
 				{
 					text = "Send announce",

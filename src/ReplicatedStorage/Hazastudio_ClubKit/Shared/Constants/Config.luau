@@ -1869,7 +1869,7 @@ Config.Admin = {
 	GUI_SCALE_MOBILE = 0.54,
 	GUI_SCALE_DESKTOP = 0.84,
 	-- 04-AdminHub root UIScale (PhoneLayout); MainWrapper keeps presentCenterPanel motion.
-	HUB_GUI_SCALE_MOBILE = 0.44,
+	HUB_GUI_SCALE_MOBILE = 0.5,
 	HUB_GUI_SCALE_DESKTOP = 0.88,
 	TOPBAR_ORDER = 3,
 	REMOTE_SET_TITLE = "AdminSetTitle",
@@ -3263,7 +3263,7 @@ Config.MobileScale = {
 	HOTBAR_GUI = 0.8, -- 10-HotbarGUI / HotbarGUI
 	BACKPACK_GUI = 0.9, -- 14-BackpackGUI HotbarWrapper.UIScale
 	ADMIN_GUI = 0.54, -- 04-AdminPanel root UIScale on phone layout
-	ADMIN_HUB_GUI = 0.44, -- 04-AdminHub root UIScale on phone layout
+	ADMIN_HUB_GUI = 0.5, -- 04-AdminHub root UIScale on phone layout
 	JOIN_COMMUN_GUI = 0.48, -- 16-JoinCommunPrompt root UIScale on phone layout
 	STICKER_GUI = 0.8, -- 11-StickerSystemGUI
 	NOTIF_GUI = 0.75, -- 99-NotificationCenter

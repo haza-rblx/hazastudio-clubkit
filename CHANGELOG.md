@@ -11,8 +11,13 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
-### Added
-- **Delivery bundle for v2.6.2** — `deliver/HazastudioClubKit_Plugin_v2.6.2.rbxm` + refreshed `deliver/README.md` (notes for v2.6.0/2.6.1/2.6.2). `OWNER_ONBOARDING.txt` gains an AFK / auto-rejoin note (engine-only, not buyer-toggleable; clarifies the rejoin does not bypass Roblox's native 20-min kick). Place/SyncBhms RBXM packs not rebuilt — engine updates ship via Update Engine.
+## [2.6.3] - 2026-08-16
+
+Admin Hub UX tweaks.
+
+### Changed
+- **Admin Hub phone scale 0.44 → 0.5** — `Admin.HUB_GUI_SCALE_MOBILE` (and the matching `MobileScale.ADMIN_HUB_GUI` fallback) raised so the Admin Hub is less cramped on phone layouts.
+- **Admin Hub announce box no longer pre-fills "Welcome to the club!"** — the Announce sheet now opens empty so the placeholder ("Say something to the server…") shows instead of a default message you have to clear first.
 
 ## [2.6.2] - 2026-08-16
 
