@@ -11,11 +11,15 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
-### Changed
-- **AFK rejoin syncs solo dancers to the top leader** — previously only players who were *following a leader* before the rejoin were re-synced (last leader → top-leader fallback); a player dancing **solo** was restored solo and never pulled into the group. Now a solo dancer also tries the current top leader (most followers, dancing) on rejoin, so the floor converges on the biggest group. Fully-idle players (no animation) are still left alone, and the whole fallback is gated by the existing `SYNC_FALLBACK_TOP_LEADER` (set false to disable). The top-leader attempt was factored into a shared helper used by both the last-leader-fallback and solo-dancer paths.
+## [2.6.2] - 2026-08-16
+
+Seamless AFK rejoin (no loading/prompt interruptions) + solo dancers converge to the top leader.
 
 ### Added
 - **Seamless AFK rejoin** — an AFK auto-rejoin now lands without replaying the first-join interruptions. New `Shared/Session/RejoinMode.luau` reads the `afkRejoin` flag from the teleport data once (client-side, previously server-only; reads both `GetJoinData().TeleportData` and `GetLocalPlayerTeleportData()`) and three consumers branch on it: `LoadingBootstrap` skips the loading screen entirely on rejoin (waits for the Session/RejoinMode module to replicate before deciding, so the skip is not lost to a replication race), `JoinCommunityPromptController.tryPromptAfterGameplay` never shows the join modal on rejoin (it still shows on a normal join for non-members), and `Main.client` bypasses the music-engine start delay and forces dance warmup to run immediately so `SyncService.restoreAfterAfkRejoin` re-syncs to the last dance/leader without the usual post-gameplay defer. Normal joins are unaffected (loading screen, prompt, and warmup schedule all unchanged when the flag is absent).
+
+### Changed
+- **AFK rejoin syncs solo dancers to the top leader** — previously only players who were *following a leader* before the rejoin were re-synced (last leader → top-leader fallback); a player dancing **solo** was restored solo and never pulled into the group. Now a solo dancer also tries the current top leader (most followers, dancing) on rejoin, so the floor converges on the biggest group. Fully-idle players (no animation) are still left alone, and the whole fallback is gated by the existing `SYNC_FALLBACK_TOP_LEADER` (set false to disable). The top-leader attempt was factored into a shared helper used by both the last-leader-fallback and solo-dancer paths.
 
 ## [2.6.1] - 2026-08-16
 
