@@ -11,6 +11,10 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.6.1] - 2026-08-16
+
+AFK auto-rejoin latch fix (verified in playtest) + Packager automation hooks.
+
 ### Added
 - **Packager plugin automation hooks** — `_G.clubkit_update_engine()` runs the same flow as the "Update engine" button (check → apply → config merge) for command-bar / MCP automation; poll `_G.clubkit_engine_update_status` (`state` = `checking`/`updating`/`done`/`error`, `progress`/`total`, `report`). Used to drive a v2.6.0 update from MiMoCode over robloxstudio-mcp without clicking the dock.
 
