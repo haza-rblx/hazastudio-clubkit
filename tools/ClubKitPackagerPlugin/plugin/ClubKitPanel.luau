@@ -305,6 +305,7 @@ local function buildConfigPage(ctx, page: Frame)
 			options = {
 				{ "IDR", "IDR (Rp)" },
 				{ "PHP", "PHP (₱)" },
+				{ "CASH", "Cash (neutral)" },
 			},
 			selected = draft.donation.currency,
 			onSelect = function(value)

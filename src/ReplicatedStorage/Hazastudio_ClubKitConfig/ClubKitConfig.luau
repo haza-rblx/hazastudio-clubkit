@@ -83,11 +83,11 @@ ClubKitConfig.Donation = {
 	Provider = "bagibagi", -- "bagibagi" | "saweria" | "sociabuzz" — donor name & label auto-set
 	ProviderLink = "", -- example: "https://bagibagi.co/your-page" or "https://sociabuzz.com/username"
 	ApiUrl = "https://hazastudio-donation-api.hazastudio.workers.dev/game/the-basic",
-	-- Cash display currency: "IDR" (Rp) or "PHP" (₱). Saweria supports both (register with
-	-- the matching account currency); Bagi-Bagi is IDR-only; SociaBuzz settles per creator
-	-- country. Display-only (symbol/grouping/chip word) — amounts are NOT converted, so
-	-- MinAmount / AuraTiers idrMin/idrMax / WorldEffectTiers below must be retuned in the
-	-- new unit yourself when switching currencies.
+	-- Cash display currency: "IDR" (Rp), "PHP" (₱), or "CASH" (neutral "Cash" labels).
+	-- Saweria supports IDR/PHP (register with the matching account currency); Bagi-Bagi is
+	-- IDR-only; SociaBuzz settles per creator country. Display-only (symbol/grouping/chip
+	-- word) — amounts are NOT converted, so MinAmount / AuraTiers idrMin/idrMax /
+	-- WorldEffectTiers below must be retuned in the new unit yourself when switching currencies.
 	Currency = "IDR",
 	Cash = { Enabled = true },
 	Robux = { Enabled = true },

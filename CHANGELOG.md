@@ -11,6 +11,13 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.6.4] - 2026-08-16
+
+Neutral "Cash" currency option.
+
+### Added
+- **`Donation.Currency = "CASH"`** — a third cash-display option with neutral "Cash" labels (`Top Cash Spender` / `Top Cash` / chip suffix `CASH`) for venues that don't want to name Rupiah or Peso. Display-only like the others; amounts are not converted. Also added to the Packager Donations currency dropdown (`Cash (neutral)`).
+
 ## [2.6.3] - 2026-08-16
 
 Admin Hub UX tweaks.

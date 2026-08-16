@@ -45,9 +45,21 @@ CashCurrencyDomain.PRESETS = {
 		groupSep = ",",
 		adminHint = "PHP",
 	},
+	-- Neutral "Cash" option: currency-agnostic labels for venues that don't want
+	-- to name Rupiah/Peso. Symbol/grouping default to the IDR style.
+	CASH = {
+		code = "CASH",
+		symbol = "",
+		boardPrefix = "",
+		chipSuffix = "CASH",
+		roleLabel = "Top Cash Spender",
+		shortRoleLabel = "Top Cash",
+		groupSep = ".",
+		adminHint = "CASH",
+	},
 } :: { [string]: CashCurrencyPreset }
 
---- Normalizes a buyer-provided currency code to a known preset key ("IDR" | "PHP").
+--- Normalizes a buyer-provided currency code to a known preset key ("IDR" | "PHP" | "CASH").
 --- Unknown / missing codes fall back to "IDR" (existing behavior for buyers who
 --- have not set Donation.Currency yet).
 function CashCurrencyDomain.normalize(code: string?): string

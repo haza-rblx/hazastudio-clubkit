@@ -63,9 +63,10 @@ ClubKitConfigSchema.defaults = {
 		Provider = "bagibagi", -- "bagibagi" | "saweria" | "sociabuzz"
 		ProviderLink = "",
 		ApiUrl = "",
-		-- Cash display currency ("IDR" | "PHP"). Saweria supports both natively;
-		-- Bagi-Bagi is IDR-only; SociaBuzz settles per creator country. Display-only —
-		-- amounts are not converted; MinAmount/AuraTiers/WorldEffectTiers stay in this unit.
+		-- Cash display currency ("IDR" | "PHP" | "CASH"). Saweria supports IDR/PHP natively;
+		-- Bagi-Bagi is IDR-only; SociaBuzz settles per creator country. "CASH" = neutral
+		-- "Cash" labels (no currency name). Display-only — amounts are not converted;
+		-- MinAmount/AuraTiers/WorldEffectTiers stay in this unit.
 		Currency = "IDR",
 		Cash = { Enabled = true },
 		Robux = { Enabled = true },
