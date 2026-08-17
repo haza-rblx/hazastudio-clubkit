@@ -562,6 +562,10 @@ ClubKitConfig.Features = {
 	-- Bulk seed from Hazastudio_ClubKitConfig/MusicCatalog.luau into DataStore on boot.
 	-- false = skip merge (tracks already seeded stay in library).
 	MusicCatalogSeed = true,
+	-- Read-only music library: no DataStore at all (fast boot, no DataStore errors).
+	-- Library = MusicCatalog + in-game requests (kept in memory only, lost on restart).
+	-- Manage tab hidden. In-game edits are NOT saved. false (default) = editable mode.
+	MusicReadOnlyLibrary = false,
 	SyncDance = true,
 	-- Rapid re-click of the PLAYING emote hard-restarts it (fade 0 "wutwut" stutter).
 	-- false = classic behavior (same-emote click toggles the dance off). Default false.

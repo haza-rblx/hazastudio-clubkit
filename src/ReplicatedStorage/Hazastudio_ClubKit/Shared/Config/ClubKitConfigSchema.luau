@@ -440,6 +440,10 @@ ClubKitConfigSchema.defaults = {
 	Features = {
 		MusicPlayer = true,
 		MusicCatalogSeed = true,
+		-- Read-only music library: skip DataStore entirely; library comes from MusicCatalog
+		-- + in-game requests (kept in memory only, lost on restart). Manage tab hidden.
+		-- false (default) = editable mode (DataStore read/write, in-game edits persist).
+		MusicReadOnlyLibrary = false,
 		SyncDance = true,
 		-- Place-only BHMS dance/sync pack. When true: skip Club Kit dance panel + SyncService;
 		-- ACM Sync Dance routes to ReplicatedStorage.SyncBhmsAcmBridge.
@@ -488,6 +492,7 @@ ClubKitConfigSchema.FEATURE_MANIFEST = {
 		items = {
 			{ key = "MusicPlayer", label = "Music player" },
 			{ key = "MusicCatalogSeed", label = "Default playlist" },
+			{ key = "MusicReadOnlyLibrary", label = "Read-only music library (no DataStore)" },
 			{ key = "SyncDance", label = "Sync dance" },
 			{ key = "LegacySyncBhms", label = "Legacy SyncBhms place-pack" },
 			{ key = "WutwutDance", label = "Wutwut dance restart" },

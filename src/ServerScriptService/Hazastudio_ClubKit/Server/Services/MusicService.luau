@@ -153,6 +153,10 @@ local function createMusicService(deps: {
 	end
 
 	function service:isManageAllowed(player: Player): boolean
+		-- Read-only library: nobody can manage music (hides Manage tab + blocks manage remotes).
+		if Config.FeatureFlags.MusicReadOnlyLibraryEnabled == true then
+			return false
+		end
 		if PermissionDomain.isAdminUser(player.UserId) then
 			return true
 		end
@@ -276,10 +280,11 @@ local function createMusicService(deps: {
 
 		startGlobalSession()
 
-		local result = repo:loadAll()
-		if not result.ok then
-			log:error("Failed to load music library", { error = result.error })
-		else
+		local readOnly = Config.FeatureFlags.MusicReadOnlyLibraryEnabled == true
+		if readOnly then
+			-- Read-only library: no DataStore read. Seed from MusicCatalog into memory,
+			-- skip the sync poll loop. Request-history playlist is created in-memory via
+			-- the repository's read-only write guard.
 			local catalogOk, catalogErr = pcall(function()
 				MusicCatalogSeeder.merge({
 					repo = repo,
@@ -291,20 +296,39 @@ local function createMusicService(deps: {
 			if not catalogOk then
 				log:warn("MusicCatalogSeed failed", { error = tostring(catalogErr) })
 			end
-			log:info("MusicService initialized")
 			service:ensureRequestHistoryPlaylist()
-			local pollInterval = tonumber(config.SYNC_POLL_INTERVAL) or 0
-			if pollInterval > 0 then
-				_pollThread = task.spawn(function()
-					-- Loop berhenti ketika _destroyed di-flip oleh destroy().
-					while not _destroyed do
-						task.wait(pollInterval)
-						if _destroyed then
-							break
-						end
-						service:reloadLibraryFromStore("poll")
-					end
+			log:info("MusicService initialized (read-only library, no DataStore)")
+		else
+			local result = repo:loadAll()
+			if not result.ok then
+				log:error("Failed to load music library", { error = result.error })
+			else
+				local catalogOk, catalogErr = pcall(function()
+					MusicCatalogSeeder.merge({
+						repo = repo,
+						config = config,
+						logger = log,
+						featureFlags = Config.FeatureFlags,
+					})
 				end)
+				if not catalogOk then
+					log:warn("MusicCatalogSeed failed", { error = tostring(catalogErr) })
+				end
+				log:info("MusicService initialized")
+				service:ensureRequestHistoryPlaylist()
+				local pollInterval = tonumber(config.SYNC_POLL_INTERVAL) or 0
+				if pollInterval > 0 then
+					_pollThread = task.spawn(function()
+						-- Loop berhenti ketika _destroyed di-flip oleh destroy().
+						while not _destroyed do
+							task.wait(pollInterval)
+							if _destroyed then
+								break
+							end
+							service:reloadLibraryFromStore("poll")
+						end
+					end)
+				end
 			end
 		end
 
@@ -377,6 +401,9 @@ local function createMusicService(deps: {
 	end
 
 	function service:reloadLibraryFromStore(reason: string?): (boolean, string)
+		if Config.FeatureFlags.MusicReadOnlyLibraryEnabled == true then
+			return true, "read_only"
+		end
 		if isLibraryReloadInFlight then return false, "reload_in_flight" end
 		isLibraryReloadInFlight = true
 		local result = repo:loadAll()

@@ -33,3 +33,9 @@ Domain glossary for agents. Terms only — no implementation details, no workflo
 - **Facade** — the engine-side `ExternalAdminFacade` singleton: a stable API surface that external admin plugins/addons call to run Club Kit actions (`setRole`, `announce`, etc.).
 - **Provider** — `ClubKitConfig.ExternalAdmin.Provider` value (`"Adonis"`, `"Kohls"`, `"None"`); runtime gate only.
 - **Rank sync** — one-way mirroring of Club Kit staff role changes into the chosen external admin's ranks, driven by the `Gift:RoleChanged` event.
+
+## Music library modes
+
+- **Music library mode** — buyer choice of how the shared music library relates to DataStore, via `ClubKitConfig.Features.MusicReadOnlyLibrary` (boolean). Two values:
+- **Editable** — the legacy behavior and default (`false`): DataStore read at boot + writes persist, catalog seed, sync poll, Manage tab shown for permitted ranks.
+- **ReadOnly** — (`true`) no DataStore at all: library comes from the MusicCatalog script + in-game requests held in memory (lost on restart); legacy stored data is untouched but not shown; Manage tab hidden (DJ tab hides too, same manage gate).

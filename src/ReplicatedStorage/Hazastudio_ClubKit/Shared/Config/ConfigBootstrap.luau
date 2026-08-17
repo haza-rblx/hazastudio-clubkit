@@ -391,6 +391,7 @@ function ConfigBootstrap.apply(config: any)
 		local map = {
 			MusicPlayer = "MusicPlayerEnabled",
 			MusicCatalogSeed = "MusicCatalogSeedEnabled",
+			MusicReadOnlyLibrary = "MusicReadOnlyLibraryEnabled",
 			SyncDance = "SyncDanceEnabled",
 			LegacySyncBhms = "LegacySyncBhmsEnabled",
 			AdminHub = "AdminHubEnabled",

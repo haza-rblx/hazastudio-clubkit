@@ -108,7 +108,7 @@ local function mergeEntriesByRevision(current: { [string]: any }?, incoming: { [
 	return merged
 end
 
-function MusicRepository.new(deps: { config: any, logger: ILogger })
+function MusicRepository.new(deps: { config: any, logger: ILogger, readOnly: boolean? })
 	local self = setmetatable({
 		_config = deps.config,
 		_logger = deps.logger,
@@ -119,6 +119,9 @@ function MusicRepository.new(deps: { config: any, logger: ILogger })
 		_playlistTombstones = {} :: { [string]: PlaylistInfo },
 		_trackTombstones = {} :: { [string]: TrackInfo },
 		_loaded = false,
+		-- Read-only mode (Features.MusicReadOnlyLibrary): all DataStore writes become
+		-- no-ops while in-memory state still updates. Reads are skipped by the service.
+		_readOnly = deps.readOnly == true,
 	}, MusicRepository) :: any
 
 	return self
@@ -240,6 +243,10 @@ function MusicRepository:_getAsync(key: string): (boolean, any)
 end
 
 function MusicRepository:_setAsync(key: string, data: any): Result<nil>
+	if self._readOnly then
+		-- Read-only mode: never touch DataStore. Mutators still commit to memory.
+		return Result.Ok(nil)
+	end
 	local saveResult = self._budgetGate:executeAsync(Enum.DataStoreRequestType.UpdateAsync, function()
 		return Result.withRetry(function()
 			self._store:UpdateAsync(key, function(currentRaw)

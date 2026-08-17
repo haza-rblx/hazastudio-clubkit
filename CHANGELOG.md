@@ -11,6 +11,16 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.6.5] - 2026-08-17
+
+Donation webhook fix + optional read-only music library mode.
+
+### Added
+- **Read-only music library mode** — `ClubKitConfig.Features.MusicReadOnlyLibrary = true` runs the music library with **no DataStore at all** (fast boot, no DataStore errors). Boot skips `MusicRepository:loadAll`, seeds the library straight from the `MusicCatalog` script into memory, and never starts the sync poll loop; all DataStore writes become no-ops via a read-only guard in `MusicRepository._setAsync` that still lets mutators commit to memory. In-game song requests keep working — the request-history playlist lives in memory and is lost on restart. The Manage tab is hidden for every rank (`MusicService:isManageAllowed` returns false, which also server-blocks the manage remotes; the DJ tab hides too since it shares the same manage-permission gate). Default stays `false` (editable mode: DataStore read/write, in-game edits persist), so existing buyers are unaffected. Playlists/tracks previously saved in DataStore are **not deleted** while read-only is on — they just don't appear, and show up again when switching back to editable. Toggle also listed in the Packager Config panel ("Read-only music library (no DataStore)").
+
+### Fixed
+- **Real (external) cash donations no longer show "Total: First donation" on the notif chip and now update the Cash leaderstat.** Two layers, both on the webhook path (manual `/fakecash` / Admin Hub were unaffected, which is why they always looked correct): (1) `getPlayerCashStats` no longer refuses the donor-profile API call for a player who isn't yet a "known donor" — that local set only tracks donors seen *this server session*, so anyone who donated while the server was offline was kept at `Cash=0` forever even though the backend had their history. The call is still cheap: true non-donors are negative-cached (120s failure cache), and hidden users still never hit HTTP. (2) When a donation notification arrives before the leaderboard cache includes the donor, the notif now falls back to the donor-profile API for `totalDonationAmount` instead of firing with `nil` → the chip shows the donor's real total. `Config.Donation.SKIP_API_FOR_UNKNOWN_DONORS` is now a legacy no-op (kept so older configs don't error).
+
 ## [2.6.4] - 2026-08-16
 
 Neutral "Cash" currency option.

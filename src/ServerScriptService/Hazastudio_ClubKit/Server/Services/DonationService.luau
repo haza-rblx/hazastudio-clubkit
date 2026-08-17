@@ -1382,6 +1382,18 @@ local function createDonationService(
 							or (info.matchedEntry and info.matchedEntry.robloxUserId)
 							or resolveRobloxUserId(robloxUsername)
 						local totalDonationAmount = info.matchedEntry and info.matchedEntry.totalAmount or nil
+						-- Lapis-2 fix (2026-08-17): a first-ever donation arrives before the
+						-- leaderboard cache includes the donor, so matchedEntry is nil and the
+						-- old code fired the notif with totalDonationAmount=nil → client showed
+						-- "Total: First donation" even when the donor had prior history in the
+						-- backend. Fall back to the donor-profile API (cached 45s, failure
+						-- negative-cached 120s) so the chip shows the real total.
+						if totalDonationAmount == nil and robloxUserId and not isHiddenDonationUser(robloxUserId) then
+							local apiTotal = fetchDonorCashProfile(robloxUserId, robloxUsername or info.donatorName)
+							if type(apiTotal) == "number" and apiTotal > 0 then
+								totalDonationAmount = apiTotal
+							end
+						end
 						local textFilterUserId = resolveTextFilterUserId(robloxUserId)
 						local filteredDonatorName = filterForBroadcast(textFilterUserId, info.donatorName, 64)
 							or getProviderDonorFallback()
@@ -1706,12 +1718,16 @@ local function createDonationService(
 			cashTotal = manualTotal
 		end
 
-		-- Phase 3: Skip API call if player never donated AND local lookup also misses.
-		if
-			cashTotal <= 0
-			and Config.Donation.SKIP_API_FOR_UNKNOWN_DONORS ~= false
-			and not knownDonors[userId]
-		then
+		-- Phase 3: "unknown donor" must not suppress the API call.
+		-- knownDonors only tracks donors seen *this server session* (notification/manual).
+		-- A player who donated while this server was offline (or in a previous session)
+		-- is in the backend but unknown here → the old early-return kept them at Cash=0
+		-- forever (leaderstat/chip never updated; validated live on Atlantis).
+		-- Hidden users still never hit HTTP, and the failure cache inside
+		-- fetchDonorCashProfile already negative-caches true non-donors for 120s,
+		-- so bulk non-donor joins cannot spam the API. We always fall through to the
+		-- API attempt; the caches keep it cheap.
+		if cashTotal <= 0 and isHiddenDonationUser(userId) then
 			return 0, nil
 		end
 		if cashTotal <= 0 then

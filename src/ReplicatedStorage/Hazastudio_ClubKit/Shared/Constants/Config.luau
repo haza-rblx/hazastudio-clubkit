@@ -1329,6 +1329,9 @@ Config.FeatureFlags = {
 	MusicPlayerEnabled = true,
 	-- Merge Hazastudio_ClubKitConfig/MusicCatalog into MusicLibrary DataStore on boot.
 	MusicCatalogSeedEnabled = true,
+	-- Read-only music library: skip DataStore entirely; library from MusicCatalog +
+	-- in-game requests (in-memory only). Manage tab hidden. Buyer: Features.MusicReadOnlyLibrary.
+	MusicReadOnlyLibraryEnabled = false,
 	SettingsEnabled = true,
 	HotbarEnabled = true,
 	LoadingScreenEnabled = true,
@@ -2255,9 +2258,11 @@ Config.Donation = {
 	REMOTE_DONOR_PROFILE_RESPONSE = "DonationDonorProfileResponse",
 	DONOR_PROFILE_CACHE_TTL = 45,
 	DONOR_PROFILE_RANK_LOOKUP_LIMIT = 100,
-	-- Phase 3: Skip API call to donor_profile for players who have never donated.
-	-- Marked as known donor via: notification broadcast, manual adjustment, or cash stats > 0.
-	-- Set false to force API call on every refresh (debugging / new data import).
+	-- Donor-profile API is no longer gated on "known donor" status: donors who gave
+	-- while this server was offline are unknown locally but exist in the backend.
+	-- True non-donors are already negative-cached (failure cache, 120s) inside
+	-- fetchDonorCashProfile, so bulk joins cannot spam the API. Kept only as a
+	-- legacy no-op for older configs that still set it.
 	SKIP_API_FOR_UNKNOWN_DONORS = true,
 	-- 30s: matches Leaderboards timeout. Donation Robux init and products
 	-- response also yields through external HTTP + DataStore on cold start.
