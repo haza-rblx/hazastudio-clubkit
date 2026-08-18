@@ -1,9 +1,9 @@
 --!strict
 -- Server logic for membership Sign tools.
 
-local TextService = game:GetService("TextService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RateLimiter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.RateLimiter)
+local TextFilterUtil = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.TextFilterUtil)
 
 local SignServer = {}
 
@@ -63,12 +63,13 @@ local function ensureSignBoard(tool: Tool): TextLabel
 end
 
 local function filterText(letters: string, userId: number): (boolean, string, string)
-	local filteredText = ""
-	local isSuccess, errorMessage = pcall(function()
-		local result = TextService:FilterStringAsync(letters, userId)
-		filteredText = result:GetNonChatStringForBroadcastAsync()
-	end)
-	return isSuccess, tostring(errorMessage), filteredText
+	-- Single attempt (retries = 1): a per-sign retry loop would multiply the
+	-- TextService quota a spamming client can burn (see signLimiter note).
+	local filtered = TextFilterUtil.filterForBroadcast(userId, letters, MAX_SIGN_LENGTH, 1)
+	if filtered then
+		return true, "", filtered
+	end
+	return false, "filter_failed", ""
 end
 
 function SignServer.bind(tool: Tool)

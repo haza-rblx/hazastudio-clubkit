@@ -1,12 +1,12 @@
 --!strict
 
-local TextService = game:GetService("TextService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local OverheadDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.OverheadDomain)
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local Result = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Result)
+local TextFilterUtil = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.TextFilterUtil)
 
 type Result<T> = Types.Result<T>
 type ProfileMenuPayload = Types.ProfileMenuPayload
@@ -46,17 +46,8 @@ local function createProfileMenuService(deps: {
 	local service = {}
 
 	local function filterBroadcastText(text: string, userId: number): Result<string>
-		local ok, filteredResult = pcall(function()
-			return TextService:FilterStringAsync(text, userId)
-		end)
-		if not ok or not filteredResult then
-			return Result.Err(Config.AvatarContext.MSG_FILTER_FAILED)
-		end
-
-		local success, filtered = pcall(function()
-			return filteredResult:GetNonChatStringForBroadcastAsync()
-		end)
-		if not success or type(filtered) ~= "string" then
+		local filtered = TextFilterUtil.filterForBroadcast(userId, text)
+		if not filtered then
 			return Result.Err(Config.AvatarContext.MSG_FILTER_FAILED)
 		end
 

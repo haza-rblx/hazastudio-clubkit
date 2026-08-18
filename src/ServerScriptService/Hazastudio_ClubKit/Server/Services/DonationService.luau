@@ -13,7 +13,6 @@ local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
-local TextService = game:GetService("TextService")
 local UserService = game:GetService("UserService")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Secrets = require(ServerScriptService.Hazastudio_ClubKitSecrets.Secrets)
@@ -26,6 +25,7 @@ local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local OverheadDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.OverheadDomain)
 local StreakDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.StreakDomain)
 local DonationEffectTierResolver = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DonationEffectTierResolver)
+local TextFilterUtil = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.TextFilterUtil)
 type DonationEntry = Types.DonationEntry
 type DonationNotifPayload = Types.DonationNotifPayload
 type DonationLeaderboardPayload = Types.DonationLeaderboardPayload
@@ -380,36 +380,14 @@ local function createDonationService(
 	end
 
 	local function filterForBroadcast(userId: number?, message: string?, maxLength: number?): string?
-		if not userId or userId <= 0 or type(message) ~= "string" then
-			return nil
+		local filtered = TextFilterUtil.filterForBroadcast(userId, message, maxLength)
+		if not filtered and TextFilterUtil.normalize(message, maxLength) then
+			log:warn("Donation provider text filter failed", {
+				userId = userId,
+				provider = getProviderName(),
+			})
 		end
-		local trimmed = message:match("^%s*(.-)%s*$") or ""
-		if trimmed == "" then
-			return nil
-		end
-		if maxLength and maxLength > 0 then
-			trimmed = string.sub(trimmed, 1, maxLength)
-		end
-		local lastError: any = nil
-		for attempt = 1, 3 do
-			local ok, filtered = pcall(function()
-				local result = TextService:FilterStringAsync(trimmed, userId, Enum.TextFilterContext.PublicChat)
-				return result:GetNonChatStringForBroadcastAsync()
-			end)
-			if ok and type(filtered) == "string" then
-				return filtered
-			end
-			lastError = filtered
-			if attempt < 3 then
-				task.wait(0.35 * attempt)
-			end
-		end
-		log:warn("Donation provider text filter failed", {
-			userId = userId,
-			provider = getProviderName(),
-			error = tostring(lastError),
-		})
-		return nil
+		return filtered
 	end
 
 	local function cleanOptionalMessage(value: any, maxLength: number?): string?
@@ -429,6 +407,36 @@ local function createDonationService(
 	local function censoredMessageFallback(message: string): string
 		local length = math.clamp(#message, 5, 24)
 		return string.rep("#", length)
+	end
+
+	-- External provider nicknames (Saweria/Bagibagi) are free text typed on an
+	-- external platform — NOT Roblox-moderated. Before any display fallback to
+	-- `saweriaName` (unlinked donors on workspace boards), route through the
+	-- broadcast filter; never leak raw. Memoized per name so repeated board
+	-- renders do not burn TextService quota (G3, ADR 0004). Author context:
+	-- linked donor userId when known, else the place owner publishes it.
+	local externalNameFilterCache: { [string]: string } = {}
+	local function filteredProviderDisplayName(rawName: string, authorUserId: number?): string
+		local key = rawName:lower()
+		local cached = externalNameFilterCache[key]
+		if cached then
+			return cached
+		end
+		local author = if authorUserId and authorUserId > 0
+			then authorUserId
+			else math.floor(game.CreatorId or 0)
+		local filtered = TextFilterUtil.filterForBroadcast(author, rawName, 64)
+			or censoredMessageFallback(rawName)
+		-- simple cap: wipe when grown past 512 distinct names
+		local count = 0
+		for _ in pairs(externalNameFilterCache) do
+			count += 1
+		end
+		if count >= 512 then
+			table.clear(externalNameFilterCache)
+		end
+		externalNameFilterCache[key] = filtered
+		return filtered
 	end
 
 	-- httpGetOnce: single HTTP GET attempt with RequestAsync + Bearer auth
@@ -2028,7 +2036,11 @@ local function createDonationService(
 		end
 
 		local donorName = resolvedDisplayName or robloxUsername or ("User" .. tostring(userId))
-		local filteredDonatorName = filterForBroadcast(userId, donorName, 64) or donorName
+		-- Never fall back to the RAW name on filter failure (G5, ADR 0004):
+		-- a Roblox username is platform-moderated and safe; raw display text is not.
+		local filteredDonatorName = filterForBroadcast(userId, donorName, 64)
+			or robloxUsername
+			or ("User" .. tostring(userId))
 
 		local rawMessage = cleanOptionalMessage(message, 180)
 		local filteredMessage = filterForBroadcast(userId, rawMessage, 180)
@@ -2308,6 +2320,11 @@ local function createDonationService(
 				displayName = resolvedDisplayName or displayName
 				thumbnail = getUserThumbnail(userId)
 			end
+			if not userId and displayName ~= "Unknown donor" then
+				-- Unlinked donor: provider nickname is external free text — filter
+				-- before it reaches the workspace board (G3, ADR 0004).
+				displayName = filteredProviderDisplayName(displayName, nil)
+			end
 
 			table.insert(entries, {
 				rank = #entries + 1,
@@ -2349,6 +2366,11 @@ local function createDonationService(
 				username = resolvedUsername or username
 				displayName = resolvedDisplayName or displayName
 				thumbnail = getUserThumbnail(userId)
+			end
+			if not userId and displayName ~= "Unknown donor" then
+				-- Unlinked donor: provider nickname is external free text — filter
+				-- before it reaches the workspace board (G3, ADR 0004).
+				displayName = filteredProviderDisplayName(displayName, nil)
 			end
 
 			table.insert(entries, {

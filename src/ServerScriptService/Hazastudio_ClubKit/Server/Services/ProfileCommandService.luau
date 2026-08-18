@@ -6,6 +6,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Result = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Result)
+local TextFilterUtil = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.TextFilterUtil)
 
 type Result<T> = Types.Result<T>
 type ProfileStoredData = Types.ProfileStoredData
@@ -25,17 +26,25 @@ local function createProfileCommandService(deps: {
 	function service:setBio(userId: number, bio: string): Result<nil>
 		-- Trim whitespace
 		bio = bio:match("^%s*(.-)%s*$") or ""
-		
+
 		-- Validate length
 		if #bio > Config.AvatarContext.BIO_MAX_LENGTH then
 			return Result.Err(string.format(Config.AvatarContext.MSG_TOO_LONG, Config.AvatarContext.BIO_MAX_LENGTH))
 		end
-		
+
 		-- Empty after trim = clear
 		if #bio == 0 then
 			return service:clearBio(userId)
 		end
-		
+
+		-- Filter at write: raw text must never reach DataStore or the
+		-- overhead/ACM displays (ADR 0004). Yielding — callers run in
+		-- yieldable remote/chat-command contexts.
+		local filteredBio = TextFilterUtil.filterForBroadcast(userId, bio, Config.AvatarContext.BIO_MAX_LENGTH)
+		if not filteredBio then
+			return Result.Err(Config.AvatarContext.MSG_FILTER_FAILED)
+		end
+
 		-- Check rate limit
 		local loadResult = repo:load(userId)
 		if loadResult.ok then
@@ -47,11 +56,11 @@ local function createProfileCommandService(deps: {
 				end
 			end
 		end
-		
+
 		-- Update
 		local updateResult = repo:update(userId, function(current: ProfileStoredData): ProfileStoredData
 			local nextProfile = table.clone(current)
-			nextProfile.bio = bio
+			nextProfile.bio = filteredBio
 			nextProfile.lastBioUpdate = os.time()
 			nextProfile.lastStatusUpdate = current.lastStatusUpdate
 			return nextProfile
@@ -83,17 +92,25 @@ local function createProfileCommandService(deps: {
 	function service:setStatus(userId: number, statusText: string): Result<nil>
 		-- Trim whitespace
 		statusText = statusText:match("^%s*(.-)%s*$") or ""
-		
+
 		-- Validate length
 		if #statusText > Config.AvatarContext.STATUS_MAX_LENGTH then
 			return Result.Err(string.format(Config.AvatarContext.MSG_TOO_LONG, Config.AvatarContext.STATUS_MAX_LENGTH))
 		end
-		
+
 		-- Empty after trim = clear
 		if #statusText == 0 then
 			return service:clearStatus(userId)
 		end
-		
+
+		-- Filter at write: statusText renders on the overhead billboard above
+		-- the player's head for EVERYONE — raw text must never be stored or
+		-- broadcast (ADR 0004, gap G1). Yielding — callers are yieldable.
+		local filteredStatus = TextFilterUtil.filterForBroadcast(userId, statusText, Config.AvatarContext.STATUS_MAX_LENGTH)
+		if not filteredStatus then
+			return Result.Err(Config.AvatarContext.MSG_FILTER_FAILED)
+		end
+
 		local loadResult = repo:load(userId)
 		if loadResult.ok and loadResult.value.lastStatusUpdate then
 			local elapsed = os.time() - loadResult.value.lastStatusUpdate
@@ -105,7 +122,7 @@ local function createProfileCommandService(deps: {
 		local now = os.time()
 		local updateResult = repo:update(userId, function(current: ProfileStoredData): ProfileStoredData
 			local nextProfile = table.clone(current)
-			nextProfile.statusText = statusText
+			nextProfile.statusText = filteredStatus
 			nextProfile.lastStatusUpdate = now
 			return nextProfile
 		end)
@@ -113,9 +130,9 @@ local function createProfileCommandService(deps: {
 			return Result.Err(Config.AvatarContext.MSG_SAVE_FAILED)
 		end
 
-		sessionStatuses[userId] = statusText
+		sessionStatuses[userId] = filteredStatus
 		sessionStatusUpdatedAt[userId] = now
-		
+
 		return Result.Ok(nil)
 	end
 	

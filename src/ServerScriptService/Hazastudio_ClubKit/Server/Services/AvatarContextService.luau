@@ -1,10 +1,10 @@
 --!strict
 -- ServerScriptService/Server/Services/AvatarContextService.lua
-local TextService = game:GetService("TextService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Result = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Result)
+local TextFilterUtil = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.TextFilterUtil)
 type Result<T> = Types.Result<T>
 type AvatarContextPayload = Types.AvatarContextPayload
 type ProfileRelationshipMode = Types.ProfileRelationshipMode
@@ -253,7 +253,7 @@ local function createAvatarContextService(deps: {
 			if profileResult and profileResult.ok then
 				local profile = profileResult.value
 				if profile.bio then
-					bio = service:_filterText(profile.bio, viewerPlayer.UserId)
+					bio = service:_filterText(profile.bio, targetPlayer.UserId, viewerPlayer.UserId)
 				end
 				relationshipMode = getRelationshipMode(profile.relationshipMode, overhead.isCoupled)
 			end
@@ -271,7 +271,7 @@ local function createAvatarContextService(deps: {
 			if profileResult and profileResult.ok then
 				local profile = profileResult.value
 				if profile.bio then
-					bio = service:_filterText(profile.bio, viewerPlayer.UserId)
+					bio = service:_filterText(profile.bio, targetPlayer.UserId, viewerPlayer.UserId)
 				end
 				relationshipMode = getRelationshipMode(profile.relationshipMode, overhead.isCoupled)
 			else
@@ -294,7 +294,7 @@ local function createAvatarContextService(deps: {
 		if profileCommandService and type(profileCommandService.getStatus) == "function" then
 			local sessionStatus = profileCommandService:getStatus(targetPlayer.UserId)
 			if sessionStatus then
-				statusText = service:_filterText(sessionStatus, viewerPlayer.UserId)
+				statusText = service:_filterText(sessionStatus, targetPlayer.UserId, viewerPlayer.UserId)
 			end
 		end
 
@@ -373,24 +373,10 @@ local function createAvatarContextService(deps: {
 
 		return Result.Ok(payload)
 	end
-	-- Both pcalls protect against TextService network errors
-	function service:_filterText(text: string, viewerUserId: number): string?
-		local ok, result = pcall(function()
-			return TextService:FilterStringAsync(text, viewerUserId)
-		end)
-		if not ok or not result then
-			log:warn("Text filtering failed", { text = text })
-			return nil
-		end
-		-- GetNonChatStringForUserAsync may also throw on network error
-		local filterOk, filtered = pcall(function()
-			return result:GetNonChatStringForUserAsync(viewerUserId)
-		end)
-		if not filterOk then
-			log:warn("GetNonChatStringForUserAsync failed", { userId = viewerUserId })
-			return nil
-		end
-		return filtered
+	-- Filter stored text for ONE viewer. Author must be the player who WROTE
+	-- the text (age context) — passing the viewer here was a bug (G2, ADR 0004).
+	function service:_filterText(text: string, authorUserId: number, viewerUserId: number): string?
+		return TextFilterUtil.filterForUser(authorUserId, viewerUserId, text)
 	end
 	return service
 end

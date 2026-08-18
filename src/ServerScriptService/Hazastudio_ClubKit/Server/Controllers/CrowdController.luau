@@ -2,10 +2,10 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local TextService = game:GetService("TextService")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local PermissionDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.PermissionDomain)
+local TextFilterUtil = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.TextFilterUtil)
 
 local function createCrowdController(deps: {
 	commandExecutionService: any?,
@@ -49,14 +49,11 @@ local function createCrowdController(deps: {
 	end
 
 	local function filterForBroadcast(fromPlayer: Player, text: string): (boolean, string?)
-		local ok, result = pcall(function()
-			local filtered = TextService:FilterStringAsync(text, fromPlayer.UserId)
-			return filtered:GetNonChatStringForBroadcastAsync()
-		end)
-		if not ok or type(result) ~= "string" then
+		local filtered = TextFilterUtil.filterForBroadcast(fromPlayer.UserId, text)
+		if not filtered then
 			return false, nil
 		end
-		local cleaned = string.gsub(result, "^%s+", "")
+		local cleaned = string.gsub(filtered, "^%s+", "")
 		cleaned = string.gsub(cleaned, "%s+$", "")
 		if cleaned == "" then
 			return false, nil

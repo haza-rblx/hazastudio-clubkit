@@ -16,6 +16,7 @@ local PermissionDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Dom
 local RateLimiter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.RateLimiter)
 local HttpApiCounter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.HttpApiCounter)
 local HttpApi = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.HttpApi)
+local TextFilterUtil = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.TextFilterUtil)
 local createMusicSession = require(script.Parent.MusicSession)
 local MusicAssetValidator = require(script.Parent.MusicAssetValidator)
 local MusicCatalogSeeder = require(script.Parent.MusicCatalogSeeder)
@@ -719,18 +720,39 @@ local function createMusicService(deps: {
 		return getOrCreateSession():reportPlaybackFinished(player, trackId)
 	end
 
+	-- Manage-tab free text (playlist/track names, creators) renders in the
+	-- music UI for every player — filter before it is stored (G4, ADR 0004).
+	-- Non-string values pass through untouched (update path keeps existing).
+	local MUSIC_TEXT_MAX_LENGTH = 64
+	local function makeManageTextFilter(player: Player): (any) -> (boolean, string)
+		return function(value: any): (boolean, string)
+			if type(value) ~= "string" then
+				return true, value
+			end
+			local filtered = TextFilterUtil.filterForBroadcast(player.UserId, value, MUSIC_TEXT_MAX_LENGTH)
+			if not filtered then
+				return false, "filter_failed"
+			end
+			return true, filtered
+		end
+	end
+
 	function service:managePlaylist(player: Player, action: string, data: { [string]: any }): (boolean, string, any)
 		if not service:isManageAllowed(player) then return false, "no_permission", nil end
 		local allowed, _ = manageLimiter:check(player.UserId)
 		if not allowed then return false, "rate_limited", nil end
 
+		local filteredManageText = makeManageTextFilter(player)
+
 		if action == "create" then
 			local ok, err = MusicDomain.validatePlaylist(data)
 			if not ok then return false, err, nil end
+			local nameOk, filteredName = filteredManageText(data.name)
+			if not nameOk then return false, "filter_failed", nil end
 			local id = HttpService:GenerateGUID(false)
 			local playlist: PlaylistInfo = MusicDomain.buildPlaylist({
 				id = id,
-				name = data.name,
+				name = filteredName,
 				visibility = type(data.visibility) == "string" and data.visibility or "public",
 				coverType = data.coverType,
 				coverValue = data.coverValue,
@@ -746,9 +768,11 @@ local function createMusicService(deps: {
 			local id = tostring(data.id or "")
 			local existing = repo:getPlaylist(id)
 			if not existing then return false, "playlist_not_found", nil end
+			local nameOk, filteredName = filteredManageText(type(data.name) == "string" and data.name or existing.name)
+			if not nameOk then return false, "filter_failed", nil end
 			local updated: PlaylistInfo = {
 				id = id,
-				name = type(data.name) == "string" and data.name or existing.name,
+				name = filteredName,
 				visibility = type(data.visibility) == "string" and data.visibility
 					or (existing :: any).visibility
 					or "public",
@@ -800,9 +824,15 @@ local function createMusicService(deps: {
 		local allowed, _ = manageLimiter:check(player.UserId)
 		if not allowed then return false, "rate_limited", nil end
 
+		local filteredManageText = makeManageTextFilter(player)
+
 		if action == "upload" then
 			local ok, err = MusicDomain.validateTrack(data)
 			if not ok then return false, err, nil end
+			local nameOk, filteredName = filteredManageText(data.name)
+			if not nameOk then return false, "filter_failed", nil end
+			local creatorOk, filteredCreator = filteredManageText(data.creator)
+			if not creatorOk then return false, "filter_failed", nil end
 			local playlist = repo:getPlaylist(tostring(data.playlistId or ""))
 			if not playlist then return false, "playlist_not_found", nil end
 			local id = HttpService:GenerateGUID(false)
@@ -814,8 +844,8 @@ local function createMusicService(deps: {
 			end
 			local track: TrackInfo = MusicDomain.buildTrack({
 				id = id,
-				name = data.name,
-				creator = data.creator,
+				name = filteredName,
+				creator = filteredCreator,
 				playlistId = data.playlistId,
 				parts = parts,
 				totalDuration = 0,
@@ -883,10 +913,16 @@ local function createMusicService(deps: {
 					nextPlaybackSpeed = nil
 				end
 			end
+			local nameOk, filteredName = filteredManageText(type(data.name) == "string" and data.name or existing.name)
+			if not nameOk then return false, "filter_failed", nil end
+			local creatorOk, filteredCreator = filteredManageText(
+				type(data.creator) == "string" and data.creator or existing.creator
+			)
+			if not creatorOk then return false, "filter_failed", nil end
 			local updated: TrackInfo = {
 				id = id,
-				name = type(data.name) == "string" and data.name or existing.name,
-				creator = type(data.creator) == "string" and data.creator or existing.creator,
+				name = filteredName,
+				creator = filteredCreator,
 				playlistId = nextPlaylistId,
 				parts = parts,
 				totalDuration = if partsWereReplaced then 0 else existing.totalDuration,

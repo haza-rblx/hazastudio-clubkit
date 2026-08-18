@@ -4,7 +4,6 @@
 -- Access: canGift only (Owner/CoOwner/Admin).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
-local TextService = game:GetService("TextService")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local OverheadDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.OverheadDomain)
@@ -18,6 +17,7 @@ local RateLimiter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Ra
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local NetworkManager = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.NetworkManager)
 local Validator = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Validator)
+local TextFilterUtil = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.TextFilterUtil)
 local MembershipCommandService = require(script.Parent.Parent.Services.MembershipCommandService)
 local PlayerLookupService = require(script.Parent.Parent.Services.PlayerLookupService)
 type IOverheadRepository = Types.IOverheadRepository
@@ -128,16 +128,8 @@ local function createAdminController(deps: {
 	-- Broadcast-safe title filter (same pattern as ProfileMenu / PaidBroadcast).
 	-- Returns filtered text, or nil if blocked / filter failed.
 	local function filterTitleForBroadcast(text: string, fromUserId: number): string?
-		local okFilter, filterResult = pcall(function()
-			return TextService:FilterStringAsync(text, fromUserId)
-		end)
-		if not okFilter or filterResult == nil then
-			return nil
-		end
-		local okBroadcast, filtered = pcall(function()
-			return filterResult:GetNonChatStringForBroadcastAsync()
-		end)
-		if not okBroadcast or type(filtered) ~= "string" then
+		local filtered = TextFilterUtil.filterForBroadcast(fromUserId, text)
+		if not filtered then
 			return nil
 		end
 		local normalized = (filtered :: string):gsub("^%s+", ""):gsub("%s+$", "")

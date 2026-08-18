@@ -15,6 +15,7 @@ local HttpApiCounter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils
 local HttpApi = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.HttpApi)
 local MemoryStoreCache = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.MemoryStoreCache)
 local CrossServerCache = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.CrossServerCache)
+local TextFilterUtil = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.TextFilterUtil)
 
 local LEADERBOARD_INVALIDATE_TOPIC = "DonationLeaderboardInvalidate"
 
@@ -599,6 +600,16 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 	end
 
 	local function writeMetadata(kind: string, id: number, data: { [string]: any }): Result<nil>
+		if kind == "community" and type(data.communityName) == "string" and data.communityName ~= "" then
+			-- Worker-sourced community name is owner-published content shown on
+			-- the community board — filter before storing (G6, ADR 0004). Must
+			-- happen OUTSIDE the UpdateAsync transform (filters yield).
+			-- Author context: the place owner publishes it.
+			local filtered = TextFilterUtil.filterForBroadcast(game.CreatorId, data.communityName, 80)
+				or TextFilterUtil.hashFallback(data.communityName)
+			data = table.clone(data)
+			data.communityName = filtered
+		end
 		local mk = metadataKey(kind, id)
 		local cacheKey = string.format("%s:%d", kind, id)
 		local result = budgetGate:executeAsync(Enum.DataStoreRequestType.UpdateAsync, function()

@@ -7,13 +7,13 @@
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local TextService = game:GetService("TextService")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local OverheadDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.OverheadDomain)
 local ShopDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.ShopDomain)
 local RateLimiter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.RateLimiter)
 local NetworkManager = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.NetworkManager)
 local Validator = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Validator)
+local TextFilterUtil = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.TextFilterUtil)
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 type ILogger = Types.ILogger
 type INotify = {
@@ -126,21 +126,14 @@ local function createShopController(
 	local controller = {} :: IShopController
 
 	local function filterForBroadcast(userId: number, message: string): string
-		local trimmed = message:match("^%s*(.-)%s*$") or ""
-		if trimmed == "" then
+		local filtered = TextFilterUtil.filterForBroadcast(userId, message)
+		if not filtered then
+			log:warn("Donation Robux message filter failed", {
+				userId = userId,
+			})
 			return ""
 		end
-		local ok, filtered = pcall(function()
-			local result = TextService:FilterStringAsync(trimmed, userId)
-			return result:GetNonChatStringForBroadcastAsync()
-		end)
-		if ok and type(filtered) == "string" then
-			return string.sub(filtered, 1, Config.Donation.ROBUX_MESSAGE_MAX_LENGTH)
-		end
-		log:warn("Donation Robux message filter failed", {
-			userId = userId,
-		})
-		return ""
+		return string.sub(filtered, 1, Config.Donation.ROBUX_MESSAGE_MAX_LENGTH)
 	end
 
 	-- Send notification to client after membership granted

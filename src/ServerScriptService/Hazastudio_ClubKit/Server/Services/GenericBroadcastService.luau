@@ -2,10 +2,10 @@
 -- Shared filter + GenericBroadcast payload fire for /announce and paid broadcast.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local TextService = game:GetService("TextService")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local OverheadDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.OverheadDomain)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
+local TextFilterUtil = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.TextFilterUtil)
 
 export type BroadcastSenderContext = {
 	role: string,
@@ -95,25 +95,15 @@ local function createGenericBroadcastService(deps: {
 	end
 
 	function service.filterMessage(_self: Service, player: Player, rawMessage: string, maxLength: number?): string?
-		local trimmed = rawMessage:match("^%s*(.-)%s*$") or ""
-		if trimmed == "" then
-			return nil
-		end
 		local limit = maxLength or Config.Announcement.MAX_MESSAGE_LENGTH
-		trimmed = string.sub(trimmed, 1, limit)
-
-		local ok, filteredOrErr = pcall(function()
-			local filtered = TextService:FilterStringAsync(trimmed, player.UserId)
-			return filtered:GetNonChatStringForBroadcastAsync()
-		end)
-		if not ok or type(filteredOrErr) ~= "string" or filteredOrErr == "" then
+		local filtered = TextFilterUtil.filterForBroadcast(player.UserId, rawMessage, limit)
+		if not filtered then
 			log:warn("Generic broadcast filter failed", {
 				player = player.Name,
-				error = tostring(filteredOrErr),
 			})
 			return nil
 		end
-		return filteredOrErr
+		return filtered
 	end
 
 	function service.buildBroadcastPayloadFromContext(

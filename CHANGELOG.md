@@ -11,6 +11,21 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.6.7] - 2026-08-18
+
+Text-filtering compliance hardening (Roblox ToS) — all player-supplied and external free-text surfaces now pass through Roblox text filtering before they are stored or shown to other players. Full policy: `docs/adr/0004-text-filtering-policy.md`.
+
+### Fixed
+- **`/status` text above heads was never filtered.** Status (and bio) text set via `/status`, `/setbio`, the profile menu, or the command library is now filtered at write (`ProfileCommandService`); the overhead billboard and profile popups only ever render filtered text. A rejected/failed filter returns the "Roblox could not review that text" error instead of saving.
+- **Profile bio/status re-filter used the wrong author.** The avatar-context popup filtered with the *viewer's* userId as author (wrong age context); it now filters with the *writer's* userId per viewer.
+- **External donor nicknames on workspace boards.** Saweria/Bagibagi nicknames (typed on the external payment platform — not Roblox-moderated) shown for unlinked donors on the donation boards are now filtered (memoized per name so board refreshes don't burn filter quota). On filter failure a `####` mask is shown — raw external text is never displayed.
+- **Music manage names/creators.** Admin/DJ-supplied track names, track creators, and playlist names are now filtered before storing; a failed filter rejects the edit with `filter_failed`.
+- **Community board name from the donation worker.** `communityName` ingested from the worker API is now filtered (author = place owner) before the DataStore write.
+- **Robux donation name no longer falls back to the raw display name** when filtering fails — falls back to the platform-moderated username instead.
+
+### Changed
+- **New canonical filter module `TextFilterUtil`** (`Shared/Utils/TextFilterUtil.luau`). The 8 previously duplicated inline `TextService` filter implementations (donations, shop, broadcast, crowd, admin title, sign tools, profile menu, avatar context) now all route through one module with consistent trim/clamp/retry semantics. No behavior change for already-compliant surfaces beyond unified retry (sign tools intentionally stay single-attempt to protect the filter quota). Roblox DisplayNames remain intentionally un-filtered (platform-moderated — ADR 0004 D1).
+
 ## [2.6.6] - 2026-08-18
 
 Unlimited level cap + donation cinematic push-in.
