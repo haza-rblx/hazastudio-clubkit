@@ -11,6 +11,14 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.6.6] - 2026-08-18
+
+Unlimited level cap + donation cinematic push-in.
+
+### Changed
+- **Levels are now unlimited (was capped at 100).** `Config.Level.MAX_LEVEL` default changed `100` → `0` (`0` = no cap). Players past level 100 now keep earning XP and leveling up; existing capped players resume leveling on their next XP gain (their stored XP was held at `needed-1`, so the very next gain triggers the level-up loop). `/setlevel` admin command now accepts any level ≥ 1. Note for buyers who want the old behavior: set `MAX_LEVEL` back to `100` (or any cap) — the cap logic itself is unchanged and was verified working before switching the default.
+- **Donation cinematic now zooms in.** The donation camera cinematic (triggered for tiers with `cameraDuration > 0` — i.e. ≥500 R$ / ≥50rb cash) previously used a fixed-FOV orbit (`DonationOrbit`). It now uses a new `DonationPushIn` mode: a pure dolly zoom — the camera holds its framing in front of the donor (no orbit) while the FOV eases 54 → 42 over the first few seconds, then holds. `DonationPushIn` is also registered in the Cinematic Dock movement list so admins can select it manually.
+
 ## [2.6.5] - 2026-08-17
 
 Donation webhook fix + optional read-only music library mode.

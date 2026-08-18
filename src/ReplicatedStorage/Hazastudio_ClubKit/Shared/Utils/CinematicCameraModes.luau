@@ -128,6 +128,24 @@ Character.DonationOrbit = {
 	end,
 }
 
+-- 2b. Donation Push In ── pure dolly zoom-in (no orbit). The camera stays in
+-- front of the subject and eases closer over the first few seconds, then holds.
+-- FOV narrows 54 -> 42 while distance shrinks 13 -> 8. One-way, not endless.
+Character.DonationPushIn = {
+	label = "Donation Push In",
+	transitionTime = 1.1,
+	lerpSpeed = 4.5,
+	update = function(s, dt, root, head)
+		s.t += dt * 0.7 * s.speed
+		local eased = easeInOutSine(math.clamp(s.t / 2.8, 0, 1))
+	-- Pure dolly zoom-in: FOV narrows 54 -> 42, camera holds its distance (no
+	-- orbit, no positional dolly — the zoom does the work, so it never crowds in).
+		local fov = math.max(30, 54 - eased * 12)
+		local pos = inFrontOfSubject(root, head, 13, 1)
+		return CFrame.lookAt(pos, head.Position), fov
+	end,
+}
+
 -- 3. Slow Orbit ── steady, contemplative full orbit
 Character.SlowOrbit = {
 	label = "Slow Orbit",

@@ -90,7 +90,7 @@ local function createCinematicDockController(deps: {
 				userId = targetPlayer.UserId,
 				name = targetPlayer.DisplayName .. " @" .. targetPlayer.Name,
 			},
-			movement = "DonationOrbit",
+			movement = "DonationPushIn",
 			speed = 1,
 			duration = duration,
 			startedAt = os.clock(),

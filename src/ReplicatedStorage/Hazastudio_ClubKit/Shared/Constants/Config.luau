@@ -561,6 +561,7 @@ Config.CinematicDock = {
 		-- Character orbit modes
 		{ value = "PendulumOrbit", label = "Pendulum Orbit", targetType = "character" },
 		{ value = "DonationOrbit", label = "Donation Orbit", targetType = "character" },
+	{ value = "DonationPushIn", label = "Donation Push In", targetType = "character" },
 		{ value = "SlowOrbit", label = "Slow Orbit", targetType = "character" },
 		{ value = "FastOrbit", label = "Fast Orbit", targetType = "character" },
 		{ value = "HighOrbit", label = "High Orbit", targetType = "character" },
@@ -936,7 +937,7 @@ Config.Level = {
 	CHAT_COOLDOWN = 4,
 	XP_BASE = 25,
 	XP_INCREMENT = 12,
-	MAX_LEVEL = 100,
+	MAX_LEVEL = 0, -- 0 = unlimited
 	ONLINE_INTERVAL = 10,
 	SAVE_BATCH_SIZE = 2,
 	-- Overhead row "03-Level" label format (%d = level number).

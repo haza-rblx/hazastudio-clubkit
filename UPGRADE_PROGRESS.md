@@ -2,7 +2,7 @@
 
 Internal scratch pad to track work **before** a version is released.
 
-**Current version:** `2.6.5` (see [`VERSION`](VERSION))
+**Current version:** `2.6.6` (see [`VERSION`](VERSION))
 **Next release target:** _(not set)_
 **Active branch:** `main`
 
@@ -20,7 +20,7 @@ Internal scratch pad to track work **before** a version is released.
 
 | Path | Change |
 |------|--------|
-| _(empty)_ | |
+| _(none)_ | |
 
 ---
 
@@ -28,6 +28,7 @@ Internal scratch pad to track work **before** a version is released.
 
 - **Packager `collect()` bundles installed admin loaders** (`Adonis_Loader` / `Kohl's Admin`) into the main template pack — these are buyer-choice and should be excluded like BHMS. Caused a leftover Kohl's to ship into a buyer place. Consider adding admin loaders to the Packager exclusion list.
 - **Overhead cash-rank chip can be assigned to the wrong player** — observed on Atlantis: hazatargz showed `#12 RUPIAH` while having `cash_total=0` in the backend (rank #12 is a different, unlinked donor). Likely in rank-matching/`assignPlayer` name-fallback path in `DonationService`. Separate from the v2.6.5 webhook fix. Needs its own diagnosis.
+- **Emote asset health visibility** — place-side dead `AnimationId`s (content-hash IDs that fail to resolve) produced "dance panel does nothing" symptoms and were diagnosed only via Studio logs. Candidate: startup summary from `AssetHealthReporter` ("N of M emotes failed to load") so content issues are distinguishable from engine bugs in seconds.
 
 ---
 
