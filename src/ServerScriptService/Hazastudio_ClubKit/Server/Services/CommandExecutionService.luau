@@ -5,6 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local OverheadDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.OverheadDomain)
+local AnnouncementRateLimitDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.AnnouncementRateLimitDomain)
 local Result = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Result)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local RateLimiter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.RateLimiter)
@@ -42,7 +43,34 @@ local function createCommandExecutionService(deps: {
 	local log = Logger.new("CommandExecutionService")
 	local giftLimiter = RateLimiter.new(Config.Gift.RATE_MAX, Config.Gift.RATE_WINDOW)
 	local communityLimiter = RateLimiter.new(Config.Community.RATE_MAX, Config.Community.RATE_WINDOW)
-	local announceLimiter = RateLimiter.new(Config.Announcement.RATE_MAX, Config.Announcement.RATE_WINDOW)
+	-- Per-role-group announce limiters, lazily created per group on first use. When
+	-- the buyer never set ClubKitConfig.Announcement.RateLimits, RATE_LIMITS_CONFIGURED
+	-- is false and everyone shares the single legacy RATE_MAX/RATE_WINDOW budget —
+	-- preserving pre-RateLimits behavior for existing buyers.
+	local announceLimiters: { [string]: any } = {}
+	local function resolveAnnounceLimiter(player: Player): any
+		local budget
+		if Config.Announcement.RATE_LIMITS_CONFIGURED == true then
+			local roleKey: string? = nil
+			local effectiveMembership: string? = nil
+			if overheadService and type(overheadService.getEffectivePayload) == "function" then
+				local payloadResult = overheadService:getEffectivePayload(player)
+				if payloadResult.ok and type(payloadResult.value) == "table" then
+					roleKey = payloadResult.value.role
+					effectiveMembership = payloadResult.value.effectiveMembership
+				end
+			end
+			budget = AnnouncementRateLimitDomain.resolve(roleKey, effectiveMembership)
+		else
+			budget = AnnouncementRateLimitDomain.legacyBudget()
+		end
+		local limiter = announceLimiters[budget.group]
+		if not limiter then
+			limiter = RateLimiter.new(budget.max, budget.window)
+			announceLimiters[budget.group] = limiter
+		end
+		return limiter
+	end
 
 	local service = {}
 	local rawHandlers: { [string]: (Player, string) -> () } = {}
@@ -589,7 +617,7 @@ local function createCommandExecutionService(deps: {
 			notify.player(player, Config.Announcement.MSG_USAGE, "WARNING")
 			return Result.Err("missing message")
 		end
-		if not announceLimiter:check(player.UserId) then
+		if not resolveAnnounceLimiter(player):check(player.UserId) then
 			notify.player(player, Config.Announcement.MSG_RATE_LIMIT, "WARNING")
 			return Result.Err("rate_limited")
 		end

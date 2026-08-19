@@ -55,6 +55,7 @@ local function createDonationService(
 		overheadService: any?,
 		leaderboardNetwork: any,
 		notifNetwork: any,
+		notifAckRemote: RemoteEvent?,
 		notify: any,
 		donationEffectService: any?,
 		donationLeaderboardRepository: any?,
@@ -70,6 +71,7 @@ local function createDonationService(
 	local overheadService = deps.overheadService
 	local leaderboardNetwork = deps.leaderboardNetwork
 	local notifNetwork = deps.notifNetwork
+	local notifAckRemote = deps.notifAckRemote
 	local _notify = deps.notify
 	local donationEffectService = deps.donationEffectService
 	local donationLeaderboardRepository = deps.donationLeaderboardRepository
@@ -157,6 +159,32 @@ local function createDonationService(
 	local _pollRunning = false -- prevent overlapping HTTP calls during slow Worker response
 	local _pollStartedAt = 0
 	local POLL_WATCHDOG_TIMEOUT = 45
+
+	-- ── Reliability v2 state ────────────────────────────────────────────────
+	-- Tracks in-flight deliveries waiting for client ack. Key = "donationId:userId".
+	-- Value = { donationId, userId, attempts, lastFiredAt, payload }. Entries are
+	-- registered when the server fires a notification and removed on ack or when
+	-- reported to the Worker DLQ after exhausting retries.
+	type PendingDelivery = {
+		donationId: number,
+		userId: number,
+		attempts: number,
+		lastFiredAt: number,
+		payload: DonationNotifPayload,
+	}
+	local pendingDeliveries: { [string]: PendingDelivery } = {}
+	local _ackFlushQueue: { { donation_id: number, roblox_user_id: number, displayed_at: string } } = {}
+
+	-- Forward declarations: the bodies below reference helpers defined later in
+	-- this module (isReliabilityV2Enabled, flushAckQueue, reportDlq). Declaring
+	-- the locals here keeps the assignments (further down) in scope.
+	local deliveryKey: (donationId: number, userId: number) -> string
+	local handleNotifAck: (player: Player, payload: any) -> ()
+	local sweepPendingDeliveries: () -> ()
+
+	deliveryKey = function(donationId: number, userId: number): string
+		return string.format("%d:%d", donationId, userId)
+	end
 	local _leaderboardRefreshQueued = false -- debounce flag for async leaderboard refresh
 	local _lastLeaderboardRefreshAt = 0 -- timestamp of last leaderboard refresh
 	local LEADERBOARD_REFRESH_DEBOUNCE = 10 -- min seconds between refreshes
@@ -326,6 +354,19 @@ local function createDonationService(
 		return url
 	end
 
+	local function buildV3Url(resourcePath: string): string
+		local base = getDonationApiBase()
+		if base == "" then
+			return ""
+		end
+		local path = resourcePath:gsub("^/+", "")
+		return base .. "/v3/" .. path
+	end
+
+	local function isReliabilityV2Enabled(): boolean
+		return Config.Donation.RELIABILITY_V2_ENABLED == true
+	end
+
 	local function httpRequestOnce(method: string, url: string, body: string?): (boolean, string)
 		if url == "" then
 			return false, "Donation API not configured"
@@ -465,6 +506,176 @@ local function createDonationService(
 		end
 		return false, res
 	end
+	-- Reliability v2: POST helper (v2 only had GET). Same Bearer auth, same retry.
+	local function httpPost(url: string, payload: any): (boolean, string)
+		if url == "" then
+			return false, "Donation API not configured"
+		end
+		local body = HttpService:JSONEncode(payload)
+		local ok, res = httpRequestOnce("POST", url, body)
+		if ok then
+			return true, res
+		end
+		if Config.Donation.NOTIF_RETRY_ENABLED then
+			task.wait(Config.Donation.NOTIF_RETRY_DELAY)
+			return httpRequestOnce("POST", url, body)
+		end
+		return false, res
+	end
+
+	-- Register intended recipients for a donation notification. Best-effort:
+	-- a failure here never blocks the in-game notification — the ledger is for
+	-- audit/retry, the live fire already happened.
+	local function registerDeliveries(donationId: number, userIds: { number })
+		if not isReliabilityV2Enabled() or donationId <= 0 or #userIds == 0 then
+			return
+		end
+		task.spawn(function()
+			local ok, err = httpPost(buildV3Url("deliveries"), {
+				donation_id = donationId,
+				roblox_user_ids = userIds,
+			})
+			if not ok then
+				log:warn("Delivery registration failed (non-blocking)", {
+					donationId = donationId,
+					recipients = #userIds,
+					error = tostring(err),
+				})
+			end
+		end)
+	end
+
+	-- Flush queued client acks to the Worker ledger. Called from the ack
+	-- listener (batched to one HTTP call per flush window).
+	local function flushAckQueue()
+		if #_ackFlushQueue == 0 then
+			return
+		end
+		local batch = _ackFlushQueue
+		_ackFlushQueue = {}
+		task.spawn(function()
+			local ok, err = httpPost(buildV3Url("delivery-ack"), { acks = batch })
+			if not ok then
+				log:warn("Delivery ack flush failed (non-blocking)", {
+					acks = #batch,
+					error = tostring(err),
+				})
+			end
+		end)
+	end
+
+	-- Report deliveries that exhausted local retries to the Worker DLQ.
+	local function reportDlq(entries: { { donation_id: number, roblox_user_id: number } })
+		if #entries == 0 then
+			return
+		end
+		task.spawn(function()
+			local ok, err = httpPost(buildV3Url("delivery-dlq"), { entries = entries })
+			if not ok then
+				log:warn("DLQ report failed (non-blocking)", {
+					entries = #entries,
+					error = tostring(err),
+				})
+			end
+		end)
+	end
+
+	-- Reliability v2: a donation whose phase-2 resolve crashed (or produced no
+	-- usable display name) never reaches fireCashDonationPresentation, so it would
+	-- never appear in the delivery ledger at all — a silent loss. Report it with
+	-- the roblox_user_id=0 sentinel so ops see status='failed_resolve' in the DLQ
+	-- instead of the donation vanishing. Best-effort, never blocks the poll loop.
+	local function reportResolveFailure(donationId: number)
+		if not isReliabilityV2Enabled() or donationId <= 0 then
+			return
+		end
+		task.spawn(function()
+			local ok, err = httpPost(buildV3Url("delivery-dlq"), {
+				entries = { { donation_id = donationId, roblox_user_id = 0, reason = "failed_resolve" } },
+			})
+			if not ok then
+				log:warn("Resolve-failure report failed (non-blocking)", {
+					donationId = donationId,
+					error = tostring(err),
+				})
+			end
+		end)
+	end
+
+	-- Reliability v2 bodies (locals forward-declared near the state tables above).
+	-- Defined here so they can call isReliabilityV2Enabled/flushAckQueue/reportDlq.
+
+	-- Client acks a displayed notification → drop from pending + queue ledger ack.
+	handleNotifAck = function(player: Player, payload: any)
+		if not isReliabilityV2Enabled() or type(payload) ~= "table" then
+			return
+		end
+		local donationId = tonumber(payload.donationId) or 0
+		if donationId <= 0 then
+			return
+		end
+		local userId = player.UserId
+		local key = deliveryKey(donationId, userId)
+		if pendingDeliveries[key] == nil then
+			return -- duplicate or untracked ack; harmless
+		end
+		pendingDeliveries[key] = nil
+		table.insert(_ackFlushQueue, {
+			donation_id = donationId,
+			roblox_user_id = userId,
+			displayed_at = os.date("!%Y-%m-%dT%H:%M:%S.000Z"),
+		})
+		flushAckQueue()
+	end
+
+	-- Retry sweep: re-fire to players who haven't acked in time; after
+	-- NOTIF_ACK_MAX_ATTEMPTS, report to the Worker DLQ and stop tracking.
+	-- Player leaving the game also drops the entry (nothing to retry against).
+	sweepPendingDeliveries = function()
+		if not isReliabilityV2Enabled() then
+			return
+		end
+		local now = os.clock()
+		local retryAfter = math.max(1, tonumber(Config.Donation.NOTIF_ACK_RETRY_AFTER_SECS) or 5)
+		local maxAttempts = math.max(1, tonumber(Config.Donation.NOTIF_ACK_MAX_ATTEMPTS) or 3)
+		local dlqEntries: { { donation_id: number, roblox_user_id: number } } = {}
+		for key, entry in pairs(pendingDeliveries) do
+			local player = Players:GetPlayerByUserId(entry.userId)
+			if player == nil then
+				-- Recipient left before acking: report to DLQ so ops can see the
+				-- notification never reached their screen, then stop tracking.
+				pendingDeliveries[key] = nil
+				table.insert(dlqEntries, {
+					donation_id = entry.donationId,
+					roblox_user_id = entry.userId,
+				})
+			elseif (now - entry.lastFiredAt) >= retryAfter then
+				if entry.attempts >= maxAttempts then
+					pendingDeliveries[key] = nil
+					table.insert(dlqEntries, {
+						donation_id = entry.donationId,
+						roblox_user_id = entry.userId,
+					})
+					log:warn("Donation notification moved to DLQ (no ack)", {
+						donationId = entry.donationId,
+						userId = entry.userId,
+						attempts = entry.attempts,
+					})
+				else
+					entry.attempts += 1
+					entry.lastFiredAt = now
+					notifNetwork:fireClient(player, entry.payload)
+					log:info("Donation notification retry", {
+						donationId = entry.donationId,
+						userId = entry.userId,
+						attempt = entry.attempts,
+					})
+				end
+			end
+		end
+		reportDlq(dlqEntries)
+	end
+
 	-- Exponential backoff: 5, 10, 20 (capped) seconds per consecutive failure
 	local function getNotifFailureBackoff(): number
 		if consecutiveFailures <= 0 then
@@ -1116,6 +1327,9 @@ local function createDonationService(
 		totalDonationAmount: number?,
 		logDonor: string?,
 		testOnly: boolean?,
+		-- Reliability v2: donation id from the Worker (D1 donations.id). 0/nil
+		-- means "untracked" (manual /fakecash, legacy paths) — no ack expected.
+		donationId: number?,
 	})
 		local amount = math.floor(tonumber(args.amount) or 0)
 		if amount <= 0 then
@@ -1133,6 +1347,7 @@ local function createDonationService(
 			worldEffect = DonationEffectTierResolver.resolveWorldByIdr(amount)
 		end
 
+		local donationId = tonumber(args.donationId) or 0
 		local payload: DonationNotifPayload = {
 			saweriaName = args.filteredDonatorName,
 			amount = amount,
@@ -1144,6 +1359,9 @@ local function createDonationService(
 			totalDonationAmount = args.totalDonationAmount,
 			source = "cash",
 			worldEffect = worldEffect,
+			-- Reliability v2: client echoes this back in the ack so the server can
+			-- correlate "displayed" with the D1 donations row.
+			donationId = if donationId > 0 then donationId else nil,
 		}
 		-- Stagger broadcast: delay between notifications to prevent client queue flood.
 		-- At high CCU, multiple donations arrive in one poll cycle. Without staggering,
@@ -1155,7 +1373,7 @@ local function createDonationService(
 		task.delay(5, function()
 			notifStaggerIndex = math.max(0, notifStaggerIndex - 1)
 		end)
-		
+
 		task.delay(staggerDelay, function()
 			notifNetwork:fireAllClients(payload)
 			log:info("Donation notification broadcast", {
@@ -1164,7 +1382,28 @@ local function createDonationService(
 				rank = args.newRank,
 				worldEffect = payload.worldEffect,
 				staggerMs = math.floor(staggerDelay * 1000),
+				donationId = if donationId > 0 then donationId else nil,
 			})
+
+			-- Reliability v2: register the delivery in the Worker's ledger and
+			-- track every online player as a pending recipient. The retry scheduler
+			-- re-fires to players who don't ack within NOTIF_ACK_RETRY_AFTER_SECS.
+			if isReliabilityV2Enabled() and donationId > 0 and not args.testOnly then
+				local onlineUserIds: { number } = {}
+				local now = os.clock()
+				for _, player in ipairs(Players:GetPlayers()) do
+					local userId = player.UserId
+					table.insert(onlineUserIds, userId)
+					pendingDeliveries[deliveryKey(donationId, userId)] = {
+						donationId = donationId,
+						userId = userId,
+						attempts = 1,
+						lastFiredAt = now,
+						payload = payload,
+					}
+				end
+				registerDeliveries(donationId, onlineUserIds)
+			end
 
 			local robloxUserId = args.robloxUserId
 			if robloxUserId and donationEffectService then
@@ -1432,6 +1671,9 @@ local function createDonationService(
 							logDonor = info.donatorName,
 							notifId = info.notifId,
 							ts = info.ts,
+							-- Reliability v2: propagate the donation id so the ack ledger
+							-- can correlate this notification back to the D1 row.
+							donationId = tonumber(info.item.id) or 0,
 						}
 					end)
 					if not okResolve then
@@ -1439,6 +1681,9 @@ local function createDonationService(
 							id = info.notifId,
 							error = tostring(resolveErr),
 						})
+						-- Reliability v2: surface the loss to the ledger instead of
+						-- dropping silently (was the 1-in-50 leak in load testing).
+						reportResolveFailure(tonumber(info.item.id) or 0)
 					end
 					pending -= 1
 				end)
@@ -1456,6 +1701,11 @@ local function createDonationService(
 						markNotifProcessed(data.notifId)
 					end
 					hadNewDonations = true
+				elseif data and (tonumber(data.donationId) or 0) > 0 then
+					-- Resolve succeeded but produced nothing displayable (e.g. filter
+					-- returned nil for every field). Surface to the ledger rather than
+					-- dropping silently.
+					reportResolveFailure(tonumber(data.donationId) or 0)
 				end
 			end
 		end)
@@ -2704,7 +2954,37 @@ local function createDonationService(
 		log:info("DonationService polling stopped")
 	end
 
+	-- ── Reliability v2 wiring ───────────────────────────────────────────────
+	-- Ack listener + retry sweep run only when the buyer opts in via
+	-- ClubKitConfig.Donation.ReliabilityV2 = true. The sweep is a lightweight
+	-- 1-second loop over the in-memory pending table (typically 0–20 entries);
+	-- it fires zero HTTP calls when there is nothing to retry or report.
+	local _reliabilityWired = false
+	local function wireReliabilityV2()
+		if _reliabilityWired or not isReliabilityV2Enabled() then
+			return
+		end
+		_reliabilityWired = true
+		if notifAckRemote then
+			notifAckRemote.OnServerEvent:Connect(handleNotifAck)
+		else
+			log:warn("ReliabilityV2 enabled but notifAckRemote missing — acks disabled")
+		end
+		task.spawn(function()
+			while _reliabilityWired do
+				sweepPendingDeliveries()
+				task.wait(1)
+			end
+		end)
+		log:info("DonationService reliability v2 wired", {
+			retryAfterSecs = Config.Donation.NOTIF_ACK_RETRY_AFTER_SECS,
+			maxAttempts = Config.Donation.NOTIF_ACK_MAX_ATTEMPTS,
+		})
+	end
+	wireReliabilityV2()
+
 	log:info("DonationService initialized", {
+		reliabilityV2 = isReliabilityV2Enabled(),
 		notifPollInterval = Config.Donation.NOTIF_POLL_INTERVAL,
 		notifBurstInterval = Config.Donation.NOTIF_BURST_INTERVAL,
 		notifBurstWindow = Config.Donation.NOTIF_BURST_WINDOW,

@@ -545,6 +545,10 @@ export type DonationNotifPayload = {
 	-- Cash world VFX name (Nuke / Smite4 / BlackHole); nil = no world effect / robux.
 	-- Client plays this when the notif actually shows (synced to notif queue).
 	worldEffect: string?,
+	-- Reliability v2: D1 donations.id, echoed back in the client ack so the
+	-- server can correlate "displayed" with the delivery ledger. nil = untracked
+	-- (manual /fakecash, legacy paths).
+	donationId: number?,
 }
 export type DonationLeaderboardPayload = {
 	daily: { DonationEntry },

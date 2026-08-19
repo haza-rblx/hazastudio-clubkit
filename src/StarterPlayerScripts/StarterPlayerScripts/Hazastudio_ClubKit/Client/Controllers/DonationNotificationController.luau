@@ -1605,6 +1605,9 @@ local function init(_deps: {}?)
 	local queue: { DonationNotifPayload } = {}
 	local isShowingNotif = false
 	local isProcessingQueue = false
+	-- Reliability v2: the payload currently on screen, so the retry-dedup guard can
+	-- recognize a re-fire for the notif being displayed (and skip re-queueing it).
+	local showingNotifPayload: DonationNotifPayload? = nil
 	local function syncDonationBroadcastLayout()
 		local active = isShowingNotif or isProcessingQueue or #queue > 0
 		GenericBroadcastLayoutBridge.setDonationNotifActive(active)
@@ -1688,6 +1691,9 @@ local function init(_deps: {}?)
 		log:warn("DonationNotification remote not found")
 		return
 	end
+	-- Reliability v2: ack channel. Optional — nil when the server runs an older
+	-- engine or the buyer has ReliabilityV2 off; acks are simply skipped.
+	local notifAckRemote = remotes:FindFirstChild(Config.Donation.REMOTE_NOTIF_ACK or "DonationNotifAck") :: RemoteEvent?
 	-- BACKGROUND SPIN LOOP
 	-- Called after panel finish entrance animation.
 	-- Loop runs until token changes (when exit is called).
@@ -1780,7 +1786,9 @@ local function init(_deps: {}?)
 			return
 		end
 		isShowingNotif = true
+		showingNotifPayload = payload
 		syncDonationBroadcastLayout()
+
 
 		-- World VFX follows notif show cadence (abort previous via WorldEffectFlight).
 		local worldEffect = payload.worldEffect
@@ -1878,6 +1886,14 @@ local function init(_deps: {}?)
 		if #queue >= backlogThreshold then
 			notifDuration = notifDuration * backlogDisplayScale
 		end
+		-- Reliability v2 (b): hard backpressure floor. Beyond half the soft queue cap
+		-- (default >50 queued) we clamp every notification to a short floor so a deep
+		-- burst drains in bounded time instead of piling up for many minutes. The
+		-- notification still shows — just briefly — so nothing is ever dropped.
+		local hardFloor = tonumber(Config.Donation.NOTIF_BACKLOG_HARD_FLOOR_SECS) or 2
+		if #queue > backlogThreshold then
+			notifDuration = math.min(notifDuration, hardFloor)
+		end
 		if refs.countDownBar then
 			refs.countDownBar.Size = UDim2.new(1, 0, refs.countDownBar.Size.Y.Scale, refs.countDownBar.Size.Y.Offset)
 			tween(
@@ -1922,6 +1938,7 @@ local function init(_deps: {}?)
 		resetGuiState(refs, restingPosition)
 		clearGuiContent(refs)
 		isShowingNotif = false
+		showingNotifPayload = nil
 		syncDonationBroadcastLayout()
 		if #queue > 0 then
 			task.wait(Config.Donation.NOTIF_GAP_DURATION)
@@ -1948,6 +1965,7 @@ local function init(_deps: {}?)
 			end)
 			if not ok then
 				isShowingNotif = false
+				showingNotifPayload = nil
 				syncDonationBroadcastLayout()
 				animToken += 1 -- invalidate all loop
 				local refs = guiRefs
@@ -2009,6 +2027,27 @@ local function init(_deps: {}?)
 		end
 		local notifPayload = payload :: DonationNotifPayload
 		displayInGeneralChat(notifPayload)
+		-- Reliability v2: idempotent retry guard. The server re-fires a notification
+		-- until the client acks it. If this donationId is already queued (or currently
+		-- showing), a retry must be a no-op — otherwise a burst would enqueue the same
+		-- donation many times and flood the queue. This check runs BEFORE the legacy
+		-- burst dedup below.
+		local incomingDonationId = tonumber((notifPayload :: any).donationId) or 0
+		if incomingDonationId > 0 then
+			local showingId = if showingNotifPayload ~= nil
+				then tonumber((showingNotifPayload :: any).donationId)
+				else nil
+			if showingId ~= nil and showingId == incomingDonationId then
+				log:debug("Donation notification retry deduped (currently showing)", { donationId = incomingDonationId })
+				return
+			end
+			for _, queued in ipairs(queue) do
+				if tonumber((queued :: any).donationId) == incomingDonationId then
+					log:debug("Donation notification retry deduped (already queued)", { donationId = incomingDonationId })
+					return
+				end
+			end
+		end
 		-- Dedup guard: filter identical payloads from burst polling (within DEDUP_WINDOW_SECS)
 		-- 3D fix: dedup key use robloxUserId (not saweriaName) so donor
 		-- with different names but same/"donor" not collapsed as duplicate.
@@ -2029,37 +2068,24 @@ local function init(_deps: {}?)
 			})
 			return
 		end
-		local pendingCount = #queue + (if isShowingNotif then 1 else 0)
-		if pendingCount >= maxPendingQueue then
-			-- Evict lowest-amount queued item to make room (never drop incoming solely for being new).
-			local evictIdx: number? = nil
-			local evictAmount = math.huge
-			for i, queued in ipairs(queue) do
-				local amt = tonumber(queued.amount) or 0
-				if amt < evictAmount then
-					evictAmount = amt
-					evictIdx = i
-				end
-			end
-			if evictIdx == nil then
-				log:warn("Donation notification queue full, notification dropped", {
-					dedupKey = dedupKey,
-					queueSize = #queue,
-					isShowing = isShowingNotif,
-				})
-				return
-			end
-			local evicted = table.remove(queue, evictIdx)
-			log:warn("Donation notification queue eviction (lowest amount)", {
-				evictedAmount = evicted and evicted.amount or nil,
-				evictedName = evicted and evicted.saweriaName or nil,
-				incomingAmount = notifPayload.amount,
-				queueSize = #queue,
-			})
-			syncDonationBroadcastLayout()
-		end
+		-- Reliability v2: NO EVICTION. A donor paid real money — their notification is
+		-- never dropped to make room for another. The queue is a soft cap: beyond
+		-- maxPendingQueue we still enqueue and rely on backlog display scaling (see
+		-- resolveNotifDuration + NOTIF_BACKLOG_DISPLAY_SCALE) to drain faster. This
+		-- replaces the old lowest-amount eviction that silently discarded small
+		-- donations under burst — a direct violation of the no-silent-loss guarantee.
 		table.insert(queue, notifPayload)
 		syncDonationBroadcastLayout()
+		-- Reliability v2: ack DELIVERY (not display). The notification is now safely
+		-- in the client queue and WILL be shown — that is the delivery guarantee the
+		-- server ledger tracks. Display timing depends on queue depth (a burst drains
+		-- over minutes), which is expected behavior, not a failure — so we ack here,
+		-- at enqueue, not after the animation. The server dedups retries by donationId,
+		-- so a late duplicate ack is harmless.
+		local deliveryId = tonumber((notifPayload :: any).donationId) or 0
+		if deliveryId > 0 and notifAckRemote then
+			notifAckRemote:FireServer({ donationId = deliveryId })
+		end
 		lastEnqueuedDedupKey = dedupKey
 		lastEnqueuedAmount = notifPayload.amount
 		lastEnqueuedAt = now

@@ -23,6 +23,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local ExternalAdminDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.ExternalAdminDomain)
+local AnnouncementRateLimitDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.AnnouncementRateLimitDomain)
 local ResultUtil = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Result)
 local RateLimiter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.RateLimiter)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
@@ -52,7 +53,9 @@ local deps: {
 local provider: Provider = "None"
 local roleChangedCallbacks: { (RoleChangedPayload) -> () } = {}
 local eventBusUnsubscribe: (() -> ())? = nil
-local announceLimiter: any = nil
+-- Per-role-group announce limiters (same source of truth as /announce chat
+-- command: AnnouncementRateLimitDomain). Lazily created per group.
+local announceLimiters: { [string]: any } = {}
 -- Self-reported presence from place-pack bridge modules (most reliable signal:
 -- if our Adonis plugin / Kohl's addon ran, that admin is installed by definition).
 local reportedAdmins: { Adonis: boolean, Kohls: boolean } = { Adonis = false, Kohls = false }
@@ -103,12 +106,9 @@ function ExternalAdminFacade._init(newDeps: {
 	local section = externalAdminConfig()
 	provider = ExternalAdminDomain.normalizeProvider(if section then section.Provider else nil)
 
-	-- Facade announce bypasses CommandExecutionService, so it carries its own
-	-- limiter (same budget as /announce: Config.Announcement.RATE_MAX/RATE_WINDOW).
-	local announceConfig = Config.Announcement
-	if type(announceConfig) == "table" then
-		announceLimiter = RateLimiter.new(announceConfig.RATE_MAX or 2, announceConfig.RATE_WINDOW or 30)
-	end
+	-- Facade announce bypasses CommandExecutionService, so it resolves the same
+	-- per-role-group budget via AnnouncementRateLimitDomain (single source of
+	-- truth). Limiters are created lazily on first check per group.
 
 	if provider ~= "None" and newDeps.eventBus and type(newDeps.eventBus.on) == "function" then
 		eventBusUnsubscribe = newDeps.eventBus:on("Gift:RoleChanged", relayRoleChanged)
@@ -197,9 +197,9 @@ function ExternalAdminFacade.onDestroy()
 		eventBusUnsubscribe()
 		eventBusUnsubscribe = nil
 	end
-	if announceLimiter then
-		announceLimiter:destroy()
-		announceLimiter = nil
+	for group, limiter in pairs(announceLimiters) do
+		limiter:destroy()
+		announceLimiters[group] = nil
 	end
 	table.clear(roleChangedCallbacks)
 end
@@ -343,8 +343,30 @@ function ExternalAdminFacade.announce(callerUserId: number, message: string): Re
 	if type(message) ~= "string" or message == "" then
 		return ResultUtil.Err("[ExternalAdmin] Empty announce message.")
 	end
-	if announceLimiter then
-		local allowed, limitErr = announceLimiter:check(caller.UserId)
+	-- Resolve announce budget (same logic + legacy fallback as the chat command).
+	do
+		local budget
+		if Config.Announcement.RATE_LIMITS_CONFIGURED == true then
+			local roleKey: string? = nil
+			local effectiveMembership: string? = nil
+			local overhead = (deps :: any).overheadService
+			if overhead and type(overhead.getEffectivePayload) == "function" then
+				local payloadResult = overhead:getEffectivePayload(caller)
+				if payloadResult.ok and type(payloadResult.value) == "table" then
+					roleKey = payloadResult.value.role
+					effectiveMembership = payloadResult.value.effectiveMembership
+				end
+			end
+			budget = AnnouncementRateLimitDomain.resolve(roleKey, effectiveMembership)
+		else
+			budget = AnnouncementRateLimitDomain.legacyBudget()
+		end
+		local limiter = announceLimiters[budget.group]
+		if not limiter then
+			limiter = RateLimiter.new(budget.max, budget.window)
+			announceLimiters[budget.group] = limiter
+		end
+		local allowed, limitErr = limiter:check(caller.UserId)
 		if not allowed then
 			return ResultUtil.Err("[ExternalAdmin] " .. tostring(limitErr))
 		end

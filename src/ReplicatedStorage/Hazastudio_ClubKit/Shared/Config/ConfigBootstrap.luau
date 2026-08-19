@@ -256,6 +256,9 @@ function ConfigBootstrap.apply(config: any)
 		if typeof(donation.NukeWorldPosition) == "Vector3" then
 			config.Donation.NUKE_WORLD_POSITION = donation.NukeWorldPosition
 		end
+		if type(donation.ReliabilityV2) == "boolean" then
+			config.Donation.RELIABILITY_V2_ENABLED = donation.ReliabilityV2
+		end
 	end
 
 	local carry = clubKit.Carry
@@ -383,6 +386,35 @@ function ConfigBootstrap.apply(config: any)
 					else minTier
 				config.Announcement.MSG_NO_PERM = "[Announcement] This command is " .. label .. "-only and above."
 			end
+		end
+		-- Per-role-group rate limits (partial override; fill-forward per group).
+		-- Detect buyer intent from the RAW buyer config, not the fill-forwarded
+		-- state: fillForward injects schema defaults, which would falsely mark every
+		-- buyer as configured. Only an explicit ClubKitConfig.Announcement.RateLimits
+		-- table opts into per-group budgets; otherwise legacy single budget applies.
+		local buyerAnnouncement = type(ClubKitConfig) == "table" and ClubKitConfig.Announcement or nil
+		local buyerRateLimits = type(buyerAnnouncement) == "table" and buyerAnnouncement.RateLimits or nil
+		local rateLimits = announcement.RateLimits
+		if type(buyerRateLimits) == "table" and type(rateLimits) == "table" then
+			config.Announcement.RATE_LIMITS_CONFIGURED = true
+			local function applyGroup(group: string, maxKey: string, windowKey: string)
+				local entry = rateLimits[group]
+				if type(entry) ~= "table" then
+					return
+				end
+				local max = tonumber(entry.Max)
+				local window = tonumber(entry.Window)
+				if max and max > 0 then
+					config.Announcement[maxKey] = math.floor(max)
+				end
+				if window and window > 0 then
+					config.Announcement[windowKey] = math.floor(window)
+				end
+			end
+			applyGroup("Leadership", "RATE_LIMIT_LEADERSHIP_MAX", "RATE_LIMIT_LEADERSHIP_WINDOW")
+			applyGroup("Spender", "RATE_LIMIT_SPENDER_MAX", "RATE_LIMIT_SPENDER_WINDOW")
+			applyGroup("Member", "RATE_LIMIT_MEMBER_MAX", "RATE_LIMIT_MEMBER_WINDOW")
+			applyGroup("Player", "RATE_LIMIT_PLAYER_MAX", "RATE_LIMIT_PLAYER_WINDOW")
 		end
 	end
 

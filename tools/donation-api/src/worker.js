@@ -8,6 +8,12 @@ import {
 } from "./game-data.js";
 import { handleGameV2, V2_VERSION } from "./v2-routes.js";
 import {
+  handleAdminDeliveryReport,
+  handleAdminDlq,
+  handleGameV3,
+  V3_VERSION,
+} from "./v3-routes.js";
+import {
   handleAdminLicenseGet,
   handleAdminLicensePatch,
   licensePayload,
@@ -244,6 +250,7 @@ async function handleHealth(req, env) {
     ok: true,
     version: "1.0.0",
     v2_version: V2_VERSION,
+    v3_version: V3_VERSION,
     ts: Math.floor(Date.now() / 1000),
   });
 }
@@ -426,6 +433,8 @@ async function handleAdmin(req, env, url, parts) {
   if (parts[3] === "test-api") return handleAdminTestApi(req, env, url, game);
   if (parts[3] === "webhook-events") return handleAdminWebhookEvents(req, env, url, game);
   if (parts[3] === "daily-leaderboard") return handleAdminDailyLeaderboard(req, env, url, game);
+  if (parts[3] === "delivery-report") return handleAdminDeliveryReport(req, env, url, game, json);
+  if (parts[3] === "dlq") return handleAdminDlq(req, env, url, game, json);
   if (parts[3] === "bulk-void") return handleAdminBulkVoid(req, env, game);
   if (parts[3] === "bulk-link") return handleAdminBulkLink(req, env, game);
   if (parts[3] === "stats") return handleAdminGameStats(req, env, url, game);
@@ -1469,6 +1478,9 @@ export default {
       if (parts[0] === "admin" && parts[1] === "shared" && parts[2])
         return handleAdminSharedToken(req, env, parts[2]);
       if (parts[0] === "admin") return handleAdmin(req, env, url, parts);
+      if (parts[0] === "game" && parts[1] && parts[2] === "v3") {
+        return handleGameV3(req, env, url, parts[1], parts, json);
+      }
       if (parts[0] === "game" && parts[1] && parts[2] === "v2") {
         return handleGameV2(req, env, url, parts[1], parts, json);
       }

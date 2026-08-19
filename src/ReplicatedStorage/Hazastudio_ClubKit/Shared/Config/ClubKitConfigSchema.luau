@@ -63,6 +63,10 @@ ClubKitConfigSchema.defaults = {
 		Provider = "bagibagi", -- "bagibagi" | "saweria" | "sociabuzz"
 		ProviderLink = "",
 		ApiUrl = "",
+		-- Enterprise-grade notification reliability (delivery ledger + client ack +
+		-- server retry + DLQ audit). Requires donation-api Worker >= v3. Default off
+		-- so existing buyers keep legacy fire-and-forget until they opt in.
+		ReliabilityV2 = false,
 		-- Cash display currency ("IDR" | "PHP" | "CASH"). Saweria supports IDR/PHP natively;
 		-- Bagi-Bagi is IDR-only; SociaBuzz settles per creator country. "CASH" = neutral
 		-- "Cash" labels (no currency name). Display-only — amounts are not converted;
@@ -156,6 +160,15 @@ ClubKitConfigSchema.defaults = {
 	-- Free /announce + free broadcast UI. Tier1=VIP, Tier2=VVIP, Tier3=Supreme (or label).
 	Announcement = {
 		MinMembership = "Tier2",
+		-- Per-role-group cooldown for /announce. Partial override OK — unspecified
+		-- groups fall back to engine defaults. Omit the whole table to keep the
+		-- legacy single budget (Config.Announcement.RATE_MAX/RATE_WINDOW).
+		RateLimits = {
+			Leadership = { Max = 10, Window = 60 }, -- Staff and above
+			Spender = { Max = 5, Window = 60 }, -- RoyaleSpender / TopSpender / Spender
+			Member = { Max = 3, Window = 60 }, -- membership >= MinMembership
+			Player = { Max = 1, Window = 60 }, -- everyone else who can announce
+		},
 	},
 	Membership = {
 		Tier1 = { Label = "VIP", Enabled = true, Priority = 40 },

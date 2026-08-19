@@ -225,6 +225,23 @@ Config.Announcement = {
 	MAX_MESSAGE_LENGTH = 180,
 	RATE_MAX = 2,
 	RATE_WINDOW = 30,
+	-- Per-role-group rate limits (buyer override: ClubKitConfig.Announcement.RateLimits,
+	-- partial — fill-forward keeps unspecified groups at these defaults). Resolution
+	-- order: Leadership (role priority >= Staff) → Spender (Royale/Top/Spender) →
+	-- Member (membership >= MIN_MEMBERSHIP_TIER) → Player (everyone else). When the
+	-- whole table is absent, RATE_MAX/RATE_WINDOW above stay the single legacy budget.
+	RATE_LIMIT_LEADERSHIP_MAX = 10,
+	RATE_LIMIT_LEADERSHIP_WINDOW = 60,
+	RATE_LIMIT_SPENDER_MAX = 5,
+	RATE_LIMIT_SPENDER_WINDOW = 60,
+	RATE_LIMIT_MEMBER_MAX = 3,
+	RATE_LIMIT_MEMBER_WINDOW = 60,
+	RATE_LIMIT_PLAYER_MAX = 1,
+	RATE_LIMIT_PLAYER_WINDOW = 60,
+	-- Set true by ConfigBootstrap only when the buyer actually supplied
+	-- ClubKitConfig.Announcement.RateLimits. When false, /announce uses the legacy
+	-- single RATE_MAX/RATE_WINDOW budget — preserving pre-RateLimits behavior.
+	RATE_LIMITS_CONFIGURED = false,
 	SHOW_DURATION = 8,
 	ENTER_SOUND_ID = "rbxassetid://74687624322129",
 	ENTER_SOUND_VOLUME = 0.65,
@@ -529,6 +546,9 @@ Config.CinematicDock = {
 	REMOTE_BROADCAST = "CinematicDockBroadcast",
 	REMOTE_TARGETS = "CinematicDockTargets",
 	GUI_NAME = "12-CinematicDockGUI",
+	-- Donation cinematic movement (buyer override via ClubKitConfig.Cinematic).
+	-- "DonationOrbit" = classic orbit (legacy), "DonationPushIn" = dolly zoom (2.6.6+).
+	DONATION_MOVEMENT = "DonationPushIn",
 	-- Bottom chrome slide (CinematicDock panel + hotbar) — CinematicDockController.setDockVisible
 	DOCK_CHROME_HIDE_DURATION = 0.18,
 	DOCK_CHROME_SHOW_DURATION = 0.28,
@@ -2300,6 +2320,10 @@ Config.Donation = {
 	NOTIF_BURST_WINDOW = 45, -- seconds before returning to normal NOTIF_POLL_INTERVAL
 	-- Client: when pending queue is at least half full, shorten notif display (no drops).
 	NOTIF_BACKLOG_DISPLAY_SCALE = 0.6,
+	-- Hard backpressure floor: when the queue exceeds half the soft cap, every
+	-- notification is clamped to this many seconds so a deep burst drains in
+	-- bounded time. The notification still shows — never dropped.
+	NOTIF_BACKLOG_HARD_FLOOR_SECS = 2,
 	-- Backoff on consecutive endpoint errors (exponential, smaller for faster recovery)
 	NOTIF_FAILURE_BACKOFF_STEP = 5, -- base delay per failure step (seconds)
 	NOTIF_FAILURE_BACKOFF_MAX = 20, -- maximum backoff cap (seconds)
@@ -2329,6 +2353,21 @@ Config.Donation = {
 	-- Remote names
 	REMOTE_NOTIFICATION = "DonationNotification",
 	REMOTE_LEADERBOARD_UPDATED = "DonationLeaderboardUpdated",
+	-- Reliability v2: client → server ack after a donation notification is
+	-- actually displayed. Server registers/acks against the Worker's durable
+	-- delivery ledger (v3 API) so a notification is never silently dropped.
+	REMOTE_NOTIF_ACK = "DonationNotifAck",
+	-- Master switch (buyer override via ClubKitConfig.Donation.ReliabilityV2).
+	-- Off = legacy fire-and-forget; engine behaves exactly like before.
+	RELIABILITY_V2_ENABLED = false,
+	-- Server-side retry: re-fire a notification to a client that has not acked
+	-- within this many seconds. The client dedups by donationId, so a retry to a
+	-- still-queued notification is a harmless no-op — retries only matter when the
+	-- remote was genuinely lost. DLQ is reserved for REAL failure (player left, or
+	-- the full window elapsed with zero ack). Window must comfortably exceed the
+	-- worst-case client queue drain under a burst (e.g. 30 notifs × ~4s ≈ 120s).
+	NOTIF_ACK_RETRY_AFTER_SECS = 8,
+	NOTIF_ACK_MAX_ATTEMPTS = 20, -- 20 × 8s ≈ 160s budget before DLQ
 	-- Slim signal on DonationLeaderboardUpdated (revision only); set false to rollback full table broadcast.
 	SHEETS_REFRESH_SIGNAL_ONLY = true,
 	REMOTE_ADMIN_COMMAND = "DonationAdminCommand",
@@ -2401,7 +2440,7 @@ Config.Donation = {
 	LEADERBOARD_SURFACE_GUI_PATH = "",
 	-- Toast notifications / notification center
 	NOTIF_SHOW_DURATION = 20, -- seconds before auto-dismiss (slightly longer for reading time)
-	NOTIF_MAX_QUEUE = 20, -- max notifications queued on client
+	NOTIF_MAX_QUEUE = 100, -- max notifications queued on client (raised 20→100 for reliability v2)
 	NOTIF_SLIDE_DURATION = 0.45, -- slide-in animation duration (seconds)
 	NOTIF_GAP_DURATION = 0.18, -- gap between notifications for distinct transitions
 	WORKSPACE_RESTORE_DELAY = 60,

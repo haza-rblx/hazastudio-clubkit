@@ -203,6 +203,7 @@ ensureRemoteEvent(Remotes, "ShopGiftPending")
 ensureRemoteEvent(Remotes, Config.Hotbar.REMOTE_TOOLS_SYNCED)
 ensureRemoteEvent(Remotes, Config.Hotbar.REMOTE_TOOLS_REQUEST_SYNC)
 local DonationNotifRemote = ensureRemoteEvent(Remotes, Config.Donation.REMOTE_NOTIFICATION)
+local DonationNotifAckRemote = ensureRemoteEvent(Remotes, Config.Donation.REMOTE_NOTIF_ACK or "DonationNotifAck")
 local DonationLeaderboardRemote = ensureRemoteEvent(Remotes, Config.Donation.REMOTE_LEADERBOARD_UPDATED)
 ensureRemoteEvent(Remotes, Config.Donation.REMOTE_ROBUX_INIT)
 ensureRemoteEvent(Remotes, Config.Donation.REMOTE_ROBUX_RESULT)
@@ -732,6 +733,7 @@ local donationService = ServerMods.createDonationService({
 		overheadService = overheadService,
 		leaderboardNetwork = donationLeaderboardNetwork,
 		notifNetwork = donationNotifNetwork,
+		notifAckRemote = DonationNotifAckRemote,
 		notify = Notify,
 		donationEffectService = donationEffectService,
 		donationLeaderboardRepository = donationLeaderboardRepository,
