@@ -54,6 +54,16 @@ Internal scratch pad to track work **before** a version is released.
 | `Main.server.luau` / `DonationNotificationController.luau` | Drop unnecessary `:: any` casts on existing strict constant |
 | `v3-routes.js` / migration 0010 | `failed_resolve` added to `DELIVERY_STATUSES` + status comment |
 | Reverted (other session's, NOT this release) | `ClubKitConfig.luau` (buyer-owned), `CinematicDockController.luau`, Cinematic hunks in Schema/Bootstrap |
+| **Couple chat tag toggle (unreleased, this session)** | |
+| `src/ReplicatedStorage/Hazastudio_ClubKit/Shared/Constants/Config.luau` | +`Config.Couple.SHOW_CHAT_TAG = true` |
+| `src/ReplicatedStorage/Hazastudio_ClubKit/Shared/Config/ConfigBootstrap.luau` | Overlay `Features.ShowCoupleChatTag` → `Config.Couple.SHOW_CHAT_TAG` (non-FeatureFlags pattern, like DonationRankGradientAnim) |
+| `src/ReplicatedStorage/Hazastudio_ClubKit/Shared/Config/ClubKitConfigSchema.luau` | +`defaults.Features.ShowCoupleChatTag = true` + FEATURE_MANIFEST "Couple chat tag (General)" |
+| `src/ReplicatedStorage/Hazastudio_ClubKitConfig/ClubKitConfig.luau` (template) | +`ShowCoupleChatTag = true` with comment |
+| `src/StarterPlayerScripts/.../Client/Controllers/ChatTagsController.luau` | Gate `buildPrefixText` coupleTag on `Config.Couple.SHOW_CHAT_TAG ~= false` (client-side render gate; server still sends data — backward compat) |
+| **Group-owner text-filter fix (unreleased, this session)** | Root cause: on group-owned places `game.CreatorId` is a GROUP id → `FilterStringAsync` author fails → community/provider-donor names stored as `#####` |
+| `src/ReplicatedStorage/Hazastudio_ClubKit/Shared/Utils/TextFilterUtil.luau` | +`resolveFilterAuthorUserId()` — user-owned → `game.CreatorId`; group-owned → group owner via `GroupService:GetGroupInfoAsync` (memoized); +`GroupService` import |
+| `src/ServerScriptService/.../Repositories/DonationLeaderboardRepository.luau` | Community-name filter author now uses resolver (was `game.CreatorId`) |
+| `src/ServerScriptService/.../Services/DonationService.luau` | `filteredProviderDisplayName` fallback author now uses resolver (was `math.floor(game.CreatorId)`) |
 
 **REVERTED:** replay-on-join ring buffer (locked decision (c)) was implemented then REMOVED per product call — donation notifications are live-moment only; late joiners intentionally do not see them. No config surface shipped. |
 

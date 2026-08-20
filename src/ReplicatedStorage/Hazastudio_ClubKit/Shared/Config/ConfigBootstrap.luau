@@ -459,6 +459,11 @@ function ConfigBootstrap.apply(config: any)
 		if type(features.WutwutDance) == "boolean" and type(config.Sync) == "table" then
 			config.Sync.WUTWUT_ENABLED = features.WutwutDance or config.Sync.WUTWUT_ENABLED == true
 		end
+		-- Couple chat tag in General (not a FeatureFlags module kill-switch; gate lives in
+		-- Config.Couple.SHOW_CHAT_TAG, read by client ChatTagsController). Default true.
+		if type(features.ShowCoupleChatTag) == "boolean" and type(config.Couple) == "table" then
+			config.Couple.SHOW_CHAT_TAG = features.ShowCoupleChatTag
+		end
 	end
 
 	if type(donation) == "table" then

@@ -21,11 +21,42 @@
 -- intentionally NOT routed through here (ADR 0004, decision D1).
 
 local TextService = game:GetService("TextService")
+local GroupService = game:GetService("GroupService")
 
 local TextFilterUtil = {}
 
 local DEFAULT_RETRIES = 3
 local RETRY_BACKOFF_SEC = 0.35
+
+-- Cached place-owner userId for filter author context (group-owned places).
+local cachedOwnerUserId: number? = nil
+
+-- Yielding: resolve a VALID filter-author userId for owner-published text.
+-- `game.CreatorId` is a GROUP id on group-owned places, and passing a group id to
+-- FilterStringAsync makes filtering fail (every name falls back to "#####").
+-- For user-owned places the creator IS the user; for group-owned places we resolve
+-- the group owner's userId via GroupService (memoized). Returns nil if unresolvable.
+function TextFilterUtil.resolveFilterAuthorUserId(): number?
+	if game.CreatorType == Enum.CreatorType.User then
+		local id = tonumber(game.CreatorId) or 0
+		return if id > 0 then id else nil
+	end
+	-- Group-owned place
+	if cachedOwnerUserId and cachedOwnerUserId > 0 then
+		return cachedOwnerUserId
+	end
+	local ok, info = pcall(function()
+		return GroupService:GetGroupInfoAsync(game.CreatorId)
+	end)
+	if ok and type(info) == "table" and type(info.Owner) == "table" then
+		local ownerId = tonumber(info.Owner.Id) or 0
+		if ownerId > 0 then
+			cachedOwnerUserId = ownerId
+			return ownerId
+		end
+	end
+	return nil
+end
 
 -- Pure: trim + clamp. Returns nil when empty after trim.
 function TextFilterUtil.normalize(text: string?, maxLength: number?): string?

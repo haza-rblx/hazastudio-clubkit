@@ -289,7 +289,7 @@ local function buildPrefixText(record: TagRecord): string
 	if hasTag then
 		table.insert(prefixParts, wrapTag(record.primaryTag :: string, colorHex))
 	end
-	if record.coupleTag and #record.coupleTag > 0 then
+	if record.coupleTag and #record.coupleTag > 0 and Config.Couple.SHOW_CHAT_TAG ~= false then
 		table.insert(prefixParts, wrapTag(record.coupleTag, Config.ChatCoupleTagColor))
 	end
 	local namePart = wrapColoredText(record.displayName, colorHex)

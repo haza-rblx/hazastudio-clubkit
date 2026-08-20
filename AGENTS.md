@@ -45,7 +45,7 @@ On release, agents can use `git diff` / `git log` to generate `CHANGED_FILES.md`
 ## Domain docs & agent skills
 
 - Read `CONTEXT.md` when a term is unfamiliar; update it (and offer an ADR) when a decision crystallizes — don't let jargon drift.
-- Project skills live in `.mimocode/skills/`: `grill-with-docs` (plan before non-trivial changes), `diagnosing-bugs` (feedback-loop-first debugging), `code-review` (two-axis gate before release), `tdd-luau` (red-green for pure Luau logic).
+- Project skills live in `.mimocode/skills/`: `grill-with-docs` (plan before non-trivial changes), `diagnosing-bugs` (feedback-loop-first debugging), `code-review` (two-axis gate before release), `tdd-luau` (red-green for pure Luau logic), `mcp-studio` (MCP→Studio bridge workflow: start/verify server, execute_luau, persistent edits, playtest, engine sync — read before touching a live Studio place via MCP).
 
 ---
 

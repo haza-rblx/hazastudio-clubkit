@@ -463,10 +463,12 @@ local function createDonationService(
 		if cached then
 			return cached
 		end
+		-- Fallback author must be a real userId — on group-owned places game.CreatorId
+		-- is a GROUP id and FilterStringAsync fails (names become "#####").
 		local author = if authorUserId and authorUserId > 0
 			then authorUserId
-			else math.floor(game.CreatorId or 0)
-		local filtered = TextFilterUtil.filterForBroadcast(author, rawName, 64)
+			else TextFilterUtil.resolveFilterAuthorUserId()
+		local filtered = (author and TextFilterUtil.filterForBroadcast(author, rawName, 64))
 			or censoredMessageFallback(rawName)
 		-- simple cap: wipe when grown past 512 distinct names
 		local count = 0

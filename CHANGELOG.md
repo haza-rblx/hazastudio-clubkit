@@ -11,6 +11,16 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.7.1] - 2026-08-20
+
+Couple chat tag toggle + group-owner text-filter fix.
+
+### Added
+- **Couple chat tag toggle (`Features.ShowCoupleChatTag`).** Buyers can now hide the couple chat tag (💕 partner) shown in the General/chat prefix without disabling the couple system. New buyer config flag `ClubKitConfig.Features.ShowCoupleChatTag` (default `true`) → resolved to `Config.Couple.SHOW_CHAT_TAG` and read by the client `ChatTagsController`. `false` hides the tag in chat only — the couple system, overhead couple name, and announcements are unaffected. Default `true` keeps all existing places unchanged (fully backward compatible); surfaced in the plugin Config Features panel as "Couple chat tag (General)".
+
+### Fixed
+- **Community / provider-donor names showing as `#####` on group-owned places.** On a group-owned place `game.CreatorId` is a **group id, not a user id**, so the text filter (`FilterStringAsync` author) failed and every community name on the donation leaderboard (and every unlinked Saweria/Bagibagi donor name on workspace boards) was stored as `#####`. New `TextFilterUtil.resolveFilterAuthorUserId()` resolves a valid filter-author userId — the creator for user-owned places, or the **group owner** (via `GroupService:GetGroupInfoAsync`, memoized) for group-owned places — and both call sites (`DonationLeaderboardRepository` community metadata, `DonationService` provider-donor display names) now use it. User-owned places are unchanged; DataStore keys are untouched; names already stored as `#####` re-render correctly the next time a donation rewrites that community's metadata.
+
 ## [2.7.0] - 2026-08-19
 
 Donation notification reliability (enterprise-grade, evidence-tested) + per-role announce cooldown.

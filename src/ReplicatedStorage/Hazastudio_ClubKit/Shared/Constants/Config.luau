@@ -947,6 +947,10 @@ Config.Couple = {
 	MSG_RATE_LIMIT = "[Couple] Give it a second before trying again.",
 	MSG_BREAKUP_DONE = "[Couple] You and %s are no longer paired.",
 	MSG_NO_COUPLE = "[Couple] No couple to break right now.",
+	-- Show the couple chat tag (💕 partner) in the General/chat prefix. Buyer-toggleable via
+	-- Features.ShowCoupleChatTag; default true (existing places unchanged). false hides the
+	-- tag in chat without disabling the couple system or overhead couple name.
+	SHOW_CHAT_TAG = true,
 }
 -- ============================================================
 -- LEVEL & XP SYSTEM

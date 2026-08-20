@@ -473,6 +473,9 @@ ClubKitConfigSchema.defaults = {
 		Settings = true,
 		Shop = true,
 		Couples = true,
+		-- Show the couple chat tag (💕 partner) in the General/chat prefix. Default true.
+		-- false hides the tag in chat only; the couple system + overhead couple name stay on.
+		ShowCoupleChatTag = true,
 		Stickers = true,
 		Leaderboards = true,
 		DonationCash = true,
@@ -526,6 +529,7 @@ ClubKitConfigSchema.FEATURE_MANIFEST = {
 		name = "Social & progression",
 		items = {
 			{ key = "Couples", label = "Couple system" },
+			{ key = "ShowCoupleChatTag", label = "Couple chat tag (General)" },
 			{ key = "Stickers", label = "Stickers" },
 			{ key = "LevelSystem", label = "Level & XP" },
 		},

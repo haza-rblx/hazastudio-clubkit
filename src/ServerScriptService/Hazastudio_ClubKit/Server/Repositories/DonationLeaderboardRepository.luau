@@ -604,9 +604,13 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 			-- Worker-sourced community name is owner-published content shown on
 			-- the community board — filter before storing (G6, ADR 0004). Must
 			-- happen OUTSIDE the UpdateAsync transform (filters yield).
-			-- Author context: the place owner publishes it.
-			local filtered = TextFilterUtil.filterForBroadcast(game.CreatorId, data.communityName, 80)
-				or TextFilterUtil.hashFallback(data.communityName)
+			-- Author context: the place owner publishes it. On group-owned places
+			-- game.CreatorId is a GROUP id (not a user), which makes FilterStringAsync
+			-- fail and every name fall back to "#####" — resolve the real owner userId.
+			local authorUserId = TextFilterUtil.resolveFilterAuthorUserId()
+			local filtered = authorUserId
+				and TextFilterUtil.filterForBroadcast(authorUserId, data.communityName, 80)
+			filtered = filtered or TextFilterUtil.hashFallback(data.communityName)
 			data = table.clone(data)
 			data.communityName = filtered
 		end
