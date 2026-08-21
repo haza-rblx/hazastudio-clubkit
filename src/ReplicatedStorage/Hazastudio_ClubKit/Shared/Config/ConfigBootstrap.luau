@@ -427,6 +427,7 @@ function ConfigBootstrap.apply(config: any)
 			SyncDance = "SyncDanceEnabled",
 			LegacySyncBhms = "LegacySyncBhmsEnabled",
 			AdminHub = "AdminHubEnabled",
+			AvatarContextMenuV2 = "AvatarContextMenuV2Enabled",
 			Hotbar = "HotbarEnabled",
 			LoadingScreen = "LoadingScreenEnabled",
 			LevelSystem = "LevelSystemEnabled",

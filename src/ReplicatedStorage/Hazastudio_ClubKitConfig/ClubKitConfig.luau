@@ -576,6 +576,9 @@ ClubKitConfig.Features = {
 	LegacySyncBhms = false,
 	-- WIP Admin Hub (04-AdminHub). false = classic Admin Panel owns topbar icon.
 	AdminHub = false,
+	-- Avatar Context Menu v2 (redesign: static profile picture + camera zoom/blur backdrop).
+	-- false (default) = legacy v1 (3D rotating avatar ViewportFrame). true = v2.
+	AvatarContextMenuV2 = false,
 	Hotbar = true,
 	LoadingScreen = true,
 	LevelSystem = true,

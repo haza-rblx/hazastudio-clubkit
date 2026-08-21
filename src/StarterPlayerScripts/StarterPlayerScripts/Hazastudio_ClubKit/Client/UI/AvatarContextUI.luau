@@ -6,9 +6,11 @@ local TweenService = game:GetService("TweenService")
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
+local MotionPresets = require(script.Parent.Parent.Utils.MotionPresets)
+local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
+local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local AvatarViewport3D = require(script.Parent.Parent.Utils.AvatarViewport3D)
 local AvatarPrewarmShared = require(script.Parent.Parent.Utils.AvatarPrewarmShared)
-local MotionPresets = require(script.Parent.Parent.Utils.MotionPresets)
 
 type AvatarContextPayload = Types.AvatarContextPayload
 type ILogger = Types.ILogger
@@ -38,6 +40,14 @@ local LIKE_BUTTON_TEXT_IDLE = "Like Player"
 local LIKE_BUTTON_TEXT_ACTIVE = "Unlike Player"
 local LIKE_BUTTON_ACTIVE_COLOR = Color3.fromRGB(255, 82, 112)
 local LIKE_BUTTON_ACTIVE_TRANSPARENCY = 0.05
+
+-- Backdrop (camera zoom-in + background blur) while the panel is open.
+-- Matches TopMenu/Settings/Music panels via AnimationHelper.presentBackdropEffects.
+local BACKDROP_OPTIONS = {
+	enableBlur = true,
+	blurName = Config.AvatarContext.BACKDROP_BLUR_NAME,
+	enableZoom = true,
+}
 
 local function formatCompactCount(value: number?): string
 	local count = math.max(0, math.floor(value or 0))
@@ -133,6 +143,21 @@ local function ensureImageLabel(parent: Instance, names: { string }, fallbackNam
 	return image
 end
 
+local function ensureViewportFrame(parent: Instance, names: { string }, fallbackName: string): ViewportFrame
+	local found = findFirstDescendantByName(parent, names)
+	if found and found:IsA("ViewportFrame") then
+		return found
+	end
+
+	local viewport = Instance.new("ViewportFrame")
+	viewport.Name = fallbackName
+	viewport.BackgroundTransparency = 1
+	viewport.Size = UDim2.fromScale(1, 1)
+	viewport.Visible = false
+	viewport.Parent = parent
+	return viewport
+end
+
 local function ensureTextLabel(parent: Instance, names: { string }, fallbackName: string): TextLabel
 	local found = findFirstDescendantByName(parent, names)
 	if found and found:IsA("TextLabel") then
@@ -147,20 +172,6 @@ local function ensureTextLabel(parent: Instance, names: { string }, fallbackName
 	label.Size = UDim2.fromScale(1, 1)
 	label.Parent = parent
 	return label
-end
-
-local function ensureViewportFrame(parent: Instance, names: { string }, fallbackName: string): ViewportFrame
-	local found = findFirstDescendantByName(parent, names)
-	if found and found:IsA("ViewportFrame") then
-		return found
-	end
-
-	local viewport = Instance.new("ViewportFrame")
-	viewport.Name = fallbackName
-	viewport.BackgroundTransparency = 1
-	viewport.Size = UDim2.fromScale(1, 1)
-	viewport.Parent = parent
-	return viewport
 end
 
 local function createDisabledAvatarContextUI(): any
@@ -195,21 +206,42 @@ end
 
 local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 	local log = deps.logger
+	-- Pick the GUI by buyer toggle: Features.AvatarContextMenuV2 (v2 = redesign,
+	-- static ProfilePicture + backdrop; v1 = legacy 3D ViewportFrame avatar).
+	local isV2 = Config.FeatureFlags.AvatarContextMenuV2Enabled == true
+	local selectedGuiName = if isV2 then "AvatarContextMenuV2" else "AvatarContextMenu"
+	local otherGuiName = if isV2 then "AvatarContextMenu" else "AvatarContextMenuV2"
+
 	-- Wait for GUI
 	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
-	local gui = playerGui:WaitForChild("AvatarContextMenu", 10)
+	local gui = playerGui:WaitForChild(selectedGuiName, 10)
 	if not gui then
-		warn("[AvatarContextUI] 'AvatarContextMenu' not found in PlayerGui — panel disabled")
-		return createDisabledAvatarContextUI()
+		-- Fall back to whichever ACM GUI exists so the panel still works if the
+		-- buyer only kept one variant in their place.
+		local fallback = playerGui:FindFirstChild(otherGuiName)
+		if fallback then
+			gui = fallback
+			isV2 = fallback.Name == "AvatarContextMenuV2"
+			log:warn("Selected ACM GUI missing; falling back", { wanted = selectedGuiName, using = fallback.Name })
+		else
+			warn("[AvatarContextUI] no AvatarContextMenu GUI found in PlayerGui — panel disabled")
+			return createDisabledAvatarContextUI()
+		end
 	end
-	local mainWrapper = gui:WaitForChild("MainWrapper") :: CanvasGroup
+	-- Disable the other variant so both never render at once.
+	local otherGui = playerGui:FindFirstChild(otherGuiName)
+	if otherGui and otherGui:IsA("ScreenGui") and otherGui ~= gui then
+		otherGui.Enabled = false
+	end
+	local mainWrapper = gui:WaitForChild("MainWrapper") :: GuiObject
+	local mainWrapperIsCanvasGroup = mainWrapper:IsA("CanvasGroup")
 
 	-- Draggable frame (for close button)
 	local draggableFrame = mainWrapper:WaitForChild("01-DraggableFrame") :: Frame
 	local draggableIcon = draggableFrame:WaitForChild("DraggableIcon") :: Frame
 
 	-- Main content
-	local contentWrapper = mainWrapper:WaitForChild("02-MainContentWrapper") :: CanvasGroup
+	local contentWrapper = mainWrapper:WaitForChild("02-MainContentWrapper") :: GuiObject
 	local loadingScreen = contentWrapper:WaitForChild("LoadingScreen") :: Frame
 	local loadingText = loadingScreen:WaitForChild("LoadingText") :: TextLabel
 	local mainContent = contentWrapper:WaitForChild("MainContent") :: ScrollingFrame
@@ -218,7 +250,14 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 	local playerInformation = mainContent:WaitForChild("PlayerInformation") :: Frame
 	local illustrationSection =
 		ensureFrame(playerInformation, { "IllustrationSection", "Illustrator" }, "IllustrationSection")
-	local avatar3D = ensureViewportFrame(illustrationSection, { "3DTargetPlayerAvatar" }, "3DTargetPlayerAvatar")
+	-- Avatar area differs per design: v1 = 3D ViewportFrame avatar, v2 = static ProfilePicture.
+	local profilePicture: ImageLabel? = nil
+	local avatar3D: ViewportFrame? = nil
+	if isV2 then
+		profilePicture = ensureImageLabel(illustrationSection, { "ProfilePicture" }, "ProfilePicture")
+	else
+		avatar3D = ensureViewportFrame(illustrationSection, { "3DTargetPlayerAvatar" }, "3DTargetPlayerAvatar")
+	end
 	local communityCover = ensureImageLabel(illustrationSection, { "CommunityCoverorImage" }, "CommunityCoverorImage")
 	local statusPopUp = ensureFrame(illustrationSection, { "StatusPopUp" }, "StatusPopUp")
 	local statusPopUpLabel = ensureTextLabel(statusPopUp, { "TextLabel" }, "TextLabel")
@@ -293,12 +332,8 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 	loadingScreen.Visible = false
 
 	local currentTargetUserId: number? = nil
-	local renderedAvatarUserId: number? = nil
 	local onCloseCallback: (() -> ())? = nil
 	local loadingTextThread: thread? = nil
-	local currentViewport = nil :: any
-	local avatarPool = AvatarPrewarmShared.getPool()
-	local thumbnailFallback: ImageLabel? = nil
 	local closeButtonConnection: RBXScriptConnection? = nil
 	local loadingScreenTween: Tween? = nil
 	local investigateAvatarButtonConnection: RBXScriptConnection? = nil
@@ -316,6 +351,12 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 	local likeButtonCallback: ((number) -> ())? = nil
 	local syncDanceCallback: ((number) -> ())? = nil
 	local visibilityToken = 0
+	local avatarThumbnailToken = 0
+	-- v1 3D avatar state (unused in v2)
+	local currentViewport: any = nil
+	local renderedAvatarUserId: number? = nil
+	local modelReadyUnsub: (() -> ())? = nil
+	local avatarPool = if not isV2 then AvatarPrewarmShared.getPool() else nil
 	local _syncDanceEnabled = false
 	local viewerIsSyncing = false
 	local viewerSyncTargetUserId: number? = nil
@@ -339,6 +380,8 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 	local panelTween: Tween? = nil
 	local panelScaleTween: Tween? = nil
 	local panelRestingPosition = mainWrapper.Position
+	local anim = AnimationHelper.new()
+	local backdropActive = false
 	likeButton.Text = ""
 	likeButton.TextTransparency = 1
 
@@ -374,10 +417,19 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 		local panel = MotionPresets.panelOpen()
 		local openInfo = MotionPresets.centerOpenInfo()
 
-		mainWrapper.GroupTransparency = 0
+		if mainWrapperIsCanvasGroup then
+			(mainWrapper :: CanvasGroup).GroupTransparency = 0
+		end
 		mainWrapperScale.Scale = center.startScale
 		mainWrapper.Position = offsetPosition(panelRestingPosition, panel.yOffset)
 		mainWrapper.Visible = true
+
+		-- Camera zoom-in + background blur while the panel is open (v2 only —
+		-- legacy v1 keeps the classic flat backdrop).
+		if isV2 and not backdropActive then
+			backdropActive = true
+			anim:presentBackdropEffects(BACKDROP_OPTIONS)
+		end
 
 		local positionTween = TweenService:Create(mainWrapper, openInfo, {
 			Position = panelRestingPosition,
@@ -418,6 +470,12 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 		local targetPosition = offsetPosition(panelRestingPosition, panelClose.yOffset)
 		mainWrapper.Visible = true
 
+		-- Restore camera zoom + remove background blur as the panel closes (v2 only).
+		if isV2 and backdropActive then
+			backdropActive = false
+			anim:dismissBackdropEffects(BACKDROP_OPTIONS)
+		end
+
 		local positionTween = TweenService:Create(mainWrapper, closeInfo, {
 			Position = targetPosition,
 		})
@@ -446,6 +504,12 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 	end
 
 	local function resetVisualState()
+		-- Backdrop flag must match the visual reset so a later close does not
+		-- double-dismiss (or leave the camera zoomed) after a re-load cycle.
+		if backdropActive then
+			backdropActive = false
+			anim:dismissBackdropEffects(BACKDROP_OPTIONS)
+		end
 		displayNameLabel.Text = "Loading..."
 		usernameLabel.Text = "@loading"
 		bioContent.Text = ""
@@ -456,7 +520,24 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 		statusPopUpLabel.Text = ""
 		communityCover.Visible = false
 		communityCover.Image = ""
-		avatar3D.Visible = false
+		if isV2 then
+			if profilePicture then
+				profilePicture.Image = ""
+				profilePicture.Visible = false
+			end
+		else
+			if modelReadyUnsub then
+				modelReadyUnsub()
+				modelReadyUnsub = nil
+			end
+			if currentViewport then
+				currentViewport:cleanup()
+			end
+			renderedAvatarUserId = nil
+			if avatar3D then
+				avatar3D.Visible = false
+			end
+		end
 
 		ownerBadge.Visible = false
 		devBadge.Visible = false
@@ -804,11 +885,9 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 	end
 
 	function ui:setData(payload: AvatarContextPayload)
-		-- setData now ONLY updates text/data state. Never calls
-		-- currentViewport:load() (which yields) or trigger 3D model loading.
-		-- 3D avatar is a separate concern via showAvatar() called
-		-- from controller.openPanel. This eliminates coupling that previously
-		-- blocked FireServer for 14 seconds.
+		-- setData ONLY updates text/data state. Profile picture is a separate
+		-- concern via showAvatar() called from controller.openPanel — keeps
+		-- setData non-blocking (no image fetch yields here).
 		currentTargetUserId = payload.userId
 
 		-- Set display name and username
@@ -844,47 +923,78 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 		ui:_setActionButtons(payload)
 	end
 
-	local function _showThumbnail(userId: number)
-		local thumbnailUrl = string.format("rbxthumb://type=AvatarBust&id=%d&w=420&h=420", userId)
-		if thumbnailUrl == "" then
-			avatar3D.Visible = false
-			renderedAvatarUserId = nil
+	-- v2: static ProfilePicture thumbnail via GetUserThumbnailAsync.
+	local function showAvatarThumbnail(userId: number)
+		-- Use Players:GetUserThumbnailAsync rather than a hand-built rbxthumb://
+		-- URL: the literal rbxthumb://type=AvatarThumbnail/AvatarBust does NOT
+		-- resolve in an ImageLabel (IsLoaded stays false -> blank). Token guards
+		-- a stale async result overwriting a newer request.
+		avatarThumbnailToken += 1
+		local token = avatarThumbnailToken
+
+		-- Only 0 means "no target"; Studio multiplayer test players use negative
+		-- userIds (-1, -2, ...), which GetUserThumbnailAsync resolves fine.
+		if userId == 0 then
+			if profilePicture then
+				profilePicture.Image = ""
+				profilePicture.Visible = false
+			end
 			return
 		end
-		if not thumbnailFallback then
-			local created = Instance.new("ImageLabel")
-			thumbnailFallback = created
+
+		-- Instant placeholder while the real thumbnail resolves.
+		if profilePicture then
+			profilePicture.Image = ""
+			profilePicture.Visible = true
 		end
-		local fallback = thumbnailFallback :: ImageLabel
-		fallback.Name = "ThumbnailFallback"
-		fallback.Size = UDim2.fromScale(1, 1)
-		fallback.Position = UDim2.fromScale(0.5, 0.5)
-		fallback.AnchorPoint = Vector2.new(0.5, 0.5)
-		fallback.BackgroundTransparency = 1
-		fallback.Image = thumbnailUrl
-		fallback.ScaleType = Enum.ScaleType.Fit
-		fallback.Visible = true
-		fallback.Parent = avatar3D
-		renderedAvatarUserId = userId
+
+		task.spawn(function()
+			local ok, content = pcall(function()
+				return Players:GetUserThumbnailAsync(
+					userId,
+					Enum.ThumbnailType.AvatarThumbnail,
+					Enum.ThumbnailSize.Size420x420
+				)
+			end)
+
+			-- Stale request (user opened a different profile meanwhile)?
+			if token ~= avatarThumbnailToken then
+				return
+			end
+			if not profilePicture then
+				return
+			end
+			if not ok or type(content) ~= "string" or content == "" then
+				profilePicture.Image = ""
+				profilePicture.Visible = false
+				return
+			end
+
+			profilePicture.Image = content
+			profilePicture.Visible = true
+		end)
 	end
 
-	-- Active subscription to pool's subscribeModelReady for upgrade
-	-- thumbnail → 3D seamless. Stored so it can be unsubscribed when
-	-- showAvatar is called for a different user.
-	local modelReadyUnsub: (() -> ())? = nil
-
-	function ui:showAvatar(userId: number)
-		-- Stop old subscription so callback does not fire for userId
-		-- that is no longer the target (e.g. user clicks another avatar).
+	-- v1: 3D rotating avatar in the ViewportFrame via AvatarViewport3D + prewarm pool.
+	local function showAvatar3D(userId: number)
+		if not avatar3D then
+			return
+		end
+		-- Stop old subscription so its callback does not fire for a userId that
+		-- is no longer the target (e.g. user clicks another avatar).
 		if modelReadyUnsub then
 			modelReadyUnsub()
 			modelReadyUnsub = nil
 		end
-
-		-- Reset avatar visibility
 		avatar3D.Visible = true
-		if thumbnailFallback then
-			thumbnailFallback.Visible = false
+
+		-- Only 0 means "no target"; Studio test players use negative userIds.
+		if userId == 0 then
+			if currentViewport then
+				currentViewport:cleanup()
+			end
+			avatar3D.Visible = false
+			return
 		end
 
 		if not currentViewport then
@@ -901,20 +1011,13 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 			return
 		end
 
-		-- Pool miss: fallback to thumbnail (instant, no YIELD) + subscribe
-		-- to subscribeModelReady for seamless upgrade when pool is ready.
-		log:debug("Pool miss — using thumbnail, subscribing to model ready", { userId = userId })
-		_showThumbnail(userId)
-
+		-- Pool miss: subscribe for seamless upgrade when the pool warms, and
+		-- kick an on-demand prewarm so the next open is instant.
 		if avatarPool and type(avatarPool.subscribeModelReady) == "function" then
 			modelReadyUnsub = avatarPool:subscribeModelReady(userId, function()
-				-- Guard: is userId still the target? (user may have closed
-				-- panel or switch to another user).
 				if currentTargetUserId ~= userId or not avatar3D.Visible then
 					return
 				end
-				-- Pool already ready. Re-attempt load(). If still miss
-				-- (e.g. pool evicted again), keep the thumbnail.
 				if not currentViewport then
 					currentViewport = AvatarViewport3D.new(avatar3D)
 					currentViewport:setPrewarmPool(avatarPool)
@@ -924,18 +1027,20 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 				local reloaded = currentViewport:load(userId)
 				if reloaded then
 					renderedAvatarUserId = userId
-					if thumbnailFallback then
-						thumbnailFallback.Visible = false
-					end
-					log:info("3D avatar upgraded from thumbnail to 3D", { userId = userId })
+					log:info("3D avatar upgraded after pool ready", { userId = userId })
 				end
 			end)
 		end
-
-		-- Trigger on-demand pool prewarm if not in pool / loading.
-		-- This makes subsequent clicks instant (pool will already be ready).
 		if avatarPool and type(avatarPool.prewarmOnDemand) == "function" then
 			avatarPool:prewarmOnDemand(userId)
+		end
+	end
+
+	function ui:showAvatar(userId: number)
+		if isV2 then
+			showAvatarThumbnail(userId)
+		else
+			showAvatar3D(userId)
 		end
 	end
 

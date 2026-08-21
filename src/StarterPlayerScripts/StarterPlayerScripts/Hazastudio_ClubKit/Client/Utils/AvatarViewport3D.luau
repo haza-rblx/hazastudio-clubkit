@@ -160,11 +160,25 @@ function AvatarViewport3D:setPrewarmPool(pool: any)
 	self._prewarmPool = pool
 end
 
+-- Destroy every WorldModel child of the viewport. self._worldModel may be only the
+-- most recent; orphans from a second AvatarViewport3D bound to the same ViewportFrame
+-- or a superseded in-flight load would otherwise linger and double-render.
+function AvatarViewport3D:_destroyAllWorldModels()
+	for _, child in ipairs(self._viewport:GetChildren()) do
+		if child:IsA("WorldModel") then
+			child:Destroy()
+		end
+	end
+end
+
 function AvatarViewport3D:load(userId: number): boolean
 	self:cleanup()
 	-- Snapshot the generation token BEFORE any yield so we can detect
 	-- if cleanup() is called again while the pool take suspends.
 	local generation = self._loadGeneration
+
+	-- Defensive: remove any leftover WorldModel before creating the new one.
+	self:_destroyAllWorldModels()
 
 	-- Create WorldModel upfront and store it so cleanup() can destroy it
 	-- even if the load is still in flight.
@@ -291,11 +305,13 @@ function AvatarViewport3D:cleanup()
 	self._loadGeneration += 1
 	-- Stop auto-rotate
 	self:stopAutoRotate()
-	-- Clear viewport
+	-- Clear viewport: destroy every WorldModel child (orphans from a second binder
+	-- or a superseded load would otherwise linger and double-render).
 	if self._worldModel then
 		self._worldModel:Destroy()
 		self._worldModel = nil
 	end
+	self:_destroyAllWorldModels()
 	self._character = nil
 	self._camera = nil
 	self._viewport.CurrentCamera = nil

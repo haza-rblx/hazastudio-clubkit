@@ -1351,6 +1351,9 @@ Config.FeatureFlags = {
 	LegacySyncBhmsEnabled = false,
 	-- WIP Admin Hub (04-AdminHub). false = classic Admin Panel owns topbar.
 	AdminHubEnabled = false,
+	-- Avatar Context Menu v2 (redesign: static ProfilePicture + backdrop zoom/blur).
+	-- false (default) = legacy v1 GUI (3D ViewportFrame avatar). Buyer: Features.AvatarContextMenuV2.
+	AvatarContextMenuV2Enabled = false,
 	MusicPlayerEnabled = true,
 	-- Merge Hazastudio_ClubKitConfig/MusicCatalog into MusicLibrary DataStore on boot.
 	MusicCatalogSeedEnabled = true,
@@ -1508,7 +1511,7 @@ Config.UISFX = {
 }
 -- Shared frosted backdrop for shop/gift/couple/donation/admin/music modals, etc.
 Config.PanelBlur = {
-	ENABLED = false, -- Lighting BlurEffect (expensive); camera zoom still works.
+	ENABLED = true, -- Lighting BlurEffect (expensive); camera zoom still works.
 	SIZE = 36,
 	FADE_IN = 0.32,
 	FADE_OUT = 0.22,
@@ -2078,6 +2081,9 @@ Config.AvatarContext = {
 	-- Timeouts
 	REQUEST_TIMEOUT = 15, -- seconds (parallel fetch ~2-4s, buffer for slow network)
 	BUILD_DEADLINE = 5, -- seconds: max wait for parallel ACM fetches on server
+
+	-- Backdrop (camera zoom + background blur while the panel is open)
+	BACKDROP_BLUR_NAME = "AvatarContextBlur",
 
 	-- 3D Avatar
 	AUTO_ROTATE_SPEED = 30, -- degrees per second

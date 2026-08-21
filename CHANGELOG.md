@@ -11,6 +11,19 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.8.0] - 2026-08-21
+
+Avatar Context Menu v2 redesign (buyer-toggleable) + camera zoom/blur backdrop; double-avatar fix; background blur enabled globally for panel backdrops.
+
+### Added
+- **Avatar Context Menu v2 (`Features.AvatarContextMenuV2`).** Buyers can now pick between the **legacy v1** design (3D rotating avatar `ViewportFrame`, GUI `AvatarContextMenu`) and the **redesigned v2** (static full-body profile picture via `Players:GetUserThumbnailAsync` `AvatarThumbnail`, GUI `AvatarContextMenuV2`). New buyer flag `ClubKitConfig.Features.AvatarContextMenuV2` (default `false` = v1, fully backward compatible — existing places keep the 3D avatar). Surfaced in the plugin Config Features panel as "Avatar context menu v2 (redesign)". `AvatarContextUI` picks the GUI by the flag, disables the other variant so both never render at once, and falls back to whichever ACM GUI exists if the buyer kept only one. Both variants share the same open/close/data pipeline and public API, so `AvatarContextController` needed no changes.
+- **Camera zoom + background blur backdrop (v2).** Opening the v2 panel now tweens the camera FOV in and fades in a `BlurEffect` backdrop, restored on close — the same backdrop language as TopMenu/Settings/Music via `AnimationHelper.presentBackdropEffects` / `dismissBackdropEffects`. New config `Config.AvatarContext.BACKDROP_BLUR_NAME = "AvatarContextBlur"`. Backdrop state is reset on `resetVisualState()` so a re-load cycle cannot desync the camera/blur on the next close. Backdrop only applies to v2; legacy v1 keeps the classic flat backdrop.
+- **Background blur enabled globally (`Config.PanelBlur.ENABLED = true`).** The shared frosted `BlurEffect` backdrop used by shop/gift/couple/donation/admin/music/top-menu modals is now on by default (camera zoom always worked; the Lighting blur was previously gated off). Affects every panel using the shared backdrop — set up per-place via `ClientSettings.BackgroundBlur` to opt out.
+
+### Fixed
+- **Double avatar in the 3D viewport (v1).** A second `AvatarViewport3D` bound to the same `ViewportFrame` (or a superseded in-flight `load()`) could leave an orphan `WorldModel` behind, rendering a duplicate avatar stacked under the new one. `AvatarViewport3D.load()` and `cleanup()` now destroy **every** `WorldModel` child of the viewport (via a shared `_destroyAllWorldModels()` helper), not just the most recently tracked one. Verified: repeated open/close cycles leave exactly one `WorldModel` + one avatar model.
+- **Avatar/profile picture hidden for Studio test players.** Studio multiplayer test players use **negative** userIds (`-1`, `-2`, …). The old `userId <= 0` guard treated them as "no target" and hid the avatar; now only `userId == 0` means "no target" so test players render correctly (`GetUserThumbnailAsync` and the 3D pool both resolve negative ids fine).
+
 ## [2.7.1] - 2026-08-20
 
 Couple chat tag toggle + group-owner text-filter fix.

@@ -467,6 +467,9 @@ ClubKitConfigSchema.defaults = {
 		WutwutDance = false,
 		-- WIP Admin Hub UI. Default false — classic 04-AdminPanelv2 until hub is ready.
 		AdminHub = false,
+		-- Avatar Context Menu v2 (redesign: static ProfilePicture + backdrop zoom/blur).
+		-- false (default) = legacy v1 GUI (3D ViewportFrame avatar). true = v2.
+		AvatarContextMenuV2 = false,
 		Hotbar = true,
 		LoadingScreen = true,
 		LevelSystem = true,
@@ -523,6 +526,7 @@ ClubKitConfigSchema.FEATURE_MANIFEST = {
 			{ key = "JoinGreetings", label = "Join greetings" },
 			{ key = "PromptJoinCommunityOnLoad", label = "Join community prompt" },
 			{ key = "AdminHub", label = "Admin Hub (04-AdminHub)" },
+			{ key = "AvatarContextMenuV2", label = "Avatar context menu v2 (redesign)" },
 		},
 	},
 	{
