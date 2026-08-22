@@ -2,7 +2,7 @@
 
 Internal scratch pad to track work **before** a version is released.
 
-**Current version:** `2.8.1` (see [`VERSION`](VERSION))
+**Current version:** `2.8.2` (see [`VERSION`](VERSION))
 **Next release target:** _(not set)_
 **Active branch:** `main`
 
@@ -29,6 +29,8 @@ Internal scratch pad to track work **before** a version is released.
 | `src/.../Client/UI/AdminPanelUI.luau` | `inputCanvas` accepts `CanvasGroup` OR `Frame` (`FindFirstChild("CanvasGroup") or FindFirstChildWhichIsA("Frame")`) + clear error if neither — fixes infinite `WaitForChild("CanvasGroup")` **hang** after `2-InputTitle.CanvasGroup` was redesigned to a plain Frame. Verified: `new()` constructs + `show()`/`hide()` succeed |
 | **Hotbar not restoring after ACM close (this session)** | Root cause: `InventoryChromeAnimator.setupAcmWatcher()` only watched `AvatarContextMenu` (v1); on v2 (`AvatarContextMenuV2`) the watcher observed a GUI that never opened → `notifyShow("acm")` never fired → hotbar stayed hidden |
 | `src/.../Client/Services/InventoryChromeAnimator.luau` | `setupAcmWatcher()` now watches BOTH `AvatarContextMenu` (v1) and `AvatarContextMenuV2` (v2) via a shared `watchGui(name)` helper. Verified in playtest: hotbar hides on open (`Visible=false`) and restores on close (`Visible=true`) |
+| **Donation text filter: online-player author fallback (2026-08-22, diagnosed on vicenorth)** | Root cause of "pager semua" (`#####` on every provider message): Roblox `FilterStringAsync` errors **"sender must be connected to the current server"** — the filter author MUST be an online player. On group-owned places (vicenorth group `407577344`) where the donor AND the game owner are both offline, the old fallback `userId=1` (later owner) was offline → every filter call failed → `censoredMessageFallback` → all messages censored |
+| `src/ServerScriptService/Hazastudio_ClubKit/Server/Services/DonationService.luau` | `resolveTextFilterUserId()` now: donor's own userId when donor is ONLINE → else **any currently-online player** (`Players:GetPlayers()[1].UserId`) as the broadcast author → else `nil`. Returns `number?` (was `number`). Verified in playtest: `filterForBroadcast(onlinePlayer, "halo ini pesan test donasi")` returns clean uncensored text; notif renders message intact instead of `#####` |
 | **Reliability v3: two-stage delivery + owner command channel (2026-08-22, on KASTA)** | |
 | `Config.luau` | New `Config.Donation.REMOTE_NOTIF_DISPLAY = "DonationNotifDisplay"` remote (stage-2 display confirm, fired when the notif actually renders vs ack-at-enqueue) |
 | `Server/Main.server.luau` | Create + wire `DonationNotifDisplayRemote` alongside the existing ack remote |

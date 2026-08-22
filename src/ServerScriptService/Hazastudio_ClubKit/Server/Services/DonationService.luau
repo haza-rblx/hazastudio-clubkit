@@ -405,11 +405,26 @@ local function createDonationService(
 		return true, if type(response.Body) == "string" then response.Body else ""
 	end
 
-	local function resolveTextFilterUserId(userId: number?): number
+	-- Filter author for provider-supplied text (donor name/message). Roblox
+	-- requires the filter author to be CONNECTED to the current server
+	-- (FilterStringAsync errors "sender must be connected" otherwise). Prefer the
+	-- donor's own userId when they are ONLINE. When the donor is offline /
+	-- unresolved, fall back to ANY currently-online player (the recipient counts)
+	-- so filtering still succeeds. Returning nil (or an offline id such as the
+	-- game owner when they are away) makes FilterStringAsync fail and every
+	-- message censors to "#####".
+	local function resolveTextFilterUserId(userId: number?): number?
 		if type(userId) == "number" and userId > 0 and Players:GetPlayerByUserId(userId) then
 			return userId
 		end
-		return 1
+		-- Donor not connected: use any online player as the broadcast author. The
+		-- donor is rarely in-server, so without this every provider message fails
+		-- filtering and renders as "#####".
+		local online = Players:GetPlayers()
+		if #online > 0 then
+			return online[1].UserId
+		end
+		return nil
 	end
 
 	local function markNotifProcessed(notifId: string)

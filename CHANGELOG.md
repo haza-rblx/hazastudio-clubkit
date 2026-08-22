@@ -11,6 +11,11 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.8.2] - 2026-08-22
+
+### Fixed
+- **Provider donation messages always censored to `#####` ("pager semua").** Roblox `FilterStringAsync` requires the filter author to be **connected to the current server** (it errors *"sender must be connected to the current server"* otherwise). On group-owned places where the donor is offline and the game owner is also offline, the previous fallback (`userId = 1`, then the owner) was never a connected player, so every filter call failed and `censoredMessageFallback` replaced every donor name/message with hashes. `DonationService.resolveTextFilterUserId()` now falls back to **any currently-online player** as the broadcast author when the donor is not connected (and returns `nil` only when nobody is online). Donation messages and names now render as typed, still fully Roblox-filtered. Verified on a group-owned place: `filterForBroadcast` returns the clean string and the notification renders the message intact.
+
 ## [2.8.0] - 2026-08-21
 
 Avatar Context Menu v2 redesign (buyer-toggleable) + camera zoom/blur backdrop; double-avatar fix; background blur enabled globally for panel backdrops.
