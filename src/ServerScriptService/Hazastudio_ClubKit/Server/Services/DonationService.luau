@@ -56,6 +56,7 @@ local function createDonationService(
 		leaderboardNetwork: any,
 		notifNetwork: any,
 		notifAckRemote: RemoteEvent?,
+		notifDisplayRemote: RemoteEvent?,
 		notify: any,
 		donationEffectService: any?,
 		donationLeaderboardRepository: any?,
@@ -72,6 +73,7 @@ local function createDonationService(
 	local leaderboardNetwork = deps.leaderboardNetwork
 	local notifNetwork = deps.notifNetwork
 	local notifAckRemote = deps.notifAckRemote
+	local notifDisplayRemote = deps.notifDisplayRemote
 	local _notify = deps.notify
 	local donationEffectService = deps.donationEffectService
 	local donationLeaderboardRepository = deps.donationLeaderboardRepository
@@ -174,12 +176,16 @@ local function createDonationService(
 	}
 	local pendingDeliveries: { [string]: PendingDelivery } = {}
 	local _ackFlushQueue: { { donation_id: number, roblox_user_id: number, displayed_at: string } } = {}
+	-- Stage-2 display reports: the notification actually rendered on the
+	-- player's screen (vs ack = it reached the client queue).
+	local _displayFlushQueue: { { donation_id: number, roblox_user_id: number, displayed_at: string } } = {}
 
 	-- Forward declarations: the bodies below reference helpers defined later in
 	-- this module (isReliabilityV2Enabled, flushAckQueue, reportDlq). Declaring
 	-- the locals here keeps the assignments (further down) in scope.
 	local deliveryKey: (donationId: number, userId: number) -> string
 	local handleNotifAck: (player: Player, payload: any) -> ()
+	local handleNotifDisplay: (player: Player, payload: any) -> ()
 	local sweepPendingDeliveries: () -> ()
 
 	deliveryKey = function(donationId: number, userId: number): string
@@ -566,6 +572,24 @@ local function createDonationService(
 		end)
 	end
 
+	-- Flush queued display reports to the Worker ledger (stage 2: on-screen).
+	local function flushDisplayQueue()
+		if #_displayFlushQueue == 0 then
+			return
+		end
+		local batch = _displayFlushQueue
+		_displayFlushQueue = {}
+		task.spawn(function()
+			local ok, err = httpPost(buildV3Url("delivery-display"), { displays = batch })
+			if not ok then
+				log:warn("Display report flush failed (non-blocking)", {
+					reports = #batch,
+					error = tostring(err),
+				})
+			end
+		end)
+	end
+
 	-- Report deliveries that exhausted local retries to the Worker DLQ.
 	local function reportDlq(entries: { { donation_id: number, roblox_user_id: number } })
 		if #entries == 0 then
@@ -628,6 +652,26 @@ local function createDonationService(
 			displayed_at = os.date("!%Y-%m-%dT%H:%M:%S.000Z"),
 		})
 		flushAckQueue()
+	end
+
+	-- Client reports the notification actually rendered on screen (stage 2).
+	-- Unlike acks, displays are not tracked in pendingDeliveries — they are a
+	-- pure pass-through to the ledger. A display report implies delivery, so
+	-- the backend promotes the row through 'acked' to 'displayed' in one step.
+	handleNotifDisplay = function(player: Player, payload: any)
+		if not isReliabilityV2Enabled() or type(payload) ~= "table" then
+			return
+		end
+		local donationId = tonumber(payload.donationId) or 0
+		if donationId <= 0 then
+			return
+		end
+		table.insert(_displayFlushQueue, {
+			donation_id = donationId,
+			roblox_user_id = player.UserId,
+			displayed_at = os.date("!%Y-%m-%dT%H:%M:%S.000Z"),
+		})
+		flushDisplayQueue()
 	end
 
 	-- Retry sweep: re-fire to players who haven't acked in time; after
@@ -1728,6 +1772,16 @@ local function createDonationService(
 		consecutiveFailures = 0
 		-- Keep notificationSkipBeforeUnix for the server lifetime — clearing it used to
 		-- let subsequent cursor pages replay historical donations as live notifs.
+		-- Pull any owner-dashboard commands (fake notif / manual adjust / retry) on
+		-- the same poll cycle — no separate connection needed.
+		do
+			local cmdOk, cmdErr = pcall(function()
+				service:_pollCommands()
+			end)
+			if not cmdOk then
+				log:warn("Command poll failed (non-blocking)", { error = tostring(cmdErr) })
+			end
+		end
 		-- On new donation: enable burst mode + refresh leaderboard immediately
 		if hadNewDonations then
 			lastNotifReceivedAt = os.time()
@@ -2213,6 +2267,200 @@ local function createDonationService(
 		message: string?
 	): (boolean, string)
 		return self:presentCashDonation(userId, username, amount, message, { testOnly = true })
+	end
+
+	-- ── Owner dashboard commands (fake notif / manual adjust / retry) ────────
+	-- The dashboard enqueues rows in the backend's game_commands table; the game
+	-- pulls them here on the existing donation poll loop and executes them
+	-- server-side, then acks. No new connection or remote — reuses the v2 poll.
+
+	-- Fire a fake notification on behalf of a provider-style name. Resolves the
+	-- Roblox identity (username → userId → display name) through the SAME path
+	-- as a real donation so the notification shows the real display name and
+	-- profile thumbnail, and the text filter runs under a real connected author
+	-- (a `robloxUserId = 0` / authorId=1 placeholder produced a blank thumbnail
+	-- and a `####` censored message). testOnly keeps stats/leaderboard untouched.
+	-- Server already resolved the Roblox identity at enqueue time and it rides in
+	-- the payload (userId/username/displayName). The game uses it directly — NO
+	-- extra Roblox name-lookup here — which saves GetUserIdFromNameAsync /
+	-- GetNameAsync budget. Only the thumbnail image itself is fetched client-side
+	-- (Roblox blocks rbxthumb from server HTTP), and it goes straight from the id.
+	local function fireFakeNotifPresentation(
+		name: string,
+		amount: number,
+		message: string,
+		userId: number?,
+		username: string?,
+		displayName: string?
+	)
+		-- Use the server-resolved identity as-is; only fall back to an in-game
+		-- lookup when the server could not resolve anything (older backends).
+		local resolvedUserId: number? = if type(userId) == "number" and userId > 0 then userId else nil
+		if resolvedUserId == nil and (username == nil or username == "" or displayName == nil) then
+			-- Legacy path: no identity came from the server — do the local lookup.
+			resolvedUserId = resolveRobloxUserId(name)
+		end
+
+		local robloxUsername: string? = if type(username) == "string" and username ~= "" then username else nil
+		local resolvedDisplayName: string? = if type(displayName) == "string" and displayName ~= "" then displayName else nil
+		-- Live player data always wins for display name freshness (no extra HTTP).
+		if resolvedUserId and resolvedUserId > 0 then
+			local live = Players:GetPlayerByUserId(resolvedUserId)
+			if live then
+				robloxUsername = robloxUsername or live.Name
+				resolvedDisplayName = live.DisplayName
+			end
+			-- If we have an id but no names yet (legacy), resolve them now.
+			if robloxUsername == nil and resolvedDisplayName == nil then
+				local uName, dName = getRobloxUserInfo(resolvedUserId)
+				robloxUsername = uName
+				resolvedDisplayName = dName
+			end
+		end
+		robloxUsername = robloxUsername or name
+		local filterAuthor = resolveTextFilterUserId(resolvedUserId)
+
+		local filteredName = filterForBroadcast(filterAuthor, name, 64) or name
+		local rawMessage = cleanOptionalMessage(message, 180)
+		local filteredMessage = filterForBroadcast(filterAuthor, rawMessage, 180)
+		if rawMessage and not filteredMessage then
+			filteredMessage = censoredMessageFallback(rawMessage)
+		end
+		fireCashDonationPresentation({
+			filteredDonatorName = filteredName,
+			amount = amount,
+			message = filteredMessage,
+			newRank = nil,
+			robloxUsername = robloxUsername,
+			robloxUserId = resolvedUserId,
+			robloxDisplayName = resolvedDisplayName,
+			totalDonationAmount = nil,
+			logDonor = name,
+			testOnly = true,
+		})
+	end
+
+	local function executeGameCommand(cmd: any): (boolean, string)
+		local ctype = tostring(cmd and cmd.type or "")
+		local payload = if type(cmd) == "table" and type(cmd.payload) == "table" then cmd.payload else {}
+		if ctype == "fake_notif" then
+			local amount = math.floor(tonumber(payload.amount) or 0)
+			local name = tostring(payload.name or "")
+			if amount <= 0 or name == "" then
+				return false, "invalid_payload"
+			end
+			local userId = math.floor(tonumber(payload.user_id) or 0)
+			fireFakeNotifPresentation(
+				name,
+				amount,
+				tostring(payload.message or ""),
+				userId > 0 and userId or nil,
+				if type(payload.username) == "string" then payload.username else nil,
+				if type(payload.display_name) == "string" then payload.display_name else nil
+			)
+			return true, ""
+		elseif ctype == "manual_adjust" then
+			local userId = math.floor(tonumber(payload.user_id) or 0)
+			local delta = math.floor(tonumber(payload.delta) or 0)
+			if userId <= 0 or delta == 0 then
+				return false, "invalid_payload"
+			end
+			-- Silent: update leaderboard/stats/overhead WITHOUT firing a notif.
+			local ok, err = service:addManualCashAdjustment(userId, tostring(payload.username or ""), delta)
+			return ok, tostring(err or "")
+		elseif ctype == "set_total" then
+			-- Set a player's cash total to an ABSOLUTE value (easier than add/remove
+			-- deltas). The backend resolved the userId from the leaderboard name, so
+			-- a mis-typed donor name can be re-pointed by editing the link.
+			local userId = math.floor(tonumber(payload.user_id) or 0)
+			local total = math.floor(tonumber(payload.total) or -1)
+			if userId <= 0 or total < 0 then
+				return false, "invalid_payload"
+			end
+			local current = 0
+			local okCur, cur = pcall(function()
+				local total = service:getPlayerCashStats(userId, tostring(payload.username or ""))
+				return total
+			end)
+			if okCur and type(cur) == "number" then
+				current = math.floor(cur)
+			end
+			local delta = total - current
+			if delta == 0 then
+				return true, "no_change"
+			end
+			-- Reuse the silent adjustment path so leaderboard/stats/overhead update.
+			local ok, err = service:addManualCashAdjustment(userId, tostring(payload.username or ""), delta)
+			return ok, tostring(err or "")
+		elseif ctype == "retry_donation" then
+			local amount = math.floor(tonumber(payload.amount) or 0)
+			local name = tostring(payload.saweria_name or payload.name or "")
+			if amount <= 0 or name == "" then
+				return false, "invalid_payload"
+			end
+			-- Re-broadcast the notification (presentation only, non-persisting).
+			-- Use the server-resolved linked identity (userId/username/displayName)
+			-- that rode along in the payload — no in-game lookup needed.
+			local retryUserId = math.floor(tonumber(payload.user_id) or 0)
+			fireFakeNotifPresentation(
+				name,
+				amount,
+				tostring(payload.message or ""),
+				retryUserId > 0 and retryUserId or nil,
+				if type(payload.username) == "string" then payload.username else nil,
+				if type(payload.display_name) == "string" then payload.display_name else nil
+			)
+			return true, ""
+		end
+		return false, "unknown_command_type"
+	end
+
+	function service:_pollCommands()
+		if not isCashDonationEnabled() or not isDonationHttpReady() or not isLicenseDonationAllowed() then
+			return
+		end
+		local url = buildV2Url("commands", { limit = "20" })
+		if url == "" then
+			return
+		end
+		local ok, res = httpGet(url)
+		if not ok then
+			return -- poll loop already logs donation HTTP failures; stay quiet here
+		end
+		local parseOk, json = pcall(function()
+			return HttpService:JSONDecode(res)
+		end)
+		if not parseOk or type(json) ~= "table" or not json.ok or type(json.commands) ~= "table" then
+			return
+		end
+		local ackIds: { number } = {}
+		local ackResults: { { id: number, ok: boolean, result: string } } = {}
+		for _, cmd in ipairs(json.commands) do
+			local id = math.floor(tonumber(cmd.id) or 0)
+			if id > 0 then
+				-- pcall returns (callOk, fnOk, fnErr) — unpack all three.
+				local callOk, fnOk, fnErr = pcall(function()
+					return executeGameCommand(cmd)
+				end)
+				local success = callOk and fnOk == true
+				local resultMsg = if not callOk then tostring(fnOk) else tostring(fnErr or "")
+				table.insert(ackIds, id)
+				table.insert(ackResults, { id = id, ok = success, result = resultMsg })
+				if success then
+					log:info("Game command executed", { id = id, type = tostring(cmd.type) })
+				else
+					log:warn("Game command failed", { id = id, type = tostring(cmd.type), error = resultMsg })
+				end
+			end
+		end
+		if #ackIds > 0 then
+			task.spawn(function()
+				local postOk, postErr = httpPost(buildV2Url("commands/ack"), { ids = ackIds, results = ackResults })
+				if not postOk then
+					log:warn("Game command ack failed (non-blocking)", { error = tostring(postErr) })
+				end
+			end)
+		end
 	end
 
 	function service:donateCashManual(
@@ -2971,6 +3219,9 @@ local function createDonationService(
 			notifAckRemote.OnServerEvent:Connect(handleNotifAck)
 		else
 			log:warn("ReliabilityV2 enabled but notifAckRemote missing — acks disabled")
+		end
+		if notifDisplayRemote then
+			notifDisplayRemote.OnServerEvent:Connect(handleNotifDisplay)
 		end
 		task.spawn(function()
 			while _reliabilityWired do

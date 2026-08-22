@@ -1694,6 +1694,9 @@ local function init(_deps: {}?)
 	-- Reliability v2: ack channel. Optional — nil when the server runs an older
 	-- engine or the buyer has ReliabilityV2 off; acks are simply skipped.
 	local notifAckRemote = remotes:FindFirstChild(Config.Donation.REMOTE_NOTIF_ACK or "DonationNotifAck") :: RemoteEvent?
+	-- Stage-2 display channel: fired when the notification actually starts
+	-- rendering on screen. Optional — nil on older servers; reports are skipped.
+	local notifDisplayRemote = remotes:FindFirstChild(Config.Donation.REMOTE_NOTIF_DISPLAY or "DonationNotifDisplay") :: RemoteEvent?
 	-- BACKGROUND SPIN LOOP
 	-- Called after panel finish entrance animation.
 	-- Loop runs until token changes (when exit is called).
@@ -1788,6 +1791,15 @@ local function init(_deps: {}?)
 		isShowingNotif = true
 		showingNotifPayload = payload
 		syncDonationBroadcastLayout()
+
+		-- Reliability v2 stage 2: the notification is NOW rendering on this
+		-- player's screen. Report the display so the dashboard can distinguish
+		-- "reached the client" (acked at enqueue) from "actually shown". This
+		-- fires once per display, at animation start — not per frame.
+		local displayDonationId = tonumber((payload :: any).donationId) or 0
+		if displayDonationId > 0 and notifDisplayRemote then
+			notifDisplayRemote:FireServer({ donationId = displayDonationId })
+		end
 
 
 		-- World VFX follows notif show cadence (abort previous via WorldEffectFlight).

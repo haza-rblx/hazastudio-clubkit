@@ -345,7 +345,14 @@ function AdminPanelUI.new(gui: ScreenGui)
 	local playerTemplate = scrollFrame:WaitForChild("PlayerSelectorCard") :: TextButton
 	local notFoundCard = scrollFrame:WaitForChild("NotFoundCard") :: TextButton
 
-	local inputCanvas = inputTitleFrame:WaitForChild("CanvasGroup") :: CanvasGroup
+	-- The input container was redesigned from a CanvasGroup to a plain Frame in some
+	-- places; accept either class (or a Frame literally named "Frame") so WaitForChild
+	-- never yields forever looking for a "CanvasGroup" that no longer exists.
+	local inputCanvas: GuiObject = inputTitleFrame:FindFirstChild("CanvasGroup")
+		or inputTitleFrame:FindFirstChildWhichIsA("Frame")
+	if not inputCanvas then
+		error("[AdminPanelUI] 2-InputTitle has no CanvasGroup/Frame container — panel cannot build")
+	end
 	local inputScroll = inputCanvas:WaitForChild("01-ScrollingFrame") :: ScrollingFrame
 	local selectedPlayerInfo = inputScroll:WaitForChild("SelectedPlayerInfo") :: Frame
 	local selectPlayerFirstInfo = inputScroll:WaitForChild("SelectPlayerFirstInfo") :: Frame

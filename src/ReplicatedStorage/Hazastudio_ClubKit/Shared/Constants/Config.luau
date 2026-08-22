@@ -1511,7 +1511,7 @@ Config.UISFX = {
 }
 -- Shared frosted backdrop for shop/gift/couple/donation/admin/music modals, etc.
 Config.PanelBlur = {
-	ENABLED = true, -- Lighting BlurEffect (expensive); camera zoom still works.
+	ENABLED = false, -- Lighting BlurEffect (expensive); camera zoom still works.
 	SIZE = 36,
 	FADE_IN = 0.32,
 	FADE_OUT = 0.22,
@@ -2367,6 +2367,11 @@ Config.Donation = {
 	-- actually displayed. Server registers/acks against the Worker's durable
 	-- delivery ledger (v3 API) so a notification is never silently dropped.
 	REMOTE_NOTIF_ACK = "DonationNotifAck",
+	-- Stage-2 display confirmation: client fires this AFTER the notification
+	-- animation actually starts rendering on screen (vs REMOTE_NOTIF_ACK which
+	-- fires at enqueue). Lets the dashboard distinguish "reached the client"
+	-- (terkirim) from "actually shown on screen" (sudah tampil).
+	REMOTE_NOTIF_DISPLAY = "DonationNotifDisplay",
 	-- Master switch (buyer override via ClubKitConfig.Donation.ReliabilityV2).
 	-- Off = legacy fire-and-forget; engine behaves exactly like before.
 	RELIABILITY_V2_ENABLED = false,

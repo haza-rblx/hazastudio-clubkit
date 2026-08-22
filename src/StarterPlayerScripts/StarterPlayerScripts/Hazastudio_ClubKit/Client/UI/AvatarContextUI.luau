@@ -1142,20 +1142,16 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 	end
 
 	function ui:_setCommunity(communityId: number?, communityName: string?, communityLogoUrl: string?)
+		-- Community cover background is disabled by design (kept hidden even when a
+		-- community logo exists) — only the small community badge/logo is shown.
+		communityCover.Visible = false
 		if communityId and communityLogoUrl then
 			communityBadge.Visible = true
 			if communityLogo then
 				communityLogo.Image = communityLogoUrl
 			end
-
-			-- Set community cover as subtle background
-			communityCover.Visible = true
-			communityCover.Image = communityLogoUrl
-			communityCover.ImageTransparency = 0.9 -- Very subtle
-			communityCover.ImageColor3 = Color3.fromRGB(255, 255, 255)
 		else
 			communityBadge.Visible = false
-			communityCover.Visible = false
 		end
 	end
 

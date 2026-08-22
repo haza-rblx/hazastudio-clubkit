@@ -581,29 +581,37 @@ function InventoryChromeAnimator.setupAcmWatcher(): ()
 	if pg == nil then
 		return
 	end
-	task.spawn(function()
-		local acmGui = pg:WaitForChild("AvatarContextMenu", 30)
-		if acmGui == nil then
-			return
-		end
-		local mainWrapper = acmGui:FindFirstChild("MainWrapper")
-		if mainWrapper == nil or not mainWrapper:IsA("GuiObject") then
-			return
-		end
-		local mw = mainWrapper :: GuiObject
-		table.insert(
-			_idleConnections,
-			mw:GetPropertyChangedSignal("Visible"):Connect(function()
-				if mw.Visible then
-					if (_hideCounts.acm or 0) <= 0 then
-						InventoryChromeAnimator.notifyHide("acm")
+	-- Watch BOTH ACM GUI variants: v1 (AvatarContextMenu) and v2 (AvatarContextMenuV2).
+	-- Watching only v1 meant the hotbar never restored when the buyer used the v2
+	-- redesign — the watcher was observing a GUI that never opened, so
+	-- notifyShow("acm") never fired after the v2 panel closed.
+	local function watchGui(guiName: string)
+		task.spawn(function()
+			local acmGui = pg:WaitForChild(guiName, 30)
+			if acmGui == nil then
+				return
+			end
+			local mainWrapper = acmGui:FindFirstChild("MainWrapper")
+			if mainWrapper == nil or not mainWrapper:IsA("GuiObject") then
+				return
+			end
+			local mw = mainWrapper :: GuiObject
+			table.insert(
+				_idleConnections,
+				mw:GetPropertyChangedSignal("Visible"):Connect(function()
+					if mw.Visible then
+						if (_hideCounts.acm or 0) <= 0 then
+							InventoryChromeAnimator.notifyHide("acm")
+						end
+					else
+						InventoryChromeAnimator.notifyShow("acm")
 					end
-				else
-					InventoryChromeAnimator.notifyShow("acm")
-				end
-			end)
-		)
-	end)
+				end)
+			)
+		end)
+	end
+	watchGui("AvatarContextMenu")
+	watchGui("AvatarContextMenuV2")
 end
 
 function InventoryChromeAnimator.setupDesktopIdle(): ()
