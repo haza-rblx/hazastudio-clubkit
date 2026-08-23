@@ -11,6 +11,7 @@
 -- - Cursor-based notification polling (no since drift)
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
+local MessagingService = game:GetService("MessagingService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 local UserService = game:GetService("UserService")
@@ -35,6 +36,11 @@ type DonorCashCacheEntry = {
 	total: number,
 	rank: number?,
 	expiresAt: number,
+	-- Event-written entries (donation just applied / cross-server push) win over
+	-- in-flight HTTP results that were issued before the donation landed. The
+	-- monotonic guard in writeDonorCashCache uses these fields.
+	source: string?,
+	writtenAt: number?,
 }
 type UserIdCacheEntry = {
 	userId: number,
@@ -88,8 +94,61 @@ local function createDonationService(
 	-- Phase 1: Negative cache for donor_profile when Worker is rate-limited.
 	-- Without this, 1 fail = N attempts (each refreshAll/poll triggers next caller).
 	-- Longer TTL than positive cache so Worker has time to recover.
-	local donorFailureCache: { [number]: { expiresAt: number } } = {}
+	local donorFailureCache: { [number]: { expiresAt: number, failures: number? } } = {}
 	local DONOR_PROFILE_FAILURE_CACHE_TTL = 120 -- seconds
+	-- Exponential per-user failure backoff so a transient backend hiccup recovers
+	-- in seconds instead of the flat 120s (which left joiners at Cash=0 for 2
+	-- minutes), while a real outage still escalates to the full TTL fast.
+	local DONOR_FAILURE_BACKOFF_STEPS = Config.Donation.DONOR_FAILURE_BACKOFF_STEPS or { 5, 10, 30, 120 }
+
+	-- Single write point for donorCashCache. An event-driven entry (source="event",
+	-- donation/cross-server push) must not be overwritten by a stale lower total
+	-- from an in-flight HTTP/leaderboard result that was issued BEFORE the event
+	-- landed — for a short window the max of the two wins (monotonic).
+	local DONOR_EVENT_GUARD_WINDOW = 10
+	local function writeDonorCashCache(
+		userId: number,
+		total: number,
+		rank: number?,
+		source: string?
+	): DonorCashCacheEntry
+		local now = os.clock()
+		local existing = donorCashCache[userId]
+		if
+			existing
+			and existing.source == "event"
+			and (existing.writtenAt or 0) > now - DONOR_EVENT_GUARD_WINDOW
+			and total < existing.total
+			and source ~= "event"
+		then
+			-- Stale in-flight result: keep the fresh event total, refresh TTL only.
+			existing.expiresAt = now + (Config.Donation.DONOR_PROFILE_CACHE_TTL or 45)
+			return existing
+		end
+		local entry: DonorCashCacheEntry = {
+			total = total,
+			rank = rank,
+			expiresAt = now + (Config.Donation.DONOR_PROFILE_CACHE_TTL or 45),
+			source = source,
+			writtenAt = now,
+		}
+		donorCashCache[userId] = entry
+		return entry
+	end
+
+	-- Exponential failure TTL: 5s → 10s → 30s → 120s by consecutive failures,
+	-- reset on success. A transient hiccup recovers in seconds; a real outage
+	-- still escalates to the full cooldown.
+	local function recordDonorFailure(userId: number, now: number)
+		local prev = donorFailureCache[userId]
+		local failures = if prev then (prev.failures or 0) + 1 else 1
+		local step = DONOR_FAILURE_BACKOFF_STEPS[math.min(failures, #DONOR_FAILURE_BACKOFF_STEPS)]
+			or DONOR_PROFILE_FAILURE_CACHE_TTL
+		donorFailureCache[userId] = {
+			expiresAt = now + step,
+			failures = failures,
+		}
+	end
 
 	-- Block /setrobux (add) while Studio writes live keys — accidental inflation risk.
 	-- /removerobux is intentionally allowed so owners can clear live LB from Studio Play
@@ -193,7 +252,7 @@ local function createDonationService(
 	end
 	local _leaderboardRefreshQueued = false -- debounce flag for async leaderboard refresh
 	local _lastLeaderboardRefreshAt = 0 -- timestamp of last leaderboard refresh
-	local LEADERBOARD_REFRESH_DEBOUNCE = 10 -- min seconds between refreshes
+	local LEADERBOARD_REFRESH_DEBOUNCE = Config.Donation.LEADERBOARD_REFRESH_DEBOUNCE or 10 -- min seconds between refreshes
 	-- Server-side notification rate limit: max 1 broadcast per 2 seconds.
 	-- Prevents client queue flood at high CCU when many donations arrive in one poll cycle.
 	-- Stagger index for notification broadcast delay at high CCU
@@ -1563,7 +1622,49 @@ local function createDonationService(
 	-- cache + overhead fast cache + the in-server player's leaderstat makes the
 	-- notif card, donation panel, overhead chip, and PlayerList Cash column all
 	-- show the new total immediately instead of on the next cache expiry (45s).
-	local function applyInstantCashTotal(userId: number?, totalAfter: number)
+	-- Unless suppressPublish, the absolute total is also pushed to other servers
+	-- in this game via MessagingService (cross-server instant sync).
+	local CROSS_SERVER_CASH_TOPIC = Config.Donation.CROSS_SERVER_CASH_TOPIC or "DonorCashSync_v1"
+	-- Token bucket (~8/s, burst 16) so a donation storm cannot approach the
+	-- MessagingService per-game publish cap (150 + 150x servers per minute).
+	local cashPublishTokens = 16.0
+	local cashPublishLastRefill = os.clock()
+	local function tryConsumeCashPublishToken(): boolean
+		local now = os.clock()
+		cashPublishTokens = math.min(16.0, cashPublishTokens + (now - cashPublishLastRefill) * 8.0)
+		cashPublishLastRefill = now
+		if cashPublishTokens >= 1.0 then
+			cashPublishTokens -= 1.0
+			return true
+		end
+		return false
+	end
+
+	local function publishCashTotalCrossServer(userId: number, total: number)
+		if Config.Donation.CROSS_SERVER_CASH_SYNC_ENABLED == false then
+			return
+		end
+		if not tryConsumeCashPublishToken() then
+			-- Storm guard: skip publishing; receivers fall back to the 45s TTL path.
+			return
+		end
+		task.spawn(function()
+			local ok, err = pcall(function()
+				-- ABSOLUTE total (never a delta): idempotent + drop-safe. Receivers
+				-- apply monotonically and simply drop stale/lower values.
+				MessagingService:PublishAsync(CROSS_SERVER_CASH_TOPIC, {
+					u = userId,
+					t = total,
+					j = game.JobId,
+				})
+			end)
+			if not ok then
+				log:debug("Cross-server cash publish failed (non-critical)", { error = tostring(err) })
+			end
+		end)
+	end
+
+	local function applyInstantCashTotal(userId: number?, totalAfter: number, suppressPublish: boolean?)
 		if type(userId) ~= "number" or userId <= 0 then
 			return
 		end
@@ -1571,11 +1672,10 @@ local function createDonationService(
 		if total <= 0 then
 			return
 		end
-		donorCashCache[userId] = {
-			total = total,
-			rank = nil,
-			expiresAt = os.clock() + (Config.Donation.DONOR_PROFILE_CACHE_TTL or 45),
-		}
+		-- Carry forward the prior rank (if any): a fresh total without rank
+		-- would blank the chip rank until the next leaderboard poll.
+		local priorRank = if donorCashCache[userId] then donorCashCache[userId].rank else nil
+		writeDonorCashCache(userId, total, priorRank, "event")
 		markKnownDonor(userId)
 		if overheadService and type(overheadService.setCashDonated) == "function" then
 			overheadService:setCashDonated(userId, total)
@@ -1589,8 +1689,13 @@ local function createDonationService(
 				then leaderstats:FindFirstChild(Config.PlayerList.CASH_STAT_NAME or "Cash")
 				else nil
 			if cashStat and cashStat:IsA("IntValue") then
-				cashStat.Value = total
+				if cashStat.Value < total then
+					cashStat.Value = total
+				end
 			end
+		end
+		if not suppressPublish then
+			publishCashTotalCrossServer(userId, total)
 		end
 	end
 
@@ -1924,9 +2029,7 @@ local function createDonationService(
 		local ok, body = httpGet(url)
 		if not ok then
 			-- Phase 1: Record fail so next callers (refreshAll, leaderboard poll, etc.) skip during TTL.
-			donorFailureCache[userId] = {
-				expiresAt = now + DONOR_PROFILE_FAILURE_CACHE_TTL,
-			}
+			recordDonorFailure(userId, now)
 			log:warn("Donor profile API failed", { userId = userId, error = body })
 			return 0, nil
 		end
@@ -1936,9 +2039,7 @@ local function createDonationService(
 		end)
 		if not success or type(decoded) ~= "table" or decoded.ok ~= true then
 			-- Phase 1: Parse fail also cached (consistently malformed response = no need to retry every 3-5s).
-			donorFailureCache[userId] = {
-				expiresAt = now + DONOR_PROFILE_FAILURE_CACHE_TTL,
-			}
+			recordDonorFailure(userId, now)
 			log:warn("Donor profile API parse failed", { userId = userId })
 			return 0, nil
 		end
@@ -1948,11 +2049,7 @@ local function createDonationService(
 		local total = math.max(0, math.floor(tonumber(decoded.cash_total) or 0))
 		local rankValue = tonumber(decoded.cash_rank)
 		local rank = if rankValue and rankValue >= 1 then math.floor(rankValue) else nil
-		donorCashCache[userId] = {
-			total = total,
-			rank = rank,
-			expiresAt = now + (Config.Donation.DONOR_PROFILE_CACHE_TTL or 45),
-		}
+		writeDonorCashCache(userId, total, rank, nil)
 		return total, rank
 	end
 
@@ -2122,13 +2219,9 @@ local function createDonationService(
 		end
 
 		if cashTotal > 0 then
-			donorCashCache[userId] = {
-				total = cashTotal,
-				rank = cashRank,
-				expiresAt = os.clock() + (Config.Donation.DONOR_PROFILE_CACHE_TTL or 45),
-			}
-			-- Phase 3: Mark as known donor (cashTotal > 0 from any source).
-			markKnownDonor(userId)
+		writeDonorCashCache(userId, cashTotal, cashRank, nil)
+		-- Phase 3: Mark as known donor (cashTotal > 0 from any source).
+		markKnownDonor(userId)
 		end
 
 		-- Push cash value to OverheadService's fast cache so leaderstats/overhead
@@ -3338,6 +3431,44 @@ local function createDonationService(
 			if count > 0 then
 				syncBagibagiLeaderboardFromCache(true)
 				log:info("Manual Bagibagi adjustments hydrated", { count = count })
+			end
+		end)
+	end
+
+
+	-- Cross-server donor cash sync: apply the ABSOLUTE totals other servers in
+	-- this game publish (see publishCashTotalCrossServer). Monotonic — stale or
+	-- duplicate messages (lower/equal total than we already have) are dropped;
+	-- messages originating from THIS server are skipped (already applied locally).
+	-- Best-effort: dropped messages simply fall back to the 45s TTL cache path.
+	if Config.Donation.CROSS_SERVER_CASH_SYNC_ENABLED ~= false then
+		task.spawn(function()
+			local okSub, subErr = pcall(function()
+				MessagingService:SubscribeAsync(CROSS_SERVER_CASH_TOPIC, function(message: any)
+					local data = if type(message) == "table" then message.Data else nil
+					if type(data) ~= "table" then
+						return
+					end
+					if type(data.j) == "string" and data.j ~= "" and data.j == game.JobId then
+						return -- own message (live servers have unique JobIds)
+					end
+					local userId = tonumber(data.u)
+					local total = tonumber(data.t)
+					if type(userId) ~= "number" or userId <= 0 or type(total) ~= "number" or total <= 0 then
+						return
+					end
+					local cached = donorCashCache[userId]
+					if cached and cached.total >= total then
+						return -- stale / already newer locally
+					end
+					applyInstantCashTotal(userId, total, true) -- suppress re-publish
+					log:debug("Cross-server cash sync applied", { userId = userId, total = total })
+				end)
+			end)
+			if okSub then
+				log:info("Cross-server cash sync subscribed", { topic = CROSS_SERVER_CASH_TOPIC })
+			else
+				log:warn("Cross-server cash sync subscribe failed", { error = tostring(subErr) })
 			end
 		end)
 	end

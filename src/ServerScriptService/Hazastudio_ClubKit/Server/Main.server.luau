@@ -797,6 +797,22 @@ if backgroundJobScheduler then
 				and Config.FeatureFlags.LeaderboardEnabled ~= false
 				and donationApiReady,
 		})
+		-- Boot leaderboard kick (delayed): pull backend-fresh leaderboard at ~30s
+		-- instead of waiting for the first 120-150s job tick. Delayed past the
+		-- DonationController pre-warm (25s) so the HTTP fetch + broadcast cascade
+		-- lands after cold-start join loads — the original immediate kick caused a
+		-- second DataStore burst that triggered StandardRead throttling; 30s clears
+		-- that window. Single HTTP call, same enable conditions as the job.
+		if cashEnabled == true and Config.FeatureFlags.LeaderboardEnabled ~= false and donationApiReady then
+			task.delay(30, function()
+				local ok, err = pcall(function()
+					donationService:refreshLeaderboard()
+				end)
+				if not ok then
+					log:warn("Boot leaderboard kick failed", { error = tostring(err) })
+				end
+			end)
+		end
 	end
 	-- Keep-warm ping (240s)
 	if donationService and type(donationService.keepWarmPing) == "function" then

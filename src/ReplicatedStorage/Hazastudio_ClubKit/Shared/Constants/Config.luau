@@ -2291,6 +2291,21 @@ Config.Donation = {
 	REMOTE_DONOR_PROFILE_RESPONSE = "DonationDonorProfileResponse",
 	DONOR_PROFILE_CACHE_TTL = 45,
 	DONOR_PROFILE_RANK_LOOKUP_LIMIT = 100,
+	-- Min seconds between donation-triggered burst leaderboard refreshes.
+	-- 4s is the floor that matters: the downstream rebuild coalesce (5s) +
+	-- broadcast min-interval (3s) dominate; lower buys nothing. Old default 10.
+	LEADERBOARD_REFRESH_DEBOUNCE = 4,
+	-- Exponential per-user donor-profile failure backoff (seconds, by consecutive
+	-- failures). A transient hiccup recovers in 5s instead of the old flat 120s
+	-- (which stuck joiners at Cash=0 for two minutes); a real outage still
+	-- escalates to the last step.
+	DONOR_FAILURE_BACKOFF_STEPS = { 5, 10, 30, 120 },
+	-- Cross-server donor cash push: after applying a donation total locally,
+	-- publish the ABSOLUTE total so other servers in this game update their
+	-- caches + leaderstats instantly (best-effort; the 45s TTL cache is the
+	-- fallback when messages drop). Payload is idempotent and drop-safe.
+	CROSS_SERVER_CASH_SYNC_ENABLED = true,
+	CROSS_SERVER_CASH_TOPIC = scopedDataStoreKey("DonorCashSync_v1"),
 	-- Donor-profile API is no longer gated on "known donor" status: donors who gave
 	-- while this server was offline are unknown locally but exist in the backend.
 	-- True non-donors are already negative-cached (failure cache, 120s) inside

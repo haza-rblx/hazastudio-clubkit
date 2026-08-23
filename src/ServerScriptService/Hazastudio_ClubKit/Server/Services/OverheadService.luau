@@ -163,7 +163,7 @@ local function createOverheadService(deps: {
 			local ok, cashTotal = pcall(function()
 				return donationService:getPlayerCashStats(userId, username)
 			end)
-			if ok and type(cashTotal) == "number" then
+			if ok and type(cashTotal) == "number" and cashTotal > 0 then
 				local newAmount = math.max(0, math.floor(cashTotal))
 				if cashDonatedCache[userId] ~= newAmount then
 					cashDonatedCache[userId] = newAmount
@@ -171,6 +171,26 @@ local function createOverheadService(deps: {
 						cashStatsReadyCallback(userId)
 					end
 				end
+			elseif not ok or (type(cashTotal) == "number" and cashTotal <= 0) then
+				-- Join-time retry: a first failure (transient backend hiccup or the
+				-- failure negative-cache) must not leave the player at Cash=0 for the
+				-- full backoff window. One delayed retry per join; after that the
+				-- exponential negative-cache path takes over.
+				task.delay(3, function()
+					if cashDonatedCache[userId] ~= nil then
+						return
+					end
+					local ok2, cashTotal2 = pcall(function()
+						return donationService:getPlayerCashStats(userId, username)
+					end)
+					if ok2 and type(cashTotal2) == "number" and cashTotal2 > 0 then
+						local newAmount2 = math.max(0, math.floor(cashTotal2))
+						cashDonatedCache[userId] = newAmount2
+						if cashStatsReadyCallback then
+							cashStatsReadyCallback(userId)
+						end
+					end
+				end)
 			end
 		end)
 	end

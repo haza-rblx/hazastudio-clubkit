@@ -11,6 +11,21 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.8.5] - 2026-08-23
+
+### Added
+- **Cross-server donor cash sync.** After a donation is applied (backend `total_after`), the server publishes the donor's ABSOLUTE total on a dedicated MessagingService topic; every other server in the game applies it instantly to their donor cache, overhead cache, and the player's leaderstat Cash if online. Payloads are idempotent and drop-safe (monotonic apply — stale/duplicate/lower totals are ignored; message drops fall back to the existing 45s TTL cache path). Token-bucket guarded (~8/s) so donation storms cannot approach the MessagingService per-game publish cap. Gated by `Config.Donation.CROSS_SERVER_CASH_SYNC_ENABLED`.
+- **Boot leaderboard kick (delayed 30s).** A fresh server now pulls the backend leaderboard at ~30s instead of waiting up to 120-150s for the first periodic job tick, so in-map cash boards fill within half a minute. Delayed past the cold-start join-load window — the original immediate kick caused a second DataStore burst and StandardRead throttling; 30s clears it. Single extra HTTP call per server lifetime.
+- **Join-time cash fetch retry.** A failed first cash fetch at join no longer strands the player at Cash=0 for the failure-cache window: one delayed retry (3s) runs before the exponential negative-cache path takes over.
+
+### Changed
+- **Donation-triggered leaderboard refresh debounce 10s → 4s** (`Config.Donation.LEADERBOARD_REFRESH_DEBOUNCE`, was hardcoded). 4s is the effective floor — the downstream rebuild coalesce (5s) and broadcast min-interval (3s) dominate anything lower. Worst case during a donation storm: 15 HTTP/min, well inside budget.
+- **Donor-profile failure cache is now exponential** (`Config.Donation.DONOR_FAILURE_BACKOFF_STEPS = {5,10,30,120}`, was flat 120s): transient backend hiccups recover in 5s instead of sticking joiners at Cash=0 for two minutes; real outages still escalate to the full cooldown.
+
+### Fixed
+- **Stale-overwrite race in the donor cash cache.** `fetchDonorCashProfile` and `getPlayerCashStats` wrote `donorCashCache` unconditionally — an in-flight HTTP/leaderboard result issued *before* a donation landed could resolve *after* the instant event write and clobber it with a stale total. All writes now go through a single guarded helper: an event-written entry (<10s old) is never overwritten by a lower non-event total (monotonic max). Event writes also carry forward the prior rank instead of blanking it.
+- **Instant leaderstat write is now monotonic** (never lowers an already-higher value).
+
 ## [2.8.4] - 2026-08-23
 
 ### Fixed
