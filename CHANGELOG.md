@@ -11,6 +11,11 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.8.9] - 2026-08-23
+
+### Fixed
+- **Spender Team names in the Roblox PlayerList now follow the renamed roles.** The buyer-facing `ClubKitConfig.SpenderRoles` still carried the old labels (`Top Rupiah Spender` / `Top Robux Donator`), which overrode `Roles.luau` — so the Team column showed `TOP DONOR` / `TOP SUPPORTER` even after the v2.8.8 role rename. Updated the buyer config labels/chatTags/toolFolders/specialRank to **Top Cash Spender** / **Top Robux Spender**, so the PlayerList teams now read `TOP CASH SPENDER` / `TOP ROBUX SPENDER`.
+
 ## [2.8.8] - 2026-08-23
 
 ### Changed
