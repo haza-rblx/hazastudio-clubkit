@@ -742,6 +742,12 @@ Config.Overhead = {
 	-- Opt-in: animate UIGradient on 00-DonationLayers RobuxRankWrapper / RupiahRankWrapper.
 	-- Safe when wrappers lack UIGradient (no-op). Buyer toggle: ClubKitConfig.Features.DonationRankGradientAnim.
 	ANIMATE_DONATION_RANK_GRADIENT = false,
+	-- Max rank that gets an overhead donation rank chip (#N RUPIAH / #N ROBUX).
+	-- 0 = unlimited: EVERY donor gets a chip. Separate from SpenderRoles.*.MaxRank,
+	-- which still gates Top-Spender ROLES / tools / chat tags / greetings (top-10).
+	-- Chip data sources cap the effective range anyway (cash fallback = backend full
+	-- rank; live-diff tracks rank <= 100).
+	DONATION_CHIP_MAX_RANK = 0,
 	BATCH_MESSAGE_KIND = "overhead_batch",
 	DELTA_MESSAGE_KIND = "overhead_delta",
 	EXISTING_PAYLOAD_BATCH_SIZE = 25,

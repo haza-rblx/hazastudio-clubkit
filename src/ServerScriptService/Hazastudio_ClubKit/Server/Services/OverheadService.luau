@@ -562,7 +562,23 @@ local function createOverheadService(deps: {
 		if normalizedRank then
 			Cache.set(cacheKey, normalizedRank, Config.Leaderboards.WORKSPACE_CACHE_TTL)
 		else
-			Cache.set(cacheKey, false, NEGATIVE_RANK_CACHE_TTL)
+			-- Chip-for-all fallback: the workspace leaderboard only covers the
+			-- top SAWERIA_LIMIT (50) donors, so a donor ranked 51+ resolves to nil
+			-- here. Ask the donor-profile path instead — the backend computes the
+			-- FULL rank over all donors (with 45s positive + exponential negative
+			-- caches in DonationService, and the join-time fetch usually already
+			-- warmed it), so any online donor gets a chip regardless of rank.
+			local okStats, statsTotal, statsRank = pcall(function()
+				return donationService:getPlayerCashStats(userId, playerName or "")
+			end)
+			if okStats and type(statsTotal) == "number" and statsTotal > 0 then
+				normalizedRank = OverheadDomain.normalizeLeaderboardRank(statsRank, "CashSpender")
+			end
+			if normalizedRank then
+				Cache.set(cacheKey, normalizedRank, Config.Leaderboards.WORKSPACE_CACHE_TTL)
+			else
+				Cache.set(cacheKey, false, NEGATIVE_RANK_CACHE_TTL)
+			end
 		end
 		return normalizedRank, true
 	end

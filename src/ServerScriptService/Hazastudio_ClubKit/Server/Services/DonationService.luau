@@ -1261,7 +1261,10 @@ local function createDonationService(
 		lastDiffChangedUserIds = {}
 		local newRanks: { [string]: number } = {}
 		for _, entry in ipairs(newEntries) do
-			if entry.rank > Config.Donation.LEADERBOARD_LIMIT then
+			-- Chip-for-all: track ranks up to 100 (the polled leaderboard's fetchLimit
+			-- ceiling). Rank >100 donors still get chips via the getPlayerCashStats
+			-- fallback in OverheadService; this gate only bounds DataStore write churn.
+			if entry.rank > 100 then
 				continue
 			end
 			local username = cleanRobloxUsername(entry.robloxUsername)
@@ -2294,7 +2297,7 @@ local function createDonationService(
 			overheadService:setCashDonated(userId, adjMap[userId])
 		end
 		local cashRank = select(2, service:getPlayerCashStats(userId, resolvedUsername))
-		if type(cashRank) == "number" and cashRank <= Config.Donation.LEADERBOARD_LIMIT then
+		if type(cashRank) == "number" and cashRank <= 100 then -- chip-for-all: was LEADERBOARD_LIMIT(10)
 			assignPlayer(resolvedUsername, cashRank)
 		end
 		local onlinePlayer = Players:GetPlayerByUserId(userId)

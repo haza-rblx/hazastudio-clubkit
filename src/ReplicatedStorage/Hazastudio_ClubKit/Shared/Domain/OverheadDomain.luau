@@ -447,36 +447,30 @@ end
 
 local ELITE_MEMBER_BADGE_FRAME = "07-ELITEMemberBadge"
 
-local function getLeaderboardBadgeLimit(spenderType: string?): number
-	local maxRank = 0
-	local spenderRoles = Config.SpenderRoles
-	if type(spenderRoles) == "table" then
-		if type(spenderType) == "string" then
-			local spender = spenderRoles[spenderType]
-			if type(spender) == "table" and spender.Enabled ~= false then
-				maxRank = tonumber(spender.MaxRank) or 0
-			end
-		else
-			for _, key in ipairs({ "CashSpender", "RobuxSpender" }) do
-				local spender = spenderRoles[key]
-				if type(spender) == "table" and spender.Enabled ~= false then
-					maxRank = math.max(maxRank, tonumber(spender.MaxRank) or 0)
-				end
-			end
-		end
+
+-- Donation rank CHIP display limit (#N RUPIAH / #N ROBUX on the overhead).
+-- 0 = unlimited: every donor gets a chip. Deliberately SEPARATE from
+-- SpenderRoles.*.MaxRank so Top-Spender roles, tools, chat tags and
+-- greetings keep their top-10 semantics while chips show for all donors.
+-- Negative values are treated as 0 (unlimited).
+local function getDonationChipRankLimit(): number
+	local raw = Config.Overhead and Config.Overhead.DONATION_CHIP_MAX_RANK
+	local chipLimit = tonumber(raw) or 10
+	if chipLimit < 0 then
+		return 0
 	end
-	if maxRank > 0 then
-		return maxRank
-	end
-	local limit = Config.Donation and Config.Donation.LEADERBOARD_LIMIT
-	if type(limit) ~= "number" or limit < 1 then
-		return 10
-	end
-	return limit
+	return chipLimit
 end
 
 local function isActiveLeaderboardRank(rank: number?, spenderType: string?): boolean
-	return type(rank) == "number" and rank >= 1 and rank <= getLeaderboardBadgeLimit(spenderType)
+	local limit = getDonationChipRankLimit()
+	if limit == 0 then
+		-- Unlimited chips: any rank >= 1 is displayable. Role-side consumers
+		-- (RolesDomain, RoleToolService, OverheadController, JoinGreeting) all
+		-- re-check SpenderRoles.MaxRank independently, so they stay top-10.
+		return type(rank) == "number" and (rank :: number) >= 1
+	end
+	return type(rank) == "number" and (rank :: number) >= 1 and (rank :: number) <= limit
 end
 
 function OverheadDomain.shouldShowEliteMemberBadge(stored: OverheadStoredData, role: RoleKey): boolean

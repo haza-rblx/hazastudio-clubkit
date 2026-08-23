@@ -11,6 +11,13 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.8.6] - 2026-08-23
+
+### Changed
+- **Overhead donation rank chips now show for EVERY donor, not just the top-10.** New `Config.Overhead.DONATION_CHIP_MAX_RANK` (default `0` = unlimited; set a number to cap) governs the `#N RUPIAH` / `#N ROBUX` chips, decoupled from `SpenderRoles.*.MaxRank`. Top-Spender **roles**, tool grants, chat tags, playerlist spender colors and join greetings all keep their top-10 semantics — they re-check MaxRank independently, verified live (rank-27 donor gets a chip, role stays Guest).
+- **Cash rank resolution fallback for donors beyond the workspace leaderboard (top-50).** When the workspace leaderboard misses, the chip rank now falls back to `getPlayerCashStats` (backend full rank over all donors, 45s positive cache + exponential negative cache) — so donor #51+ still resolves a chip while online.
+- Live leaderboard diff and manual cash adjust now track ranks up to 100 (was 10), so the persisted ranks that feed chips stay current for the top 100; donors ranked >100 get their chip via the fallback above. Gate intentionally capped at 100 (the polled leaderboard's fetch ceiling) to bound DataStore write churn.
+
 ## [2.8.5] - 2026-08-23
 
 ### Added
