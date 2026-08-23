@@ -1557,6 +1557,12 @@ local function createDonationService(
 		end)
 	end
 
+	-- Forward declaration: _pollNotifications' phase-2 resolve calls this before
+	-- its definition below. Without the forward local, the earlier call site
+	-- resolves to a nil global at runtime ("attempt to call a nil value") for any
+	-- donor missing from the leaderboard cache (first-ever donation / test names).
+	local fetchDonorCashProfile: (userId: number, username: string) -> (number, number?)
+
 	function service:_pollNotifications()
 		if not isCashDonationEnabled() then
 			return
@@ -1844,7 +1850,7 @@ local function createDonationService(
 		return displayName
 	end
 
-	local function fetchDonorCashProfile(userId: number, username: string): (number, number?)
+	fetchDonorCashProfile = function(userId: number, username: string): (number, number?)
 		local now = os.clock()
 		-- Phase 1: Negative cache check — skip silently if Worker just failed for this userId.
 		local failEntry = donorFailureCache[userId]

@@ -11,6 +11,12 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.8.3] - 2026-08-23
+
+### Fixed
+- **First-time donor notifications lost (`failed_resolve`) with "attempt to call a nil value".** The Lapis-2 donor-total fallback called `fetchDonorCashProfile()` at a call site **above** its `local function` definition inside `createDonationService`. With no forward declaration, the earlier reference resolved to a nil global and the phase-2 resolve worker crashed for any donor missing from the cached leaderboard (first-ever donations, dashboard test names) — the donation silently went to `failed_resolve` instead of showing. The function is now forward-declared before `_pollNotifications` and assigned later in the scope. Verified: a webhook donation for a brand-new donor resolves and displays end-to-end.
+- **Game-data API base URL now points at the self-hosted VPS** (`https://api.hazastudio.id/social`) instead of the retired Cloudflare worker — overhead group-rank / community lookups keep working after the migration.
+
 ## [2.8.2] - 2026-08-22
 
 ### Fixed

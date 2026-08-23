@@ -2130,10 +2130,12 @@ Config.AvatarContext = {
 	LIKE_HEART_IMAGE = "",
 }
 -- ============================================================
--- GAME DATA API (Cloudflare Worker)
+-- GAME DATA API (self-hosted VPS; was Cloudflare Worker)
+-- Social/groups/community endpoints are mounted under /social on the VPS, so
+-- BASE_URL includes that prefix (kit builds .../game/{key}/groups/{userId}).
 -- ============================================================
 Config.GameDataApi = {
-	BASE_URL = "https://hazastudio-game-data-api.hazastudio.workers.dev",
+	BASE_URL = "https://api.hazastudio.id/social",
 	GAME_KEY = "clubkit",
 	-- SECRET moved to Server/Secrets.luau (server-only, not replicated to clients)
 	SECRET = "SET_VIA_SERVER_SECRETS",
