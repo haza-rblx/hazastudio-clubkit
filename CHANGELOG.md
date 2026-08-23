@@ -11,6 +11,12 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.8.8] - 2026-08-23
+
+### Changed
+- **PlayerList stat titles reverted to `Cash` / `Robux`** (v2.8.7 renamed them by mistake — the "Spender" naming belongs on roles, not the stat columns).
+- **Spender team/role names clarified:** `Top Rupiah Spender` → **Top Cash Spender**, `Top Robux Donator` → **Top Robux Spender** — matching chat tags, special rank text and tool folders, all in `Roles.luau` + `ClubKitConfigSchema.luau`. Legacy aliases kept (e.g. `/setrole "top rupiah spender"` still resolves), and new-name aliases added.
+
 ## [2.8.7] - 2026-08-23
 
 ### Changed

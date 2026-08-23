@@ -918,8 +918,8 @@ Config.PlayerList = {
 	STREAK_STAT_NAME = "Streak",
 	LEVEL_STAT_NAME = "Level",
 	LIKES_STAT_NAME = "Likes",
-	ROBUX_STAT_NAME = "Top Robux Spender",
-	CASH_STAT_NAME = "Top Cash Spender",
+	ROBUX_STAT_NAME = "Robux",
+	CASH_STAT_NAME = "Cash",
 	-- BrickColor names for built-in Roblox PlayerList
 	-- Team.TeamColor = BrickColor (limited palette ~63 preset)
 	-- BrickColor.new(Color3) snaps to nearest preset -> often becomes gray
