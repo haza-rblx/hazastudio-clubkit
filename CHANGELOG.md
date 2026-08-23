@@ -11,6 +11,15 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.8.7] - 2026-08-23
+
+### Changed
+- **Donation rank chips are now capped at the top 20** (`Config.Overhead.DONATION_CHIP_MAX_RANK = 20`). Donors ranked 1–20 show the ranked chip (`#N RUPIAH` / `#N ROBUX`) as before; donors beyond the top 20 get a single **"SUPPORTER"** chip (reusing the Rupiah wrapper, no rank number) instead of a ranked chip. A donor who already has a ranked chip in either category shows no SUPPORTER chip.
+- **PlayerList stat titles clarified:** `Cash` → **Top Cash Spender**, `Robux` → **Top Robux Spender** (`Config.PlayerList.CASH_STAT_NAME` / `ROBUX_STAT_NAME`).
+
+### Notes
+- One "SUPPORTER" chip max per player even when they donate to both categories without ranking top-20 in either — the ranked chip always wins when present.
+
 ## [2.8.6] - 2026-08-23
 
 ### Changed

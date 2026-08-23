@@ -747,7 +747,7 @@ Config.Overhead = {
 	-- which still gates Top-Spender ROLES / tools / chat tags / greetings (top-10).
 	-- Chip data sources cap the effective range anyway (cash fallback = backend full
 	-- rank; live-diff tracks rank <= 100).
-	DONATION_CHIP_MAX_RANK = 0,
+	DONATION_CHIP_MAX_RANK = 20,
 	BATCH_MESSAGE_KIND = "overhead_batch",
 	DELTA_MESSAGE_KIND = "overhead_delta",
 	EXISTING_PAYLOAD_BATCH_SIZE = 25,
@@ -918,8 +918,8 @@ Config.PlayerList = {
 	STREAK_STAT_NAME = "Streak",
 	LEVEL_STAT_NAME = "Level",
 	LIKES_STAT_NAME = "Likes",
-	ROBUX_STAT_NAME = "Robux",
-	CASH_STAT_NAME = "Cash",
+	ROBUX_STAT_NAME = "Top Robux Spender",
+	CASH_STAT_NAME = "Top Cash Spender",
 	-- BrickColor names for built-in Roblox PlayerList
 	-- Team.TeamColor = BrickColor (limited palette ~63 preset)
 	-- BrickColor.new(Color3) snaps to nearest preset -> often becomes gray

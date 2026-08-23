@@ -1015,42 +1015,57 @@ local function setDonationLayers(wrapper: GuiObject, payload: OverheadPayload)
 
 	local function applyChip(
 		wrapperName: string,
-		_labelName: string,
-		rank: number?,
-		suffix: string,
+	_labelName: string,
+		text: string?,
 		layerKey: string
 	)
 		local chip = layers:FindFirstChild(wrapperName)
 		if not chip or not chip:IsA("GuiObject") then
 			return
 		end
-		local hasRank = type(rank) == "number" and (rank :: number) > 0
+		local hasText = type(text) == "string" and text ~= ""
 		local layerVisible = isLayerVisible(
 			layerKey,
 			getPublicMapValue(payload.publicOverheadLayerVisible, layerKey, true),
 			payload.userId
-		)
-		local show = hasRank and layerVisible
+	)
+		local show = hasText and layerVisible
 		chip.Visible = show
 		if show then
 			local label = chip:FindFirstChildWhichIsA("TextLabel")
 			if label then
-				(label :: TextLabel).Text = "#" .. tostring(rank) .. " " .. suffix
+				(label :: TextLabel).Text = text
 			end
 		end
 		local animEnabled = Config.Overhead.ANIMATE_DONATION_RANK_GRADIENT == true
 		setChipGradientAnim(chip, wrapperName, show and animEnabled)
 	end
 
-	-- Robux ranking = topDonateRank, cash/Saweria ranking = topSpenderRank
-	applyChip("RobuxRankWrapper", "RobuxRanking", payload.topDonateRank, "ROBUX", "TopDonate")
-	applyChip(
-		"RupiahRankWrapper",
-		"RupiahRank",
-		payload.topSpenderRank,
-		CashCurrencyDomain.getActive().chipSuffix,
-		"TopSpender"
-	)
+	-- Chip rules (v2.8.7):
+	--   * Ranked chips (#N RUPIAH / #N ROBUX) show for the top DONATION_CHIP_MAX_RANK
+	--     (default 20) per category.
+	--   * A donor who does not rank in EITHER category gets ONE "SUPPORTER" chip
+	--     (reusing the Rupiah wrapper, no rank number).
+	--   * A donor who already has a ranked chip in either category gets NO
+	--     SUPPORTER chip — their ranked chip already identifies them.
+	local cashRank = if type(payload.topSpenderRank) == "number" then payload.topSpenderRank :: number else nil
+	local robuxRank = if type(payload.topDonateRank) == "number" then payload.topDonateRank :: number else nil
+	local cashTotal = tonumber(payload.cashDonated) or 0
+	local robuxTotal = tonumber(payload.robuxDonated) or 0
+	local isCashSupporter = cashTotal > 0 and cashRank == nil
+	local isRobuxSupporter = robuxTotal > 0 and robuxRank == nil
+	local hasRankedChip = cashRank ~= nil or robuxRank ~= nil
+
+	local cashSuffix = CashCurrencyDomain.getActive().chipSuffix
+	local cashText: string? = if cashRank then ("#%d %s"):format(cashRank, cashSuffix) else nil
+	local robuxText: string? = if robuxRank then ("#%d ROBUX"):format(robuxRank) else nil
+	local supporterText: string? = nil
+	if not hasRankedChip and (isCashSupporter or isRobuxSupporter) then
+		supporterText = "SUPPORTER"
+	end
+
+	applyChip("RobuxRankWrapper", "RobuxRanking", robuxText, "TopDonate")
+	applyChip("RupiahRankWrapper", "RupiahRank", if supporterText then supporterText else cashText, "TopSpender")
 
 	-- Hide container if both empty, so it does not consume layout slot.
 	local anyVisible = false
