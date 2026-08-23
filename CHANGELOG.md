@@ -11,6 +11,12 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.8.4] - 2026-08-23
+
+### Fixed
+- **Community names on the donation leaderboard no longer pass through Roblox text filtering.** Community names come from the player's Roblox group list (platform-moderated at source, same as usernames/display names), so re-filtering was redundant — and whenever the filter author was unresolvable (group-owned place + owner offline) valid group names were stored as `#####`. `writeMetadata` now stores the group name as-is (still length/clamp-sanitized).
+- **Self-heal for already-hashed community names.** Board builds detect stored `#####` names, re-resolve the real group name once via `GroupService:GetGroupInfoAsync`, and persist the clean value — places with legacy hashed rows clean themselves on the next board rebuild, no new donation needed.
+
 ## [2.8.3] - 2026-08-23
 
 ### Fixed

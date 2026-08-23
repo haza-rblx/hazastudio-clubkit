@@ -1,6 +1,7 @@
 --!strict
 
 local DataStoreService = game:GetService("DataStoreService")
+local GroupService = game:GetService("GroupService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -15,7 +16,6 @@ local HttpApiCounter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils
 local HttpApi = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.HttpApi)
 local MemoryStoreCache = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.MemoryStoreCache)
 local CrossServerCache = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.CrossServerCache)
-local TextFilterUtil = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.TextFilterUtil)
 
 local LEADERBOARD_INVALIDATE_TOPIC = "DonationLeaderboardInvalidate"
 
@@ -600,19 +600,16 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 	end
 
 	local function writeMetadata(kind: string, id: number, data: { [string]: any }): Result<nil>
-		if kind == "community" and type(data.communityName) == "string" and data.communityName ~= "" then
-			-- Worker-sourced community name is owner-published content shown on
-			-- the community board — filter before storing (G6, ADR 0004). Must
-			-- happen OUTSIDE the UpdateAsync transform (filters yield).
-			-- Author context: the place owner publishes it. On group-owned places
-			-- game.CreatorId is a GROUP id (not a user), which makes FilterStringAsync
-			-- fail and every name fall back to "#####" — resolve the real owner userId.
-			local authorUserId = TextFilterUtil.resolveFilterAuthorUserId()
-			local filtered = authorUserId
-				and TextFilterUtil.filterForBroadcast(authorUserId, data.communityName, 80)
-			filtered = filtered or TextFilterUtil.hashFallback(data.communityName)
+		-- Community names are resolved from the player's Roblox group list
+		-- (GroupService / Open Cloud) — i.e. platform-moderated at source, same as
+		-- usernames/displayNames. Per ADR 0004 D1 they are intentionally NOT routed
+		-- through TextService filtering: re-filtering only risked turning valid
+		-- group names into "#####" whenever the filter author was unresolvable
+		-- (group-owned place + owner offline). sanitizeText below still clamps
+		-- length/strips control chars before storing.
+		if kind == "community" then
 			data = table.clone(data)
-			data.communityName = filtered
+			data.communityName = sanitizeText(data.communityName, 80)
 		end
 		local mk = metadataKey(kind, id)
 		local cacheKey = string.format("%s:%d", kind, id)
@@ -660,6 +657,19 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 		-- R10.3: Invalidate metadata cache on write so next read picks up fresh data.
 		metadataCacheInvalidate(cacheKey)
 		return Result.Ok(nil)
+	end
+
+	-- Resolve a community's display name straight from Roblox (group names are
+	-- platform-moderated). Used to self-heal metadata rows whose stored name was
+	-- hashFallback'd ("#####") by the old pre-filter write path.
+	local function resolveCommunityGroupName(communityId: number): string?
+		local ok, info = pcall(function()
+			return GroupService:GetGroupInfoAsync(communityId)
+		end)
+		if ok and type(info) == "table" and type(info.Name) == "string" and info.Name ~= "" then
+			return info.Name
+		end
+		return nil
 	end
 
 	local function hasProcessedReceipt(purchaseId: string): Result<boolean>
@@ -1249,12 +1259,31 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 		for i, item in ipairs(pageItems) do
 			local communityId = pageIds[i]
 			local metadata = metadataList[i]
+			local storedName = if type(metadata) == "table" and type(metadata.communityName) == "string"
+				then metadata.communityName
+				else nil
+			-- Self-heal: names stored while the old pre-filter write path was
+			-- active can be hashFallback ("#####"). Community names are Roblox
+			-- group names (platform-moderated), so re-resolve once from
+			-- GroupService and persist the clean value; next builds read it back.
+			if storedName and storedName:match("^#+$") then
+				local freshName = resolveCommunityGroupName(communityId)
+				if freshName then
+					storedName = freshName
+					writeMetadata("community", communityId, {
+						communityId = communityId,
+						communityName = freshName,
+						communityLogo = if type(metadata) == "table" and type(metadata.communityLogo) == "string"
+							then metadata.communityLogo
+							else "",
+						updatedAt = os.time(),
+					})
+				end
+			end
 			table.insert(entries, {
 				rank = #entries + 1,
 				communityId = communityId,
-				communityName = type(metadata) == "table"
-						and type(metadata.communityName) == "string"
-						and metadata.communityName
+				communityName = storedName
 					or ("Community " .. tostring(communityId)),
 				communityLogo = type(metadata) == "table"
 						and type(metadata.communityLogo) == "string"
