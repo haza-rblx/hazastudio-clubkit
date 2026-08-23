@@ -1557,6 +1557,43 @@ local function createDonationService(
 		end)
 	end
 
+	-- Instant cash-total sync for a donor whose donation just arrived. The
+	-- backend feed carries an authoritative cumulative total (total_after) that
+	-- already INCLUDES the donation being processed; pushing it into the donor
+	-- cache + overhead fast cache + the in-server player's leaderstat makes the
+	-- notif card, donation panel, overhead chip, and PlayerList Cash column all
+	-- show the new total immediately instead of on the next cache expiry (45s).
+	local function applyInstantCashTotal(userId: number?, totalAfter: number)
+		if type(userId) ~= "number" or userId <= 0 then
+			return
+		end
+		local total = math.max(0, math.floor(tonumber(totalAfter) or 0))
+		if total <= 0 then
+			return
+		end
+		donorCashCache[userId] = {
+			total = total,
+			rank = nil,
+			expiresAt = os.clock() + (Config.Donation.DONOR_PROFILE_CACHE_TTL or 45),
+		}
+		markKnownDonor(userId)
+		if overheadService and type(overheadService.setCashDonated) == "function" then
+			overheadService:setCashDonated(userId, total)
+		end
+		-- Direct leaderstat bump: the overhead broadcast rebuild will reuse the
+		-- same cached value, so writing the IntValue here just makes it instant.
+		local player = Players:GetPlayerByUserId(userId)
+		if player then
+			local leaderstats = player:FindFirstChild("leaderstats")
+			local cashStat = if leaderstats
+				then leaderstats:FindFirstChild(Config.PlayerList.CASH_STAT_NAME or "Cash")
+				else nil
+			if cashStat and cashStat:IsA("IntValue") then
+				cashStat.Value = total
+			end
+		end
+	end
+
 	-- Forward declaration: _pollNotifications' phase-2 resolve calls this before
 	-- its definition below. Without the forward local, the earlier call site
 	-- resolves to a nil global at runtime ("attempt to call a nil value") for any
@@ -1681,6 +1718,7 @@ local function createDonationService(
 					providerRobloxUserId = providerRobloxUserId,
 					newRank = newRank,
 					matchedEntry = matchedEntry,
+					totalAfter = tonumber(item.total_after) or tonumber(item.totalAfter) or 0,
 				})
 			end
 
@@ -1696,6 +1734,16 @@ local function createDonationService(
 							or (info.matchedEntry and info.matchedEntry.robloxUserId)
 							or resolveRobloxUserId(robloxUsername)
 						local totalDonationAmount = info.matchedEntry and info.matchedEntry.totalAmount or nil
+						-- Backend total_after (window sum including THIS donation) is the
+						-- authoritative total — the cached leaderboard and the 45s donor
+						-- profile cache can both lag behind the donation being processed,
+						-- which made the card show a stale total right after donating.
+						-- When present it wins and also syncs the player's local stats.
+						local backendTotalAfter = tonumber(info.totalAfter) or 0
+						if backendTotalAfter > 0 then
+							totalDonationAmount = backendTotalAfter
+							applyInstantCashTotal(robloxUserId, backendTotalAfter)
+						end
 						-- Lapis-2 fix (2026-08-17): a first-ever donation arrives before the
 						-- leaderboard cache includes the donor, so matchedEntry is nil and the
 						-- old code fired the notif with totalDonationAmount=nil → client showed
