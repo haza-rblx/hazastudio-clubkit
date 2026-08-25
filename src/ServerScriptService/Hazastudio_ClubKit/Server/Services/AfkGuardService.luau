@@ -14,15 +14,25 @@ local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 type Result<T> = Types.Result<T>
 
 -- in-flight guard entry: nil = free, number = os.clock() timestamp when set.
--- Stale entries (> timeout + retries + buffer) are reaped so a teleport that
--- resolved without a PlayerRemoving never latches the player forever.
+-- Stale entries are reaped so a teleport that resolved without a
+-- PlayerRemoving never latches the player forever. One request now performs at
+-- most one teleport attempt (the client ladder owns retry timing), so the
+-- window is just the confirmation wait plus slack.
 local function inFlightStaleAfterSec(): number
 	local cfg = Config.AfkGuard
-	local timeout = tonumber(cfg.TELEPORT_INIT_TIMEOUT_SEC) or 10
-	local retryDelay = tonumber(cfg.RETRY_DELAY_SEC) or 30
-	local maxRetry = tonumber(cfg.MAX_RETRY) or 1
-	return timeout + retryDelay * (maxRetry + 1) + 30
+	local confirm = tonumber(cfg.TELEPORT_CONFIRM_TIMEOUT_SEC) or 15
+	local init = tonumber(cfg.TELEPORT_INIT_TIMEOUT_SEC) or 10
+	return math.max(confirm, init) + 20
 end
+
+-- One rate token opens one AFK cycle (idle streak). Every rung of the ladder
+-- inside that cycle reuses it, so retries can never be starved by the limiter
+-- the way they were when a token was charged per request.
+type CycleEntry = {
+	cycleId: string,
+	openedAt: number,
+	rejoinConfirmed: boolean,
+}
 
 local function createAfkGuardService(deps: {
 	notify: any,
@@ -48,6 +58,7 @@ local function createAfkGuardService(deps: {
 		maxSize = Config.Security.MAX_REQUEST_CACHE or 500,
 	})
 	local inFlightAfkRejoin: { [number]: number } = {}
+	local activeCycles: { [number]: CycleEntry } = {}
 
 	local _connections: { RBXScriptConnection } = {}
 	local service = {}
@@ -57,24 +68,72 @@ local function createAfkGuardService(deps: {
 		return conn
 	end
 
-	local function respond(player: Player, requestId: string, outcome: AfkGuardDomain.RejoinOutcome, retryAfterSec: number?)
+	local function respond(
+		player: Player,
+		requestId: string,
+		outcome: AfkGuardDomain.RejoinOutcome,
+		retryAfterSec: number?,
+		stepIndex: number?
+	)
 		if responseRemote and responseRemote:IsA("RemoteEvent") then
 			responseRemote:FireClient(player, {
 				requestId = requestId,
 				outcome = outcome,
 				retryAfterSec = retryAfterSec,
+				-- Echoed so the client knows WHICH rung to un-fire on a
+				-- transient denial instead of guessing.
+				stepIndex = stepIndex,
 			})
 		end
 	end
 
-	local function deny(player: Player, requestId: string, reason: string, outcome: AfkGuardDomain.RejoinOutcome, retryAfterSec: number?)
+	local function deny(
+		player: Player,
+		requestId: string,
+		reason: string,
+		outcome: AfkGuardDomain.RejoinOutcome,
+		retryAfterSec: number?,
+		stepIndex: number?
+	)
 		log:info("afk_rejoin_denied", {
 			player = player.Name,
 			userId = player.UserId,
 			reason = reason,
 			requestId = requestId,
+			stepIndex = stepIndex,
 		})
-		respond(player, requestId, outcome, retryAfterSec)
+		respond(player, requestId, outcome, retryAfterSec, stepIndex)
+	end
+
+	-- Returns true when this request may proceed without charging a new token:
+	-- either it continues the currently-open cycle, or a fresh token is granted.
+	local function admitCycle(player: Player, cycleId: string): (boolean, number?)
+		local ttl = tonumber(afkConfig.AUTO_REJOIN_CYCLE_TTL_SEC) or 600
+		local existing = activeCycles[player.UserId]
+		if existing ~= nil then
+			if existing.cycleId == cycleId and (os.clock() - existing.openedAt) <= ttl then
+				return true, nil
+			end
+			-- Different or expired cycle: it is over, so drop it and re-admit.
+			activeCycles[player.UserId] = nil
+		end
+
+		local allowed, _reason, waitSec = limiter:check(player.UserId)
+		if not allowed then
+			return false, waitSec
+		end
+
+		activeCycles[player.UserId] = {
+			cycleId = cycleId,
+			openedAt = os.clock(),
+			rejoinConfirmed = false,
+		}
+		log:info("afk_cycle_opened", {
+			player = player.Name,
+			userId = player.UserId,
+			cycleId = cycleId,
+		})
+		return true, nil
 	end
 
 	local function isBlockedState(player: Player): (boolean, string?)
@@ -110,9 +169,8 @@ local function createAfkGuardService(deps: {
 		end
 		processedRequests:add(request.requestId)
 
-		-- Free server-state checks run before the rate limiter: a token is an
-		-- attempt budget for genuine teleports, not a request budget. Transitory
-		-- denials (in-flight, carry) must not burn the 15-minute window.
+		-- Free server-state checks run before cycle admission: transient denials
+		-- (in-flight, carry) must never consume a cycle token.
 		local inFlightAt = inFlightAfkRejoin[player.UserId]
 		if inFlightAt ~= nil then
 			local staleAfter = inFlightStaleAfterSec()
@@ -124,51 +182,59 @@ local function createAfkGuardService(deps: {
 					staleAfterSec = staleAfter,
 				})
 			else
-				deny(player, request.requestId, "in_flight", "denied_in_flight", 30)
+				deny(player, request.requestId, "in_flight", "denied_in_flight", 30, request.stepIndex)
 				return
 			end
 		end
 
 		local blocked, blockReason = isBlockedState(player)
 		if blocked then
-			deny(player, request.requestId, blockReason or "carry_active", "denied_carry_active", 60)
+			deny(player, request.requestId, blockReason or "carry_active", "denied_carry_active", 60, request.stepIndex)
 			notify.player(player, afkConfig.MSG_REJOIN_FAILED, "WARNING")
 			return
 		end
 
-		local allowed, _reason, waitSec = limiter:check(player.UserId)
-		if not allowed then
-			deny(player, request.requestId, "rate_limited", "denied_rate_limited", waitSec)
+		local admitted, waitSec = admitCycle(player, request.cycleId)
+		if not admitted then
+			deny(player, request.requestId, "rate_limited", "denied_rate_limited", waitSec, request.stepIndex)
 			notify.player(player, afkConfig.MSG_REJOIN_FAILED, "WARNING")
 			return
 		end
 
 		if not sessionCommandService or type(sessionCommandService.handleAfkRejoin) ~= "function" then
-			deny(player, request.requestId, "service_unavailable", "denied_service_unavailable", 60)
+			deny(player, request.requestId, "service_unavailable", "denied_service_unavailable", 60, request.stepIndex)
 			notify.player(player, afkConfig.MSG_REJOIN_FAILED, "ERROR")
 			return
 		end
+
+		local ladder = AfkGuardDomain.getLadder()
+		local step = ladder[request.stepIndex]
+		local sameServer = if step ~= nil then step.sameServer else true
 
 		inFlightAfkRejoin[player.UserId] = os.clock()
 		log:info("afk_rejoin_approved", {
 			player = player.Name,
 			userId = player.UserId,
 			requestId = request.requestId,
+			cycleId = request.cycleId,
+			stepIndex = request.stepIndex,
+			sameServer = sameServer,
 			reportedIdleSec = request.reportedIdleSec,
 		})
-		respond(player, request.requestId, "allowed", nil)
+		respond(player, request.requestId, "allowed", nil, request.stepIndex)
 
 		local ok, resultOrErr = pcall(function()
-			return sessionCommandService:handleAfkRejoin(player, request.reportedIdleSec)
+			return sessionCommandService:handleAfkRejoin(player, request.reportedIdleSec, sameServer)
 		end)
 		inFlightAfkRejoin[player.UserId] = nil
 		if not ok then
 			log:error("afk_teleport_throw", {
 				player = player.Name,
 				userId = player.UserId,
+				stepIndex = request.stepIndex,
 				error = tostring(resultOrErr),
 			})
-			respond(player, request.requestId, "rejoin_failed", 60)
+			respond(player, request.requestId, "rejoin_failed", 60, request.stepIndex)
 			notify.player(player, afkConfig.MSG_REJOIN_FAILED, "ERROR")
 			return
 		end
@@ -177,11 +243,27 @@ local function createAfkGuardService(deps: {
 			log:warn("afk_teleport_failed", {
 				player = player.Name,
 				userId = player.UserId,
+				stepIndex = request.stepIndex,
 				reason = result.error,
 			})
-			respond(player, request.requestId, "rejoin_failed", 60)
+			respond(player, request.requestId, "rejoin_failed", 60, request.stepIndex)
 			notify.player(player, afkConfig.MSG_REJOIN_FAILED, "ERROR")
+			return
 		end
+
+		-- Confirmed: the player actually left as a result of this rejoin.
+		local cycleEntry = activeCycles[player.UserId]
+		if cycleEntry ~= nil then
+			cycleEntry.rejoinConfirmed = true
+		end
+		log:info("afk_rejoin_confirmed", {
+			player = player.Name,
+			userId = player.UserId,
+			cycleId = request.cycleId,
+			stepIndex = request.stepIndex,
+			sameServer = sameServer,
+			reportedIdleSec = request.reportedIdleSec,
+		})
 	end
 
 	function service:init()
@@ -220,8 +302,32 @@ local function createAfkGuardService(deps: {
 		log:info("AfkGuardService initialized")
 	end
 
+	-- The leak metric. Without this you cannot tell "left because the rejoin
+	-- worked" from "left because Roblox idle-kicked them" — which is exactly why
+	-- the old failure mode was only ever visible as user complaints.
 	function service:onPlayerRemoving(player: Player)
 		inFlightAfkRejoin[player.UserId] = nil
+
+		local cycleEntry = activeCycles[player.UserId]
+		if cycleEntry ~= nil then
+			if cycleEntry.rejoinConfirmed then
+				log:info("afk_cycle_closed_rejoined", {
+					player = player.Name,
+					userId = player.UserId,
+					cycleId = cycleEntry.cycleId,
+				})
+			else
+				-- Left during an open AFK cycle with no confirmed rejoin: the
+				-- ladder ran out or every rung failed. Treat as a leak.
+				log:warn("afk_cycle_lost_player", {
+					player = player.Name,
+					userId = player.UserId,
+					cycleId = cycleEntry.cycleId,
+					cycleAgeSec = os.clock() - cycleEntry.openedAt,
+				})
+			end
+			activeCycles[player.UserId] = nil
+		end
 	end
 
 	function service:destroy()
@@ -230,6 +336,7 @@ local function createAfkGuardService(deps: {
 		end
 		table.clear(_connections)
 		table.clear(inFlightAfkRejoin)
+		table.clear(activeCycles)
 	end
 
 	return service

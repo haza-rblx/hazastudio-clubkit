@@ -1417,14 +1417,41 @@ local function isMappedToggleEnabled(item: any, resolved: any): boolean
 	return resolved == true
 end
 
+-- The option-button container used to be findable by class: it was the row's only
+-- CanvasGroup. After GUI revisions converted those wrappers to plain Frames, the row
+-- holds SEVERAL same-named "Frame" children (the label frame AND the options frame),
+-- so neither class nor child order identifies it -- the old class-first lookup fell
+-- through to the FIRST Frame (the label) and found no buttons, silently disabling
+-- every MultiOption/segmented row. Identify it by what it actually holds instead:
+-- the descendant with the most direct TextButton children.
 local function resolveSegmentedButtonFrame(row: GuiObject): Instance?
-	local groupRoot = row:FindFirstChild("CanvasGroup")
-		or row:FindFirstChildWhichIsA("CanvasGroup")
-		or row:FindFirstChildWhichIsA("Frame")
-	if not groupRoot or not groupRoot:IsA("GuiObject") then
-		return nil
+	local function countDirectButtons(inst: Instance): number
+		local count = 0
+		for _, child in ipairs(inst:GetChildren()) do
+			if child:IsA("TextButton") then
+				count += 1
+			end
+		end
+		return count
 	end
-	return groupRoot:FindFirstChildWhichIsA("Frame")
+
+	local best: Instance? = nil
+	local bestCount = countDirectButtons(row)
+	if bestCount > 0 then
+		best = row
+	end
+
+	for _, descendant in ipairs(row:GetDescendants()) do
+		if descendant:IsA("GuiObject") then
+			local count = countDirectButtons(descendant)
+			if count > bestCount then
+				best = descendant
+				bestCount = count
+			end
+		end
+	end
+
+	return best
 end
 
 local function setSegmentedButtonVisual(button: TextButton, label: string, selected: boolean, iconImage: string?)
@@ -1746,6 +1773,11 @@ end
 local MenuSettingsCore = {}
 
 MenuSettingsCore.SECTION_LIST_GAP = SECTION_LIST_GAP
+-- Exported so ImagePreloadService can warm these before the Settings tab is
+-- first opened. The tab is built lazily (template clone -> setSettingIcon), so
+-- without this every one of these ids is requested for the first time on the
+-- exact frame the panel appears -- the worst-case pop in the whole kit.
+MenuSettingsCore.SETTINGS_ICON = SETTINGS_ICON
 MenuSettingsCore.createSection = createSection
 MenuSettingsCore.getSettingsSectionDefs = getSettingsSectionDefs
 MenuSettingsCore.shouldShowSettingsItem = shouldShowSettingsItem

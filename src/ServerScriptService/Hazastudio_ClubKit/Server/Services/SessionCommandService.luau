@@ -69,12 +69,22 @@ local function createSessionCommandService(deps: {
 	-- false lets Roblox pick any public server. Returns (true, nil) on success
 	-- (player left or no failure within the watch window — never double-teleport
 	-- on ambiguity), (false, err) on pcall throw or reported init failure.
+	-- requireConfirmedExit: when true, ONLY an actual departure counts as success.
+	-- The AFK path needs this — "no error within the window" silently reported a
+	-- teleport that never happened as a success, burning the attempt while the
+	-- player stayed put and rode the idle clock into a disconnect. Manual /rejoin
+	-- keeps the optimistic behaviour so a merely-slow teleport does not show the
+	-- player a false failure.
 	local function safeTeleportAsync(
 		player: Player,
 		teleportData: { [string]: any },
-		sameServer: boolean
+		sameServer: boolean,
+		requireConfirmedExit: boolean?
 	): (boolean, string?)
 		local timeoutSec = math.max(3, tonumber(Config.AfkGuard.TELEPORT_INIT_TIMEOUT_SEC) or 10)
+		if requireConfirmedExit then
+			timeoutSec = math.max(timeoutSec, tonumber(Config.AfkGuard.TELEPORT_CONFIRM_TIMEOUT_SEC) or 15)
+		end
 		local watch: TeleportWatch = { done = false, errMessage = nil }
 		teleportWatchers[player.UserId] = watch
 
@@ -110,8 +120,14 @@ local function createSessionCommandService(deps: {
 			task.wait(0.25)
 		end
 
-		-- No failure reported within the window; assume the teleport proceeds.
 		teleportWatchers[player.UserId] = nil
+		if requireConfirmedExit then
+			-- Still here after the confirmation window: treat as failed so the
+			-- caller escalates. Retrying is safe — if the teleport does land
+			-- late, the player is gone and no further request is sent.
+			return false, "teleport_unconfirmed"
+		end
+		-- No failure reported within the window; assume the teleport proceeds.
 		return true, nil
 	end
 
@@ -633,7 +649,7 @@ local function createSessionCommandService(deps: {
 		return Result.Ok(nil)
 	end
 
-	function service:handleAfkRejoin(player: Player, reportedIdleSec: number?): Result<nil>
+	function service:handleAfkRejoin(player: Player, reportedIdleSec: number?, sameServer: boolean?): Result<nil>
 		local afkConfig = Config.AfkGuard
 		if afkConfig.ENABLED ~= true then
 			return Result.Err("disabled")
@@ -656,13 +672,17 @@ local function createSessionCommandService(deps: {
 			end
 		end
 
+		-- Ladder rungs 1-2 aim at this exact server; later rungs fall back to any
+		-- public server (different crowd, but far better than a disconnect).
+		local useSameServer = sameServer ~= false and afkConfig.TELEPORT_PREFER_SAME_SERVER == true
+
 		local teleportData = {
 			sessionRestore = {
 				placeId = game.PlaceId,
 				jobId = game.JobId,
 				cframe = serializeCFrame(restoreCFrame),
 				afkRejoin = true,
-				preferSameServer = afkConfig.TELEPORT_PREFER_SAME_SERVER == true,
+				preferSameServer = useSameServer,
 				syncRestore = syncRestore,
 			},
 		}
@@ -672,49 +692,31 @@ local function createSessionCommandService(deps: {
 			player = player.Name,
 			userId = player.UserId,
 			jobId = game.JobId,
+			sameServer = useSameServer,
 			reportedIdleSec = reportedIdleSec,
 		})
 
-		local function trySameServer(): (boolean, string?)
-			return safeTeleportAsync(player, teleportData, true)
-		end
-
-		local success, err = trySameServer()
-		local maxRetry = tonumber(afkConfig.MAX_RETRY) or 1
-		local retryDelay = tonumber(afkConfig.RETRY_DELAY_SEC) or 30
-		local canRetry = reportedIdleSec == nil or AfkGuardDomain.isBelowTeleportAbortIdle(reportedIdleSec)
-
-		if not success and maxRetry > 0 and canRetry then
-			task.wait(retryDelay)
-			if player.Parent then
-				success, err = trySameServer()
-			end
-		end
-
+		-- ONE attempt per request. Retry timing and the same-server -> any-server
+		-- escalation belong to the client ladder (Config.AfkGuard.REJOIN_LADDER),
+		-- which knows the live idle clock. Retrying here instead blocked the
+		-- in-flight guard for ~60s (it slept 30s mid-attempt) and starved the
+		-- very rungs that were supposed to provide the retries.
+		local success, err = safeTeleportAsync(player, teleportData, useSameServer, true)
 		if success then
 			return Result.Ok(nil)
 		end
 
-		if afkConfig.TELEPORT_FALLBACK_NEW_SERVER == true and canRetry and player.Parent then
-			local fallbackOk, fallbackErr = safeTeleportAsync(player, teleportData, false)
-			if fallbackOk then
-				log:warn("afk_teleport_fallback_new_server", {
-					player = player.Name,
-					userId = player.UserId,
-					error = err,
-				})
-				return Result.Ok(nil)
-			end
-			err = tostring(fallbackErr)
-		end
-
-		log:error("afk_teleport_failed", {
+		log:warn("afk_teleport_attempt_failed", {
 			player = player.Name,
 			userId = player.UserId,
+			sameServer = sameServer,
+			reportedIdleSec = reportedIdleSec,
 			error = err,
 		})
-		notify.player(player, afkConfig.MSG_REJOIN_FAILED, "ERROR")
-		return Result.Err(afkConfig.MSG_REJOIN_FAILED)
+		-- Deliberately no player-facing error here: a failed rung is expected
+		-- and the next rung fires shortly. AfkGuardService notifies only when it
+		-- has no rung left to try.
+		return Result.Err(tostring(err))
 	end
 
 	function service:handleBring(player: Player, target: Player): Result<nil>

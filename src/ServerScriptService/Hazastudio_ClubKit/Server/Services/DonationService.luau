@@ -530,37 +530,6 @@ local function createDonationService(
 		return string.rep("#", length)
 	end
 
-	-- External provider nicknames (Saweria/Bagibagi) are free text typed on an
-	-- external platform — NOT Roblox-moderated. Before any display fallback to
-	-- `saweriaName` (unlinked donors on workspace boards), route through the
-	-- broadcast filter; never leak raw. Memoized per name so repeated board
-	-- renders do not burn TextService quota (G3, ADR 0004). Author context:
-	-- linked donor userId when known, else the place owner publishes it.
-	local externalNameFilterCache: { [string]: string } = {}
-	local function filteredProviderDisplayName(rawName: string, authorUserId: number?): string
-		local key = rawName:lower()
-		local cached = externalNameFilterCache[key]
-		if cached then
-			return cached
-		end
-		-- Fallback author must be a real userId — on group-owned places game.CreatorId
-		-- is a GROUP id and FilterStringAsync fails (names become "#####").
-		local author = if authorUserId and authorUserId > 0
-			then authorUserId
-			else TextFilterUtil.resolveFilterAuthorUserId()
-		local filtered = (author and TextFilterUtil.filterForBroadcast(author, rawName, 64))
-			or censoredMessageFallback(rawName)
-		-- simple cap: wipe when grown past 512 distinct names
-		local count = 0
-		for _ in pairs(externalNameFilterCache) do
-			count += 1
-		end
-		if count >= 512 then
-			table.clear(externalNameFilterCache)
-		end
-		externalNameFilterCache[key] = filtered
-		return filtered
-	end
 
 	-- httpGetOnce: single HTTP GET attempt with RequestAsync + Bearer auth
 	local function httpGetOnce(url: string): (boolean, string)
@@ -2985,11 +2954,11 @@ local function createDonationService(
 				displayName = resolvedDisplayName or displayName
 				thumbnail = getUserThumbnail(userId)
 			end
-			if not userId and displayName ~= "Unknown donor" then
-				-- Unlinked donor: provider nickname is external free text — filter
-				-- before it reaches the workspace board (G3, ADR 0004).
-				displayName = filteredProviderDisplayName(displayName, nil)
-			end
+			-- Unlinked donor: provider nickname shown RAW on the workspace board.
+			-- Owner decision 2026-08-24 (overrides ADR 0004 filter-at-write for the
+			-- unlinked board fallback): the cash donor board displays the provider
+			-- nickname as-is (cleanOptionalMessage only trims + clamps length; no text filter).
+			displayName = cleanOptionalMessage(displayName, 64) or displayName
 
 			table.insert(entries, {
 				rank = #entries + 1,
@@ -3032,11 +3001,11 @@ local function createDonationService(
 				displayName = resolvedDisplayName or displayName
 				thumbnail = getUserThumbnail(userId)
 			end
-			if not userId and displayName ~= "Unknown donor" then
-				-- Unlinked donor: provider nickname is external free text — filter
-				-- before it reaches the workspace board (G3, ADR 0004).
-				displayName = filteredProviderDisplayName(displayName, nil)
-			end
+			-- Unlinked donor: provider nickname shown RAW on the workspace board.
+			-- Owner decision 2026-08-24 (overrides ADR 0004 filter-at-write for the
+			-- unlinked board fallback): the cash donor board displays the provider
+			-- nickname as-is (cleanOptionalMessage only trims + clamps length; no text filter).
+			displayName = cleanOptionalMessage(displayName, 64) or displayName
 
 			table.insert(entries, {
 				rank = #entries + 1,

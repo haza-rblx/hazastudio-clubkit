@@ -6,6 +6,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local GraphicsQuality = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.GraphicsQuality)
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local ScrollIndicatorHelper = require(script.Parent.Parent.Utils.ScrollIndicatorHelper)
+local GroupedRowCornerUtil = require(script.Parent.Parent.Utils.GroupedRowCornerUtil)
 local MenuGuiRefs = require(script.Parent.MenuGuiRefs)
 local MenuSettingsCore = require(script.Parent.MenuSettingsCore)
 
@@ -215,6 +216,9 @@ function SettingsTabBinder:updateConditionalRowVisibility()
 			end
 		end
 		section.Visible = hasVisibleChild
+		if contentWrapper and hasVisibleChild then
+			GroupedRowCornerUtil.apply(contentWrapper)
+		end
 	end
 end
 

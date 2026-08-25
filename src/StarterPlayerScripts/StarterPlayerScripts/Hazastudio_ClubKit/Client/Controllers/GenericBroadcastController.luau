@@ -39,7 +39,10 @@ type Payload = {
 
 type Refs = {
 	rootGui: ScreenGui,
-	wrapper: CanvasGroup,
+	-- The GenericBroadcast wrapper may be a CanvasGroup or a plain Frame depending on
+	-- GUI revision (some buyer places redesigned it from CanvasGroup to Frame); it's
+	-- only ever used for Position/AnchorPoint/Visible/GetChildren, so GuiObject covers it.
+	wrapper: GuiObject,
 	template: CanvasGroup,
 }
 
@@ -186,7 +189,7 @@ local function resolveRefs(): Refs?
 	end
 
 	local wrapper = rootGui:FindFirstChild(WRAPPER_NAME)
-	if not wrapper or not wrapper:IsA("CanvasGroup") then
+	if not wrapper or not wrapper:IsA("GuiObject") then
 		log:warn("GenericBroadcast wrapper not found")
 		return nil
 	end
@@ -257,7 +260,7 @@ local function fillCard(card: CanvasGroup, payload: Payload)
 	card:SetAttribute("SenderRole", role)
 end
 
-local function hasActiveBroadcastCard(wrapper: CanvasGroup): boolean
+local function hasActiveBroadcastCard(wrapper: GuiObject): boolean
 	for _, child in ipairs(wrapper:GetChildren()) do
 		if child.Name == "BroadcastMessage" and child:IsA("GuiObject") then
 			return true
@@ -281,7 +284,7 @@ local function setCardContentVisible(card: CanvasGroup, visible: boolean)
 	end
 end
 
-local function captureBasicWrapperLayout(wrapper: CanvasGroup)
+local function captureBasicWrapperLayout(wrapper: GuiObject)
 	basicWrapperPosition = wrapper.Position
 	basicWrapperAnchorPoint = wrapper.AnchorPoint
 end

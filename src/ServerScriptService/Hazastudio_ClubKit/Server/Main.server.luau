@@ -1059,6 +1059,12 @@ proximityService:onStart()
 local sessionCommandService: any = nil
 local commandExecutionService = nil
 local _commandLibraryController = nil
+-- Forward-declared for the SAME reason as the two above: the PlayerRemoving
+-- handler below closes over it. It used to be declared further down (next to its
+-- construction), so the closure captured a nil global instead and
+-- afkGuardService:onPlayerRemoving was never invoked — leaking in-flight
+-- entries and, since 2026-08-25, the AFK cycle bookkeeping too.
+local afkGuardService: any = nil
 connectionCleaner:add(Players.PlayerRemoving:Connect(function(player)
 	-- R1.7: remove from all channels + clear per-pair delta baselines on disconnect.
 	-- proximityService:removePlayer already delegates to interest:removePlayer.
@@ -1207,7 +1213,9 @@ sessionCommandService = ServerMods.createSessionCommandService({
 		else nil,
 })
 sessionCommandService:init() -- wire wirePlayer so rejoin position restore berfungsi
-local afkGuardService: any = nil
+-- NOTE: assignment only — `afkGuardService` is forward-declared above the
+-- PlayerRemoving handler. Re-adding `local` here would shadow it and silently
+-- break that handler again.
 if Config.FeatureFlags.AfkGuardEnabled ~= false and Config.AfkGuard.ENABLED == true then
 	afkGuardService = trackLifecycle(
 		"AfkGuardService",

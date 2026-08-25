@@ -1758,18 +1758,87 @@ Config.Community = {
 	MSG_ALREADY_ACTIVE = "[Community] That community is already on your profile.",
 	PRIMARY_FALLBACK_ENABLED = true,
 }
+-- AFK Guard timing is derived from MEASURED Player.Idled behaviour (2026-08-25):
+-- the event first fires at ~129s of idle, then EXACTLY every 30s, and its `time`
+-- argument tracks real idle seconds since the last input. Roblox disconnects at
+-- 20:00 (1200s). Ladder times below are therefore reached on the tick at
+-- 129 + 30k, e.g. the 780s rung actually fires at ~789s.
+--
+-- The old design fired a single rung at 17:00 (~1029s), leaving only 171s of
+-- margin, and the server's 1-token/900s limiter made retries impossible inside
+-- that margin — one failed rejoin meant a guaranteed idle kick.
+-- ============================================================
+-- IMAGE PRELOAD
+-- ============================================================
+-- Measured 2026-08-25 in playtest: a cold UI image takes ~0.53-0.56s from
+-- assignment to IsLoaded -- that is the blank-then-pop when a panel first opens.
+-- Warming it first drops the same display to ~0.05-0.06s.
+--
+-- Critical implementation detail, also measured: PreloadAsync with a STRING id
+-- is a no-op for images; only the INSTANCE form actually warms them. The service
+-- wraps every id in a throwaway ImageLabel for this reason -- do not "simplify"
+-- it back to passing ids.
+Config.ImagePreload = {
+	ENABLED = true,
+	-- Ids per PreloadAsync call. Small batches keep one slow asset from holding
+	-- up the rest and keep the request queue shallow.
+	BATCH_SIZE = 12,
+	-- PreloadAsync yields until every asset resolves, and assets the backend
+	-- never serves hang it indefinitely. Batches are abandoned after this.
+	BATCH_TIMEOUT_SEC = 15,
+	-- Back off while the engine's own content queue is busy (same guard the
+	-- dance warmup uses) so preloading never competes with gameplay streaming.
+	QUEUE_HIGH_WATERMARK = 32,
+	QUEUE_PAUSE_SEC = 0.16,
+	-- Breather between tiers so immediate chrome wins the early bandwidth.
+	TIER_DELAY_SEC = 0.25,
+	-- ImageSwap: fade applied when a freshly-loaded image replaces a placeholder.
+	FADE_TIME = 0.12,
+	SWAP_TIMEOUT_SEC = 10,
+	-- Shown while a not-yet-loaded image is being fetched. Empty string = keep
+	-- whatever the holder already shows (never blank it).
+	PLACEHOLDER_IMAGE = "",
+	-- Keep a 1x1 near-transparent copy of every warmed image parented, which is
+	-- the community remedy for texture eviction. UNVERIFIED -- the eviction claim
+	-- is not in Roblox's docs and could not be reproduced here, and this costs
+	-- real memory. Leave off unless eviction is actually observed in production.
+	KEEP_RESIDENT = false,
+}
 Config.AfkGuard = {
 	ENABLED = true,
 	IDLE_WARN_SEC = 120,
-	IDLE_THRESHOLD_SEC = 17 * 60,
+	-- First ladder rung; also the floor for server-side request validation
+	-- (min accepted idle = IDLE_THRESHOLD_SEC - IDLE_TOLERANCE_SEC).
+	IDLE_THRESHOLD_SEC = 13 * 60,
 	IDLE_TOLERANCE_SEC = 30,
+	-- Escalation ladder. Each rung is one rejoin attempt; sameServer rungs come
+	-- first so the player lands back with the same crowd, then any-server rungs
+	-- as a last resort. Retries within one idle streak do NOT need a new rate
+	-- token (see AUTO_REJOIN_CYCLE_TTL_SEC).
+	REJOIN_LADDER = {
+		{ atIdleSec = 13 * 60, sameServer = true },
+		{ atIdleSec = 870, sameServer = true },
+		{ atIdleSec = 16 * 60, sameServer = false },
+		{ atIdleSec = 1050, sameServer = false },
+	},
+	-- Stop attempting past this: teleporting into the 20:00 kick window risks
+	-- landing the player mid-disconnect instead of cleanly rejoining.
+	HARD_STOP_IDLE_SEC = 19 * 60,
+	-- One token opens one AFK *cycle* (idle streak), not one request. Window is
+	-- below the 13-minute first rung so a fresh streak always has a token.
 	AUTO_REJOIN_RATE_MAX = 1,
-	AUTO_REJOIN_RATE_WINDOW = 900,
-	RETRY_DELAY_SEC = 30,
-	MAX_RETRY = 1,
+	AUTO_REJOIN_RATE_WINDOW = 600,
+	-- How long a cycle stays open server-side; ladder spans 780s..1050s (270s).
+	AUTO_REJOIN_CYCLE_TTL_SEC = 600,
 	-- Teleport init failures are async (TeleportInitFailed); give up waiting after this long.
 	TELEPORT_INIT_TIMEOUT_SEC = 10,
-	-- Client re-request backoff per idle streak (Player.Idled keeps firing while idle).
+	-- AFK path only: how long to wait for the player to ACTUALLY leave before
+	-- calling the attempt failed. "No error reported" is not success.
+	TELEPORT_CONFIRM_TIMEOUT_SEC = 15,
+	-- Deprecated (superseded by REJOIN_LADDER); kept so buyer configs that set
+	-- them keep loading. No longer read by the engine.
+	RETRY_DELAY_SEC = 30,
+	MAX_RETRY = 1,
 	CLIENT_RETRY_BACKOFF_SEC = 60,
 	MAX_CLIENT_ATTEMPTS = 3,
 	SYNC_FALLBACK_TOP_LEADER = true,
@@ -2928,7 +2997,7 @@ Config.Music = {
 	VIRTUAL_TRACK_MAX_RENDERED_ROWS = 60,
 	THUMBNAIL_CACHE_MAX = 100,
 	-- Playback
-	VOTE_SKIP_DURATION = 1,
+	VOTE_SKIP_DURATION = 15,
 	-- Max audio asset IDs per track. GUI 4-AddorEditTrackModal
 	-- currently provides 9 slots (2-TrackIDPart1..9). Increase this value
 	-- only if you add new frames in the GUI too.

@@ -23,6 +23,16 @@ A deep audit (3 parallel explore agents + manual verification) mapped every text
 5. **Native chat stays native.** Chat decorations (role tags, colors) only mutate `PrefixText`/metadata; the message body never leaves Roblox chat filtering.
 6. **Sign tools stay single-attempt** (`retries = 1`) — a retry loop would multiply the TextService quota a spamming client can burn.
 
+## Amendment (2026-08-24) — G3 unlinked board names shown RAW
+
+**Decision changed for one surface.** The workspace **cash donor board** fallback for *unlinked* donors (`DonationService.getWorkspaceSaweriaLeaderboard` + `getWorkspaceDailySaweriaLeaderboard`) now renders the provider nickname **as-is** (`cleanOptionalMessage` — trim + length clamp, **no** `TextService` filter). The `filteredProviderDisplayName` helper was removed.
+
+**Owner rationale:** the broadcast filter was turning valid Indonesian donor nicknames into `####` / unrelated censored words (e.g. "pager") whenever the filter author was unresolvable — a worse board UX than the moderation risk it prevented, for a low-traffic surface. The owner accepted the moderation tradeoff for this one surface.
+
+**Still filtered (unchanged):** everything else in this ADR — `/status`, bio, music manage names/creators, `communityName`, donation **messages** (`censoredMessageFallback` on filter fail), robux donation names, and the per-viewer re-filters. Only the *unlinked donor nickname on the cash workspace board* was exempted. **Linked donors always showed Roblox `username`/`displayName` (platform-moderated) and were never filtered — that path is unchanged.**
+
+If this exemption ever needs reversing, restore a filtered fallback at the two `cleanOptionalMessage(displayName, 64)` board call sites.
+
 ## Consequences
 
 - The full audit tables (filtered surfaces, entry points, display surfaces) live in the 2.6.7 release notes summary; `TextFilterUtil` is the single grep target for future audits.

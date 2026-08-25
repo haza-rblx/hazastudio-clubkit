@@ -220,6 +220,7 @@ local clientBootScheduler = ClientBootScheduler.create({
 })
 local PhoneLayout = require(script.Parent.Client.Utils.PhoneLayout)
 local AvatarPrewarmShared = require(script.Parent.Client.Utils.AvatarPrewarmShared)
+local ImagePreloadService = require(script.Parent.Client.Services.ImagePreloadService)
 local JoinCommunityPromptController = require(script.Parent.Client.Controllers.JoinCommunityPromptController)
 local JoinGreetingController = require(script.Parent.Client.Controllers.JoinGreetingController)
 local syncDanceController: any = nil
@@ -2070,6 +2071,62 @@ if clubKitOwnedSyncDance then
 			danceWarmupService:beginWarmup(nil, "tier1")
 		end)
 	end
+end
+-- Warm UI artwork before the panels that use it are ever opened. A cold image
+-- costs ~0.5s between assignment and IsLoaded, which is exactly the blank-then-
+-- pop players see on first open; warming drops it to ~0.05s. Fully async and
+-- self-contained -- it must never be able to delay the loading screen finishing.
+do
+	-- Each source is registered independently and tolerates nil: a renamed or
+	-- absent config table must degrade to "that group is not warmed", never take
+	-- the whole warmup down with it.
+	local function reg(tier: string, source: any, label: string)
+		if source == nil then
+			studioWarn("[ImagePreload] source missing, skipped: " .. label)
+			return
+		end
+		local ok, err = pcall(ImagePreloadService.register, tier, source)
+		if not ok then
+			studioWarn("[ImagePreload] register failed for " .. label .. ": " .. tostring(err))
+		end
+	end
+
+	-- Tier 1: chrome that is on screen the moment the loading screen lifts.
+	reg("immediate", Config.Icons, "Config.Icons")
+	reg("immediate", Config.Branding, "Config.Branding")
+	reg("immediate", Config.PaidBroadcast, "Config.PaidBroadcast")
+
+	-- Tier 2: the first panels a player typically opens. SETTINGS_ICON is the
+	-- worst offender -- the Settings tab is built lazily, so all 14 ids would
+	-- otherwise be requested on the frame the panel appears.
+	local okCore, MenuSettingsCore = pcall(require, script.Parent.Client.UI.MenuSettingsCore)
+	if okCore and type(MenuSettingsCore) == "table" then
+		reg("firstOpen", MenuSettingsCore.SETTINGS_ICON, "MenuSettingsCore.SETTINGS_ICON")
+	end
+	local okProv, DonationProviderDomain =
+		pcall(require, ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.DonationProviderDomain)
+	if okProv and type(DonationProviderDomain) == "table" then
+		reg("firstOpen", DonationProviderDomain.PRESETS, "DonationProviderDomain.PRESETS")
+	end
+	reg("firstOpen", Config.Donation and Config.Donation.ROLE_BADGE_IMAGE, "ROLE_BADGE_IMAGE")
+	reg("firstOpen", Config.Membership, "Config.Membership")
+	reg("firstOpen", Config.Shop, "Config.Shop")
+
+	-- Tier 3: everything authored directly into the GUIs. These live outside the
+	-- Rojo tree so there is no code-side manifest -- but the instances are already
+	-- in PlayerGui, and instances are the form PreloadAsync actually accepts.
+	local okGui, guiErr = pcall(function()
+		local playerGui = Players.LocalPlayer:FindFirstChildOfClass("PlayerGui")
+		if playerGui then
+			ImagePreloadService.collectFrom(playerGui, "background")
+		end
+	end)
+	if not okGui then
+		studioWarn("[ImagePreload] PlayerGui sweep failed: " .. tostring(guiErr))
+	end
+	reg("background", Config.Sticker, "Config.Sticker")
+
+	ImagePreloadService.start()
 end
 loadingBootReady = true
 clientBootScheduler:setInteractiveComplete()

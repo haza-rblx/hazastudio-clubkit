@@ -22,6 +22,16 @@ export type SyncRestorePayload = {
 export type AfkRejoinRequest = {
 	requestId: string,
 	reportedIdleSec: number,
+	-- Identifies the idle streak this request belongs to. Retries inside one
+	-- cycle reuse it so the server does not charge a new rate token per rung.
+	cycleId: string,
+	-- Which ladder rung fired (1-based); decides same-server vs any-server.
+	stepIndex: number,
+}
+
+export type LadderStep = {
+	atIdleSec: number,
+	sameServer: boolean,
 }
 
 -- Server -> client outcome for one rejoin request (REMOTE_RESPONSE).
@@ -42,12 +52,19 @@ export type RejoinResponse = {
 	retryAfterSec: number?,
 }
 
--- Client-side retry budget for one idle streak; reset by real user input.
--- Attempts are ALSO re-armed on server feedback (allowed / rejoin_failed) so
--- a no-input session never dead-ends on a transient denial.
-export type ClientRetryState = {
-	lastRequestAt: number?,
-	attempts: number,
+-- Client state for ONE idle streak. Rungs are scheduled by idle time (see
+-- Config.AfkGuard.REJOIN_LADDER), not by a backoff counter, so a denial can
+-- never dead-end the streak: the rung is simply un-fired and retried on a
+-- later Idled tick.
+--
+-- `prevIdleSec` exists to detect that the ENGINE restarted its idle streak.
+-- Measured 2026-08-25: mouse movement resets Roblox's idle clock but arrives via
+-- UserInputService.InputChanged, never InputBegan — so input-event-based resets
+-- alone leak stale state across streaks.
+export type ClientCycleState = {
+	cycleId: string?,
+	firedSteps: { [number]: boolean },
+	prevIdleSec: number?,
 }
 
 local ANIMATION_ID_PATTERN = "^rbxassetid://%d+$"
@@ -104,34 +121,76 @@ function AfkGuardDomain.isBelowTeleportAbortIdle(reportedIdleSec: number): boole
 	return reportedIdleSec < (19 * 60)
 end
 
--- Pure decision for the client: may we fire a rejoin request on this Idled tick?
--- True only when at/above the rejoin threshold, under the attempt cap, and past
--- the backoff window since the last request. Returns the next state either way.
-function AfkGuardDomain.canRequestRejoin(
-	state: ClientRetryState,
-	idleSec: number,
-	nowSec: number
-): (boolean, ClientRetryState)
+function AfkGuardDomain.getHardStopIdleSec(): number
 	local cfg = getAfkConfig()
-	local maxAttempts = tonumber(cfg.MAX_CLIENT_ATTEMPTS) or 3
-	local backoffSec = tonumber(cfg.CLIENT_RETRY_BACKOFF_SEC) or 60
+	return tonumber(cfg.HARD_STOP_IDLE_SEC) or (19 * 60)
+end
 
-	if not AfkGuardDomain.isRejoinThreshold(idleSec) then
-		return false, state
+-- Normalised, ascending escalation ladder. Falls back to a single rung at the
+-- legacy threshold if a buyer config supplies nothing usable.
+function AfkGuardDomain.getLadder(): { LadderStep }
+	local cfg = getAfkConfig()
+	local raw = cfg.REJOIN_LADDER
+	local out: { LadderStep } = {}
+
+	if type(raw) == "table" then
+		for _, step in ipairs(raw) do
+			if type(step) == "table" then
+				local at = tonumber(step.atIdleSec)
+				if at ~= nil and at > 0 then
+					table.insert(out, { atIdleSec = at, sameServer = step.sameServer ~= false })
+				end
+			end
+		end
 	end
 
-	if state.attempts >= maxAttempts then
-		return false, state
+	if #out == 0 then
+		local threshold = tonumber(cfg.IDLE_THRESHOLD_SEC) or (13 * 60)
+		return { { atIdleSec = threshold, sameServer = true } }
 	end
 
-	if state.lastRequestAt ~= nil and (nowSec - state.lastRequestAt) < backoffSec then
-		return false, state
+	table.sort(out, function(a, b)
+		return a.atIdleSec < b.atIdleSec
+	end)
+	return out
+end
+
+-- Did the engine restart its idle streak since the previous tick? `idleTime`
+-- is engine-authoritative and monotonic within a streak, so a drop means real
+-- input happened — including input that never reaches InputBegan.
+function AfkGuardDomain.isIdleRegression(prevIdleSec: number?, idleSec: number): boolean
+	if prevIdleSec == nil then
+		return false
+	end
+	-- 1s slack so float jitter is never mistaken for a new streak.
+	return idleSec < (prevIdleSec - 1)
+end
+
+-- Which rung should fire on this tick? Picks the HIGHEST rung whose time has
+-- passed and that has not fired yet, so a client that was blocked for a while
+-- escalates straight to the most urgent rung instead of replaying stale ones.
+-- Returns nil past the hard stop — teleporting into the kick window is worse
+-- than letting the disconnect happen cleanly.
+function AfkGuardDomain.resolveLadderStep(
+	idleSec: number,
+	firedSteps: { [number]: boolean }
+): (number?, LadderStep?)
+	if idleSec > AfkGuardDomain.getHardStopIdleSec() then
+		return nil, nil
 	end
 
-	return true, {
-		lastRequestAt = nowSec,
-		attempts = state.attempts + 1,
-	}
+	local ladder = AfkGuardDomain.getLadder()
+	local chosenIndex: number? = nil
+	for index, step in ipairs(ladder) do
+		if idleSec >= step.atIdleSec and not firedSteps[index] then
+			chosenIndex = index
+		end
+	end
+
+	if chosenIndex ~= nil then
+		return chosenIndex, ladder[chosenIndex]
+	end
+	return nil, nil
 end
 
 function AfkGuardDomain.validateRequestId(requestId: any): boolean
@@ -145,9 +204,23 @@ function AfkGuardDomain.validateRejoinRequest(raw: any): Result<AfkRejoinRequest
 
 	local requestId = raw.requestId
 	local reportedIdleSec = raw.reportedIdleSec
+	local cycleId = raw.cycleId
+	local stepIndex = raw.stepIndex
 
 	if not AfkGuardDomain.validateRequestId(requestId) then
 		return Result.Err("invalid_request_id")
+	end
+
+	if not AfkGuardDomain.validateRequestId(cycleId) then
+		return Result.Err("invalid_cycle_id")
+	end
+
+	if type(stepIndex) ~= "number" or stepIndex ~= stepIndex then
+		return Result.Err("invalid_step_index")
+	end
+	stepIndex = math.floor(stepIndex)
+	if stepIndex < 1 or stepIndex > #AfkGuardDomain.getLadder() then
+		return Result.Err("invalid_step_index")
 	end
 
 	if type(reportedIdleSec) ~= "number" or reportedIdleSec ~= reportedIdleSec then
@@ -165,6 +238,8 @@ function AfkGuardDomain.validateRejoinRequest(raw: any): Result<AfkRejoinRequest
 	return Result.Ok({
 		requestId = requestId,
 		reportedIdleSec = reportedIdleSec,
+		cycleId = cycleId,
+		stepIndex = stepIndex,
 	})
 end
 

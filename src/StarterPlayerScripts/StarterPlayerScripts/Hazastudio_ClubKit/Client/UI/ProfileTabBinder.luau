@@ -7,6 +7,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local AvatarPrewarmShared = require(script.Parent.Parent.Utils.AvatarPrewarmShared)
 local AvatarViewport3D = require(script.Parent.Parent.Utils.AvatarViewport3D)
+local GroupedRowCornerUtil = require(script.Parent.Parent.Utils.GroupedRowCornerUtil)
 local ButtonVisualUtil = require(script.Parent.ButtonVisualUtil)
 local MenuGuiRefs = require(script.Parent.MenuGuiRefs)
 local MenuSettingsCore = require(script.Parent.MenuSettingsCore)
@@ -648,6 +649,14 @@ function ProfileTabBinder:patchProfile(payload: ProfileMenuPayload, overhead: Ov
 	if refs.statusInput then
 		refs.statusInput.row.Visible = true
 		setProfileFieldRowDisplay(refs.statusInput.valueBox, "statusText", payload.statusText)
+	end
+
+	local editableFieldWrapper = (refs.displayNameInput and refs.displayNameInput.row.Parent)
+		or (refs.specialTitleInput and refs.specialTitleInput.row.Parent)
+		or (refs.bioInput and refs.bioInput.row.Parent)
+		or (refs.statusInput and refs.statusInput.row.Parent)
+	if editableFieldWrapper then
+		GroupedRowCornerUtil.apply(editableFieldWrapper)
 	end
 
 	if overhead and type(overhead.visibleBadges) == "table" then
