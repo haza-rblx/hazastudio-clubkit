@@ -2,7 +2,7 @@
 
 Internal scratch pad to track work **before** a version is released.
 
-**Current version:** `2.9.1` (see [`VERSION`](VERSION))
+**Current version:** `2.9.2` (see [`VERSION`](VERSION))
 **Next release target:** _(not set)_
 **Active branch:** `main`
 
@@ -22,6 +22,12 @@ Internal scratch pad to track work **before** a version is released.
 
 | Path | Change |
 |------|--------|
+
+**Open follow-ups (carried past 2.9.2):**
+- **Auto Dance topbar pill is a temporary home.** Intended destination is the dance panel UI itself, next to the existing emote controls.
+- **`Config.AutoDance.TOPBAR_ICON` is a hardcoded asset id** taken from the stock `StarterGui.IconGroup.DancePanelButton`. A buyer who rebrands their dance button gets mismatched icons, and a place without access to that asset shows a blank icon. Better: read `Image` off the live DancePanelButton at runtime, using the config value only as a fallback.
+- **Server never notifies a follower when it auto-detaches them** (`SyncService.luau:937`, the "become our own root" branch). The follower's client keeps a stale `isSyncing = true`, so the dance panel keeps showing "syncing with X" and `onEmoteSelected`'s toggle-off branch stays disabled. Auto Dance now routes *around* this, but a player who syncs and then picks an emote manually still hits it. Fix would be to fire `unsync_success` on that path.
+
 
 ---
 

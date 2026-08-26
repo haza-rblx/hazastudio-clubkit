@@ -44,6 +44,7 @@ return {
 	createGravityController = require(Client.Controllers.GravityController),
 	createMobileFreecamController = require(Client.Controllers.MobileFreecamController),
 	createSyncLeadTopbarController = require(Client.Controllers.SyncLeadTopbarController),
+	createAutoDanceController = require(Client.Controllers.AutoDanceController),
 	createAvatarContextUI = require(Client.UI.AvatarContextUI),
 	createCarryUI = require(Client.UI.CarryUI),
 	createCommandLibraryUI = require(Client.UI.CommandLibraryUI),

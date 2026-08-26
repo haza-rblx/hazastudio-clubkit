@@ -977,6 +977,29 @@ Config.Level = {
 -- ============================================================
 -- SYNC DANCE
 -- ============================================================
+-- ============================================================
+-- AUTO DANCE (topbar toggle — shuffles dance emotes on an interval)
+-- ============================================================
+-- Ported from the legacy HIERAPOLIS AnimationsUI "AUTO" button. Client-only:
+-- the server sees ordinary emote selections, exactly like manual clicks.
+-- Interval is randomised per cycle so it does not look mechanical.
+Config.AutoDance = {
+	ENABLED = true,
+	MIN_INTERVAL = 3, -- seconds; lower bound of the random gap
+	MAX_INTERVAL = 6, -- seconds; upper bound
+	-- Leave a leader's sync group when auto is switched on (following someone AND
+	-- shuffling your own emotes fight each other).
+	UNSYNC_ON_ENABLE = true,
+	-- Stop the current emote when auto is switched off (legacy behaviour).
+	STOP_ON_DISABLE = true,
+	-- LEFT topbar strip, sitting just after "Lead Dance" (which is Music.TOPBAR_ORDER + 2 = 3).
+	TOPBAR_ORDER = 4,
+	TOPBAR_LABEL = "Auto",
+	TOPBAR_LABEL_ACTIVE = "Auto ON",
+	-- Same artwork as the in-GUI dance panel button (StarterGui.IconGroup.DancePanelButton),
+	-- so the pair reads as one dance cluster. Empty string = label-only pill.
+	TOPBAR_ICON = "rbxassetid://104629759158002",
+}
 Config.Sync = {
 	REMOTE_FOLDER = "SyncRemotes",
 	REMOTE_ANIMATION_START = "animationStart",

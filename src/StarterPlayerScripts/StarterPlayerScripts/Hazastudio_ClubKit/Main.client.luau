@@ -1776,6 +1776,47 @@ if clubKitOwnedSyncDance then
 			})
 		)
 		triggerController:init()
+		-- Auto Dance: temporary TopbarPlus toggle (ported from legacy AnimationsUI).
+		-- Client-only shuffle; the server only ever sees ordinary emote selections.
+		if Config.AutoDance and Config.AutoDance.ENABLED ~= false then
+			local autoDanceIcon = Icon.new()
+			autoDanceIcon:setLabel(Config.AutoDance.TOPBAR_LABEL or "Auto")
+			if Config.AutoDance.TOPBAR_ICON and Config.AutoDance.TOPBAR_ICON ~= "" then
+				autoDanceIcon:setImage(Config.AutoDance.TOPBAR_ICON, "Deselected")
+			end
+			placeTopbarIconLeft(autoDanceIcon, Config.AutoDance.TOPBAR_ORDER or 4)
+			setCompactTopbarWidth(autoDanceIcon, 96)
+			setTopbarHorizontalPadding(autoDanceIcon, 8)
+			styleTopbarPill(autoDanceIcon)
+			enlargeTopbarIcon(autoDanceIcon, 36, 10)
+			local autoDanceController = trackClientLifecycle(
+				"AutoDanceController",
+				ClientMods.createAutoDanceController({
+					syncController = syncDanceController,
+					animationLoader = AnimationLoader,
+					logger = Logger.new("Client.AutoDanceController"),
+					onStateChanged = function(isOn)
+						autoDanceIcon:setLabel(
+							if isOn
+								then (Config.AutoDance.TOPBAR_LABEL_ACTIVE or "Auto ON")
+								else (Config.AutoDance.TOPBAR_LABEL or "Auto")
+						)
+						-- Keep the pill visual in step when the controller stops itself.
+						if not isOn then
+							pcall(function()
+								autoDanceIcon:deselect()
+							end)
+						end
+					end,
+				})
+			)
+			autoDanceIcon.selected:Connect(function()
+				autoDanceController:setEnabled(true)
+			end)
+			autoDanceIcon.deselected:Connect(function()
+				autoDanceController:setEnabled(false)
+			end)
+		end
 	end)
 end
 -- LegacySyncBhms ON: hide residual Club Kit dance panel GUIs if still in PlayerGui.

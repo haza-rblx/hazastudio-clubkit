@@ -368,6 +368,32 @@ function SourceSyncCore.applyFile(repoPath: string, source: string): (boolean, s
 	return true, nil
 end
 
+-- The subtrees the kit owns and applyFile writes into — derived from
+-- Manifest.SERVICE_ROOTS rather than hardcoded, so the sweeps below stay in step
+-- with the manifest instead of drifting from it. Note this deliberately includes
+-- the vendored `ReplicatedStorage.Icon` (TopbarPlus): it ships in the pack and is
+-- listed in ENGINE_SOURCE_PREFIXES, so it is kit-owned, not bystander content.
+-- Anything NOT listed here (buyer folders, third-party systems) is never touched.
+local function engineRoots(): { Instance }
+	local roots: { Instance } = {}
+	for _, entry in ipairs(Manifest.SERVICE_ROOTS or {}) do
+		local svc: Instance? = nil
+		if entry.service == "StarterPlayerScripts" then
+			svc = game:GetService("StarterPlayer"):FindFirstChild("StarterPlayerScripts")
+		else
+			local ok, resolved = pcall(function()
+				return game:GetService(entry.service :: any)
+			end)
+			svc = if ok then resolved else nil
+		end
+		local root = svc and svc:FindFirstChild(entry.name)
+		if root then
+			table.insert(roots, root)
+		end
+	end
+	return roots
+end
+
 function SourceSyncCore.applyEngineUpdate(tag: string, onProgress)
 	local report: ApplyReport = {
 		ok = {},
@@ -432,6 +458,29 @@ function SourceSyncCore.applyEngineUpdate(tag: string, onProgress)
 		if removed > 0 then
 			table.insert(report.ok, ("(removed) ClubKitShowcase x%d under Hazastudio_ClubKit"):format(removed))
 		end
+	end
+
+	-- Stale Rojo `init` twins. Rojo collapses `SomeFolder/init.luau` INTO the folder,
+	-- so the resulting Script/ModuleScript IS the init — a CHILD still named `init`
+	-- is pre-Rojo cruft. applyFile only ever writes the collapsed instance, so these
+	-- twins are never refreshed and drift stale. Harmless while they are ModuleScripts
+	-- (nothing requires `X.init`), but the EffectDonate ones are LocalScripts, which
+	-- auto-run: their frozen copies kept an older require path and threw
+	-- "Utils is not a valid member of Folder ...Client.Effects" on every client boot.
+	local initTwinsRemoved = 0
+	for _, root in ipairs(engineRoots()) do
+		for _, desc in root:GetDescendants() do
+			if desc:IsA("LuaSourceContainer") and desc.Name == "init" then
+				local holder = desc.Parent
+				if holder and holder:IsA("LuaSourceContainer") then
+					desc:Destroy()
+					initTwinsRemoved += 1
+				end
+			end
+		end
+	end
+	if initTwinsRemoved > 0 then
+		table.insert(report.ok, ("(removed) stale Rojo init twins x%d"):format(initTwinsRemoved))
 	end
 
 	-- Additive ClubKitConfig fill-forward (Features + missing top-level sections).

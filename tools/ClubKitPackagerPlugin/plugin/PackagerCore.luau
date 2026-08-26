@@ -625,6 +625,37 @@ function PackagerCore.unpack(packageRoot: Instance, options: UnpackOptions): Unp
 		end
 	end
 
+	-- Stale Rojo `init` twins (see SourceSyncCore for the full note). A Script/
+	-- ModuleScript that still holds a CHILD named `init` is pre-Rojo cruft: Rojo
+	-- collapses `Folder/init.luau` into the folder, so the parent already IS the init.
+	-- The EffectDonate ones are LocalScripts and therefore auto-run, throwing
+	-- "Utils is not a valid member" from a frozen copy of an old require path.
+	-- Swept here too so a fresh install from an older .rbxm self-heals.
+	do
+		local initTwins = 0
+		-- Scope from the manifest (includes the vendored ReplicatedStorage.Icon,
+		-- which the kit ships and source-syncs) so this never drifts from
+		-- SERVICE_ROOTS, and never reaches buyer or third-party content.
+		for _, entry in ipairs(Manifest.SERVICE_ROOTS or {}) do
+			local svc = getService(entry.service)
+			local root = svc and svc:FindFirstChild(entry.name)
+			if root then
+				for _, desc in root:GetDescendants() do
+					if desc:IsA("LuaSourceContainer") and desc.Name == "init" then
+						local holder = desc.Parent
+						if holder and holder:IsA("LuaSourceContainer") then
+							desc:Destroy()
+							initTwins += 1
+						end
+					end
+				end
+			end
+		end
+		if initTwins > 0 then
+			logWarn(report, ("Stripped stale Rojo init twins x%d after unpack"):format(initTwins))
+		end
+	end
+
 	-- Ensure donation display root tags are applied (CollectionService tags persist in rbxm).
 	local displayTag = "DonationDisplayRoot"
 	for _, tagName in ipairs(Manifest.WORKSPACE_MULTI) do
