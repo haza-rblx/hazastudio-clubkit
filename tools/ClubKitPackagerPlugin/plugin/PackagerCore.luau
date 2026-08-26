@@ -188,7 +188,17 @@ end
 local function blankTemplateConfigSource(source: string): string
 	local src = source
 	src = src:gsub("OwnerUserId%s*=%s*%d+", "OwnerUserId = 0")
-	src = src:gsub("AdminUserIds%s*=%s*{[^}]*}", "AdminUserIds = {} :: { [number]: boolean }")
+	-- Swallow an existing `:: { [number]: boolean }` when the buyer source already
+	-- carries the annotation — replacing only the table literal would leave the old
+	-- annotation behind and chain a second one, which is a Luau syntax error.
+	local annotated: number
+	src, annotated = src:gsub(
+		"AdminUserIds%s*=%s*{[^}]*}%s*::%s*{[^}]*}",
+		"AdminUserIds = {} :: { [number]: boolean }"
+	)
+	if annotated == 0 then
+		src = src:gsub("AdminUserIds%s*=%s*{[^}]*}", "AdminUserIds = {} :: { [number]: boolean }")
+	end
 	src = src:gsub("LegacySyncBhms%s*=%s*true", "LegacySyncBhms = false")
 	return src
 end

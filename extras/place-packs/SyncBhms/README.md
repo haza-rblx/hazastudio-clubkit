@@ -12,6 +12,8 @@ When active: Club Kit **does not** run the dance panel / `SyncService` / `SyncRe
 | `bridge/SyncBhmsGate.luau` | Reads `Features.LegacySyncBhms` — pack no-ops when `false` |
 | `bridge/SyncBhmsAcmBridge.luau` | ACM module → BHMS (`ReplicatedStorage.SyncBhmsAcmBridge`) |
 | `bridge/SyncBhmsRemotes.server.luau` | Provisions `Remotes2` + `StoredAnimations` (gated) |
+| `bridge/SyncBhmsLeadDanceBridge.client.luau` | Topbar "Lead Dance" icon under LegacySyncBhms — reuses Club Kit's `SyncLeadTopbarController` module, routes requests through `SyncBhmsAcmBridge` instead of Club Kit's `SyncController` |
+| `bridge/SyncBhmsLeadDanceFollowerSync.server.luau` | Mirrors BHMS's own follower graph (`Character.Syncing`, see `SyncServer/Modules/SyncManager.luau`) onto `Character.IsLeader`/`FollowerCount` — makes the Lead Dance dropdown above dynamic (real active followers), not just role-based |
 | `README.md` | This guide |
 
 ## Studio setup (place owner)
@@ -36,6 +38,8 @@ When active: Club Kit **does not** run the dance panel / `SyncService` / `SyncRe
    - `SyncBhmsGate.luau` → ModuleScript `ReplicatedStorage.SyncBhmsGate` (**required** — all BHMS scripts check the flag here).
    - `SyncBhmsRemotes.server.luau` → Script in `ServerScriptService` (any name; run before Main1).
    - `SyncBhmsAcmBridge.luau` → ModuleScript `ReplicatedStorage.SyncBhmsAcmBridge`.
+   - `SyncBhmsLeadDanceBridge.client.luau` → LocalScript `StarterPlayerScripts.SyncBhmsLeadDanceBridge` (optional — restores the topbar "Lead Dance" icon under BHMS).
+   - `SyncBhmsLeadDanceFollowerSync.server.luau` → Script `ServerScriptService.SyncBhmsLeadDanceFollowerSync` (pair with the bridge above — makes its dropdown dynamic: players holding the `LeadDance` role AND anyone with an active BHMS follower, mirrored from BHMS's own `Character.Syncing` graph).
 5. Ensure **TopbarPlus** `ReplicatedStorage.Icon` exists if `TopbarDance` uses it.
 6. At the top of each BHMS script (`TopbarDance`, `danceDraging1`, `BeatDanceClient`, `SyncServer.Main1`, `SyncBhmsRemotes`) add:
    ```lua

@@ -1524,6 +1524,11 @@ Config.PanelBlur = {
 	-- BackdropBlur GUI frames: lower = darker = more frosted feel.
 	MODAL_BACKDROP_TRANSPARENCY = 0.38,
 }
+-- Camera FOV zoom-in on panel open/close (shop/gift/couple/donation/admin/music/etc.).
+-- Independent of PanelBlur — set true to bring back the small zoom-in effect.
+Config.PanelZoom = {
+	ENABLED = false,
+}
 -- Thin UI motion knobs (calm panel language). Full presets live in Client MotionPresets.
 Config.UIMotion = {
 	MOTION_SCALE = 1, -- global duration multiplier (reduced-motion hook)

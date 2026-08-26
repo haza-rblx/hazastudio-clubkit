@@ -11,6 +11,16 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [2.9.1] - 2026-08-26
+
+### Fixed
+- **Packager shipped a `ClubKitConfig` that fails to compile** (`PackagerCore.blankTemplateConfigSource`). The blank-template regex matched only the `AdminUserIds` table literal (`AdminUserIds%s*=%s*{[^}]*}`) and replaced it with an already-annotated `{} :: { [number]: boolean }`. Once the buyer/template source carried that annotation itself — as the current template place does, written across three lines — the original trailing `:: { [number]: boolean }` survived the substitution and the result chained two type assertions (`{} :: T :: T`), which is a **Luau syntax error**: every fresh install from the pack would have loaded a dead config module. The substitution now consumes an existing annotation when one is present, and is idempotent. Verified in Studio: the old form fails to compile, the new form compiles and is byte-stable when applied twice.
+- **Donation-effect scripts (`EffectDonate/{BlackHole,LocalNuke,GreenHammer,Blossom}`) could ship with a duplicate nested `init` copy of themselves**, one folder deeper than the real script — its `script.Parent.Parent.Parent.Utils` require then resolved to `Client.Effects` instead of `Client`, throwing `Utils is not a valid member of Folder` on boot and leaving the duplicate half-run. Root cause is in the packaging/export pipeline (the checked-in `src/` source was never duplicated), so this only ever shipped inside already-packaged/unpacked buyer places, not from a fresh Rojo sync. No source fix landed this release — flagging so the master "thebasic" export gets the stray `init` children stripped before the next `.rbxm` is cut, or every future unpack reintroduces it.
+
+### Added
+- **`Config.PanelZoom` toggle** (`Shared/Constants/Config.luau`) for the shared camera FOV zoom-in effect on modal panel open/close (`AnimationHelper:_tweenCameraZoom`, wired into `presentBackdropEffects`/`dismissBackdropEffects` and used by every panel that calls them: Shop, Gift, Admin Panel, Admin Hub, Music Player, Couple, Donation, Avatar profile card, Top Menu, Paid Broadcast, Join Community prompt). Previously always-on with no way to disable, unlike the sibling `Config.PanelBlur` which already had `ENABLED`. Defaults to `false` (off).
+- **SyncBhms add-on: Lead Dance topbar restored** (`extras/place-packs/SyncBhms/bridge/SyncBhmsLeadDanceBridge.client.luau` + `SyncBhmsLeadDanceFollowerSync.server.luau`, optional install). Reuses Club Kit's own `SyncLeadTopbarController` module but routes requests through `SyncBhmsAcmBridge` instead of `SyncController`, so the topbar "Lead Dance" icon works under `Features.LegacySyncBhms = true` (where Club Kit's own dance panel/`SyncService` is disabled). The dropdown is now dynamic — mirrors BHMS's own follower graph (`Character.Syncing`, `SyncServer/Modules/SyncManager.luau`) onto `Character.IsLeader`/`FollowerCount` — instead of just listing everyone holding the `LeadDance` role.
+
 ## [2.9.0] - 2026-08-25
 
 ### Fixed

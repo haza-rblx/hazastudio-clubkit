@@ -393,7 +393,13 @@ function AnimationHelper:_getPanelEffectTweenInfo(): TweenInfo
 	return TweenInfo.new(blurConfig.FADE_IN, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
 end
 
+local function isPanelZoomEnabled(): boolean
+	local panelZoom = Config.PanelZoom
+	return type(panelZoom) == "table" and panelZoom.ENABLED == true
+end
+
 function AnimationHelper:_tweenCameraZoom(deltaFov: number)
+	if not isPanelZoomEnabled() then return end
 	local camera = workspace.CurrentCamera
 	if not camera then return end
 	

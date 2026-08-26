@@ -2,7 +2,7 @@
 
 Internal scratch pad to track work **before** a version is released.
 
-**Current version:** `2.9.0` (see [`VERSION`](VERSION))
+**Current version:** `2.9.1` (see [`VERSION`](VERSION))
 **Next release target:** _(not set)_
 **Active branch:** `main`
 
@@ -19,8 +19,6 @@ Internal scratch pad to track work **before** a version is released.
 ---
 
 ## File changes (unreleased)
-
-_(none — reset after v2.9.0 release, 2026-08-25)_
 
 | Path | Change |
 |------|--------|
