@@ -234,7 +234,12 @@ local function createDonationService(
 		payload: DonationNotifPayload,
 	}
 	local pendingDeliveries: { [string]: PendingDelivery } = {}
-	local _ackFlushQueue: { { donation_id: number, roblox_user_id: number, displayed_at: string } } = {}
+	-- `skipped` (reliability v4): the client RECEIVED the notif but did not show
+	-- it ("muted" = player disabled donation announce, "no_gui" = notif GUI
+	-- missing in this place). Reported so the ledger records a non-failure and
+	-- the server stops retrying — before v4 these looked identical to a lost
+	-- notification and produced 1 DLQ row per muted player per donation.
+	local _ackFlushQueue: { { donation_id: number, roblox_user_id: number, displayed_at: string, skipped: string? } } = {}
 	-- Stage-2 display reports: the notification actually rendered on the
 	-- player's screen (vs ack = it reached the client queue).
 	local _displayFlushQueue: { { donation_id: number, roblox_user_id: number, displayed_at: string } } = {}
@@ -633,8 +638,11 @@ local function createDonationService(
 		end)
 	end
 
-	-- Report deliveries that exhausted local retries to the Worker DLQ.
-	local function reportDlq(entries: { { donation_id: number, roblox_user_id: number } })
+	-- Report deliveries the server gave up on. `reason` lets the ledger separate
+	-- "player left" (not a failure) from "stayed, never answered" (real DLQ);
+	-- `attempts` is the client re-fire count for diagnostics.
+	type DlqEntry = { donation_id: number, roblox_user_id: number, reason: string?, attempts: number? }
+	local function reportDlq(entries: { DlqEntry })
 		if #entries == 0 then
 			return
 		end
@@ -689,10 +697,24 @@ local function createDonationService(
 			return -- duplicate or untracked ack; harmless
 		end
 		pendingDeliveries[key] = nil
+		-- Reliability v4: a client that received the notif but will not show it
+		-- says so ("muted" / "no_gui"). Same effect on retry (stop), different
+		-- ledger outcome (non-failure instead of dlq). Whitelisted so a client
+		-- cannot write arbitrary strings into the ledger.
+		local skipped: string? = nil
+		if type(payload.skipped) == "string" then
+			local s = string.lower(payload.skipped)
+			if s == "muted" or s == "no_gui" or s == "disabled" then
+				skipped = s
+			else
+				skipped = "other"
+			end
+		end
 		table.insert(_ackFlushQueue, {
 			donation_id = donationId,
 			roblox_user_id = userId,
 			displayed_at = os.date("!%Y-%m-%dT%H:%M:%S.000Z"),
+			skipped = skipped,
 		})
 		flushAckQueue()
 	end
@@ -727,23 +749,30 @@ local function createDonationService(
 		local now = os.clock()
 		local retryAfter = math.max(1, tonumber(Config.Donation.NOTIF_ACK_RETRY_AFTER_SECS) or 5)
 		local maxAttempts = math.max(1, tonumber(Config.Donation.NOTIF_ACK_MAX_ATTEMPTS) or 3)
-		local dlqEntries: { { donation_id: number, roblox_user_id: number } } = {}
+		local dlqEntries: { DlqEntry } = {}
 		for key, entry in pairs(pendingDeliveries) do
 			local player = Players:GetPlayerByUserId(entry.userId)
 			if player == nil then
-				-- Recipient left before acking: report to DLQ so ops can see the
-				-- notification never reached their screen, then stop tracking.
+				-- Recipient left before acking. Reliability v4: reported as
+				-- reason="left" → ledger status 'left' (not a failure — there was
+				-- no screen to show it on), then stop tracking.
 				pendingDeliveries[key] = nil
 				table.insert(dlqEntries, {
 					donation_id = entry.donationId,
 					roblox_user_id = entry.userId,
+					reason = "left",
+					attempts = entry.attempts,
 				})
 			elseif (now - entry.lastFiredAt) >= retryAfter then
 				if entry.attempts >= maxAttempts then
+					-- Player stayed the whole window and the client never
+					-- answered at all — the only real per-player failure.
 					pendingDeliveries[key] = nil
 					table.insert(dlqEntries, {
 						donation_id = entry.donationId,
 						roblox_user_id = entry.userId,
+						reason = "timeout",
+						attempts = entry.attempts,
 					})
 					log:warn("Donation notification moved to DLQ (no ack)", {
 						donationId = entry.donationId,
@@ -1454,6 +1483,12 @@ local function createDonationService(
 			-- Reliability v2: client echoes this back in the ack so the server can
 			-- correlate "displayed" with the D1 donations row.
 			donationId = if donationId > 0 then donationId else nil,
+			-- NetworkManager coalesces same-frame fires by (target, data.kind) and
+			-- keeps only the LAST one. Without a per-donation kind, two donation
+			-- notifs to the same target in one Heartbeat (burst, or the retry
+			-- sweep re-firing 2+ pending donations to one player) silently drop
+			-- the older one — every single time, until it hits the DLQ.
+			kind = if donationId > 0 then "donation:" .. tostring(donationId) else "donation:" .. tostring(os.clock()),
 		}
 		-- Stagger broadcast: delay between notifications to prevent client queue flood.
 		-- At high CCU, multiple donations arrive in one poll cycle. Without staggering,
@@ -1553,6 +1588,8 @@ local function createDonationService(
 			robloxDisplayName = args.robloxDisplayName,
 			totalDonationAmount = args.totalDonationAmount,
 			source = "robux",
+			-- Unique coalesce key — see the cash payload for why.
+			kind = "donation:robux:" .. tostring(os.clock()),
 		}
 		local staggerDelay = notifStaggerIndex * 0.5
 		notifStaggerIndex += 1

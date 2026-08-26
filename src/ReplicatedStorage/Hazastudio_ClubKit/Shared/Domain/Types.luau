@@ -549,6 +549,9 @@ export type DonationNotifPayload = {
 	-- server can correlate "displayed" with the delivery ledger. nil = untracked
 	-- (manual /fakecash, legacy paths).
 	donationId: number?,
+	-- NetworkManager coalesce key. Unique per notification so two notifs to the
+	-- same target in one frame are never merged (the older one used to vanish).
+	kind: string?,
 }
 export type DonationLeaderboardPayload = {
 	daily: { DonationEntry },

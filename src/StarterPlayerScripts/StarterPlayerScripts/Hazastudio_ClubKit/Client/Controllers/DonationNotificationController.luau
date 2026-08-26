@@ -1597,6 +1597,35 @@ local function init(_deps: {}?)
 	local guiRefs: GuiRefs? = resolveGuiRefs(playerGui)
 	local workspaceSurfaceStates: { WorkspaceSurfaceState } = buildWorkspaceSurfaceStates()
 	if not guiRefs then
+		-- Reliability v4: the notif GUI is missing in this place, so nothing can
+		-- be shown — but the server must still hear from us. Without this the
+		-- server re-fires 20x and files a DLQ row for EVERY player, and the
+		-- owner sees "gagal" with no hint that the GUI itself is broken. Answer
+		-- every notif with skipped="no_gui" and fall back to the chat line.
+		log:warn("Donation notification GUI not found — replying no_gui, chat fallback only")
+		task.spawn(function()
+			local remotesFolder = ReplicatedStorage:WaitForChild("Remotes", 15)
+			if not remotesFolder then
+				return
+			end
+			local remote = remotesFolder:WaitForChild(Config.Donation.REMOTE_NOTIFICATION, 15) :: RemoteEvent?
+			local ackRemote = remotesFolder:WaitForChild(Config.Donation.REMOTE_NOTIF_ACK or "DonationNotifAck", 10) :: RemoteEvent?
+			if not remote then
+				return
+			end
+			track(remote.OnClientEvent:Connect(function(payload: any)
+				if type(payload) ~= "table" then
+					return
+				end
+				local id = tonumber(payload.donationId) or 0
+				if id > 0 and ackRemote then
+					ackRemote:FireServer({ donationId = id, skipped = "no_gui" })
+				end
+				if type(payload.saweriaName) == "string" and type(payload.amount) == "number" then
+					displayInGeneralChat(payload :: DonationNotifPayload)
+				end
+			end))
+		end)
 		return
 	end
 	-- Capture resting position from Studio before we animate anything
@@ -1693,10 +1722,13 @@ local function init(_deps: {}?)
 	end
 	-- Reliability v2: ack channel. Optional — nil when the server runs an older
 	-- engine or the buyer has ReliabilityV2 off; acks are simply skipped.
-	local notifAckRemote = remotes:FindFirstChild(Config.Donation.REMOTE_NOTIF_ACK or "DonationNotifAck") :: RemoteEvent?
+	-- WaitForChild (short timeout), not FindFirstChild: the first player of a
+	-- fresh server can arrive before Main.server has created these remotes, and
+	-- a nil here silently disabled acks for that player's whole session.
+	local notifAckRemote = remotes:WaitForChild(Config.Donation.REMOTE_NOTIF_ACK or "DonationNotifAck", 10) :: RemoteEvent?
 	-- Stage-2 display channel: fired when the notification actually starts
 	-- rendering on screen. Optional — nil on older servers; reports are skipped.
-	local notifDisplayRemote = remotes:FindFirstChild(Config.Donation.REMOTE_NOTIF_DISPLAY or "DonationNotifDisplay") :: RemoteEvent?
+	local notifDisplayRemote = remotes:WaitForChild(Config.Donation.REMOTE_NOTIF_DISPLAY or "DonationNotifDisplay", 10) :: RemoteEvent?
 	-- BACKGROUND SPIN LOOP
 	-- Called after panel finish entrance animation.
 	-- Loop runs until token changes (when exit is called).
@@ -2035,6 +2067,14 @@ local function init(_deps: {}?)
 			return
 		end
 		if not DonationExperiencePrefs.shouldShowAnnounce() then
+			-- Reliability v4: the player muted donation announcements. Tell the
+			-- server we RECEIVED it so it stops retrying and the ledger records
+			-- 'muted' — not a lost notification. Before this, every muted player
+			-- produced 20 useless re-fires and one DLQ row per donation.
+			local mutedId = tonumber((payload :: any).donationId) or 0
+			if mutedId > 0 and notifAckRemote then
+				notifAckRemote:FireServer({ donationId = mutedId, skipped = "muted" })
+			end
 			return
 		end
 		local notifPayload = payload :: DonationNotifPayload
