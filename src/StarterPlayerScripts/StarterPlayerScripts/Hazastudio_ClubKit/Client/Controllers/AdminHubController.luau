@@ -654,10 +654,21 @@ local function init(deps: {
 				})
 			else
 				ui:addCallout(content, "Changes the board number directly — no donate FX.", "warn", "Manual fix.")
-				ui:addFieldLabel(content, "Amount (" .. CashCurrencyDomain.getActive().adminHint .. ")")
-				amountBox = ui:addTextBox(content, "Amount", "10000")
-				amountBox.Text = "10000"
-				ui:addChipRow(content, DONATE_IDR_CHIPS, "10000", function(value)
+				ui:addFieldLabel(content, "Currency")
+				local getKind = ui:addChipRow(content, { "Cash", "Robux" }, if kind == "robux" then "Robux" else "Cash", function(value)
+					kind = if value == "Robux" then "robux" else "cash"
+					rebuildContent(mode)
+				end)
+				kind = if getKind() == "Robux" then "robux" else "cash"
+
+				local defaultAmt = if kind == "robux" then "100" else "10000"
+				ui:addFieldLabel(
+					content,
+					if kind == "robux" then "Amount (Robux)" else "Amount (" .. CashCurrencyDomain.getActive().adminHint .. ")"
+				)
+				amountBox = ui:addTextBox(content, "Amount", defaultAmt)
+				amountBox.Text = defaultAmt
+				ui:addChipRow(content, if kind == "robux" then DONATE_ROBUX_CHIPS else DONATE_IDR_CHIPS, defaultAmt, function(value)
 					if amountBox then
 						amountBox.Text = value
 					end
@@ -668,7 +679,9 @@ local function init(deps: {
 						primary = true,
 						onClick = function()
 							local amt = if amountBox then amountBox.Text else "0"
-							runCommand("/" .. Config.Donation.CMD_ADD_CASH .. " " .. selectedPlayer.username .. " " .. amt)
+							-- Robux → setrobux (persists to the OrderedDataStore); Cash → addcash.
+							local cmd = if kind == "robux" then Config.Donation.CMD_ADD_ROBUX else Config.Donation.CMD_ADD_CASH
+							runCommand("/" .. cmd .. " " .. selectedPlayer.username .. " " .. amt)
 							notify("Score updated for " .. selectedPlayer.displayName, "SUCCESS")
 							ui:closeSheet()
 						end,

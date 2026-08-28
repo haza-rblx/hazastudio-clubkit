@@ -13,6 +13,7 @@ local RolesDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.R
 local CashCurrencyDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.CashCurrencyDomain)
 local DonationAmountFormat = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DonationAmountFormat)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
+local GroupMotion = require(script.Parent.Parent.Utils.GroupMotion)
 
 local log = Logger.new("JoinGreetingController")
 
@@ -400,7 +401,8 @@ local function dismissCard(refs: Refs, active: ActiveCard, exitDuration: number)
 	-- Same exit family as GenericBroadcast: GroupTransparency + scale shrink.
 	local exitInfo = TweenInfo.new(exitDuration, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 	tween(card, exitInfo, { GroupTransparency = 1 })
-	tweenWait(scale, exitInfo, { Scale = EXIT_SCALE })
+	-- ADR 0005: card is a CanvasGroup — hold NORMAL_SCALE so its texture is never resized.
+	tweenWait(scale, exitInfo, { Scale = GroupMotion.scaleTarget(card, EXIT_SCALE, NORMAL_SCALE) })
 
 	if card.Parent then
 		card:Destroy()
@@ -425,7 +427,7 @@ local function playGreeting(refs: Refs, payload: Payload)
 		scale = Instance.new("UIScale")
 		scale.Parent = card
 	end
-	scale.Scale = ENTER_START_SCALE
+	scale.Scale = GroupMotion.scaleTarget(card, ENTER_START_SCALE, NORMAL_SCALE)
 
 	local enterDuration = math.max(tonumber(payload.enterDuration) or getCfg().ENTER or ENTER_DURATION, 0.05)
 	local messageHold = math.max(tonumber(payload.messageHold) or getCfg().MESSAGE_HOLD or 3.7, 0.1)

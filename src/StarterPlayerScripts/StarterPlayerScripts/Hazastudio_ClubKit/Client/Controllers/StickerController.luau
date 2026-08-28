@@ -8,6 +8,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
+local GroupMotion = require(script.Parent.Parent.Utils.GroupMotion)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 
 local StickerController = {}
@@ -280,7 +281,8 @@ function StickerController:_bindGui(): boolean
 	refs.modal.Visible = false
 	refs.template.Visible = false
 	self._modalScale = ensureScale(refs.modal, "RuntimeStickerModalScale")
-	self._modalScale.Scale = Config.Sticker.MODAL_CLOSED_SCALE
+	-- ADR 0005: the modal may be a CanvasGroup (buyer GUI revision) — keep it size-stable.
+	self._modalScale.Scale = GroupMotion.scaleTarget(refs.modal, Config.Sticker.MODAL_CLOSED_SCALE)
 
 	self:_track(refs.uploadButton.Activated:Connect(function()
 		self:_setModalOpen(true)
@@ -383,15 +385,16 @@ function StickerController:_animateModal(isOpen: boolean)
 		self._modalTween = nil
 	end
 
+	local closedScale = GroupMotion.scaleTarget(refs.modal, Config.Sticker.MODAL_CLOSED_SCALE)
 	if isOpen then
-		scale.Scale = Config.Sticker.MODAL_CLOSED_SCALE
+		scale.Scale = closedScale
 		refs.modal.Visible = true
 		self._modalTween = TweenService:Create(scale, MODAL_TWEEN_INFO, {
 			Scale = 1,
 		})
 	else
 		self._modalTween = TweenService:Create(scale, PANEL_TWEEN_INFO, {
-			Scale = Config.Sticker.MODAL_CLOSED_SCALE,
+			Scale = closedScale,
 		})
 	end
 

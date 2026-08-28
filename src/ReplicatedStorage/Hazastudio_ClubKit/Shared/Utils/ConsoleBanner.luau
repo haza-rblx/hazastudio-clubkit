@@ -61,6 +61,10 @@ function ConsoleBanner.printOnce(kitProduct: any?)
 			if buildId then ("  ·  build " .. buildId) else ""
 		),
 		string.format("  Context   %s  ·  F9 Developer Console", side),
+		-- Ownership watermark (ADR 0006 Pillar 4). Shows in F9 on any copy, so a
+		-- leaked stream/screenshot names the universe it is actually running in.
+		"  License   Proprietary — © Hazastudio, licensed per buyer",
+		string.format("  Universe  %d  ·  copies are traced", game.GameId),
 	}
 
 	appendLine(lines, "Discord", nonEmpty(support.Discord))

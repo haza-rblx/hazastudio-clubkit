@@ -9,6 +9,7 @@ local AnnouncementRateLimitDomain = require(ReplicatedStorage.Hazastudio_ClubKit
 local Result = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Result)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local RateLimiter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.RateLimiter)
+local LicenseService = require(script.Parent.LicenseService)
 
 type Result<T> = Types.Result<T>
 type MembershipTier = Types.MembershipTier
@@ -704,6 +705,14 @@ local function createCommandExecutionService(deps: {
 	end
 
 	function service:execute(player: Player, commandText: string): Result<nil>
+		-- License gate (ADR 0006 Pillar 2): a definitively-unlicensed place (e.g. a
+		-- copy whose universe does not match) has admin_commands disabled -> refuse
+		-- staff/admin commands. Licensed, optimistic, and not-yet-verified states pass.
+		if LicenseService.isEnforcementActive() and not LicenseService.isFeatureEnabled("admin_commands") then
+			notify.player(player, "[Command] Commands are disabled here — this place is not licensed.", "ERROR")
+			return Result.Err("license_inactive")
+		end
+
 		local alias, args = splitCommandText(commandText)
 		if not alias then
 			return Result.Err("Invalid command format.")

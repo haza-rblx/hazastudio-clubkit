@@ -27,6 +27,13 @@ Domain glossary for agents. Terms only — no implementation details, no workflo
 - **Register budget** — Luau's ~200 local-registers-per-chunk limit; the structural pressure behind Init bags (see `docs/adr/0002`). Frozen at ≥170 top-level locals in a file, blocker at ≥185.
 - **Versioned DataStore keys** — player-data keys carry a version; bumping one is a breaking migration for existing buyers' live data.
 
+## UI motion
+
+- **Rasterized group** — a `CanvasGroup`: Roblox flattens its subtree into a GPU texture sized by its `AbsoluteSize`. Resizing re-creates the texture; exceeding the client's texture budget renders it blank (Roblox docs).
+- **Size-stable motion** — the rule that nothing may change a rasterized group's `AbsoluteSize` while it is visible (see `docs/adr/0005`). Scale pops on groups become fades/travel; plain Frame trees keep the pop.
+- **Group motion policy** — `Shared/UI/GroupMotionPolicy` (pure) + `Client/Utils/GroupMotion` (Instance adapter): the single decision point for "scale or stable?" that every animation site consults via `GroupMotion.scaleTarget`. Opt-out knob: `Config.UIMotion.CANVAS_GROUP_SIZE_STABLE`.
+- **Texture-budget guard** — `Client/Services/CanvasGroupBudgetService`: distance-culls Workspace `SurfaceGui`s that contain a rasterized group so their textures are released while nobody is near, keeping the budget free for ScreenGui panels (`Config.CanvasGroupBudget`; per-GUI opt-out attribute `ClubKitKeepSurfaceGui`).
+
 ## External admin bridge
 
 - **External admin** — a third-party moderation system (Adonis or Kohl's Admin) installed by the buyer. The Kit does not own it and does not fork it.

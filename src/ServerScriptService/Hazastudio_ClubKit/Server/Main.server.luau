@@ -32,6 +32,28 @@ log:info("Hazastudio Clubkit server boot", {
 	version = KitProduct.KitVersion,
 	buildId = KitProduct.BuildId,
 })
+-- ============================================================
+-- BOOT GATE — HttpService is mandatory (ADR 0006).
+-- No HTTP => the kit does not boot at all. Nothing below this runs:
+-- no services, no remotes, no DataStore, no GUIs wired. A copied place
+-- that disables HttpService to blind the license/beacon just gets a
+-- dead kit. Gated on the HttpEnabled *setting* (instant, reflects the
+-- game setting) so a transient VPS/network blip can never false-halt a
+-- licensed buyer — only an actually-disabled HttpService stops boot.
+-- ============================================================
+do
+	if game:GetService("HttpService").HttpEnabled ~= true then
+		local kitFolder = ReplicatedStorage:FindFirstChild("Hazastudio_ClubKit")
+		if kitFolder then
+			kitFolder:SetAttribute("BootHalted", "http_disabled")
+		end
+		log:warn(
+			"BOOT HALTED — HttpService is disabled. Club Kit will not start.",
+			{ fix = "Enable 'Allow HTTP Requests' in Game Settings > Security, then rejoin." }
+		)
+		return
+	end
+end
 do
 	local kitFolder = ReplicatedStorage:FindFirstChild("Hazastudio_ClubKit")
 	if kitFolder then
@@ -102,6 +124,14 @@ local donationApiReady = type(donationApiUrl) == "string"
 	and type(Secrets.DonationApiSecret) == "string"
 	and Secrets.DonationApiSecret ~= ""
 
+-- Self-integrity tripwire (ADR 0006 Pillar 6): runs regardless of the
+-- enforcement flag, so flipping enforcement off cannot also silence the signal.
+ServerMods.IntegrityTripwire.check({
+	kitProduct = KitProduct,
+	apiUrl = donationApiUrl,
+	secret = Secrets.DonationApiSecret,
+})
+
 if KitProduct.LicenseEnforcementEnabled == true then
 	ServerMods.LicenseService.start({
 		apiUrl = donationApiUrl,
@@ -118,6 +148,10 @@ if KitProduct.LicenseEnforcementEnabled == true then
 		log:info("License verify on boot", { status = licenseState.status })
 	end
 end
+
+-- Live-exploiter detector wiring (ADR 0006 Pillar 5). Independent of the
+-- enforcement flag — detection runs regardless; reports route via LicenseService.
+ServerMods.TamperGuard.start(ServerMods.LicenseService)
 
 local serverLifecycle = Lifecycle.new(Logger.new("ServerLifecycle"))
 local eventBus = ServerMods.EventBus.new()

@@ -20,6 +20,7 @@ local HttpApiCounter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils
 local ClientThumbnailCache = require(script.Parent.Parent.Utils.ClientThumbnailCache)
 local WorldEffectDispatch = require(script.Parent.Parent.Utils.WorldEffectDispatch)
 local DonationVfxClientGate = require(script.Parent.Parent.Utils.DonationVfxClientGate)
+local GroupMotion = require(script.Parent.Parent.Utils.GroupMotion)
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local OverheadController = require(script.Parent.OverheadController)
 local GenericBroadcastLayoutBridge = require(script.Parent.Parent.Services.GenericBroadcastLayoutBridge)
@@ -352,7 +353,8 @@ local function settleMessageWrapper(refs: WorkspaceSurfaceRefs, towardIdle: bool
 		return
 	end
 	local scale = getOrCreateLiveChatScale(frame)
-	scale.Scale = if towardIdle then 0.96 else 0.97
+	-- ADR 0005: live-chat wrappers may be CanvasGroups — keep them size-stable.
+	scale.Scale = GroupMotion.scaleTarget(frame, if towardIdle then 0.96 else 0.97)
 	TweenService:Create(
 		scale,
 		TweenInfo.new(LIVECHAT_MSG_SETTLE_DUR, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
@@ -371,7 +373,7 @@ local function showLiveChatFooter(refs: WorkspaceSurfaceRefs, delaySec: number)
 		end
 		local scale = getOrCreateLiveChatScale(footer)
 		footer.Visible = true
-		scale.Scale = 0.94
+		scale.Scale = GroupMotion.scaleTarget(footer, 0.94)
 		setGroupTransparency(footer, 1)
 		TweenService:Create(
 			scale,
@@ -402,7 +404,7 @@ local function hideLiveChatFooter(refs: WorkspaceSurfaceRefs, animated: boolean)
 	end
 	local scale = getOrCreateLiveChatScale(footer)
 	local outInfo = TweenInfo.new(LIVECHAT_FOOTER_OUT_DUR, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-	TweenService:Create(scale, outInfo, { Scale = 0.94 }):Play()
+	TweenService:Create(scale, outInfo, { Scale = GroupMotion.scaleTarget(footer, 0.94) }):Play()
 	local fade = tweenGroupTransparency(footer, 1, outInfo)
 	local function finish()
 		if footer.Parent then
@@ -445,7 +447,7 @@ local function popLiveChatInfo(refs: WorkspaceSurfaceRefs)
 	if refs.liveDonatorInfoRoot then
 		local rootScale = getOrCreateLiveChatScale(refs.liveDonatorInfoRoot)
 		refs.liveDonatorInfoRoot.Visible = true
-		rootScale.Scale = 0.94
+		rootScale.Scale = GroupMotion.scaleTarget(refs.liveDonatorInfoRoot, 0.94)
 		setGroupTransparency(refs.liveDonatorInfoRoot, 0.35)
 		TweenService:Create(
 			rootScale,
@@ -466,7 +468,7 @@ local function popLiveChatInfo(refs: WorkspaceSurfaceRefs)
 
 		local scale = getOrCreateLiveChatScale(frame)
 		frame.Visible = true
-		scale.Scale = LIVECHAT_POP_FROM
+		scale.Scale = GroupMotion.scaleTarget(frame, LIVECHAT_POP_FROM)
 		setGroupTransparency(frame, 0.55)
 
 		task.delay(delaySec, function()
@@ -476,7 +478,7 @@ local function popLiveChatInfo(refs: WorkspaceSurfaceRefs)
 			local grow = TweenService:Create(
 				scale,
 				TweenInfo.new(LIVECHAT_POP_IN_DUR, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-				{ Scale = LIVECHAT_POP_PEAK }
+				{ Scale = GroupMotion.scaleTarget(frame, LIVECHAT_POP_PEAK) }
 			)
 			tweenGroupTransparency(
 				frame,
@@ -509,7 +511,7 @@ local function popOutLiveChatInfo(refs: WorkspaceSurfaceRefs, onDone: (() -> ())
 		if frame and frame.Parent and frame.Visible then
 			local scale = getOrCreateLiveChatScale(frame)
 			local outInfo = TweenInfo.new(LIVECHAT_POP_OUT_DUR, Enum.EasingStyle.Back, Enum.EasingDirection.In)
-			local tweenOut = TweenService:Create(scale, outInfo, { Scale = LIVECHAT_POP_OUT_SCALE })
+			local tweenOut = TweenService:Create(scale, outInfo, { Scale = GroupMotion.scaleTarget(frame, LIVECHAT_POP_OUT_SCALE) })
 			tweenGroupTransparency(frame, 1, outInfo)
 			longestTween = tweenOut
 			tweenOut.Completed:Once(function()
@@ -526,7 +528,7 @@ local function popOutLiveChatInfo(refs: WorkspaceSurfaceRefs, onDone: (() -> ())
 	if refs.liveDonatorInfoRoot and refs.liveDonatorInfoRoot.Parent then
 		local rootScale = getOrCreateLiveChatScale(refs.liveDonatorInfoRoot)
 		local outInfo = TweenInfo.new(LIVECHAT_POP_OUT_DUR, Enum.EasingStyle.Back, Enum.EasingDirection.In)
-		local rootTween = TweenService:Create(rootScale, outInfo, { Scale = LIVECHAT_POP_OUT_SCALE })
+		local rootTween = TweenService:Create(rootScale, outInfo, { Scale = GroupMotion.scaleTarget(refs.liveDonatorInfoRoot, LIVECHAT_POP_OUT_SCALE) })
 		tweenGroupTransparency(refs.liveDonatorInfoRoot, 1, outInfo)
 		longestTween = rootTween
 		rootTween.Completed:Once(function()
@@ -1898,7 +1900,9 @@ local function init(_deps: {}?)
 		-- Prepare initial entrance animation state
 		-- Panel: above resting, small, fully transparent
 		refs.panel.Position = restingPosition + UDim2.fromOffset(0, ENTER_SLIDE_OFFSET)
-		refs.panelScale.Scale = ENTER_SCALE_FROM
+		-- ADR 0005: panel is a CanvasGroup — scale keyframes collapse to 1 (size-stable);
+		-- slide + GroupTransparency carry the entrance/exit instead.
+		refs.panelScale.Scale = GroupMotion.scaleTarget(refs.panel, ENTER_SCALE_FROM)
 		refs.panel.GroupTransparency = 1
 		refs.panel.Visible = true
 		refs.donationWrapper.Visible = true
@@ -1912,7 +1916,7 @@ local function init(_deps: {}?)
 			GroupTransparency = 0,
 		})
 		tweenWait(refs.panelScale, TweenInfo.new(ENTER_PHASE1_DUR, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-			Scale = ENTER_SCALE_PEAK,
+			Scale = GroupMotion.scaleTarget(refs.panel, ENTER_SCALE_PEAK),
 		})
 		-- Phase 2: settle to resting position
 		tween(refs.panel, TweenInfo.new(ENTER_PHASE2_DUR, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
@@ -1963,14 +1967,14 @@ local function init(_deps: {}?)
 		tweenWait(
 			refs.panelScale,
 			TweenInfo.new(EXIT_ANTICIPATION_DUR, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-			{ Scale = EXIT_ANTICIPATION_SCALE }
+			{ Scale = GroupMotion.scaleTarget(refs.panel, EXIT_ANTICIPATION_SCALE) }
 		)
 		-- Launch upward: panel flies up + shrinks + fades
 		local exitTarget = restingPosition + UDim2.fromOffset(0, EXIT_SLIDE_ABOVE)
 		tween(
 			refs.panelScale,
 			TweenInfo.new(EXIT_LAUNCH_DUR, Enum.EasingStyle.Quart, Enum.EasingDirection.In),
-			{ Scale = ENTER_SCALE_FROM }
+			{ Scale = GroupMotion.scaleTarget(refs.panel, ENTER_SCALE_FROM) }
 		)
 		tweenWait(
 			refs.panel,

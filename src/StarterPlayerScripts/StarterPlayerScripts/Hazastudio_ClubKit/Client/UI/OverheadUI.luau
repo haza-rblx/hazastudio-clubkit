@@ -10,6 +10,7 @@ local Config = require(game.ReplicatedStorage.Hazastudio_ClubKit.Shared.Constant
 local CashCurrencyDomain = require(game.ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.CashCurrencyDomain)
 local LoadingScreenUI = require(game.ReplicatedStorage.Hazastudio_ClubKit.Shared.UI.LoadingScreenUI)
 local UIShadowHelper = require(script.Parent.Parent.Utils.UIShadowHelper)
+local GroupMotion = require(script.Parent.Parent.Utils.GroupMotion)
 local SpecialTitleRenderer = require(game.ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.SpecialTitleRenderer)
 local TitleFontUtil = require(game.ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.TitleFontUtil)
 local ChatBubbleAdornee = require(script.Parent.Parent.Services.ChatBubbleAdornee)
@@ -191,7 +192,8 @@ local function ensurePopScale(wrapper: GuiObject): UIScale
 	end
 	local scale = Instance.new("UIScale")
 	scale.Name = "_OverheadPopScale"
-	scale.Scale = POP_IN_START_SCALE
+	-- ADR 0005: overhead wrappers are usually CanvasGroups — size-stable means no scale pop.
+	scale.Scale = GroupMotion.scaleTarget(wrapper, POP_IN_START_SCALE)
 	scale.Parent = wrapper
 	return scale
 end
@@ -203,7 +205,7 @@ local function setWrapperGroupTransparency(wrapper: GuiObject, value: number)
 end
 
 local function playPopIn(wrapper: GuiObject, popScale: UIScale)
-	popScale.Scale = POP_IN_START_SCALE
+	popScale.Scale = GroupMotion.scaleTarget(wrapper, POP_IN_START_SCALE)
 	setWrapperGroupTransparency(wrapper, 1)
 	TweenService
 		:Create(
@@ -225,7 +227,7 @@ local function playPopOut(wrapper: GuiObject, popScale: UIScale, gui: BillboardG
 	TweenService:Create(
 		popScale,
 		TweenInfo.new(POP_OUT_DURATION, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
-		{ Scale = POP_OUT_END_SCALE }
+		{ Scale = GroupMotion.scaleTarget(wrapper, POP_OUT_END_SCALE) }
 	):Play()
 	if wrapper:IsA("CanvasGroup") then
 		local fadeTween = TweenService:Create(

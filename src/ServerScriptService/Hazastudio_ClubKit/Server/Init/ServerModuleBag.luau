@@ -35,6 +35,8 @@ return {
 	createSyncService = require(Server.Services.SyncService),
 	createDonationService = require(Server.Services.DonationService),
 	LicenseService = require(Server.Services.LicenseService),
+	IntegrityTripwire = require(Server.Init.IntegrityTripwire),
+	TamperGuard = require(Server.Init.TamperGuard),
 	createDonationEffectService = require(Server.Services.DonationEffectService),
 	createStickerService = require(Server.Services.StickerService),
 	createSettingsService = require(Server.Services.SettingsService),

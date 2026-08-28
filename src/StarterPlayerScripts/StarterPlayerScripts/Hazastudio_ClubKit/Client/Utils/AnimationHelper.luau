@@ -4,6 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local MotionPresets = require(script.Parent.MotionPresets)
+local GroupMotion = require(script.Parent.GroupMotion)
 -- ============================================================
 -- Types
 -- ============================================================
@@ -126,6 +127,68 @@ local function resolveRestingPosition(frame: Frame): UDim2
 	end
 	return frame.Position
 end
+-- ============================================================
+-- Size-stable variants (ADR 0005)
+-- A CanvasGroup is rasterized to a texture sized by its AbsoluteSize; scaling it (or any
+-- ancestor) re-creates that texture every frame and renders BLANK once the client's
+-- texture budget is exceeded. When GroupMotion says "stable", scale pops become:
+--   * CanvasGroup target  -> GroupTransparency fade (no size change)
+--   * Frame wrapping one  -> dialog snap/settle travel (position only)
+-- UIScale instances already on the target are left untouched (mobile scaling lives there).
+-- ============================================================
+local restingGroupAlpha: { [Instance]: number } = weakInstanceKeyTable()
+local function resolveRestingGroupAlpha(group: CanvasGroup): number
+	local cached = restingGroupAlpha[group]
+	if activeTweens[group] and cached ~= nil then
+		return cached
+	end
+	local current = group.GroupTransparency
+	-- Fully faded-out counts as "opaque at rest": that is how our own dismiss leaves it.
+	if current >= 0.999 then
+		current = 0
+	end
+	restingGroupAlpha[group] = current
+	return current
+end
+local function presentGroupFade(group: CanvasGroup, info: TweenInfo, onDone: (() -> ())?): ()
+	local resting = resolveRestingGroupAlpha(group)
+	local token = beginAnimation(group)
+	group.GroupTransparency = 1
+	group.Visible = true
+	local fade = TweenService:Create(group, info, { GroupTransparency = resting })
+	registerTweens(group, { fade }, group.Position)
+	fade.Completed:Once(function(playbackState)
+		if not isCurrentAnimation(group, token) then
+			return
+		end
+		completeTweens(group)
+		group.GroupTransparency = resting
+		if playbackState == Enum.PlaybackState.Completed and onDone then
+			onDone()
+		end
+	end)
+	fade:Play()
+end
+local function dismissGroupFade(group: CanvasGroup, info: TweenInfo, onDone: (() -> ())?): ()
+	local resting = resolveRestingGroupAlpha(group)
+	local token = beginAnimation(group)
+	group.Visible = true
+	local fade = TweenService:Create(group, info, { GroupTransparency = 1 })
+	registerTweens(group, { fade }, group.Position)
+	fade.Completed:Once(function(playbackState)
+		if not isCurrentAnimation(group, token) then
+			return
+		end
+		completeTweens(group)
+		group.Visible = false
+		-- Restore so any later plain `Visible = true` by a binder shows the group opaque.
+		group.GroupTransparency = resting
+		if playbackState == Enum.PlaybackState.Completed and onDone then
+			onDone()
+		end
+	end)
+	fade:Play()
+end
 local function offsetPosition(pos: UDim2, yOffset: number): UDim2
 	return UDim2.new(pos.X.Scale, pos.X.Offset, pos.Y.Scale, pos.Y.Offset + yOffset)
 end
@@ -197,6 +260,14 @@ end
 -- Does not change Position/AnchorPoint at all
 -- ============================================================
 function AnimationHelper:scalePop(modal: Frame, onDone: (() -> ())?): ()
+	if GroupMotion.isStable(modal) then
+		if modal:IsA("CanvasGroup") then
+			presentGroupFade(modal, makeInfo(SCALE_POP_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), onDone)
+		else
+			self:presentDialog(modal, onDone)
+		end
+		return
+	end
 	local uiScale = getOrCreateUIScale(modal)
 	uiScale.Scale = 0
 	modal.Visible = true
@@ -219,6 +290,11 @@ end
 -- ============================================================
 local SCALE_CENTER_POP_TIME = 0.4
 function AnimationHelper:scaleCenterPop(modal: Frame, onDone: (() -> ())?): ()
+	if GroupMotion.isStable(modal) then
+		-- No anchor compensation needed: nothing scales, so nothing drifts off-center.
+		self:scalePop(modal, onDone)
+		return
+	end
 	local uiScale = getOrCreateUIScale(modal)
 	uiScale.Scale = 0
 	modal.Visible = true
@@ -251,6 +327,14 @@ end
 -- Scale Out — for closing panel/modal
 -- ============================================================
 function AnimationHelper:scaleOut(modal: Frame, onDone: (() -> ())?): ()
+	if GroupMotion.isStable(modal) then
+		if modal:IsA("CanvasGroup") then
+			dismissGroupFade(modal, makeInfo(SCALE_OUT_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.In), onDone)
+		else
+			self:dismissDialog(modal, onDone)
+		end
+		return
+	end
 	local uiScale = getOrCreateUIScale(modal)
 	local t = TweenService:Create(
 		uiScale,
@@ -484,11 +568,18 @@ function AnimationHelper:presentCenterPanel(modal: Frame, onDone: (() -> ())?, o
 }?): ()
 	local opts = options or {}
 	local openPreset = MotionPresets.centerOpen()
+	self:presentBackdropEffects(opts)
+	if GroupMotion.isStable(modal) then
+		if modal:IsA("CanvasGroup") then
+			presentGroupFade(modal, MotionPresets.centerOpenInfo(), onDone)
+		else
+			self:presentDialog(modal, onDone)
+		end
+		return
+	end
 	local uiScale = getOrCreateUIScale(modal)
 	local token = beginAnimation(modal)
 
-	self:presentBackdropEffects(opts)
-	
 	uiScale.Scale = openPreset.startScale
 	modal.Visible = true
 	local scaleTween = TweenService:Create(
@@ -517,11 +608,18 @@ function AnimationHelper:dismissCenterPanel(modal: Frame, onDone: (() -> ())?, o
 }?): ()
 	local opts = options or {}
 	local closePreset = MotionPresets.centerClose()
+	self:dismissBackdropEffects(opts)
+	if GroupMotion.isStable(modal) then
+		if modal:IsA("CanvasGroup") then
+			dismissGroupFade(modal, MotionPresets.centerCloseInfo(), onDone)
+		else
+			self:dismissDialog(modal, onDone)
+		end
+		return
+	end
 	local uiScale = getOrCreateUIScale(modal)
 	local token = beginAnimation(modal)
 
-	self:dismissBackdropEffects(opts)
-	
 	modal.Visible = true
 	local scaleTween = TweenService:Create(
 		uiScale,
@@ -616,34 +714,32 @@ end
 local SLIDE_OUT_TIME = 0.3
 local SLIDE_OUT_OFFSET = 50 -- px downward
 function AnimationHelper:slideOut(modal: Frame, onDone: (() -> ())?): ()
-	local uiScale = getOrCreateUIScale(modal)
+	-- Size-stable (ADR 0005): keep the downward slide, drop the shrink on CanvasGroup trees.
+	local uiScale: UIScale? = if GroupMotion.isStable(modal) then nil else getOrCreateUIScale(modal)
 	local origPos = modal.Position
 	local targetPos = UDim2.new(origPos.X.Scale, origPos.X.Offset, origPos.Y.Scale, origPos.Y.Offset + SLIDE_OUT_OFFSET)
-	uiScale.Scale = 1
+	if uiScale then
+		uiScale.Scale = 1
+	end
 	modal.Visible = true
+	local slideInfo = makeInfo(SLIDE_OUT_TIME, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
 	-- Slide downward
-	TweenService
-		:Create(
-			modal,
-			makeInfo(SLIDE_OUT_TIME, Enum.EasingStyle.Quint, Enum.EasingDirection.In),
-			{ Position = targetPos }
-		)
-		:Play()
-	-- Slight scale-down + settle
-	local tScale = TweenService:Create(
-		uiScale,
-		makeInfo(SLIDE_OUT_TIME, Enum.EasingStyle.Quint, Enum.EasingDirection.In),
-		{ Scale = 0.85 }
-	)
-	tScale.Completed:Once(function()
+	local tSlide = TweenService:Create(modal, slideInfo, { Position = targetPos })
+	tSlide.Completed:Once(function()
 		modal.Visible = false
 		modal.Position = origPos -- restore position
-		uiScale.Scale = 1
+		if uiScale then
+			uiScale.Scale = 1
+		end
 		if onDone then
 			onDone()
 		end
 	end)
-	tScale:Play()
+	-- Slight scale-down + settle (scale mode only)
+	if uiScale then
+		TweenService:Create(uiScale, slideInfo, { Scale = 0.85 }):Play()
+	end
+	tSlide:Play()
 end
 -- ============================================================
 -- Scatter Fragments - for Rejected frame dismiss
@@ -691,15 +787,18 @@ end
 -- Swing In - for Confirmation notification entrance
 -- ============================================================
 function AnimationHelper:swingIn(modal: Frame, overlay: Frame, onDone: (() -> ())?): ()
-	local uiScale = getOrCreateUIScale(modal)
+	-- Size-stable (ADR 0005): rotation does not resize a CanvasGroup texture, scale does.
+	local uiScale: UIScale? = if GroupMotion.isStable(modal) then nil else getOrCreateUIScale(modal)
 	local finalRotation = modal.Rotation
 	modal.Visible = true
-	uiScale.Scale = 0.7
 	modal.Rotation = -12
 	-- Do not fade overlay — leave transparent
 	-- overlay used by swingIn but transparency not changed
-	TweenService:Create(uiScale, makeInfo(SWING_TIME, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 })
-		:Play()
+	if uiScale then
+		uiScale.Scale = 0.7
+		TweenService:Create(uiScale, makeInfo(SWING_TIME, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 })
+			:Play()
+	end
 	local tRot = TweenService:Create(
 		modal,
 		makeInfo(SWING_TIME * 0.85, Enum.EasingStyle.Back, Enum.EasingDirection.Out),

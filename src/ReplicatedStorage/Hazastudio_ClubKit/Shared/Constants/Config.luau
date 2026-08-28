@@ -1558,6 +1558,34 @@ Config.UIMotion = {
 	CENTER_OPEN_TIME = 0.28,
 	CENTER_CLOSE_TIME = 0.18,
 	SIDEBAR_SPRING_FREQ = 4.8, -- TopMenu / sidebar critically-damped spring (softer = lower)
+	-- CanvasGroup textures are re-created whenever their size changes (Roblox docs), and
+	-- render BLANK when the client's texture budget is exceeded. When true, every UIScale
+	-- pop that would resize a CanvasGroup (or anything containing / inside one) is replaced
+	-- by a size-stable fade/travel; plain Frame trees keep the scale pop. Set false to
+	-- restore the legacy pop on CanvasGroups (ADR 0005). Default true.
+	CANVAS_GROUP_SIZE_STABLE = true,
+}
+-- Client-side texture budget guard for workspace CanvasGroups (ADR 0005). A SurfaceGui that
+-- contains a CanvasGroup is disabled (texture released) while its part is farther than
+-- SURFACE_CULL_DISTANCE studs from the camera, and re-enabled within DISTANCE - HYSTERESIS.
+-- Per-GUI opt-out: attribute `ClubKitKeepSurfaceGui = true` on the SurfaceGui.
+Config.CanvasGroupBudget = {
+	ENABLED = true,
+	SURFACE_CULL_DISTANCE = 250, -- studs (edge distance)
+	SURFACE_CULL_HYSTERESIS = 20,
+	POLL_INTERVAL = 0.5, -- seconds
+}
+-- Anti-tamper / live-exploiter response (ADR 0006 Pillar 5). Client-side
+-- saveinstance detection is a speed bump for lazy exploiters (a determined one
+-- bypasses it via hookmetamethod); the durable protection is server-authoritative
+-- logic + the license/beacon. BRICK is OFF by default: a false brick on a paying
+-- player is worse than missing a thief. Enable it only once you trust the
+-- detector in your place. Detection is always skipped in Studio.
+Config.AntiTamper = {
+	SAVEINSTANCE_DETECT_ENABLED = true,
+	KICK_ON_DETECT = true,
+	BRICK_ON_DETECT = false,
+	DETECT_POLL_INTERVAL = 2, -- seconds between UGCValidationService probes
 }
 -- ============================================================
 -- SHOP SYSTEM

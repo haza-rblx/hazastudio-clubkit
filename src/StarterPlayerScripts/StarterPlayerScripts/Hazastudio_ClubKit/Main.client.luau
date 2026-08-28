@@ -541,6 +541,14 @@ task.spawn(function()
 	MobilePanelManager.init(playerGui)
 end)
 
+do
+	-- Live saveinstance/exploit detector (ADR 0006 Pillar 5). Scoped require so it
+	-- adds no top-level register in Main (ADR 0002 budget). Off in Studio; only
+	-- bricks when the owner opts in via Config.AntiTamper.BRICK_ON_DETECT.
+	local SaveInstanceGuardService = require(script.Parent.Client.Services.SaveInstanceGuardService)
+	SaveInstanceGuardService.start()
+end
+
 local SharedContextModule = Shared:WaitForChild("ContextModule", LoadingConfig.BOOTSTRAP_WAIT_TIMEOUT)
 local SharedUtils = Shared:WaitForChild("Utils", LoadingConfig.BOOTSTRAP_WAIT_TIMEOUT)
 local Remotes = ReplicatedStorage:WaitForChild("Remotes", LoadingConfig.BOOTSTRAP_WAIT_TIMEOUT)
@@ -552,6 +560,22 @@ if
 	or not (Remotes and Remotes:IsA("Folder"))
 	or not (iconModule and iconModule:IsA("ModuleScript"))
 then
+	do
+		-- Server may have halted the kit on purpose (ADR 0006 boot gate, e.g.
+		-- HttpService disabled). If so, show a clear reason instead of a silent
+		-- broken state. The attribute is set on the kit root before the server
+		-- stops, so it has long since replicated by the time deps time out.
+		local haltReason = kitRoot and kitRoot:GetAttribute("BootHalted")
+		if haltReason ~= nil then
+			studioWarn("[LoadingScreen] Kit boot halted by server", tostring(haltReason))
+			local BootHaltedNotice = require(script.Parent.Client.UI.BootHaltedNotice)
+			pcall(function()
+				BootHaltedNotice.show(tostring(haltReason))
+			end)
+			finishLoadingScreen()
+			return
+		end
+	end
 	studioWarn("[LoadingScreen] Critical client dependencies were not replicated in time")
 	finishLoadingScreen()
 	enterGameplay()
@@ -2168,6 +2192,17 @@ do
 	reg("background", Config.Sticker, "Config.Sticker")
 
 	ImagePreloadService.start()
+end
+-- ADR 0005: release far-away workspace CanvasGroup textures (posters/boards) so the
+-- texture budget is free for the panel the player is about to open. Inline require on
+-- purpose: keeps Main.client's top-level local count flat (ADR 0002).
+do
+	local okBudget, budgetErr = pcall(function()
+		require(script.Parent.Client.Services.CanvasGroupBudgetService).start()
+	end)
+	if not okBudget then
+		studioWarn("[CanvasGroupBudget] start failed: " .. tostring(budgetErr))
+	end
 end
 loadingBootReady = true
 clientBootScheduler:setInteractiveComplete()

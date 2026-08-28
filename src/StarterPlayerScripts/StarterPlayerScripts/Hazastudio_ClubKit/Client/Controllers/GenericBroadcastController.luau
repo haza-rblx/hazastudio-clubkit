@@ -10,6 +10,7 @@ local TweenService = game:GetService("TweenService")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local GenericBroadcastLayoutBridge = require(script.Parent.Parent.Services.GenericBroadcastLayoutBridge)
+local GroupMotion = require(script.Parent.Parent.Utils.GroupMotion)
 
 local log = Logger.new("GenericBroadcastController")
 
@@ -335,7 +336,8 @@ local function dismissCard(refs: Refs, active: ActiveCard)
 			GroupTransparency = 1,
 		})
 		tweenWait(scale, TweenInfo.new(EXIT_DURATION, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-			Scale = EXIT_SCALE,
+			-- ADR 0005: the card is a CanvasGroup — hold NORMAL_SCALE so its texture is never resized.
+			Scale = GroupMotion.scaleTarget(card, EXIT_SCALE, NORMAL_SCALE),
 		})
 		card:Destroy()
 	end
@@ -366,7 +368,7 @@ local function playBroadcast(refs: Refs, payload: Payload)
 		scale = Instance.new("UIScale")
 		scale.Parent = card
 	end
-	scale.Scale = ENTER_START_SCALE
+	scale.Scale = GroupMotion.scaleTarget(card, ENTER_START_SCALE, NORMAL_SCALE)
 
 	local countDownBar = findFrame(card, "CountDownBar")
 	if countDownBar then
