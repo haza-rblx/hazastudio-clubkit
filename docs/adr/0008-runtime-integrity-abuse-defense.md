@@ -58,6 +58,65 @@ Independent of the kit boot gate, started in `Server/Init` next to `IntegrityTri
 - **RemoteStorm** — a global per-player counter across kit remotes (the limiters are per remote); above `REMOTE_STORM_PER_SEC` for `REMOTE_STORM_WINDOW` → kick + beacon `runtime:remote_storm`. Cheap, catches spam bots before the limiters do.
 - All three reuse `LicenseService.reportTamper` (reasons prefixed `runtime:`), so evidence lands in the same VPS table and Discord channel as ADR 0006 beacons.
 
+### Layer 2b — MovementGuard: client-side movement cheats, auto-kick (added 2026-08-29)
+
+Owner asked for fly/speed/etc. to be kicked automatically. What these cheats are, what the server can actually see, and why a club venue needs a *whitelist-first* detector.
+
+#### The cheats (what an injected client does to its own character)
+
+| Cheat | Mechanism on the client | Server-visible symptom | Why a club cares |
+|---|---|---|---|
+| **Fly** | Loop that sets `AssemblyLinearVelocity`/`CFrame` on the HRP, or a `BodyVelocity`/`LinearVelocity` on the character (client-created movers replicate through the owned assembly). | HRP rises/hovers with no floor beneath and no jump impulse; `Humanoid` state stuck in `Freefall`/`Flying`/`Physics`. | Floats over the stage, blocks camera shots, ruins photos. |
+| **Speed** | `Humanoid.WalkSpeed = 100` (replicates because the client owns its Humanoid) or CFrame stepping. | Horizontal displacement per second ≫ what the server-set `WalkSpeed` allows. | Runs through the crowd, spams distance. |
+| **Noclip** | `CanCollide = false` on own parts every frame, or CFrame through walls. | Path between two samples crosses a `CanCollide` wall/floor. | Enters backstage / VIP rooms / DJ booth. |
+| **Teleport** | `HRP.CFrame = target` once. | Displacement > N studs in one sample with no server teleport token. | Jumps onto the stage, onto the DJ, into staff rooms. |
+| **Infinite jump / high jump** | `Humanoid:ChangeState(Jumping)` mid-air, or `JumpPower = 200`. | `Jumping` state while airborne; rise height > `JumpPower` physics. | Same as fly, cheaper. |
+| **Anti-AFK** | Fake input (`VirtualUser`) to dodge the 20-min idle kick. | Not detectable server-side per se; the kit's own `AfkGuard` idle ladder is the countermeasure (it measures *movement + input reports*, so spoofers stay "active"). | Seat squatting, crowd inflation. |
+| **Emote / animation spam** | `Animator:LoadAnimation` of arbitrary ids (client-owned animator replicates). | Animation tracks on the character that are not in the kit dance catalog / Roblox default set. | Lewd or seizure-inducing animations on the dance floor. |
+| **Chat filter bypass / spam** | Unicode look-alikes, zero-width chars, rapid sends. | Roblox `TextChatService` filters server-side already; kit can add per-player rate + repeated-message hash. | Harassment. |
+| **Fake UI** | Client-only edits: fake "donated Rp 10.000.000" toasts, fake ranks. | Nothing replicates — only the cheater sees it. Screenshots are the only "harm". | Reputation; nothing to detect, educate staff. |
+| **Avatar / item spoof** | Local-only appearance changes. | Nothing replicates (server owns `HumanoidDescription`). | None. |
+| **Remote spam / lag switch** | Fire remotes in a loop; throttle own connection. | RemoteStorm (Layer 2) + kit rate limiters. | Lag. |
+| **Ban evasion / alts** | New account. | `AccountAge`, no history. | Repeat trolls. |
+
+#### What the server can see, honestly
+
+Roblox gives the client **network ownership of its own character**: `WalkSpeed`, `JumpPower`, HRP `CFrame`/velocity and animation tracks all replicate *from* the client. The server cannot prevent those writes — it can only **observe the replicated result** and react. A server-side movement guard is therefore a sampler + a set of physics-plausibility rules + a strike ledger, never a blocker. Detection lag of ~1 s is fine for a venue; false kicks are the real cost.
+
+#### Detector design (server, `Server/Init/MovementGuard.luau`; rules in a pure `Shared/Domain/MovementPolicy.luau`)
+
+Sample every character every `SAMPLE_INTERVAL` (0.5 s): HRP position, `AssemblyLinearVelocity`, `Humanoid.WalkSpeed`/`JumpPower`/`FloorMaterial`/state, `Player:GetNetworkPing()`. The **pure policy** takes the last two samples + an exemption bitset and returns zero or more violations; the guard only does I/O.
+
+**Exemptions come first** (this is what makes it safe in a club, and all of them are states the kit itself creates):
+
+- Kit **Gravity float** (`GravityService` owns a `LinearVelocity` on the HRP; guard asks `GravityService:isFloating(player)`), and its restore fall.
+- **Carry** in either role (`CarryService` welds + `PlatformStand`; attributes/`CarryWeld` present).
+- **Server teleports**: `/to`, `/bring` (`SessionCommandService.handleTo/handleBring`), respawn, `CharacterAdded`, AfkGuard rejoin landing, `Seat`/`VehicleSeat` occupancy. The teleport path stamps `character:SetAttribute("ClubKitTeleportAt", os.clock())`; any displacement within 2 s of the stamp is ignored.
+- **Sync dance** (`Syncing`/`IsLeader` attributes): animation checks skip catalog dances; movement rules still apply.
+- Roles in `Config.MovementGuard.EXEMPT_ROLES` (default `Owner`, `CoOwner`) — staff use Freecam/fly tools legitimately.
+- First 5 s after spawn; any sample with ping > 600 ms is discarded rather than judged.
+
+**Rules** (each yields a strike weight; tolerances are deliberately loose):
+
+| Rule | Condition (per 0.5 s sample) | Weight |
+|---|---|---|
+| Speed | horizontal distance / dt > `max(WalkSpeed, 16) × 1.6 + 4` for **3 consecutive** samples | 1 |
+| Speed-property | `Humanoid.WalkSpeed` > `MAX_WALKSPEED` (default 32) or `JumpPower` > `MAX_JUMPPOWER` (75) — a client-set property, seen directly | 2 |
+| Fly | vertical velocity ≥ 0 and `FloorMaterial == Air` and no downward raycast hit within 8 studs for **4 consecutive** samples, state not `Seated/PlatformStanding/Climbing` | 1 |
+| High-jump | rise since last floor contact > `jumpApex(JumpPower) × 1.8 + 5` studs | 2 |
+| Noclip | raycast from previous to current position hits a `CanCollide` part whose thickness the sample crossed (ignore parts in `Config.MovementGuard.IGNORE_COLLECTION_TAG` and anything under kit boards), for 2 samples in 10 s | 2 |
+| Teleport | displacement > `max(60, speedCap × dt × 3)` studs in one sample with no teleport stamp | 3 |
+| Infinite jump | `Jumping` state entered while `FloorMaterial == Air` ≥ 3 times within 3 s | 1 |
+| Foreign animation | a playing `AnimationTrack` whose `Animation.AnimationId` is not in the kit dance catalog, Roblox default animate ids, or `Config.MovementGuard.ALLOWED_ANIMATION_IDS` | 1 (log-only until the catalog allowlist is proven complete) |
+
+**Ledger**: strikes decay 1 per `STRIKE_DECAY_SEC` (20 s). At `WARN_AT` (3) the player gets a kit notification ("Movement looks modified — stop or you will be removed") and a beacon `runtime:movement_warn`. At `KICK_AT` (5) → kick with a plain-language reason, beacon `runtime:movement_kick {rule, samples, ping}`, and a `Config.MovementGuard.SOFT_BAN_MINUTES` (15) memory-only re-join block for this server. Owner can flip `ENFORCE = "log"` per place.
+
+**Not detected on purpose**: fake UI, avatar spoof (nothing replicates — nothing to fix); "wall-hugging" or animation-cancel micro-cheats (no venue harm, high false-positive rate).
+
+#### Why this is safe enough to ship as kick-by-default
+
+Every rule needs either a client-set property that legitimate players can never have (WalkSpeed 100), or **repeated** physically impossible samples with all kit-driven states excluded and lag samples dropped. A laggy phone player produces one bad sample, not four in a row; a teleport by staff carries a stamp. The remaining risk is third-party place scripts that move players (e.g. a buyer's own teleporter pads) — those are covered by the same attribute stamp, documented in the checklist, and by log-only mode for the first week on a new place.
+
 ### Layer 3 — Response tools for staff
 
 - `/purgesounds` (Staff+): stop and destroy every non-allowlisted `Sound` right now; `/soundlog` prints the last 20 rogue-sound events with the actor guess.
@@ -79,10 +138,12 @@ Independent of the kit boot gate, started in `Server/Init` next to `IntegrityTri
 1. Default enforcement after one log-only release: `"block"` rogue sounds automatically, or keep it staff-triggered (`/purgesounds`)?
 2. Should `ScriptGuard` destroy injected scripts by default (breaks a buyer's legitimate runtime-script loaders) or only beacon?
 3. Buyer policy: is "one admin system only, scanned free models only" a delivery requirement (we refuse to ship otherwise) or a recommendation?
+4. MovementGuard default: `ENFORCE = "kick"` from the first release (owner's ask) with `EXEMPT_ROLES = {Owner, CoOwner}` and a 1-week log-only window on newly delivered places — or log-only kit-wide first?
+5. Foreign-animation rule: keep log-only until the dance catalog allowlist is validated on RUST/NIGHT ZONE, or kick from day one?
 
 ## Implementation phases
 
 0. **Now** — run `PlaceSecurityScan` on the attacked place and on Hierapolis; publish the checklist; strip/replace anything CRITICAL.
-1. `RuntimeGuard` log-only + beacons (`[Unreleased]`, next kit release).
+1. `RuntimeGuard` log-only + beacons (`[Unreleased]`, next kit release). `MovementGuard` + pure `MovementPolicy` (TDD seam: sample pairs → violations) in the same release; kick default per decision 4.
 2. Enforcement + `/purgesounds` + `/lockdown` (release after the owner decides).
 3. Telemetry counters when ADR 0007 phase B lands.
