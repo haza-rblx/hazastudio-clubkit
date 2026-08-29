@@ -1438,7 +1438,10 @@ Config.Demo = {
 -- LOADING SCREEN
 -- ============================================================
 Config.Loading = {
-	BOOTSTRAP_WAIT_TIMEOUT = 30,
+	-- Wall-clock seconds the client waits for each engine dependency (Remotes, Icon, Shared
+	-- folders) before giving up. Heavy buyer places at low FPS (video walls, big maps) can take
+	-- >30 s to replicate; giving up there leaves the venue with no kit UI at all, so be patient.
+	BOOTSTRAP_WAIT_TIMEOUT = 120,
 	TEMPLATE_WAIT_TIMEOUT = 10,
 	CONTROLLER_WAIT_TIMEOUT = 30,
 	CONTROLLER_POLL_INTERVAL = 0.1,
