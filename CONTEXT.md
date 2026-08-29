@@ -44,6 +44,13 @@ Domain glossary for agents. Terms only — no implementation details, no workflo
 - **Role color pair** — `roleColor = { primary, secondary }` on a role: `primary` is the chat name/tag color (must be unique per role), `secondary` an accent.
 - **Role color stops** — optional `roleColor.stops` (2..5 hex strings): a multi-color gradient painted on the overhead **special-rank** text. Sanitized once at boot by `RoleColorDomain` (pure); when set, an omitted `primary`/`secondary` default to the first/last stop. `nil` = the nametag template's own gradient.
 
+## Venue abuse (ADR 0008)
+
+- **Backdoor** — code already inside a buyer place (free model, plugin, "admin" script) that `require`s a remote module or runs obfuscated payloads, giving outsiders server-side control. The most likely source of "a guest made everyone hear X".
+- **Server-authoritative** — the kit's rule that a client request is only ever a *request*: every remote handler validates, permission-checks and rate-limits, and audio/effects come from templates already in the place. Client injection can therefore only affect the injector's own screen.
+- **RuntimeGuard** — proposed `Server/Init` module watching *effects* rather than code: rogue `Sound`s (SoundGuard, boot-snapshot allowlist), runtime-created scripts (ScriptGuard), remote storms. Log-only first, beacons via `LicenseService.reportTamper("runtime:…")`.
+- **Place security scan** — `tools/security/PlaceSecurityScan.luau`: static pass over every script in a place for `require(<id>)`, `getfenv`/`loadstring`, webhook tokens, unguarded remotes; run before publish and at delivery.
+
 ## External admin bridge
 
 - **External admin** — a third-party moderation system (Adonis or Kohl's Admin) installed by the buyer. The Kit does not own it and does not fork it.
