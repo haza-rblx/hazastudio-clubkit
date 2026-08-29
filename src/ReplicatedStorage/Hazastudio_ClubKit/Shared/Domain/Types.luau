@@ -138,6 +138,7 @@ export type OverheadPayload = {
 	specialTitlePosition: string?, -- "Top" | "Stacked"
 	specialRank: string?, -- nil = 04-SpecialRank hidden
 	specialRankGradient: boolean,
+	roleChip: string?, -- role text shown as a chip in 00-DonationLayers (replaces rank chips); nil = none
 	statusText: string?, -- nil = 00-SpecialStatus hidden
 	rankText: string, -- selalu ada, minimal "GUEST"
 	rankGradient: boolean,

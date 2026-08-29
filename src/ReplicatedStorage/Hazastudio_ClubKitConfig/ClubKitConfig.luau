@@ -232,6 +232,9 @@ ClubKitConfig.Membership = {
 -- roleColor = { primary, secondary } drives chat/tag colors. Optional `stops = { hex, ... }`
 -- (2..5 colors) paints a multi-color gradient on the overhead special-rank text; when set,
 -- primary/secondary may be omitted (default to first/last stop).
+-- A role may carry its own `privileges = { ... }` to override its category's (one category,
+-- different powers per member). `specialRank = { text, gradient, chip = true }` also shows
+-- the text as a chip in the overhead donation-chip row and hides that role's #N rank chips.
 -- =============================================================================
 ClubKitConfig.RoleCategories = {
 	{

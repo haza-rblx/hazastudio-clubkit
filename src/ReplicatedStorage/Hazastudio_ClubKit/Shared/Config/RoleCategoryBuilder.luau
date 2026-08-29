@@ -13,6 +13,9 @@ export type BuiltRoles = {
 	COMMAND_ALIASES: { [string]: string },
 	ROLE_TO_CATEGORY: { [string]: number },
 	CATEGORY_PRIVILEGES: { [number]: { [string]: boolean } },
+	-- Per-role overrides: a role inside a category may carry its own `privileges` table;
+	-- it is merged over the category's (category = default, role = override).
+	ROLE_PRIVILEGES: { [string]: { [string]: boolean } },
 }
 
 local MEMBERSHIP_DISPLAY_ROLES = {
@@ -73,6 +76,7 @@ function RoleCategoryBuilder.build(clubKit: any): BuiltRoles
 	local staffPlus: { string } = {}
 	local roleToCategory: { [string]: number } = {}
 	local categoryPrivileges: { [number]: { [string]: boolean } } = {}
+	local rolePrivileges: { [string]: { [string]: boolean } } = {}
 	local extraToolFolders: { string } = {}
 	local legacyAliases = cloneTable(clubKit.LegacyAliases or {})
 	local commandAliases = cloneTable(clubKit.CommandAliases or {})
@@ -124,6 +128,15 @@ function RoleCategoryBuilder.build(clubKit: any): BuiltRoles
 				end
 
 				local privileges = category.privileges or {}
+				if type(role.privileges) == "table" then
+					-- Role-level override (e.g. one "DPC" category whose members differ in power).
+					local merged = cloneTable(privileges)
+					for permission, allowed in pairs(role.privileges) do
+						merged[permission] = allowed == true
+					end
+					privileges = merged
+					rolePrivileges[roleKey] = merged
+				end
 				-- First role in array = highest priority within the category block.
 				local priority = basePriority * 100 + (#roles - roleIndex)
 				definitions[roleKey] = {
@@ -287,6 +300,7 @@ function RoleCategoryBuilder.build(clubKit: any): BuiltRoles
 		COMMAND_ALIASES = commandAliases,
 		ROLE_TO_CATEGORY = roleToCategory,
 		CATEGORY_PRIVILEGES = categoryPrivileges,
+		ROLE_PRIVILEGES = rolePrivileges,
 	}
 end
 

@@ -200,6 +200,8 @@ ClubKitConfigSchema.defaults = {
 					badgeFrames = { "01-OwnerCoOwnerBadge" },
 					-- roleColor.stops (optional, 2..5 hex): multi-color gradient on the overhead
 					-- special-rank text; primary/secondary then default to first/last stop.
+					-- privileges (optional, per role): overrides the category's privileges.
+					-- specialRank.chip (optional): show the text as an overhead chip, hide rank chips.
 					roleColor = { primary = "#FBBF24", secondary = "#FDE68A" },
 				},
 				{

@@ -563,6 +563,7 @@ function ConfigBootstrap.apply(config: any)
 	config.RolePrivileges = {
 		ROLE_TO_CATEGORY = builtRoles.ROLE_TO_CATEGORY,
 		CATEGORY_PRIVILEGES = builtRoles.CATEGORY_PRIVILEGES,
+		ROLE_PRIVILEGES = builtRoles.ROLE_PRIVILEGES or {},
 	}
 end
 

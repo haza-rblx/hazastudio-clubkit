@@ -402,6 +402,7 @@ end
 		appendFingerprintString(parts, payload.specialTitlePosition)
 		appendFingerprintString(parts, payload.specialRank)
 		appendFingerprintBoolean(parts, payload.specialRankGradient)
+		appendFingerprintString(parts, payload.roleChip)
 		appendFingerprintString(parts, payload.statusText)
 		appendFingerprintString(parts, payload.rankText)
 		appendFingerprintBoolean(parts, payload.rankGradient)

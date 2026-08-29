@@ -700,6 +700,9 @@ function OverheadDomain.buildPayload(
 		specialRankText = specialRankCfg.text
 		specialRankGradient = specialRankCfg.gradient
 	end
+	-- Role chip: the configured role text also occupies the donation-chip row (and hides
+	-- the #N rank chips) when the role opts in with specialRank.chip = true.
+	local roleChip: string? = if specialRankCfg and (specialRankCfg :: any).chip == true then specialRankCfg.text else nil
 
 	local effectiveMembership: MembershipTier = OverheadDomain.resolveEffectiveMembership(stored, rankId, userId)
 	local roleMembership = OverheadDomain.normalizeMembershipTier(role)
@@ -871,6 +874,7 @@ function OverheadDomain.buildPayload(
 			or "Top",
 		specialRank = specialRankText,
 		specialRankGradient = specialRankGradient,
+		roleChip = roleChip,
 		statusText = specialStatusText,
 		rankText = rankText,
 		rankGradient = rankGradient,

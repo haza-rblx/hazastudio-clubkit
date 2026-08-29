@@ -5,6 +5,9 @@
 export type RoleSpecialRank = {
 	text: string,
 	gradient: boolean,
+	-- true = also show `text` as a chip in the overhead donation-chip row (00-DonationLayers),
+	-- painted with roleColor.stops; the role's #N ROBUX / #N cash rank chips are hidden.
+	chip: boolean?,
 }
 
 export type RoleColor = {

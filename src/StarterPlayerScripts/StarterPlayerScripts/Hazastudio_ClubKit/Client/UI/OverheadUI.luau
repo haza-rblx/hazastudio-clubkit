@@ -1022,7 +1022,63 @@ end
 local DONATION_CHIP_ANIM: { [string]: { mode: string, speed: number } } = {
 	RobuxRankWrapper = { mode = "sheen", speed = 0.9 },
 	RupiahRankWrapper = { mode = "prism", speed = 0.75 },
+	RoleChipWrapper = { mode = "sheen", speed = 0.7 },
 }
+
+-- Role chip (specialRank.chip = true): a clone of the Robux rank pill, first in the row,
+-- carrying the role text and the role's stops gradient. Created lazily per nametag.
+local ROLE_CHIP_NAME = "RoleChipWrapper"
+local roleChipTemplateColors: { [UIGradient]: ColorSequence } = setmetatable({}, { __mode = "k" }) :: any
+
+local function ensureRoleChip(layers: Instance): GuiObject?
+	local existing = layers:FindFirstChild(ROLE_CHIP_NAME)
+	if existing and existing:IsA("GuiObject") then
+		return existing
+	end
+	local source = layers:FindFirstChild("RobuxRankWrapper")
+	if not (source and source:IsA("GuiObject")) then
+		return nil
+	end
+	local chip = source:Clone()
+	chip.Name = ROLE_CHIP_NAME
+	chip.LayoutOrder = (source.LayoutOrder or 0) - 1
+	chip.Visible = false
+	chip.Parent = layers
+	return chip
+end
+
+local function paintRoleChip(chip: GuiObject, roleKey: string?)
+	local grad = chip:FindFirstChildWhichIsA("UIGradient")
+	if not grad then
+		return
+	end
+	local palette = if type(roleKey) == "string" then Config.RoleColorPalette[roleKey] else nil
+	local stops = if type(palette) == "table" then palette.stops else nil
+	local key = if type(stops) == "table" then table.concat(stops, ",") else ""
+	if grad:GetAttribute(ROLE_STOPS_KEY_ATTR) == key then
+		return
+	end
+	if roleChipTemplateColors[grad] == nil then
+		roleChipTemplateColors[grad] = grad.Color
+	end
+	if key == "" then
+		-- No stops: fall back to the role's chat pair so the chip still reads as the role.
+		local primary = if type(palette) == "table" and type(palette.primary) == "string" then palette.primary else nil
+		local secondary = if type(palette) == "table" and type(palette.secondary) == "string" then palette.secondary else nil
+		if primary and secondary then
+			grad.Color = ColorSequence.new(Color3.fromHex(primary), Color3.fromHex(secondary))
+		else
+			grad.Color = roleChipTemplateColors[grad]
+		end
+	else
+		local keypoints = {}
+		for _, point in ipairs(RoleColorDomain.toKeypoints(stops :: { string })) do
+			table.insert(keypoints, ColorSequenceKeypoint.new(point.time, Color3.fromRGB(point.r, point.g, point.b)))
+		end
+		grad.Color = ColorSequence.new(keypoints)
+	end
+	grad:SetAttribute(ROLE_STOPS_KEY_ATTR, key)
+end
 
 local function setChipGradientAnim(chip: GuiObject, wrapperName: string, active: boolean)
 	local grad = chip:FindFirstChildWhichIsA("UIGradient") :: UIGradient?
@@ -1107,6 +1163,23 @@ local function setDonationLayers(wrapper: GuiObject, payload: OverheadPayload)
 	local supporterText: string? = nil
 	if not hasRankedChip and (isCashSupporter or isRobuxSupporter) then
 		supporterText = "SUPPORTER"
+	end
+
+	-- Role chip replaces the rank chips for roles that opt in (specialRank.chip = true).
+	local roleChipText = (payload :: any).roleChip
+	local roleChip = ensureRoleChip(layers)
+	if type(roleChipText) == "string" and roleChipText ~= "" and roleChip then
+		local label = roleChip:FindFirstChildWhichIsA("TextLabel")
+		if label then
+			(label :: TextLabel).Text = roleChipText
+		end
+		paintRoleChip(roleChip, payload.role)
+		roleChip.Visible = true
+		setChipGradientAnim(roleChip, ROLE_CHIP_NAME, Config.Overhead.ANIMATE_DONATION_RANK_GRADIENT == true)
+		robuxText, cashText, supporterText = nil, nil, nil
+	elseif roleChip then
+		roleChip.Visible = false
+		setChipGradientAnim(roleChip, ROLE_CHIP_NAME, false)
 	end
 
 	applyChip("RobuxRankWrapper", "RobuxRanking", robuxText, "TopDonate")

@@ -36,6 +36,11 @@ local function getCategoryPrivileges(roleKey: string): { [string]: boolean }?
 		return nil
 	end
 	local canonical = RolesDomain.normalizeRoleKey(roleKey) or roleKey
+	-- Role-level override wins over its category (RoleCategoryBuilder merges the two).
+	local rolePrivileges = privileges.ROLE_PRIVILEGES
+	if type(rolePrivileges) == "table" and type(rolePrivileges[canonical]) == "table" then
+		return rolePrivileges[canonical]
+	end
 	local categoryId = roleToCategory[canonical]
 	if type(categoryId) ~= "number" then
 		return nil
