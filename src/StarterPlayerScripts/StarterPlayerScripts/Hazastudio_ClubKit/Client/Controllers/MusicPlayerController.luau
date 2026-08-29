@@ -38,6 +38,37 @@ local FALLBACK_FAVORITES_PLAYLIST_ID = "__favorites__"
 local FALLBACK_NEW_DROPS_PLAYLIST_ID = "__new_drops__"
 local FALLBACK_FAVORITES_ATTRIBUTE_KEY = "MusicFavoriteTrackIds"
 
+-- All kit music Sounds hang off one SoundGroup so the whole player can be ducked at once.
+-- External loading contract (Config.ClientBoot.EXTERNAL_LOADING_ATTRIBUTE): while a place pack's
+-- loading screen is up, the group is silent so only the pack's own track plays.
+local MUSIC_SOUND_GROUP_NAME = "ClubKitMusic"
+local function getMusicSoundGroup(): SoundGroup
+	local existing = SoundService:FindFirstChild(MUSIC_SOUND_GROUP_NAME)
+	if existing and existing:IsA("SoundGroup") then
+		return existing
+	end
+	local group = Instance.new("SoundGroup")
+	group.Name = MUSIC_SOUND_GROUP_NAME
+	group.Volume = 1
+	group.Parent = SoundService
+	return group
+end
+
+local function bindExternalLoadingDuck()
+	local player = Players.LocalPlayer
+	local clientBoot = (Config :: any).ClientBoot or {}
+	local attrName = clientBoot.EXTERNAL_LOADING_ATTRIBUTE
+	if not player or type(attrName) ~= "string" or attrName == "" then
+		return
+	end
+	local group = getMusicSoundGroup()
+	local function apply()
+		group.Volume = if player:GetAttribute(attrName) == true then 0 else 1
+	end
+	apply()
+	player:GetAttributeChangedSignal(attrName):Connect(apply)
+end
+
 local function getSpecialPlaylistIds(config: any): (string, string)
 	return tostring(config.SPECIAL_PLAYLIST_FAVORITES_ID or FALLBACK_FAVORITES_PLAYLIST_ID),
 		tostring(config.SPECIAL_PLAYLIST_NEW_DROPS_ID or FALLBACK_NEW_DROPS_PLAYLIST_ID)
@@ -194,6 +225,7 @@ function MusicPlayerController.create(
 		tostring((deps.config.DJ and deps.config.DJ.SOUND_BOARD_FALLBACK_SOUND_ID) or "")
 
 	-- Sound engine state
+	bindExternalLoadingDuck()
 	self._activeSounds = {} :: { [number]: Sound } -- { [partIndex]: Sound }
 	self._fadingOutSounds = {} :: { [Sound]: boolean } -- fade-out tweens (excluded from orphan kill)
 	self._currentPartIdx = 1
@@ -599,6 +631,7 @@ function MusicPlayerController:_playFromPart(
 	end
 	sound.Volume = if (fadeInDuration or 0) > 0 then 0 else volume
 	sound.RollOffMaxDistance = 0 -- non-spatial (music)
+	sound.SoundGroup = getMusicSoundGroup()
 	sound.Parent = SoundService
 	self:_applyDjSoundSettings(sound)
 	if self:_applyCachedPartDuration(partIndex, assetId) then

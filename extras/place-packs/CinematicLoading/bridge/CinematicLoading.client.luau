@@ -215,7 +215,7 @@ BGMusic.SoundId = SETTINGS.LoadingMusicId
 BGMusic.Volume = SETTINGS.MusicVolume
 BGMusic.Looped = true
 BGMusic.Parent = LoadingUI
-BGMusic:Play()
+-- Played once LoadingUI is inside PlayerGui (a Sound outside the DataModel does not start).
 
 local GraphSelected = false
 local StillLoading = true
@@ -268,6 +268,9 @@ StoryText.TextWrapped = true
 LoadingUI.DisplayOrder = 99999
 LoadingUI.IgnoreGuiInset = true
 LoadingUI.Parent = Plr:WaitForChild("PlayerGui")
+BGMusic:Play()
+-- Kit music stays muted while ClubKitExternalLoading is true (MusicPlayerController honours it),
+-- so the loading track is the only thing playing; it fades out in FinishLoadingWithPan.
 
 -- CoreGui: remember per-type state so we restore exactly what was there (kit hotbar owns Backpack).
 local coreGuiBefore = {}
