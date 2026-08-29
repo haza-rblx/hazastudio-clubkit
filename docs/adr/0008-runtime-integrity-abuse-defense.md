@@ -117,6 +117,38 @@ Sample every character every `SAMPLE_INTERVAL` (0.5 s): HRP position, `AssemblyL
 
 Every rule needs either a client-set property that legitimate players can never have (WalkSpeed 100), or **repeated** physically impossible samples with all kit-driven states excluded and lag samples dropped. A laggy phone player produces one bad sample, not four in a row; a teleport by staff carries a stamp. The remaining risk is third-party place scripts that move players (e.g. a buyer's own teleporter pads) — those are covered by the same attribute stamp, documented in the checklist, and by log-only mode for the first week on a new place.
 
+### Layer 2c — AvatarGuard: oversized / effect-spamming avatars (added 2026-08-29)
+
+Owner's second example: avatars that are "genuinely abnormal" — skybox-sized hats, "laser" beams, giant wings. Unlike movement, **appearance is server-authoritative**: the server loads the `HumanoidDescription` and owns every `Accessory` it welds on. So this is a *trim*, not a kick — the server removes the offending item and every client sees the fixed avatar; the client cannot put it back for others.
+
+#### Where these come from
+
+- **UGC size-limit bypass** (2024, re-patched at least once): accessories thousands of studs wide, stackable ("Glitched Head / Horns / Wing"). Already-owned items keep working after the patch. Sources: [Oversized UGC accessories ruining experiences](https://devforum.roblox.com/t/oversized-ugc-accessories-ruining-experiences/3027611), [UGC size bypass — thousands of studs wide](https://devforum.roblox.com/t/ugc-size-bypass-allows-accessories-that-are-thousands-of-studs-wide/3067813), [Exploit in UGC accessories allowing game-breaking skybox items](https://devforum.roblox.com/t/exploit-in-ugc-accessories-allowing-game-breaking-skybox-items/3322573), [Massive UGC items in game](https://devforum.roblox.com/t/massive-ugc-items-in-game/3184984).
+- **Effect accessories**: legitimate UGC may carry `Beam`, `Trail`, `ParticleEmitter`, `PointLight`/`SpotLight`/`SurfaceLight`, `Fire`, `Smoke`, `Sparkles`. Ten "laser halo" wearers on a dance floor = a light show nobody booked, plus GPU cost on phones (the same texture/overdraw budget ADR 0005 protects).
+- **Body scale**: the place's own Avatar settings decide the allowed `BodyHeightScale` / width / head / proportion ranges. If a buyer left them wide, "giant" needs no exploit.
+
+#### Detector (server, part of `RuntimeGuard`)
+
+Trigger points: `CharacterAppearanceLoaded`, `Character.DescendantAdded` for `Accessory` (covers the kit's in-place `/re` refresh — `SessionCommandService.applyAppearanceInPlace` does not fire `CharacterAdded`), and a one-time pass on `RuntimeGuard.start` for players already in the server.
+
+For each `Accessory`:
+
+| Check | Rule | Action |
+|---|---|---|
+| Accessory bounds | `Handle.Size` (for `Part` + `SpecialMesh`: `Size × Mesh.Scale`) — any axis > `MAX_ACCESSORY_STUDS` (10) or the accessory pushes `character:GetExtentsSize()` above `MAX_CHARACTER_HEIGHT` (14) / `MAX_CHARACTER_WIDTH` (10) | remove the accessory (largest first until the character is back under the cap) |
+| Effect instances | `Beam`, `Trail`, lights, `Fire`, `Smoke`, `Sparkles` under an accessory | `EFFECTS = "strip"` (default): destroy them, keep the mesh. `"cap"`: `Beam.Width0/1 ≤ 2`, `Trail.Lifetime ≤ 1`, light `Range ≤ 12`, `Brightness ≤ 2` |
+| Particles | `ParticleEmitter` under an accessory | cap `Rate ≤ 20`, `Size` keypoints ≤ 2, `Lifetime ≤ 3`; remove if `Enabled` with `Rate > 200` |
+| Count | more than `MAX_ACCESSORIES` (30) accessories | remove the newest beyond the cap |
+
+Everything under kit-owned roots, `Tool`s, and the venue's own effects (donation aura folders, `StatusFX`) are out of scope — only descendants of `Accessory` on a character are touched.
+
+Response: trimmed items are logged per player `{userId, assetId, reason, size}`; a single kit notification ("One of your accessories is too large / bright for this venue and was hidden") per session; beacon `runtime:avatar_trimmed` deduped per player. **No strike, no kick** by default — the harm is already gone. `KICK_AFTER_TRIMS` (0 = off) exists for repeat offenders who re-equip via `/re`.
+
+#### Place-level companion (checklist)
+
+- Game Settings → **Avatar**: pin scale ranges (height 0.9–1.05, width 0.7–1.0, head 0.95–1.0, proportions 0–1) so "giant" cannot come from the website avatar editor at all.
+- Keep `StarterPlayer.LoadCharacterAppearance = true` (the guard needs the real description) — do not replace appearances with a scripted uniform unless the buyer wants that.
+
 ### Layer 3 — Response tools for staff
 
 - `/purgesounds` (Staff+): stop and destroy every non-allowlisted `Sound` right now; `/soundlog` prints the last 20 rogue-sound events with the actor guess.
@@ -140,6 +172,7 @@ Every rule needs either a client-set property that legitimate players can never 
 3. Buyer policy: is "one admin system only, scanned free models only" a delivery requirement (we refuse to ship otherwise) or a recommendation?
 4. MovementGuard default: `ENFORCE = "kick"` from the first release (owner's ask) with `EXEMPT_ROLES = {Owner, CoOwner}` and a 1-week log-only window on newly delivered places — or log-only kit-wide first?
 5. Foreign-animation rule: keep log-only until the dance catalog allowlist is validated on RUST/NIGHT ZONE, or kick from day one?
+6. AvatarGuard effects policy: `"strip"` every Beam/Trail/light from accessories (clean floor, some legit UGC loses its glow) or `"cap"` them (keeps the look, still limits lasers)?
 
 ## Implementation phases
 

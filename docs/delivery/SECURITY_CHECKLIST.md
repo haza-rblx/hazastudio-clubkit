@@ -11,6 +11,7 @@ Run at delivery and after every free-model / admin-system change. Background: `d
 - [ ] Free models: scan **before** inserting; prefer vendored copies (the model's code lives in the place, not behind a `require(id)`).
 - [ ] Non-kit `RemoteEvent`s from the scan's inventory: each has a server-side permission check *and* a rate limit, or is removed.
 - [ ] HttpService: on (kit needs it — ADR 0006), but the scan's `HttpService call` list is understood.
+- [ ] Game Settings → **Avatar**: scale ranges pinned (height 0.9–1.05, width 0.7–1.0, head 0.95–1.0) so oversized bodies cannot come from the avatar editor; `LoadCharacterAppearance` stays on (AvatarGuard needs the real description).
 - [ ] Venue-owned audio assets set to **private + granted to this experience only** (Creator Dashboard → asset privacy), so copies of the place lose the music.
 
 ## Accounts
