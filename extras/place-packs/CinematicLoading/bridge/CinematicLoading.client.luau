@@ -43,6 +43,11 @@ local SETTINGS = {
 	-- Give up waiting for the kit after this many seconds (bar completes anyway).
 	MaxWait = 60,
 	SkipAtPercent = 45,
+	-- Brand logo shown above the loading text when the template GameIcon is blank.
+	-- The template's GameIcon frame is 0.7 x 0.7 of the screen (invisible in the old place
+	-- because it had no image), so the logo is resized here. false = keep it hidden.
+	ShowLogo = false, -- Hierapolis: no logo on the loading screen (owner call 2026-08-29)
+	LogoScale = 0.16, -- fraction of screen height, square (only when ShowLogo = true)
 	Tips = {
 		"Join our community server COMA Studio!",
 	},
@@ -179,11 +184,28 @@ local StoryText = MainFrame:WaitForChild("StoryText")
 local ClickSFX = LoadingUI:WaitForChild("Click")
 local HoverSFX = LoadingUI:WaitForChild("Hover")
 
--- Brand logo from the kit config when the template icon is blank.
-if GameIcon:IsA("ImageLabel") and GameIcon.Image == "" and kitConfig and type(kitConfig.Branding) == "table" then
-	local logo = kitConfig.Branding.LogoImage
-	if type(logo) == "string" and logo ~= "" then
+-- Brand logo from the kit config when the template icon is blank — resized, because the
+-- template frame is screen-sized.
+if GameIcon:IsA("ImageLabel") then
+	local logo = kitConfig and type(kitConfig.Branding) == "table" and kitConfig.Branding.LogoImage or nil
+	if GameIcon.Image ~= "" then
+		logo = GameIcon.Image -- template supplied its own
+	end
+	if SETTINGS.ShowLogo and type(logo) == "string" and logo ~= "" then
 		GameIcon.Image = logo
+		GameIcon.ScaleType = Enum.ScaleType.Fit
+		GameIcon.BackgroundTransparency = 1
+		GameIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+		GameIcon.Size = UDim2.fromScale(SETTINGS.LogoScale, SETTINGS.LogoScale)
+		GameIcon.Position = UDim2.fromScale(0.5, 0.36)
+		local ratio = GameIcon:FindFirstChildOfClass("UIAspectRatioConstraint") or Instance.new("UIAspectRatioConstraint")
+		ratio.AspectRatio = 1
+		ratio.DominantAxis = Enum.DominantAxis.Height
+		ratio.Parent = GameIcon
+	else
+		-- No logo at all on this screen (ShowLogo = false, or nothing to show).
+		GameIcon.Image = ""
+		GameIcon.Visible = false
 	end
 end
 
