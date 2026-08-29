@@ -700,9 +700,18 @@ function OverheadDomain.buildPayload(
 		specialRankText = specialRankCfg.text
 		specialRankGradient = specialRankCfg.gradient
 	end
-	-- Role chip: the configured role text also occupies the donation-chip row (and hides
-	-- the #N rank chips) when the role opts in with specialRank.chip = true.
+	-- Role chip: the configured role text occupies the donation-chip row (and hides the #N
+	-- rank chips) when the role opts in with specialRank.chip = true. The special-rank row
+	-- then shows the role's chatTag instead ("DPC" / "OWNER"), so the unique name is not
+	-- printed twice on one nametag. A per-player admin override (stored.specialRank) still wins.
 	local roleChip: string? = if specialRankCfg and (specialRankCfg :: any).chip == true then specialRankCfg.text else nil
+	if roleChip and not stored.specialRank then
+		local roleDef = RolesDomain.getDefinition(role)
+		local chatTag = if roleDef and type(roleDef.chatTag) == "string" then roleDef.chatTag else nil
+		if chatTag and chatTag ~= "" then
+			specialRankText = chatTag
+		end
+	end
 
 	local effectiveMembership: MembershipTier = OverheadDomain.resolveEffectiveMembership(stored, rankId, userId)
 	local roleMembership = OverheadDomain.normalizeMembershipTier(role)
