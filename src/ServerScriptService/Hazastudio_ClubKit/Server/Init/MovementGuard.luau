@@ -147,9 +147,16 @@ local function sampleCharacter(deps: Deps, player: Player, entry: Tracked, now: 
 
 	local c = cfg()
 	local pos = hrp.Position
+	-- Exclude EVERY character: another dancer's torso on the sampled chord is not a wall.
+	local exclude = {}
+	for _, other in ipairs(Players:GetPlayers()) do
+		if other.Character then
+			table.insert(exclude, other.Character)
+		end
+	end
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Exclude
-	params.FilterDescendantsInstances = { character }
+	params.FilterDescendantsInstances = exclude
 	params.RespectCanCollide = true
 
 	-- Ground under the feet (fly rule).
@@ -171,9 +178,13 @@ local function sampleCharacter(deps: Deps, player: Player, entry: Tracked, now: 
 			if hit and hit.Instance and hit.Instance.CanCollide then
 				local tag = c.IGNORE_COLLECTION_TAG
 				if not (type(tag) == "string" and CollectionService:HasTag(hit.Instance, tag)) then
-					-- Must be genuinely inside/through the part: hit well before the destination.
+					-- Genuinely THROUGH the part, not a cut corner: the reverse ray from the
+					-- destination must hit the same part too (a corner cut exits into open air).
 					if (hit.Position - pos).Magnitude > 1.5 then
-						blockedPath = true
+						local back = workspace:Raycast(pos, -delta, params)
+						if back and back.Instance == hit.Instance and (back.Position - from).Magnitude > 1.5 then
+							blockedPath = true
+						end
 					end
 				end
 			end
@@ -301,6 +312,12 @@ function MovementGuard.start(deps: Deps)
 			entry.stateConn:Disconnect()
 		end
 		tracked[player.UserId] = nil
+		-- Expired soft bans are dropped here so the table stays bounded.
+		for userId, until_ in pairs(softBanUntil) do
+			if os.time() >= until_ then
+				softBanUntil[userId] = nil
+			end
+		end
 	end)
 
 	local interval = tonumber(c.SAMPLE_INTERVAL) or 0.5
@@ -310,7 +327,7 @@ function MovementGuard.start(deps: Deps)
 		if acc < interval then
 			return
 		end
-		acc = 0
+		acc -= interval
 		local now = os.clock()
 		for _, player in ipairs(Players:GetPlayers()) do
 			local entry = tracked[player.UserId]
@@ -323,6 +340,13 @@ function MovementGuard.start(deps: Deps)
 		end
 	end)
 	log:info("MovementGuard armed", { enforce = c.ENFORCE, interval = interval, exempt = table.concat(c.EXEMPT_ROLES or {}, ",") })
+end
+
+-- Buyer scripts (teleport pads, elevators, cutscenes) call this right before moving a
+-- character so the displacement is not judged. Equivalent to setting the attribute directly.
+function MovementGuard.stampTeleport(character: Instance)
+	local attr = cfg().TELEPORT_STAMP_ATTRIBUTE or "ClubKitTeleportAt"
+	character:SetAttribute(attr, os.clock())
 end
 
 -- Test/ops hook: current ledger for a player (nil when untracked).

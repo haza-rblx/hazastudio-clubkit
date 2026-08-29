@@ -110,6 +110,8 @@ local function startSoundGuard(deps: Deps)
 		end
 	end)
 	local seen: { [string]: boolean } = {}
+	local seenCount = 0
+	local MAX_SEEN = 200 -- attacker-controlled key space: stop remembering after this
 	local rogueCount = 0
 
 	local function judge(sound: Sound)
@@ -121,12 +123,14 @@ local function startSoundGuard(deps: Deps)
 			return
 		end
 		rogueCount += 1
-		local actor = ownerOf(sound)
+		-- A sound parented INTO a character was put there by a server script, not by that
+		-- player; keep the path as evidence but do not attribute it to the player.
 		local path = sound:GetFullName()
-		log:warn("Rogue sound", { soundId = id, path = path, actor = actor and actor.Name, mode = mode })
-		if not seen[id] then
+		log:warn("Rogue sound", { soundId = id, path = path, mode = mode })
+		if not seen[id] and seenCount < MAX_SEEN then
 			seen[id] = true
-			beacon(deps, "rogue_sound", { sound_id = id, path = string.sub(path, 1, 200), actor_id = actor and actor.UserId })
+			seenCount += 1
+			beacon(deps, "rogue_sound", { sound_id = id, path = string.sub(path, 1, 200) })
 		end
 		if mode == "block" then
 			pcall(function()
@@ -138,10 +142,18 @@ local function startSoundGuard(deps: Deps)
 
 	game.DescendantAdded:Connect(function(inst)
 		if inst:IsA("Sound") then
-			-- SoundId is often set right after Instance.new; judge on the next step.
+			-- SoundId is often set right after Instance.new; judge on the next step, and
+			-- again if the id changes later. The connection dies with the Sound.
 			task.defer(judge, inst)
-			inst:GetPropertyChangedSignal("SoundId"):Connect(function()
+			local conn: RBXScriptConnection? = nil
+			conn = inst:GetPropertyChangedSignal("SoundId"):Connect(function()
 				judge(inst)
+			end)
+			inst.Destroying:Connect(function()
+				if conn then
+					conn:Disconnect()
+					conn = nil
+				end
 			end)
 		end
 	end)
@@ -183,6 +195,7 @@ local function startScriptGuard(deps: Deps)
 	end
 
 	local seenPaths: { [string]: boolean } = {}
+	local seenPathCount = 0
 	game.DescendantAdded:Connect(function(inst)
 		if not bootDone or not inst:IsA("LuaSourceContainer") then
 			return
@@ -204,7 +217,10 @@ local function startScriptGuard(deps: Deps)
 			if seenPaths[path] then
 				return
 			end
-			seenPaths[path] = true
+			if seenPathCount < 500 then
+				seenPaths[path] = true
+				seenPathCount += 1
+			end
 			reported += 1
 			local head = ""
 			pcall(function()
@@ -243,8 +259,12 @@ local function startRemoteStorm(deps: Deps)
 			return
 		end
 		hooked[remote] = true
-		;(remote :: any).OnServerEvent:Connect(function(player: Player)
+		local conn = (remote :: any).OnServerEvent:Connect(function(player: Player)
 			counts[player.UserId] = (counts[player.UserId] or 0) + 1
+		end)
+		remote.Destroying:Connect(function()
+			conn:Disconnect()
+			hooked[remote] = nil
 		end)
 	end
 	for _, inst in ipairs(ReplicatedStorage:GetDescendants()) do
@@ -462,22 +482,42 @@ local function startAvatarGuard(deps: Deps)
 		end
 	end
 
-	local function bindCharacter(player: Player, character: Model)
-		task.defer(judgeCharacter, player, character)
-		character.DescendantAdded:Connect(function(inst)
-			if inst:IsA("Accessory") then
-				task.defer(function()
-					judgeAccessory(inst, player)
-					judgeCharacter(player, character)
-				end)
+	-- One deferred whole-character pass per burst of accessory adds (an avatar with 30
+	-- accessories arrives as 30 DescendantAdded events; judging once is enough).
+	local pendingCharacter: { [Model]: boolean } = {}
+	local function scheduleJudge(player: Player, character: Model)
+		if pendingCharacter[character] then
+			return
+		end
+		pendingCharacter[character] = true
+		task.defer(function()
+			pendingCharacter[character] = nil
+			if character.Parent then
+				judgeCharacter(player, character)
 			end
 		end)
 	end
 
-	local function bindPlayer(player: Player)
-		player.CharacterAppearanceLoaded:Connect(function(character)
-			bindCharacter(player, character)
+	local playerConns: { [number]: { RBXScriptConnection } } = {}
+	local function bindCharacter(player: Player, character: Model)
+		scheduleJudge(player, character)
+		local conn = character.DescendantAdded:Connect(function(inst)
+			if inst:IsA("Accessory") then
+				scheduleJudge(player, character)
+			end
 		end)
+		character.Destroying:Once(function()
+			conn:Disconnect()
+			pendingCharacter[character] = nil
+		end)
+	end
+
+	local function bindPlayer(player: Player)
+		local conns = {}
+		playerConns[player.UserId] = conns
+		table.insert(conns, player.CharacterAppearanceLoaded:Connect(function(character)
+			bindCharacter(player, character)
+		end))
 		if player.Character then
 			bindCharacter(player, player.Character)
 		end
@@ -489,6 +529,10 @@ local function startAvatarGuard(deps: Deps)
 	Players.PlayerRemoving:Connect(function(player)
 		trims[player.UserId] = nil
 		notified[player.UserId] = nil
+		for _, conn in ipairs(playerConns[player.UserId] or {}) do
+			conn:Disconnect()
+		end
+		playerConns[player.UserId] = nil
 	end)
 	log:info("AvatarGuard armed", { effects = cfg.EFFECTS, maxStuds = cfg.MAX_ACCESSORY_STUDS })
 end

@@ -1615,7 +1615,10 @@ Config.RuntimeGuard = {
 	-- Remote storm: total RemoteEvent fires per player per second, sustained over the window.
 	REMOTE_STORM_PER_SEC = 40,
 	REMOTE_STORM_WINDOW = 3,
-	REMOTE_STORM_ACTION = "kick", -- "log" | "kick"
+	-- Counts EVERY RemoteEvent under ReplicatedStorage, including third-party kits that may
+	-- legitimately fire per frame — so the default only logs. Flip to "kick" per place once
+	-- the log shows no honest player crossing the threshold.
+	REMOTE_STORM_ACTION = "log", -- "log" | "kick"
 	NOTIFY_PLAYER = true,
 }
 -- Movement cheats (ADR 0008 Layer 2b). Server samples replicated character physics and
@@ -1629,6 +1632,9 @@ Config.MovementGuard = {
 	SOFT_BAN_MINUTES = 15,
 	-- CollectionService tag for parts the noclip raycast must ignore (buyer's fake walls / curtains).
 	IGNORE_COLLECTION_TAG = "ClubKitNoclipIgnore",
+	-- Buyer teleport pads / elevators / vehicles: set this attribute on the character to os.clock()
+	-- right before you move it (or call MovementGuard.stampTeleport(character)); seated players
+	-- are exempt from the displacement rules automatically.
 	TELEPORT_STAMP_ATTRIBUTE = "ClubKitTeleportAt",
 	MSG_WARN = "Your movement looks modified. Stop now or you will be removed from the venue.",
 	MSG_KICK = "Removed: modified movement detected (%s). You can rejoin in %d minutes.",
@@ -1646,7 +1652,7 @@ Config.MovementGuard = {
 	FLY_GROUND_CLEARANCE = 8,
 	HIGHJUMP_MULT = 1.8,
 	HIGHJUMP_ADD = 5,
-	NOCLIP_EVENTS = 2,
+	NOCLIP_EVENTS = 3, -- honest players cut two corners in 10 s on a crowded floor; three is a pattern
 	NOCLIP_WINDOW = 10,
 	TELEPORT_MIN_STUDS = 60,
 	TELEPORT_SPEED_MULT = 3,

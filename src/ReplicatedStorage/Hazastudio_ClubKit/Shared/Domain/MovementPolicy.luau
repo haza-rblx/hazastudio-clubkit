@@ -66,7 +66,7 @@ MovementPolicy.DEFAULTS = {
 	FLY_GROUND_CLEARANCE = 8,
 	HIGHJUMP_MULT = 1.8,
 	HIGHJUMP_ADD = 5,
-	NOCLIP_EVENTS = 2,
+	NOCLIP_EVENTS = 3,
 	NOCLIP_WINDOW = 10,
 	TELEPORT_MIN_STUDS = 60,
 	TELEPORT_SPEED_MULT = 3,
@@ -197,8 +197,9 @@ function MovementPolicy.evaluate(prev: Sample?, cur: Sample, flags: Flags, cfg: 
 		state.airJumpTimes = {}
 	end
 
-	-- Noclip: path between samples crossed solid geometry, more than once.
-	if cur.blockedPath then
+	-- Noclip: path between samples crossed solid geometry, repeatedly (never while seated —
+	-- vehicles clip through their own doors).
+	if cur.blockedPath and not cur.seated then
 		table.insert(state.noclipTimes, cur.t)
 	end
 	state.noclipTimes = pruneTimes(state.noclipTimes, cur.t, cfgNum(cfg, "NOCLIP_WINDOW"))
@@ -207,7 +208,9 @@ function MovementPolicy.evaluate(prev: Sample?, cur: Sample, flags: Flags, cfg: 
 		state.noclipTimes = {}
 	end
 
-	if prev == nil then
+	-- Seated = vehicle / seat / elevator moves the player; displacement rules do not apply.
+	if prev == nil or cur.seated then
+		state.speedStreak = 0
 		return violations
 	end
 	local dt = cur.t - prev.t
