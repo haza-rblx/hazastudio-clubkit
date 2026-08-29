@@ -22,6 +22,7 @@ Active version: see [`VERSION`](VERSION).
 - **Role chip in the overhead.** `specialRank = { text, gradient, chip = true }` shows the role text as a pill in the donation-chip row (`00-DonationLayers`, cloned from the Robux rank pill, first in the row) painted with `roleColor.stops`, and hides that role's `#N ROBUX` / `#N cash` / SUPPORTER chips. Payload field `roleChip` (fingerprinted for delta sync); the `04-SpecialRank` row is unchanged.
 
 ### Fixed
+- **Client boot gave up on heavy places.** `Config.Loading.BOOTSTRAP_WAIT_TIMEOUT` was 30 s per dependency; on a large venue running at 4–5 FPS (video walls, 28k-instance maps) `Remotes` / `Icon` replicated later than that and `Main.client` bailed with "Critical client dependencies were not replicated in time" — no kit UI at all. Now 120 s (verified on Hierapolis: kit boots at ~37 s under the same load).
 - **Admin Hub "Set role" only offered the stock roles.** The picker was a hardcoded list (Co-Owner / Staff / Moderator / DJ / …), so a buyer catalog with renamed or extra roles (e.g. Minister, Emperor, Echoborn) could not be applied from the hub — only via `/setrole` in chat. It is now built from `Config.Roles` at open time (setrole-only roles in catalog order, category label as subtitle); the template's pick cards are re-keyed by `LayoutOrder`, cloned when the catalog is longer than the template, and parked when shorter.
 
 ## [2.10.0] - 2026-08-28
