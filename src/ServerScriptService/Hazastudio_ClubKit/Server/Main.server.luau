@@ -461,6 +461,16 @@ if Config.FeatureFlags.GravityEnabled ~= false then
 		})
 	)
 end
+-- Runtime integrity + movement guards (ADR 0008). Started here because they need the
+-- carry/gravity/snapshot services for exemptions; evidence routes via LicenseService.
+ServerMods.RuntimeGuard.start({ licenseService = ServerMods.LicenseService, notify = Notify })
+ServerMods.MovementGuard.start({
+	licenseService = ServerMods.LicenseService,
+	notify = Notify,
+	gravityService = gravityService,
+	carryService = carryService,
+	playerSnapshotService = playerSnapshotService,
+})
 local stickerService = trackLifecycle(
 	"StickerService",
 	ServerMods.createStickerService.new({

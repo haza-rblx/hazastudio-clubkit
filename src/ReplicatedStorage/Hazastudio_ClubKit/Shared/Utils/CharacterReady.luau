@@ -399,6 +399,9 @@ function CharacterReady.pivotTo(
 	if humanoid then
 		humanoid.Sit = false
 	end
+	-- Server-teleport stamp: MovementGuard ignores displacement shortly after this
+	-- (every kit teleport — /to, /bring, AFK rejoin restore — funnels through here).
+	character:SetAttribute("ClubKitTeleportAt", os.clock())
 	CharacterReady.streamAround(player, targetCFrame.Position)
 	character:PivotTo(targetCFrame)
 	local hrp = character:FindFirstChild("HumanoidRootPart")

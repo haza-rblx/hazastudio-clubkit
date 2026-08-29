@@ -1599,6 +1599,82 @@ Config.AntiTamper = {
 	BRICK_ON_DETECT = false,
 	DETECT_POLL_INTERVAL = 2, -- seconds between UGCValidationService probes
 }
+-- Runtime integrity guards (ADR 0008 Layer 2). Watch EFFECTS, not code: a backdoor can
+-- be obfuscated, but a rogue Sound, an injected Script or a remote storm cannot hide.
+-- Beacons reuse LicenseService.reportTamper ("runtime:<kind>").
+Config.RuntimeGuard = {
+	ENABLED = true,
+	-- Sounds: every Sound present at server start is the allowlist (their SoundIds), plus
+	-- anything under kit-owned roots. "log" = record + beacon; "block" = also stop + destroy.
+	-- Default log: third-party music systems may legitimately create Sounds at runtime.
+	SOUND_ENFORCE = "log", -- "off" | "log" | "block"
+	-- Scripts created at runtime outside the kit: "beacon" = log + beacon; "destroy" = also delete.
+	SCRIPT_GUARD = "beacon", -- "off" | "beacon" | "destroy"
+	-- Admin loaders create their own runtime scripts; parents whose Name matches are ignored.
+	SCRIPT_ALLOW_PARENT_NAMES = { "Kohl's Admin", "Kohl's Admin Source", "Adonis_Loader", "Adonis", "HD Admin", "_KAdmin" },
+	-- Remote storm: total RemoteEvent fires per player per second, sustained over the window.
+	REMOTE_STORM_PER_SEC = 40,
+	REMOTE_STORM_WINDOW = 3,
+	REMOTE_STORM_ACTION = "kick", -- "log" | "kick"
+	NOTIFY_PLAYER = true,
+}
+-- Movement cheats (ADR 0008 Layer 2b). Server samples replicated character physics and
+-- scores physically impossible streaks; kit states (gravity float, carry, server teleports,
+-- spawn) are exempt first. See Shared/Domain/MovementPolicy for the rules.
+Config.MovementGuard = {
+	ENABLED = true,
+	ENFORCE = "kick", -- "log" | "kick"
+	EXEMPT_ROLES = { "Owner", "CoOwner" },
+	SAMPLE_INTERVAL = 0.5,
+	SOFT_BAN_MINUTES = 15,
+	-- CollectionService tag for parts the noclip raycast must ignore (buyer's fake walls / curtains).
+	IGNORE_COLLECTION_TAG = "ClubKitNoclipIgnore",
+	TELEPORT_STAMP_ATTRIBUTE = "ClubKitTeleportAt",
+	MSG_WARN = "Your movement looks modified. Stop now or you will be removed from the venue.",
+	MSG_KICK = "Removed: modified movement detected (%s). You can rejoin in %d minutes.",
+	MSG_SOFT_BAN = "You were removed for modified movement. Try again in %d minutes.",
+	-- Rule tuning (mirrors MovementPolicy.DEFAULTS; policy falls back to its own defaults if a key is missing).
+	MAX_PING_MS = 600,
+	SPAWN_GRACE = 5,
+	TELEPORT_GRACE = 2,
+	SPEED_TOLERANCE_MULT = 1.6,
+	SPEED_TOLERANCE_ADD = 4,
+	SPEED_STREAK = 3,
+	MAX_WALKSPEED = 32,
+	MAX_JUMPPOWER = 75,
+	FLY_STREAK = 4,
+	FLY_GROUND_CLEARANCE = 8,
+	HIGHJUMP_MULT = 1.8,
+	HIGHJUMP_ADD = 5,
+	NOCLIP_EVENTS = 2,
+	NOCLIP_WINDOW = 10,
+	TELEPORT_MIN_STUDS = 60,
+	TELEPORT_SPEED_MULT = 3,
+	AIRJUMP_COUNT = 3,
+	AIRJUMP_WINDOW = 3,
+	STRIKE_DECAY_SEC = 20,
+	WARN_AT = 3,
+	KICK_AT = 5,
+}
+-- Oversized / effect-spamming avatars (ADR 0008 Layer 2c). Appearance is server-owned, so
+-- this trims instead of kicking. See Shared/Domain/AvatarPolicy.
+Config.AvatarGuard = {
+	ENABLED = true,
+	MAX_ACCESSORY_STUDS = 10,
+	MAX_CHARACTER_HEIGHT = 14,
+	MAX_CHARACTER_WIDTH = 10,
+	MAX_ACCESSORIES = 30,
+	EFFECTS = "cap", -- "cap" | "strip" — Beam/Trail/lights inside accessories
+	BEAM_MAX_WIDTH = 2,
+	LIGHT_MAX_RANGE = 12,
+	LIGHT_MAX_BRIGHTNESS = 2,
+	PARTICLE_MAX_RATE = 20,
+	PARTICLE_MAX_SIZE = 2,
+	PARTICLE_MAX_LIFETIME = 3,
+	PARTICLE_REMOVE_RATE = 200,
+	KICK_AFTER_TRIMS = 0, -- 0 = never kick; N = kick after N trims in one session
+	MSG_TRIMMED = "One of your accessories is too large or too bright for this venue and was hidden.",
+}
 -- ============================================================
 -- SHOP SYSTEM
 -- ============================================================

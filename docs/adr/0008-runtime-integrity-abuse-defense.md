@@ -1,6 +1,6 @@
 # ADR 0008 — Runtime integrity & abuse defense (anti-cheat for club venues)
 
-Status: **Proposed** (2026-08-29). Research + design; nothing in this ADR is built yet except the scanner in `tools/security/`.
+Status: **Accepted — phase 1 built** (2026-08-29). Layers 1, 2, 2b, 2c are implemented in `[Unreleased]` (`Server/Init/RuntimeGuard`, `Server/Init/MovementGuard`, pure `MovementPolicy` / `AvatarPolicy`, `tools/security/PlaceSecurityScan.luau`). Defaults chosen by the agent pending the owner's answers to the decisions below: SoundGuard `"log"`, ScriptGuard `"beacon"`, MovementGuard `"kick"` with Owner/CoOwner exempt, foreign-animation rule deferred to phase 2, AvatarGuard effects `"cap"`. Layers 3–4 not built.
 
 Trigger: a buyer venue was hit by a *guest with no rank* who made a laughing audio play **for everyone in the server**. ADR 0006 covers theft of the kit; this ADR covers the other half — someone abusing a live venue.
 
@@ -81,7 +81,7 @@ Owner asked for fly/speed/etc. to be kicked automatically. What these cheats are
 
 #### What the server can see, honestly
 
-Roblox gives the client **network ownership of its own character**: `WalkSpeed`, `JumpPower`, HRP `CFrame`/velocity and animation tracks all replicate *from* the client. The server cannot prevent those writes — it can only **observe the replicated result** and react. A server-side movement guard is therefore a sampler + a set of physics-plausibility rules + a strike ledger, never a blocker. Detection lag of ~1 s is fine for a venue; false kicks are the real cost.
+Roblox gives the client **network ownership of its own character physics**: HRP `CFrame`/velocity and animation tracks replicate *from* the client. **Humanoid properties do not** — verified 2026-08-29 in the test place: a client setting `WalkSpeed = 100` moves at 100 while the server still reads 16. So the `speed_property` rule only catches server-side misconfiguration; real speed cheats are caught by the displacement rule (and were: CFrame-stepping at 60 studs/s → 5 strikes → kick in ~3 s). The server cannot prevent those writes — it can only **observe the replicated result** and react. A server-side movement guard is therefore a sampler + a set of physics-plausibility rules + a strike ledger, never a blocker. Detection lag of ~1 s is fine for a venue; false kicks are the real cost.
 
 #### Detector design (server, `Server/Init/MovementGuard.luau`; rules in a pure `Shared/Domain/MovementPolicy.luau`)
 
@@ -164,6 +164,22 @@ Response: trimmed items are logged per player `{userId, assetId, reason, size}`;
 - Layer 2 is a speed bump with evidence: a backdoor can still delete `RuntimeGuard`, but the beacon fires on the first rogue sound before the operator reacts, and `ScriptGuard` sees the dropper. Log-only first release avoids false positives against legitimate third-party sound systems (the venue's own music/lights packs create sounds too — hence the boot snapshot allowlist, not a hardcoded list).
 - Register budget: RuntimeGuard is its own `Server/Init` module (adds 1 local to `ServerModuleBag`, none to `Main.server`).
 - Non-goals: client anti-cheat heuristics (speed/fly detection) — a club venue has no gameplay integrity to protect, and false kicks cost more than a flyer; hooking `require`; scanning obfuscated code semantically.
+
+#### Test-place verification (THE BASIC TEST 1.3, 2026-08-29)
+
+| Experiment | Result |
+|---|---|
+| Server creates `Workspace.EvilLaugh` Sound with an id not in the place (backdoor simulation) | SoundGuard `block`: logged, beaconed, destroyed within 1 s |
+| 30-stud `Accessory` with Beam width 20 + PointLight range 60 on my character | removed (`oversized`) |
+| 2-stud hat with Beam width 15 + ParticleEmitter rate 500 | kept; Beam capped to width 2, emitter removed (`effect_particle`) |
+| Client `HRP.CFrame += 150` (teleport) | `teleport` 3 strikes → warning; second impossible sample → 6 → kick, soft-ban 15 min |
+| Client `WalkSpeed = 100` | server still sees 16 (does not replicate) — no strike, see above |
+| Client CFrame-stepping at 60 studs/s in a circle | `speed` strikes 1…5 → kick in ~3.5 s |
+| Client holds `AssemblyLinearVelocity = (0, 12, 0)` (fly) | rose 31 studs, then kick "modified movement detected (fly)" |
+| Client fires `ClientGameplayReady` ~180×/s | RemoteStorm: kick "too many requests per second" after the 3-s window |
+
+Test-place-only overrides used for these runs (`SOUND_ENFORCE = "block"`, `EXEMPT_ROLES = {}`) were reverted afterwards — that place is the delivery-pack template, so engine constants there must equal the repo.
+| Kit tools cloned into Backpack/StarterGear by `RoleToolService` | ScriptGuard false positive on first run → fixed: scripts under `Tool`/`Backpack`/`StarterGear` and `__MCP_*` bridges are ignored |
 
 ## Decisions needed from the owner
 

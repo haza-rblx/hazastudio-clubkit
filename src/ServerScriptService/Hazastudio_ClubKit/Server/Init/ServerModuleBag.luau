@@ -37,6 +37,8 @@ return {
 	LicenseService = require(Server.Services.LicenseService),
 	IntegrityTripwire = require(Server.Init.IntegrityTripwire),
 	TamperGuard = require(Server.Init.TamperGuard),
+	RuntimeGuard = require(Server.Init.RuntimeGuard),
+	MovementGuard = require(Server.Init.MovementGuard),
 	createDonationEffectService = require(Server.Services.DonationEffectService),
 	createStickerService = require(Server.Services.StickerService),
 	createSettingsService = require(Server.Services.SettingsService),
