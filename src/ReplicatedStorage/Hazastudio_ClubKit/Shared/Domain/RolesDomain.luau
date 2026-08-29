@@ -4,6 +4,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local LegacyRoles = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Config.Roles)
+local RoleColorDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.RoleColorDomain)
 
 export type RoleDefinition = LegacyRoles.RoleDefinition
 export type RoleColor = LegacyRoles.RoleColor
@@ -397,6 +398,19 @@ local function ensureUniqueRoleColors()
 		if type(roleColor) ~= "table" then
 			roleColor = { primary = "#6B7280", secondary = "#9CA3AF" }
 			definition.roleColor = roleColor
+		end
+		-- Optional multi-stop gradient: sanitize once here so every consumer (overhead,
+		-- chat pair below) sees either nil or 2..5 "#RRGGBB" strings.
+		local stops = RoleColorDomain.normalizeStops(roleColor.stops)
+		roleColor.stops = stops
+		if stops then
+			local firstStop, lastStop = RoleColorDomain.deriveChatPair(stops)
+			if type(roleColor.primary) ~= "string" or roleColor.primary == "" then
+				roleColor.primary = firstStop
+			end
+			if type(roleColor.secondary) ~= "string" or roleColor.secondary == "" then
+				roleColor.secondary = lastStop
+			end
 		end
 		local preferredPrimary = if type(roleColor.primary) == "string" then roleColor.primary else ""
 		local assignedPrimary = nextFreePrimary(preferredPrimary, roleKey)

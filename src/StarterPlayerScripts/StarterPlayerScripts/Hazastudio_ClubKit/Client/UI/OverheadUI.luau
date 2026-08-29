@@ -8,6 +8,7 @@ local TweenService = game:GetService("TweenService")
 local Types = require(game.ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local Config = require(game.ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local CashCurrencyDomain = require(game.ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.CashCurrencyDomain)
+local RoleColorDomain = require(game.ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.RoleColorDomain)
 local LoadingScreenUI = require(game.ReplicatedStorage.Hazastudio_ClubKit.Shared.UI.LoadingScreenUI)
 local UIShadowHelper = require(script.Parent.Parent.Utils.UIShadowHelper)
 local GroupMotion = require(script.Parent.Parent.Utils.GroupMotion)
@@ -539,6 +540,48 @@ local function lazySetRow(
 		-- Schedule removal from hierarchy after 1s (R4.4).
 		lazyReleaseRow(self, rowName)
 	end
+end
+
+-- roleColor.stops → the special-rank text gradient. The template ships one UIGradient on
+-- SpecialRoleName; we overwrite its Color for roles that declare stops and put the template
+-- sequence back when the row is reused for a role without stops. Keyed on the joined stop
+-- string so a full-state re-apply (server echoes, not deltas) is a no-op.
+local ROLE_STOPS_KEY_ATTR = "ClubKitRoleStopsKey"
+local roleStopsTemplateColors: { [UIGradient]: ColorSequence } = setmetatable({}, { __mode = "k" }) :: any
+
+local function applyRoleStopsGradient(row: Instance?, roleKey: string?)
+	if not row then
+		return
+	end
+	local label = row:FindFirstChildWhichIsA("TextLabel")
+	local textGrad = label and label:FindFirstChildWhichIsA("UIGradient")
+	if not textGrad then
+		return
+	end
+	local palette = if type(roleKey) == "string" then Config.RoleColorPalette[roleKey] else nil
+	local stops = if type(palette) == "table" then palette.stops else nil
+	local key = if type(stops) == "table" then table.concat(stops, ",") else ""
+	if textGrad:GetAttribute(ROLE_STOPS_KEY_ATTR) == key then
+		return
+	end
+	if key == "" then
+		local template = roleStopsTemplateColors[textGrad]
+		if template then
+			textGrad.Color = template
+		end
+		textGrad:SetAttribute(ROLE_STOPS_KEY_ATTR, nil)
+		return
+	end
+	if roleStopsTemplateColors[textGrad] == nil then
+		roleStopsTemplateColors[textGrad] = textGrad.Color
+	end
+	local keypoints = {}
+	for _, point in ipairs(RoleColorDomain.toKeypoints(stops :: { string })) do
+		table.insert(keypoints, ColorSequenceKeypoint.new(point.time, Color3.fromRGB(point.r, point.g, point.b)))
+	end
+	textGrad.Color = ColorSequence.new(keypoints)
+	textGrad.Enabled = true
+	textGrad:SetAttribute(ROLE_STOPS_KEY_ATTR, key)
 end
 
 local function applyTextShadowIfBackgroundless(row: Instance?)
@@ -1589,6 +1632,9 @@ function OverheadUI:apply(payload: OverheadPayload)
 			payload.userId
 		)
 	rowSet("04-SpecialRank", specialRankVisible, payload.specialRank)
+	if specialRankVisible then
+		applyRoleStopsGradient(specialRankRow, payload.role)
+	end
 	applyTextShadowIfBackgroundless(specialRankRow)
 
 	-- 05-TopSpender legacy (#N INVESTOR) — superseded by 00-DonationLayers RupiahRank chip.

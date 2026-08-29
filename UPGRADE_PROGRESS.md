@@ -15,6 +15,8 @@ Internal scratch pad to track work **before** a version is released.
 | CanvasGroup blank/flicker (ADR 0005) | **Released in 2.10.0.** QA: NIGHT ZONE 0/91 groups (2026-08-28) + the-basic admin panel 0.0px seam + boot/cull verified. |
 | License hardening (ADR 0006) | **Released in 2.10.0** (kit + VPS backend live). Deferred to a future release: universe check on the *data* endpoints (Pillar 1) + per-buyer hidden canary (Pillar 4 Packager step); brick default OFF until validated live. |
 | Manual Robux via Admin Hub | **Released in 2.10.0.** Persist fix validated end-to-end in the-basic (42→542). |
+| 2.10.0 release + delivery pack | Released + pushed (`v2.10.0`) 2026-08-28. Desktop `ClubKit v2.10.0 Delivery/` ready **except** `HazastudioClubKit_Package_v2.10.0.rbxm` — owner still owes: **Ctrl+S the-basic** (the 19-file MCP sync is unsaved otherwise) then packager **Create package** into the folder. Plugin 2.10.0 rbxm installed; loads on next Studio restart. |
+| Product telemetry (ADR 0007) | Phases 0+A **live on the VPS** 2026-08-28: `/fleet` (master-only, enriched) + `v3/telemetry` ingest. Kit phases B–D pending a future kit release. |
 | RUST → VPS + data migration | Done 2026-08-27 (`docs/buyers/rust.md`). On 2.9.2-era build; 2.10.0 available to roll out. Owner still owes: Ctrl+S, Saweria webhook repoint. |
 | NIGHT ZONE → VPS + data migration | Done 2026-08-27 (`docs/buyers/night-zone.md`). On 2.9.2-era build; 2.10.0 available to roll out. Owner still owes: Ctrl+S, Saweria webhook repoint. |
 | AFTER HOURS → VPS data migration | Done 2026-08-28 (`docs/buyers/after-hours.md`, 164/164). Owner still owes: repoint BagiBagi webhook + point place ApiUrl. |
@@ -23,11 +25,18 @@ Internal scratch pad to track work **before** a version is released.
 
 ## File changes (unreleased)
 
-_(empty — 2.10.0 just shipped. Add new engine/buyer file changes here as development continues.)_
-
 | Path | Change |
 |------|--------|
-|      |        |
+| `src/ReplicatedStorage/Hazastudio_ClubKit/Shared/Domain/RoleColorDomain.luau` | **New (pure).** `normalizeStops` / `toKeypoints` / `deriveChatPair` for `roleColor.stops`. Harness `.tmp/test_role_color_domain.luau` (lune, 11/11). |
+| `src/ReplicatedStorage/Hazastudio_ClubKit/Shared/Domain/RolesDomain.luau` | Sanitizes `roleColor.stops` at boot; fills `primary`/`secondary` from first/last stop when omitted. |
+| `src/ReplicatedStorage/Hazastudio_ClubKit/Shared/Config/Roles.luau` | `RoleColor.stops: { string }?` type. |
+| `src/ReplicatedStorage/Hazastudio_ClubKit/Shared/Constants/Config.luau` | `RoleColorPalette` type gains `stops`; `Config.ClientBoot` gains the external-loading attribute names + `EXTERNAL_LOADING_TIMEOUT`. |
+| `src/StarterPlayerScripts/.../Client/UI/OverheadUI.luau` | `applyRoleStopsGradient` on `04-SpecialRank` (keyed setter, restores template gradient on role change). |
+| `src/StarterPlayerScripts/.../Main.client.luau` | Publishes `ClubKitBootProgress` / `ClubKitBootSettled` / `ClubKitGameplayReady`; `enterGameplayAfterExternalHold` when the kit loading screen is off. |
+| `src/ReplicatedStorage/Hazastudio_ClubKit/Shared/Config/ClubKitConfigSchema.luau`, `src/ReplicatedStorage/Hazastudio_ClubKitConfig/ClubKitConfig.luau` | Comment-only: document `roleColor.stops` (no new schema key — it is optional inside an existing table). |
+| `src/StarterPlayerScripts/.../Client/Controllers/AdminHubController.luau` | Set-role picker built from `Config.Roles` (`buildSetroleOptions` + `retargetPickCards`); hardcoded `SETROLE_OPTIONS` is fallback only. |
+| `extras/place-packs/CinematicLoading/` | **New place pack (not engine):** Hierapolis cinematic loading screen ported onto the external loading contract. |
+| `docs/adr/0007-product-telemetry.md` | **New ADR (Accepted).** Product telemetry: fleet health + field diagnostics. Decisions locked 2026-08-28: v3 endpoint transport, v1 metrics = memory/FPS/device + network top-N (errors & feature-opens deferred), opt-out default ON via `ClubKitConfig.Telemetry`, retention 90d, Venue Insights later. Binding constraint: 500 req/min shared HttpService budget → aggregate flush only. **Phases 0+A built + tested in clubkit-infra** (migration 0021, `v3/telemetry` ingest, `/api/owner/fleet` master-only + telemetry read, dashboard Fleet page; suite 39/39, build clean). **Deployed to the VPS 2026-08-28** (API restart auto-applied 0021; dashboard swapped atomically). Master account `admin` is auto-routed to `/fleet` only — owner pages crash on master's `game_id NULL` (was a live blank-screen bug, fixed same day). Fleet then **enriched** (still existing-data-only): per-venue month/all-time donation volume, upgrade trail from `kit_version_history`, leak-beacon chip, 7-day DLQ chip, fleet-wide leak/DLQ counters. Kit phases B–D (TelemetryService/Client + network attribution + `ClubKitConfig.Telemetry` schema key) not started; will ride a future kit release. |
 
 ---
 

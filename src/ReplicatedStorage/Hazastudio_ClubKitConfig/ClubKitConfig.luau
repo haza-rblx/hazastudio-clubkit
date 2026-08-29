@@ -229,6 +229,9 @@ ClubKitConfig.Membership = {
 -- =============================================================================
 -- ROLE CATEGORIES (group rank → role; match your Roblox group)
 -- privileges per category: canGift, canAnnounce, canTeleport, adminPanel, musicManage
+-- roleColor = { primary, secondary } drives chat/tag colors. Optional `stops = { hex, ... }`
+-- (2..5 colors) paints a multi-color gradient on the overhead special-rank text; when set,
+-- primary/secondary may be omitted (default to first/last stop).
 -- =============================================================================
 ClubKitConfig.RoleCategories = {
 	{

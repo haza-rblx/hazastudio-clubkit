@@ -198,6 +198,8 @@ ClubKitConfigSchema.defaults = {
 					enabled = true,
 					specialRank = { text = "CO-OWNER", gradient = true },
 					badgeFrames = { "01-OwnerCoOwnerBadge" },
+					-- roleColor.stops (optional, 2..5 hex): multi-color gradient on the overhead
+					-- special-rank text; primary/secondary then default to first/last stop.
 					roleColor = { primary = "#FBBF24", secondary = "#FDE68A" },
 				},
 				{

@@ -10,6 +10,9 @@ export type RoleSpecialRank = {
 export type RoleColor = {
 	primary: string,
 	secondary: string,
+	-- Optional 2..5 hex stops → multi-color gradient on the overhead special-rank text.
+	-- Normalized by RolesDomain (RoleColorDomain.normalizeStops); nil = template gradient.
+	stops: { string }?,
 }
 
 export type RoleDefinition = {

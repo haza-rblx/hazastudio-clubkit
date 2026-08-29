@@ -103,7 +103,43 @@ Re-applied correctly and reconfirmed via a second playtest before calling it don
 remembering if secrets are ever re-applied by hand again: verify with a real playtest, not
 just "field is non-empty".
 
+## 2026-08-29 — engine 2.9.0 → 2.10.0 (+ unreleased), role catalog, CinematicLoading pack
+
+Done via MCP in the open Studio session (**not saved until the owner presses Ctrl+S / publishes**):
+
+- **Engine** synced to repo HEAD = 2.10.0 + unreleased (`roleColor.stops`, external loading
+  contract, Admin Hub dynamic set-role picker). 425/425 engine files hash-match; 15 stale Rojo
+  `init` twins removed. HttpService was already on; license `active`.
+- **Role catalog** (`ClubKitConfig.RoleCategories` / `SystemRoles.Owner`) rewritten to the
+  Hierapolis names — all `/setrole` roles (COMA group only has Member / Dev / Admin / Owner ranks):
+
+  | Kit key | Label | Category | Gradient stops (`roleColor.stops`) | Chat `primary` |
+  |---|---|---|---|---|
+  | `Owner` (rank 255 / OwnerUserId) | The President | system | daad18 ffed2a fdff90 daad18 f4e628 | #FFD700 (kit default kept) |
+  | `CoOwner` | The Archon | Leadership | 000000 2b2b2b 808080 c0c0c0 f1f4f4 | #000000 (first stop, owner's call 2026-08-29) |
+  | `Emperor` | The Emperor (Scripter) | Leadership | 7f1d1d b91c1c de3b20 f87171 fca5a5 (ramp derived from old accent #DE3B20 — buyer never sent stops) | #7F1D1D |
+  | `Minister` | The Minister (Admin) | Leadership | fa6c14 f18e37 f59b21 f7a640 ffdd00 | #FA6C14 |
+  | `Echoborn` | The Echoborn | Content (not staff, per owner call) | 4b0082 8a2be2 e086d1 8a2be2 d388e0 | #4B0082 (first stop) |
+  | `LeadDance` | The Senator (Lead Dancer) | Content | 301a9e 5141d7 5fec4c fafa3e **e61b23** (form said `e61b2`, 5 chars — completed from the old accent) | #301A9E (first stop) |
+  | `DJ` / `Streamer` / `Influencer` | kit stock | Content | — | stock |
+
+  `Staff` / `Moderator` were dropped; `LegacyAliases` maps stored `Staff`/`Moderator`/`Admin` →
+  `Minister`, `Developer`/`Scripter` → `Emperor`, so existing DataStore roles keep working
+  (verified: my test account's old `Staff` resolved to `Minister` in playtest). `CommandAliases`
+  cover `president/archon/emperor/scripter/minister/admin/staff/echoborn/senator/lead dancer`.
+- **Loading**: `Features.LoadingScreen = false`; `ReplicatedFirst.CinematicLoading` (LocalScript +
+  `LoadingUI`) installed from `extras/place-packs/CinematicLoading`. Playtest: bar tracks kit boot,
+  graphics menu shows with **no** join prompt under it, prompt + kit UI appear after a preset is picked.
+- Old place (`backup HIERAPOLIS.rbxl`) untouched; its `ReplicatedFirst.LoadingScreen` is Disabled there.
+
 ## Open items / not done
+
+- [ ] The Emperor ramp is derived, not buyer-supplied — swap in real stops if the buyer sends them.
+- [ ] Assign the six roles with `/setrole <user> <president|archon|emperor|minister|echoborn|senator>`
+      (old place used hardcoded userId lists; the kit persists roles in DataStore instead).
+- [ ] `robloxstudio` MCP **client** peer times out in this place during playtest (server/edit fine) —
+      unrelated to the sync, but it blocks client-side eval; use the `Roblox_Studio` server's
+      screen_capture / mouse input instead.
 
 - [ ] Place not yet Published — everything above is live only in the Studio edit session
 - [ ] Real Creator Dashboard IDs: Tier1/Tier2 GiftId, all of Tier3, PaidBroadcast.ProductId

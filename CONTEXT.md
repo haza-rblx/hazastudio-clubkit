@@ -34,6 +34,16 @@ Domain glossary for agents. Terms only — no implementation details, no workflo
 - **Group motion policy** — `Shared/UI/GroupMotionPolicy` (pure) + `Client/Utils/GroupMotion` (Instance adapter): the single decision point for "scale or stable?" that every animation site consults via `GroupMotion.scaleTarget`. Opt-out knob: `Config.UIMotion.CANVAS_GROUP_SIZE_STABLE`.
 - **Texture-budget guard** — `Client/Services/CanvasGroupBudgetService`: distance-culls Workspace `SurfaceGui`s that contain a rasterized group so their textures are released while nobody is near, keeping the budget free for ScreenGui panels (`Config.CanvasGroupBudget`; per-GUI opt-out attribute `ClubKitKeepSurfaceGui`).
 
+## Place packs
+
+- **Place pack** — a per-owner add-on under `extras/place-packs/<Name>/` (rbxm + bridge Luau + README). Not engine: not in Rojo, not in Update Engine, not in the buyer changelog. Each pack is gated by a `ClubKitConfig.Features` flag so the engine and the pack never both run (`SyncBhms` ↔ `LegacySyncBhms`, `CinematicLoading` ↔ `LoadingScreen = false`).
+- **External loading contract** — the attribute handshake on `Players.LocalPlayer` between `Main.client` and a loading-screen pack (`Config.ClientBoot.*_ATTRIBUTE`): the kit publishes `ClubKitBootProgress` / `ClubKitBootSettled` / `ClubKitGameplayReady`; a pack sets `ClubKitExternalLoading = true` while its screen is up and the kit holds gameplay entry (join prompt, greetings) until it clears, bounded by `EXTERNAL_LOADING_TIMEOUT`.
+
+## Roles & colors
+
+- **Role color pair** — `roleColor = { primary, secondary }` on a role: `primary` is the chat name/tag color (must be unique per role), `secondary` an accent.
+- **Role color stops** — optional `roleColor.stops` (2..5 hex strings): a multi-color gradient painted on the overhead **special-rank** text. Sanitized once at boot by `RoleColorDomain` (pure); when set, an omitted `primary`/`secondary` default to the first/last stop. `nil` = the nametag template's own gradient.
+
 ## External admin bridge
 
 - **External admin** — a third-party moderation system (Adonis or Kohl's Admin) installed by the buyer. The Kit does not own it and does not fork it.

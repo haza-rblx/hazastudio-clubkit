@@ -910,7 +910,7 @@ Config.MembershipChatLabel = {
 -- Derived from Shared/Config/Roles.luau (see RolesDomain.applyDerivedConfig).
 Config.ChatPrimaryTagPriority = {} :: { [string]: number }
 Config.ChatPrimaryTagLabel = {} :: { [string]: string }
-Config.RoleColorPalette = {} :: { [string]: { primary: string, secondary: string } }
+Config.RoleColorPalette = {} :: { [string]: { primary: string, secondary: string, stops: { string }? } }
 Config.ChatPrimaryTagColor = {} :: { [string]: string }
 Config.ChatCoupleTagColor = "#FF7EB6"
 Config.PlayerList = {
@@ -1519,6 +1519,18 @@ Config.ClientBoot = {
 	DANCE_WARMUP_IDLE_DELAY = 1.5,
 	CLIENT_GAMEPLAY_READY_REMOTE = "ClientGameplayReady",
 	GAMEPLAY_READY_SERVER_TIMEOUT = 15,
+	-- External loading-screen contract (place packs, e.g. extras/place-packs/CinematicLoading).
+	-- Attributes live on Players.LocalPlayer. The kit WRITES BootProgress (0..1), BootSettled
+	-- (interactive boot done) and GameplayReady; a pack SETS ExternalLoading = true while its
+	-- own screen is up and the kit holds enterGameplay (join prompt / greetings) until it
+	-- flips back to false or EXTERNAL_LOADING_TIMEOUT passes. Only used with Features.LoadingScreen = false.
+	-- The timeout is a safety net for a pack that never releases, not a UX budget — a player
+	-- idling on a pack's own menu (e.g. graphics picker) must not get the join prompt under it.
+	BOOT_PROGRESS_ATTRIBUTE = "ClubKitBootProgress",
+	BOOT_SETTLED_ATTRIBUTE = "ClubKitBootSettled",
+	GAMEPLAY_READY_ATTRIBUTE = "ClubKitGameplayReady",
+	EXTERNAL_LOADING_ATTRIBUTE = "ClubKitExternalLoading",
+	EXTERNAL_LOADING_TIMEOUT = 300,
 }
 Config.Debug = {
 	BOOT_PROFILE_MARKERS = false,

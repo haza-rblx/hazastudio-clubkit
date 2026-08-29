@@ -29,6 +29,72 @@ local SETROLE_OPTIONS = {
 	{ key = "Influencer", label = "Influencer", desc = "Content · music" },
 }
 
+-- Buyer catalogs rename/replace the stock roles (e.g. Minister / Emperor / Echoborn), so the
+-- picker is built from Config.Roles at open time; SETROLE_OPTIONS is only the fallback.
+local function buildSetroleOptions(): { { key: string, label: string, desc: string? } }
+	local roles = (Config :: any).Roles
+	if type(roles) ~= "table" or type(roles.ORDER) ~= "table" or type(roles.DEFINITIONS) ~= "table" then
+		return SETROLE_OPTIONS
+	end
+	local categoryLabel: { [number]: string } = {}
+	local categories = (Config :: any).RoleCategories
+	if type(categories) == "table" then
+		for _, category in ipairs(categories) do
+			if type(category) == "table" and type(category.id) == "number" then
+				categoryLabel[category.id] = tostring(category.label or "")
+			end
+		end
+	end
+	local out = {}
+	for _, key in ipairs(roles.ORDER) do
+		local def = roles.DEFINITIONS[key]
+		if type(def) == "table" and def.setroleOnly == true and def.dynamicLeaderboard ~= true then
+			local desc = if type(def.categoryId) == "number" then categoryLabel[def.categoryId] else nil
+			table.insert(out, {
+				key = key,
+				label = tostring(def.label or key),
+				desc = if desc and desc ~= "" then desc else nil,
+			})
+		end
+	end
+	return if #out > 0 then out else SETROLE_OPTIONS
+end
+
+-- Template pick cards carry fixed PickKey attributes (stock roles). Re-key them onto the live
+-- option list by LayoutOrder, cloning the last card when the catalog is longer than the template
+-- and parking the extras (blank PickKey = ignored by bindPickCards).
+local function retargetPickCards(host: Instance, options: { { key: string, label: string, desc: string? } })
+	local buttons: { TextButton } = {}
+	for _, d in ipairs(host:GetDescendants()) do
+		if d:IsA("TextButton") and d:GetAttribute("PickKey") ~= nil then
+			table.insert(buttons, d)
+		end
+	end
+	if #buttons == 0 then
+		return
+	end
+	table.sort(buttons, function(a, b)
+		return a.LayoutOrder < b.LayoutOrder
+	end)
+	local template = buttons[#buttons]
+	for index, opt in ipairs(options) do
+		local btn = buttons[index]
+		if not btn then
+			btn = template:Clone()
+			btn.Parent = template.Parent
+			table.insert(buttons, btn)
+		end
+		btn.Name = "Pick_" .. opt.key
+		btn:SetAttribute("PickKey", opt.key)
+		btn.LayoutOrder = index
+		btn.Visible = true
+	end
+	for index = #options + 1, #buttons do
+		buttons[index]:SetAttribute("PickKey", "")
+		buttons[index].Visible = false
+	end
+end
+
 local DONATE_IDR_CHIPS = { "10000", "20000", "50000", "100000", "200000", "500000", "1000000" }
 local DONATE_ROBUX_CHIPS = { "10", "80", "150", "250", "500", "1000", "2000", "5000" }
 
@@ -276,10 +342,13 @@ local function init(deps: {
 				end)
 			end)
 			local getPicked: () -> string
+			local setroleOptions = buildSetroleOptions()
+			local initialKey = if setroleOptions[2] then setroleOptions[2].key else setroleOptions[1].key
 			if ui:usesActionTemplate(body) then
 				local pickHost = body:FindFirstChild("PickGrid", true) or body
-				ui:applyPickCardLabels(pickHost, SETROLE_OPTIONS)
-				getPicked = ui:bindPickCards(pickHost, "Moderator", function() end)
+				retargetPickCards(pickHost, setroleOptions)
+				ui:applyPickCardLabels(pickHost, setroleOptions)
+				getPicked = ui:bindPickCards(pickHost, initialKey, function() end)
 			else
 				ui:addCallout(
 					body,
@@ -287,7 +356,7 @@ local function init(deps: {
 					"soft",
 					"Staff role override"
 				)
-				getPicked = ui:addPickGrid(body, SETROLE_OPTIONS, "Moderator", function() end)
+				getPicked = ui:addPickGrid(body, setroleOptions, initialKey, function() end)
 			end
 			ui:setSheetFoot({
 				{

@@ -11,6 +11,13 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+### Added
+- **Multi-color role gradients — `roleColor.stops`.** A role in `ClubKitConfig.RoleCategories` / `SystemRoles` / `SpenderRoles` may now carry `roleColor = { stops = { "daad18", "ffed2a", "fdff90", ... } }` (2..5 hex, `#` optional): the overhead special-rank text (`04-SpecialRank`) is painted with that gradient instead of the template's fixed one. `primary` / `secondary` (chat colors) default to the first / last stop when omitted. Sanitized once at boot by the new pure `Shared/Domain/RoleColorDomain` (malformed entries dropped, <2 valid stops = no gradient). Setter is keyed on the stop list so server full-state echoes are no-ops.
+- **External loading-screen contract** (`Config.ClientBoot`). When `Features.LoadingScreen = false`, `Main.client` now publishes boot state on `Players.LocalPlayer` — `ClubKitBootProgress` (0..1), `ClubKitBootSettled`, `ClubKitGameplayReady` — and, if a pack sets `ClubKitExternalLoading = true`, holds `enterGameplay` (join-community prompt, join greetings) until the pack clears it or `EXTERNAL_LOADING_TIMEOUT` (300 s safety net) passes. Lets a place pack draw its own loading screen without racing the kit. First consumer: `extras/place-packs/CinematicLoading` (Hierapolis; not engine).
+
+### Fixed
+- **Admin Hub "Set role" only offered the stock roles.** The picker was a hardcoded list (Co-Owner / Staff / Moderator / DJ / …), so a buyer catalog with renamed or extra roles (e.g. Minister, Emperor, Echoborn) could not be applied from the hub — only via `/setrole` in chat. It is now built from `Config.Roles` at open time (setrole-only roles in catalog order, category label as subtitle); the template's pick cards are re-keyed by `LayoutOrder`, cloned when the catalog is longer than the template, and parked when shorter.
+
 ## [2.10.0] - 2026-08-28
 
 ### Fixed

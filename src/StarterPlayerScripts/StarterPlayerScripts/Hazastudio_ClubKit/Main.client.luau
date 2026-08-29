@@ -247,11 +247,21 @@ local loadingMilestonesReadyAt: number? = nil
 local maybeFinishLoadingScreen: (() -> ())? = nil
 local gameplayEnteredFired = false
 
+-- External loading-screen contract (see Config.ClientBoot.*_ATTRIBUTE): attributes on the
+-- local player so a place pack can mirror boot progress and hold gameplay entry.
+local function setBootAttribute(configKey: string, value: any)
+	local name = ClientBootConfig[configKey]
+	if type(name) == "string" and name ~= "" then
+		Players.LocalPlayer:SetAttribute(name, value)
+	end
+end
+
 local function enterGameplay()
 	if gameplayEnteredFired then
 		return
 	end
 	gameplayEnteredFired = true
+	setBootAttribute("GAMEPLAY_READY_ATTRIBUTE", true)
 	clientBootScheduler:notifyGameplayEntered()
 	local remotesFolder = ReplicatedStorage:FindFirstChild("Remotes")
 	local readyRemoteName = tostring(ClientBootConfig.CLIENT_GAMEPLAY_READY_REMOTE or "ClientGameplayReady")
@@ -265,6 +275,27 @@ local function enterGameplay()
 	end
 	JoinCommunityPromptController.tryPromptAfterGameplay()
 	JoinGreetingController.notifyGameplayReady()
+end
+
+-- Kit loading screen off + a pack flagged ExternalLoading: defer enterGameplay until the
+-- pack releases the flag (or the timeout), so join prompt / greetings don't fire under it.
+local function enterGameplayAfterExternalHold()
+	local attrName = ClientBootConfig.EXTERNAL_LOADING_ATTRIBUTE
+	local player = Players.LocalPlayer
+	if type(attrName) ~= "string" or player:GetAttribute(attrName) ~= true then
+		enterGameplay()
+		return
+	end
+	task.spawn(function()
+		local deadline = os.clock() + (tonumber(ClientBootConfig.EXTERNAL_LOADING_TIMEOUT) or 300)
+		while player:GetAttribute(attrName) == true and os.clock() < deadline do
+			task.wait(0.25)
+		end
+		if player:GetAttribute(attrName) == true then
+			studioWarn("[ClientBoot] External loading hold timed out; entering gameplay")
+		end
+		enterGameplay()
+	end)
 end
 
 local function updateLoadingProgress()
@@ -401,7 +432,7 @@ local function finishLoadingScreen()
 	-- When loading UI is disabled or never attached, unlock gameplay here.
 	-- When UI is present, enterGameplay fires via onGameplayEntered after dismiss.
 	if not LOADING_SCREEN_ENABLED or not loadingScreen then
-		enterGameplay()
+		enterGameplayAfterExternalHold()
 	end
 end
 
@@ -462,9 +493,14 @@ end
 clientBootScheduler:onInteractiveProgress(function()
 	syncBootCounters()
 	updateLoadingProgress()
+	setBootAttribute(
+		"BOOT_PROGRESS_ATTRIBUTE",
+		if loadingBootTasksTotal > 0 then loadingBootTasksDone / loadingBootTasksTotal else 1
+	)
 end)
 
 clientBootScheduler:onInteractiveSettled(function()
+	setBootAttribute("BOOT_SETTLED_ATTRIBUTE", true)
 	requestFinishLoadingScreen()
 end)
 
