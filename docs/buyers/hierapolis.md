@@ -123,6 +123,14 @@ Done via MCP in the open Studio session (**not saved until the owner presses Ctr
   | `LeadDance` | The Senator (Lead Dancer) | Content | 301a9e 5141d7 5fec4c fafa3e **e61b23** (form said `e61b2`, 5 chars — completed from the old accent) | #301A9E (first stop) |
   | `DJ` / `Streamer` / `Influencer` | kit stock | Content | — | stock |
 
+  **Owner refinement (2026-08-29, evening):** Emperor / Echoborn / Minister / Senator live in one
+  category **DPC** (category = Admin privileges; per-role `privileges` override: Echoborn no gift /
+  admin panel, Senator music + announce only) and share `chatTag = "DPC"` — so the Rank row, chat
+  tag and player list read "DPC" — while the unique "THE …" text is shown as the overhead **role
+  chip** (`specialRank.chip = true`, stops gradient, rank chips hidden) *and* on the special-rank
+  row. President/Archon keep their own chat tags. Re-apply after a Studio crash with
+  `.tmp/hierapolis-config-apply.luau` (idempotent; dev-serve `/repo/` + loadstring).
+
   `Staff` / `Moderator` were dropped; `LegacyAliases` maps stored `Staff`/`Moderator`/`Admin` →
   `Minister`, `Developer`/`Scripter` → `Emperor`, so existing DataStore roles keep working
   (verified: my test account's old `Staff` resolved to `Minister` in playtest). `CommandAliases`
