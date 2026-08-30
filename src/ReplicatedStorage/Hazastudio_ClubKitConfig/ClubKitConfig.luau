@@ -613,6 +613,9 @@ ClubKitConfig.Features = {
 	-- UIGradient animation on #N ROBUX / #N RUPIAH chips in overhead (RobuxRankWrapper / RupiahRankWrapper).
 	-- Default false — existing places without UIGradient on wrapper stay safe; set true after adding gradient in Studio.
 	DonationRankGradientAnim = false,
+	-- Hierapolis Theatre place pack: true = merge Hazastudio_ClubKitConfig.HierapolisCustom
+	-- (role catalog, aliases, LoadingScreen off) over this config at boot. Default false.
+	HierapolisCustom = false,
 }
 
 return ClubKitConfig

@@ -1,28 +1,28 @@
---!nocheck
--- Hierapolis ClubKitConfig patch (idempotent). Normally run via apply.luau in this folder:
---   loadstring(HttpService:GetAsync("http://127.0.0.1:8798/repo/extras/place-packs/Hierapolis/apply.luau"))()
--- Replaces RoleCategories / SystemRoles.Owner / LegacyAliases+CommandAliases spans and flips
--- Features.LoadingScreen = false. Buyer values outside those spans are untouched.
-local mod = game:GetService("ReplicatedStorage").Hazastudio_ClubKitConfig.ClubKitConfig
-local src = mod.Source
-local log = {}
+--!strict
+--[[
+  Hierapolis Theatre custom overlay — ModuleScript
+  Parent: ReplicatedStorage.Hazastudio_ClubKitConfig.HierapolisCustom  (buyer-owned folder; never
+  touched by Update Engine).
 
-local function spanReplace(startAnchor, endAnchor, replacement, label, keepEnd)
-	local s = string.find(src, startAnchor, 1, true)
-	assert(s, "start anchor not found: " .. label)
-	local e1, e2 = string.find(src, endAnchor, s, true)
-	assert(e1, "end anchor not found: " .. label)
-	local cutEnd = if keepEnd then e1 - 1 else e2
-	src = string.sub(src, 1, s - 1) .. replacement .. string.sub(src, cutEnd + 1)
-	table.insert(log, label)
-end
+  Switched on/off by ONE flag in the buyer config, like every other kit feature:
+      ClubKitConfig.Features.HierapolisCustom = true | false
+  ConfigBootstrap (engine) merges this table over the buyer config at boot when the flag is true.
+  false = the place runs the stock kit catalog + kit loading screen; this module is ignored.
 
--- 1. RoleCategories (Leadership: Archon | DPC: Emperor, Echoborn, Minister, Senator | Content)
-spanReplace("ClubKitConfig.RoleCategories = {", "} :: { any }", [[ClubKitConfig.RoleCategories = {
-	-- Hierapolis Theatre catalog. All roles here are /setrole roles (the COMA Studio group only
-	-- has Member / Dev / Admin / Owner ranks). The four DPC roles share chatTag "DPC" (Rank row,
-	-- chat tag, player list) while their unique name lives in the overhead chip
-	-- (specialRank.chip = true, painted with roleColor.stops; hides that role's #N rank chips).
+  Merge rules (ConfigBootstrap.applyHierapolisCustom):
+    RoleCategories / LegacyAliases / CommandAliases  → replaced wholesale
+    SystemRoles.<key>                                → that entry replaced wholesale
+    Features                                         → merged key by key
+  ClubKitConfig.luau itself is never rewritten. Edit THIS file to change the catalog.
+]]
+
+local HierapolisCustom = {}
+
+-- Hierapolis Theatre catalog. All roles here are /setrole roles (the COMA Studio group only
+-- has Member / Dev / Admin / Owner ranks). The four DPC roles share chatTag "DPC" (Rank row,
+-- chat tag, player list) while their unique name lives in the overhead chip
+-- (specialRank.chip = true, painted with roleColor.stops; hides that role's #N rank chips).
+HierapolisCustom.RoleCategories = {
 	{
 		id = 1,
 		label = "Leadership",
@@ -97,7 +97,7 @@ spanReplace("ClubKitConfig.RoleCategories = {", "} :: { any }", [[ClubKitConfig.
 				privileges = { canGift = false, canTeleport = false, adminPanel = false },
 				specialRank = { text = "THE SENATOR", gradient = true, chip = true },
 				showSpecialStatus = true,
-				roleColor = { stops = { "301a9e", "5141d7", "5fec4c", "fafa3e", "e61b23" } }, -- last was "e61b2" (typo) → #E61B23 from old accent
+				roleColor = { stops = { "301a9e", "5141d7", "5fec4c", "fafa3e", "e61b23" } }, -- form said "e61b2" (typo) → #E61B23 from old accent
 			},
 		},
 	},
@@ -143,27 +143,10 @@ spanReplace("ClubKitConfig.RoleCategories = {", "} :: { any }", [[ClubKitConfig.
 			},
 		},
 	},
-} :: { any }]], "RoleCategories")
+} :: { any }
 
--- 2. SystemRoles.Owner → The President (whole block, wherever it sits inside SystemRoles)
-do
-	local sysStart = string.find(src, "ClubKitConfig.SystemRoles = {", 1, true)
-	assert(sysStart, "SystemRoles block not found")
-	local ownerStart = string.find(src, "Owner = {", sysStart, true)
-	assert(ownerStart, "SystemRoles.Owner not found")
-	-- match the brace that opens Owner's table
-	local braceOpen = string.find(src, "{", ownerStart, true)
-	local depth, i, braceClose = 0, braceOpen, nil
-	while i <= #src do
-		local ch = string.sub(src, i, i)
-		if ch == "{" then depth += 1 elseif ch == "}" then depth -= 1 if depth == 0 then braceClose = i break end end
-		i += 1
-	end
-	assert(braceClose, "SystemRoles.Owner brace mismatch")
-	-- include the trailing comma if present
-	local after = braceClose
-	if string.sub(src, braceClose + 1, braceClose + 1) == "," then after = braceClose + 1 end
-	src = string.sub(src, 1, ownerStart - 1) .. [[Owner = { -- rank row / chat tag stay OWNER; "THE PRESIDENT" lives in the chip
+HierapolisCustom.SystemRoles = {
+	Owner = { -- rank row / chat tag stay OWNER; "THE PRESIDENT" lives in the chip
 		label = "Owner",
 		chatTag = "OWNER",
 		priority = 15000,
@@ -174,12 +157,10 @@ do
 		badgeFrames = { "01-OwnerCoOwnerBadge" },
 		canGift = true,
 		giftable = false,
-	},]] .. string.sub(src, after + 1)
-	table.insert(log, "SystemRoles.Owner")
-end
+	},
+} :: { [string]: any }
 
--- 3. Aliases
-spanReplace("ClubKitConfig.LegacyAliases = {", "-- =============================================================================\n-- JOIN COMMUNITY", [[ClubKitConfig.LegacyAliases = {
+HierapolisCustom.LegacyAliases = {
 	-- Stored role names from the kit's stock catalog (this place ran 2.9.0 with Staff/Moderator).
 	Staff = "Minister",
 	Moderator = "Minister",
@@ -227,9 +208,9 @@ spanReplace("ClubKitConfig.LegacyAliases = {", "-- =============================
 	["top robux donator"] = "RoyaleSpender",
 	["Royale Spender"] = "RoyaleSpender",
 	["royale spender"] = "RoyaleSpender",
-}
+} :: { [string]: string }
 
-ClubKitConfig.CommandAliases = {
+HierapolisCustom.CommandAliases = {
 	owner = "Owner",
 	president = "Owner",
 	["the president"] = "Owner",
@@ -290,25 +271,11 @@ ClubKitConfig.CommandAliases = {
 	member = "Guest",
 	none = "none",
 	remove = "none",
-}
+} :: { [string]: string }
 
-]], "Aliases", true)
+-- Kit loading screen off → ReplicatedFirst.CinematicLoading (place pack) owns boot.
+HierapolisCustom.Features = {
+	LoadingScreen = false,
+} :: { [string]: boolean }
 
--- 4. Kit loading screen off → CinematicLoading pack owns boot
-if string.find(src, "\tLoadingScreen = true,", 1, true) then
-	src = string.gsub(src, "\tLoadingScreen = true,", "\tLoadingScreen = false, -- CinematicLoading place pack owns boot (ReplicatedFirst.CinematicLoading)", 1)
-	table.insert(log, "Features.LoadingScreen")
-end
-
-local fn, err = loadstring(src, "=ClubKitConfig")
-assert(fn, "patched source does not compile: " .. tostring(err))
-setfenv(fn, setmetatable({ script = mod }, { __index = getfenv() }))
-local cfg = fn()
-assert(cfg.SystemRoles.Owner.chatTag == "OWNER" and cfg.SystemRoles.Owner.specialRank.text == "THE PRESIDENT" and cfg.Features.LoadingScreen == false and cfg.CommandAliases.senator == "LeadDance", "sanity failed")
-local keys = {}
-for _, cat in ipairs(cfg.RoleCategories) do
-	for _, r in ipairs(cat.roles) do table.insert(keys, cat.label .. "/" .. r.key .. ":" .. r.chatTag) end
-end
-mod.Source = src
-print("[hierapolis-config-apply] " .. table.concat(log, ", ") .. " | " .. table.concat(keys, ", "))
-return table.concat(keys, ", ")
+return HierapolisCustom

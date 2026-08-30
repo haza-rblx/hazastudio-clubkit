@@ -494,6 +494,10 @@ ClubKitConfigSchema.defaults = {
 		JoinGreetings = true,
 		DonationWorldEffects = true,
 		DonationRankGradientAnim = false,
+		-- Hierapolis Theatre place pack (extras/place-packs/Hierapolis). true = ConfigBootstrap merges
+		-- Hazastudio_ClubKitConfig.HierapolisCustom (role catalog, aliases, LoadingScreen off) over
+		-- this config at boot. Default false — no effect unless that module is installed.
+		HierapolisCustom = false,
 	},
 }
 
@@ -558,6 +562,7 @@ ClubKitConfigSchema.FEATURE_MANIFEST = {
 			{ key = "Gravity", label = "Gravity tool" },
 			{ key = "VipOnCommunityJoin", label = "Free VIP for group members" },
 			{ key = "DonationRankGradientAnim", label = "Donor rank animation" },
+			{ key = "HierapolisCustom", label = "Hierapolis place pack (HierapolisCustom module)" },
 		},
 	},
 } :: { FeatureManifestGroup }

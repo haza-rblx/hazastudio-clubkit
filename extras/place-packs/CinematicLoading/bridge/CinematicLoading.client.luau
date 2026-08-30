@@ -86,8 +86,28 @@ local function readKitConfig()
 end
 
 local kitConfig = readKitConfig()
-if kitConfig and type(kitConfig.Features) == "table" and kitConfig.Features.LoadingScreen ~= false then
-	warn("[CinematicLoading] ClubKitConfig.Features.LoadingScreen is not false — kit loading screen owns boot; pack disabled")
+local function loadingScreenOff(cfg): boolean
+	local features = cfg and cfg.Features
+	if type(features) ~= "table" then
+		return false
+	end
+	-- Features.HierapolisCustom = true: the HierapolisCustom overlay (same folder) may turn the
+	-- kit loading screen off at boot even though ClubKitConfig still says true (engine merges it).
+	if features.HierapolisCustom == true then
+		local folder = ReplicatedStorage:FindFirstChild("Hazastudio_ClubKitConfig")
+		local overlayMod = folder and folder:WaitForChild("HierapolisCustom", 10)
+		if overlayMod and overlayMod:IsA("ModuleScript") then
+			local ok, overlay = pcall(require, overlayMod)
+			local of = ok and type(overlay) == "table" and overlay.Features
+			if type(of) == "table" and of.LoadingScreen ~= nil then
+				return of.LoadingScreen == false
+			end
+		end
+	end
+	return features.LoadingScreen == false
+end
+if not loadingScreenOff(kitConfig) then
+	warn("[CinematicLoading] kit loading screen is on (Features.LoadingScreen / HierapolisCustom) — kit owns boot; pack disabled")
 	return
 end
 

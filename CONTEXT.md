@@ -36,7 +36,8 @@ Domain glossary for agents. Terms only — no implementation details, no workflo
 
 ## Place packs
 
-- **Place pack** — a per-owner add-on under `extras/place-packs/<Name>/` (rbxm + bridge Luau + README). Not engine: not in Rojo, not in Update Engine, not in the buyer changelog. Each pack is gated by a `ClubKitConfig.Features` flag so the engine and the pack never both run (`SyncBhms` ↔ `LegacySyncBhms`, `CinematicLoading` ↔ `LoadingScreen = false`).
+- **Place pack** — a per-owner add-on under `extras/place-packs/<Name>/` (rbxm + bridge Luau + README). Not engine: not in Rojo, not in Update Engine, not in the buyer changelog. Each pack is gated by a `ClubKitConfig.Features` flag so the engine and the pack never both run (`SyncBhms` ↔ `LegacySyncBhms`, `CinematicLoading` ↔ `LoadingScreen = false`, `Hierapolis` ↔ `HierapolisCustom`).
+- **Config overlay** — a ModuleScript inside the buyer-owned `Hazastudio_ClubKitConfig` folder that `ConfigBootstrap` merges over the buyer config at boot when its `Features` flag is true (`HierapolisCustom` is the first). Lets a place pack change the role catalog / aliases / feature flags without ever rewriting `ClubKitConfig.luau` (ADR 0001 stays intact) and without living in the engine tree (Update Engine never touches it). Replace-wholesale for catalog sections, per-entry for `SystemRoles`, key-by-key for `Features`. Distinct from `ClubKitShowcase` (dev-only, engine tree, stripped on sync).
 - **External loading contract** — the attribute handshake on `Players.LocalPlayer` between `Main.client` and a loading-screen pack (`Config.ClientBoot.*_ATTRIBUTE`): the kit publishes `ClubKitBootProgress` / `ClubKitBootSettled` / `ClubKitGameplayReady`; a pack sets `ClubKitExternalLoading = true` while its screen is up and the kit holds gameplay entry (join prompt, greetings) until it clears, bounded by `EXTERNAL_LOADING_TIMEOUT`.
 
 ## Roles & colors

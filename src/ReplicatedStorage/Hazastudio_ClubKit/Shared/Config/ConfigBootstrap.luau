@@ -105,6 +105,46 @@ local function loadShowcaseOverlay(): any?
 	return result
 end
 
+-- Features.HierapolisCustom = true → merge ReplicatedStorage.Hazastudio_ClubKitConfig.HierapolisCustom
+-- (buyer-owned folder, shipped by extras/place-packs/Hierapolis) over the buyer config.
+-- Catalog-style sections are replaced wholesale, SystemRoles per entry, Features key by key.
+-- Missing / broken module → warn and keep the stock state (flag is harmless when the module is absent).
+local HIERAPOLIS_REPLACE_SECTIONS = { "RoleCategories", "LegacyAliases", "CommandAliases" }
+
+local function applyHierapolisCustom(state: any): any
+	local features = state.Features
+	if type(features) ~= "table" or features.HierapolisCustom ~= true then
+		return state
+	end
+	local folder = ReplicatedStorage:FindFirstChild("Hazastudio_ClubKitConfig")
+	local module = folder and folder:FindFirstChild("HierapolisCustom")
+	if not module or not module:IsA("ModuleScript") then
+		warn("[ConfigBootstrap] Features.HierapolisCustom = true but Hazastudio_ClubKitConfig.HierapolisCustom is missing; running stock catalog")
+		return state
+	end
+	local ok, overlay = pcall(require, module)
+	if not ok or type(overlay) ~= "table" then
+		warn("[ConfigBootstrap] HierapolisCustom failed to load; running stock catalog:", overlay)
+		return state
+	end
+	for _, section in HIERAPOLIS_REPLACE_SECTIONS do
+		if type(overlay[section]) == "table" then
+			state[section] = overlay[section]
+		end
+	end
+	if type(overlay.SystemRoles) == "table" then
+		state.SystemRoles = table.clone(state.SystemRoles)
+		for key, role in pairs(overlay.SystemRoles) do
+			state.SystemRoles[key] = role
+		end
+	end
+	if type(overlay.Features) == "table" then
+		state.Features = deepMerge(features, overlay.Features)
+	end
+	log:info("HierapolisCustom overlay applied")
+	return state
+end
+
 local function applyShowcaseMode(state: any, showcaseOverlay: any?)
 	state.Showcase = if type(state.Showcase) == "table" then state.Showcase else {}
 	state.Showcase.Enabled = showcaseOverlay ~= nil
@@ -136,6 +176,7 @@ local function buildClubKitState(): any
 		end
 	end
 	applyShowcaseMode(state, showcaseOverlay)
+	state = applyHierapolisCustom(state)
 	validateClubKitState(state)
 	return state
 end

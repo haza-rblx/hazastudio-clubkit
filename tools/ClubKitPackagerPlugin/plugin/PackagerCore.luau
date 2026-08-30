@@ -200,6 +200,7 @@ local function blankTemplateConfigSource(source: string): string
 		src = src:gsub("AdminUserIds%s*=%s*{[^}]*}", "AdminUserIds = {} :: { [number]: boolean }")
 	end
 	src = src:gsub("LegacySyncBhms%s*=%s*true", "LegacySyncBhms = false")
+	src = src:gsub("HierapolisCustom%s*=%s*true", "HierapolisCustom = false")
 	return src
 end
 
@@ -381,6 +382,12 @@ function PackagerCore.collect(options: ExportOptions): (Model?, CollectReport)
 			local configMod = clone:FindFirstChild("ClubKitConfig")
 			if configMod and configMod:IsA("ModuleScript") then
 				configMod.Source = blankTemplateConfigSource(configMod.Source)
+			end
+			-- Place-pack overlays are buyer-specific; never ship them in the product package.
+			local hierapolis = clone:FindFirstChild("HierapolisCustom")
+			if hierapolis then
+				hierapolis:Destroy()
+				logWarn(report, "Stripped Hazastudio_ClubKitConfig.HierapolisCustom (place-pack overlay)")
 			end
 			logOk(report, "ReplicatedStorage/Hazastudio_ClubKitConfig (blank template)", clone)
 		else
