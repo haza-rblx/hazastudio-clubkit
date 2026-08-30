@@ -51,7 +51,7 @@
     <div class="hub-hero">
       <div class="hub-kicker">
         <span data-i18n="updates.kicker">Catatan rilis</span>
-        <span class="version-pill" data-i18n="updates.version">Saat ini 2.5.3</span>
+        <span class="version-pill" data-i18n="updates.version">Saat ini 2.11.0</span>
       </div>
       <h1 class="hub-title" data-i18n="updates.title">Updates</h1>
       <p class="hub-lead" data-i18n-html="updates.lead">
@@ -88,7 +88,31 @@
 
     <div class="changelog-list">
 
-      <details class="changelog-item" id="v2-5-3" open>
+      <details class="changelog-item" id="v2-11-0" open>
+        <summary>
+          <span class="changelog-ver">2.11.0</span>
+          <span class="changelog-date">2026-08-30</span>
+          <span class="changelog-blurb" data-i18n="updates.v2110.blurb">Role gradients + name chip, per-role permissions, and anti-cheat guards.</span>
+        </summary>
+        <div class="changelog-body">
+          <h4 data-i18n="updates.cat.added">Added</h4>
+          <ul>
+            <li data-i18n-html="updates.v2110.a1"><strong>Multi-color role gradients</strong> — up to 5 colors per role: <code>roleColor = { stops = { "daad18", "ffed2a", "fdff90" } }</code>. Chat colors are derived from the first and last stop.</li>
+            <li data-i18n-html="updates.v2110.a2"><strong>Role name chip</strong> — <code>specialRank = { text = "THE MINISTER", gradient = true, chip = true }</code> shows the role as a pill in the chip row above the nametag; that player's <code>#N ROBUX</code> / cash chips are hidden and the rank line shows the role's <code>chatTag</code>.</li>
+            <li data-i18n-html="updates.v2110.a3"><strong>Per-role permissions</strong> — a role can override its category: <code>privileges = { canGift = false, adminPanel = false }</code>. One visible staff label, different powers per person.</li>
+            <li data-i18n-html="updates.v2110.a4"><strong>Anti-cheat guards</strong> — rogue audio (the "random guest played a sound for everyone" attack), runtime script injection, flying / speed / noclip / teleport, and laser-sized avatars are detected server-side and reported. Movement ships in <strong>log mode</strong> this release: warnings and reports only, nobody is kicked yet — set <code>Config.MovementGuard.ENFORCE = "kick"</code> to enforce now.</li>
+            <li data-i18n-html="updates.v2110.a5"><strong>Custom loading screens</strong> — the kit now publishes boot progress on the player and waits for your own screen (<code>ClubKitExternalLoading</code>); kit music is muted while it is up.</li>
+          </ul>
+          <h4 data-i18n="updates.cat.fixed">Fixed</h4>
+          <ul>
+            <li data-i18n-html="updates.v2110.f1"><strong>Heavy places failed to boot</strong> — on a large venue at 4–5 FPS the client gave up after 30 s and showed no kit UI. The wait is now 120 s.</li>
+            <li data-i18n-html="updates.v2110.f2"><strong>Admin Hub "Set role"</strong> — the picker was a hardcoded list, so renamed or extra roles could only be given with <code>/setrole</code>. It now reads your own role catalogue.</li>
+          </ul>
+          <p><a href="releases/2.11.0/UPGRADE.md" data-i18n="updates.upgradeGuide">Upgrade guide</a></p>
+        </div>
+      </details>
+
+      <details class="changelog-item" id="v2-5-3">
         <summary>
           <span class="changelog-ver">2.5.3</span>
           <span class="changelog-date">2026-08-14</span>
