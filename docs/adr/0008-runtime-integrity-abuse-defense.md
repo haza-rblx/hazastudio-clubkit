@@ -186,13 +186,14 @@ Test-place-only overrides used for these runs (`SOUND_ENFORCE = "block"`, `EXEMP
 1. Default enforcement after one log-only release: `"block"` rogue sounds automatically, or keep it staff-triggered (`/purgesounds`)?
 2. Should `ScriptGuard` destroy injected scripts by default (breaks a buyer's legitimate runtime-script loaders) or only beacon?
 3. Buyer policy: is "one admin system only, scanned free models only" a delivery requirement (we refuse to ship otherwise) or a recommendation?
-4. MovementGuard default: `ENFORCE = "kick"` from the first release (owner's ask) with `EXEMPT_ROLES = {Owner, CoOwner}` and a 1-week log-only window on newly delivered places — or log-only kit-wide first?
+4. ~~MovementGuard default: `ENFORCE = "kick"` from the first release (owner's ask) … or log-only kit-wide first?~~ **Decided 2026-08-30: log-only kit-wide for one week, then flip to `"kick"`.** Reason: the rules have never run against a venue's custom teleport pads / elevators / vehicles, and a false kick costs a paying guest. Strikes, warnings and beacons still fire in `"log"`, so the week produces the evidence needed to flip with confidence. Flip = `Config.MovementGuard.ENFORCE = "kick"` (one line) after reviewing `runtime:movement_*` beacons; do it per place first if any place shows false positives. Review due **2026-09-06** (one week from the first release that ships this).
 5. Foreign-animation rule: keep log-only until the dance catalog allowlist is validated on RUST/NIGHT ZONE, or kick from day one?
 6. AvatarGuard effects policy: `"strip"` every Beam/Trail/light from accessories (clean floor, some legit UGC loses its glow) or `"cap"` them (keeps the look, still limits lasers)?
 
 ## Implementation phases
 
 0. **Now** — run `PlaceSecurityScan` on the attacked place and on Hierapolis; publish the checklist; strip/replace anything CRITICAL.
-1. `RuntimeGuard` log-only + beacons (`[Unreleased]`, next kit release). `MovementGuard` + pure `MovementPolicy` (TDD seam: sample pairs → violations) in the same release; kick default per decision 4.
+1. `RuntimeGuard` log-only + beacons (`[Unreleased]`, next kit release). `MovementGuard` + pure `MovementPolicy` (TDD seam: sample pairs → violations) in the same release, `ENFORCE = "log"` per decision 4.
+1b. **One week after that release (due 2026-09-06)** — review `runtime:movement_warn` / `runtime:movement_kick` beacons on the Fleet page; if no false positives, flip `Config.MovementGuard.ENFORCE` to `"kick"` and ship it.
 2. Enforcement + `/purgesounds` + `/lockdown` (release after the owner decides).
 3. Telemetry counters when ADR 0007 phase B lands.

@@ -1629,11 +1629,11 @@ Config.RuntimeGuard = {
 -- spawn) are exempt first. See Shared/Domain/MovementPolicy for the rules.
 Config.MovementGuard = {
 	ENABLED = true,
-	-- "log" | "kick". "kick" is the owner's ask (ADR 0008 decision 4, still open). Note before a
-	-- release: these rules have never run against a live venue's custom teleport pads / elevators /
-	-- vehicles, and a false kick costs a paying guest — "log" still keeps strikes, warnings and
-	-- beacons, so a place can gather evidence for a week and then flip.
-	ENFORCE = "kick",
+	-- "log" | "kick". Ships "log" for one week of live evidence (owner call 2026-08-30, ADR 0008
+	-- decision 4): the rules have never run against a venue's custom teleport pads / elevators /
+	-- vehicles, and a false kick costs a paying guest. Strikes, warnings and beacons still fire in
+	-- "log" — only the kick is withheld. Flip to "kick" once a week of beacons comes back clean.
+	ENFORCE = "log",
 	EXEMPT_ROLES = { "Owner", "CoOwner" },
 	SAMPLE_INTERVAL = 0.5,
 	SOFT_BAN_MINUTES = 15,
