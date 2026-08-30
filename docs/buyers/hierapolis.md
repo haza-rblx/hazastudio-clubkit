@@ -128,7 +128,8 @@ Done via MCP in the open Studio session (**not saved until the owner presses Ctr
   admin panel, Senator music + announce only) and share `chatTag = "DPC"` — so the Rank row, chat
   tag and player list read "DPC" — while the unique "THE …" text is shown as the overhead **role
   chip** (`specialRank.chip = true`, stops gradient, rank chips hidden) *and* on the special-rank
-  row. President/Archon keep the stock **OWNER / CO-OWNER** label + chat tag (owner call); "THE PRESIDENT" / "THE ARCHON" appear only in the chip and the special-rank row. Re-apply after a Studio crash with
+  row. **Packaged as a toggleable add-on: `extras/place-packs/Hierapolis/` (`apply.luau` / `revert.luau`).**
+  President/Archon keep the stock **OWNER / CO-OWNER** label + chat tag (owner call); "THE PRESIDENT" / "THE ARCHON" appear only in the chip and the special-rank row. Re-apply after a Studio crash with
   `.tmp/hierapolis-config-apply.luau` (idempotent; dev-serve `/repo/` + loadstring).
 
   **Tool folders (2026-08-30):** each role now has its own `ServerStorage.Tools/<toolFolder>`:
