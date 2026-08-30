@@ -131,6 +131,11 @@ Done via MCP in the open Studio session (**not saved until the owner presses Ctr
   row. President/Archon keep the stock **OWNER / CO-OWNER** label + chat tag (owner call); "THE PRESIDENT" / "THE ARCHON" appear only in the chip and the special-rank row. Re-apply after a Studio crash with
   `.tmp/hierapolis-config-apply.luau` (idempotent; dev-serve `/repo/` + loadstring).
 
+  **Tool folders (2026-08-30):** each role now has its own `ServerStorage.Tools/<toolFolder>`:
+  `OWNER` (existing), `CO-OWNER` (cloned from OWNER), `THE EMPEROR` / `THE ECHOBORN` /
+  `THE MINISTER` (cloned from STAFF), `THE SENATOR` (cloned from LEAD DANCE). Old `STAFF`,
+  `MODERATOR`, `LEAD DANCE` folders are left in place (unused by the catalog) — buyer can prune.
+
   `Staff` / `Moderator` were dropped; `LegacyAliases` maps stored `Staff`/`Moderator`/`Admin` →
   `Minister`, `Developer`/`Scripter` → `Emperor`, so existing DataStore roles keep working
   (verified: my test account's old `Staff` resolved to `Minister` in playtest). `CommandAliases`
