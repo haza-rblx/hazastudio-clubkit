@@ -38,6 +38,16 @@ local LOADING_TEXTS = {
 
 local LIKE_BUTTON_TEXT_IDLE = "Like Player"
 local LIKE_BUTTON_TEXT_ACTIVE = "Unlike Player"
+
+-- With DAILY_LIKE_RESET on, a spent like is a status until WIB midnight, not an action — labelling
+-- it "Unlike Player" would name something the button no longer does. Resolved at call time because
+-- ConfigBootstrap projects the buyer's value after this module has loaded.
+local function likedButtonText(): string
+	if Config.AvatarContext.DAILY_LIKE_RESET == true then
+		return Config.AvatarContext.LIKE_LABEL_DONE_TODAY or LIKE_BUTTON_TEXT_ACTIVE
+	end
+	return LIKE_BUTTON_TEXT_ACTIVE
+end
 local LIKE_BUTTON_ACTIVE_COLOR = Color3.fromRGB(255, 82, 112)
 local LIKE_BUTTON_ACTIVE_TRANSPARENCY = 0.05
 
@@ -1103,7 +1113,7 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 	end
 
 	function ui:_applyLikeButtonState(isLiked: boolean, animate: boolean?)
-		local targetText = if isLiked then LIKE_BUTTON_TEXT_ACTIVE else LIKE_BUTTON_TEXT_IDLE
+		local targetText = if isLiked then likedButtonText() else LIKE_BUTTON_TEXT_IDLE
 		local targetColor = if isLiked then LIKE_BUTTON_ACTIVE_COLOR else likeButtonBadgeBaseColor
 		local targetTransparency = if isLiked then LIKE_BUTTON_ACTIVE_TRANSPARENCY else likeButtonBadgeBaseTransparency
 

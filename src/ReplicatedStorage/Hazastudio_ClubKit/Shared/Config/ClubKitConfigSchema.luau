@@ -495,6 +495,13 @@ ClubKitConfigSchema.defaults = {
 	Graphics = {
 		DefaultPreset = "Low",
 	},
+	-- Profile likes. true = each player may like someone once per WIB day and every
+	-- one of those likes adds +1 to that player's lifetime total (likes cannot be
+	-- taken back). false = the older rule: one standing like per person, ever, with
+	-- an Unlike button. Switching it off later leaves every like in place.
+	AvatarContext = {
+		DailyLikeReset = true,
+	},
 	-- Self-service custom title. Only read when Features.SelfCustomTitle is true.
 	-- Rolling quota: MaxChangesPerWindow updates per WindowDays; removing is free.
 	-- QuotaEnabled = false drops the rolling limit entirely (MinLevel still applies).

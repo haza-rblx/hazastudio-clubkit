@@ -353,7 +353,8 @@ export type AvatarContextRequest = {
 	requestId: string,
 }
 export type AvatarContextLikeAction = "like" | "unlike"
-export type AvatarLikeTransition = "first_like" | "reliked" | "unliked" | "noop"
+-- "daily_like": a repeat like on a later WIB day, once AvatarContext.DAILY_LIKE_RESET is on.
+export type AvatarLikeTransition = "first_like" | "reliked" | "unliked" | "noop" | "daily_like"
 export type AvatarContextLikeRequest = {
 	requestId: string,
 	targetUserId: number,
@@ -386,6 +387,8 @@ export type AvatarContextLikeResult = {
 	likesCount: number?,
 	viewerHasLiked: boolean?,
 	transition: AvatarLikeTransition?,
+	-- Daily mode: this viewer has already spent today's like on this target.
+	alreadyLikedToday: boolean?,
 	error: string?,
 }
 export type AvatarLikeEffectPayload = {

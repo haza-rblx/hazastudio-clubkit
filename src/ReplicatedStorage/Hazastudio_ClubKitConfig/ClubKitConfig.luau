@@ -656,6 +656,29 @@ ClubKitConfig.Graphics = {
 }
 
 -- =============================================================================
+-- PROFILE LIKES
+-- =============================================================================
+--   DailyLikeReset
+--     true (default) — a player may like someone once per day, and the counter
+--                      resets at midnight WIB (the same day boundary the daily
+--                      streak uses). Every daily like adds +1 to that player's
+--                      lifetime total, so the Likes board becomes a measure of
+--                      how active a venue is, not how many different people
+--                      passed through. Likes cannot be taken back: once given
+--                      today, the button reads "Liked today" until midnight.
+--     false          — the older rule: one standing like per person, ever, with
+--                      an Unlike button that takes the count back down.
+--
+--     Switching this off later changes nothing that is stored — every like stays
+--     and the old toggle starts working on it again. Switching it on does not
+--     reset anybody's total either; existing likes simply stop being the last
+--     word, and everyone may like again the next day.
+--
+ClubKitConfig.AvatarContext = {
+	DailyLikeReset = true,
+}
+
+-- =============================================================================
 -- CUSTOM TITLE (self-service overhead title)
 -- =============================================================================
 --   Only used when Features.SelfCustomTitle = true. With the flag off the

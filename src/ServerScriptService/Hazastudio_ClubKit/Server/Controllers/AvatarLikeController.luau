@@ -156,6 +156,7 @@ local function createAvatarLikeController(deps: {
 				likesCount = toggleResult.value.likesCount,
 				viewerHasLiked = toggleResult.value.viewerHasLiked,
 				transition = toggleResult.value.transition,
+				alreadyLikedToday = toggleResult.value.alreadyLikedToday,
 			}
 			resultNetwork:fireClient(player, response)
 			if overheadController and type(overheadController.refreshPlayer) == "function" then
@@ -164,7 +165,10 @@ local function createAvatarLikeController(deps: {
 			if avatarContextController and type(avatarContextController.pushContextUpdate) == "function" then
 				avatarContextController:pushContextUpdate(targetPlayer.UserId)
 			end
-			if toggleResult.value.transition == "first_like" then
+			-- "daily_like" is a genuine new like worth +1, so it earns the same notification and
+			-- hearts as the first one. "reliked" stays out on purpose: unlike/relike must not be a
+			-- way to spam someone's notifications.
+			if toggleResult.value.transition == "first_like" or toggleResult.value.transition == "daily_like" then
 				notify.player(
 					targetPlayer,
 					string.format(Config.AvatarContext.LIKE_NOTIF_MESSAGE, player.DisplayName),

@@ -2446,6 +2446,11 @@ Config.AvatarContext = {
 	PROFILE_DATASTORE_KEY = scopedDataStoreKey("Profile_v1"),
 	LIKE_DATASTORE_KEY = scopedDataStoreKey("AvatarLikes_v1"),
 	LIKE_SHARD_COUNT = 128,
+	-- Buyer: ClubKitConfig.AvatarContext.DailyLikeReset. true = one like per player per WIB day,
+	-- each worth +1 to the target's lifetime total and not revocable; false = the pre-2.12 toggle
+	-- (one standing like per player, ever). Projected by ConfigBootstrap; the DataStore key does not
+	-- change either way — see Shared/Domain/AvatarLikePolicy.
+	DAILY_LIKE_RESET = true,
 
 	-- Remote names
 	REMOTE_REQUEST = "AvatarContextRequest",
@@ -2473,7 +2478,10 @@ Config.AvatarContext = {
 	MSG_SAVE_FAILED = "[Profile] Could not save that. Try again.",
 	MSG_FILTER_FAILED = "[Profile] Roblox could not review that text yet. Try different wording.",
 	MSG_LIKE_RATE_LIMIT = "[Profile] Give it a moment before liking again.",
+	MSG_LIKE_ALREADY_TODAY = "[Profile] You already liked them today — come back after midnight.",
 	LIKE_NOTIF_MESSAGE = "[Profile] %s liked your profile.",
+	-- Button copy while daily mode is on and the viewer has spent today's like.
+	LIKE_LABEL_DONE_TODAY = "Liked today",
 	-- World 3D like effect
 	LIKE_EFFECT_RADIUS = 80,
 	LIKE_HEART_COUNT = 12,

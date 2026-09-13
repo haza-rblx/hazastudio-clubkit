@@ -468,6 +468,21 @@ function ConfigBootstrap.apply(config: any)
 		end
 	end
 
+	-- Profile likes: once per WIB day (each worth +1, not revocable) or the older one
+	-- standing like per person. Only a literal boolean counts — a string "false" is junk
+	-- and must not quietly change how a venue's like counter means anything.
+	local avatarContextCfg = clubKit.AvatarContext
+	if type(config.AvatarContext) == "table" and type(avatarContextCfg) == "table" then
+		if type(avatarContextCfg.DailyLikeReset) == "boolean" then
+			config.AvatarContext.DAILY_LIKE_RESET = avatarContextCfg.DailyLikeReset
+		elseif avatarContextCfg.DailyLikeReset ~= nil then
+			warn(
+				"[ConfigBootstrap] AvatarContext.DailyLikeReset is not a boolean; keeping "
+					.. tostring(config.AvatarContext.DAILY_LIKE_RESET)
+			)
+		end
+	end
+
 	-- Self-service custom title tuning. Ignored unless SelfCustomTitleEnabled;
 	-- TitleQuotaDomain clamps anything nonsensical that slips through.
 	local customTitle = clubKit.CustomTitle

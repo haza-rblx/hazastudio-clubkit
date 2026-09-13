@@ -823,7 +823,10 @@ local function createAvatarContextController(deps: {
 			ui:updateLikeState(
 				result.likesCount,
 				result.viewerHasLiked,
-				result.transition == "first_like" or result.transition == "reliked" or result.transition == "unliked"
+				result.transition == "first_like"
+					or result.transition == "reliked"
+					or result.transition == "unliked"
+					or result.transition == "daily_like"
 			)
 		else
 			ui:setData(nextPayload)
@@ -856,6 +859,14 @@ local function createAvatarContextController(deps: {
 			return
 		end
 		if currentPayload.userId ~= targetUserId or not currentPayload.canLike then
+			return
+		end
+
+		-- Daily mode: a like is one-way until WIB midnight, so a spent like is a dead button rather
+		-- than an unlike. Sending "unlike" anyway would be refused by the server; not sending it
+		-- keeps the round trip (and the pending spinner) out of the way entirely.
+		local dailyReset = Config.AvatarContext.DAILY_LIKE_RESET == true
+		if dailyReset and currentPayload.viewerHasLiked then
 			return
 		end
 

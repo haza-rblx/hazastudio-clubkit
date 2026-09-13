@@ -12,6 +12,8 @@ local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local BudgetGate = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.BudgetGate)
 local HttpApiCounter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.HttpApiCounter)
 local HttpApi = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.HttpApi)
+local AvatarLikePolicy = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.AvatarLikePolicy)
+local StreakDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.StreakDomain)
 
 type Result<T> = Types.Result<T>
 type AvatarContextLikeAction = Types.AvatarContextLikeAction
@@ -20,6 +22,10 @@ type AvatarLikeTransition = Types.AvatarLikeTransition
 type LikeShardData = {
 	entries: {[string]: number},
 	activeCount: number,
+	-- Running count of likes given through this shard. activeCount only counts people currently
+	-- holding a like, which stopped being the same number once one person can like every day.
+	-- Absent on shards written before 2.12 — AvatarLikePolicy.resolveShardTotal falls back.
+	likeTotal: number,
 	_version: number,
 }
 
@@ -34,6 +40,7 @@ type ToggleResult = {
 	delta: number,
 	totalLikes: number,
 	transition: AvatarLikeTransition,
+	alreadyLikedToday: boolean,
 }
 
 local function createAvatarLikeRepository(deps: { logger: Types.ILogger? }?)
@@ -192,11 +199,14 @@ local function createAvatarLikeRepository(deps: { logger: Types.ILogger? }?)
 		return (giverUserId % shardCount) + 1
 	end
 
+	-- 0 / 1 are the legacy states; anything from MIN_DAY_STAMP up is a WIB day stamp. Junk is
+	-- dropped rather than guessed at — see Shared/Domain/AvatarLikePolicy.
 	local function sanitizeState(value: any): number?
-		if value == 0 or value == 1 then
-			return value
+		local entry = AvatarLikePolicy.classify(value)
+		if entry.kind == "none" then
+			return nil
 		end
-		return nil
+		return value :: number
 	end
 
 	local function sanitizeShard(raw: any): LikeShardData
@@ -209,7 +219,7 @@ local function createAvatarLikeRepository(deps: { logger: Types.ILogger? }?)
 					local normalizedState = sanitizeState(state)
 					if normalizedState ~= nil then
 						entries[giverKey] = normalizedState
-						if normalizedState == 1 then
+						if AvatarLikePolicy.hasActiveLike(normalizedState) then
 							activeCount += 1
 						end
 					end
@@ -220,6 +230,10 @@ local function createAvatarLikeRepository(deps: { logger: Types.ILogger? }?)
 		return {
 			entries = entries,
 			activeCount = activeCount,
+			likeTotal = AvatarLikePolicy.resolveShardTotal(
+				if type(raw) == "table" then raw.likeTotal else nil,
+				activeCount
+			),
 			_version = type(raw) == "table" and type(raw._version) == "number" and raw._version or 1,
 		}
 	end
@@ -239,24 +253,17 @@ local function createAvatarLikeRepository(deps: { logger: Types.ILogger? }?)
 		return copy
 	end
 
-	local function applyAction(previousState: number?, action: AvatarContextLikeAction): (number?, number, AvatarLikeTransition)
-		if action == "like" then
-			if previousState == 1 then
-				return 1, 0, "noop"
-			end
-			if previousState == 0 then
-				return 1, 1, "reliked"
-			end
-			return 1, 1, "first_like"
-		end
-
-		if previousState == 1 then
-			return 0, -1, "unliked"
-		end
-		if previousState == 0 then
-			return 0, 0, "noop"
-		end
-		return nil, 0, "noop"
+	local function applyAction(
+		previousState: number?,
+		action: AvatarContextLikeAction
+	): (number?, number, AvatarLikeTransition, boolean)
+		local outcome = AvatarLikePolicy.evaluate(
+			previousState,
+			action,
+			StreakDomain.toDayNumber(os.time()),
+			Config.AvatarContext.DAILY_LIKE_RESET == true
+		)
+		return outcome.nextValue, outcome.delta, outcome.transition :: AvatarLikeTransition, outcome.alreadyLikedToday
 	end
 
 	local function loadShard(targetUserId: number, shardId: number): Result<LikeShardData>
@@ -448,6 +455,7 @@ local function createAvatarLikeRepository(deps: { logger: Types.ILogger? }?)
 		local nextState: number? = nil
 		local delta = 0
 		local transition: AvatarLikeTransition = "noop"
+		local alreadyLikedToday = false
 		local updatedShard: LikeShardData? = nil
 
 		local result = budgetGate:executeAsync(Enum.DataStoreRequestType.UpdateAsync, function()
@@ -457,7 +465,7 @@ local function createAvatarLikeRepository(deps: { logger: Types.ILogger? }?)
 					local entries = cloneEntries(current.entries)
 
 					previousState = entries[giverKey]
-					nextState, delta, transition = applyAction(previousState, action)
+					nextState, delta, transition, alreadyLikedToday = applyAction(previousState, action)
 
 					if nextState == nil then
 						entries[giverKey] = nil
@@ -465,9 +473,16 @@ local function createAvatarLikeRepository(deps: { logger: Types.ILogger? }?)
 						entries[giverKey] = nextState
 					end
 
+					-- activeCount tracks holders (a repeat daily like adds none); likeTotal tracks
+					-- likes given, which is what a target's total is rebuilt from.
+					local heldBefore = AvatarLikePolicy.hasActiveLike(previousState)
+					local heldAfter = AvatarLikePolicy.hasActiveLike(nextState)
+					local holderDelta = (if heldAfter then 1 else 0) - (if heldBefore then 1 else 0)
+
 					updatedShard = {
 						entries = entries,
-						activeCount = math.max(0, current.activeCount + delta),
+						activeCount = math.max(0, current.activeCount + holderDelta),
+						likeTotal = math.max(0, current.likeTotal + delta),
 						_version = current._version + 1,
 					}
 
@@ -509,6 +524,7 @@ local function createAvatarLikeRepository(deps: { logger: Types.ILogger? }?)
 			delta = delta,
 			totalLikes = totalLikesResult.value,
 			transition = transition,
+			alreadyLikedToday = alreadyLikedToday,
 		})
 	end
 
@@ -520,7 +536,9 @@ local function createAvatarLikeRepository(deps: { logger: Types.ILogger? }?)
 			if not shardResult.ok then
 				return Result.Err(shardResult.error)
 			end
-			totalLikes += shardResult.value.activeCount
+			-- likeTotal, not activeCount: with daily likes one person contributes many, and
+			-- sanitizeShard already falls a pre-2.12 shard back to its holder count.
+			totalLikes += shardResult.value.likeTotal
 		end
 
 		local writeResult = writeSummary(targetUserId, totalLikes)

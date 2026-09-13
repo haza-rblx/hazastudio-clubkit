@@ -2,8 +2,11 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local Result = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Result)
+local AvatarLikePolicy = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.AvatarLikePolicy)
+local StreakDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.StreakDomain)
 
 type Result<T> = Types.Result<T>
 type AvatarContextLikeAction = Types.AvatarContextLikeAction
@@ -14,6 +17,7 @@ type ToggleLikeOutcome = {
 	likesCount: number,
 	viewerHasLiked: boolean,
 	transition: AvatarLikeTransition,
+	alreadyLikedToday: boolean,
 }
 
 local function createAvatarLikeService(deps: {
@@ -49,8 +53,15 @@ local function createAvatarLikeService(deps: {
 		return Result.Ok({
 			targetUserId = targetPlayer.UserId,
 			likesCount = toggleResult.value.totalLikes,
-			viewerHasLiked = toggleResult.value.nextState == 1,
+			-- Not `nextState == 1`: in daily mode the stored value is a WIB day stamp, and "liked"
+			-- means "liked today".
+			viewerHasLiked = AvatarLikePolicy.viewerHasLiked(
+				toggleResult.value.nextState,
+				StreakDomain.toDayNumber(os.time()),
+				Config.AvatarContext.DAILY_LIKE_RESET == true
+			),
 			transition = toggleResult.value.transition,
+			alreadyLikedToday = toggleResult.value.alreadyLikedToday == true,
 		})
 	end
 

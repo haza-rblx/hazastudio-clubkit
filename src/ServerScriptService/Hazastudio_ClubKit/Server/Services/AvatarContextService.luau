@@ -5,6 +5,8 @@ local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Result = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Result)
 local TextFilterUtil = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.TextFilterUtil)
+local AvatarLikePolicy = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.AvatarLikePolicy)
+local StreakDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.StreakDomain)
 type Result<T> = Types.Result<T>
 type AvatarContextPayload = Types.AvatarContextPayload
 type ProfileRelationshipMode = Types.ProfileRelationshipMode
@@ -304,7 +306,12 @@ local function createAvatarContextService(deps: {
 		local likeStateResult = results["likeState"]
 		if likeStateResult then
 			if likeStateResult.ok then
-				viewerHasLiked = likeStateResult.value == 1
+				-- Daily mode stores a WIB day stamp, so "liked" is "liked today" (AvatarLikePolicy).
+				viewerHasLiked = AvatarLikePolicy.viewerHasLiked(
+					likeStateResult.value,
+					StreakDomain.toDayNumber(os.time()),
+					Config.AvatarContext.DAILY_LIKE_RESET == true
+				)
 			else
 				log:warn("AvatarContextService like state lookup failed", {
 					targetUserId = targetPlayer.UserId,
