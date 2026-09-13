@@ -19,7 +19,8 @@ local cfg = Config.MobilePanelManager
 local NEVER_HIDE: { [string]: boolean } = {
 	["MobilePanelOverlay"] = true,
 	["00-LoadingScreen"] = true,
-	["99-NotificationCenter"] = true,
+	[Config.NotificationCenter.GUI_NAME] = true,
+	[Config.NotificationCenter.GUI_NAME_V2] = true,
 }
 
 type GuiState = { enabled: boolean, displayOrder: number, ignoreGuiInset: boolean }

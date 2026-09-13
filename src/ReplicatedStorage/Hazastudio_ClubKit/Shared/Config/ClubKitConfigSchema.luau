@@ -454,6 +454,69 @@ ClubKitConfigSchema.defaults = {
 		SyncJoinFade = 0.4,
 		SwitchInputCooldown = 0.45,
 	},
+	-- Which OverheadGUIMainTemplate* the place uses. The template is place data, so
+	-- only a version actually installed in ReplicatedStorage should be named here.
+	-- DefaultLayers / DefaultBadges take three values per key: true = starts visible,
+	-- false = starts hidden but Settings can still turn it on (a default, not a lock),
+	-- "off" = off for everyone always, with its Settings row hidden too.
+	Overhead = {
+		GuiType = "V4",
+		-- false = only donors with an actual rank get a chip; the generic SUPPORTER
+		-- chip is dropped. Not the same as DefaultLayers.TopSpender, which also
+		-- governs the ranked "#N <currency>" chip.
+		ShowSupporterChip = true,
+		DefaultLayers = {
+			SpecialTitle = true,
+			BadgeGroup = true,
+			Level = true,
+			SpecialRank = true,
+			SpecialStatus = true,
+			TopSpender = true,
+			TopDonate = true,
+			Rank = true,
+			DisplayName = true,
+			CoupleName = false,
+		},
+		DefaultBadges = {
+			OwnerCoOwner = true,
+			Developer = true,
+			Admin = true,
+			Member = true,
+			VIP = true,
+			VVIP = true,
+			Elite = true,
+			Streak = true,
+			LikeCounter = true,
+			Community = true,
+		},
+	},
+	-- Starting graphics preset for players who have never saved settings (and Reset):
+	-- "Low" | "Balanced" | "High". Players who already chose one keep it.
+	Graphics = {
+		DefaultPreset = "Low",
+	},
+	-- Self-service custom title. Only read when Features.SelfCustomTitle is true.
+	-- Rolling quota: MaxChangesPerWindow updates per WindowDays; removing is free.
+	-- QuotaEnabled = false drops the rolling limit entirely (MinLevel still applies).
+	CustomTitle = {
+		MinLevel = 50,
+		MaxChangesPerWindow = 5,
+		WindowDays = 7,
+		QuotaEnabled = true,
+		-- One free title for everyone, whatever their level. Spent by creating; an
+		-- admin grant never consumes it and removing the title never refunds it.
+		FreeFirstTitle = false,
+	},
+	-- Free Title event. A threshold above 0 switches its requirement on; Mode says
+	-- how the active ones combine: "Any" | "All" | "Disabled". A qualifying player
+	-- may create a title below CustomTitle.MinLevel; the quota still applies, and
+	-- nobody ever loses access they already had.
+	FreeTitleEvent = {
+		Mode = "Disabled",
+		RequiredLevel = 0,
+		MinDonationRobux = 0,
+		MinDonationCash = 0,
+	},
 	Features = {
 		MusicPlayer = true,
 		MusicCatalogSeed = true,
@@ -474,6 +537,13 @@ ClubKitConfigSchema.defaults = {
 		-- Avatar Context Menu v2 (redesign: static ProfilePicture + backdrop zoom/blur).
 		-- false (default) = legacy v1 GUI (3D ViewportFrame avatar). true = v2.
 		AvatarContextMenuV2 = false,
+		-- Self-service custom title panel (1000-01-CT-ADDON) on the profile Title row,
+		-- gated by CustomTitle.MinLevel + rolling quota. false (default) = old text-only
+		-- modal. Falls back to the old modal when the ScreenGui is not installed.
+		SelfCustomTitle = false,
+		-- Custom-title panel v3 (04-AdminPanelv3) takes the admin topbar icon from
+		-- the classic 04-AdminPanelv2. Needs that ScreenGui installed.
+		AdminPanelV3 = false,
 		Hotbar = true,
 		LoadingScreen = true,
 		LevelSystem = true,
@@ -534,6 +604,7 @@ ClubKitConfigSchema.FEATURE_MANIFEST = {
 			{ key = "JoinGreetings", label = "Join greetings" },
 			{ key = "PromptJoinCommunityOnLoad", label = "Join community prompt" },
 			{ key = "AdminHub", label = "Admin Hub (04-AdminHub)" },
+			{ key = "AdminPanelV3", label = "Custom title panel v3 (04-AdminPanelv3)" },
 			{ key = "AvatarContextMenuV2", label = "Avatar context menu v2 (redesign)" },
 		},
 	},
@@ -544,6 +615,7 @@ ClubKitConfigSchema.FEATURE_MANIFEST = {
 			{ key = "ShowCoupleChatTag", label = "Couple chat tag (General)" },
 			{ key = "Stickers", label = "Stickers" },
 			{ key = "LevelSystem", label = "Level & XP" },
+			{ key = "SelfCustomTitle", label = "Self-service custom title (1000-01-CT-ADDON)" },
 		},
 	},
 	{

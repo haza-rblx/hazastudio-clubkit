@@ -1,5 +1,5 @@
 --!strict
--- Presents 99-NotificationCenter > GenericBroadcast announcements.
+-- Presents <notification center> > GenericBroadcast announcements (V2 GUI first, V1 fallback).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -11,6 +11,8 @@ local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Con
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local GenericBroadcastLayoutBridge = require(script.Parent.Parent.Services.GenericBroadcastLayoutBridge)
 local GroupMotion = require(script.Parent.Parent.Utils.GroupMotion)
+local GuiFade = require(script.Parent.Parent.Utils.GuiFade)
+local NotificationCenterGui = require(script.Parent.Parent.Utils.NotificationCenterGui)
 
 local log = Logger.new("GenericBroadcastController")
 
@@ -44,10 +46,11 @@ type Refs = {
 	-- GUI revision (some buyer places redesigned it from CanvasGroup to Frame); it's
 	-- only ever used for Position/AnchorPoint/Visible/GetChildren, so GuiObject covers it.
 	wrapper: GuiObject,
-	template: CanvasGroup,
+	-- CanvasGroup (V1) or a plain Frame (V2 redesign); the fade path follows the class.
+	template: GuiObject,
+	isV2: boolean,
 }
 
-local ROOT_GUI_NAME = "99-NotificationCenter"
 local WRAPPER_NAME = "GenericBroadcast"
 local TEMPLATE_NAME = "BroadcastMessageTemplate"
 local ENTER_DURATION = 0.28
@@ -59,8 +62,12 @@ local EXIT_SCALE = 0.81
 local MAX_VISIBLE_CARDS = 3
 
 type ActiveCard = {
-	card: CanvasGroup,
+	card: GuiObject,
 	scale: UIScale,
+	-- Resting UIScale: the template's own (V2) or NORMAL_SCALE (V1).
+	normalScale: number,
+	-- Descendant fade for Frame cards; nil for CanvasGroup cards (GroupTransparency).
+	fade: GuiFade.Snapshot?,
 	createdAt: number,
 	dismissing: boolean,
 }
@@ -175,19 +182,12 @@ local function applyCountDownBarAccent(countDownBar: GuiObject, role: string)
 end
 
 local function resolveRefs(): Refs?
-	local playerGui = Players.LocalPlayer:FindFirstChildOfClass("PlayerGui")
-	if not playerGui then
+	local resolved = NotificationCenterGui.resolve(10)
+	if not resolved then
+		log:warn("Notification center GUI not found")
 		return nil
 	end
-
-	local rootGui = playerGui:FindFirstChild(ROOT_GUI_NAME)
-	if not rootGui then
-		rootGui = playerGui:WaitForChild(ROOT_GUI_NAME, 10)
-	end
-	if not rootGui or not rootGui:IsA("ScreenGui") then
-		log:warn("99-NotificationCenter not found")
-		return nil
-	end
+	local rootGui = resolved.gui
 
 	local wrapper = rootGui:FindFirstChild(WRAPPER_NAME)
 	if not wrapper or not wrapper:IsA("GuiObject") then
@@ -196,7 +196,7 @@ local function resolveRefs(): Refs?
 	end
 
 	local template = wrapper:FindFirstChild(TEMPLATE_NAME)
-	if not template or not template:IsA("CanvasGroup") then
+	if not template or not template:IsA("GuiObject") then
 		log:warn("BroadcastMessageTemplate not found")
 		return nil
 	end
@@ -206,7 +206,24 @@ local function resolveRefs(): Refs?
 		rootGui = rootGui,
 		wrapper = wrapper,
 		template = template,
+		isV2 = resolved.isV2,
 	}
+end
+
+local function setCardAlpha(card: GuiObject, fade: GuiFade.Snapshot?, alpha: number)
+	if fade then
+		GuiFade.set(fade, alpha)
+	elseif card:IsA("CanvasGroup") then
+		card.GroupTransparency = alpha
+	end
+end
+
+local function tweenCardAlpha(card: GuiObject, fade: GuiFade.Snapshot?, info: TweenInfo, alpha: number)
+	if fade then
+		GuiFade.tween(fade, info, alpha)
+	elseif card:IsA("CanvasGroup") then
+		TweenService:Create(card, info, { GroupTransparency = alpha }):Play()
+	end
 end
 
 local function tween(instance: Instance, info: TweenInfo, goals: { [string]: any }): Tween
@@ -230,7 +247,7 @@ local function normalizePayload(raw: any): Payload?
 	return raw :: Payload
 end
 
-local function fillCard(card: CanvasGroup, payload: Payload)
+local function fillCard(card: GuiObject, payload: Payload)
 	local userId = tonumber(payload.senderUserId) or 0
 	local displayName = tostring(payload.senderDisplayName or "Unknown")
 	local username = tostring(payload.senderUsername or "unknown")
@@ -277,7 +294,7 @@ local function removeActive(active: ActiveCard)
 	end
 end
 
-local function setCardContentVisible(card: CanvasGroup, visible: boolean)
+local function setCardContentVisible(card: GuiObject, visible: boolean)
 	for _, child in ipairs(card:GetChildren()) do
 		if child:IsA("GuiObject") and child.Name ~= "CountDownBar" then
 			child.Visible = visible
@@ -315,7 +332,7 @@ local function restackActiveCards()
 			active.card.LayoutOrder = index
 			setCardContentVisible(active.card, true)
 			tween(active.scale, TweenInfo.new(RESTACK_DURATION, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-				Scale = NORMAL_SCALE,
+				Scale = active.normalScale,
 			})
 		end
 	end
@@ -332,14 +349,16 @@ local function dismissCard(refs: Refs, active: ActiveCard)
 	local card = active.card
 	local scale = active.scale
 	if card.Parent then
-		tween(card, TweenInfo.new(EXIT_DURATION, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-			GroupTransparency = 1,
-		})
-		tweenWait(scale, TweenInfo.new(EXIT_DURATION, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-			-- ADR 0005: the card is a CanvasGroup — hold NORMAL_SCALE so its texture is never resized.
-			Scale = GroupMotion.scaleTarget(card, EXIT_SCALE, NORMAL_SCALE),
+		local exitInfo = TweenInfo.new(EXIT_DURATION, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+		tweenCardAlpha(card, active.fade, exitInfo, 1)
+		tweenWait(scale, exitInfo, {
+			-- ADR 0005: a CanvasGroup card holds its resting scale so its texture is never resized.
+			Scale = GroupMotion.scaleTarget(card, active.normalScale * EXIT_SCALE / NORMAL_SCALE, active.normalScale),
 		})
 		card:Destroy()
+	end
+	if active.fade then
+		GuiFade.destroy(active.fade)
 	end
 
 	if not hasActiveBroadcastCard(refs.wrapper) then
@@ -358,27 +377,42 @@ local function playBroadcast(refs: Refs, payload: Payload)
 	local card = refs.template:Clone()
 	card.Name = "BroadcastMessage"
 	card.Visible = true
-	card.GroupTransparency = 1
 	card.LayoutOrder = os.clock() * 1000
-	card.Parent = wrapper
 	fillCard(card, payload)
 
+	-- V2 rests at the designer's own UIScale; V1 keeps the kit's NORMAL_SCALE.
 	local scale = card:FindFirstChildOfClass("UIScale")
-	if not scale then
+	local normalScale = NORMAL_SCALE
+	if scale then
+		if refs.isV2 then
+			normalScale = scale.Scale
+		end
+	else
 		scale = Instance.new("UIScale")
 		scale.Parent = card
+		if refs.isV2 then
+			normalScale = 1
+		end
 	end
-	scale.Scale = GroupMotion.scaleTarget(card, ENTER_START_SCALE, NORMAL_SCALE)
 
 	local countDownBar = findFrame(card, "CountDownBar")
+	-- V2 drains from the designed bar width; V1 always started full width.
+	local barStartWidth = if refs.isV2 and countDownBar then countDownBar.Size.X.Scale else 1
 	if countDownBar then
-		countDownBar.Size = UDim2.new(1, 0, countDownBar.Size.Y.Scale, countDownBar.Size.Y.Offset)
+		countDownBar.Size = UDim2.new(barStartWidth, 0, countDownBar.Size.Y.Scale, countDownBar.Size.Y.Offset)
 		applyCountDownBarAccent(countDownBar, tostring(payload.senderRole or "Member"))
 	end
 
-	local active = {
+	local fade = if card:IsA("CanvasGroup") then nil else GuiFade.capture(card)
+	setCardAlpha(card, fade, 1)
+	card.Parent = wrapper
+	scale.Scale = GroupMotion.scaleTarget(card, normalScale * ENTER_START_SCALE / NORMAL_SCALE, normalScale)
+
+	local active: ActiveCard = {
 		card = card,
 		scale = scale,
+		normalScale = normalScale,
+		fade = fade,
 		createdAt = os.clock(),
 		dismissing = false,
 	}
@@ -389,11 +423,10 @@ local function playBroadcast(refs: Refs, payload: Payload)
 	trimVisibleCards(refs)
 	playEnterSound()
 
-	tween(card, TweenInfo.new(ENTER_DURATION, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		GroupTransparency = 0,
-	})
-	tweenWait(scale, TweenInfo.new(ENTER_DURATION, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		Scale = NORMAL_SCALE,
+	local enterInfo = TweenInfo.new(ENTER_DURATION, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	tweenCardAlpha(card, fade, enterInfo, 0)
+	tweenWait(scale, enterInfo, {
+		Scale = normalScale,
 	})
 	restackActiveCards()
 
@@ -431,6 +464,9 @@ local function clearActiveCards()
 		local active = activeCards[index]
 		if active.card.Parent then
 			active.card:Destroy()
+		end
+		if active.fade then
+			GuiFade.destroy(active.fade)
 		end
 		table.remove(activeCards, index)
 	end

@@ -59,6 +59,8 @@ local function provisionRemotesFolder(remotes: Folder, config: any)
 	ensureRemoteEvent(remotes, config.Admin.REMOTE_SEND_GIFTCARD)
 	ensureRemoteEvent(remotes, config.Admin.REMOTE_GIFTCARD_RESULT)
 	ensureRemoteEvent(remotes, config.Admin.REMOTE_RESET_TITLE)
+	ensureRemoteEvent(remotes, config.Admin.REMOTE_SET_TITLE_IMAGE)
+	ensureRemoteEvent(remotes, config.Admin.REMOTE_TITLE_IMAGE_LIST)
 
 	ensureRemoteEvent(remotes, config.CinematicDock.REMOTE_REQUEST)
 	ensureRemoteEvent(remotes, config.CinematicDock.REMOTE_BROADCAST)

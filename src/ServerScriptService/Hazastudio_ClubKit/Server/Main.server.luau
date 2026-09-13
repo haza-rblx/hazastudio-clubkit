@@ -747,6 +747,7 @@ local _adminController = ServerMods.createAdminController({
 	membershipCommandService = membershipCommandService,
 	playerLookupService = playerLookupService, -- DI fixed: inject lookup service
 	profileMenuSync = profileMenuSync,
+	titleImageRegistry = ServerMods.TitleImageRegistryRepository.create({}),
 })
 if Config.FeatureFlags.CouplesEnabled ~= false then
 	ServerMods.createCoupleController({
@@ -790,6 +791,12 @@ local donationService = ServerMods.createDonationService({
 	})
 if type(overheadService.setDonationService) == "function" then
 	overheadService:setDonationService(donationService)
+end
+-- Same late binding for the profile menu: it only needs donations when the Free
+-- Title event runs in "Donation" mode, and the service does not exist yet when the
+-- menu service is built above.
+if type(profileMenuService.setDonationService) == "function" then
+	profileMenuService:setDonationService(donationService)
 end
 -- Wire async cash-donation updates back into the overhead refresh loop.
 if type(overheadService.setCashStatsReadyCallback) == "function" then

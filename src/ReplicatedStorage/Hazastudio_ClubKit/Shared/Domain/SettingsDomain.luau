@@ -7,6 +7,7 @@ type SettingsSessionData = Types.SettingsSessionData
 type SettingsPayload = Types.SettingsPayload
 
 local GraphicsQuality = require(script.Parent.Parent.Utils.GraphicsQuality)
+local Config = require(script.Parent.Parent.Constants.Config)
 
 local SettingsDomain = {}
 
@@ -28,8 +29,10 @@ local DEFAULT_STORED: SettingsStoredData = {
 	textures = 2,
 	musicVolume = 100,
 	_musicVolBase = SettingsDomain.MUSIC_VOLUME_BASE_SCHEMA,
-	graphicsPreset = "Balanced",
-	shadowQuality = "Balanced",
+	-- Placeholders: defaultStoredData() replaces the preset with the buyer's default
+	-- (Config.Graphics.DEFAULT_PRESET) and cascades that preset's own fields.
+	graphicsPreset = "Low",
+	shadowQuality = "Off",
 	overheadDistance = "Medium",
 	overheadLayerVisible = {
 		["SpecialTitle"] = true,
@@ -119,11 +122,21 @@ local function sanitizeMap(raw: any, defaults: { [string]: boolean }): { [string
 	return result
 end
 
+-- Starting preset for a player who has never saved settings (and for Reset). Buyer:
+-- ClubKitConfig.Graphics.DefaultPreset. Read at call time; junk falls back to Low.
+local function resolveDefaultPreset(): Types.GraphicsPreset
+	local graphicsCfg = (Config :: any).Graphics
+	local raw = if type(graphicsCfg) == "table" then graphicsCfg.DEFAULT_PRESET else nil
+	return GraphicsQuality.resolvePreset(raw) or "Low"
+end
+
 function SettingsDomain.defaultStoredData(): SettingsStoredData
 	local stored = table.clone(DEFAULT_STORED)
 	stored.overheadLayerVisible = table.clone(DEFAULT_STORED.overheadLayerVisible)
 	stored.overheadBadgeVisible = table.clone(DEFAULT_STORED.overheadBadgeVisible)
-	return stored
+	stored.graphicsPreset = resolveDefaultPreset()
+	-- Store the preset's own field values, so the Settings toggles agree with what renders.
+	return GraphicsQuality.cascadePresetToStored(stored) :: any
 end
 
 function SettingsDomain.defaultSessionData(): SettingsSessionData

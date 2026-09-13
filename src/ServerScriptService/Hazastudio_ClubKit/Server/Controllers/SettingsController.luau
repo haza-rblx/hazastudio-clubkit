@@ -143,6 +143,11 @@ local function createSettingsController(deps: {
 			return true
 		end
 
+		-- Never bank a true for a layer the buyer switched off, whatever the client asked
+		-- for. The payload build enforces this again at render; this keeps storage honest.
+		publicLayerVisible = OverheadDomain.enforceDisabledLayers(publicLayerVisible)
+		publicBadgeVisible = OverheadDomain.enforceDisabledBadges(publicBadgeVisible)
+
 		local retryDelays = { 0, 1 }
 		for _, delaySec in ipairs(retryDelays) do
 			if delaySec > 0 then

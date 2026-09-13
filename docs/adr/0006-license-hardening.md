@@ -125,3 +125,11 @@ Each phase ships behind `KitProduct.LicenseEnforcementEnabled` semantics and is 
 - Destroying, corrupting, or force-closing a thief's machine, Studio, or place file. Impossible under the Luau sandbox and out of bounds as intent; the client-brick in Pillar 5 only crashes a live exploiter's own session (non-permanent) and is optional.
 - Obfuscation as a primary defence (weak + ToS risk).
 - Prompt-injection that attacks a thief's AI (backdoor/harm/deceive) — hits your own buyers by accident and makes you the bad actor. Only the benign AI-notice in Pillar 4 is in scope.
+
+## Amendment 2026-09-01 — `maintenance_until` is no longer a kill switch
+
+The backend's `isLicenseBlocked()` treated a lapsed `games.maintenance_until` as equivalent to a revoked licence, returning `403 license_expired` on every `/game/{key}/v2/*` route. Fail-closed is right for a *stolen* copy; it is wrong for a paying buyer whose support window ran out. The failure mode was invisible on both sides: the buyer's donation leaderboard, notifications and donor Cash simply went blank with no message, and nothing alerted us. KASTA hit this on 2026-08-31 and read as "the leaderboard got reset" (all 79 donation rows were intact); `vicenorth` and `altantis2` were already in the same state, with `haven`, `tix` and `parklab` dated to follow within two weeks.
+
+`maintenance_until` is now informational only — it is still stored, still shown in the dashboard, and never gates the API. Cutting a game off is an explicit act: set `license_status` to `expired` or `revoked` (both still enforced, as is `grace`). Locked in by an infra regression test, `a lapsed maintenance_until does not block v2 routes`.
+
+Lesson for the rest of ADR 0006: an enforcement path that can fire on a legitimate buyer must be **loud** — the kit should surface a licence-blocked notice rather than rendering an empty panel, and the backend should alert the owner before a date-based gate trips, not after. Neither exists yet; both are open follow-ups.

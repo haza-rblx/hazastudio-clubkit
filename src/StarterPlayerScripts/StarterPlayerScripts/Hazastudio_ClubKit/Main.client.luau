@@ -1441,14 +1441,33 @@ trackBootTask("AfkGuardController.init", function()
 	end
 end)
 -- === Admin Hub (optional WIP) + Admin Panel ===
+local adminPanelV3Owns = Config.FeatureFlags.AdminPanelV3Enabled == true
+	and Config.FeatureFlags.AdminHubEnabled ~= true
 trackBootTask("AdminController.init", function()
 	adminPanelApi = ClientMods.AdminController.init({
 		remotes = Remotes,
 		icon = adminIcon,
-		-- Hub owns topbar when enabled; otherwise classic panel binds the icon.
-		bindTopbar = Config.FeatureFlags.AdminHubEnabled ~= true,
+		-- Hub owns topbar when enabled; the v3 title panel takes it next; otherwise
+		-- the classic panel binds the icon.
+		bindTopbar = Config.FeatureFlags.AdminHubEnabled ~= true and not adminPanelV3Owns,
 	})
 end)
+if Config.FeatureFlags.AdminPanelV3Enabled == true then
+	trackBootTask("AdminTitleV3Controller.init", function()
+		-- Returns nil when 04-AdminPanelv3 is not installed, and in that case the
+		-- classic panel has already taken the icon above only if the flag was off —
+		-- so a flag-on/GUI-missing place leaves the icon unbound rather than opening
+		-- a panel that cannot work. The controller logs which case it hit.
+		local v3Api = ClientMods.AdminTitleV3Controller.init({
+			remotes = Remotes,
+			icon = adminIcon,
+			bindTopbar = adminPanelV3Owns,
+		})
+		if v3Api then
+			adminPanelApi = v3Api
+		end
+	end)
+end
 if Config.FeatureFlags.AdminHubEnabled == true then
 	trackBootTask("AdminHubController.init", function()
 		local hubApi = ClientMods.AdminHubController.init({

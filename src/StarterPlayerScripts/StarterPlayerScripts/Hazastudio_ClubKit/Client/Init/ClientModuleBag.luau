@@ -22,6 +22,7 @@ return {
 	GiftController = require(Client.Controllers.GiftController),
 	AdminController = require(Client.Controllers.AdminController),
 	AdminHubController = require(Client.Controllers.AdminHubController),
+	AdminTitleV3Controller = require(Client.Controllers.AdminTitleV3Controller),
 	createAvatarContextController = require(Client.Controllers.AvatarContextController),
 	createCarryController = require(Client.Controllers.CarryController),
 	createCommandLibraryController = require(Client.Controllers.CommandLibraryController),

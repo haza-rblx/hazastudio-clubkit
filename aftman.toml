@@ -1,2 +1,4 @@
 [tools]
 rojo = "rojo-rbx/rojo@7.5.1"
+# Headless Luau runner for pure-Shared test harnesses (see .mimocode/skills/tdd-luau).
+lune = "lune-org/lune@0.8.9"

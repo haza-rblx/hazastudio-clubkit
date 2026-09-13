@@ -180,6 +180,22 @@ function DonationSystemController.init(deps: {
 	end
 
 	local lastDonorProfile: any? = nil
+	-- Snapshot of what the panel was last actually painted with. Kept separate from
+	-- `lastDonorProfile` because `fetchDonorProfile` updates that one without painting.
+	local lastAppliedDonorProfile: any? = nil
+
+	-- The server echoes the whole overhead payload on every sync, not just deltas, so an
+	-- idle player re-runs this path dozens of times a minute with identical numbers.
+	local function donorProfileUnchanged(a: any?, b: any?): boolean
+		if a == nil or b == nil then
+			return false
+		end
+		return a.displayName == b.displayName
+			and a.robuxTotal == b.robuxTotal
+			and a.robuxRank == b.robuxRank
+			and a.cashTotal == b.cashTotal
+			and a.cashRank == b.cashRank
+	end
 
 	local function profileFromOverheadPayload(overheadPayload: any): any?
 		if type(overheadPayload) ~= "table" then
@@ -213,6 +229,10 @@ function DonationSystemController.init(deps: {
 			return
 		end
 		lastDonorProfile = merged
+		if donorProfileUnchanged(lastAppliedDonorProfile, merged) then
+			return
+		end
+		lastAppliedDonorProfile = merged
 		ui:applyDonorProfile(merged)
 		log:debug("overhead profile applied to donation panel", {
 			userId = localPlayer.UserId,

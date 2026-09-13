@@ -2,7 +2,7 @@
 
 Internal scratch pad to track work **before** a version is released.
 
-**Current version:** `2.11.0` (see [`VERSION`](VERSION))
+**Current version:** `2.12.0` (see [`VERSION`](VERSION))
 **Next release target:** _(not set)_
 **Active branch:** `main`
 
@@ -12,16 +12,340 @@ Internal scratch pad to track work **before** a version is released.
 
 | Area | Status |
 |------|--------|
-| 2.11.0 release | **Released 2026-08-30** (roleColor.stops, role chip, per-role privileges, dynamic Admin Hub picker, ADR 0008 phase 1 guards in `log` mode, external-loading contract + ClubKitMusic duck, boot timeout 120 s, `Features.HierapolisCustom`). Docs: `docs/releases/2.11.0/`. Still to do: push tag, customer web update, Discord announce, delivery pack rbxm. |
+| 2.12.0 release | **Released 2026-09-12** (overhead layer/badge hard-off + ADR 0009, membership tier on/off, self-service custom title + free first title + Free Title event, graphics presets that really differ + High that stops downgrading itself + buyer `Graphics.DefaultPreset`, notification center V2, topbar "Close Menu", five fixes). Docs: `docs/releases/2.12.0/`. File list derived from mtimes, not `git diff` — git is not installed on this machine. Still to do: push tag `v2.12.0`, delivery pack RBXM (PARKLAB + denylist collect), customer web update, Discord announce. |
+| **2.12.0 delivery pack — built 2026-09-12, one manual step left** | Collected from **PARKLAB**, not the template place, because only PARKLAB carries the new GUIs (`1000-01-CT-ADDON`, `ADDON-FreeTitleEventTrigger` inside `IconGroup`, `99-NotificationCenterV2`). `PackagerCore.collect` was the wrong tool for that — it is full-service, so it would have shipped the venue map, ETH*/Cenz*/Paanz systems and the Adonis loader to every buyer. New `PackagerCore.collectFromBuyerPlace` + `Manifest.PLACE_PACK_ALLOW` is an **allowlist**, so a system added to a venue tomorrow cannot leak into a pack built the day after; `STARTER_GUI_EXACT` was refreshed (it had gone stale — no v3 admin panel, no V2 notification center, no CT addon). Workspace is limited to `hazastudioBoard` + the board roots (the venue map never ships); `Lighting` is skipped (venue look); **config and secrets come from the repo template over the `/repo/` bridge**, never from the buyer — PARKLAB's own copy carries its group id, product ids, Saweria URL and branding. Result in the place: `Workspace.HazastudioClubKit_Package`, **11,516 instances / 42 entries / 0 warnings**, `kitVersion = 2.12.0`, config 34,619 B with `OwnerUserId = 0` and no "PARKLAB" string, secrets blank. The 16 "missing" entries are all expected: four legacy GUI names PARKLAB has superseded, and ten board roots that are *inside* the packed `hazastudioBoard` folder; `RunningText` genuinely does not exist in PARKLAB. **Owner owes:** right-click the model → Save to File → `Desktop\ClubKit v2.12.0 Delivery\HazastudioClubKit_Package_v2.12.0.rbxm`, then delete the model from Workspace and Ctrl+S. Neither MCP bridge can export an rbxm (`robloxstudio` reports no connected instance), so that step cannot be automated from here. Plugin rbxm already built + installed (`deliver/HazastudioClubKit_Plugin_v2.12.0.rbxm`, 124,173 B) — takes effect on the next Studio restart. |
 | **MovementGuard flip to `kick` — due 2026-09-06** | 2.11.0 ships `Config.MovementGuard.ENFORCE = "log"` (ADR 0008 decision 4). After one week, review `runtime:movement_warn` / `movement_kick` beacons on the Fleet page; if clean, flip the default to `"kick"` and ship it. If one place shows false positives (teleport pads / lifts / vehicles), flip per place instead. |
+| **`maintenance_until` kill switch removed — 2026-09-01** | Backend-only fix, **awaiting VPS deploy** (scp blocked by the classifier; owner runs it). A lapsed `games.maintenance_until` made every `/v2/*` route 403 `license_expired`, blanking the buyer's donation leaderboard/notifications/Cash with no message — KASTA dark since 2026-08-31T11:48Z, `vicenorth` + `altantis2` too, `haven`/`tix`/`parklab` queued. Patched `isLicenseBlocked()` in the infra checkout + `tools/donation-api/src/license-routes.js`; regression test added (infra suite 40/40). ADR 0006 amended. Open follow-ups: kit should show a licence-blocked notice instead of an empty panel; backend should alert before a date-based gate trips. |
+| **PARKLAB full engine sync — 2026-09-10** | The mixed build finally forced the issue. Pushing single files kept dragging in modules the place had never had — first `IntegrityTripwire` / `TamperGuard` / `RuntimeGuard` / `MovementGuard` / `AvatarPolicy` / `MovementPolicy` (which had killed the server boot), then `RoleColorDomain`, then `GroupMotion` / `GroupedRowCornerUtil` / `ImageSwap`, then `GroupMotionPolicy` — three rounds of "fix one, uncover the next", each round leaving the overhead painting template placeholder text. Ran the documented full source sync instead: 439 engine files (buyer config excluded per ADR 0001) fetched over the `/repo/` bridge in four batches to stay inside the bridge's timeout, updating in place and creating only plain ModuleScripts — `init.luau` / `.server` / `.client` entries that did not already exist were skipped rather than guessed at, then handled in a second pass that maps `<folder>/init.luau` to the folder instance itself (all 15 were already identical). **Result: 34 updated, 7 created, 383 already identical, 0 failed**, and a clean boot afterwards — `Remotes` present, nametag painting real data, zero kit errors on client or server. PARKLAB is now on the repo's engine rather than a 2.11.0-era build with patches on top, which retires the "mixed build" caveat recorded above. **Correction 2026-09-11:** that sync list wrongly included `ServerScriptService/Hazastudio_ClubKitSecrets/Secrets.luau`, so PARKLAB's buyer secrets were overwritten with the empty template (ADR 0001 violation; the owner spotted it). Refilled from the VPS `games` row for `parklab` without the values entering the session, and the line was removed from `.tmp/engine-sync-list.txt`. Playtest after refill: `License verify on boot {status=active}`, community game-data `ok gameKey=parklab`, Saweria leaderboard 55 all-time, no secret-empty warnings, zero kit errors. Owner owes Ctrl+S. |
+| **Admin Panel v3 + image titles — 2026-09-09** | **Code shipped in 2.12.0; the feature itself is still in progress** — the modules went out with the release because they share files with the custom-title workstream, but nothing in `CHANGELOG [2.12.0]` announces it and no buyer is told it exists. Engine change, in progress. New `04-AdminPanelv3` (owner-built) replaces `04-AdminPanelv2`, adding a second tab where an admin gives a player an **image** title — an extra overhead layer under the text title, rendered by the new `02-AddOnCustomImageBadge` row in the owner's `OverheadGUIMainTemplateV5`. Done so far (data + render layer, all parse-checked, 49 lune assertions green across two specs): new pure `Shared/Domain/TitleImageDomain.luau` (`normalizeAssetId` / `sanitizeList` / `remember`, TDD'd red-first, 24 assertions) — accepts the same shapes as the kit's existing `normalizeImage` and adds the **19-digit cap that audit H5 asks for**; `Overhead_v1.specialTitleImage` wired through all four whitelist rebuilds plus `OverheadPayload`; `Config.OverheadGuiVariants.V5` + `Config.TitleImage` (row/image names, registry cap, messages) + `Config.DataStore.TITLE_IMAGE_REGISTRY_KEY` (**new versioned key** `TitleImageRegistry_v1`, place-global, nothing to migrate); `OverheadUI` paints and hides the image row, no-oping when the id is unchanged (server echoes full state) and doing nothing at all on V4 templates. Template choice became buyer-tunable (`ClubKitConfig.Overhead.GuiType`, default `"V4"`, schema fill-forward + `ConfigBootstrap` projection that also re-derives `Config.Template.TEMPLATE_NAME`, which is computed at module load and would otherwise go stale) — deliberately **not** flipping the engine default, since V5 is place data no other buyer has. **Code-complete 2026-09-09, not yet run anywhere.** Server: `Server/Repositories/TitleImageRegistryRepository.luau` (single document under the new key, cached reads, `UpdateAsync` writes recomputed from `current` so two servers cannot drop each other's entry, last-good list served when a read fails); two new remotes — `AdminSetTitleImage` (its own remote, not a wider `AdminSetTitle` payload, because that handler requires non-empty title text and the image tab writes a different field; empty id clears; the registry is only written *after* the assignment persists) and `AdminTitleImageList` (admin-gated, rate-limited, replies to the caller). Registry injected optionally, so a place without it just returns an empty list. Client: `Client/UI/AdminPanelV3UI.luau` (player search/list, both tabs, size buttons, preset + typeface pickers reusing v3's own modal copies, image grid from the registry, tab pill, save/remove routed per active tab) and `Client/Controllers/AdminTitleV3Controller.luau`, both returning nil when the GUI is absent. New `Client/Utils/PresetPreview.luau` holds the one preset-painting implementation, now shared with `CustomTitleUI` instead of duplicated. Gated by `Features.AdminPanelV3` (default false) which decides who owns the admin topbar icon — Hub first, then v3, then the classic panel. **Gap to decide:** v3 has no gift/membership surface at all, while v2's binder has `bindPackageSelected` / `bindConfirmationSendGift`, so treating v3 as a full replacement would drop admin gifting; today both can coexist because v3 only takes the topbar when its flag is on. Owner-built modals were copied into v3 via MCP on request (their `ZIndex` had to be raised from 99 to 100000 — `MainWrapper` sits at 99999 and would have swallowed every click). **Synced to PARKLAB and playtested 2026-09-09** (`Overhead.GuiType = "V5"` + `Features.AdminPanelV3 = true` in the buyer config). Verified: overhead is `OverheadGUIMainTemplateV5`; the image row renders the stored image on join, hides on clear, repaints on re-set, and swaps to a different id — all four transitions; the placeholder asset the template ships is cleared so a player without an image shows nothing; a malformed id is rejected without polluting the registry; the registry came back newest-first with both assigned ids and the panel's "Or select" grid built from it; v3 resolved and closed itself on boot with the pickers at `ZIndex` 100000 over `MainWrapper` 99999. **Two bugs found by the playtest, both invisible to parse-checking:** (1) neither fingerprint knew the new field, so `computeInputsFingerprint` short-circuited the rebuild and `fingerprintPayload` suppressed the delta broadcast — the write persisted but nothing ever repainted; (2) even with the fingerprints fixed, re-setting a value in the same session was still swallowed until the handler called `invalidateBuildCache` before `refreshPlayer`, as the couple flow does. Both fixed in repo and place. Pre-sync backup: `ServerStorage.V3_PRESYNC_BACKUP` (14 sources) — delete once satisfied. Owner still owes Ctrl+S. **Motion + picker handoff, 2026-09-10** — same treatment as `CustomTitleUI`, same `AnimationHelper` center pop, so the admin surface and the player-facing one now move alike. `show()` fills the panel *before* presenting it (the pop plays over a settled layout instead of one reflowing mid-tween); `_openPicker` dismisses `MainWrapper` and presents the picker only in the dismissal's completion callback; `_closePicker` reverses it. `hide(immediate)` is the interesting one: the ScreenGui's `Enabled` is the panel's real off switch, so dropping it immediately would cut whichever tween was still playing — it now runs all three dismissals through a **pending counter** and only sets `Enabled = false` when the last one reports done. `AdminTitleV3Controller` passes `immediate` for its two state resets (start-closed on boot, `destroy()`), where a tween would play over a panel the player never saw. `isVisible()` now answers for all three surfaces, since a picker is on its own once it has taken over from the wrapper (it had no callers, so nothing depended on the old wrapper-only meaning). Motion helpers guard on `asFrame` and fall back to a plain `Visible` toggle, so a place whose wrapper is not a `Frame` still opens. Verified in a PARKLAB playtest by sampling `Visible` + `UIScale.Scale` every 0.05 s: boot leaves `Enabled = false` with all three hidden; preset picker handoff 1.00 → 0.98 → wrapper hidden → picker 0.96 → 1.00, and the mirror on confirm; identical for the typeface picker (33 rows each); close button scales the wrapper 1.00 → 0.97 and **only then** flips `Enabled` false (46.07 → 46.20 in the trace); zero errors. Two caveats on that run: the panel was opened by hand (`Enabled` + `MainWrapper.Visible`) because reaching `show()` for real needs the Hub's player-select flow — but `show()`'s only new line is the same `_present(self._mainWrapper)` that `_closePicker` exercised twice; and the one permutation not observed is a *picker* animating while the wrapper takes the immediate path (only the reverse was seen) — same counter, order swapped, reasoned rather than measured. Also note `AdminPanelV3UI` in PARKLAB had drifted **1615 bytes** behind the repo (the repo's `PresetPreview` extraction never reached the place); it was re-pushed byte-for-byte from `/repo/` along with the controller, so both are `= repo` now. **Header tabs fixed 2026-09-10.** Two defects, both reported by the owner: the pill never slid, and the buttons still read "Option 1" / "Option 2". Cause of the first: `setTab` copied the selected option's own `Position`/`Size` onto the pill, but a `UIListLayout` arranges those buttons — **both options report `{0,0},{0,0}`**, so the pill was assigned the position it already had. v3 had also hand-rolled its slider resolution while the kit already has `Shared/Utils/SliderSelectorUtil` (used by Music, Donation, Gift, Dance): it now resolves through `getOptionsContainer` / `getBackgroundPill` / `collectTabButtons` / `resolveTabButton`, labels through `applyTabLabel`, and slides through `animateSlidingPill` (0.5 s Quint, index-normalised — it never reads the option's Position), with `setTabButtonSelected` for the per-button state, matching GiftUI. Labels come from new `Config.Admin.V3_TAB_LABELS` (`text` = "Text Title", `image` = "Image Title"); `applyTabLabel` only overwrites text that is blank or still says "Option N", so a buyer who renames the tabs keeps their wording. Verified in a PARKLAB playtest by sampling the pill: labels read correctly, pill starts at scale-X 0.000 / anchor 0 (absX 865), tweens to 1.000 / anchor 1 (absX 950) on the Image tab, and back; tab frames follow; zero errors. **Selecting a player left the editor blank — fixed 2026-09-10.** Owner: "I pick a player in v3 and the title shows empty, even though they have one." `AdminPanelV3UI:setCurrentTitle` existed but **had no caller anywhere in the repo**, and nothing loaded the target's stored title/size/preset/font either, so every selection started from a blank form regardless of what the player actually had. No new remote was needed: every client already receives an overhead payload per player (that is what draws the nametags) and `OverheadController` caches it behind `getCachedPayload` / `subscribeOverheadCacheUpdated` — the same source the classic v2 panel reads for its own title editor via `overheadCache`. `selectPlayer` now fires a new `bindPlayerSelected` callback; the controller answers it with `panel:applyTargetSnapshot(OverheadController.getCachedPayload(userId))`, which fills the current-title line, the title box, the size row, the preset and typeface buttons, and the image tab's asset id. The cache subscription keeps the **current-title line** in step when the value changes elsewhere — and deliberately nothing else, because reloading the form there would wipe an admin's typing exactly the way the self-service panel used to. Verified in a PARKLAB playtest: before the fix the line read the template's `"Title saat ini"` placeholder with an empty box; after, selecting the player filled `"DEV PRO GA MAGANG"` into both the line and the box with `NeonStroke` / `Arcade` resolved from storage and all five size buttons rebuilt; typing `ADMIN MID EDIT` then riding out 12 s of live overhead broadcasts left the text untouched; zero kit errors. **"Panel opens but stays stuck" — root cause was `DisplayOrder`, found 2026-09-10.** The v3 ScreenGui shipped with **`DisplayOrder = 0`**, the same bucket as ~20 other kit GUIs (menu, shop, music, hotbar, topbar, notification centre), while its siblings in the same family sit well above it — `1000-01-CT-ADDON` at 45, `04-AdminHub` at 40, and the place's own `ETHBoardCustomizerGui` at 35 (plus `CenzGE_Overlay` 50, `FadeScreen` 999, `CCTV_FadeGui` 9999 created at runtime). With `ZIndexBehavior = Sibling`, ordering **between** ScreenGuis is decided by `DisplayOrder` alone — the panel's carefully set `ZIndex` 99999 / picker 100000 only orders instances *within* its own ScreenGui and does nothing against another one. So an opened v3 could render underneath whatever else was drawn at order 0, which from the owner's seat is "it opens and then just sits there". Worth noting this is also why the earlier v3 and custom-title QA passes worked: every one of them began by disabling `CCTV_FadeGui` / `FadeScreen` / `CenzGE_Overlay` / `ETHBoardCustomizerGui`, which masked the problem all day. Fixed in the place's StarterGui: `DisplayOrder 0 → 60` (above Hub, CT addon and the place overlays, still below the cinematic fades, which are meant to cover everything), `Enabled true → false` so a place whose controller fails to init does not get a panel stuck on screen, and the template's tab defaults flipped to match the tab the binder opens on (`CustomTitleTab` visible, `ImageCustomTitleTab` hidden — the binder corrected this at runtime, so it was cosmetic). The rest of the audit came back clean: every ref `tryCreate` needs is present, `ResetOnSpawn` is already false, and both pickers ship hidden. **Classic panel's boot warning on a v3-only place — fixed 2026-09-10.** A place that has moved fully to v3 has no `04-AdminPanelv2`, but `Main.client` still calls `AdminController.init` unconditionally (only `bindTopbar` is conditional), so the classic controller sat in `WaitForChild("04-AdminPanelv2", 30)` and then logged `GUI not found, AdminController not initialized`. Not just noise: it runs inside `trackBootTask`, so the client boot was carrying a **30-second** task on every join. The blocking wait is now a poll — it takes the classic GUI the moment it replicates, and gives up early once `04-AdminPanelv3` is present, which settles that the classic one was removed on purpose rather than being slow. That exit logs at info (`Classic admin panel not installed — the v3 panel owns this surface`), while a place with neither GUI keeps the old wait-then-warn unchanged. `AdminController.init` returned an empty API in this case anyway, so nothing is lost by leaving early. Verified in a PARKLAB playtest: the warning is gone and the info line appears instead, alongside the v3 and Hub controllers initialising. **Still worth deciding:** `1000-01-CT-ADDON` sits at 45, i.e. below `CenzGE_Overlay` (50) — the self-service title panel can be covered the same way. **Save/Remove now name the tab they act on — 2026-09-10.** Both buttons live in `OverlayWrapper`, outside the tabs, and `_submit` already routed by the active tab — but their labels stayed "Save custom title" / "Remove custom title" even on the image tab, so the button never said what it would actually do. Each is an `ImageButton` whose text lives in a child `TextLabel` (named `3-CurrentTitle`, `AutomaticSize = XY`), so only the text needs to follow `setTab`. The image wording comes from new `Config.Admin.V3_ACTION_LABELS` (`saveImage` / `removeImage`); the text-tab wording is captured from the template at `tryCreate` and restored, so a buyer who renames those buttons keeps their own words. Verified in a PARKLAB playtest by clicking the tabs: Image → `"Save image title"` / `"Remove image title"` with the pill at 1.00 and the image tab shown, Text → back to `"Save custom title"` / `"Remove custom title"` with the pill at 0.00; zero kit errors. **Owner-owed GUI detail:** `Option2` carries a `UIGradient-Gold` that `Option1` does not, so with `setTabButtonSelected` now live the Image tab gets an extra gold fill when active and the Text tab does not — add a disabled `UIGradient-Gold` to `Option1`, or delete `Option2`'s, so the two match. |
 | License hardening (ADR 0006) | **Released in 2.10.0** (kit + VPS backend live). Deferred to a future release: universe check on the *data* endpoints (Pillar 1) + per-buyer hidden canary (Pillar 4 Packager step); brick default OFF until validated live. |
 | 2.10.0 release + delivery pack | Released + pushed (`v2.10.0`) 2026-08-28. Desktop `ClubKit v2.10.0 Delivery/` ready **except** `HazastudioClubKit_Package_v2.10.0.rbxm` — owner still owes: **Ctrl+S the-basic** (the 19-file MCP sync is unsaved otherwise) then packager **Create package** into the folder. Plugin 2.10.0 rbxm installed; loads on next Studio restart. |
 | Runtime integrity & abuse defense (ADR 0008) | **Phase 1 released in 2.11.0** (SoundGuard, ScriptGuard, RemoteStorm, AvatarGuard, MovementGuard; 41 lune tests; verified the-basic 2026-08-29 + 2-client pass 2026-08-30). Defaults: sound `log`, script `beacon`, movement **`log`** (Owner/CoOwner exempt), avatar effects `cap`. Decision 4 closed; owner still owes decisions 1, 2, 3, 5, 6. Phase 2 (`/purgesounds`, `/lockdown`, foreign-animation rule, per-place `ClubKitConfig.Security` overrides) not started. |
+| **PARKLAB phone scales + one-line greeting — 2026-09-11** | Engine change + place data, unreleased. `Config.MobileScale.ADMIN_PANEL_V3_GUI = 0.45`, `CUSTOM_TITLE_GUI = 0.55` (+ `MobileScaleService` map); new `Client/Utils/TextFit.luau`; `JoinGreetingController` fits the V2 greeting to one line. **Place data changed in PARKLAB** (`StarterGui.99-NotificationCenterV2…GeneralGreetings…Message`): `AutomaticSize XY → None`, `Size {0,0,0,0} → {1,0,1,0}`, `TextWrapped true → false`, `TextTruncate None → AtEnd`, `TextSize` stays 24 — a V2 RBXM for other buyers must carry this. All code pushed byte-for-byte (also carried the pending donation amount-fit headroom 0.97, which had missed PARKLAB when the place closed). Verified on the A16 emulator + desktop; owner owes Ctrl+S. Seen in the phone screenshot, not addressed: the greeting card overlaps the top of `16-JoinCommunPrompt` at that viewport (design position). |
+| **Creator live status → 3.0 design** | **Paused mid-design (owner, 2026-09-11), nothing built.** Auto-detect a registered creator's TikTok live state from the VPS and show a generic `🔴 LIVE` + notification in game — never the platform or handle (Roblox policy). Research facts, decisions, round-3 open questions and the first step (feasibility spike from the VPS) are in the section "Creator live status — design in progress" below. |
+| **Security hardening → 3.0** | **Parked for the 3.0 upgrade (owner, 2026-09-11).** DoS sweep `docs/security/DOS-SWEEP-2026-09-11.md` over all 66 server handlers: base discipline is good (limiter on ~55/66, size caps, no `InvokeClient`, no pattern injection, `BudgetGate`), but **D1** lets any player force-skip the server's music, H1–H4 are still open, several handlers do expensive work before their gate, NaN reaches gravity/drone physics, and RemoteStorm + MovementGuard are still log-only. Ordered work list SH1–SH10 and the owner decisions are in the section "Security hardening — scheduled for 3.0" below. Nothing fixed yet. |
 | Security audit 2026-08-29 | `docs/security/AUDIT-2026-08-29.md` — **5 HIGH open** (H1 Studio gift bypass → Owner on live DataStore; H2 ProfileMenuUpdate ungated; H3 NotifDisplay ledger/HTTP flood; H4 SettingsReset ungated; H5 arbitrary sticker image), 14 MEDIUM, 11 LOW. Guard-related HIGHs fixed same day (noclip filter, seated exemption, RemoteStorm default `log`, leaks). Suggested order in the doc; nothing else fixed yet. |
 | Product telemetry (ADR 0007) | Phases 0+A **live on the VPS** 2026-08-28: `/fleet` (master-only, enriched) + `v3/telemetry` ingest. Kit phases B–D pending a future kit release. |
 | RUST → VPS + data migration | Done 2026-08-27 (`docs/buyers/rust.md`). On 2.9.2-era build; 2.10.0 available to roll out. Owner still owes: Ctrl+S, Saweria webhook repoint. |
 | NIGHT ZONE → VPS + data migration | Done 2026-08-27 (`docs/buyers/night-zone.md`). On 2.9.2-era build; 2.10.0 available to roll out. Owner still owes: Ctrl+S, Saweria webhook repoint. |
 | AFTER HOURS → VPS data migration | Done 2026-08-28 (`docs/buyers/after-hours.md`, 164/164). Owner still owes: repoint BagiBagi webhook + point place ApiUrl. |
+| **Perf & Structure workstream** | **Planned + measured 2026-08-31. No code written yet.** No version number assigned — see the section below. **Framed 2026-09-08 as an engine *and template* upgrade** (first one that is not source-sync-only), which splits it into Lane A (engine, ships as usual) and Lane B (StarterGui / place data, needs a Packager action + written manual steps) — see "Release surface" in the plan. Done: **P0a** (boot attribution — module loading is ~2 s, not the bottleneck), **P0c** (server: 83 modules = 0.54 s; **Studio timings contaminated by the Elttob Reclass plugin, ~50 % CPU** — every boot-duration figure from Studio is unusable), **P1a** (Open Cloud budget — **no defect; premise was wrong**, kit makes no Open Cloud DataStore calls; G8 dropped). Still standing on direct counts, not inference: **G2/G3** (10,098 GUI instances per join, ~1,700 dead) and **P2a** (`Remotes` created at `Main.server:165`, after the license wait) — both read from source/instance counts, so contamination cannot touch them. **Reassessed 2026-09-03 and struck:** `ProximityInterestService:423` (10.9 % is a share of a half-plugin capture; `recompute()` provably does nothing with zero players) and `LeaderboardScaleAudit buildMs` (wall-clock including DataStore + HTTP waits, so not a CPU signal at all) — details in the P0c result section. Blocked: **G1 has no target** until a clean run with Studio plugins disabled — now scoped as **P0d**, run against TIX 2 so the licence wait is finally measurable too. Owner decision pending: deleting `06-MusicPlayerGUIv3` (1,300 instances) from the test place — place data, not source-syncable, not undoable. |
+
+---
+
+## Perf & Structure workstream — plan
+
+**No version number yet.** Deliberately unversioned until the owner calls it; `VERSION` stays at `2.11.0`.
+
+**Thesis:** zero new features. Same kit, faster boot, tidier code. Everything admitted must be explainable to a buyer in one sentence — "faster" or "easier to maintain".
+
+### Release surface — decided 2026-09-08. This is an engine **and template** upgrade.
+
+Every kit release so far has been engine-only: source sync, Update Engine, done. **This workstream is not.** Its two biggest levers (G2/G3) are instance counts in `StarterGui` — place data, which source sync cannot touch. So the workstream splits into two lanes with different delivery mechanics, and they must be tracked separately from the first line of code:
+
+| Lane | Items | Ships via | Buyer action |
+|---|---|---|---|
+| **A — engine only** | P2a/b/c (boot order), P1c (`Config` facade), P1d (`GuiNames`), P4 (split binder), P2d (lazy bags) | source sync, as today | Update Engine, nothing else |
+| **B — template / place data** | P1b (strip dead GUI), P3 (GUI vault), P0b (UI Styling, if modifiers need real instances) | Packager plugin action, or an RBXM step | a guided, **irreversible** operation on their live place |
+
+Consequences that follow from this and must not be rediscovered later:
+
+- **The major bump is justified by the delivery mechanics, not the feature list.** A buyer cannot take this by doing what they always do. That alone makes it 3.0 rather than 2.12 — and the two are independent: the current `[Unreleased]` fixes are all Lane A and should ship as 2.12.0 first, without waiting on any of this.
+- **`docs/releases/<ver>/UPGRADE.md` carries real manual steps for the first time.** Lane B needs a written, ordered procedure with a stated rollback, not the usual "run Update Engine".
+- **Lane B is one-way on live places.** RUST and NIGHT ZONE are live and still on a 2.9.2-era build. S7's dry-run + automatic backup RBXM is therefore not a nice-to-have, it is the thing that makes Lane B shippable at all.
+- **ADR 0001 is untouched by this.** `ClubKitConfig.luau` / `Secrets.luau` still are never replaced; template work is `StarterGui`, a third surface, not buyer-owned config.
+- **Lane A can ship before Lane B and should.** Boot-order work delivers on its own, and shipping it separately keeps the risky template surgery from riding on the same rollback.
+- **Version numbers in the three files** (`VERSION`, `KitProduct.KitVersion`, `ClubKitManifest.KIT_VERSION`) stay in sync as always — but a Lane B place also carries GUI that no version string describes. Worth deciding, before P3 ships, how a place reports which template generation it is on.
+
+### Baseline — measured 2026-08-31
+
+`THE BASIC TEST` (placeId `75916114543452`), kit **2.10.0**, Studio playtest. Re-measure on 2.11.0 before trusting deltas.
+
+| Metric | Value |
+|---|---|
+| Boot → music panel usable | 13.3 s |
+| Unattributed gap in boot | **7.1 s** (t+0.12 → t+7.20, zero log lines) |
+| ~30 controllers init | all within 2 ms at t+8.79 — one shared blocker, not slow controllers |
+| PlayerGui instances cloned per join | **10,098** (StarterGui is 6,653; kit builds ~3,400 more at runtime) |
+| Dead GUI shipped | ~1,700 (`06-MusicPlayerGUIv3` 1,300 + unused twin variants ~400) |
+| StarterGui that is modifier/layout, not content | **3,612 / 6,683 (54%)** — 1,008 UICorner, 846 UIListLayout, 684 UIPadding, 543 UIStroke, 288 UIGradient, 243 UIAspectRatioConstraint |
+| `ImagePreloadService` | 16.95 s, `queued=144`, **`warmed=0`** — *cause found 2026-09-02 (`IsLoaded` on an unrendered probe); after the fix the same place reads `warmed=230 / unresolved=6`* |
+| `Config.luau` | 3,752 lines / 159 KB, required by 196 of 432 files |
+| Eager module loads at boot | 62 client (`ClientModuleBag`) / 83 server (`ServerModuleBag`) |
+| Hardcoded GUI name literals | ~200 across 34 files (70 in `OverheadUI` alone) |
+| Client-visible vs server-only Luau | 3,740,688 B (72.7%) / 1,403,232 B (27.3%) |
+
+### P0a result — measured 2026-08-31. The module-loading hypothesis is dead.
+
+Measured without touching the place: `require` caches per *instance*, so cloning a subtree into a detached `ReplicatedStorage` folder gives a cold require tree. No probe script, no Ctrl+S needed.
+
+| Measurement | Result |
+|---|---|
+| COLD `require(ClientModuleBag)` — all 62 modules | **1.53 s** |
+| COLD require of all 169 `Shared` modules | **0.49 s** |
+| COLD `require(Shared.Constants.Config)` (159 KB) | **0.16 s** |
+| Recursive `FindFirstChild` miss over 10,130-descendant PlayerGui | 2.5 ms |
+| `PlayerGui:GetDescendants()` | 11.5 ms |
+
+**Total client-side module loading is ~2.0 s of a 13.3 s boot.** Lazy loading cannot recover more than that, and less in practice since some modules are needed immediately.
+
+Then the run-to-run comparison, which is the real finding:
+
+| | Run 1 | Run 2 |
+|---|---|---|
+| Client t0 → controller batch | 8.79 s | **17.4 s** |
+| Client t0 → music panel ready | 13.3 s | **27.1 s** |
+
+**The gap is not stable between runs, so it is not fixed CPU work — it is waiting.** Confirmed by the server timeline in run 2:
+
+- Server t0 `1788175935.304` → `Server initialized` `1788175966.388` = **31.1 s of server boot**
+- Client `Main` starts 4.8 s after server t0
+- Client's music panel lands `1788175967.157` — **0.77 s after the server finished initializing**
+
+`Main.client:588-591` blocks on `WaitForChild` for `Shared.ContextModule`, `Shared.Utils`, `ReplicatedStorage.Remotes`, `Icon`. **`Remotes` is created by the server.** The client is not slow; it is idling until the server is ready.
+
+Caveats: Studio, not production; the buyer's `Kohl's Admin` (2,473 descendants / 397 scripts) and `Adonis_Loader` boot on the same server and are not kit code; only two runs. Re-measure on 2.11.0 and in a published place before committing to any number.
+
+### P0c result — measured 2026-08-31. Every Studio boot timing so far is contaminated.
+
+| Measurement | Result |
+|---|---|
+| COLD `require(ServerModuleBag)` — all 83 modules | **0.54 s** |
+| `LicenseService.getState()` in this place | `lastError = missing_api_config`, `status = unknown` |
+| `LicenseService.forceRefresh()` round-trip | **0.000 s** — no API configured, so no HTTP is attempted |
+
+Then `capture_script_profiler target=server`, 15 s, run-mode (no client):
+
+| Source | % of capture |
+|---|---|
+| `cloud_18962718950.Elttob Reclass …Fusion.Graph.evaluate` | **50.7 %** |
+| `…Reclass …Fusion.Graph.change` | 46.2 % |
+| `…Reclass …Fusion.RobloxExternal.performUpdateStep` | 43.4 % |
+| `Main` (kit) | 12.5 % |
+| `ServerScriptService…ProximityInterestService:423` (kit) | **10.9 %** |
+
+**A Studio plugin — Elttob Reclass, running Fusion — is burning roughly half the server CPU during measurement.** It is not game code and will never exist in a published place.
+
+**Consequences:**
+- The **31.1 s server boot figure is not a kit measurement** and must not be used. Same for the 13.3 s → 27.1 s client run-to-run variance, which plugin CPU contention plausibly explains on its own.
+- Cold-require numbers (client 1.53 s, shared 0.49 s, server 0.54 s) were wall-clock under that contention, so they are **upper bounds** — the real cost is lower. That only strengthens the conclusion that module loading is not the bottleneck.
+- **G1 cannot get a number from this place as currently configured.** A clean run needs Studio plugins disabled (Reclass especially), and ideally a published place.
+
+**What survives, unaffected by CPU contention:**
+- Boot *ordering* in `Main.server` (read from source): `Remotes` is created at line 165, after `awaitInitialCheck`. P2a stands on its own.
+- `missing_api_config` means the license wait is free *here* but genuinely blocking (up to 10 s) in a configured buyer place. **The one measurement this place can never give us is the one that matters most for buyers.**
+- All GUI instance counts (G2/G3).
+- ~~**New kit finding:** `ProximityInterestService:423` burned 10.9 % of server CPU with zero players.~~ **Reassessed from source 2026-09-03 — most likely a third measurement artefact, not a defect.** With no players, `recompute()` (line 251) snapshots `Players:GetPlayers()` into an empty table, then iterates `members`, the position set and the spatial grid — all empty — and allocates three empty tables. The Heartbeat handler itself early-returns after one `+=` and one comparison on ~29 of every 30 frames (`RECOMPUTE_INTERVAL` 0.5 s). That cannot cost 10.9 % of anything real. What it can do is look large as a *share*: the capture was a near-idle run-mode server whose denominator was already half-eaten by the Reclass plugin, so any per-frame connection inflates. **Percentages from that capture are unusable for kit code the same way the boot durations are** — this needs an absolute number (ms/frame), not a share, before anyone optimises it.
+- ~~**New kit finding:** `LeaderboardScaleAudit` logged `buildMs = 897` for a broadcast with 1 player and 4 entries.~~ **Reassessed 2026-09-03 — the metric conflates I/O with compute.** `buildMs` (`DonationController.luau:489-491`) is plain wall-clock around `buildWorkspaceLeaderboardPayload`, which calls `getRobuxLeaderboard` / `getCommunityLeaderboard` / `getTopLeaderboard` — every one of them a yielding DataStore `GetSortedAsync`/`GetAsync` with retries, plus the donation-API HTTP call. So the number is dominated by round-trip latency, and 897 ms for a cold build is unremarkable. Confirmed against TIX 2 on 2026-09-03: `buildMs = 12302` while Studio API access was **off** (that is retry-then-fail time, not work), then `21070` cold and `2079` warm once it was on — same code, same place, an order of magnitude apart purely from I/O. **Action is instrumentation, not optimisation:** split `buildMs` into wait-time vs compute-time before treating any of these as a perf signal.
+
+### Goals
+
+| # | Goal | Now | Target |
+|---|---|---|---|
+| G1 | Boot → panel usable | 13.3–27.1 s (unstable) | **re-scope: server boot + client/server decoupling.** No number until P0c |
+| G2 | GUI instances cloned per join | 10,098 | ≤ 1,000 |
+| G3 | Dead GUI shipped | ~1,700 | 0 |
+| G4 | Modules loaded eagerly at boot | 62 / 83 | only what the first second needs |
+| G5 | Config parsed by client | 159 KB monolith | lazy per-domain facade |
+| G6 | Hardcoded GUI name literals | ~200 | 0 (`GuiNames` registry) |
+| G7 | Files existing only due to the register ceiling | `MusicPlayerUIBinderPart2` (128 KB) | 0 |
+| ~~G8~~ | ~~Stale Open Cloud budget assumptions~~ | **Dropped 2026-08-31** — P1a found no defect; the kit makes no Open Cloud DataStore calls and already tracks budget via the engine's live number. Only 3 misleading comments remain, demoted to housekeeping. |
+
+### Non-goals — explicit, so they do not creep in
+
+- **No new features.**
+- **No anti-piracy / obfuscation.** Decided 2026-08-31 — see "Decisions taken".
+- **No framework** (Knit / Flamework / Matter). Adds boot cost; does not solve the ~200 register ceiling (ADR 0002).
+- **No DataStore key changes.** Zero breaking migrations.
+- **No buyer place reinstall.** Engine via source sync + one plugin action for the GUI vault.
+- **No audio API migration** (`AudioPlayer`/`Wire`). Real candidate, but it is a feature change in `MusicPlayerController` (116 KB). Later workstream.
+
+### Sequence
+
+**P0 — Measure. Gates P2 and P3.**
+
+- **P0a — Boot attribution. DONE 2026-08-31.** No probe or Ctrl+S was needed — the clone-a-subtree trick gave cold requires from a live playtest. Result above: module loading is ~2.0 s; the rest is the client waiting on a 31.1 s server boot. **P2 is demoted from headline to a ~1.5 s footnote.**
+- **P0c — Server boot attribution. DONE 2026-08-31 — see the result section above.** It did not answer the question it was asked; it invalidated the question. The 31.1 s was never a kit number (Elttob Reclass ~50 % CPU), so there is nothing to attribute yet. Superseded by **P0d** below. Original scope: where do the server's 31.1 s go? Split kit (`ServerModuleBag`, 83 eager requires; repositories doing DataStore reads at init) from non-kit (`Kohl's Admin` 397 scripts, `Adonis_Loader`). Method: same clone trick against `ServerScriptService.Hazastudio_ClubKit` in the Server DM, plus `capture_script_profiler target=server` on a fresh boot. Until this lands, G1 has no target.
+- **P0d — One clean measurement run. NEW 2026-09-03, now the highest-value measurement, and it unblocks four things at once.** Every number that matters is currently blocked on the same two contaminants: Studio plugins burning CPU, and a test place with no configured licence API. **TIX 2 removes the second one** — as of 2026-09-03 it is a real buyer place on 2.11.0, licence bound and verifying against the VPS, HTTP live. So a single playtest of TIX 2 **with Studio plugins disabled (Elttob Reclass above all)** yields: (1) G1's first honest boot number, and therefore its target; (2) the real cost of `LicenseService.awaitInitialCheck` in a *configured* place — the one measurement `the-basic` can never give (see P0c result, "the one that matters most for buyers"); (3) an absolute ms/frame for `ProximityInterestService`, settling whether the 10.9 % is real; (4) a clean `buildMs` baseline to split I/O from compute against. **Do not write workstream code before this run** — P2's whole shape depends on whether the licence wait is the 10 s worst case or negligible. Requires the owner to disable plugins; the playtest itself can be driven over MCP.
+- **P0b — UI Styling experiment.** Docs describe "instance modifiers, similar to CSS pseudo-elements" targeting "phantom UIComponents such as UICorner or UIStroke", but never state whether the instance must pre-exist. One StyleSheet + StyleRule + a Frame with no UICorner settles it. If modifiers can be supplied without instances, this outranks the GUI vault for G2 (3,612 instances vs 10,098 clones).
+
+**P1 — Independent of P0. Can start now.**
+
+- **P1a — Open Cloud budget audit. DONE 2026-08-31. No defect found; premise was wrong.**
+
+  The claim written here earlier — that `OverheadService.luau:261`'s "Open Cloud API, dedicated rate limit" comment was already false — **was incorrect, and was asserted from the announcement without checking which API the Worker actually calls.** Verified endpoints:
+
+  | Call | Endpoint | API family |
+  |---|---|---|
+  | `fetchRankFromWorker` | `{BASE_URL}/game/{key}/groups/{userId}` | Groups |
+  | `JoinCommunityMembersService` | `{BASE_URL}/game/{key}/community/{groupId}` | Groups/Community |
+  | member info fallback | `groups.roproxy.com/v1/groups/…` | Groups proxy |
+
+  The 2026-07-29 unification merged the **DataStore** in-game budget with the **DataStore** Open Cloud budget. Group/Community APIs carry their own separate quota. **The kit makes no Open Cloud DataStore calls, so the change does not touch it, and the comment is accurate as written.**
+
+  The earlier per-server → per-experience shift is also already handled correctly, by design rather than by luck:
+  - `BudgetGate` / `DataStoreScheduler` read `DataStoreService:GetRequestBudgetForRequestType`, the engine's live number, instead of hardcoding any formula — so they follow whatever the platform's current rules are.
+  - `DataStoreThrottleLockout` already subscribes to `StandardReadExperienceThrottled` and `OrderedListExperienceThrottled` — **experience**-scoped events. (Its "runs once per server" comment at line 113 is about module-require caching, not budget scope. Also a false positive in the first sweep.)
+
+  **Residual, low priority:** three tuning rationales were written under per-server assumptions and may now be needlessly conservative — `AvatarLikeRepository.luau:584` ("per-server quota at 70 CCU"), `ProfileRepository.luau:68` ("per-server quota is too low"), `Main.server.luau:610` ("saturate the per-server budget"). Re-derive the numbers against per-experience limits, or at minimum reword so the next reader is not misled. Not urgent; nothing is broken.
+- **P1b — Strip dead GUI (G3).** `06-MusicPlayerGUIv3` has zero references in the repo — delete from the test place manually. Twin variants (`04-AdminPanel` v1/v2, `AvatarContextMenu` v1/v2) must both stay shippable because buyers toggle them, so the Packager strips the unused one at delivery, read from `Features.AvatarContextMenuV2Enabled`.
+- **P1c — `Config` facade (G5).** `Config` becomes a thin module lazily indexing per-domain submodules (`Config.Hotbar` → require `Constants/Hotbar` on touch). Zero call-site changes across 196 files, zero risk to ADR 0001 fill-forward.
+- **P1d — `GuiNames` registry (G6).** Move ~200 literals out of 34 files into one module. Pure tidiness now that name randomisation is off the table.
+
+**P2 — Client/server boot decoupling (G1). Now the real G1 work, gated on P0c.**
+
+The client idles at `Main.client:588-591` waiting for `ReplicatedStorage.Remotes`, which the server creates. Candidate fixes, cheapest first:
+
+- **P2a — Publish `Remotes` first.** Measured boot order in `Main.server`:
+
+  | Line | What | Cost |
+  |---|---|---|
+  | 36–51 | `HttpEnabled` boot gate (ADR 0006) | instant, by design |
+  | 15 | `ServerModuleBag` — 83 eager requires | ~2 s (est. from client's 62 = 1.53 s) |
+  | 129 | `IntegrityTripwire.check` | ? |
+  | 135–141 | `LicenseService.start` + **`awaitInitialCheck(10)`** | **blocking HTTP, up to 10 s** |
+  | 165–169 | `Remotes` folder created | — |
+  | ~220 | `provisionEarlyRemotes(...)` | — |
+
+  `Init/EarlyRemotes.luau` already exists and its own header says *"Create remotes before heavy service wiring so clients can bind during slow boot."* The intent is right; it is simply called ~220 lines too late, behind a blocking 10 s HTTP wait. Target order: HttpEnabled gate → create `Remotes` + `provisionEarlyRemotes` → heavy init → license check → connect handlers → set `KitReady`.
+- **P2b — Let the client build UI while waiting.** Anything not needing a remote (GUI resolution, layout, mobile scaling) should run before the `WaitForChild` wall rather than behind it.
+- **P2c — Cut server boot itself.** Driven by P0c. Suspects: 83 eager `ServerModuleBag` requires, repositories doing DataStore reads at init. Note the buyer's admin systems are not kit code — measure kit and non-kit separately before claiming a kit win.
+
+**P2d — Lazy module bags (G4). Demoted.** Worth ~1.5 s client-side at absolute best; do it for the tidiness and memory, not for G1. `ClientModuleBag` / `ServerModuleBag` become `setmetatable({}, {__index = …})` proxies requiring on demand. `Main.client` keeps one local and its 111 `ClientMods.X` call sites unchanged, so ADR 0002 still holds. Watch for modules loaded purely for side effects — `_NukeEffectController` is already flagged as one in `ClientModuleBag:62`.
+
+**P1c downgrade:** the `Config` facade is now a tidiness item, not a perf item. Cold `Config` require measured 0.16 s, not the multi-second cost assumed when it was scoped.
+
+**P3 — Gated on P0b + design. GUI vault (G2).**
+
+Templates move `StarterGui` → `ServerStorage.ClubKitGuiVault`; panels are built when first opened. Motivation is boot cost, *not* piracy — the reduced rip surface is a side effect and must not be used to justify extra work. Delivered as a Packager plugin action, not an RBXM reinstall: the plugin already has `PackagerCore` collect/unpack and `ConfigPatchCore` source rewriting, and self-updates via Settings → Update plugin. **Mandatory: dry-run preview mode + automatic backup RBXM before execution.** Buyer places are live (RUST, NIGHT ZONE).
+
+**P4 — Structure (G7).**
+
+Split `MusicPlayerUIBinder` + `Part2` (263 KB combined) along domain seams, not the register ceiling. `.\tools\count-locals.ps1` must stay under WARN afterwards.
+
+### Not in this workstream
+
+- ~~**`ImagePreloadService` `warmed=0`.**~~ **Diagnosed and fixed 2026-09-02** — see the status row above. It was an instrumentation defect, not 161 broken assets: `IsLoaded` never flips for an unrendered probe. Still shipped outside this workstream, as planned.
+
+### Decisions taken 2026-08-31
+
+- **Anti-piracy work dropped.** Client-visible code is 72.7% of the kit and recoverable via bytecode decompilation — a rip is not an empty shell. But the server-only 27.3% (DataStore logic and key versioning, remote validation, donation/gamepass flow, `DonationLeaderboardRepository`, `SyncService`, `LicenseService`) never reaches a client and cannot be taken. That, plus the ADR 0006 license gate and the VPS, is the moat. Name randomisation was considered and rejected: it does nothing against a resold `.rbxl`, nothing against a decompiler that already discards local names, and its cost (per-buyer salt registry, harder support, harder MCP work on buyer places) lands entirely on the owner. Derived principle worth more than obfuscation: **every piece of logic moved client → server permanently lowers what a rip is worth, at zero ops cost.**
+- **Script Capabilities (production 2026-05-13) needs no work.** `src/` is already compliant: zero `loadstring`, `getfenv`/`setfenv`, `InsertService`, `require(id)`, `GetObjects`. The *plugin* uses `loadstring` for GitHub hot-remount (`HazastudioClubKit.plugin.luau:144`, `PluginSyncCore`) — different security context, but the path to check first if the kit is ever listed on the Creator Store.
+- **Rejected after research:** native `--!native` codegen (server-only, and the server is I/O-bound not compute-bound); UI shadows / individual corners (23 `UIShadow` already in place, only 7 shadow-named GuiObjects, and individual corners are properties *on* `UICorner` so the 1,008 instances remain); Extended Services for Compute (a buyer-side per-experience opt-in, not kit code — document it for buyers instead).
+
+### Safety rails — non-negotiable
+
+**S1 — The fail-closed license gate must not weaken (ADR 0006).** P2a moves `Remotes` creation *before* `LicenseService.awaitInitialCheck`. That is safe only because fail-closed lives in the handlers, not the folder: a `RemoteEvent` with nothing connected is inert, and an unlicensed place would sit in exactly that state anyway. Two rules follow:
+- The `HttpEnabled` gate at `Main.server:36-51` stays **first**, before everything including `Remotes`. It is instant and it is the actual kill switch.
+- **Handlers must still connect only after the license check passes.** Publishing the folder early is allowed; connecting behaviour early is not.
+
+**S2 — The client's halt path must move from inference to signal.** `Main.client:604` currently learns about a halt *by inference*: dependency `WaitForChild` times out, then it reads `BootHalted`. Once `Remotes` appears early that timeout never fires, so an unlicensed place would boot forever instead of showing `BootHaltedNotice`. Before P2a ships, the client must read `BootHalted` / a new `KitReady` attribute **directly**, not as a timeout fallback. This is a UX regression risk, not a security hole — handlers still never connect — but it must land in the same change, not after.
+
+**S3 — Early remotes must not silently swallow events.** Between "folder published" and "handlers connected" a client can fire into the void and the event is dropped with no error. Every early-bound client path needs either a `KitReady` wait or an idempotent retry. Enumerate them before writing code.
+
+**S4 — Buyer-owned files untouched.** `ClubKitConfig.luau` and `Secrets.luau` are never replaced (ADR 0001). New config keys go to schema + template only.
+
+**S5 — Zero DataStore key changes.** No breaking migration anywhere in this workstream.
+
+**S6 — Every behaviour change ships behind a config kill switch**, matching the existing pattern, so a buyer can revert without downgrading the engine.
+
+**S7 — GUI vault (P3) needs dry-run + backup before it ever touches a buyer place.** Preview mode that only reports the plan, and an automatic backup RBXM before execution. RUST and NIGHT ZONE are live and still on a 2.9.2-era build.
+
+**S8 — Register budget after every refactor.** `.\tools\count-locals.ps1` must stay under WARN (ADR 0002).
+
+**S9 — Staged rollout.** Test place → owner's own place → one buyer → the rest. Never all buyers at once, because the boot-order change touches the one path that decides whether the kit runs at all.
+
+### Open questions
+
+- **G1 has no target until P0d produces one clean run.** P0c could not split the 31.1 s because the figure was never a kit measurement to begin with. The original ≤ 7 s was written against a hypothesis that measurement killed.
+- **How much of the "kit is slow" picture is actually measurement error?** Three findings have now been overturned this way — `warmed=0` (instrumentation), `ProximityInterestService` 10.9 % (contaminated denominator), `buildMs` (I/O counted as work) — plus P1a's premise and G1's own number. Worth holding as a standing prior: **on this project, treat a suspicious number as a suspect instrument until an independent measurement agrees.**
+- Does the client actually need `Remotes` at line 588, or only later? P2a's size depends on the answer.
+- Run-to-run boot varied 13.3 s → 27.1 s in Studio. How much of that is Studio artefact vs real? Needs a published-place measurement.
+- P0b outcome decides whether P3 or a styling pass is the bigger G2 lever.
+- Whether the twin-variant strip (P1b) belongs in the Packager or the GUI vault action (P3).
+- G2/G3 (GUI instance count) were never dependent on the boot hypothesis and still stand on their own.
+
+---
+
+## Security hardening — scheduled for 3.0 (recorded 2026-09-11)
+
+**Owner call 2026-09-11: park this for the 3.0 upgrade.** Hardening is not a feature, so it does not break the "No new features" non-goal above. Everything here is **Lane A** (engine only, source sync) — no GUI, no DataStore key change.
+
+**Source documents:** `docs/security/DOS-SWEEP-2026-09-11.md` (crash / DoS classes, all 66 `OnServerEvent` handlers) and `docs/security/AUDIT-2026-08-29.md` (authorization + budget). Line numbers there were true on 2026-09-11 — re-grep before editing, the files keep moving.
+
+**Deferral risk, stated once so it is a conscious choice:** the 2026-08-29 audit labelled H1–H5 "fix before the next release", and 2.12.0 is planned to ship before 3.0. Parking these means 2.12.0 ships with them open. **D1, H2, H3 and H4 are reachable by any player with no role**; the rest need staff or a pilot seat.
+
+### Work items, in order
+
+| # | Item | Who can trigger today | Fix shape |
+|---|---|---|---|
+| SH1 | **D1** `DurationReport` — `totalDuration=0.001` force-skips the playing track for the whole server with no vote (verified); `math.huge` likely freezes music and writes `inf` into the library | any player | Reject non-finite / out-of-range durations; never let one client's report end a track (require agreement with the library duration or several reporters); never write a client number to the library without the same checks |
+| SH2 | **H4** `SettingsReset` no limiter (2 DataStore writes per click) | any player | Reuse the settings update limiter |
+| SH3 | **H2** `ProfileMenuUpdate` no limiter / size check | any player | Limiter + `checkSize`, auth → rate → work |
+| SH4 | **H3** `DonationNotifDisplay` accepts any `donationId`, HTTP flush per call | any player | Only ids in `pendingDeliveries` / recently delivered to that player; per-player limiter; flush on a timer, not per call |
+| SH5 | **D4** `StickerAdd` — 1 DataStore write + sync fired to every player per call | any player | Coalesce the all-player sync; cap global-pool writes |
+| SH6 | **D2 / D3 / M8** work before gate (Overhead payload build, Gravity, Drone, Cinematic no limiter; `checkSize` JSONEncode before limiter in ~9 controllers) | any player | Reorder everywhere to **auth → rate → size → work**; add a limiter to Cinematic |
+| SH7 | **D5 / D6** NaN passes `type == "number"` into gravity `LinearVelocity` (every HRP) and drone CFrames (every viewer's camera) | staff / pilot | Shared finite-number guard (`v == v and v ~= math.huge and v ~= -math.huge`) before any physics/CFrame write |
+| SH8 | **D7 / M13** idempotency caches keyed by raw client `requestId` with O(n) sweeps | any player, low impact | Namespace by userId, use `TTLSet` |
+| SH9 | **H1** `STUDIO_GIFT_BYPASS = IS_STUDIO` writes `giftedRole=Owner` to the live DataStore from Studio | Studio session | Off unless DataStore isolation is proven |
+| SH10 | **H5** arbitrary sticker image; remaining MEDIUMs (M1 secret in query string, M2 `ApiUrl` host pin, M3 `/setrole` hierarchy, M5 fake-donation commands in production, …) | varies | Per the 2026-08-29 audit |
+
+### Owner decisions needed before 3.0 ships
+
+- **RemoteStorm action.** Currently `REMOTE_STORM_ACTION = "log"` — counts every RemoteEvent (third-party kits included), removes nobody. Options: flip to `"kick"`, or count kit remotes only and kick on those.
+- **MovementGuard enforce.** Still `"log"`; the one-week review due 2026-09-06 never happened. Pull the `runtime:movement_*` beacons from Fleet first.
+- **SoundGuard / ScriptGuard** stay `log` / `beacon`, or move to `block` / `destroy` per place.
+
+### Rails specific to this workstream
+
+- A regression test first for every pure rule (duration validation, finite-number guard) — lune spec per `tdd-luau`, red before green.
+- Each tightened handler keeps its current client contract; an honest client must see no change. Verify with a playtest that drives the real remote, the way the custom-title work did.
+- No kill switch needed for pure validation fixes (an invalid request has no legitimate user); **guard mode flips (RemoteStorm / MovementGuard) do** ship behind their existing config values, per S6.
+- Not fixable in kit code, document for buyers instead: backdoors in free models and misconfigured third-party admin — run `tools/security/PlaceSecurityScan.luau` on every buyer place, check `SoundService.RespectFilteringEnabled = true`.
+
+---
+
+## Creator live status — design in progress, parked for 3.0 (recorded 2026-09-11)
+
+**Owner call 2026-09-11: keep this as a v3 design, paused mid-grill.** Nothing built. Glossary is already in `CONTEXT.md` § "Creator live status" (terms + the two policy lines). This is a **feature**, so it is its own workstream — the Perf & Structure "No new features" non-goal applies to that workstream only; whether both ride the same 3.0 is the owner's call.
+
+**Idea (owner):** when a player is live on TikTok, their overhead shows it automatically and the server gets a general notification — driven by the clubkit-infra API.
+
+### Research facts (2026-09-11, do not redo)
+
+- **Roblox Community Standards:** "You may not link to, share, or display URLs of any external websites or services except by using the Social Links feature…"; "Any other efforts to direct users off of Roblox to an external website or service are prohibited"; off-Roblox handles count as restricted "Internet Identifiers". Social links are allowed only on the experience/group/profile detail page, and TikTok is not one of the supported Social Links platforms (Facebook, X, YouTube, Twitch, Discord, Guilded). In-experience wording allowed: "Check out our social media links on our game's page."
+- **No compliant bypass:** `PolicyService:GetPolicyInfoForPlayerAsync().AllowedExternalLinkReferences` is documented as "a legacy field. It always returns an empty array."
+- **TikTok has no official "is user live" API.** TikTok for Developers only exposes profile info. Detection is possible only unofficially: scraping public profile/live state (e.g. the approach in `TikTok-Live-Connector`) or a third-party relay (Euler Stream "TikTok LIVE Alerts", webhook-based; pricing/limits page was unreachable, unknown).
+- **Clean alternative that exists:** the creator's streaming software (OBS frontend event "streaming started/stopped") calls the VPS with a personal token — touches nothing at TikTok, but misses streams started from a phone.
+- **clubkit-infra shape:** no scheduler/cron anywhere (by design); game servers *pull* from the VPS with the game secret (donation poll ≤ 5 s, `game_commands` piggybacks on it — `apps/api/src/routes/v2-routes.js:122-140`); migrations auto-apply from `apps/api/migrations/`; dashboard is owner-scoped with a master-only Vendor area.
+- **Kit already has:** overhead row `00-SpecialStatus` (filtered status text, per-role `showSpecialStatus`, viewer-hideable layer), `RoleCategories` privileges, general notifications, the donation poll loop.
+
+### Decided
+
+| Decision | Choice | Why |
+|---|---|---|
+| What the game shows | Generic `🔴 LIVE` + notification "X sedang live!" — **never the platform name, never a handle or link** | Roblox policy (hard line); breaking it risks every buyer's experience |
+| Detection | **Automatic, VPS checks the creator's public TikTok profile** (option B). OBS-signal (clean, PC-only) and A+B hybrid were offered and not chosen | Owner wants automatic and phone streams covered; the grey risk is TikTok-side (VPS blocking / breakage), not Roblox-side |
+| Command / manual toggle | Rejected — "at least automatic, not via command" | Owner |
+| Who is a creator | Registered in the clubkit-infra dashboard: Roblox user ↔ TikTok handle | Owner picked B, whose shape is a dashboard registry; handle never reaches the game |
+
+### Proposed, awaiting owner answers (round 3 — resume here)
+
+1. **Freshness:** VPS rechecks a handle at most every 60 s, and only while that creator is in a server (request-driven: the game posts the userIds present; VPS matches the registry, checks stale handles, answers "which userIds are live"); game asks every 30 s → LIVE appears/clears within ~1.5 min.
+2. **Failure:** keep last known state ≤ 5 min, then treat as not live; per-creator "check failed" in the dashboard, checker health on Fleet (master), global VPS kill switch (env) to stop all TikTok requests at once.
+3. **Registry:** venue owner account only; max 20 creators per game.
+4. **Overhead:** reuse `00-SpecialStatus` — `🔴 LIVE` replaces the custom status while live, restores it after (engine-only, no template/RBXM). Alternative: a new row (template change → RBXM for every buyer).
+5. **Notification:** once per creator per live session per server — when they go live while present, or when a live creator joins; obeys the existing "Hide System Announce" setting.
+6. **Buyer switch:** `Features.CreatorLive`, default `false` (schema + template, ADR 0001); empty dashboard registry = nothing happens.
+7. **Feasibility spike first:** from the VPS, check one handle known to be live and one known offline. If the VPS cannot read TikTok live state reliably, stop before writing any code — the whole design depends on it.
+8. **ADR 0009:** record the split policy (Roblox hard line vs accepted TikTok-side grey). Recommended yes; not written yet.
+
+### Watch-items already checked
+
+- **DataStore:** none needed — live state is session-only in the game; the registry lives in the VPS database (new migration).
+- **Buyer-owned files:** only a new `Features.CreatorLive` key via schema + template.
+- **Release surface:** kit engine (source sync) + clubkit-infra API/dashboard deploy (scp + restart, dashboard via `scripts/deploy-dashboard.ps1`). No StarterGui change if option 4 = reuse `SpecialStatus`.
+- **Security (ties to SH items above):** the new game → VPS route must take a bounded userId list, and the VPS must single-flight + cache per handle so a game server cannot turn it into a TikTok request amplifier.
 
 ---
 
@@ -29,11 +353,13 @@ Internal scratch pad to track work **before** a version is released.
 
 | Path | Change |
 |------|--------|
-| _(none yet — 2.11.0 shipped 2026-08-30)_ | |
+| _(empty — reset at the 2.12.0 release, 2026-09-12)_ | |
 
 ---
 
 ## Open follow-ups (carried past 2.11.0)
+
+- **PARKLAB's engine is broadly behind the repo — decide whether to full-sync it (found 2026-09-10).** A 19-file spot check over the `/repo/` bridge found **14 drifted, every one smaller than the repo** (`Main.client` −7,486 B, `OverheadUI` −5,141 B, `ConfigBootstrap` −3,502 B, `Main.server` −2,549 B, `OverheadDomain`, `ShopUI`, `GiftUI`, `StreakUI`, `DonationSystemController`, `TopMenuController`, `Types`, `ClubKitConfigSchema`, `ProfileMenuService`, `DonationLeaderboardRepository`), plus `Client/Services/ImagePreloadService` **absent from the place entirely** — so the place never received the source sync that the repo's unreleased work assumes. Every session so far patched it per-hunk instead. **Consequence to be aware of:** pushing `Config.luau` on 2026-09-10 (needed for `V3_TAB_LABELS`) replaced a hand-patched 145,799-byte copy with the repo's 159,461-byte one, so PARKLAB now runs a **mixed build** — repo-current `Config`, `CustomTitleUI`, `MenuShellUI`, `AdminPanelV3UI`, `AdminTitleV3Controller`, plus `Types` / `ClubKitConfigSchema` / `ConfigBootstrap` / `ProfileMenuService` / `TitleQuotaDomain` (pushed later the same day for the quota switch, and drifted too), and an older engine everywhere else. Boot was clean and no errors appeared in the playtest (the Config differences are additive), but the place is no longer a trustworthy stand-in for a buyer install until it is fully synced. The pre-push copy of that `Config` no longer exists anywhere — `V3_PRESYNC_BACKUP`'s is older still (143,998 B) — so the way forward is forward: a full source sync (Update Engine, or the `/repo/` drift-sync recipe), not a rollback. Not done unasked: it is a broad change to a place the owner is actively editing.
 
 - **ADR 0006 deferred pieces:** (1) universe check on the *data* endpoints (`v2-routes`/`v3-routes` + game-data-api) — a cross-cutting kit+backend change so the kit must send its `universe_id` on every data call; (2) per-buyer *hidden* canary stamped into the pack by the Packager at build time (engine files are byte-identical across buyers); (3) brick (`Config.AntiTamper.BRICK_ON_DETECT`) is default OFF — enable once the exploiter detector is trusted live with the owner absent. See `docs/adr/0006-license-hardening.md`.
 - **Auto Dance topbar pill is a temporary home.** Intended destination is the dance panel UI itself, next to the existing emote controls.

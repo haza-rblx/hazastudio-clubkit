@@ -994,7 +994,7 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 
 		-- P0-a: cache/last-good before lockout — warm data must not be refused.
 		if DataStoreThrottleLockout.isLocked() then
-			local lastGood = tryReturnLastGood<{ PlayerLeaderboardEntry }>(cacheKey)
+			local lastGood: Result<{ PlayerLeaderboardEntry }>? = tryReturnLastGood(cacheKey)
 			if lastGood then
 				return lastGood
 			end
@@ -1012,7 +1012,7 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 		end, "getRobuxLeaderboard")
 		if not result.ok then
 			maybeMarkThrottledFromError(result.error)
-			local lastGood = tryReturnLastGood<{ PlayerLeaderboardEntry }>(cacheKey)
+			local lastGood: Result<{ PlayerLeaderboardEntry }>? = tryReturnLastGood(cacheKey)
 			if lastGood then
 				return lastGood
 			end
@@ -1123,7 +1123,7 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 		end
 
 		if DataStoreThrottleLockout.isLocked() then
-			local lastGood = tryReturnLastGood<number>(cacheKey)
+			local lastGood: Result<number>? = tryReturnLastGood(cacheKey)
 			if lastGood then
 				return lastGood
 			end
@@ -1140,7 +1140,7 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 		end, "getPlayerRobuxTotal")
 		if not result.ok then
 			maybeMarkThrottledFromError(result.error)
-			local lastGood = tryReturnLastGood<number>(cacheKey)
+			local lastGood: Result<number>? = tryReturnLastGood(cacheKey)
 			if lastGood then
 				return lastGood
 			end
@@ -1216,7 +1216,7 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 		end
 
 		if DataStoreThrottleLockout.isLocked() then
-			local lastGood = tryReturnLastGood<{ CommunityLeaderboardEntry }>(cacheKey)
+			local lastGood: Result<{ CommunityLeaderboardEntry }>? = tryReturnLastGood(cacheKey)
 			if lastGood then
 				return lastGood
 			end
@@ -1233,7 +1233,7 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 		end, "getCommunityLeaderboard")
 		if not result.ok then
 			maybeMarkThrottledFromError(result.error)
-			local lastGood = tryReturnLastGood<{ CommunityLeaderboardEntry }>(cacheKey)
+			local lastGood: Result<{ CommunityLeaderboardEntry }>? = tryReturnLastGood(cacheKey)
 			if lastGood then
 				return lastGood
 			end

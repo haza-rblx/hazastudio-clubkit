@@ -94,6 +94,21 @@ export type OverheadStoredData = {
 	specialTitleFont: string?, -- Enum.Font name
 	specialTitleStyle: TitleStyleData?,
 	specialTitlePosition: string?, -- "Top" | "Stacked", nil = default (Top)
+	-- Epoch seconds of each self-service title change (Features.SelfCustomTitle).
+	-- Rolling quota window; pruned on write by TitleQuotaDomain.record. nil = never changed.
+	specialTitleChanges: { number }?,
+	-- Free-first-title bookkeeping (CustomTitle.FreeFirstTitle).
+	-- FreeUsed: the player has spent their one free title. Removing the title does
+	-- not clear it — the slot pays for creating, not for keeping.
+	specialTitleFreeUsed: boolean?,
+	-- FromAdmin: who set the title that is currently on. **nil means legacy**, which
+	-- TitleAccessDomain reads as an admin grant, so players who held a title before
+	-- self-service existed keep their edit rights. Only a self-service write sets it
+	-- to false.
+	specialTitleFromAdmin: boolean?,
+	-- Canonical rbxassetid for the overhead image-title row (V5 template only).
+	-- An extra layer under the text title, not a replacement. nil = row hidden.
+	specialTitleImage: string?,
 	specialRank: string?, -- nil = use normal rank (legacy, may be removed)
 	specialSubRole: string?, -- nil | "DJ" | "Influencer"
 	giftedRole: string?, -- gifted RoleKey, overrides group rank
@@ -134,6 +149,7 @@ export type OverheadPayload = {
 	specialTitlePreset: string?, -- Title color preset mode ID (e.g. "Rainbow"), nil = legacy style path
 	specialTitleSize: TitleSizeKey?,
 	specialTitleFont: string?, -- Enum.Font name
+	specialTitleImage: string?, -- rbxassetid for the V5 image-title row; nil = row hidden
 	specialTitleStyle: TitleStyleData?,
 	specialTitlePosition: string?, -- "Top" | "Stacked"
 	specialRank: string?, -- nil = 04-SpecialRank hidden
@@ -387,6 +403,14 @@ export type UIScaleMode = "Small" | "Normal" | "Large"
 export type OverheadDistanceMode = "Near" | "Medium" | "Far"
 export type ShadowQuality = "Off" | "Balanced" | "High"
 export type ChatBubbleVisibility = "All" | "Nearby" | "Off"
+-- One Free Title event requirement the buyer switched on. `axis` is
+-- "level" | "robux" | "cash"; requirement and progress are on that same axis.
+export type TitleEventRequirement = {
+	axis: string,
+	requirement: number,
+	progress: number,
+	met: boolean,
+}
 export type ProfileMenuPayload = {
 	displayName: string,
 	displayNameOverride: string?,
@@ -394,6 +418,29 @@ export type ProfileMenuPayload = {
 	statusText: string?,
 	specialTitle: string?,
 	canEditSpecialTitle: boolean,
+	-- Self-service custom title (Features.SelfCustomTitle). With the feature off
+	-- customTitleEnabled is false and the client keeps the old text-only modal.
+	customTitleEnabled: boolean,
+	specialTitlePreset: string?,
+	specialTitleSize: TitleSizeKey?,
+	specialTitleFont: string?,
+	customTitleLevel: number, -- the player's level, for the locked-state message
+	customTitleMinLevel: number, -- buyer's threshold, so the panel prints their number
+	customTitleRemaining: number, -- quota slots left in the rolling window
+	customTitleResetsAt: number?, -- epoch seconds when a slot returns; nil = none spent
+	-- Buyer switched the rolling limit off (CustomTitle.QuotaEnabled = false):
+	-- customTitleRemaining is not a countdown and the panel says so instead.
+	customTitleUnlimited: boolean,
+	-- The one free title (CustomTitle.FreeFirstTitle) is what is currently opening
+	-- the panel — true only while that slot is the reason, not merely unspent.
+	customTitleFreeAvailable: boolean,
+	-- Free Title event (ClubKitConfig.FreeTitleEvent), decided by the server and
+	-- carried here so the card can paint itself. Mode is "disabled" | "any" | "all";
+	-- requirements lists every axis the buyer switched on, met or not.
+	titleEventMode: string,
+	titleEventActive: boolean,
+	titleEventMet: boolean,
+	titleEventRequirements: { TitleEventRequirement },
 	relationshipMode: ProfileRelationshipMode,
 	isCoupled: boolean,
 	couplePartner: string?,

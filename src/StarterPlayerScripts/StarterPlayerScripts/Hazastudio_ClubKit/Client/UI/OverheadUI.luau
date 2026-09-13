@@ -15,6 +15,7 @@ local GroupMotion = require(script.Parent.Parent.Utils.GroupMotion)
 local SpecialTitleRenderer = require(game.ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.SpecialTitleRenderer)
 local TitleFontUtil = require(game.ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.TitleFontUtil)
 local ChatBubbleAdornee = require(script.Parent.Parent.Services.ChatBubbleAdornee)
+local OverheadLayerPolicy = require(game.ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.OverheadLayerPolicy)
 
 type OverheadPayload = Types.OverheadPayload
 
@@ -875,6 +876,12 @@ local function getPublicMapValue(map: { [string]: boolean }?, key: string, defau
 end
 
 local function isLayerVisible(key: string, publicDefault: boolean, subjectUserId: number?): boolean
+	-- A layer the buyer switched off is not part of this venue: hard-off beats the wearer's
+	-- stored value AND this viewer's own local attribute, so it cannot be re-enabled locally.
+	local overheadCfg = Config.Overhead
+	if OverheadLayerPolicy.isDisabled(overheadCfg and overheadCfg.DISABLED_LAYERS, key) then
+		return false
+	end
 	if isOwnSubject(subjectUserId) then
 		return getLocalBoolAttribute("SettingsOverheadLayerVisible_" .. key, publicDefault)
 	end
@@ -895,6 +902,10 @@ local function isCoupleRelationshipRowVisible(payload: OverheadPayload): boolean
 end
 
 local function isBadgeVisible(key: string, publicDefault: boolean, subjectUserId: number?): boolean
+	local overheadCfg = Config.Overhead
+	if OverheadLayerPolicy.isDisabled(overheadCfg and overheadCfg.DISABLED_BADGES, key) then
+		return false
+	end
 	if isOwnSubject(subjectUserId) then
 		return getLocalBoolAttribute("SettingsOverheadBadgeVisible_" .. key, publicDefault)
 	end
@@ -1161,7 +1172,15 @@ local function setDonationLayers(wrapper: GuiObject, payload: OverheadPayload)
 	local cashText: string? = if cashRank then ("#%d %s"):format(cashRank, cashSuffix) else nil
 	local robuxText: string? = if robuxRank then ("#%d ROBUX"):format(robuxRank) else nil
 	local supporterText: string? = nil
-	if not hasRankedChip and (isCashSupporter or isRobuxSupporter) then
+	-- The generic SUPPORTER chip gets its own switch rather than riding the
+	-- TopSpender layer: that layer also carries the ranked "#N <currency>" chip, so
+	-- turning the layer off to lose SUPPORTER would take the ranked chip with it.
+	-- Off here means only donors who actually hold a rank get a chip.
+	if
+		Config.Overhead.SHOW_SUPPORTER_CHIP ~= false
+		and not hasRankedChip
+		and (isCashSupporter or isRobuxSupporter)
+	then
 		supporterText = "SUPPORTER"
 	end
 
@@ -1586,6 +1605,33 @@ function OverheadUI:apply(payload: OverheadPayload)
 		lazyEnsureRow(self, "09-CoupleDisplayName")
 		lazyEnsureRow(self, "00-DonationLayers")
 		lazyEnsureRow(self, "02-BadgeGroup")
+	end
+
+	-- V5-only image-title row. It does not exist on V4 and older templates, so a
+	-- place that has not switched renders nothing here. It follows the SpecialTitle
+	-- layer toggle: hiding your title hides the banner under it too.
+	local imageRow = wrapper:FindFirstChild(Config.TitleImage.ROW_NAME)
+	if imageRow and imageRow:IsA("GuiObject") then
+		local imageId = payload.specialTitleImage
+		local imageVisible = imageId ~= nil
+			and isLayerVisible(
+				"SpecialTitle",
+				getPublicMapValue(payload.publicOverheadLayerVisible, "SpecialTitle", true),
+				payload.userId
+			)
+		if imageRow.Visible ~= imageVisible then
+			imageRow.Visible = imageVisible
+		end
+		local imageLabel = imageRow:FindFirstChild(Config.TitleImage.IMAGE_NAME)
+		if imageLabel and imageLabel:IsA("ImageLabel") then
+			local nextImage = imageId or ""
+			-- The server echoes full state rather than deltas, so only touch Image
+			-- when it actually changed: reassigning the same id restarts the asset
+			-- fetch and makes the banner blink on every sync.
+			if imageLabel.Image ~= nextImage then
+				imageLabel.Image = nextImage
+			end
+		end
 	end
 
 	local specialTitleRow = ensureSpecialTitleRow(wrapper)

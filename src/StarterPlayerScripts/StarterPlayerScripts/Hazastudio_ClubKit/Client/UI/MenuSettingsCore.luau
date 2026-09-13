@@ -9,6 +9,7 @@ local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Con
 local DonationProviderDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.DonationProviderDomain)
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local GraphicsQuality = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.GraphicsQuality)
+local OverheadLayerPolicy = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.OverheadLayerPolicy)
 
 type SettingsPayload = Types.SettingsPayload
 
@@ -277,6 +278,10 @@ local SECTION_DEFS: { SettingsSectionDef } = {
 				field = "shadowQuality",
 				label = "Shadows",
 				valueMap = { on = "Balanced", off = "Off" },
+				-- The High preset stores "High" here; without this the row would show OFF
+				-- on the very preset with the best shadows. Switching the row on still
+				-- stores "Balanced", and the domain restores the preset's own fidelity.
+				onValues = { "Balanced", "High" },
 			},
 			{ kind = "toggle", field = "depthOfField", label = "Background Blur", valueMap = { on = 3, off = 0 } },
 			{ kind = "toggle", field = "hideAllParticles", label = "Hide All Particles" },
@@ -527,6 +532,30 @@ local function shouldShowSettingsItem(item: any, overheadPayload: any?): boolean
 	if type(item.field) == "string" and item.field == "hideDonationWorldEffect" then
 		if Config.FeatureFlags.DonationWorldEffectsEnabled ~= true then
 			return false
+		end
+	end
+
+	-- Layers / badges the buyer switched off for the whole venue: hide the row rather than
+	-- leave a switch that does nothing. Checked BEFORE the payload guard below, so the row
+	-- is gone from the first build too, not only once an overhead payload has arrived.
+	-- SettingsTabBinder hides a section whose rows are all invisible, so an entirely
+	-- switched-off group takes its heading with it.
+	if type(item.field) == "string" then
+		local overheadCfg = Config.Overhead
+		local disabledLayers = overheadCfg and overheadCfg.DISABLED_LAYERS
+		local lockedLayerKey = string.match(item.field, "^overheadLayerVisible%.(.+)$")
+		if lockedLayerKey and OverheadLayerPolicy.isDisabled(disabledLayers, lockedLayerKey) then
+			return false
+		end
+		local lockedBadgeKey = string.match(item.field, "^overheadBadgeVisible%.(.+)$")
+		if lockedBadgeKey then
+			-- With the badge group itself off, no per-badge toggle can ever show anything.
+			if OverheadLayerPolicy.isDisabled(disabledLayers, "BadgeGroup") then
+				return false
+			end
+			if OverheadLayerPolicy.isDisabled(overheadCfg and overheadCfg.DISABLED_BADGES, lockedBadgeKey) then
+				return false
+			end
 		end
 	end
 
@@ -1412,6 +1441,19 @@ end
 
 local function isMappedToggleEnabled(item: any, resolved: any): boolean
 	if item.valueMap then
+		-- A toggle whose field has MORE than two values needs every "on" value listed, or
+		-- the row reads OFF while the feature is at its strongest. Shadows is the case:
+		-- the High preset stores shadowQuality = "High", which is not the toggle's own
+		-- on-value ("Balanced"). Only rows that opt in with onValues get this treatment,
+		-- so two-value toggles (chatBubbleVisibility, depthOfField) are unchanged.
+		if type(item.onValues) == "table" then
+			for _, value in ipairs(item.onValues) do
+				if resolved == value then
+					return true
+				end
+			end
+			return false
+		end
 		return resolved == item.valueMap.on
 	end
 	return resolved == true

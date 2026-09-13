@@ -1108,6 +1108,12 @@ local function createOverheadService(deps: {
 					.. "|"
 					.. tostring((stored :: any).specialTitleFont or "")
 					.. "|"
+					-- Without this, assigning or clearing an image title leaves the
+					-- fingerprint unchanged, S1 short-circuits the rebuild, and the
+					-- overhead never repaints — the same failure the giftedRole fix
+					-- above was written for.
+					.. tostring((stored :: any).specialTitleImage or "")
+					.. "|"
 					.. tostring((stored :: any).specialRank or "")
 					.. "|"
 					.. tostring((stored :: any).streakDays or "")

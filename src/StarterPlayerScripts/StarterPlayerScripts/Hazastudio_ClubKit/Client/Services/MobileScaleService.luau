@@ -32,8 +32,11 @@ local SCALE_MAP: { [string]: number } = {
 	[Config.Settings.GUI_NAME] = ms.MENU_GUI,
 	[Config.Donation.GUI_NAME] = ms.DONATION_GUI,
 	[Config.Sticker.GUI_NAME] = ms.STICKER_GUI,
-	["99-NotificationCenter"] = ms.NOTIF_GUI,
+	[Config.NotificationCenter.GUI_NAME] = ms.NOTIF_GUI,
+	[Config.NotificationCenter.GUI_NAME_V2] = ms.NOTIF_GUI,
 	[Config.CommandLibrary.GUI_NAME] = ms.COMMAND_GUI,
+	[Config.Admin.GUI_NAME_V3] = ms.ADMIN_PANEL_V3_GUI,
+	[Config.CustomTitle.GUI_NAME] = ms.CUSTOM_TITLE_GUI,
 	["AvatarContextMenu"] = ms.ACM_GUI,
 }
 

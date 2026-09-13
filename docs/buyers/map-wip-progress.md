@@ -1,6 +1,6 @@
 # Buyer: Waktu Indonesia Party (WIP) — migration progress
 
-Status: **kit v2.9.0 terpasang berdampingan dengan sisa sistem lama; data pemain sudah diimport; belum Publish.** Last touched 2026-08-27.
+Status: **kit v2.11.0 terpasang berdampingan dengan sisa sistem lama; data pemain sudah diimport; belum Publish.** Last touched 2026-08-30.
 
 Migrasi dari sistem custom lama (RemoteWaktuIndonesia / Donation Board V3 / lizzy TopLikes / ProfileStore) ke Club Kit. Tool import: [`tools/migrate-wip-legacy.luau`](../../tools/migrate-wip-legacy.luau).
 
@@ -87,7 +87,7 @@ Kandidat dipindah ke kit dari arsip: tool VIP/VVIP lama → `ServerStorage/Tools
 
 1. Putuskan mapping rank (bagian B) → `ClubKitConfig.Roles`.
 2. Isi `Donation.GameKey`/`ApiUrl`/`ProviderLink` + `Secrets` per-buyer; logo; Tier3.
-3. Engine 2.9.0 → 2.9.2 (sync via dev-serve `/repo/`).
+3. ~~Engine 2.9.0 → 2.9.2~~ **Done 2026-08-30: engine synced 2.9.0 → 2.11.0** (sync via dev-serve `/repo/`, batched `execute_luau`; 46/429 files drifted, 0 errors; `ConfigPatchCore` fill-forward reported buyer `ClubKitConfig` already schema-complete — 26/26 `Features` keys, no missing top-level sections; 417 ModuleScripts re-required with 0 errors). Pulls in ADR 0005 (CanvasGroup rendering fixes), ADR 0006 (license hardening — HttpService boot gate; `HttpEnabled` already `true` on this place; license verdict stays "undeterminable/optimistic" since `Donation.ApiUrl`/`Secrets` are still template values, so no hard-deny risk yet), and ADR 0008 phase 1 (RuntimeGuard/MovementGuard/AvatarGuard, ships `ENFORCE = "log"` — safe default). **Not yet saved** — needs Ctrl+S in Studio, then a playtest smoke check (console boot log, panels, no `BootHalted`) before trusting it live.
 4. Port `Shared.Animations` lama ke katalog dance kit; stiker & tool dari arsip (opsional).
 5. Inject cash/Sawer via xlsx.
 6. Delta-run import + verifikasi 324 gift key.

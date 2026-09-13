@@ -214,6 +214,15 @@ Config.Notify = {
 	COLOR_ERROR = Color3.fromRGB(255, 100, 100),
 	COLOR_SYSTEM = Color3.fromRGB(200, 200, 200),
 }
+-- Notification center ScreenGui (CONTEXT.md "Notification center"). V2 is told apart by
+-- name alone; binders take V2 when present and fall back to V1.
+Config.NotificationCenter = {
+	GUI_NAME = "99-NotificationCenter",
+	GUI_NAME_V2 = "99-NotificationCenterV2",
+	-- Applied to a V2 GUI still at DisplayOrder 0: above panels, the mobile overlay (200/201)
+	-- and the cinematic dock (200), below full-screen cinematic fades (999+).
+	V2_DISPLAY_ORDER = 300,
+}
 Config.Announcement = {
 	REMOTE_BROADCAST = "GenericBroadcast",
 	CMD_ALIAS_ANNOUNCE = "announce",
@@ -651,6 +660,11 @@ Config.CinematicDock = {
 -- ============================================================
 Config.DataStore = {
 	OVERHEAD_KEY = scopedDataStoreKey("Overhead_v1"),
+	-- Place-global list of image asset ids that have been assigned as a title, so
+	-- an admin can re-pick one without retyping it. Grows from use, not from
+	-- config. New key as of the image-title work — nothing to migrate.
+	TITLE_IMAGE_REGISTRY_KEY = scopedDataStoreKey("TitleImageRegistry_v1"),
+	TITLE_IMAGE_REGISTRY_DOC = "images",
 	ABOUT_ROSTER_KEY = scopedDataStoreKey("AboutRoster_v1"),
 	ABOUT_ROSTER_ENTRY_KEY = "team",
 	CACHE_TTL = 120,  -- Scaling 100→200 CCU: extended from 60s to 120s to reduce DataStore GetAsync by 50%
@@ -734,6 +748,53 @@ Config.Security = {
 -- ============================================================
 Config.Overhead = {
 	GUI_TYPE = "V4",
+	-- Starting state of each nametag layer / badge, for a player who has never
+	-- touched the toggle themselves (buyer: ClubKitConfig.Overhead.DefaultLayers /
+	-- DefaultBadges). These are *defaults*, not locks: the Settings menu can still
+	-- turn any of them back on. OverheadDomain reads these at call time, never at
+	-- module load, because ConfigBootstrap projects the buyer's values afterwards.
+	--
+	-- A buyer writes three possible values per key (OverheadLayerPolicy.classify):
+	-- true / false land here as the starting value, while "off" ALSO lands in
+	-- DISABLED_LAYERS / DISABLED_BADGES below — the hard-off set, which is off for
+	-- everyone and hides the layer's Settings row too.
+	DEFAULT_LAYER_VISIBLE = {
+		SpecialTitle = true,
+		BadgeGroup = true,
+		Level = true,
+		SpecialRank = true,
+		SpecialStatus = true,
+		TopSpender = true,
+		TopDonate = true,
+		Rank = true,
+		DisplayName = true,
+		CoupleName = false,
+	},
+	-- The generic "SUPPORTER" chip, shown to a donor who has no ranked chip yet.
+	-- false = only donors holding an actual rank get a chip (buyer:
+	-- ClubKitConfig.Overhead.ShowSupporterChip). Separate from the TopSpender layer,
+	-- which also carries the ranked "#N <currency>" chip.
+	SHOW_SUPPORTER_CHIP = true,
+	DEFAULT_BADGE_VISIBLE = {
+		OwnerCoOwner = true,
+		Developer = true,
+		Admin = true,
+		Member = true,
+		VIP = true,
+		VVIP = true,
+		Elite = true,
+		Streak = true,
+		LikeCounter = true,
+		Community = true,
+	},
+	-- Layers / badges the buyer switched off for the whole venue (ClubKitConfig.Overhead
+	-- .DefaultLayers / .DefaultBadges value "off"). Filled in place by ConfigBootstrap —
+	-- keep them as tables so a reference captured at module load stays valid. Unlike the
+	-- defaults above these are ENFORCED at payload build and at render, so they also reach
+	-- players whose stored record predates the change; stored values are never rewritten,
+	-- so removing the "off" restores every player exactly as they had it.
+	DISABLED_LAYERS = {} :: { [string]: true },
+	DISABLED_BADGES = {} :: { [string]: true },
 	-- Perf-scaling feature flags (R4 / R8). Flip to false to roll back the optimization instantly.
 	-- R4: build badge/effect rows lazily on show + pool on hide so hidden rows cost 0 instances.
 	ENABLE_LAZY_ROWS = true,
@@ -822,6 +883,24 @@ Config.OverheadGuiVariants = {
 		wrapperName = "Frame",
 		preserveLayoutOrder = true,
 	},
+	-- V4 plus the image-title row `02-AddOnCustomImageBadge`. The wrapper's
+	-- UIListLayout sorts by Name, so that prefix is what puts the image directly
+	-- under `01-SpecialTitle`. `renderer` is inert metadata (never branched on).
+	V5 = {
+		templateName = "OverheadGUIMainTemplateV5",
+		renderer = "V5",
+		wrapperName = "Frame",
+		preserveLayoutOrder = true,
+	},
+}
+-- Overhead image title (the V5-only `02-AddOnCustomImageBadge` row).
+Config.TitleImage = {
+	ROW_NAME = "02-AddOnCustomImageBadge",
+	IMAGE_NAME = "ChangeableImage",
+	-- How many previously-assigned images the "Or select" list keeps, newest first.
+	REGISTRY_MAX = 60,
+	MSG_INVALID_ID = "[Admin] That image id is not usable.",
+	MSG_NO_IMAGE_ROW = "[Admin] This place's overhead template has no image row (needs V5).",
 }
 -- ============================================================
 -- RATE LIMITER
@@ -856,6 +935,8 @@ Config.Streak = {
 	GLOW_PULSE_SIZE_IN = 400, -- px when pulse contracts
 	-- Overlay backdrop
 	OVERLAY_TRANSPARENCY = 0.45,
+	-- RotatingBackground sunburst: seconds per 1 full rotation
+	ROTATION_SPEED = 5,
 	-- Particles
 	PARTICLE_COUNT = 45,
 	PARTICLE_SIZE_MIN = 3,
@@ -1383,6 +1464,20 @@ Config.FeatureFlags = {
 	-- Avatar Context Menu v2 (redesign: static ProfilePicture + backdrop zoom/blur).
 	-- false (default) = legacy v1 GUI (3D ViewportFrame avatar). Buyer: Features.AvatarContextMenuV2.
 	AvatarContextMenuV2Enabled = false,
+	-- Self-service custom title panel (1000-01-CT-ADDON) on the profile Title row.
+	-- false (default) = old text-only modal, admin-granted titles only.
+	-- Buyer: Features.SelfCustomTitle. Also needs the ScreenGui installed.
+	SelfCustomTitleEnabled = false,
+	-- Custom-title panel v3 (04-AdminPanelv3) owns the admin topbar icon instead of
+	-- the classic panel. false (default) = classic 04-AdminPanelv2.
+	-- Buyer: Features.AdminPanelV3. Also needs the ScreenGui installed.
+	AdminPanelV3Enabled = false,
+	-- Free Title event card (ADDON-FreeTitleEventTrigger in the buyer's IconGroup).
+	-- Derived by ConfigBootstrap from `ClubKitConfig.FreeTitleEvent.Mode` — there is
+	-- no separate buyer boolean, because "Disabled" is one of the modes and two
+	-- switches for one thing is one too many. Needs SelfCustomTitleEnabled as well,
+	-- since the card is a door to that panel.
+	FreeTitleEventEnabled = false,
 	MusicPlayerEnabled = true,
 	-- Merge Hazastudio_ClubKitConfig/MusicCatalog into MusicLibrary DataStore on boot.
 	MusicCatalogSeedEnabled = true,
@@ -2126,6 +2221,9 @@ Config.Crowd = {
 Config.Admin = {
 	GUI_NAME = "04-AdminPanelv2",
 	GUI_NAME_CANDIDATES = { "04-AdminPanelv2", "04-AdminPanel" },
+	-- Custom-title panel v3. Bound by AdminPanelV3UI when the place has it; the
+	-- candidates above stay the v2 path, so a place without v3 is unaffected.
+	GUI_NAME_V3 = "04-AdminPanelv3",
 	HUB_GUI_NAME = "04-AdminHub",
 	GUI_WAIT_TIMEOUT = 30, -- WaitForChild GUI timeout (seconds)
 	GUI_SCALE_BAKED = 0.82,
@@ -2139,8 +2237,29 @@ Config.Admin = {
 	REMOTE_SEND_GIFTCARD = "AdminSendGiftcard",
 	REMOTE_GIFTCARD_RESULT = "AdminGiftcardResult", -- Server->Client after grant
 	REMOTE_RESET_TITLE = "AdminResetTitle",
+	-- Image title (v3 panel, V5 template). Its own remote rather than a wider
+	-- AdminSetTitle payload: that handler requires non-empty title text, and the
+	-- image tab writes a different field entirely.
+	REMOTE_SET_TITLE_IMAGE = "AdminSetTitleImage",
+	-- Client asks, server replies to that client with the place-global registry.
+	REMOTE_TITLE_IMAGE_LIST = "AdminTitleImageList",
 	RATE_MAX = 5,
 	RATE_WINDOW = 30,
+	-- v3 header tabs. Applied over the template's own text only when that text is
+	-- blank or still says "Option N" (SliderSelectorUtil.applyTabLabel), so a buyer
+	-- who renames the tabs in their GUI keeps their wording.
+	V3_TAB_LABELS = {
+		text = "Text Title",
+		image = "Image Title",
+	},
+	-- Save/Remove sit outside the tabs and act on whichever one is open, so their
+	-- wording follows the tab. Only the image wording is configured: on the text tab
+	-- the template's own text is restored, so a buyer who renames those buttons
+	-- keeps their words.
+	V3_ACTION_LABELS = {
+		saveImage = "Save image title",
+		removeImage = "Remove image title",
+	},
 	TITLE_MAX_LENGTH = 32,
 	TITLE_PRESET_COUNT = 33,
 	TITLE_FONTS = {
@@ -2426,6 +2545,8 @@ Config.TopbarMenu = {
 	DESKTOP_FRAME_NAME = "TopBarMenu",
 	PHONE_FRAME_NAME = "TopBarMenuPhone",
 	LABEL = "Menu",
+	-- Shown on the same pill while the menu is open (TopbarPlus "Selected" state).
+	LABEL_SELECTED = "Close Menu",
 	ORDER = 4,
 	-- Inter (TopbarPlus IconLabel via styleTopbarPill / setTextFont)
 	FONT_ASSET_ID = 12187365364,
@@ -2451,6 +2572,10 @@ Config.TopbarMenu = {
 -- SETTINGS MENU
 -- ============================================================
 Config.Graphics = {
+	-- Preset for a player who has never saved settings, and for Settings → Reset.
+	-- "Low" | "Balanced" | "High". Buyer: ClubKitConfig.Graphics.DefaultPreset.
+	-- Players who already saved a choice keep it.
+	DEFAULT_PRESET = "Low",
 	-- CollectionService tags (Studio): venue VFX / geometry that respect graphics presets.
 	SCALABLE_VFX_TAG = "ScalableVfx",
 	SCALABLE_GEOMETRY_TAG = "ScalableGeometry",
@@ -2468,6 +2593,21 @@ Config.Graphics = {
 	ORIGINAL_LIGHT_RANGE_ATTRIBUTE = "RuntimeSettingsOriginalLightRange",
 	ORIGINAL_POSTFX_ENABLED_ATTRIBUTE = "RuntimeSettingsOriginalPostFxEnabled",
 	DONATION_EFFECT_NAME_PREFIX = "HazastudioDonationEffect_",
+	-- A player's own Roblox graphics slider caps everything the kit can do: at
+	-- QualityLevel1 the High preset still renders at the client's lowest quality. The kit
+	-- only ever READS UserGameSettings.SavedQualityLevel and suggests raising it — writing
+	-- it would change a persistent account-wide setting that follows the player into other
+	-- experiences, which is not ours to touch. Automatic never triggers the notice: the
+	-- engine is already choosing per device.
+	SUGGEST_QUALITY_BELOW_LEVEL = 8,
+	MSG_RAISE_ROBLOX_QUALITY = "[Graphics] High is on, but your Roblox graphics slider is at %d/10 — raise it in the Roblox menu (Esc → Settings) for the full HD look.",
+	-- A phone player who picked High is RENDERED at this preset instead: High keeps every
+	-- local light casting shadows, the softest shadow maps (0.55), depth of field and full
+	-- workspace VFX, which a phone cannot carry. Their stored choice is untouched, so the
+	-- same account gets High again on desktop. (An earlier draft justified this by High
+	-- forcing RenderFidelity.Precise — that never shipped: mesh fidelity cannot be changed
+	-- at run-time at all. See GraphicsQuality's note.)
+	PHONE_MAX_PRESET = "Balanced",
 }
 Config.Settings = {
 	GUI_NAME = "07-MenuGUI",
@@ -2493,6 +2633,102 @@ Config.ProfileMenu = {
 	MSG_TITLE_TOO_LONG = "[Profile] That custom title is a bit too long.",
 	MSG_TITLE_LOCKED = "[Profile] You do not have a custom title to edit yet.",
 	MSG_SINGLE_DUMB = "[Profile] You are single dumb.",
+}
+-- Self-service custom title (FeatureFlags.SelfCustomTitleEnabled). Buyer overrides
+-- MIN_LEVEL / MAX_CHANGES_PER_WINDOW / WINDOW_DAYS via ClubKitConfig.CustomTitle.
+Config.CustomTitle = {
+	-- Level needed to create your own title. Holders of an admin-granted title can
+	-- always edit it regardless of level, so migrated titles never lock out.
+	MIN_LEVEL = 50,
+	-- Rolling quota: this many accepted updates per WINDOW_DAYS. Removing is free.
+	MAX_CHANGES_PER_WINDOW = 5,
+	WINDOW_DAYS = 7,
+	-- false = no rolling limit at all (buyer: CustomTitle.QuotaEnabled). Changes
+	-- made while it is off are not banked, so switching it back on does not find
+	-- players already spent.
+	QUOTA_ENABLED = true,
+	-- One free title for everyone, whatever their level (buyer:
+	-- CustomTitle.FreeFirstTitle). Spent by creating, not by keeping — removing the
+	-- title afterwards does not hand the slot back, and an admin grant never
+	-- consumes it. Once spent, the player is locked until they meet MIN_LEVEL or
+	-- qualify for the Free Title event.
+	FREE_FIRST_TITLE = false,
+	-- Name of the buyer-installed ScreenGui. Missing = fall back to the old modal.
+	GUI_NAME = "1000-01-CT-ADDON",
+	MSG_LOCKED_LEVEL = "[Profile] Reach level %d to unlock custom titles.",
+	-- The panel's LockedState message, built from whatever the buyer configured:
+	-- one clause per requirement, routes joined by UNLOCK_OR, requirements inside a
+	-- route joined by UNLOCK_AND. With no event running this reads exactly as it
+	-- always did — "Reach Lv 50 to unlock this custom feature."
+	-- Clauses are written lowercase because any of them can land mid-sentence; the
+	-- panel capitalises whichever ends up first.
+	MSG_LOCKED_PANEL = "%s to unlock this custom feature.",
+	-- Replaces the quota line while the free title is what is opening the panel.
+	MSG_FREE_TITLE = "Your first title is free — this one is on the house.",
+	UNLOCK_LEVEL = "reach Lv %d",
+	UNLOCK_ROBUX = "donate %d R$",
+	UNLOCK_CASH = "donate %s",
+	UNLOCK_OR = ", or ",
+	UNLOCK_AND = " and ",
+	-- Shown instead when the Free Title event runs in Donation mode: quoting a level
+	-- at someone who needs to donate would send them the wrong way.
+	MSG_LOCKED_DONATION = "[Profile] Donate %d Robux to unlock custom titles.",
+	MSG_QUOTA_SPENT = "[Profile] You have used all %d title changes this week.",
+	MSG_NO_CHANGE = "[Profile] That is already your title.",
+	MSG_INVALID_PRESET = "[Profile] That color preset is not available.",
+	MSG_INVALID_FONT = "[Profile] That typeface is not available.",
+	MSG_INVALID_SIZE = "[Profile] That title size is not available.",
+}
+-- Free Title event card (FeatureFlags.FreeTitleEventEnabled). A promo card pinned
+-- to the screen edge that opens the self-service title panel — a shortcut only, it
+-- changes no rule: MIN_LEVEL and the quota apply exactly as they do from the
+-- profile row. Lives inside the buyer's `IconGroup`, so a place without the frame
+-- simply has no card.
+Config.FreeTitleEvent = {
+	HOST_GUI_NAME = "IconGroup",
+	FRAME_NAME = "ADDON-FreeTitleEventTrigger",
+	-- Buyer-tunable (ClubKitConfig.FreeTitleEvent). A threshold above zero switches
+	-- its axis on; MODE says how the active ones combine: "Any" (meet one) | "All"
+	-- (meet every one) | "Disabled". TitleEventDomain normalises anything else to
+	-- Disabled, and a mode with no thresholds set is inactive rather than free.
+	-- A qualifying player may create a title below CustomTitle.MIN_LEVEL — the quota
+	-- still applies, and nobody loses access they already had.
+	MODE = "Disabled",
+	REQUIRED_LEVEL = 0,
+	MIN_DONATION_ROBUX = 0,
+	MIN_DONATION_CASH = 0,
+	-- Button label while the player does not qualify yet; the template's own text is
+	-- restored once they do. Only the first unmet requirement is shown — one line,
+	-- one next step.
+	MSG_LOCKED_LEVEL = "Reach Lv %d",
+	MSG_LOCKED_ROBUX = "Donate %d R$",
+	MSG_LOCKED_CASH = "Donate %s",
+	-- Entrance waits for ClientBoot.GAMEPLAY_READY_ATTRIBUTE so the card is never
+	-- spent behind a loading screen (the bug the streak overlay hit), then holds
+	-- for ENTER_DELAY so it does not fight the join greeting.
+	ENTER_DELAY = 2,
+	READY_TIMEOUT = 45,
+	ENTER_TIME = 0.55,
+	ENTER_OFFSET = 220, -- px it flies in from, past the right edge
+	EXIT_TIME = 0.28,
+	-- Idle life: sunburst spin, a slow float, and a breathing scale. All three are
+	-- ping-pong tweens rather than per-frame work.
+	ROTATION_SPEED = 14, -- seconds per full sunburst turn
+	BOB_OFFSET = 7,
+	BOB_TIME = 2.1,
+	BREATHE_SCALE = 1.035,
+	BREATHE_TIME = 1.7,
+	-- Attention punch every so often, so the card is noticed without nagging.
+	PULSE_INTERVAL = 7,
+	PULSE_SCALE = 1.14,
+	PULSE_TIME = 0.42,
+	PULSE_TILT = 4, -- degrees of wiggle on the punch
+	-- Gold sweep across the "Grab Yours" button: the button's own gradient slides
+	-- and restarts. A separate transparent-ended sheen layer was tried instead (it
+	-- loops without a visible seam), but the owner preferred this one — the whole
+	-- fill travelling reads bolder than a highlight passing over it.
+	SHINE_TIME = 1.1,
+	SHINE_DELAY = 1.7,
 }
 -- ============================================================
 -- DONATION / BAGI-BAGI INTEGRATION
@@ -3573,6 +3809,9 @@ Config.MobileScale = {
 	BACKPACK_GUI = 0.9, -- 14-BackpackGUI HotbarWrapper.UIScale
 	ADMIN_GUI = 0.54, -- 04-AdminPanel root UIScale on phone layout
 	ADMIN_HUB_GUI = 0.5, -- 04-AdminHub root UIScale on phone layout
+	ADMIN_PANEL_V3_GUI = 0.45, -- 04-AdminPanelv3 root UIScale on phone layout
+	CUSTOM_TITLE_GUI = 0.55, -- 1000-01-CT-ADDON root UIScale on phone layout
+	FREE_TITLE_EVENT_CARD = 0.7, -- IconGroup.ADDON-FreeTitleEventTrigger resting UIScale on phone layout
 	JOIN_COMMUN_GUI = 0.48, -- 16-JoinCommunPrompt root UIScale on phone layout
 	STICKER_GUI = 0.8, -- 11-StickerSystemGUI
 	NOTIF_GUI = 0.75, -- 99-NotificationCenter
@@ -3739,8 +3978,13 @@ Config.NetworkPerf = {
 local function validateConfig()
 	-- Shop IDs: Game Pass (buy) + Developer Product (gift); placeholder 0 until ClubKitConfig filled
 	if Config.Shop and Config.Shop.PRODUCTS then
+		-- Runs after ConfigBootstrap.apply, so PAID_TIERS already reflects the
+		-- buyer's Membership.TierN.Enabled. A tier switched off is never sold —
+		-- its empty ids are deliberate, so stay quiet about them.
+		local paidTiers = Config.Membership and Config.Membership.PAID_TIERS
 		for tier, product in pairs(Config.Shop.PRODUCTS) do
-			if type(product) == "table" then
+			local tierDisabled = type(paidTiers) == "table" and paidTiers[tier] == false
+			if type(product) == "table" and not tierDisabled then
 				if product.BUY_GAMEPASS_ID == 0 or product.BUY_GAMEPASS_ID == nil then
 					warn(
 						("[Config] Shop.PRODUCTS.%s.BUY_GAMEPASS_ID is still 0/nil — set ClubKitConfig.Shop.Products.%s.BuyGamePassId."):format(

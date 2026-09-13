@@ -1,6 +1,7 @@
 --!strict
--- Presents 99-NotificationCenter > GreetingNotifications join greetings.
--- Enter/exit + CountDownBar follow GenericBroadcastController (UIScale + GroupTransparency).
+-- Presents <notification center> > GreetingNotifications join greetings (V2 GUI first, V1 fallback).
+-- Enter/exit + CountDownBar follow GenericBroadcastController (UIScale + GroupTransparency on a
+-- CanvasGroup card, a recorded descendant fade on a Frame card).
 -- Message sequence (creative → fade → entered-the-space) keeps TextTransparency crossfade
 -- (same family as DonationNotificationController content fades) — no abrupt Visible toggles.
 
@@ -14,6 +15,9 @@ local CashCurrencyDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.D
 local DonationAmountFormat = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DonationAmountFormat)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local GroupMotion = require(script.Parent.Parent.Utils.GroupMotion)
+local GuiFade = require(script.Parent.Parent.Utils.GuiFade)
+local NotificationCenterGui = require(script.Parent.Parent.Utils.NotificationCenterGui)
+local TextFit = require(script.Parent.Parent.Utils.TextFit)
 
 local log = Logger.new("JoinGreetingController")
 
@@ -57,11 +61,12 @@ type Payload = {
 type Refs = {
 	rootGui: ScreenGui,
 	wrapper: GuiObject,
-	template: CanvasGroup,
+	-- CanvasGroup (V1) or a plain Frame (V2 redesign); the fade path follows the class.
+	template: GuiObject,
+	isV2: boolean,
 }
 
 -- Mirror GenericBroadcastController toast motion constants.
-local ROOT_GUI_NAME = "99-NotificationCenter"
 local WRAPPER_NAME = "GreetingNotifications"
 local TEMPLATE_NAME = "GeneralGreetings"
 local ENTER_DURATION = 0.28
@@ -71,8 +76,12 @@ local NORMAL_SCALE = 0.9
 local EXIT_SCALE = 0.81
 
 type ActiveCard = {
-	card: CanvasGroup,
+	card: GuiObject,
 	scale: UIScale,
+	-- Resting UIScale: the template's own (V2) or NORMAL_SCALE (V1).
+	normalScale: number,
+	-- Descendant fade for Frame cards; nil for CanvasGroup cards (GroupTransparency).
+	fade: GuiFade.Snapshot?,
 	dismissing: boolean,
 }
 
@@ -124,22 +133,15 @@ local function maxVisibleCards(): number
 end
 
 local function resolveRefs(): Refs?
-	local playerGui = Players.LocalPlayer:FindFirstChildOfClass("PlayerGui")
-	if not playerGui then
-		return nil
-	end
-
-	local rootGui = playerGui:FindFirstChild(ROOT_GUI_NAME)
-	if not rootGui then
-		rootGui = playerGui:WaitForChild(ROOT_GUI_NAME, 10)
-	end
-	if not rootGui or not rootGui:IsA("ScreenGui") then
+	local resolved = NotificationCenterGui.resolve(10)
+	if not resolved then
 		if not missingGuiWarned then
 			missingGuiWarned = true
-			log:warn("99-NotificationCenter not found")
+			log:warn("Notification center GUI not found")
 		end
 		return nil
 	end
+	local rootGui = resolved.gui
 
 	local wrapper = rootGui:FindFirstChild(WRAPPER_NAME)
 	if not wrapper or not wrapper:IsA("GuiObject") then
@@ -151,10 +153,10 @@ local function resolveRefs(): Refs?
 	end
 
 	local template = wrapper:FindFirstChild(TEMPLATE_NAME)
-	if not template or not template:IsA("CanvasGroup") then
+	if not template or not template:IsA("GuiObject") then
 		if not missingGuiWarned then
 			missingGuiWarned = true
-			log:warn("GeneralGreetings template must be a CanvasGroup (same as BroadcastMessageTemplate)")
+			log:warn("GeneralGreetings template not found")
 		end
 		return nil
 	end
@@ -164,7 +166,24 @@ local function resolveRefs(): Refs?
 		rootGui = rootGui,
 		wrapper = wrapper,
 		template = template,
+		isV2 = resolved.isV2,
 	}
+end
+
+local function setCardAlpha(card: GuiObject, fade: GuiFade.Snapshot?, alpha: number)
+	if fade then
+		GuiFade.set(fade, alpha)
+	elseif card:IsA("CanvasGroup") then
+		card.GroupTransparency = alpha
+	end
+end
+
+local function tweenCardAlpha(card: GuiObject, fade: GuiFade.Snapshot?, info: TweenInfo, alpha: number)
+	if fade then
+		GuiFade.tween(fade, info, alpha)
+	elseif card:IsA("CanvasGroup") then
+		TweenService:Create(card, info, { GroupTransparency = alpha }):Play()
+	end
 end
 
 local function normalizePayload(raw: any): Payload?
@@ -299,7 +318,7 @@ local function buildEnteredSpaceText(payload: Payload): string
 	return fillEnteredPlaceholders(template, resolveGelarFromPayload(payload), resolveDisplayName(payload))
 end
 
-local function fillCard(card: CanvasGroup, payload: Payload)
+local function fillCard(card: GuiObject, payload: Payload)
 	local userId = tonumber(payload.userId) or 0
 	local displayName = tostring(payload.displayName or "Unknown")
 	local username = tostring(payload.username or "unknown")
@@ -392,20 +411,28 @@ local function dismissCard(refs: Refs, active: ActiveCard, exitDuration: number)
 	local card = active.card
 	local scale = active.scale
 	if not card.Parent then
+		if active.fade then
+			GuiFade.destroy(active.fade)
+		end
 		if not hasActiveCards(refs.wrapper) then
 			setWrapperVisible(refs, false)
 		end
 		return
 	end
 
-	-- Same exit family as GenericBroadcast: GroupTransparency + scale shrink.
+	-- Same exit family as GenericBroadcast: fade + scale shrink.
 	local exitInfo = TweenInfo.new(exitDuration, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-	tween(card, exitInfo, { GroupTransparency = 1 })
-	-- ADR 0005: card is a CanvasGroup — hold NORMAL_SCALE so its texture is never resized.
-	tweenWait(scale, exitInfo, { Scale = GroupMotion.scaleTarget(card, EXIT_SCALE, NORMAL_SCALE) })
+	tweenCardAlpha(card, active.fade, exitInfo, 1)
+	-- ADR 0005: a CanvasGroup card holds its resting scale so its texture is never resized.
+	tweenWait(scale, exitInfo, {
+		Scale = GroupMotion.scaleTarget(card, active.normalScale * EXIT_SCALE / NORMAL_SCALE, active.normalScale),
+	})
 
 	if card.Parent then
 		card:Destroy()
+	end
+	if active.fade then
+		GuiFade.destroy(active.fade)
 	end
 
 	if not hasActiveCards(refs.wrapper) then
@@ -418,16 +445,23 @@ local function playGreeting(refs: Refs, payload: Payload)
 	local card = refs.template:Clone()
 	card.Name = "GreetingCard"
 	card.Visible = true
-	card.GroupTransparency = 1
-	card.Parent = wrapper
 	fillCard(card, payload)
 
+	-- V2 rests at the designer's own UIScale (1 when the card has none, so only the
+	-- wrapper's scale applies); V1 keeps the kit's NORMAL_SCALE.
 	local scale = card:FindFirstChildOfClass("UIScale")
-	if not scale then
+	local normalScale = NORMAL_SCALE
+	if scale then
+		if refs.isV2 then
+			normalScale = scale.Scale
+		end
+	else
 		scale = Instance.new("UIScale")
 		scale.Parent = card
+		if refs.isV2 then
+			normalScale = 1
+		end
 	end
-	scale.Scale = GroupMotion.scaleTarget(card, ENTER_START_SCALE, NORMAL_SCALE)
 
 	local enterDuration = math.max(tonumber(payload.enterDuration) or getCfg().ENTER or ENTER_DURATION, 0.05)
 	local messageHold = math.max(tonumber(payload.messageHold) or getCfg().MESSAGE_HOLD or 3.7, 0.1)
@@ -438,14 +472,28 @@ local function playGreeting(refs: Refs, payload: Payload)
 	local showDuration = messageHold + (messageFade * 2) + welcomeHold
 
 	-- Width/progress only — leave CountDownBar colors / Studio UIGradient alone (no role tint).
+	-- V2 drains from the designed bar width; V1 always started full width.
 	local countDownBar = findFrame(card, "CountDownBar")
 	if countDownBar then
-		countDownBar.Size = UDim2.new(1, 0, countDownBar.Size.Y.Scale, countDownBar.Size.Y.Offset)
+		local barStartWidth = if refs.isV2 then countDownBar.Size.X.Scale else 1
+		countDownBar.Size = UDim2.new(barStartWidth, 0, countDownBar.Size.Y.Scale, countDownBar.Size.Y.Offset)
+	end
+
+	local fade = if card:IsA("CanvasGroup") then nil else GuiFade.capture(card)
+	setCardAlpha(card, fade, 1)
+	card.Parent = wrapper
+	scale.Scale = GroupMotion.scaleTarget(card, normalScale * ENTER_START_SCALE / NORMAL_SCALE, normalScale)
+	-- V2 greeting is one line, never more: shrink from the designed size to fit.
+	local fitLabel = if refs.isV2 then findText(card, "Message") else nil
+	if fitLabel then
+		TextFit.singleLineNextFrame(fitLabel)
 	end
 
 	local active: ActiveCard = {
 		card = card,
 		scale = scale,
+		normalScale = normalScale,
+		fade = fade,
 		dismissing = false,
 	}
 	table.insert(activeCards, active)
@@ -461,10 +509,10 @@ local function playGreeting(refs: Refs, payload: Payload)
 
 	setWrapperVisible(refs, true)
 
-	-- Enter: GroupTransparency 1→0 + scale ENTER_START→NORMAL (GenericBroadcast).
+	-- Enter: fade 1→0 + scale ENTER_START→resting (GenericBroadcast).
 	local enterInfo = TweenInfo.new(enterDuration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-	tween(card, enterInfo, { GroupTransparency = 0 })
-	tweenWait(scale, enterInfo, { Scale = NORMAL_SCALE })
+	tweenCardAlpha(card, fade, enterInfo, 0)
+	tweenWait(scale, enterInfo, { Scale = normalScale })
 
 	if countDownBar then
 		tween(countDownBar, TweenInfo.new(showDuration, Enum.EasingStyle.Linear, Enum.EasingDirection.Out), {
@@ -487,6 +535,9 @@ local function playGreeting(refs: Refs, payload: Payload)
 			return
 		end
 		messageLabel.Text = buildEnteredSpaceText(payload)
+		if refs.isV2 then
+			TextFit.singleLine(messageLabel)
+		end
 		tweenWait(messageLabel, fadeInfo, { TextTransparency = 0 })
 	else
 		task.wait(messageFade * 2)
@@ -569,6 +620,9 @@ local function clearActiveCards()
 		local active = activeCards[index]
 		if active.card.Parent then
 			active.card:Destroy()
+		end
+		if active.fade then
+			GuiFade.destroy(active.fade)
 		end
 		table.remove(activeCards, index)
 	end

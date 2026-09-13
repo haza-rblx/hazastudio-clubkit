@@ -8,6 +8,9 @@ local ClubKitConfigSchema = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.
 local ClubKitConfig = require(ReplicatedStorage.Hazastudio_ClubKitConfig.ClubKitConfig)
 local DonationProviderDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.DonationProviderDomain)
 local CashCurrencyDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.CashCurrencyDomain)
+local TitleEventDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.TitleEventDomain)
+local OverheadLayerPolicy = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.OverheadLayerPolicy)
+local GraphicsQuality = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.GraphicsQuality)
 local RoleCategoryBuilder = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Config.RoleCategoryBuilder)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 
@@ -40,8 +43,14 @@ local function validateClubKitState(state: any)
 	end
 	local shop = state.Shop
 	if type(shop) == "table" and type(shop.Products) == "table" then
+		local membership = state.Membership
 		for tierKey, product in pairs(shop.Products) do
-			if type(product) == "table" then
+			-- A tier switched off via Membership.TierN.Enabled is never sold, so its
+			-- missing product ids are deliberate. Warning about them anyway trains
+			-- buyers to ignore the whole block.
+			local tierCfg = if type(membership) == "table" then membership[tierKey] else nil
+			local tierDisabled = type(tierCfg) == "table" and tierCfg.Enabled == false
+			if type(product) == "table" and not tierDisabled then
 				local buyPassId = product.BuyGamePassId
 				if type(buyPassId) ~= "number" or buyPassId <= 0 then
 					warn("[ConfigBootstrap] Shop.Products." .. tierKey .. ".BuyGamePassId not set (Creator Dashboard → Game Passes)")
@@ -360,6 +369,165 @@ function ConfigBootstrap.apply(config: any)
 		end
 	end
 
+	-- SHOP_TIERS is the list every shop/gift surface iterates: the shop cards
+	-- (ShopUI), the gift tabs (GiftUI), both ShopControllers, ShopDomain's accepted
+	-- tier set, and the Admin Hub gift menu. PAID_TIERS alone only governed what
+	-- counts as a *paid membership* (badge / chat tag / leaderstats Rank), so a
+	-- buyer's `Enabled = false` used to leave the tier fully purchasable — the
+	-- server's syncOwnedGamePasses would still grant it from gamepass ownership.
+	-- Deriving SHOP_TIERS here makes one flag switch the tier off everywhere.
+	--
+	-- Filtered IN PLACE: ShopUI/GiftUI/ShopDomain capture this table by reference at
+	-- module load, so replacing it would leave them holding the unfiltered original.
+	if type(config.Membership) == "table" and type(config.Membership.SHOP_TIERS) == "table" then
+		local paidTiers = config.Membership.PAID_TIERS
+		if type(paidTiers) == "table" then
+			local shopTiers = config.Membership.SHOP_TIERS
+			for index = #shopTiers, 1, -1 do
+				-- nil = tier the engine never listed as paid; only an explicit
+				-- false (buyer set Enabled = false) removes it.
+				if paidTiers[shopTiers[index]] == false then
+					table.remove(shopTiers, index)
+				end
+			end
+		end
+	end
+
+	-- Overhead nametag template choice. Only a variant the engine knows is accepted,
+	-- so a typo or a version the place has not installed keeps the current default
+	-- instead of falling back to V1 at render time. Config.Template.TEMPLATE_NAME is
+	-- derived at module load from the old value, so it has to be re-derived here.
+	local overheadCfg = clubKit.Overhead
+	if type(config.Overhead) == "table" and type(overheadCfg) == "table" then
+		local guiType = overheadCfg.GuiType
+		if type(guiType) == "string" and type(config.OverheadGuiVariants[guiType]) == "table" then
+			config.Overhead.GUI_TYPE = guiType
+			if type(config.Template) == "table" then
+				config.Template.TEMPLATE_NAME = config.OverheadGuiVariants[guiType].templateName
+			end
+		elseif guiType ~= nil then
+			warn("[ConfigBootstrap] Unknown Overhead.GuiType '" .. tostring(guiType) .. "'; keeping " .. tostring(config.Overhead.GUI_TYPE))
+		end
+
+		if type(overheadCfg.ShowSupporterChip) == "boolean" then
+			config.Overhead.SHOW_SUPPORTER_CHIP = overheadCfg.ShowSupporterChip
+		end
+
+		-- Per-layer / per-badge state, three values per key (OverheadLayerPolicy):
+		--   true  -> starts visible
+		--   false -> starts hidden, the player may switch it back on in Settings
+		--   "off" -> off for everyone, always; its Settings row is hidden too
+		-- Booleans (and "off", which also seeds hidden) land in DEFAULT_*_VISIBLE, which
+		-- seeds a player's first stored record; the "off" keys additionally land in
+		-- DISABLED_*, which every render and Settings site consults at call time. Only keys
+		-- the engine already knows are read, so a typo cannot invent a layer or blank the
+		-- table — it is reported instead, and the kit's own value is kept.
+		for buyerKey, spec in pairs({
+			DefaultLayers = { defaults = "DEFAULT_LAYER_VISIBLE", disabled = "DISABLED_LAYERS" },
+			DefaultBadges = { defaults = "DEFAULT_BADGE_VISIBLE", disabled = "DISABLED_BADGES" },
+		}) do
+			local buyerMap = overheadCfg[buyerKey]
+			local engineMap = config.Overhead[spec.defaults]
+			if type(buyerMap) == "table" and type(engineMap) == "table" then
+				for _, badKey in ipairs(OverheadLayerPolicy.invalidValueKeys(buyerMap, engineMap)) do
+					warn(
+						"[ConfigBootstrap] Overhead."
+							.. buyerKey
+							.. "."
+							.. badKey
+							.. ' is not true, false or "off"; keeping '
+							.. tostring(engineMap[badKey])
+					)
+				end
+				local disabled = OverheadLayerPolicy.disabledSet(buyerMap, engineMap)
+				for key in pairs(engineMap) do
+					engineMap[key] = OverheadLayerPolicy.defaultVisible(buyerMap[key], engineMap[key])
+				end
+				-- Filled in place: modules that captured the table at load keep seeing it.
+				local disabledMap = config.Overhead[spec.disabled]
+				if type(disabledMap) == "table" then
+					table.clear(disabledMap)
+					for key in pairs(disabled) do
+						disabledMap[key] = true
+					end
+				end
+			end
+		end
+	end
+
+	-- Starting graphics preset. Only a preset the engine knows is accepted, so a typo
+	-- keeps the kit default instead of reaching SettingsDomain.
+	local graphicsBuyerCfg = clubKit.Graphics
+	if type(config.Graphics) == "table" and type(graphicsBuyerCfg) == "table" then
+		local rawPreset = graphicsBuyerCfg.DefaultPreset
+		local preset = GraphicsQuality.resolvePreset(rawPreset)
+		if preset then
+			config.Graphics.DEFAULT_PRESET = preset
+		elseif rawPreset ~= nil then
+			warn("[ConfigBootstrap] Unknown Graphics.DefaultPreset '" .. tostring(rawPreset) .. "'; keeping " .. tostring(config.Graphics.DEFAULT_PRESET))
+		end
+	end
+
+	-- Self-service custom title tuning. Ignored unless SelfCustomTitleEnabled;
+	-- TitleQuotaDomain clamps anything nonsensical that slips through.
+	local customTitle = clubKit.CustomTitle
+	if type(config.CustomTitle) == "table" and type(customTitle) == "table" then
+		local minLevel = tonumber(customTitle.MinLevel)
+		if minLevel and minLevel >= 1 then
+			config.CustomTitle.MIN_LEVEL = math.floor(minLevel)
+		end
+		local maxChanges = tonumber(customTitle.MaxChangesPerWindow)
+		if maxChanges and maxChanges >= 1 then
+			config.CustomTitle.MAX_CHANGES_PER_WINDOW = math.floor(maxChanges)
+		end
+		local windowDays = tonumber(customTitle.WindowDays)
+		if windowDays and windowDays >= 1 then
+			config.CustomTitle.WINDOW_DAYS = math.floor(windowDays)
+		end
+		-- Booleans only: a buyer writing "false" as a string leaves the quota on,
+		-- matching TitleQuotaDomain's own opt-in rule.
+		if type(customTitle.QuotaEnabled) == "boolean" then
+			config.CustomTitle.QUOTA_ENABLED = customTitle.QuotaEnabled
+		end
+		if type(customTitle.FreeFirstTitle) == "boolean" then
+			config.CustomTitle.FREE_FIRST_TITLE = customTitle.FreeFirstTitle
+		end
+	end
+
+	-- Free Title event. `Mode` is the only switch; the engine's boolean flag is
+	-- derived from it, so a buyer never has to keep two settings in agreement.
+	-- TitleEventDomain owns what a mode string means — this only carries values over.
+	local freeTitle = clubKit.FreeTitleEvent
+	if type(config.FreeTitleEvent) == "table" and type(freeTitle) == "table" then
+		if type(freeTitle.Mode) == "string" then
+			config.FreeTitleEvent.MODE = freeTitle.Mode
+		end
+		-- Carried straight over, including 0: a zero threshold is how a buyer turns
+		-- a requirement off, so it must not be filtered out as "invalid" here.
+		-- TitleEventDomain decides what each value means.
+		for buyerKey, engineKey in pairs({
+			RequiredLevel = "REQUIRED_LEVEL",
+			MinDonationRobux = "MIN_DONATION_ROBUX",
+			MinDonationCash = "MIN_DONATION_CASH",
+		}) do
+			local value = tonumber(freeTitle[buyerKey])
+			if value and value >= 0 then
+				config.FreeTitleEvent[engineKey] = math.floor(value)
+			end
+		end
+	end
+	if type(config.FreeTitleEvent) == "table" and type(config.FeatureFlags) == "table" then
+		-- Ask the domain rather than testing the mode string: an event with a valid
+		-- mode but no thresholds set is not an event, and this flag decides whether
+		-- the card is built at all.
+		config.FeatureFlags.FreeTitleEventEnabled = TitleEventDomain.evaluate({
+			Mode = config.FreeTitleEvent.MODE,
+			RequiredLevel = config.FreeTitleEvent.REQUIRED_LEVEL,
+			MinDonationRobux = config.FreeTitleEvent.MIN_DONATION_ROBUX,
+			MinDonationCash = config.FreeTitleEvent.MIN_DONATION_CASH,
+		}, nil).active
+	end
+
 	local shop = clubKit.Shop
 	if type(config.Shop) == "table" and type(shop) == "table" and type(shop.Products) == "table" then
 		for tierKey, product in pairs(shop.Products) do
@@ -469,6 +637,8 @@ function ConfigBootstrap.apply(config: any)
 			LegacySyncBhms = "LegacySyncBhmsEnabled",
 			AdminHub = "AdminHubEnabled",
 			AvatarContextMenuV2 = "AvatarContextMenuV2Enabled",
+			SelfCustomTitle = "SelfCustomTitleEnabled",
+			AdminPanelV3 = "AdminPanelV3Enabled",
 			Hotbar = "HotbarEnabled",
 			LoadingScreen = "LoadingScreenEnabled",
 			LevelSystem = "LevelSystemEnabled",

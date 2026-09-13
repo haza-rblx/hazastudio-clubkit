@@ -47,14 +47,13 @@ export function isLicenseBlocked(game) {
     return { blocked: true, error: "license_expired" };
   }
 
-  const until = cleanString(game?.maintenance_until);
-  if (until && status === "active") {
-    const untilMs = Date.parse(until);
-    if (Number.isFinite(untilMs) && Date.now() > untilMs) {
-      return { blocked: true, error: "license_expired" };
-    }
-  }
-
+  // `maintenance_until` is informational only — it does NOT gate the API.
+  // It used to: a lapsed date returned license_expired, which 403'd every
+  // /game/{key}/v2/* route and silently blanked the buyer's donation
+  // leaderboard, notifications and donor cash with no warning to anyone
+  // (hit kasta on 2026-08-31). A support/update window running out is not a
+  // revoked licence. To actually cut a game off, set license_status to
+  // 'expired' or 'revoked' — that is explicit and still enforced above.
   return { blocked: false };
 }
 

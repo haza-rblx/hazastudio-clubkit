@@ -148,10 +148,14 @@ function TopMenuController.configureMenuIcon(menuIcon: any)
 		pcall(function()
 			local fontId = tonumber(Config.TopbarMenu and Config.TopbarMenu.FONT_ASSET_ID) or 12187365364
 			local fontFace = Font.fromId(fontId, Enum.FontWeight.Bold, Enum.FontStyle.Normal)
+			local selectedLabel = tostring(
+				(Config.TopbarMenu and Config.TopbarMenu.LABEL_SELECTED) or "Close Menu"
+			)
+			-- No TextSize override here: the open state is a word now, not a single "X"
+			-- glyph, so it has to read at the same size as the closed "Menu" label.
 			menuIcon:modifyTheme({
 				{ "IconLabel", "FontFace", fontFace, "Selected" },
-				{ "IconLabel", "Text", "X", "Selected" },
-				{ "IconLabel", "TextSize", 20, "Selected" },
+				{ "IconLabel", "Text", selectedLabel, "Selected" },
 				{ "IconLabel", "TextStrokeTransparency", 0.8, "Selected" },
 				{ "IconImage", "Image", "", "Selected" },
 			})

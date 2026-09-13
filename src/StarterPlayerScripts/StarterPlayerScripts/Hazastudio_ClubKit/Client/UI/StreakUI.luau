@@ -31,8 +31,13 @@ function StreakUI.new(gui: ScreenGui)
 	self._img      = imgLabel
 	self._count    = countLbl
 	self._anim     = AnimationHelper.new()
+	-- Sunburst di belakang StreakImage. Opsional: place lama bisa saja tidak punya.
+	self._rotBg    = overlay:FindFirstChild("RotatingBackground") :: ImageLabel?
+	self._rotHandle = nil
+	self._playId   = 0
 	-- Hide on init
 	gui.Enabled            = false
+	overlay.Visible        = false
 	overlay.BackgroundTransparency = 1
 	UIShadowHelper.apply(imgLabel, "STREAK_GLOW")
 	return self
@@ -161,9 +166,18 @@ function StreakUI:play(payload: {
 	local imageColor = didReset and COLOR_RESET
 		or (isMile and COLOR_MILESTONE)
 		or COLOR_NORMAL
+	self._playId          += 1
 	self._img.ImageColor3  = COLOR_DESATURATED
 	self._count.Text       = "0"
 	self._gui.Enabled      = true
+	self._overlay.Visible  = true
+	-- Sunburst mulai muter selama overlay tampil
+	if self._rotBg then
+		if self._rotHandle then
+			self._anim:stopRotation(self._rotHandle)
+		end
+		self._rotHandle = self._anim:startRotation(self._rotBg, Config.Streak.ROTATION_SPEED)
+	end
 	UIShadowHelper.apply(self._img, "STREAK_GLOW", {
 		Color = Config.UIShadow.STREAK_COLORS[colorKey],
 		Transparency = Config.UIShadow.STREAK_GLOW.Transparency,
@@ -173,9 +187,10 @@ function StreakUI:play(payload: {
 		{ ImageColor3 = imageColor }
 	):Play()
 	-- 1. Fade in overlay
+	self._overlay.BackgroundTransparency = 1
 	TweenService:Create(self._overlay,
 		TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-		{ BackgroundTransparency = 1 }
+		{ BackgroundTransparency = Config.Streak.OVERLAY_TRANSPARENCY }
 	):Play()
 	-- 2. StreakImage scalePop
 	self._anim:scalePop(self._img :: Frame, function()
@@ -196,6 +211,7 @@ function StreakUI:play(payload: {
 	end)
 end
 function StreakUI:dismiss()
+	local playId = self._playId
 	UIShadowHelper.setTransparency(self._img, Config.UIShadow.STREAK_GLOW.Transparency)
 	self._anim:scaleOut(self._img :: Frame, nil)
 	TweenService:Create(self._overlay,
@@ -203,7 +219,14 @@ function StreakUI:dismiss()
 		{ BackgroundTransparency = 1 }
 	):Play()
 	task.delay(0.3, function()
+		-- Notif baru keburu main duluan: jangan disembunyiin
+		if self._playId ~= playId then return end
+		if self._rotHandle then
+			self._anim:stopRotation(self._rotHandle)
+			self._rotHandle = nil
+		end
 		self._gui.Enabled = false
+		self._overlay.Visible = false
 		-- Reset UIScale for berikutnya
 		local s = self._img:FindFirstChildWhichIsA("UIScale") :: UIScale?
 		if s then s.Scale = 1 end

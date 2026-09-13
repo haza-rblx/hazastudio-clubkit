@@ -195,11 +195,19 @@ end
 -- sat at IsLoaded == false for 6s with no error raised). The call is pushed onto
 -- its own thread and abandoned on timeout so one bad asset can never stall the
 -- whole warmup pipeline.
-local function preloadWithTimeout(instances: { Instance }, timeoutSec: number): boolean
+local function preloadWithTimeout(
+	instances: { Instance },
+	timeoutSec: number,
+	onAsset: ((any, any) -> ())?
+): boolean
 	local finished = false
 	task.spawn(function()
 		local ok, err = pcall(function()
-			ContentProvider:PreloadAsync(instances)
+			if onAsset then
+				ContentProvider:PreloadAsync(instances, onAsset)
+			else
+				ContentProvider:PreloadAsync(instances)
+			end
 		end)
 		finished = true
 		if not ok then
@@ -249,15 +257,27 @@ local function preloadBatch(ids: { string })
 	end
 
 	stats.batches += 1
-	preloadWithTimeout(probes, num(cfg().BATCH_TIMEOUT_SEC, 15))
+	-- `ImageLabel.IsLoaded` does not flip until the engine has actually RENDERED the
+	-- probe, so an off-screen warmup probe reads false even for a texture that fetched
+	-- perfectly — it scored every asset unresolved and left `warm` permanently empty,
+	-- which sent every ImageSwap down the slow fade path. PreloadAsync's per-asset
+	-- status is the real fetch result; IsLoaded stays only as a fallback for ids the
+	-- callback never reports (batch abandoned on timeout, or an unexpected id form).
+	local fetched: { [string]: boolean } = {}
+	preloadWithTimeout(probes, num(cfg().BATCH_TIMEOUT_SEC, 15), function(contentId, fetchStatus)
+		fetched[tostring(contentId)] = fetchStatus == Enum.AssetFetchStatus.Success
+	end)
 
 	for index, probe in ipairs(probes) do
 		local id = ids[index]
 		attempted[id] = true
-		local loaded = false
-		pcall(function()
-			loaded = (probe :: ImageLabel).IsLoaded
-		end)
+		local loaded = fetched[id]
+		if loaded == nil then
+			loaded = false
+			pcall(function()
+				loaded = (probe :: ImageLabel).IsLoaded
+			end)
+		end
 		if loaded then
 			warm[id] = true
 			stats.warmed += 1

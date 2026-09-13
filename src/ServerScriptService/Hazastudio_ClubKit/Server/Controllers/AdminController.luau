@@ -9,6 +9,7 @@ local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local OverheadDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.OverheadDomain)
 local PermissionDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.PermissionDomain)
 local TitleStyleDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.TitleStyleDomain)
+local TitleImageDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.TitleImageDomain)
 local TitleFontUtil = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.TitleFontUtil)
 local TitleColorPreset = require(ReplicatedStorage.Hazastudio_ClubKit.OverheadEffects.TitleColorPreset)
 local AnimationModes = TitleColorPreset.AnimationModes
@@ -52,6 +53,9 @@ local function createAdminController(deps: {
 	membershipCommandService: IMembershipCommandService,
 	playerLookupService: IPlayerLookupService,
 	profileMenuSync: { syncPlayer: ((Player) -> ())? }?,
+	-- Optional: absent on a place that has not installed the image-title work, in
+	-- which case the "Or select" list simply comes back empty.
+	titleImageRegistry: any?,
 })
 	local repo = deps.repo
 	local overheadService = deps.overheadService
@@ -62,6 +66,7 @@ local function createAdminController(deps: {
 	local membershipCommandService = deps.membershipCommandService
 	local playerLookupService = deps.playerLookupService
 	local profileMenuSync = deps.profileMenuSync
+	local titleImageRegistry = deps.titleImageRegistry
 
 	-- Live-refresh the target's profile menu (if online) after an overhead-backed
 	-- profile field (specialTitle) changes, so an open profile panel updates
@@ -228,6 +233,10 @@ local function createAdminController(deps: {
 		local updatedResult = repo:update(target.UserId, function(current)
 			return OverheadDomain.mergeStored(current, {
 				specialTitle = filteredTitle,
+				-- Marks the title as an admin grant: its holder keeps edit rights
+				-- whatever their level, and their one free title stays unspent
+				-- (TitleAccessDomain).
+				specialTitleFromAdmin = true,
 				specialTitlePreset = if usePreset then presetMode else OverheadDomain.NIL,
 				specialTitleSize = titleSize,
 				specialTitleFont = titleFont,
@@ -240,7 +249,11 @@ local function createAdminController(deps: {
 					local base = type(current.publicOverheadLayerVisible) == "table"
 							and table.clone(current.publicOverheadLayerVisible)
 						or {}
-					base.SpecialTitle = true
+					-- ...unless the buyer switched the layer off for the whole venue. An
+					-- admin grant must not punch through a hard-off.
+					if not OverheadDomain.isLayerDisabled("SpecialTitle") then
+						base.SpecialTitle = true
+					end
 					return base
 				end)(),
 			})
@@ -265,6 +278,101 @@ local function createAdminController(deps: {
 			family = if sanitizedStyle then sanitizedStyle.family else nil,
 		})
 	end)
+	-- ============================================================
+	-- Remote: AdminSetTitleImage
+	-- Payload: { targetUsername, imageId, requestId }
+	-- An empty imageId clears the image title. Only the V5 overhead template has a
+	-- row for it; on older templates the value is stored but nothing renders it.
+	-- ============================================================
+	local SetTitleImageRemote = getOrCreateRemote(Config.Admin.REMOTE_SET_TITLE_IMAGE)
+	local processedSetTitleImage: { [string]: number } = {}
+	SetTitleImageRemote.OnServerEvent:Connect(function(player: Player, data: any)
+		if not Validator.checkSize(data) then
+			return
+		end
+		if type(data) ~= "table" or type(data.targetUsername) ~= "string" or type(data.requestId) ~= "string" then
+			return
+		end
+		if not isAdmin(player) then
+			notify.player(player, Config.Admin.MSG_GIFT_NO_PERM, "ERROR")
+			return
+		end
+		if not checkRate(player) then
+			notify.player(player, Config.Admin.MSG_GIFT_RATE_LIMIT, "WARNING")
+			return
+		end
+
+		-- "" means remove; anything else must normalize to a usable asset id, so a
+		-- typo is rejected here rather than stored and rendered as a broken image.
+		local rawImage = if type(data.imageId) == "string" then data.imageId else ""
+		local clearing = rawImage:match("^%s*$") ~= nil
+		local imageId = if clearing then "" else TitleImageDomain.normalizeAssetId(rawImage)
+		if not clearing and imageId == "" then
+			notify.player(player, Config.TitleImage.MSG_INVALID_ID, "ERROR")
+			return
+		end
+
+		local lookupResult = playerLookupService:resolve(data.targetUsername :: string)
+		if not lookupResult.ok then
+			notify.player(player, Config.Admin.MSG_TITLE_NOT_FOUND:format(data.targetUsername), "ERROR")
+			return
+		end
+		local target = lookupResult.value
+
+		local updatedResult = repo:update(target.UserId, function(current)
+			return OverheadDomain.mergeStored(current, {
+				specialTitleImage = if clearing then OverheadDomain.NIL else imageId,
+			})
+		end)
+		if not updatedResult.ok then
+			notify.player(player, Config.Admin.MSG_TITLE_SAVE_FAILED, "ERROR")
+			return
+		end
+		if not rememberRequest(processedSetTitleImage, data.requestId :: string) then
+			return
+		end
+
+		-- Remember it only after it is actually assigned, so the "Or select" list
+		-- never fills up with ids that failed to save.
+		if not clearing and titleImageRegistry then
+			local remembered = titleImageRegistry:remember(imageId)
+			if not remembered.ok then
+				log:warn("Image assigned but registry write failed", { assetId = imageId, error = remembered.error })
+			end
+		end
+
+		-- Bust the S1 build cache before refreshing. Without this the inputs
+		-- fingerprint can compare equal (it is only as good as the cache entry it
+		-- reads) and the refresh is short-circuited, so the overhead keeps the old
+		-- image. Same reason the couple flow calls this.
+		if type(overheadController.invalidateBuildCache) == "function" then
+			overheadController:invalidateBuildCache(target.UserId)
+		end
+		overheadController:refreshPlayer(target)
+		refreshProfileMenu(target.UserId)
+		notify.player(player, Config.Admin.MSG_TITLE_SUCCESS:format(target.DisplayName), "SUCCESS")
+		log:info("Set title image", { by = player.Name, target = target.Name, image = if clearing then "(cleared)" else imageId })
+	end)
+
+	-- ============================================================
+	-- Remote: AdminTitleImageList — client asks, server replies to that client.
+	-- ============================================================
+	local TitleImageListRemote = getOrCreateRemote(Config.Admin.REMOTE_TITLE_IMAGE_LIST)
+	TitleImageListRemote.OnServerEvent:Connect(function(player: Player)
+		if not isAdmin(player) then
+			return
+		end
+		if not checkRate(player) then
+			return
+		end
+		if not titleImageRegistry then
+			TitleImageListRemote:FireClient(player, {})
+			return
+		end
+		local listed = titleImageRegistry:list()
+		TitleImageListRemote:FireClient(player, if listed.ok then listed.value else {})
+	end)
+
 	-- ============================================================
 	-- Remote: AdminSendGiftcard
 	-- Payload: { targetUsername, tier, requestId }
@@ -403,6 +511,9 @@ local function createAdminController(deps: {
 		local updatedResult = repo:update(target.UserId, function(current)
 			return OverheadDomain.mergeStored(current, {
 				specialTitle = OverheadDomain.NIL,
+				-- The grant is gone with the title. Deliberately does NOT touch
+				-- specialTitleFreeUsed: an admin reset is not a refund.
+				specialTitleFromAdmin = OverheadDomain.NIL,
 				specialTitlePreset = OverheadDomain.NIL,
 				specialTitleSize = OverheadDomain.NIL,
 				specialTitleFont = OverheadDomain.NIL,

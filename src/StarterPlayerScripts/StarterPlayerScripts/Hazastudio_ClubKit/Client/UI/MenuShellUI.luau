@@ -14,6 +14,8 @@ local MotionPresets = require(script.Parent.Parent.Utils.MotionPresets)
 local PressFeedback = require(script.Parent.Parent.Utils.PressFeedback)
 local MenuGuiRefs = require(script.Parent.MenuGuiRefs)
 local ProfileTabBinder = require(script.Parent.ProfileTabBinder)
+local CustomTitleUI = require(script.Parent.CustomTitleUI)
+local FreeTitleEventUI = require(script.Parent.FreeTitleEventUI)
 local SettingsTabBinder = require(script.Parent.SettingsTabBinder)
 
 type SettingsPayload = Types.SettingsPayload
@@ -286,8 +288,54 @@ function MenuShellUI.new(gui: ScreenGui)
 	self:_wireTabs()
 	self:_wireModal()
 	self:_wireProfile()
+	self:_wireFreeTitleEvent()
 
 	return self
+end
+
+-- The event card is a second door to the custom title panel, so the shell owns it:
+-- it already holds that panel and the payload the panel opens with. Resolved at
+-- boot rather than lazily, because the card is meant to be on screen.
+function MenuShellUI:_wireFreeTitleEvent()
+	if Config.FeatureFlags.FreeTitleEventEnabled ~= true then
+		return
+	end
+	if Config.FeatureFlags.SelfCustomTitleEnabled ~= true then
+		warn("[MenuShellUI] FreeTitleEvent is on but SelfCustomTitle is off — the card has nothing to open")
+		return
+	end
+	local playerGui = self._gui.Parent
+	if not playerGui then
+		return
+	end
+
+	local card = FreeTitleEventUI.tryCreate(playerGui)
+	if not card then
+		warn("[MenuShellUI] FreeTitleEvent is on but " .. Config.FreeTitleEvent.FRAME_NAME .. " is missing — no card")
+		return
+	end
+	card:bindOpen(function()
+		self:openCustomTitlePanel()
+	end)
+	self._freeTitleCard = card
+	card:playEntrance()
+end
+
+-- Open the custom title panel from outside the profile menu (the event card).
+-- Routed through the same request the profile row builds, so the level gate, the
+-- quota message and the fallback to the text-only modal all behave identically.
+function MenuShellUI:openCustomTitlePanel(): boolean
+	local payload = self._currentProfilePayload
+	if not payload then
+		return false
+	end
+	self:_showProfileFieldModal({
+		field = "specialTitle",
+		title = "Title",
+		currentValue = payload.specialTitle,
+		canEdit = payload.canEditSpecialTitle == true,
+	} :: any)
+	return true
 end
 
 function MenuShellUI:_wireTabs()
@@ -418,7 +466,56 @@ function MenuShellUI:_wireModal()
 	end
 end
 
+-- The self-service panel lives in its own buyer-installed ScreenGui, so it is
+-- resolved lazily and only once: a place running the flag without the GUI keeps
+-- the old modal instead of getting a button that does nothing.
+function MenuShellUI:_getCustomTitleUI(): any?
+	if self._customTitleResolved then
+		return self._customTitle
+	end
+	self._customTitleResolved = true
+
+	if Config.FeatureFlags.SelfCustomTitleEnabled ~= true then
+		return nil
+	end
+	local playerGui = self._gui.Parent
+	if not playerGui then
+		return nil
+	end
+
+	local panel = CustomTitleUI.tryCreate(playerGui, self._anim)
+	if not panel then
+		warn("[MenuShellUI] SelfCustomTitle is on but " .. Config.CustomTitle.GUI_NAME .. " is missing — using the text-only modal")
+		return nil
+	end
+
+	panel:bindSubmit(function(form)
+		if self._profileChangeCallback then
+			self._profileChangeCallback("customTitle", form)
+		end
+	end)
+	panel:bindRemove(function()
+		if self._profileChangeCallback then
+			self._profileChangeCallback("customTitleRemove", true)
+		end
+	end)
+
+	self._customTitle = panel
+	return panel
+end
+
 function MenuShellUI:_showProfileFieldModal(request: ProfileTabBinder.ProfileFieldModalRequest)
+	if request.field == "specialTitle" then
+		local payload = self._currentProfilePayload
+		if payload and (payload :: any).customTitleEnabled == true then
+			local panel = self:_getCustomTitleUI()
+			if panel then
+				panel:open(payload)
+				return
+			end
+		end
+	end
+
 	local modal = self._refs.universalModal
 	local input = self._refs.modalInput
 	if not modal or not input then
@@ -730,6 +827,19 @@ function MenuShellUI:patchProfileFromPayload(payload: ProfileMenuPayload, overhe
 		self._currentOverheadPayload = overhead
 	end
 	self._profile:patchProfile(payload, self._currentOverheadPayload)
+	-- The server echoes a fresh payload after every accepted or rejected update —
+	-- and after admin actions and couple events too — so an open panel repaints its
+	-- quota line and locked state from it. Deliberately *not* the form: the player
+	-- may be mid-edit, and reloading their text and picks under them is exactly the
+	-- "it snapped back to the old title" bug.
+	if self._customTitle and self._customTitle:isOpen() then
+		self._customTitle:applyPayload(payload)
+	end
+	-- The event card follows the same payload: the server decides who qualifies, the
+	-- card only paints locked or open from that verdict.
+	if self._freeTitleCard then
+		self._freeTitleCard:applyState(payload)
+	end
 end
 
 function MenuShellUI:setProfileData(payload: ProfileMenuPayload, options: { forceRebuild: boolean? }?)

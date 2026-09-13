@@ -85,6 +85,7 @@ return {
 	GiftPendingRepository = require(Server.Repositories.GiftPendingRepository),
 	ManualBagibagiRepository = require(Server.Repositories.ManualBagibagiRepository),
 	StickerRepository = require(Server.Repositories.StickerRepository),
+	TitleImageRegistryRepository = require(Server.Repositories.TitleImageRegistryRepository),
 	SettingsRepository = require(Server.Repositories.SettingsRepository),
 	FavoritesRepository = require(Server.Repositories.FavoritesRepository),
 	ProfileLoader = require(Server.Repositories.ProfileLoader),

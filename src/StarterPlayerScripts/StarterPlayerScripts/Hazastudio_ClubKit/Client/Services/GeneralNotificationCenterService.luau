@@ -7,6 +7,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local MotionPresets = require(script.Parent.Parent.Utils.MotionPresets)
+local NotificationCenterGui = require(script.Parent.Parent.Utils.NotificationCenterGui)
 
 local log = Logger.new("GeneralNotificationCenterService")
 
@@ -35,6 +36,8 @@ type ResolvedPayload = {
 
 type Refs = {
 	rootGui: ScreenGui,
+	-- V2: icon shows whenever the toast has one; the stroke keeps the designer's colour.
+	isV2: boolean,
 	panel: Frame,
 	wrapper: Frame,
 	icon: ImageLabel,
@@ -55,7 +58,6 @@ type Refs = {
 	baseDescriptionColor: Color3,
 }
 
-local ROOT_GUI_NAME = "99-NotificationCenter"
 local PANEL_NAME = "GeneralNotificationCenter"
 local WRAPPER_NAME = "NotificationWrapper"
 local ICON_NAME = "NotificationIcon"
@@ -231,10 +233,11 @@ local function resolveRefsOnce(): Refs?
 		return nil
 	end
 
-	local rootGui = playerGui:FindFirstChild(ROOT_GUI_NAME)
-	if not rootGui or not rootGui:IsA("ScreenGui") then
+	local resolved = NotificationCenterGui.find(playerGui)
+	if not resolved then
 		return nil
 	end
+	local rootGui = resolved.gui
 
 	local panel = rootGui:FindFirstChild(PANEL_NAME)
 	if not panel or not panel:IsA("Frame") then
@@ -264,6 +267,7 @@ local function resolveRefsOnce(): Refs?
 
 	local refs: Refs = {
 		rootGui = rootGui,
+		isV2 = resolved.isV2,
 		panel = panel,
 		wrapper = wrapper,
 		icon = icon,
@@ -449,7 +453,9 @@ local function applyContent(refs: Refs, payload: ResolvedPayload)
 	refs.title.TextColor3 = refs.baseTitleColor
 	refs.description.TextColor3 = refs.baseDescriptionColor
 
-	if refs.stroke then
+	if refs.isV2 then
+		refs.icon.Visible = refs.icon.Image ~= ""
+	elseif refs.stroke then
 		refs.stroke.Color = accent
 	end
 end

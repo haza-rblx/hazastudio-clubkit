@@ -19,7 +19,12 @@ function CoupleDomain.applyCouple(
 ): OverheadStoredData
 	local OverheadDomain = require(script.Parent.OverheadDomain)
 	local publicOverheadLayerVisible = table.clone(stored.publicOverheadLayerVisible or {})
-	publicOverheadLayerVisible.CoupleName = true
+	-- Coupling reveals the CoupleName row — unless the buyer switched that layer off for the
+	-- whole venue. Storing a true there would be dead data: the payload build and the
+	-- renderer both force it false again, so hard-off keeps storage honest too.
+	if not OverheadDomain.isLayerDisabled("CoupleName") then
+		publicOverheadLayerVisible.CoupleName = true
+	end
 
 	return OverheadDomain.mergeStored(stored, {
 		couplePartner = partnerName,

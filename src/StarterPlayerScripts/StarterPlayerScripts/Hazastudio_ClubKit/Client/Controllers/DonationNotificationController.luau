@@ -21,6 +21,7 @@ local ClientThumbnailCache = require(script.Parent.Parent.Utils.ClientThumbnailC
 local WorldEffectDispatch = require(script.Parent.Parent.Utils.WorldEffectDispatch)
 local DonationVfxClientGate = require(script.Parent.Parent.Utils.DonationVfxClientGate)
 local GroupMotion = require(script.Parent.Parent.Utils.GroupMotion)
+local NotificationCenterGui = require(script.Parent.Parent.Utils.NotificationCenterGui)
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local OverheadController = require(script.Parent.OverheadController)
 local GenericBroadcastLayoutBridge = require(script.Parent.Parent.Services.GenericBroadcastLayoutBridge)
@@ -42,6 +43,8 @@ type TemplateRefs = {
 
 type GuiRefs = {
 	rootGui: ScreenGui,
+	-- V2 notification center: keep the template's TextSize, rank-prefixed total line.
+	isV2: boolean,
 	backgroundWrapper: GuiObject?,
 	rotatingBackground: ImageLabel?,
 	donationWrapper: Frame,
@@ -182,6 +185,92 @@ local function formatTotalDonation(amount: number?, source: string?): string
 		return "Total : " .. DonationAmountFormat.formatGrouped(amount) .. " Robux"
 	end
 	return "Total : " .. DonationAmountFormat.formatCash(amount)
+end
+
+-- V2 total line: "Top #3 Robux | Total : 32.000" while the donor sits in the top 10,
+-- otherwise the plain V1 wording. The Robux unit is dropped once the prefix names it.
+local function formatTotalLineV2(amount: number?, source: string?, rank: number?): string
+	if type(rank) ~= "number" or rank < 1 then
+		return formatTotalDonation(amount, source)
+	end
+	local isRobux = source == "robux"
+	local prefix = ("Top #%d %s | "):format(math.floor(rank), if isRobux then "Robux" else getExternalProviderName())
+	if type(amount) ~= "number" or amount <= 0 then
+		return prefix .. DEFAULT_TOTAL_DONATION
+	end
+	if isRobux then
+		return prefix .. "Total : " .. DonationAmountFormat.formatGrouped(amount)
+	end
+	return prefix .. "Total : " .. DonationAmountFormat.formatCash(amount)
+end
+
+-- V2: the designer's TextSize is the ceiling; step down only until no single word of the
+-- amount is wider than the value column. The label still wraps at spaces as designed
+-- ("Rp" over "1.500.000"); this only stops a 7-digit number breaking mid-digits.
+-- Call only while the panel is visible — a hidden list-layout child reports AbsoluteSize 0.
+local AMOUNT_MIN_TEXT_SIZE = 16
+-- Rendering under UIScale rounds glyph sizes: measured in PARKLAB, a word 113 of 116 unscaled
+-- px wide stayed whole and one 114 px wide broke. Keep ~3% headroom.
+local AMOUNT_FIT_HEADROOM = 0.97
+local DESIGN_TEXT_SIZE_ATTRIBUTE = "NotificationCenterDesignTextSize"
+local function fitAmountToWidth(label: TextLabel)
+	local ceiling = label:GetAttribute(DESIGN_TEXT_SIZE_ATTRIBUTE)
+	if type(ceiling) ~= "number" then
+		ceiling = label.TextSize
+		label:SetAttribute(DESIGN_TEXT_SIZE_ATTRIBUTE, ceiling)
+	end
+	-- AbsoluteSize carries every UIScale up to and including the ScreenGui's own;
+	-- text bounds are unscaled.
+	local scale = 1
+	local node: Instance? = label
+	while node do
+		local uiScale = node:FindFirstChildOfClass("UIScale")
+		if uiScale then
+			scale *= uiScale.Scale
+		end
+		if node:IsA("LayerCollector") then
+			break
+		end
+		node = node.Parent
+	end
+	local available = label.AbsoluteSize.X / math.max(scale, 0.01) * AMOUNT_FIT_HEADROOM
+	local size = ceiling :: number
+	if available > 0 then
+		local params = Instance.new("GetTextBoundsParams")
+		params.Font = label.FontFace
+		params.Width = math.huge
+		local words = string.split(label.ContentText, " ")
+		local function widestWord(textSize: number): number?
+			params.Size = textSize
+			local widest = 0
+			for _, word in ipairs(words) do
+				if word ~= "" then
+					params.Text = word
+					local ok, bounds = pcall(function()
+						return TextService:GetTextBoundsAsync(params)
+					end)
+					if not ok then
+						return nil
+					end
+					widest = math.max(widest, bounds.X)
+				end
+			end
+			return widest
+		end
+		while size > AMOUNT_MIN_TEXT_SIZE do
+			local widest = widestWord(size)
+			if widest == nil or widest <= available then
+				break
+			end
+			size -= 1
+		end
+	end
+	label.TextSize = size
+end
+
+-- Donor text lands in RichText labels; escape markup so "<" or "&" render as typed.
+local function escapeRichText(text: string): string
+	return (string.gsub(text, "[&<>]", { ["&"] = "&amp;", ["<"] = "&lt;", [">"] = "&gt;" }))
 end
 local function normalizeMessage(message: string?): string?
 	if type(message) ~= "string" then
@@ -796,18 +885,16 @@ local function resolveTemplateRefs(panel: CanvasGroup, isSaweria: boolean): Temp
 end
 
 local function resolveGuiRefs(playerGui: PlayerGui): GuiRefs?
-	local rootGui: Instance? = playerGui:FindFirstChild("99-NotificationCenter")
-	if not rootGui then
-		rootGui = playerGui:WaitForChild("99-NotificationCenter", 10)
-	end
-	if not rootGui or not rootGui:IsA("ScreenGui") then
-		log:warn("99-NotificationCenter not found in PlayerGui")
+	local resolved = NotificationCenterGui.find(playerGui) or NotificationCenterGui.resolve(10)
+	if not resolved then
+		log:warn("Notification center GUI not found in PlayerGui")
 		return nil
 	end
+	local rootGui = resolved.gui
 
 	local donationWrapper = rootGui:FindFirstChild("DonationWrapper")
 	if not donationWrapper or not donationWrapper:IsA("Frame") then
-		log:warn("DonationWrapper not found in 99-NotificationCenter")
+		log:warn("DonationWrapper not found in " .. rootGui.Name)
 		return nil
 	end
 
@@ -831,7 +918,8 @@ local function resolveGuiRefs(playerGui: PlayerGui): GuiRefs?
 
 	-- Default active template = Saweria
 	return {
-		rootGui = rootGui :: ScreenGui,
+		rootGui = rootGui,
+		isV2 = resolved.isV2,
 		backgroundWrapper = bgWrapper,
 		rotatingBackground = rotBg,
 		donationWrapper = donationWrapper :: Frame,
@@ -922,16 +1010,22 @@ local function populateGui(refs: GuiRefs, payload: DonationNotifPayload)
 		refs.donationValue.Text = if isRobux
 			then DonationAmountFormat.formatGrouped(payload.amount)
 			else DonationAmountFormat.formatCash(payload.amount)
-		refs.donationValue.TextSize = if payload.amount >= 1_000_000
-			then 31
-			elseif payload.amount >= 100_000 then 38
-			else 40
+		-- V2 keeps the designer's TextSize; V1 steps it down for long amounts.
+		if not refs.isV2 then
+			refs.donationValue.TextSize = if payload.amount >= 1_000_000
+				then 31
+				elseif payload.amount >= 100_000 then 38
+				else 40
+		end
 	end
 	if refs.donationMessage then
-		refs.donationMessage.Text = msgText and ('"' .. msgText .. '"') or EMPTY_MESSAGE_TEXT
+		local shown = if msgText and refs.donationMessage.RichText then escapeRichText(msgText) else msgText
+		refs.donationMessage.Text = shown and ('"' .. shown .. '"') or EMPTY_MESSAGE_TEXT
 	end
 	if refs.senderTotalDonations then
-		refs.senderTotalDonations.Text = formatTotalDonation(payload.totalDonationAmount, payload.source)
+		refs.senderTotalDonations.Text = if refs.isV2
+			then formatTotalLineV2(payload.totalDonationAmount, payload.source, payload.newRank)
+			else formatTotalDonation(payload.totalDonationAmount, payload.source)
 	end
 	if refs.totalDonationsWrapper then
 		refs.totalDonationsWrapper.Visible = true
@@ -1907,6 +2001,16 @@ local function init(_deps: {}?)
 		refs.panel.Visible = true
 		refs.donationWrapper.Visible = true
 		setVisible(refs.backgroundWrapper, true) -- wrapper visible but bg still transparent
+		if refs.isV2 and refs.donationValue then
+			local amountLabel = refs.donationValue
+			-- Next frame: the panel has just been laid out, and it is still fully transparent.
+			task.spawn(function()
+				RunService.Heartbeat:Wait()
+				if amountLabel.Parent then
+					fitAmountToWidth(amountLabel)
+				end
+			end)
+		end
 		-- Phase 1: slide in + pop scale (spring overshoot)
 		-- Panel slides down to restingPos + slight overshoot
 		local targetPhase1 = restingPosition + UDim2.fromOffset(0, ENTER_OVERSHOOT_BELOW)

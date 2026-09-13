@@ -6,9 +6,9 @@ local ClubKitManifest = {}
 ClubKitManifest.PACKAGE_NAME = "HazastudioClubKit_Package"
 ClubKitManifest.MANIFEST_NAME = "_ClubKitManifest"
 ClubKitManifest.PRODUCT_ID = "hazastudioclubkit"
-ClubKitManifest.KIT_VERSION = "2.11.0"
+ClubKitManifest.KIT_VERSION = "2.12.0"
 -- Soft-update version for the Studio dock (may diverge from KIT_VERSION for plugin-only fixes).
-ClubKitManifest.PLUGIN_VERSION = "2.11.0"
+ClubKitManifest.PLUGIN_VERSION = "2.12.0"
 
 -- Soft-update: fetch these Luau modules from GitHub tags (exclude bootstrap).
 ClubKitManifest.PLUGIN_SOURCE_PREFIX = "tools/ClubKitPackagerPlugin/plugin/"
@@ -31,11 +31,14 @@ ClubKitManifest.OPTIONAL_ROOTS = {
 }
 
 ClubKitManifest.STARTER_GUI_EXACT = {
+	"00-LoadingScreen",
 	"01-CoupleSystemGUI",
 	"02-ShopGUI",
 	"03-GiftSystemGUI",
-	"04-AdminPanelv2",
 	"04-AdminPanel",
+	"04-AdminPanelv2",
+	"04-AdminPanelv3",
+	"04-AdminHub",
 	"05-StreakGUI",
 	"06-MusicPlayerGUI",
 	"07-MenuGUI",
@@ -47,10 +50,16 @@ ClubKitManifest.STARTER_GUI_EXACT = {
 	"13-PaidBroadcast",
 	"14-BackpackGUI",
 	"15-TopMenuGUI",
+	"16-JoinCommunPrompt",
 	"99-NotificationCenter",
+	"99-NotificationCenterV2",
+	"1000-01-CT-ADDON",
+	"AvatarContextMenu",
 	"CommandLibraryGUI",
 	"HotbarGUI",
 	"IconGroup",
+	"MobileFreecam",
+	"SignGui",
 }
 
 -- Workspace: board + poster + donation display roots.
@@ -117,6 +126,45 @@ ClubKitManifest.FULL_SERVICE_PACK = {
 ClubKitManifest.WORKSPACE_SKIP = {
 	"Camera",
 	"Terrain",
+}
+
+-- Buyer-place pack (PackagerCore.collectFromBuyerPlace). FULL_SERVICE_PACK is right for the
+-- template place, where everything present IS the kit; a buyer place is full of systems the kit
+-- does not own (ETH*, Cenz*, Paanz, admin loaders, migration scratch, and the venue map itself),
+-- and shipping one of those to another buyer is a licensing problem, not a cosmetic one. So this
+-- mode is an **allowlist**: anything not named here is left behind by construction, and a new
+-- non-kit system added to a venue tomorrow cannot leak into a pack built the day after.
+--
+-- StarterGui uses STARTER_GUI_EXACT. Workspace is never taken wholesale — only the board folder
+-- and the donation/leaderboard roots (WORKSPACE_BOARD_FOLDER / WORKSPACE_EXACT / WORKSPACE_MULTI).
+-- Lighting is skipped entirely: it carries the venue's own look (Sky, Atmosphere, colour grading),
+-- which is place data, not kit data.
+ClubKitManifest.PLACE_PACK_ALLOW = {
+	ReplicatedFirst = { "Hazastudio_ClubKit" },
+	ReplicatedStorage = {
+		"Hazastudio_ClubKit",
+		"Icon",
+		"TopbarPlus",
+		"WorldEffects",
+		"Emotes",
+		"Carry",
+		"OverheadGUIMainTemplateV4",
+		"OverheadGUIMainTemplateV5",
+	},
+	ServerScriptService = { "Hazastudio_ClubKit" },
+	ServerStorage = { "DonationEffects", "DonationSounds", "Tools" },
+	StarterPlayerScripts = { "Hazastudio_ClubKit" },
+}
+
+-- Services a buyer-place pack never reads at all.
+ClubKitManifest.PLACE_PACK_SKIP_SERVICES = { "Lighting" }
+
+-- In a buyer-place pack the buyer's own `ClubKitConfig` and `Secrets` must never ship: they carry
+-- that venue's group id, product ids, donation URL and branding. The pack carries the kit template
+-- instead, fetched from the repo at build time (see PackagerCore.collectFromBuyerPlace).
+ClubKitManifest.PLACE_PACK_TEMPLATE_SOURCES = {
+	config = "src/ReplicatedStorage/Hazastudio_ClubKitConfig/ClubKitConfig.luau",
+	secrets = "src/ServerScriptService/Hazastudio_ClubKitSecrets/Secrets.luau",
 }
 
 ClubKitManifest.SYNC_BHMS_ADDON_PACKAGE_NAME = "HazastudioClubKit_SyncBhmsAddon"

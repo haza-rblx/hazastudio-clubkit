@@ -5,9 +5,11 @@ local Config = require(script.Parent.Parent.Constants.Config)
 local RolesDomain = require(script.Parent.RolesDomain)
 local PermissionDomain = require(script.Parent.PermissionDomain)
 local TitleStyleDomain = require(script.Parent.TitleStyleDomain)
+local TitleImageDomain = require(script.Parent.TitleImageDomain)
 local TitleFontUtil = require(script.Parent.Parent.Utils.TitleFontUtil)
 local Types = require(script.Parent.Types)
 local LevelDomain = require(script.Parent.LevelDomain)
+local OverheadLayerPolicy = require(script.Parent.OverheadLayerPolicy)
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TitleColorPreset = require(ReplicatedStorage.Hazastudio_ClubKit.OverheadEffects.TitleColorPreset)
@@ -95,6 +97,10 @@ end)()
 local GIFTER_ROLES: { [string]: true } = buildRoleFlagMap("canGift")
 local GIFTABLE_ROLES: { [string]: true } = buildRoleFlagMap("giftable")
 
+-- Kit fallbacks. The buyer's own defaults live in Config.Overhead and are read at
+-- call time by defaultLayerVisible/defaultBadgeVisible below — reading them here,
+-- at module load, would freeze the kit values before ConfigBootstrap has projected
+-- the buyer's (the same trap Config.Template.TEMPLATE_NAME hit).
 local DEFAULT_PUBLIC_LAYER_VISIBLE: { [string]: boolean } = {
 	SpecialTitle = true,
 	BadgeGroup = true,
@@ -120,6 +126,67 @@ local DEFAULT_PUBLIC_BADGE_VISIBLE: { [string]: boolean } = {
 	LikeCounter = true,
 	Community = true,
 }
+
+-- Overlay the buyer's configured defaults onto the kit's, for known keys only: a
+-- typo in their config can flip a real layer but can never invent one.
+local function resolveDefaults(
+	fallback: { [string]: boolean },
+	configured: any
+): { [string]: boolean }
+	local result = table.clone(fallback)
+	if type(configured) ~= "table" then
+		return result
+	end
+	for key in pairs(fallback) do
+		if type(configured[key]) == "boolean" then
+			result[key] = configured[key]
+		end
+	end
+	return result
+end
+
+local function defaultLayerVisible(): { [string]: boolean }
+	local overhead = Config.Overhead
+	return resolveDefaults(DEFAULT_PUBLIC_LAYER_VISIBLE, overhead and overhead.DEFAULT_LAYER_VISIBLE)
+end
+
+local function defaultBadgeVisible(): { [string]: boolean }
+	local overhead = Config.Overhead
+	return resolveDefaults(DEFAULT_PUBLIC_BADGE_VISIBLE, overhead and overhead.DEFAULT_BADGE_VISIBLE)
+end
+
+-- Layers / badges the buyer switched off for the whole venue. Read at call time for the
+-- same reason the defaults above are: ConfigBootstrap projects after this module loads.
+local function disabledLayers(): { [string]: true }
+	local overhead = Config.Overhead
+	return (overhead and overhead.DISABLED_LAYERS) or {}
+end
+
+local function disabledBadges(): { [string]: true }
+	local overhead = Config.Overhead
+	return (overhead and overhead.DISABLED_BADGES) or {}
+end
+
+--- A hard-off layer/badge is off for everyone, so every kit path that would otherwise
+--- force one visible (an admin granting a title, a couple forming) asks here first.
+function OverheadDomain.isLayerDisabled(key: string): boolean
+	return OverheadLayerPolicy.isDisabled(disabledLayers(), key)
+end
+
+function OverheadDomain.isBadgeDisabled(key: string): boolean
+	return OverheadLayerPolicy.isDisabled(disabledBadges(), key)
+end
+
+--- Force every hard-off key false in a wearer-side visibility map. Used when building a
+--- payload (so a stored true from before the config change never renders) and before
+--- storing what a client asked for (so a crafted remote cannot bank a true either).
+function OverheadDomain.enforceDisabledLayers(map: { [string]: boolean }?): { [string]: boolean }
+	return OverheadLayerPolicy.enforce(map, disabledLayers())
+end
+
+function OverheadDomain.enforceDisabledBadges(map: { [string]: boolean }?): { [string]: boolean }
+	return OverheadLayerPolicy.enforce(map, disabledBadges())
+end
 
 local function sanitizeBoolMap(raw: any, defaults: { [string]: boolean }): { [string]: boolean }
 	local result = table.clone(defaults)
@@ -407,7 +474,11 @@ end
 function OverheadDomain.getHighestGiftedMembership(stored: OverheadStoredData): MembershipTier?
 	local highest: MembershipTier? = nil
 	for _, entry in ipairs(OverheadDomain.normalizeGiftedMemberships(stored)) do
-		highest = OverheadDomain.getHigherMembership(highest, entry.tier)
+		-- Skip per entry, not on the result: someone gifted both Tier2 and a
+		-- since-disabled Tier3 must still come back as Tier2, not as nothing.
+		if OverheadDomain.isPaidMembershipTier(entry.tier) then
+			highest = OverheadDomain.getHigherMembership(highest, entry.tier)
+		end
 	end
 	return highest
 end
@@ -415,17 +486,31 @@ end
 function OverheadDomain.getHighestStoredMembership(stored: OverheadStoredData): MembershipTier?
 	local highest: MembershipTier? = nil
 
-	local ownedMembership = OverheadDomain.normalizeMembershipTier(stored.ownedMembership)
+	-- A tier switched off via Membership.TierN.Enabled must stop surfacing even for
+	-- players who already hold it (bought the gamepass, or were gifted it before the
+	-- buyer turned the tier off) — otherwise it lives on in the leaderstats Rank
+	-- column, the chat tag and the overhead badge. Filtered at RESOLVE time, never
+	-- at storage: the entry stays in the DataStore, so re-enabling the tier brings
+	-- the membership straight back instead of silently destroying what people paid for.
+	local function usable(tier: MembershipTier?): MembershipTier?
+		if tier and OverheadDomain.isPaidMembershipTier(tier) then
+			return tier
+		end
+		return nil
+	end
+
+	local ownedMembership = usable(OverheadDomain.normalizeMembershipTier(stored.ownedMembership))
 	if ownedMembership then
 		highest = OverheadDomain.getHigherMembership(highest, ownedMembership)
 	end
 
 	-- Legacy compatibility for older data and current shop flow.
-	local membershipBadge = OverheadDomain.normalizeMembershipTier(stored.membershipBadge)
+	local membershipBadge = usable(OverheadDomain.normalizeMembershipTier(stored.membershipBadge))
 	if membershipBadge then
 		highest = OverheadDomain.getHigherMembership(highest, membershipBadge)
 	end
 
+	-- getHighestGiftedMembership already filters per entry.
 	return OverheadDomain.getHigherMembership(highest, OverheadDomain.getHighestGiftedMembership(stored))
 end
 
@@ -579,6 +664,13 @@ function OverheadDomain.defaultStoredData(): OverheadStoredData
 		specialTitleFont = nil,
 		specialTitleStyle = nil,
 		specialTitlePosition = Config.Admin.DEFAULT_SPECIAL_TITLE_POSITION or "Top",
+		specialTitleChanges = nil,
+		-- Free-first-title bookkeeping. `FromAdmin` is nil on a legacy record and
+		-- TitleAccessDomain reads that as an admin grant, so players who had a title
+		-- before self-service existed keep their edit rights.
+		specialTitleFreeUsed = nil,
+		specialTitleFromAdmin = nil,
+		specialTitleImage = nil,
 		specialRank = nil,
 		specialSubRole = nil,
 		giftedRole = nil,
@@ -591,8 +683,8 @@ function OverheadDomain.defaultStoredData(): OverheadStoredData
 		couplePartner = nil,
 		couplePartnerId = nil,
 		showCoupleName = true,
-		publicOverheadLayerVisible = table.clone(DEFAULT_PUBLIC_LAYER_VISIBLE),
-		publicOverheadBadgeVisible = table.clone(DEFAULT_PUBLIC_BADGE_VISIBLE),
+		publicOverheadLayerVisible = defaultLayerVisible(),
+		publicOverheadBadgeVisible = defaultBadgeVisible(),
 		topDonateRank = nil,
 		topDonateText = nil,
 		topSpenderRank = nil,
@@ -620,6 +712,10 @@ function OverheadDomain.applyHardcoded(stored: OverheadStoredData, userId: numbe
 		specialTitleFont = stored.specialTitleFont,
 		specialTitleStyle = stored.specialTitleStyle,
 		specialTitlePosition = stored.specialTitlePosition,
+		specialTitleChanges = stored.specialTitleChanges,
+		specialTitleFreeUsed = stored.specialTitleFreeUsed,
+		specialTitleFromAdmin = stored.specialTitleFromAdmin,
+		specialTitleImage = stored.specialTitleImage,
 		specialRank = hardcoded.specialRank or stored.specialRank,
 		giftedRole = stored.giftedRole,
 		membershipBadge = stored.membershipBadge,
@@ -631,8 +727,8 @@ function OverheadDomain.applyHardcoded(stored: OverheadStoredData, userId: numbe
 		couplePartner = stored.couplePartner,
 		couplePartnerId = stored.couplePartnerId,
 		showCoupleName = stored.showCoupleName,
-		publicOverheadLayerVisible = sanitizeBoolMap(stored.publicOverheadLayerVisible, DEFAULT_PUBLIC_LAYER_VISIBLE),
-		publicOverheadBadgeVisible = sanitizeBoolMap(stored.publicOverheadBadgeVisible, DEFAULT_PUBLIC_BADGE_VISIBLE),
+		publicOverheadLayerVisible = sanitizeBoolMap(stored.publicOverheadLayerVisible, defaultLayerVisible()),
+		publicOverheadBadgeVisible = sanitizeBoolMap(stored.publicOverheadBadgeVisible, defaultBadgeVisible()),
 		topDonateRank = stored.topDonateRank,
 		topDonateText = stored.topDonateText,
 		topSpenderRank = stored.topSpenderRank,
@@ -825,8 +921,14 @@ function OverheadDomain.buildPayload(
 
 	local isCoupled = stored.couplePartner ~= nil or stored.couplePartnerId ~= nil
 	local showCoupleName = stored.showCoupleName ~= false
-	local publicLayerVisible = sanitizeBoolMap(stored.publicOverheadLayerVisible, DEFAULT_PUBLIC_LAYER_VISIBLE)
-	local publicBadgeVisible = sanitizeBoolMap(stored.publicOverheadBadgeVisible, DEFAULT_PUBLIC_BADGE_VISIBLE)
+	-- Hard-off is enforced here rather than merely seeded at record creation, so a layer the
+	-- buyer switched off is gone for players whose stored record predates the change too.
+	local publicLayerVisible = OverheadDomain.enforceDisabledLayers(
+		sanitizeBoolMap(stored.publicOverheadLayerVisible, DEFAULT_PUBLIC_LAYER_VISIBLE)
+	)
+	local publicBadgeVisible = OverheadDomain.enforceDisabledBadges(
+		sanitizeBoolMap(stored.publicOverheadBadgeVisible, DEFAULT_PUBLIC_BADGE_VISIBLE)
+	)
 	-- Coupled always wins: Single/Fun must not hide partner title / CoupleName row.
 	-- Profile Taken without an active couple falls back to Single (legacy "Taken" alone).
 	local resolvedRelationshipMode: ProfileRelationshipMode = if isCoupled
@@ -877,6 +979,7 @@ function OverheadDomain.buildPayload(
 		specialTitlePreset = stored.specialTitlePreset,
 		specialTitleSize = stored.specialTitleSize,
 		specialTitleFont = stored.specialTitleFont,
+		specialTitleImage = stored.specialTitleImage,
 		specialTitleStyle = stored.specialTitleStyle,
 		specialTitlePosition = stored.specialTitlePosition
 			or Config.Admin.DEFAULT_SPECIAL_TITLE_POSITION
@@ -947,6 +1050,31 @@ function OverheadDomain.normalizeXp(rawXp: any, level: number): number
 	return xp
 end
 
+-- Self-service title change stamps come straight back from DataStore, so keep
+-- only real epoch numbers and cap the list at the configured quota. nil when
+-- nothing survives, matching "never changed".
+local function sanitizeTitleChanges(raw: any): { number }?
+	if type(raw) ~= "table" then
+		return nil
+	end
+	local stamps: { number } = {}
+	for _, entry in pairs(raw) do
+		if type(entry) == "number" and entry == entry and entry > 0 then
+			table.insert(stamps, math.floor(entry))
+		end
+	end
+	if #stamps == 0 then
+		return nil
+	end
+	table.sort(stamps)
+	local cap = tonumber(Config.CustomTitle and Config.CustomTitle.MAX_CHANGES_PER_WINDOW) or 5
+	cap = math.max(1, math.floor(cap))
+	while #stamps > cap do
+		table.remove(stamps, 1)
+	end
+	return stamps
+end
+
 function OverheadDomain.sanitize(raw: any): OverheadStoredData
 	if type(raw) ~= "table" then
 		return OverheadDomain.defaultStoredData()
@@ -979,6 +1107,17 @@ function OverheadDomain.sanitize(raw: any): OverheadStoredData
 				and (raw.specialTitlePosition == "Top" or raw.specialTitlePosition == "Stacked")
 				and raw.specialTitlePosition
 			or (Config.Admin.DEFAULT_SPECIAL_TITLE_POSITION or "Top"),
+		specialTitleChanges = sanitizeTitleChanges(raw.specialTitleChanges),
+		-- Booleans or nothing. nil for FromAdmin is meaningful (legacy = admin
+		-- grant), so it is preserved rather than defaulted.
+		specialTitleFreeUsed = if raw.specialTitleFreeUsed == true then true else nil,
+		specialTitleFromAdmin = if type(raw.specialTitleFromAdmin) == "boolean"
+			then raw.specialTitleFromAdmin
+			else nil,
+		specialTitleImage = (function()
+			local id = TitleImageDomain.normalizeAssetId(raw.specialTitleImage)
+			return if id ~= "" then id else nil
+		end)(),
 		specialRank = type(raw.specialRank) == "string" and raw.specialRank or nil,
 		specialSubRole = if raw.specialSubRole == "DJ" or raw.specialSubRole == "Influencer"
 			then raw.specialSubRole

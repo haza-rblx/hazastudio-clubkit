@@ -561,6 +561,183 @@ ClubKitConfig.Sync = {
 }
 
 -- =============================================================================
+-- OVERHEAD NAMETAG TEMPLATE
+-- =============================================================================
+--   GuiType
+--     Which OverheadGUIMainTemplate* this place uses. The template itself lives
+--     in ReplicatedStorage (place data), so only set a version you have actually
+--     installed — an unknown or missing one falls back to V1.
+--       "V4" (default) — the standard nametag.
+--       "V5"           — V4 plus the image-title row `02-AddOnCustomImageBadge`,
+--                        an extra banner under the text title. Needed for the
+--                        admin panel's image title to show up at all.
+--
+--   DefaultLayers / DefaultBadges
+--     What each nametag layer and badge does in your venue. Three values per key:
+--
+--       true    Shown. A player can still hide it from Settings → Overhead.
+--       false   Hidden to begin with, but a player may switch it back on. A
+--               DEFAULT, not a lock. For example, to drop the status chip unless
+--               someone opts in:  DefaultLayers = { SpecialStatus = false }
+--       "off"   Not part of this venue. Off for EVERYONE, always — and the
+--               layer's row disappears from the Settings menu, so nobody is left
+--               with a switch that does nothing. For example, to run nametags
+--               with no badges at all:  DefaultLayers = { BadgeGroup = "off" }
+--
+--     Keys you leave out keep the kit's own value, so you only write what you
+--     want to change. An unknown key is ignored rather than creating a layer, and
+--     a value that is none of the three above is ignored with a warning in the
+--     output window (the kit keeps its own value rather than guessing).
+--
+--     NOTE: true / false decide a player's *first* stored record only. Players who
+--     already have one keep whatever is stored for them — changing true or false
+--     here does not reach back and rewrite existing players. "off" is different:
+--     it is enforced every time a nametag is built, so it applies to everyone
+--     immediately. Nothing stored is erased, so deleting the "off" later brings
+--     every player back exactly as they had it.
+--
+--     "off" also beats the kit's own overrides: an admin granting someone a custom
+--     title will not resurface a SpecialTitle layer you switched off, and a couple
+--     forming will not resurface CoupleName.
+--
+--   ShowSupporterChip
+--     The generic "SUPPORTER" chip a donor gets while they have no ranked chip
+--     yet. false = only donors who actually hold a rank get a chip.
+--     Note this is NOT the same as DefaultLayers.TopSpender: that layer also
+--     carries the ranked "#N RUPIAH" chip, so switching the layer off would take
+--     the ranked chip away too.
+--
+ClubKitConfig.Overhead = {
+	GuiType = "V4",
+	ShowSupporterChip = true,
+	DefaultLayers = {
+		SpecialTitle = true,
+		BadgeGroup = true,
+		Level = true,
+		SpecialRank = true,
+		SpecialStatus = true,
+		TopSpender = true,
+		TopDonate = true,
+		Rank = true,
+		DisplayName = true,
+		CoupleName = false,
+	},
+	DefaultBadges = {
+		OwnerCoOwner = true,
+		Developer = true,
+		Admin = true,
+		Member = true,
+		VIP = true,
+		VVIP = true,
+		Elite = true,
+		Streak = true,
+		LikeCounter = true,
+		Community = true,
+	},
+}
+
+-- =============================================================================
+-- GRAPHICS
+-- =============================================================================
+--   DefaultPreset
+--     The Settings → Graphics preset a player starts on: "Low" | "Balanced" |
+--     "High". Also what Settings → Reset goes back to.
+--       "Low" (default) — no shadows at all, reduced effects; the map keeps its
+--                         textures. Smoothest on phones and weak PCs.
+--       "Balanced"      — sun shadows only; club lights cast no shadows.
+--       "High"          — the map exactly as built.
+--
+--     NOTE: only players who have never saved their settings get this. Anyone who
+--     has already picked a preset (or changed any other setting, which saves the
+--     whole panel) keeps what is stored for them.
+--
+ClubKitConfig.Graphics = {
+	DefaultPreset = "Low",
+}
+
+-- =============================================================================
+-- CUSTOM TITLE (self-service overhead title)
+-- =============================================================================
+--   Only used when Features.SelfCustomTitle = true. With the flag off the
+--   profile "Title" row keeps the old text-only modal and these are ignored.
+--
+--   MinLevel
+--     Level a player must reach to create their own title. Players who already
+--     hold a title given by an admin can always edit it, whatever their level.
+--     Requires Features.LevelSystem — with levels off nobody reaches MinLevel,
+--     so only admin-granted title holders can open the panel.
+--
+--   MaxChangesPerWindow / WindowDays
+--     Rolling quota: at most MaxChangesPerWindow updates in any WindowDays
+--     period. One "Update Title" press that changes anything (text, size,
+--     preset or font) costs one slot. Removing a title is always free.
+--
+--   QuotaEnabled
+--     false = no limit at all: players change their title as often as they
+--     like and the panel says "Unlimited" instead of counting down. MinLevel
+--     still applies. Changes made while this is false are not counted, so
+--     turning the quota back on does not find everyone already spent.
+--
+--   FreeFirstTitle
+--     true = every player gets ONE free title, whatever their level. It is spent
+--     by creating a title, not by keeping one: removing it afterwards does not
+--     give the slot back, and a title an admin gives them never consumes it.
+--     Once spent they are locked again until they reach MinLevel or qualify for
+--     the Free Title event. Their title stays on their head either way.
+--
+ClubKitConfig.CustomTitle = {
+	MinLevel = 50,
+	MaxChangesPerWindow = 5,
+	WindowDays = 7,
+	QuotaEnabled = true,
+	FreeFirstTitle = false,
+}
+
+-- =============================================================================
+-- FREE TITLE EVENT (the ADDON-FreeTitleEventTrigger card)
+-- =============================================================================
+--   An event card that floats on screen and opens the custom title panel. It is
+--   a second, easier door to the same panel: a player who meets the event
+--   requirement may create a title even if they have not reached
+--   CustomTitle.MinLevel. Nobody ever loses access they already had, and the
+--   change quota still applies.
+--
+--   Needs Features.SelfCustomTitle = true and the ADDON-FreeTitleEventTrigger
+--   frame installed inside your IconGroup. Without either, there is no card.
+--
+--   There are three possible requirements. Set a number above 0 to switch one on,
+--   leave it 0 to ignore it:
+--
+--     RequiredLevel       reach this level (usually lower than
+--                         CustomTitle.MinLevel — that is the point of the event)
+--     MinDonationRobux    donated at least this many Robux, lifetime total
+--     MinDonationCash     donated at least this much cash, lifetime total, in
+--                         your Donation.Currency
+--
+--   Mode says how the ones you switched on are combined:
+--
+--     "Disabled"  no card, no rule change. This is the off switch.
+--     "Any"       meeting ONE of them is enough
+--     "All"       every one of them has to be met
+--
+--   Examples:
+--     level only        Mode = "Any",  RequiredLevel = 25
+--     donation only     Mode = "Any",  MinDonationRobux = 100
+--     either one        Mode = "Any",  RequiredLevel = 25, MinDonationRobux = 100
+--     both required     Mode = "All",  RequiredLevel = 25, MinDonationRobux = 100
+--
+--   A player who does not qualify still sees the card, showing the first thing
+--   they are missing. Anything Mode does not recognise counts as "Disabled", and
+--   so does a Mode with every threshold left at 0.
+--
+ClubKitConfig.FreeTitleEvent = {
+	Mode = "Disabled",
+	RequiredLevel = 0,
+	MinDonationRobux = 0,
+	MinDonationCash = 0,
+}
+
+-- =============================================================================
 -- FEATURES (disable modules you do not use)
 -- =============================================================================
 ClubKitConfig.Features = {
@@ -585,6 +762,15 @@ ClubKitConfig.Features = {
 	-- Avatar Context Menu v2 (redesign: static profile picture + camera zoom/blur backdrop).
 	-- false (default) = legacy v1 (3D rotating avatar ViewportFrame). true = v2.
 	AvatarContextMenuV2 = false,
+	-- Self-service custom title: profile "Title" row opens the 1000-01-CT-ADDON panel
+	-- (text + size + color preset + typeface), gated by CustomTitle.MinLevel and a
+	-- rolling change quota. false (default) = old text-only modal, admin-granted titles
+	-- only. Needs the 1000-01-CT-ADDON ScreenGui installed in StarterGui; without it the
+	-- old modal is used even when this is true.
+	SelfCustomTitle = false,
+	-- Custom-title panel v3 (04-AdminPanelv3) owns the admin topbar icon instead of
+	-- the classic 04-AdminPanelv2. Needs that ScreenGui installed in StarterGui.
+	AdminPanelV3 = false,
 	Hotbar = true,
 	LoadingScreen = true,
 	LevelSystem = true,

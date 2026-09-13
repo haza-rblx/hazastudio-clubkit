@@ -16,6 +16,10 @@ type INotify = {
 local PUBLIC_OVERHEAD_FIELDS = {
 	displayNameOverride = true,
 	specialTitle = true,
+	-- Self-service custom title: both paths change the overhead row, so the
+	-- nametag must refresh without waiting for a rejoin.
+	customTitle = true,
+	customTitleRemove = true,
 	relationshipMode = true,
 	showCoupleName = true,
 	statusText = true,

@@ -56,10 +56,40 @@ local function init(deps: {
 		end
 	end
 	if not gui then
-		gui = localPlayer.PlayerGui:WaitForChild(
-			Config.Admin.GUI_NAME,
-			Config.Admin.GUI_WAIT_TIMEOUT
-		) :: ScreenGui?
+		-- A place that has moved to the v3 panel deliberately has no 04-AdminPanelv2,
+		-- so waiting the full timeout for it and then warning is noise — and this runs
+		-- as a tracked boot task, so the wait is not free. Poll instead: take the
+		-- classic GUI the moment it replicates, and give up early once the v3 GUI is
+		-- there, which settles that the classic one was removed on purpose rather
+		-- than being slow. A place without v3 keeps the old wait-then-warn exactly.
+		local v3Expected = Config.FeatureFlags.AdminPanelV3Enabled == true
+		local deadline = os.clock() + Config.Admin.GUI_WAIT_TIMEOUT
+		while true do
+			for _, guiName in ipairs(candidates) do
+				local found = localPlayer.PlayerGui:FindFirstChild(guiName)
+				if found and found:IsA("ScreenGui") then
+					gui = found
+					break
+				end
+			end
+			if gui then
+				break
+			end
+			if v3Expected then
+				local v3Gui = localPlayer.PlayerGui:FindFirstChild(Config.Admin.GUI_NAME_V3)
+				if v3Gui and v3Gui:IsA("ScreenGui") then
+					log:info("Classic admin panel not installed — the v3 panel owns this surface", {
+						guiName = Config.Admin.GUI_NAME,
+						v3GuiName = Config.Admin.GUI_NAME_V3,
+					})
+					return {}
+				end
+			end
+			if os.clock() >= deadline then
+				break
+			end
+			task.wait(0.25)
+		end
 	end
 	if not gui then
 		log:warn("GUI not found, AdminController not initialized", {

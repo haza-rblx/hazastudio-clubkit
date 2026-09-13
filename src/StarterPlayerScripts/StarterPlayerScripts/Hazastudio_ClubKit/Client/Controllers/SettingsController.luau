@@ -14,9 +14,11 @@ local CashCurrencyDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.D
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local SettingsDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.SettingsDomain)
+local OverheadLayerPolicy = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.OverheadLayerPolicy)
 local DeltaCompressor = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DeltaCompressor)
 local GraphicsQuality = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.GraphicsQuality)
 local NotifService = require(script.Parent.Parent.Services.NotifService)
+local WorldGraphicsService = require(script.Parent.Parent.Services.WorldGraphicsService)
 local OverheadController = require(script.Parent.OverheadController)
 local PhoneLayout = require(script.Parent.Parent.Utils.PhoneLayout)
 
@@ -37,23 +39,18 @@ local SETTINGS_TEXTURES_ATTRIBUTE = "SettingsTexturesEnabled"
 local SETTINGS_HIDE_ALL_GUI_ORIGINAL = "RuntimeSettingsOriginalEnabled_HideAllGui"
 local SETTINGS_GUI_NAME = "07-MenuGUI"
 
-local ORIGINAL_CAST_SHADOW_ATTRIBUTE = "RuntimeSettingsOriginalCastShadow"
-local ORIGINAL_LIGHT_SHADOWS_ATTRIBUTE = "RuntimeSettingsOriginalLightShadows"
 local ORIGINAL_MATERIAL_ATTRIBUTE = "RuntimeSettingsOriginalMaterial"
 local ORIGINAL_MATERIAL_VARIANT_ATTRIBUTE = "RuntimeSettingsOriginalMaterialVariant"
 local ORIGINAL_TEXTURE_ID_ATTRIBUTE = "RuntimeSettingsOriginalTextureId"
 local ORIGINAL_TEXTURE_ATTRIBUTE = "RuntimeSettingsOriginalTexture"
 local ORIGINAL_TRANSPARENCY_ATTRIBUTE = "RuntimeSettingsOriginalTransparency"
 local ORIGINAL_TERRAIN_DECORATION_ATTRIBUTE = "RuntimeSettingsOriginalTerrainDecoration"
-local ORIGINAL_SURFACE_COLOR_MAP_ATTRIBUTE = "RuntimeSettingsOriginalSurfaceColorMap"
-local ORIGINAL_SURFACE_METALNESS_MAP_ATTRIBUTE = "RuntimeSettingsOriginalSurfaceMetalnessMap"
-local ORIGINAL_SURFACE_NORMAL_MAP_ATTRIBUTE = "RuntimeSettingsOriginalSurfaceNormalMap"
-local ORIGINAL_SURFACE_ROUGHNESS_MAP_ATTRIBUTE = "RuntimeSettingsOriginalSurfaceRoughnessMap"
 local ORIGINAL_PARTICLE_RATE_ATTRIBUTE = graphicsCfg.ORIGINAL_PARTICLE_RATE_ATTRIBUTE
 local ORIGINAL_LIGHT_RANGE_ATTRIBUTE = graphicsCfg.ORIGINAL_LIGHT_RANGE_ATTRIBUTE
 local ORIGINAL_POSTFX_ENABLED_ATTRIBUTE = graphicsCfg.ORIGINAL_POSTFX_ENABLED_ATTRIBUTE
 local ORIGINAL_ATMOSPHERE_DENSITY_ATTRIBUTE = "RuntimeSettingsOriginalAtmosphereDensity"
-local ORIGINAL_WORKSPACE_LIGHT_SHADOWS_ATTRIBUTE = "RuntimeSettingsOriginalWorkspaceLightShadows"
+local ORIGINAL_ENV_DIFFUSE_ATTRIBUTE = "RuntimeSettingsOriginalEnvironmentDiffuseScale"
+local ORIGINAL_ENV_SPECULAR_ATTRIBUTE = "RuntimeSettingsOriginalEnvironmentSpecularScale"
 
 local POST_PROCESSING_CLASSES: { string } = {
 	"BloomEffect",
@@ -193,11 +190,11 @@ local function createSettingsController(deps: {
 	local trackedEffectDescendantConns = {} :: { [Player]: RBXScriptConnection }
 	local renderSettingsGeneration = 0
 	local workspaceVfxGeneration = 0
-	local appliedShadowsEnabled: boolean? = nil
 	local appliedTexturesEnabled: boolean? = nil
 	local appliedWorkspaceVfxMode: string? = nil
 	local appliedPostProcessing: string? = nil
-	local provisionalPreset = if PhoneLayout.isPhoneLayout() then "Low" else "Balanced"
+	-- Before the server's settings arrive: the buyer's default preset, but never above Low on a phone.
+	local provisionalPreset = if PhoneLayout.isPhoneLayout() then "Low" else SettingsDomain.defaultStoredData().graphicsPreset
 	local effectiveGraphics: EffectiveGraphics = GraphicsQuality.getEffective({
 		graphicsPreset = provisionalPreset,
 		textures = 2,
@@ -322,9 +319,15 @@ local function createSettingsController(deps: {
 				return
 			end
 			patch.relationshipMode = value
-			local publicLayers = table.clone(base.publicOverheadLayerVisible or {})
-			publicLayers.CoupleName = true
-			patch.publicOverheadLayerVisible = publicLayers
+			-- Choosing a relationship reveals the CoupleName row — unless the buyer switched
+			-- that layer off for the venue, in which case asking for it is pointless (the
+			-- server enforces the same rule before storing anything).
+			local overheadCfg = Config.Overhead
+			if not OverheadLayerPolicy.isDisabled(overheadCfg and overheadCfg.DISABLED_LAYERS, "CoupleName") then
+				local publicLayers = table.clone(base.publicOverheadLayerVisible or {})
+				publicLayers.CoupleName = true
+				patch.publicOverheadLayerVisible = publicLayers
+			end
 		elseif field == "showCoupleName" then
 			if type(value) ~= "boolean" then
 				return
@@ -573,8 +576,45 @@ local function createSettingsController(deps: {
 		}
 	end
 
+	local suggestedQualityBump = false
+	-- The player's own Roblox graphics slider caps everything this controller can do: at
+	-- QualityLevel1 the High preset still renders at the client's lowest quality. We read
+	-- it and say so once; we never write it (that setting is account-wide and follows them
+	-- into other experiences). pcall because a restricted context may refuse the read.
+	local function maybeSuggestQualityBump()
+		if suggestedQualityBump then
+			return
+		end
+		local okLevel, savedLevel = pcall(function()
+			return UserSettings():GetService("UserGameSettings").SavedQualityLevel.Value
+		end)
+		if not okLevel then
+			return
+		end
+		if
+			not GraphicsQuality.shouldSuggestQualityBump(
+				effectiveGraphics.graphicsPreset,
+				savedLevel,
+				graphicsCfg.SUGGEST_QUALITY_BELOW_LEVEL
+			)
+		then
+			return
+		end
+		suggestedQualityBump = true
+		NotifService.info(string.format(graphicsCfg.MSG_RAISE_ROBLOX_QUALITY, savedLevel))
+	end
+
 	local function refreshEffectiveGraphics()
-		effectiveGraphics = GraphicsQuality.getEffective(payloadGraphicsSource())
+		local source = payloadGraphicsSource()
+		-- Clamp what we RENDER on a phone, never what is stored: High forces Precise on
+		-- every mesh, and the player keeps their choice for when they return on desktop.
+		source.graphicsPreset = GraphicsQuality.clampPresetForDevice(
+			source.graphicsPreset,
+			PhoneLayout.isPhoneLayout(),
+			graphicsCfg.PHONE_MAX_PRESET
+		)
+		effectiveGraphics = GraphicsQuality.getEffective(source)
+		maybeSuggestQualityBump()
 	end
 
 	local function getCurrentCamera(): Camera?
@@ -702,25 +742,6 @@ local function createSettingsController(deps: {
 		return effectiveGraphics.textures > 0
 	end
 
-	local function applyShadowSettingToInstance(instance: Instance, enabled: boolean)
-		if instance:IsA("BasePart") then
-			local part = instance :: BasePart
-			rememberBoolean(part, ORIGINAL_CAST_SHADOW_ATTRIBUTE, part.CastShadow)
-			local original = part:GetAttribute(ORIGINAL_CAST_SHADOW_ATTRIBUTE)
-			part.CastShadow = if enabled and type(original) == "boolean" then original else false
-			return
-		end
-
-		if instance:IsA("PointLight") or instance:IsA("SpotLight") or instance:IsA("SurfaceLight") then
-			local ok, current = getProperty(instance, "Shadows")
-			if ok and type(current) == "boolean" then
-				rememberBoolean(instance, ORIGINAL_LIGHT_SHADOWS_ATTRIBUTE, current)
-				local original = instance:GetAttribute(ORIGINAL_LIGHT_SHADOWS_ATTRIBUTE)
-				setProperty(instance, "Shadows", if enabled and type(original) == "boolean" then original else false)
-			end
-		end
-	end
-
 	local function applyTextureSettingToInstance(instance: Instance, enabled: boolean)
 		if instance:IsA("BasePart") then
 			local part = instance :: BasePart
@@ -781,24 +802,7 @@ local function createSettingsController(deps: {
 			end
 		end
 
-		if instance:IsA("SurfaceAppearance") then
-			rememberStringProperty(instance, ORIGINAL_SURFACE_COLOR_MAP_ATTRIBUTE, "ColorMap")
-			rememberStringProperty(instance, ORIGINAL_SURFACE_METALNESS_MAP_ATTRIBUTE, "MetalnessMap")
-			rememberStringProperty(instance, ORIGINAL_SURFACE_NORMAL_MAP_ATTRIBUTE, "NormalMap")
-			rememberStringProperty(instance, ORIGINAL_SURFACE_ROUGHNESS_MAP_ATTRIBUTE, "RoughnessMap")
-
-			if enabled then
-				restoreStringProperty(instance, ORIGINAL_SURFACE_COLOR_MAP_ATTRIBUTE, "ColorMap")
-				restoreStringProperty(instance, ORIGINAL_SURFACE_METALNESS_MAP_ATTRIBUTE, "MetalnessMap")
-				restoreStringProperty(instance, ORIGINAL_SURFACE_NORMAL_MAP_ATTRIBUTE, "NormalMap")
-				restoreStringProperty(instance, ORIGINAL_SURFACE_ROUGHNESS_MAP_ATTRIBUTE, "RoughnessMap")
-			else
-				setProperty(instance, "ColorMap", "")
-				setProperty(instance, "MetalnessMap", "")
-				setProperty(instance, "NormalMap", "")
-				setProperty(instance, "RoughnessMap", "")
-			end
-		end
+		-- SurfaceAppearance maps are PluginSecurity; WorldGraphicsService detaches them instead.
 
 		if instance:IsA("Terrain") then
 			local ok, decoration = getProperty(instance, "Decoration")
@@ -811,7 +815,6 @@ local function createSettingsController(deps: {
 	end
 
 	local function applyRenderSettingToInstance(instance: Instance)
-		applyShadowSettingToInstance(instance, shouldEnableShadows())
 		applyTextureSettingToInstance(instance, shouldEnableTextures())
 	end
 
@@ -844,14 +847,13 @@ local function createSettingsController(deps: {
 		return {}
 	end
 
+	-- Textures on tagged geometry only; shadows are WorldGraphicsService's, workspace-wide.
 	local function applyWorkspaceRenderSettings()
-		local shadowsEnabled = shouldEnableShadows()
 		local texturesEnabled = shouldEnableTextures()
 
-		if appliedShadowsEnabled == shadowsEnabled and appliedTexturesEnabled == texturesEnabled then
+		if appliedTexturesEnabled == texturesEnabled then
 			return
 		end
-		appliedShadowsEnabled = shadowsEnabled
 		appliedTexturesEnabled = texturesEnabled
 
 		local roots = getGeometryApplyRoots()
@@ -868,14 +870,12 @@ local function createSettingsController(deps: {
 				if generation ~= renderSettingsGeneration then
 					return
 				end
-				applyShadowSettingToInstance(root, shadowsEnabled)
 				applyTextureSettingToInstance(root, texturesEnabled)
 				processed += 1
 				for _, descendant in ipairs(root:GetDescendants()) do
 					if generation ~= renderSettingsGeneration then
 						return
 					end
-					applyShadowSettingToInstance(descendant, shadowsEnabled)
 					applyTextureSettingToInstance(descendant, texturesEnabled)
 					processed += 1
 					if processed % 250 == 0 then
@@ -1009,20 +1009,14 @@ local function createSettingsController(deps: {
 			if light:GetAttribute(ORIGINAL_LIGHT_RANGE_ATTRIBUTE) == nil then
 				light:SetAttribute(ORIGINAL_LIGHT_RANGE_ATTRIBUTE, light.Range)
 			end
-			if light:GetAttribute(ORIGINAL_WORKSPACE_LIGHT_SHADOWS_ATTRIBUTE) == nil then
-				light:SetAttribute(ORIGINAL_WORKSPACE_LIGHT_SHADOWS_ATTRIBUTE, light.Shadows == true)
-			end
 			local originalRange = light:GetAttribute(ORIGINAL_LIGHT_RANGE_ATTRIBUTE)
 			local baseRange = if type(originalRange) == "number" then originalRange else light.Range
+			-- Light Shadows belong to WorldGraphicsService; only Range scales here.
 			if mode == "Off" then
-				light.Shadows = false
 				light.Range = baseRange * 0.75
 			elseif mode == "Reduced" then
-				light.Shadows = false
 				light.Range = baseRange * 0.9
 			else
-				local originalShadows = light:GetAttribute(ORIGINAL_WORKSPACE_LIGHT_SHADOWS_ATTRIBUTE)
-				light.Shadows = if type(originalShadows) == "boolean" then originalShadows else light.Shadows
 				light.Range = baseRange
 			end
 		end
@@ -1421,9 +1415,17 @@ local function createSettingsController(deps: {
 			Lighting.ShadowSoftness = shadowSoftness
 		end
 
+		-- Scale the map's own environment lighting instead of overwriting it, so High
+		-- looks exactly as the builder set it.
+		if Lighting:GetAttribute(ORIGINAL_ENV_DIFFUSE_ATTRIBUTE) == nil then
+			Lighting:SetAttribute(ORIGINAL_ENV_DIFFUSE_ATTRIBUTE, Lighting.EnvironmentDiffuseScale)
+			Lighting:SetAttribute(ORIGINAL_ENV_SPECULAR_ATTRIBUTE, Lighting.EnvironmentSpecularScale)
+		end
 		local textureScale = math.clamp(effectiveGraphics.textures / 2, 0, 1)
-		local diffuseScale = 0.45 + (0.55 * textureScale)
-		local specularScale = 0.4 + (0.6 * textureScale)
+		local originalDiffuse = tonumber(Lighting:GetAttribute(ORIGINAL_ENV_DIFFUSE_ATTRIBUTE)) or 1
+		local originalSpecular = tonumber(Lighting:GetAttribute(ORIGINAL_ENV_SPECULAR_ATTRIBUTE)) or 1
+		local diffuseScale = originalDiffuse * (0.45 + (0.55 * textureScale))
+		local specularScale = originalSpecular * (0.4 + (0.6 * textureScale))
 		if math.abs(Lighting.EnvironmentDiffuseScale - diffuseScale) > 0.001 then
 			Lighting.EnvironmentDiffuseScale = diffuseScale
 		end
@@ -1435,7 +1437,13 @@ local function createSettingsController(deps: {
 		applyWorkspaceVfx(effectiveGraphics.workspaceVfxMode)
 		applyAllDonationEffects()
 
-		if appliedShadowsEnabled ~= shadowsEnabled or appliedTexturesEnabled ~= texturesEnabled then
+		WorldGraphicsService.apply({
+			lightShadows = effectiveGraphics.lightShadows,
+			partShadows = effectiveGraphics.partShadows,
+			surfaceAppearance = effectiveGraphics.surfaceAppearance,
+		})
+
+		if appliedTexturesEnabled ~= texturesEnabled then
 			applyWorkspaceRenderSettings()
 		end
 	end
@@ -1920,7 +1928,7 @@ local function createSettingsController(deps: {
 		end))
 
 		local function onGeometryInstanceAdded(instance: Instance)
-			if appliedShadowsEnabled == nil and appliedTexturesEnabled == nil then
+			if appliedTexturesEnabled == nil then
 				return
 			end
 			task.defer(function()
@@ -2201,6 +2209,7 @@ local function createSettingsController(deps: {
 			conn:Disconnect()
 		end
 		table.clear(controller._connections)
+		WorldGraphicsService.stop()
 	end
 
 	return controller

@@ -17,6 +17,10 @@ local PackagerCore = {}
 export type ExportOptions = {
 	includeConfig: boolean,
 	includeSecrets: boolean,
+	-- Buyer-place packs only (collectFromBuyerPlace): kit template sources, read from the repo by
+	-- the caller. Without them the buyer's own config/secrets would be the only thing to ship.
+	templateConfigSource: string?,
+	templateSecretsSource: string?,
 }
 
 export type SyncBhmsAddonExportOptions = {}
@@ -294,7 +298,7 @@ local function verifyKitFingerprint(): (boolean, string?)
 	return true, product.KitVersion
 end
 
-local function writeManifestModule(packageRoot: Instance, version: string?, exportOptions: ExportOptions)
+local function writeManifestModule(packageRoot: Instance, version: string?, exportOptions: ExportOptions, collectMode: string?)
 	local old = packageRoot:FindFirstChild(Manifest.MANIFEST_NAME)
 	if old then
 		old:Destroy()
@@ -308,7 +312,7 @@ local function writeManifestModule(packageRoot: Instance, version: string?, expo
 		("\texportedAt = %d,"):format(os.time()),
 		("\tincludeConfig = %s,"):format(tostring(exportOptions.includeConfig)),
 		("\tincludeSecrets = %s,"):format(tostring(exportOptions.includeSecrets)),
-		'\tcollectMode = "full_service",',
+		('\tcollectMode = "%s",'):format(collectMode or "full_service"),
 		"}",
 	}
 
@@ -403,6 +407,192 @@ function PackagerCore.collect(options: ExportOptions): (Model?, CollectReport)
 	end
 
 	writeManifestModule(packageRoot, if valid then versionOrErr else nil, options)
+	parentPackageModel(packageRoot)
+
+	return packageRoot, report
+end
+
+--- Build a product package from a **buyer place** rather than the template place.
+---
+--- `collect` above clones every child of FULL_SERVICE_PACK, which is only correct in the template
+--- place. A live venue also holds systems the kit does not own and must not redistribute (ETH*,
+--- Cenz*, Paanz, Adonis/Kohl's loaders, migration scratch) plus the map itself, so this mode takes
+--- only what `Manifest.PLACE_PACK_ALLOW` / `STARTER_GUI_EXACT` name — an allowlist, so a system
+--- added to the venue tomorrow cannot leak into a pack built the day after.
+---
+--- Workspace never comes wholesale: only the board folder and the donation/leaderboard roots.
+--- Lighting is skipped (venue look). The buyer's own config and secrets never ship — pass the kit
+--- template sources in `options.templateConfigSource` / `templateSecretsSource` (the caller reads
+--- them from the repo); without them the buyer copy is blanked and the report warns, because a
+--- blanked buyer config still carries that venue's branding, product ids and donation URL.
+function PackagerCore.collectFromBuyerPlace(options: ExportOptions): (Model?, CollectReport)
+	local report: CollectReport = {
+		ok = {},
+		missing = {},
+		warnings = {},
+		instanceCount = 0,
+	}
+
+	local valid, versionOrErr = verifyKitFingerprint()
+	if not valid then
+		logWarn(report, versionOrErr :: string)
+	end
+
+	removeExistingPackage(Manifest.PACKAGE_NAME)
+	local packageRoot = createPackageModel(Manifest.PACKAGE_NAME)
+
+	local skipService: { [string]: boolean } = {}
+	for _, name in ipairs(Manifest.PLACE_PACK_SKIP_SERVICES or {}) do
+		skipService[name] = true
+	end
+
+	local function cloneAllowed(serviceName: string, svc: Instance, allowed: { string })
+		local dest = ensureServiceFolder(packageRoot, serviceName)
+		for _, wanted in ipairs(allowed) do
+			-- Config and secrets are handled below from the kit template, never from the buyer.
+			if wanted == "Hazastudio_ClubKitConfig" or wanted == "Hazastudio_ClubKitSecrets" then
+				continue
+			end
+			local child = svc:FindFirstChild(wanted)
+			if not child then
+				logMissing(report, ("%s/%s"):format(serviceName, wanted))
+				continue
+			end
+			if isBhmsExcluded(child.Name) then
+				logWarn(report, ("Excluded (BHMS): %s/%s"):format(serviceName, child.Name))
+				continue
+			end
+			local okClone, clone = pcall(function()
+				return cloneInto(dest, child)
+			end)
+			if not okClone then
+				logWarn(report, ("Cannot clone %s/%s"):format(serviceName, child.Name))
+				continue
+			end
+			if child.Name == "Hazastudio_ClubKit" then
+				local stripped = stripShowcase(clone)
+				if stripped > 0 then
+					logWarn(report, ("Stripped ClubKitShowcase x%d"):format(stripped))
+				end
+			end
+			logOk(report, ("%s/%s"):format(serviceName, child.Name), clone)
+		end
+	end
+
+	for serviceName, allowed in pairs(Manifest.PLACE_PACK_ALLOW or {}) do
+		if skipService[serviceName] then
+			continue
+		end
+		local svc: Instance? = if serviceName == "StarterPlayerScripts"
+			then StarterPlayer:FindFirstChild("StarterPlayerScripts")
+			else getService(serviceName)
+		if not svc then
+			logMissing(report, ("service %s"):format(serviceName))
+			continue
+		end
+		cloneAllowed(serviceName, svc, allowed)
+	end
+
+	if not skipService.StarterGui then
+		local starterGui = getService("StarterGui")
+		if starterGui then
+			cloneAllowed("StarterGui", starterGui, Manifest.STARTER_GUI_EXACT or {})
+		else
+			logMissing(report, "service StarterGui")
+		end
+	end
+
+	-- Workspace: the board folder if it exists, else the individual roots; never the map.
+	if not skipService.Workspace then
+		local dest = ensureServiceFolder(packageRoot, "Workspace")
+		local boardFolder = workspace:FindFirstChild(Manifest.WORKSPACE_BOARD_FOLDER)
+		if boardFolder then
+			local clone = cloneInto(dest, boardFolder)
+			logOk(report, ("Workspace/%s (board folder)"):format(boardFolder.Name), clone)
+		end
+		for _, wanted in ipairs(Manifest.WORKSPACE_EXACT or {}) do
+			local inst = workspace:FindFirstChild(wanted)
+			if not inst then
+				logMissing(report, ("Workspace/%s"):format(wanted))
+			elseif boardFolder and isUnderWorkspaceBoardFolder(inst) then
+				-- already inside the packed board folder
+			else
+				logOk(report, ("Workspace/%s"):format(wanted), cloneInto(dest, inst))
+			end
+		end
+		for _, base in ipairs(Manifest.WORKSPACE_MULTI or {}) do
+			local index = 0
+			for _, child in ipairs(workspace:GetChildren()) do
+				if child.Name == base and not (boardFolder and isUnderWorkspaceBoardFolder(child)) then
+					index += 1
+					local clone = cloneInto(dest, child)
+					-- Same name twice under one parent is legal in Roblox but unreadable in a pack;
+					-- unpack restores the original name (see isWorkspaceMultiPackedName).
+					if index > 1 then
+						clone.Name = ("%s__%d"):format(base, index)
+					end
+					logOk(report, ("Workspace/%s"):format(clone.Name), clone)
+				end
+			end
+			if index == 0 then
+				logMissing(report, ("Workspace/%s"):format(base))
+			end
+		end
+	end
+
+	if options.includeConfig then
+		local dest = ensureServiceFolder(packageRoot, "ReplicatedStorage")
+		local folder = Instance.new("Folder")
+		folder.Name = "Hazastudio_ClubKitConfig"
+		local mod = Instance.new("ModuleScript")
+		mod.Name = "ClubKitConfig"
+		if options.templateConfigSource and options.templateConfigSource ~= "" then
+			mod.Source = options.templateConfigSource
+			logOk(report, "ReplicatedStorage/Hazastudio_ClubKitConfig (kit template)", folder)
+		else
+			local buyer = ReplicatedStorage:FindFirstChild("Hazastudio_ClubKitConfig")
+			local buyerMod = buyer and buyer:FindFirstChild("ClubKitConfig")
+			if buyerMod and buyerMod:IsA("ModuleScript") then
+				mod.Source = blankTemplateConfigSource(buyerMod.Source)
+				logWarn(
+					report,
+					"No template config supplied — shipped the buyer's own config blanked. It still carries this venue's branding, product ids and donation URL; review before delivery."
+				)
+			else
+				logMissing(report, "ReplicatedStorage/Hazastudio_ClubKitConfig")
+			end
+		end
+		mod.Parent = folder
+		folder.Parent = dest
+	end
+
+	if options.includeSecrets then
+		local dest = ensureServiceFolder(packageRoot, "ServerScriptService")
+		local folder = Instance.new("Folder")
+		folder.Name = "Hazastudio_ClubKitSecrets"
+		local mod = Instance.new("ModuleScript")
+		mod.Name = "Secrets"
+		local source = options.templateSecretsSource
+		if not source or source == "" then
+			local sss = getService("ServerScriptService")
+			local buyer = sss and sss:FindFirstChild("Hazastudio_ClubKitSecrets")
+			local buyerMod = buyer and buyer:FindFirstChild("Secrets")
+			source = if buyerMod and buyerMod:IsA("ModuleScript") then buyerMod.Source else ""
+		end
+		-- Blanked either way: a distributed package must never carry live API secrets.
+		mod.Source = blankTemplateSecretsSource(source)
+		mod.Parent = folder
+		folder.Parent = dest
+		logOk(report, "ServerScriptService/Hazastudio_ClubKitSecrets (blank template)", folder)
+	end
+
+	for _, child in ipairs(packageRoot:GetChildren()) do
+		if child:IsA("Folder") and #child:GetChildren() == 0 and child.Name ~= Manifest.MANIFEST_NAME then
+			child:Destroy()
+		end
+	end
+
+	writeManifestModule(packageRoot, if valid then versionOrErr else nil, options, "buyer_place")
 	parentPackageModel(packageRoot)
 
 	return packageRoot, report

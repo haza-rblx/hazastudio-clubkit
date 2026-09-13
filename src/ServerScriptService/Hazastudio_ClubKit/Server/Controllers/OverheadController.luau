@@ -398,6 +398,9 @@ end
 		appendFingerprintString(parts, payload.specialTitlePreset)
 		appendFingerprintString(parts, payload.specialTitleSize)
 		appendFingerprintString(parts, payload.specialTitleFont)
+		-- Delta broadcasts diff on this fingerprint, so a field missing here is a
+		-- field the client is never told about.
+		appendFingerprintString(parts, payload.specialTitleImage)
 		appendFingerprintTitleStyle(parts, payload.specialTitleStyle)
 		appendFingerprintString(parts, payload.specialTitlePosition)
 		appendFingerprintString(parts, payload.specialRank)
@@ -1787,9 +1790,13 @@ end
 				patched.relationshipMode = "Taken"
 				patched.showCoupleName = true
 				patched.chatCoupleTag = nextCoupleTag
-				local layers = table.clone(patched.publicOverheadLayerVisible or {})
-				layers.CoupleName = true
-				patched.publicOverheadLayerVisible = layers
+				-- A forming couple reveals the CoupleName row, unless the buyer switched
+				-- that layer off for the whole venue (hard-off wins).
+				if not OverheadDomain.isLayerDisabled("CoupleName") then
+					local layers = table.clone(patched.publicOverheadLayerVisible or {})
+					layers.CoupleName = true
+					patched.publicOverheadLayerVisible = layers
+				end
 			else
 				patched.isCoupled = false
 				patched.couplePartner = nil

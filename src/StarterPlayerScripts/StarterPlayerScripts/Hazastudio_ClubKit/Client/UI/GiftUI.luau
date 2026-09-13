@@ -218,8 +218,32 @@ function GiftUI.new(gui: ScreenGui)
 				end
 			end
 		end
+		-- Tiers the buyer switched off (Membership.TierN.Enabled = false) are gone
+		-- from TIERS, so the loop above binds only the first #TIERS buttons. The
+		-- selector still SHIPS one button per tier, and the last resolution pass is
+		-- positional (allButtons[i]) — so the surplus buttons would stay on screen,
+		-- correctly labelled and completely inert. Hide whatever went unbound.
+		local boundButtons: { [TextButton]: true } = {}
+		for _, btn in ipairs(tabButtons) do
+			boundButtons[btn] = true
+		end
+		for _, btn in ipairs(allButtons) do
+			if not boundButtons[btn] then
+				btn.Visible = false
+			end
+		end
+		-- Same for the tab frames behind them: a disabled tier can never become
+		-- active (normalizeTier rejects it), but leave nothing half-shown.
+		for tier, cfg in pairs(Config.Membership.Tiers or {}) do
+			if TAB_FRAME[tier] == nil and type(cfg) == "table" and type(cfg.giftTabFrame) == "string" then
+				local frame = contentWrapper:FindFirstChild(cfg.giftTabFrame)
+				if frame and frame:IsA("GuiObject") then
+					frame.Visible = false
+				end
+			end
+		end
 	end
-	
+
 	local selectFrame = contentWrapper:WaitForChild("4-SelectPlayerFrame", WAIT_TIMEOUT) :: Frame
 	local closeBtn = headerWrapper:FindFirstChild("3-CloseModalButton") :: TextButton?
 	local searchBox = selectFrame and selectFrame:FindFirstChild("01-SearchBox") :: TextBox?

@@ -24,6 +24,29 @@ for _, tier in ipairs(Config.Membership.SHOP_TIERS or {}) do
 		TIER_SUFFIX[tier] = cfg.guiSuffix
 	end
 end
+-- Tiers the buyer switched off (ClubKitConfig.Membership.TierN.Enabled = false).
+-- ConfigBootstrap drops them from SHOP_TIERS, so nothing above wires them up — but
+-- the card and notification instances still ship inside the buyer's ScreenGui and
+-- would sit there as dead, unbuyable cards. The card row is a horizontal
+-- UIListLayout with SortOrder.Name, so hiding a card reflows the rest by itself.
+local DISABLED_TIER_CARDS: { string } = {}
+local DISABLED_TIER_NOTIFS: { string } = {}
+do
+	local enabled: { [string]: true } = {}
+	for _, tier in ipairs(Config.Membership.SHOP_TIERS or {}) do
+		enabled[tier] = true
+	end
+	for tier, cfg in pairs(Config.Membership.Tiers or {}) do
+		if not enabled[tier] and type(cfg) == "table" then
+			if type(cfg.shopCard) == "string" and cfg.shopCard ~= "" then
+				table.insert(DISABLED_TIER_CARDS, cfg.shopCard)
+			end
+			if type(cfg.shopNotif) == "string" and cfg.shopNotif ~= "" then
+				table.insert(DISABLED_TIER_NOTIFS, cfg.shopNotif)
+			end
+		end
+	end
+end
 local function normalizeTier(tier: string): string?
 	return ShopDomain.parseShopTier(tier)
 end
@@ -155,6 +178,18 @@ function ShopUI.new(gui: ScreenGui)
 end
 -- Fetch and store references for all elements per tier
 function ShopUI:_buildRefs()
+	for _, cardName in ipairs(DISABLED_TIER_CARDS) do
+		local card = self._contentWrapper:FindFirstChild(cardName)
+		if card and card:IsA("GuiObject") then
+			card.Visible = false
+		end
+	end
+	for _, notifName in ipairs(DISABLED_TIER_NOTIFS) do
+		local notif = self._notifWrapper and self._notifWrapper:FindFirstChild(notifName)
+		if notif and notif:IsA("GuiObject") then
+			notif.Visible = false
+		end
+	end
 	for tier, cardName in pairs(TIER_CARD) do
 		local card = self._contentWrapper:FindFirstChild(cardName) :: Frame?
 		if not card then
