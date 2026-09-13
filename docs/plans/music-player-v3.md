@@ -1,6 +1,6 @@
 # Music Player v3 — rencana implementasi
 
-**Status:** disetujui owner 2026-09-13. **Stage A selesai 2026-09-13** (unreleased, terverifikasi di place template — detail di `UPGRADE_PROGRESS.md`). **Stage B (tarik library) — kode kit selesai + terverifikasi di place; rute VPS ditulis + dites lokal, belum di-deploy** (detail di `UPGRADE_PROGRESS.md`). Import satu kali (B3) belum dimulai. Stage C–F belum dimulai. Keputusan produk ada di `CONTEXT.md` (§ Music roles & tiers, § Music player GUI v3) dan ADR 0010.
+**Status:** disetujui owner 2026-09-13. **Stage A selesai 2026-09-13** (unreleased, terverifikasi di place template — detail di `UPGRADE_PROGRESS.md`). **Stage B (tarik library) — kode kit selesai + terverifikasi di place; rute VPS ditulis + dites lokal, belum di-deploy** (detail di `UPGRADE_PROGRESS.md`). **Update 2026-09-13:** B + B3 di-deploy dan lolos uji live (9 track), di-commit `71bdaee`. **Stage C selesai** di `music-v3` (belum di-commit). Stage D–F belum dimulai. Keputusan produk ada di `CONTEXT.md` (§ Music roles & tiers, § Music player GUI v3) dan ADR 0010.
 **Basis:** kit 2.12.0. Target: v3 menggantikan v2 di **3.0**.
 
 ## Prinsip yang tidak boleh dilanggar
@@ -96,6 +96,8 @@ Tiap view: `new(refs, store, config)`, `mount()`, `unmount()`, tidak tahu view l
 - Liked Tracks = `favoriteTrackIds` yang sudah ada; hanya label yang berubah.
 
 **Gerbang C:** panel v3 terbuka di playtest, tiga tab bisa dipilih, tidak ada error, `count-locals` tiap file ≤ 170.
+
+**Hasil C (2026-09-13, `music-v3`, belum di-commit):** `Client/UI/Music/GuiRefs.luau` (101 baris, `need()` assert per elemen) + `Client/UI/Music/PanelShell.luau` (≈200 baris) menggantikan `MusicPlayerGuiRefs`/`MusicPlayerUIBinder` di `ClientModuleBag`; `Config.Music.GUI_NAME = "06-MusicPlayerGUIv3"` di cabang ini. `PanelShell` menyediakan seluruh permukaan binder yang dipanggil `MusicPlayerController` — method render/Manage sengaja no-op sampai Stage D/F — jadi mesin playback tidak disentuh. Diuji di THE BASIC TEST lewat menu topbar sungguhan: buka → Now Playing, DJ (drag panel mati), Library (drag hidup), tutup (blur dilepas); 0 error kit, 0 `CanvasGroup`, 682 instance. Bug yang ketemu dan sudah diperbaiki: `isControlAllowed` sudah `true` sebelum controller subscribe, jadi shell tidak pernah menerimanya dan klik DJ jatuh ke Now Playing — `bindAll` kini menerapkan nilai store saat bind. **Catatan desain untuk owner:** `Option3.LayoutOrder` sama dengan `Option2` (1); nama `PlaylistNonIMageTemplateNormal` (huruf M besar) dipakai apa adanya oleh resolver — kalau di-rename, ubah juga `GuiRefs`.
 
 ---
 

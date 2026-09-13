@@ -2091,8 +2091,8 @@ if Config.FeatureFlags.MusicPlayerEnabled then
 			_musicLog:warn("GUI not found — panel disabled", { name = Config.Music.GUI_NAME })
 			return nil
 		end
-		local refs = ClientMods.MusicPlayerGuiRefs.resolve(playerGui)
-		local binder = ClientMods.MusicPlayerUIBinder.new({
+		local refs = ClientMods.MusicGuiRefs.resolve(playerGui)
+		local binder = ClientMods.MusicPanelShell.new({
 			refs = refs,
 			store = ClientMods.MusicPlayerStore,
 			config = Config.Music,

@@ -3311,8 +3311,8 @@ Config.Leaderboards = {
 -- MUSIC PLAYER
 -- ============================================================
 Config.Music = {
-	-- GUI
-	GUI_NAME = "06-MusicPlayerGUI",
+	-- GUI (music-v3 branch: v3 ScreenGui; renamed back to "06-MusicPlayerGUI" at the 3.0 cut)
+	GUI_NAME = "06-MusicPlayerGUIv3",
 	TOPBAR_LABEL = "",
 	TOPBAR_ORDER = 1, -- Right strip: leftmost, immediately left of Command
 	TOPBAR_ICON = Config.Icons.Topbar.Music,
