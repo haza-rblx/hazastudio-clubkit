@@ -228,7 +228,9 @@ ClubKitConfig.Membership = {
 
 -- =============================================================================
 -- ROLE CATEGORIES (group rank → role; match your Roblox group)
--- privileges per category: canGift, canAnnounce, canTeleport, adminPanel, musicManage
+-- privileges per category: canGift, canAnnounce, canTeleport, adminPanel, musicManage, musicControl
+-- musicManage = edit the music library; musicControl = live control (DJ mode, effects, speed,
+-- soundboard, skip, private playlists). Leave musicControl out and it follows musicManage.
 -- roleColor = { primary, secondary } drives chat/tag colors. Optional `stops = { hex, ... }`
 -- (2..5 colors) paints a multi-color gradient on the overhead special-rank text; when set,
 -- primary/secondary may be omitted (default to first/last stop).
@@ -248,6 +250,7 @@ ClubKitConfig.RoleCategories = {
 			canTeleport = true,
 			adminPanel = true,
 			musicManage = true,
+			musicControl = true,
 		},
 		roles = {
 			{
@@ -285,6 +288,7 @@ ClubKitConfig.RoleCategories = {
 			canTeleport = true,
 			adminPanel = false,
 			musicManage = false,
+			musicControl = false,
 		},
 		roles = {
 			{
@@ -310,6 +314,7 @@ ClubKitConfig.RoleCategories = {
 			canTeleport = false,
 			adminPanel = false,
 			musicManage = true,
+			musicControl = true,
 		},
 		roles = {
 			{

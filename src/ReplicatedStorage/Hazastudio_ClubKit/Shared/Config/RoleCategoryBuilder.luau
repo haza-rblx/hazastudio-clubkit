@@ -69,6 +69,16 @@ local function addUnique(list: { string }, value: string)
 	end
 end
 
+-- ADR 0010: live music control is split out of musicManage. A config written before the split
+-- only has musicManage, which then also gated live control — so an absent musicControl inherits
+-- it. Only ever called on a table this builder owns (ConfigBootstrap may freeze buyer tables).
+local function applyMusicControlDefault(privileges: { [string]: boolean }): { [string]: boolean }
+	if privileges.musicControl == nil then
+		privileges.musicControl = privileges.musicManage == true
+	end
+	return privileges
+end
+
 function RoleCategoryBuilder.build(clubKit: any): BuiltRoles
 	local definitions: { [string]: any } = {}
 	local order: { string } = {}
@@ -108,7 +118,7 @@ function RoleCategoryBuilder.build(clubKit: any): BuiltRoles
 			end
 			local categoryId = category.id
 			if type(categoryId) == "number" then
-				categoryPrivileges[categoryId] = cloneTable(category.privileges or {})
+				categoryPrivileges[categoryId] = applyMusicControlDefault(cloneTable(category.privileges or {}))
 			end
 			local basePriority = tonumber(category.priority) or 0
 			local roles = category.roles
@@ -134,6 +144,9 @@ function RoleCategoryBuilder.build(clubKit: any): BuiltRoles
 					for permission, allowed in pairs(role.privileges) do
 						merged[permission] = allowed == true
 					end
+					-- Inferred from the merged set, not the category's: a role that overrides only
+					-- musicManage = true could skip and run DJ mode under the old rule, so it still can.
+					applyMusicControlDefault(merged)
 					privileges = merged
 					rolePrivileges[roleKey] = merged
 				end

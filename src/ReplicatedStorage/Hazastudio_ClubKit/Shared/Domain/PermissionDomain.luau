@@ -14,6 +14,7 @@ local PERMISSION_ALIASES = {
 	canAnnounce = "canAnnounce",
 	canTeleport = "canTeleport",
 	musicManage = "musicManage",
+	musicControl = "musicControl",
 }
 
 local function getRoleDefinition(roleKey: string): any?
@@ -156,6 +157,16 @@ function PermissionDomain.canManageMusic(roleKey: string?, userId: number?): boo
 		return true
 	end
 	return PermissionDomain.hasPermission(roleKey, "musicManage")
+end
+
+-- Live control during an event: DJ mode, effects, playback speed, soundboard, admin skip,
+-- private playlists (ADR 0010). Absent from a buyer config, it inherits musicManage at build
+-- time (RoleCategoryBuilder), so this reads only the resolved value.
+function PermissionDomain.canControlMusic(roleKey: string?, userId: number?): boolean
+	if PermissionDomain.isAdminUser(userId) then
+		return true
+	end
+	return PermissionDomain.hasPermission(roleKey, "musicControl")
 end
 
 return PermissionDomain

@@ -1655,6 +1655,7 @@ function MusicPlayerController:_applyServerState(data: any, options: { forcePlay
 		isDjMode = data.isDjMode == true,
 		djOwnerUserId = type(data.djOwnerUserId) == "number" and data.djOwnerUserId or nil,
 		isManageAllowed = data.isManageAllowed == true,
+		isControlAllowed = data.isControlAllowed == true,
 		queue = newQueue,
 		prefetchBuffer = newBuffer,
 	})
@@ -2704,6 +2705,10 @@ function MusicPlayerController:initPanel()
 	-- isManageAllowed -> push to binder via setManageAllowed
 	self:_trackUnsubscriber(store:subscribe("isManageAllowed", function(allowed)
 		binder:setManageAllowed(allowed == true)
+	end))
+	-- isControlAllowed -> DJ tab access (live control, ADR 0010)
+	self:_trackUnsubscriber(store:subscribe("isControlAllowed", function(allowed)
+		binder:setControlAllowed(allowed == true)
 	end))
 	self:_trackUnsubscriber(store:subscribe("isDjMode", function(isDjMode)
 		binder:setDjModeEnabled(isDjMode == true)

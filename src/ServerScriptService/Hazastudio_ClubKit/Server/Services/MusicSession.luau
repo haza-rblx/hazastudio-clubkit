@@ -7,6 +7,7 @@ local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local MusicDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicDomain)
+local MusicDurationPolicy = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicDurationPolicy)
 local NetworkPerfCounters = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.NetworkPerfCounters)
 local MusicAssetValidator = require(script.Parent.MusicAssetValidator)
 
@@ -20,12 +21,14 @@ local function createMusicSession(deps: {
 	config: any,
 	getMembers: () -> { Player },
 	isManageAllowed: (player: Player) -> boolean,
+	isControlAllowed: ((player: Player) -> boolean)?,
 })
 	local repo = deps.repo
 	local log = deps.logger
 	local config = deps.config
 	local getMembers = deps.getMembers
 	local isManageAllowed = deps.isManageAllowed
+	local isControlAllowed = deps.isControlAllowed or deps.isManageAllowed
 
 	local session = {}
 
@@ -93,7 +96,7 @@ local function createMusicSession(deps: {
 		if player == nil then
 			return false
 		end
-		return isDjOwner(player) or isManageAllowed(player)
+		return isDjOwner(player) or isControlAllowed(player)
 	end
 
 	local function getTrackById(trackId: string?): TrackInfo?
@@ -454,6 +457,7 @@ local function createMusicSession(deps: {
 		resolveZombieCurrentTrack("syncStateToPlayer")
 		local payload = session:getState()
 		payload.isManageAllowed = isManageAllowed(player)
+		payload.isControlAllowed = isControlAllowed(player)
 		_onStateSync(player, payload)
 	end
 
@@ -920,43 +924,35 @@ local function createMusicSession(deps: {
 	end
 
 	function session:onDurationUpdated(trackId: string, wallDuration: number): boolean
-		if state.currentTrackId ~= trackId or not state.isPlaying then
-			return false
-		end
-		if type(wallDuration) ~= "number" or wallDuration <= 0 then
-			return false
-		end
+		local track = getTrackById(trackId)
+		local decision = MusicDurationPolicy.evaluate({
+			isCurrentTrack = state.currentTrackId == trackId,
+			isPlaying = state.isPlaying == true,
+			reportedDuration = wallDuration,
+			libraryDuration = if track then tonumber(track.totalDuration) else nil,
+			startServerTime = state.startServerTime,
+			expectedEndServerTime = state.expectedEndServerTime,
+			now = workspace:GetServerTimeNow(),
+			minRemainingSeconds = config.CLIENT_DURATION_MIN_REMAINING_SECONDS,
+		})
 
-		local now = workspace:GetServerTimeNow()
-		local elapsed = math.max(0, now - state.startServerTime)
-		local minRemaining = math.max(
-			15,
-			tonumber(config.CLIENT_DURATION_MIN_REMAINING_SECONDS) or 45
-		)
-		local newExpectedEnd = state.startServerTime + wallDuration
-
-		if newExpectedEnd <= now + minRemaining then
-			if newExpectedEnd <= now + 5 then
-				task.defer(function()
-					if state.currentTrackId == trackId and state.isPlaying then
-						session:advanceQueue()
-					end
-				end)
-			end
-			return false
-		end
-
-		if math.abs(newExpectedEnd - state.expectedEndServerTime) < 0.5 then
+		if decision.reason == "unchanged" then
 			return true
+		end
+		-- Never advances the queue. Any client can send this report, so ending the song here let
+		-- one player skip it for everyone (DoS sweep D1). A song that really is this short ends
+		-- through the PlaybackFinished quorum instead.
+		if not decision.accept or decision.expectedEnd == nil then
+			return false
 		end
 
 		log:debug("Session timing updated from client duration", {
 			trackId = trackId,
 			reportedWallDuration = wallDuration,
 			previousExpectedEnd = state.expectedEndServerTime,
-			nextExpectedEnd = newExpectedEnd,
+			nextExpectedEnd = decision.expectedEnd,
 		})
-		return applyTimingUpdate(newExpectedEnd, trackId)
+		return applyTimingUpdate(decision.expectedEnd, trackId)
 	end
 
 	function session:reportPlaybackFinished(player: Player, trackId: string): (boolean, string)

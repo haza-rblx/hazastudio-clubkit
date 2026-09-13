@@ -187,6 +187,8 @@ ClubKitConfigSchema.defaults = {
 				canTeleport = true,
 				adminPanel = true,
 				musicManage = true,
+				-- Live music control (ADR 0010). Omitted in a buyer config, it follows musicManage.
+				musicControl = true,
 			},
 			roles = {
 				{
@@ -228,6 +230,7 @@ ClubKitConfigSchema.defaults = {
 				canTeleport = true,
 				adminPanel = false,
 				musicManage = false,
+				musicControl = false,
 			},
 			roles = {
 				{
@@ -253,6 +256,7 @@ ClubKitConfigSchema.defaults = {
 				canTeleport = false,
 				adminPanel = false,
 				musicManage = true,
+				musicControl = true,
 			},
 			roles = {
 				{

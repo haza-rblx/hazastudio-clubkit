@@ -332,7 +332,7 @@ local function createMusicController(deps: {
 			if not checkIdempotency(voteSkipCache, (raw :: any).requestId) then return end
 			task.spawn(function()
 				-- Admin+ bypass: directly adminSkip without entering vote flow
-				if service:isManageAllowed(player) then
+				if service:isControlAllowed(player) then
 					local ok, err = service:adminSkip(player)
 					if not ok then
 						log:debug("AdminSkip (via vote button) rejected", { player = player.Name, reason = err })
@@ -459,6 +459,7 @@ local function createMusicController(deps: {
 				end
 				local currentState = service:getState(player)
 				currentState.isManageAllowed = service:isManageAllowed(player)
+				currentState.isControlAllowed = service:isControlAllowed(player)
 				fireMusicResponse(responseRE, player, "get_state", (raw :: any).requestId, true, currentState, nil)
 			end)
 		end)

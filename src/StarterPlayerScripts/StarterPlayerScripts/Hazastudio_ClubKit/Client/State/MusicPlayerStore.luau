@@ -94,6 +94,7 @@ return createStore({
 	editingPlaylist = nil,     -- PlaylistInfo? (nil = create mode)
 	selectedTrackPlaylistId = nil, -- string? selected playlist in upload/edit track form
 	isManageAllowed = false,
+	isControlAllowed = false,  -- live control: DJ tab, DJ-mode bypass (ADR 0010)
 	isLoading       = false,   -- loading state for form submission
 
 	-- Cover & Font customization state

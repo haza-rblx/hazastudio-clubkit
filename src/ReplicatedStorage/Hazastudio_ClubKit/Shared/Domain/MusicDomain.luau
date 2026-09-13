@@ -97,6 +97,7 @@ export type StateSyncPayload = {
 	isDjMode: boolean,
 	djOwnerUserId: number?,
 	isManageAllowed: boolean,
+	isControlAllowed: boolean?,
 	djEffects: any?,
 }
 

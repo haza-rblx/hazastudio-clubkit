@@ -3093,7 +3093,7 @@ return function(MusicPlayerUIBinder: any, H: any)
 		trackConnection(
 			self,
 			refs.tabs.dj.Activated:Connect(function()
-				if not store:get().isManageAllowed then
+				if not store:get().isControlAllowed then
 					return
 				end
 				self:switchTab("dj")
@@ -3496,7 +3496,7 @@ return function(MusicPlayerUIBinder: any, H: any)
 			local isDjOwner = storeState.isDjMode == true
 				and type(localUserId) == "number"
 				and storeState.djOwnerUserId == localUserId
-			local canControl = isDjOwner or storeState.isManageAllowed == true
+			local canControl = isDjOwner or storeState.isControlAllowed == true
 			local shouldHide = storeState.isDjMode == true and not canControl
 			refs.voteSkipButton.Visible = not shouldHide
 			refs.tabs.reqSong.Visible = not shouldHide
@@ -3521,7 +3521,7 @@ return function(MusicPlayerUIBinder: any, H: any)
 		)
 		trackUnsubscriber(
 			self,
-			store:subscribe("isManageAllowed", function()
+			store:subscribe("isControlAllowed", function()
 				updateDjModeGating()
 			end)
 		)
@@ -3689,20 +3689,25 @@ return function(MusicPlayerUIBinder: any, H: any)
 		if self._onUpdateManageTab then
 			self._onUpdateManageTab(allowed)
 		end
+	end
+
+	-- DJ tab follows live control, not library editing (ADR 0010).
+	function MusicPlayerUIBinder:setControlAllowed(allowed: boolean)
 		if self._onUpdateDjTabAccess then
 			self._onUpdateDjTabAccess(allowed)
 		end
 	end
-	
+
 	function MusicPlayerUIBinder:setDjModeEnabled(enabled: boolean)
 		if self._onUpdateDjTabState then
 			self._onUpdateDjTabState(enabled)
 		end
 		-- Re-evaluate manage/DJ tab access when DJ mode toggles.
-		-- setManageAllowed provides the base permission; the internal
-		-- updateManageTab/updateDjTabAccess now overlay DJ-owner check.
+		-- The base permissions come from the store; the internal
+		-- updateManageTab/updateDjTabAccess overlay the DJ-owner check.
 		local storeState = self._store:get()
 		self:setManageAllowed(storeState.isManageAllowed == true)
+		self:setControlAllowed(storeState.isControlAllowed == true)
 	end
 	
 	function MusicPlayerUIBinder:setTotalDuration(duration: number)

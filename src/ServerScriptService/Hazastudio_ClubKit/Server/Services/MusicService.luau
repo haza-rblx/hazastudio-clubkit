@@ -153,32 +153,48 @@ local function createMusicService(deps: {
 		log:debug("Rank cached", { player = player.Name, rank = rank })
 	end
 
-	function service:isManageAllowed(player: Player): boolean
-		-- Read-only library: nobody can manage music (hides Manage tab + blocks manage remotes).
-		if Config.FeatureFlags.MusicReadOnlyLibraryEnabled == true then
-			return false
-		end
+	-- One music privilege for a player: admin users, then the group role, then the stored /setrole role.
+	function service:_hasMusicPrivilege(
+		player: Player,
+		check: (roleKey: string?, userId: number?) -> boolean,
+		privilege: string
+	): boolean
 		if PermissionDomain.isAdminUser(player.UserId) then
 			return true
 		end
 		local cachedRole = roleCache[player.UserId]
-		if type(cachedRole) == "string" and PermissionDomain.canManageMusic(cachedRole, player.UserId) then
+		if type(cachedRole) == "string" and check(cachedRole, player.UserId) then
 			return true
 		end
 		if overheadRepository and type(overheadRepository.load) == "function" then
 			local storedResult = overheadRepository:load(player.UserId)
 			if storedResult.ok and type(storedResult.value.giftedRole) == "string" then
-				if PermissionDomain.canManageMusic(storedResult.value.giftedRole, player.UserId) then
+				if check(storedResult.value.giftedRole, player.UserId) then
 					return true
 				end
 			elseif not storedResult.ok then
 				log:warn("Internal role lookup failed for music permission", {
 					player = player.Name,
+					privilege = privilege,
 					error = storedResult.error,
 				})
 			end
 		end
 		return false
+	end
+
+	function service:isManageAllowed(player: Player): boolean
+		-- Read-only library: nobody can manage music (hides Manage tab + blocks manage remotes).
+		if Config.FeatureFlags.MusicReadOnlyLibraryEnabled == true then
+			return false
+		end
+		return service:_hasMusicPrivilege(player, PermissionDomain.canManageMusic, "musicManage")
+	end
+
+	-- Live control: DJ mode, effects, speed, skip, private playlists (ADR 0010). Not switched off by
+	-- a read-only library — those are runtime actions during an event, not edits to the library.
+	function service:isControlAllowed(player: Player): boolean
+		return service:_hasMusicPrivilege(player, PermissionDomain.canControlMusic, "musicControl")
 	end
 
 	-- ============================================================
@@ -197,6 +213,9 @@ local function createMusicService(deps: {
 			getMembers = getMembers,
 			isManageAllowed = function(player: Player): boolean
 				return service:isManageAllowed(player)
+			end,
+			isControlAllowed = function(player: Player): boolean
+				return service:isControlAllowed(player)
 			end,
 		})
 		sess:setOnTrackChanged(function(payload: any, members: { Player }?, skipReason: string?)
@@ -388,7 +407,7 @@ local function createMusicService(deps: {
 		if not result.ok then
 			return {}
 		end
-		if player and service:isManageAllowed(player) then
+		if player and service:isControlAllowed(player) then
 			return result.value
 		end
 
@@ -443,7 +462,7 @@ local function createMusicService(deps: {
 		end
 		if playlistId and playlistId ~= "" then
 			local playlist = repo:getPlaylist(playlistId)
-			if isPlaylistPrivate(playlist) and not (player and service:isManageAllowed(player)) then
+			if isPlaylistPrivate(playlist) and not (player and service:isControlAllowed(player)) then
 				return {}
 			end
 		end
@@ -637,7 +656,7 @@ local function createMusicService(deps: {
 	end
 
 	function service:adminSkip(player: Player): (boolean, string)
-		if not service:isManageAllowed(player) then return false, "no_permission" end
+		if not service:isControlAllowed(player) then return false, "no_permission" end
 		log:info("AdminSkip by " .. player.Name)
 		return getOrCreateSession():adminSkip()
 	end
@@ -658,7 +677,7 @@ local function createMusicService(deps: {
 	end
 
 	function service:setDjMode(player: Player, enabled: boolean): (boolean, string, boolean)
-		if not service:isManageAllowed(player) then
+		if not service:isControlAllowed(player) then
 			local currentDjMode = session ~= nil and (session:getState().isDjMode == true) or false
 			return false, "no_permission", currentDjMode
 		end
@@ -668,12 +687,12 @@ local function createMusicService(deps: {
 	-- DJ effect sync: server-authoritative. DJ changes effect → server stores +
 	-- broadcasts to all members via stateSync. Listeners apply to local Sound.
 	function service:setDjEffect(player: Player, effectId: string, action: string, itemId: string?, value: any): (boolean, string)
-		if not service:isManageAllowed(player) then return false, "no_permission" end
+		if not service:isControlAllowed(player) then return false, "no_permission" end
 		return getOrCreateSession():setDjEffect(effectId, action, itemId, value)
 	end
 
 	function service:setDjPlaybackSpeed(player: Player, speed: number): (boolean, string)
-		if not service:isManageAllowed(player) then return false, "no_permission" end
+		if not service:isControlAllowed(player) then return false, "no_permission" end
 		return getOrCreateSession():setDjPlaybackSpeed(speed)
 	end
 
