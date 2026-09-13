@@ -1484,6 +1484,11 @@ Config.FeatureFlags = {
 	-- Read-only music library: skip DataStore entirely; library from MusicCatalog +
 	-- in-game requests (in-memory only). Manage tab hidden. Buyer: Features.MusicReadOnlyLibrary.
 	MusicReadOnlyLibraryEnabled = false,
+	-- Music library from the web (ADR 0010): fetched from the VPS at boot and polled; the
+	-- MusicLibrary_v1 DataStore becomes a read-through cache and nothing in-game edits the
+	-- library (Manage tab hidden). Wins over MusicReadOnlyLibraryEnabled when both are on.
+	-- Buyer: Features.MusicWebLibrary.
+	MusicWebLibraryEnabled = false,
 	SettingsEnabled = true,
 	HotbarEnabled = true,
 	LoadingScreenEnabled = true,

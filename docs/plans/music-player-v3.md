@@ -1,6 +1,6 @@
 # Music Player v3 — rencana implementasi
 
-**Status:** disetujui owner 2026-09-13. **Stage A selesai 2026-09-13** (unreleased, terverifikasi di place template — detail di `UPGRADE_PROGRESS.md`). Stage B–F belum dimulai. Keputusan produk ada di `CONTEXT.md` (§ Music roles & tiers, § Music player GUI v3) dan ADR 0010.
+**Status:** disetujui owner 2026-09-13. **Stage A selesai 2026-09-13** (unreleased, terverifikasi di place template — detail di `UPGRADE_PROGRESS.md`). **Stage B (tarik library) — kode kit selesai + terverifikasi di place; rute VPS ditulis + dites lokal, belum di-deploy** (detail di `UPGRADE_PROGRESS.md`). Import satu kali (B3) belum dimulai. Stage C–F belum dimulai. Keputusan produk ada di `CONTEXT.md` (§ Music roles & tiers, § Music player GUI v3) dan ADR 0010.
 **Basis:** kit 2.12.0. Target: v3 menggantikan v2 di **3.0**.
 
 ## Prinsip yang tidak boleh dilanggar
@@ -19,7 +19,7 @@
 
 Alasan: mendukung dua GUI dalam satu codebase memaksa `MusicPlayerUIBinder` (158/200 local) menampung dua jalur — pasti jebol.
 
-> **Hambatan (2026-09-13):** git tidak terpasang di mesin ini (folder `.git` ada, executable tidak ada), jadi cabang `music-v3` belum bisa dibuat. Alternatif tanpa git: modul v3 ditulis di `main` sebagai file baru di `Client/UI/Music/` yang **tidak di-require** oleh v2 sampai Stage F — v2 tidak tersentuh, register budget binder lama tidak bertambah. Keputusan owner.
+> **Terselesaikan (2026-09-13):** git dipasang (winget). Cabang `music-v3` dibuat di `5cf781c` (commit Stage A) dan sudah di-push. Stage B tetap di `main`; Stage C–E di `music-v3`.
 
 ---
 

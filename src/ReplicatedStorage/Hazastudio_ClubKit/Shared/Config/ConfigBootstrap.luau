@@ -648,6 +648,7 @@ function ConfigBootstrap.apply(config: any)
 			MusicPlayer = "MusicPlayerEnabled",
 			MusicCatalogSeed = "MusicCatalogSeedEnabled",
 			MusicReadOnlyLibrary = "MusicReadOnlyLibraryEnabled",
+			MusicWebLibrary = "MusicWebLibraryEnabled",
 			SyncDance = "SyncDanceEnabled",
 			LegacySyncBhms = "LegacySyncBhmsEnabled",
 			AdminHub = "AdminHubEnabled",

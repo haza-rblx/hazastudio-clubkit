@@ -777,6 +777,11 @@ ClubKitConfig.Features = {
 	-- Library = MusicCatalog + in-game requests (kept in memory only, lost on restart).
 	-- Manage tab hidden. In-game edits are NOT saved. false (default) = editable mode.
 	MusicReadOnlyLibrary = false,
+	-- Music library from the web: edit playlists and tracks at customer.hazastudio.id;
+	-- the game fetches them on boot and every minute, and keeps a DataStore copy so music
+	-- still plays if the web is unreachable. Manage tab hidden. Needs Donation.ApiUrl +
+	-- Secrets.DonationApiSecret. Wins over MusicReadOnlyLibrary. false (default) = in-game library.
+	MusicWebLibrary = false,
 	SyncDance = true,
 	-- Rapid re-click of the PLAYING emote hard-restarts it (fade 0 "wutwut" stutter).
 	-- false = classic behavior (same-emote click toggles the dance off). Default false.

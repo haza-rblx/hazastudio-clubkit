@@ -59,6 +59,39 @@ OAuth was investigated as a way to drop the key. The scopes check out (`asset:re
 - `MusicDurationReport` stays. Web-sourced tracks arrive with a known duration, but a free-tier track pasted as a bare asset ID does not, so the client-measures-and-reports path remains the fallback for exactly that case.
 - Music must not be collateral damage of the licence kill switch. `maintenance_until` expiry already blanks `/v2/*`; the music route returning 403 has to be treated by the kit as "unreachable" and fall through to cache, not as "empty library".
 
+## Addendum — 2026-09-13: the pull transport runs through clubkit-api, not to brm-api directly
+
+**Decision (owner):** the game calls `GET /game/<key>/v3/music/library` on **clubkit-api** — the same base URL, the same `Bearer <game secret>` check and the same licence gate (`resolveGameV3` / `isLicenseBlocked`) as every other game route. clubkit-api answers by calling **brm-api over loopback** (`127.0.0.1:8787`) on an internal route guarded by a shared token that exists only in the two services' `.env` files.
+
+**Why this shape.** The library builder the game needs already exists in brm-api (`buildLocalClubKitLibrary` in `roblox/club-kit-sync.ts` produces exactly the `MusicDomain` shape the kit stores in `MusicLibrary_v1` → `Playlists` / `Tracks`). The game-facing contract, on the other hand, already lives in clubkit-api. Keeping one on each side means neither is duplicated.
+
+**Tenant resolution needs no lookup table.** brm-api keys a library on `(user_id, universe_id)`, and its ClubKit mode already fixes `user_id = "clubkit:<game_key>"` (per game, not per login, so every owner account of a game sees one library). clubkit-api knows `game_key` from the URL and `universe_id` from `games.universe_id`, pinned at licence verify — the only universe value anything here trusts.
+
+**Alternatives rejected:**
+- *The game calls brm-api directly*, with brm-api verifying the game secret by asking clubkit-api. No new secret, but the auth and licence rules would exist twice and the kit would carry a second base path.
+- *clubkit-api reads `brm.sqlite` read-only.* No hop and no secret, but the TypeScript builder would be rewritten in JavaScript and the two schemas would be welded together.
+
+**Consequences:**
+- One ops step per environment: the same internal token goes into `/opt/clubkit/apps/api/.env` and brm-api's `.env`. Until both hold it, the route answers `503` and the kit keeps playing from its DataStore cache — never an empty library.
+- Reading is not gated by `games.music_enabled`: that flag is the Studio/BRM upload tier, and reading a library of existing asset ids is the free tier (Decision above).
+- The internal brm-api route is also reachable through the public `/music/*` proxy, so the token is the guard, not the network. It must be compared in constant time and must never be logged.
+
+## Addendum — 2026-09-13: the game's library is imported before the web is trusted
+
+**What changed our mind.** The first live test on THE BASIC TEST (web mode on) showed the web copy is not just "empty or complete". brm-api held all 11 of the venue's tracks, but 7 were marked `robloxAvailabilityStatus = revoked` and 5 of those still pointed at the audio asset they had *before* being re-pointed in-game. The pull route rightly skips revoked tracks, so the game dropped tracks that still play, and its cache was overwritten (recovered from DataStore version history). Two causes: brm-api only reads the game's library during an auto-sync, which runs on dashboard edits; and `upsertLibraryItemFromSync` carried the old asset's availability status onto the new asset.
+
+**Decision (owner):** the kit sends its DataStore library to the VPS **once, automatically**, on the first boot with `MusicWebLibrary` on, and applies no web snapshot until that import has landed. This replaces the earlier consequence "accepted by the VPS only while that game's web library is still empty", which cannot tell a stale library from a complete one.
+
+**Rules:**
+- Transport mirrors the pull: `POST /game/<key>/v3/music/library/import` on clubkit-api (game secret + licence gate) → brm-api internal import route over loopback. No Open Cloud key involved, so the free tier migrates too.
+- **Merge, never replace:** the kit's library is merged with brm-api's local one by the same per-entry rule the auto-sync already uses (`mergeByLatest`, newer change time wins). Web-only tracks survive.
+- **A changed asset resets availability** to `checking`, so the checker judges the new asset instead of inheriting the old one's `revoked`. This is also fixed in the existing sync path.
+- **Once per game.** brm-api records the import per `(clubkit:<game_key>, universe_id)`; a second import answers 409. A game secret therefore cannot be used to rewrite a library repeatedly.
+- The pull response carries `import_required` until then, and that flag is part of the revision, so the game cannot miss the flip behind a 304.
+- **The kit never imports an unread cache:** if the DataStore library could not be loaded, it does not send an empty import (that would mark the game imported with nothing and let the web erase the venue's library). It retries instead.
+
+**Alternative rejected:** an "Import from game" button in the dashboard, with brm-api reading the game's DataStore over Open Cloud. It needs the buyer's API key, so it would leave the free tier unable to migrate, and it relies on the owner remembering to press it before turning the flag on.
+
 ## Addendum — 2026-09-13: publishing is automatic, with no draft stage
 
 Until the pull transport exists, the customer area still reaches the game by the old push: brm-api writes the game's `MusicLibrary_v1` with the customer's Open Cloud key. That push used to be a button ("Sync ke Roblox", later "Kirim ke game"). The button was not a decision — nobody edits a playlist and then chooses to keep the old one playing — so what it reliably produced was the failure of forgetting to press it, discovered as silence in the venue.

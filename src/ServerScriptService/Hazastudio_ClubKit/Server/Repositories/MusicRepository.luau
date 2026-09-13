@@ -629,6 +629,87 @@ function MusicRepository:bulkSeed(deps: {
 	return Result.Ok(nil)
 end
 
+function MusicRepository:isLoaded(): boolean
+	return self._loaded == true
+end
+
+-- The in-game library in the kit's own shape, as id-carrying arrays, for the one-time web import
+-- (ADR 0010 import addendum). Tombstones go too, so a track deleted in-game is not revived on the
+-- web from an older copy there.
+function MusicRepository:exportForWebImport(): { playlists: { any }, tracks: { any } }
+	local playlists = {} :: { any }
+	for id, entry in pairs(self:_serializePlaylists(self._playlists, self._playlistTombstones)) do
+		entry.id = id
+		table.insert(playlists, entry)
+	end
+	local tracks = {} :: { any }
+	for id, entry in pairs(self:_serializeTracks(self._tracks, self._trackTombstones)) do
+		entry.id = id
+		table.insert(tracks, entry)
+	end
+	return { playlists = playlists, tracks = tracks }
+end
+
+-- Web library mode (ADR 0010): the web is the only writer, so a snapshot replaces the in-memory
+-- library outright. No tombstones and no merge: an entry the web no longer has is simply gone.
+function MusicRepository:applyWebSnapshot(playlists: { [string]: PlaylistInfo }, tracks: { [string]: TrackInfo })
+	local nextPlaylists = {} :: { [string]: PlaylistInfo }
+	for id, playlist in pairs(playlists) do
+		nextPlaylists[id] = clonePlaylist(playlist)
+	end
+	local nextTracks = {} :: { [string]: TrackInfo }
+	for id, track in pairs(tracks) do
+		nextTracks[id] = cloneTrack(track)
+	end
+	self._playlists = nextPlaylists
+	self._tracks = nextTracks
+	self._playlistTombstones = {}
+	self._trackTombstones = {}
+	self._loaded = true
+end
+
+-- Overwrites the DataStore cache with the in-memory library. Deliberately not _setAsync: that
+-- merges by revision, which would keep every entry the web has deleted alive in the cache.
+-- excludeTrackIds: in memory but not part of the web library (the carried track on air).
+function MusicRepository:writeWebCache(excludeTrackIds: { [string]: boolean }?): Result<nil>
+	if self._readOnly then
+		return Result.Ok(nil)
+	end
+	local tracksToCache = self._tracks
+	if excludeTrackIds and next(excludeTrackIds) ~= nil then
+		tracksToCache = {} :: { [string]: TrackInfo }
+		for id, track in pairs(self._tracks) do
+			if not excludeTrackIds[id] then
+				tracksToCache[id] = track
+			end
+		end
+	end
+	local entries = {
+		{ key = self._config.PLAYLIST_KEY, data = self:_serializePlaylists(self._playlists, nil) },
+		{ key = self._config.TRACK_KEY, data = self:_serializeTracks(tracksToCache, nil) },
+	}
+	for _, entry in ipairs(entries) do
+		local encodeOk, encoded = pcall(function()
+			return HttpService:JSONEncode(entry.data)
+		end)
+		if not encodeOk then
+			self._logger:error("Web cache encode failed", { key = entry.key, error = tostring(encoded) })
+			return Result.Err("web_cache_encode_failed")
+		end
+		local saveResult = self._budgetGate:executeAsync(Enum.DataStoreRequestType.SetIncrementAsync, function()
+			return Result.withRetry(function()
+				self._store:SetAsync(entry.key, encoded)
+				return nil
+			end, Config.DataStore.RETRY_ATTEMPTS)
+		end)
+		if not saveResult.ok then
+			self._logger:warn("Web cache write failed", { key = entry.key, error = saveResult.error })
+			return Result.Err("web_cache_write_failed")
+		end
+	end
+	return Result.Ok(nil)
+end
+
 function MusicRepository:updateTrackDuration(trackId: string, duration: number): Result<nil>
 	local track = self._tracks[trackId]
 	if not track then

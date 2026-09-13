@@ -48,7 +48,10 @@ function MusicBootstrap.start(deps: MusicBootstrapDeps): MusicBootstrapResult
 	local musicRepo = MusicRepository.new({
 		config = musicConfig,
 		logger = Logger.new("MusicRepository"),
-		readOnly = Config.FeatureFlags.MusicReadOnlyLibraryEnabled == true,
+		-- The web library keeps a DataStore cache, so it must be able to write even when
+		-- MusicReadOnlyLibrary is also on (the web mode wins; see MusicService.init).
+		readOnly = Config.FeatureFlags.MusicReadOnlyLibraryEnabled == true
+			and Config.FeatureFlags.MusicWebLibraryEnabled ~= true,
 	})
 	local musicFavoritesRepo = MusicFavoritesRepository.new({
 		config = musicConfig,

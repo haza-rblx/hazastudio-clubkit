@@ -20,6 +20,7 @@ local TextFilterUtil = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils
 local createMusicSession = require(script.Parent.MusicSession)
 local MusicAssetValidator = require(script.Parent.MusicAssetValidator)
 local MusicCatalogSeeder = require(script.Parent.MusicCatalogSeeder)
+local MusicLibraryProvider = require(script.Parent.MusicLibraryProvider)
 
 type TrackInfo = MusicDomain.TrackInfo
 type PlaylistInfo = MusicDomain.PlaylistInfo
@@ -66,6 +67,7 @@ local function createMusicService(deps: {
 	local _pollThread: thread? = nil
 	local _playerRemovingConn: RBXScriptConnection? = nil
 	local _eventBusUnsub: (() -> ())? = nil
+	local _webProvider: any = nil
 	local _destroyed = false
 
 	-- Rank cache: fetch once per player on join
@@ -108,6 +110,11 @@ local function createMusicService(deps: {
 			coverValue = 1,
 			trackIds = {},
 		})
+		if Config.FeatureFlags.MusicWebLibraryEnabled == true then
+			-- The customer area owns the library in web mode: a playlist saved here would be erased
+			-- by the next snapshot and rewrite the cache on every boot.
+			return playlist
+		end
 		local saveResult = repo:savePlaylist(playlist)
 		if not saveResult.ok then
 			log:warn("Failed to bootstrap request history playlist", { error = saveResult.error })
@@ -185,7 +192,11 @@ local function createMusicService(deps: {
 
 	function service:isManageAllowed(player: Player): boolean
 		-- Read-only library: nobody can manage music (hides Manage tab + blocks manage remotes).
-		if Config.FeatureFlags.MusicReadOnlyLibraryEnabled == true then
+		-- Web library: the customer area is the only editor (ADR 0010).
+		if
+			Config.FeatureFlags.MusicReadOnlyLibraryEnabled == true
+			or Config.FeatureFlags.MusicWebLibraryEnabled == true
+		then
 			return false
 		end
 		return service:_hasMusicPrivilege(player, PermissionDomain.canManageMusic, "musicManage")
@@ -300,8 +311,38 @@ local function createMusicService(deps: {
 
 		startGlobalSession()
 
-		local readOnly = Config.FeatureFlags.MusicReadOnlyLibraryEnabled == true
-		if readOnly then
+		local webLibrary = Config.FeatureFlags.MusicWebLibraryEnabled == true
+		local readOnly = not webLibrary and Config.FeatureFlags.MusicReadOnlyLibraryEnabled == true
+		if webLibrary then
+			if Config.FeatureFlags.MusicReadOnlyLibraryEnabled == true then
+				log:warn("MusicWebLibrary and MusicReadOnlyLibrary are both on; the web library wins")
+			end
+			-- ADR 0010: start from the DataStore cache so music plays even with the VPS down, then
+			-- let the web replace it. No catalog seed and no DataStore poll: the web is the only writer.
+			local cacheResult = repo:loadAll()
+			if not cacheResult.ok then
+				log:warn("Music web library: cache unreadable, waiting for the web", { error = cacheResult.error })
+			end
+			_webProvider = MusicLibraryProvider.new({
+				repo = repo,
+				logger = log,
+				onLibraryApplied = function(removedTrackIds: { [string]: true })
+					service:_onWebLibraryApplied(removedTrackIds)
+				end,
+				getPlayingTrackId = function(): string?
+					if not session then
+						return nil
+					end
+					-- currentEntry, not track: track resolves through the repository and is nil
+					-- exactly when the id is the one that needs protecting.
+					local current = session:getState()
+					local entry = type(current) == "table" and current.currentEntry or nil
+					return if type(entry) == "table" and type(entry.trackId) == "string" then entry.trackId else nil
+				end,
+			})
+			_webProvider:start()
+			log:info("MusicService initialized (web library)")
+		elseif readOnly then
 			-- Read-only library: no DataStore read. Seed from MusicCatalog into memory,
 			-- skip the sync poll loop. Request-history playlist is created in-memory via
 			-- the repository's read-only write guard.
@@ -367,6 +408,10 @@ local function createMusicService(deps: {
 
 	function service:destroy()
 		_destroyed = true
+		if _webProvider then
+			_webProvider:destroy()
+			_webProvider = nil
+		end
 		if _pollThread then
 			task.cancel(_pollThread)
 			_pollThread = nil
@@ -421,6 +466,10 @@ local function createMusicService(deps: {
 	end
 
 	function service:reloadLibraryFromStore(reason: string?): (boolean, string)
+		if Config.FeatureFlags.MusicWebLibraryEnabled == true then
+			-- The DataStore is only a cache in web mode; reloading it would undo a newer web snapshot.
+			return true, "web_library"
+		end
 		if Config.FeatureFlags.MusicReadOnlyLibraryEnabled == true then
 			return true, "read_only"
 		end
@@ -439,6 +488,18 @@ local function createMusicService(deps: {
 			session:onLibraryReloaded()
 		end
 		return true, ""
+	end
+
+	-- Web snapshot applied: tracks the owner removed leave the queue and the auto buffer (the song
+	-- on air was carried by the provider and is not in this set), then every member resyncs.
+	function service:_onWebLibraryApplied(removedTrackIds: { [string]: true })
+		if not session then
+			return
+		end
+		if next(removedTrackIds) ~= nil then
+			session:pruneDeletedTracks(removedTrackIds)
+		end
+		session:onLibraryReloaded()
 	end
 
 	function service:getTracksForPlaylist(player: Player?, playlistId: string?): { [string]: TrackInfo }
