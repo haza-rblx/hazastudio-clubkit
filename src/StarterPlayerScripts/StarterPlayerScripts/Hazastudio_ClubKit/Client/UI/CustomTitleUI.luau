@@ -19,6 +19,7 @@ local DonationAmountFormat = require(ReplicatedStorage.Hazastudio_ClubKit.Shared
 local PresetPreview = require(script.Parent.Parent.Utils.PresetPreview)
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
 local MotionPresets = require(script.Parent.Parent.Utils.MotionPresets)
+local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 
 local CustomTitleUI = {}
 CustomTitleUI.__index = CustomTitleUI
@@ -175,6 +176,14 @@ function CustomTitleUI.tryCreate(playerGui: Instance, anim: any?): any?
 	self._removeCallback = nil :: (() -> ())?
 	self._built = false
 
+	-- Designed transparencies for every fade this panel plays, captured once per element
+	-- and keyed weakly so rebuilt picker rows do not pin their old clones.
+	self._fadeBases = setmetatable({}, { __mode = "k" }) :: any
+	-- What is currently painted: the server echoes a whole payload after any profile
+	-- change, so both painters compare against these before they animate.
+	self._choiceKey = nil :: string?
+	self._quotaShown = nil :: number?
+
 	self:_wire()
 	-- Start from a known-closed state whatever the template was saved as, so a
 	-- panel left `Visible = true` in StarterGui does not sit on screen. No tween
@@ -202,10 +211,17 @@ function CustomTitleUI:_buildSizeButtons()
 		if button:IsA("TextButton") then
 			button.Text = sizeKey
 			button.AutoButtonColor = false
+			self:_bindMotion(button)
 			button.Activated:Connect(function()
 				if self._selectedSize ~= sizeKey then
 					self._selectedSize = sizeKey
 					self:_buildSizeButtons()
+					-- The row was just rebuilt, so what pops is the fresh selected-state
+					-- clone, not the button that was pressed.
+					local chosen = self._sizeButtons[sizeKey]
+					if chosen then
+						UIMotion.pop(UIMotion.scaleTargetOf(chosen), 1.18)
+					end
 				end
 			end)
 		end
@@ -259,13 +275,41 @@ function CustomTitleUI:_buildPicker(
 		end
 		if row:IsA("GuiButton") then
 			row.AutoButtonColor = false
+			self:_bindMotion(row)
 			row.Activated:Connect(function()
 				onPick(value)
 			end)
 		end
+		-- Rows are cloned fresh on every (re)build, so their designed transparencies are
+		-- recorded here, once per clone, before any fade touches them.
+		self:_captureFades(row)
 		row.Parent = scroll
 		table.insert(state.rows, row)
 	end
+end
+
+-- The picker's rows cascade in as the modal arrives, never while it is still behind
+-- the panel: the handoff calls this the moment the modal is made visible.
+function CustomTitleUI:_staggerPicker(modal: Instance)
+	local state = self._pickerState[modal]
+	if state and #state.rows > 0 then
+		UIMotion.stagger(state.rows, self._fadeBases)
+	end
+end
+
+-- A pick rebuilds the list, so the chosen row is a brand new selected-state clone:
+-- fade its highlight up over the row it replaced and pop whatever inside it can scale
+-- (the rows themselves sit in a UIListLayout, so they are never scaled or moved).
+function CustomTitleUI:_flashPickedRow(modal: Instance, value: string)
+	local row = findChild(findChild(modal, "ScrollingFrame"), "Entry_" .. value)
+	if not row or not row:IsA("GuiObject") then
+		return
+	end
+	local base = row.BackgroundTransparency
+	row.BackgroundTransparency = 1
+	UIMotion.tween(row, 0.18, { BackgroundTransparency = base })
+	UIMotion.fadeIn(self:_captureFades(row), self._fadeBases)
+	UIMotion.pop(UIMotion.scaleTargetOf(row), 1.12)
 end
 
 -- ============================================================
@@ -279,6 +323,7 @@ function CustomTitleUI:_wire()
 
 	if self._submit:IsA("GuiButton") then
 		self._submit.AutoButtonColor = false
+		self:_bindMotion(self._submit)
 		self._submit.Activated:Connect(function()
 			self:_submitForm()
 		end)
@@ -286,6 +331,7 @@ function CustomTitleUI:_wire()
 
 	if self._remove and self._remove:IsA("GuiButton") then
 		self._remove.AutoButtonColor = false
+		self:_bindMotion(self._remove)
 		self._remove.Activated:Connect(function()
 			if self._removeCallback then
 				self._removeCallback()
@@ -296,6 +342,7 @@ function CustomTitleUI:_wire()
 
 	if self._presetButton and self._presetButton:IsA("GuiButton") then
 		self._presetButton.AutoButtonColor = false
+		self:_bindMotion(self._presetButton)
 		self._presetButton.Activated:Connect(function()
 			self:_openPresetPicker()
 		end)
@@ -303,6 +350,7 @@ function CustomTitleUI:_wire()
 
 	if self._typefaceButton and self._typefaceButton:IsA("GuiButton") then
 		self._typefaceButton.AutoButtonColor = false
+		self:_bindMotion(self._typefaceButton)
 		self._typefaceButton.Activated:Connect(function()
 			self:_openTypefacePicker()
 		end)
@@ -370,8 +418,51 @@ end
 function CustomTitleUI:_bindIfButton(instance: Instance?, callback: () -> ())
 	if instance and instance:IsA("GuiButton") then
 		instance.AutoButtonColor = false
+		self:_bindMotion(instance)
 		instance.Activated:Connect(callback)
 	end
+end
+
+-- Press squash + hover lift (ADR 0011). UIMotion hands its connections back and one of
+-- them lives on UserInputService, so each button owns its own: a picker row destroyed
+-- by the next rebuild must not leave a listener behind.
+function CustomTitleUI:_bindMotion(button: GuiObject)
+	local connections = UIMotion.bindPress(button)
+	for _, connection in ipairs(UIMotion.bindHover(button)) do
+		table.insert(connections, connection)
+	end
+	if #connections == 0 then
+		return
+	end
+	button.Destroying:Once(function()
+		for _, connection in ipairs(connections) do
+			connection:Disconnect()
+		end
+		table.clear(connections)
+	end)
+end
+
+-- The designed transparency of every text/image element under `root` (UIMotion ignores
+-- the rest), recorded once per element so a second fade never fades to invisible.
+-- Returns the elements, ready to hand to `fadeIn`.
+function CustomTitleUI:_captureFades(root: Instance): { GuiObject }
+	local elements: { GuiObject } = {}
+	if root:IsA("GuiObject") then
+		table.insert(elements, root)
+	end
+	for _, descendant in ipairs(root:GetDescendants()) do
+		if descendant:IsA("GuiObject") then
+			table.insert(elements, descendant)
+		end
+	end
+	local fresh: { GuiObject } = {}
+	for _, element in ipairs(elements) do
+		if self._fadeBases[element] == nil then
+			table.insert(fresh, element)
+		end
+	end
+	UIMotion.captureBases(fresh, self._fadeBases)
+	return elements
 end
 
 -- ============================================================
@@ -418,7 +509,11 @@ end
 -- a timer: whichever runs first shows `to`, the other finds it already visible and
 -- does nothing. The generation counter keeps a stale timer from re-opening
 -- something after a newer interaction has moved on.
-function CustomTitleUI:_handoff(from: Frame?, to: Frame?)
+--
+-- `onArrive` rides the same one-shot guard as the arrival itself: whichever path wins
+-- makes `to` visible and runs it, the other returns at `to.Visible` — so it fires
+-- exactly once, and never for a handoff a newer interaction superseded.
+function CustomTitleUI:_handoff(from: Frame?, to: Frame?, onArrive: (() -> ())?)
 	self:_bumpMotion()
 	local gen = self._motionGen
 	local function arrive()
@@ -426,6 +521,9 @@ function CustomTitleUI:_handoff(from: Frame?, to: Frame?)
 			return
 		end
 		self:_present(to)
+		if onArrive then
+			onArrive()
+		end
 	end
 	self:_dismiss(from, false, arrive)
 	task.delay(MotionPresets.centerClose().time + HANDOFF_SAFETY, arrive)
@@ -439,7 +537,9 @@ end
 -- A picker takes over the screen rather than stacking on top of the panel.
 function CustomTitleUI:_openPicker(modal: Frame, build: () -> ())
 	build()
-	self:_handoff(self._panel, modal)
+	self:_handoff(self._panel, modal, function()
+		self:_staggerPicker(modal)
+	end)
 end
 
 -- Back out of a picker: it hands the screen back to the panel it was opened
@@ -467,6 +567,7 @@ function CustomTitleUI:_openPresetPicker()
 			self._selectedPreset = value
 			self:_refreshChoiceLabels()
 			rebuild()
+			self:_flashPickedRow(modal, value)
 		end)
 	end
 	self:_openPicker(modal, rebuild)
@@ -490,15 +591,30 @@ function CustomTitleUI:_openTypefacePicker()
 			self._selectedFont = value
 			self:_refreshChoiceLabels()
 			rebuild()
+			self:_flashPickedRow(modal, value)
 		end)
 	end
 	self:_openPicker(modal, rebuild)
 end
 
+-- The two summary labels are this panel's preview of the title being built. An
+-- unchanged pick returns early: repainting the preset would tear down and rebuild its
+-- RenderStepped effect for nothing. `close()` clears the key, because it destroys the
+-- effect this would then skip.
 function CustomTitleUI:_refreshChoiceLabels()
+	local key = (self._selectedPreset or "") .. "|" .. (self._selectedFont or "")
+	if self._choiceKey == key then
+		return
+	end
+	local first = self._choiceKey == nil
+	self._choiceKey = key
+
+	local faded: { GuiObject } = {}
 	if self._presetButton then
 		local name = self._presetButton:FindFirstChild("PresetName")
 		if name and name:IsA("TextLabel") then
+			self:_captureFades(name)
+			table.insert(faded, name)
 			name.Text = self._selectedPreset or NO_PRESET_LABEL
 			self:_paintPresetSummary(name)
 		end
@@ -506,9 +622,16 @@ function CustomTitleUI:_refreshChoiceLabels()
 	if self._typefaceButton then
 		local name = self._typefaceButton:FindFirstChild("TypefaceName")
 		if name and name:IsA("TextLabel") then
+			self:_captureFades(name)
+			table.insert(faded, name)
 			name.Text = self._selectedFont or NO_FONT_LABEL
 			TitleFontUtil.applyToTextLabel(name, self._selectedFont)
 		end
+	end
+	-- A pick made on screen reads in; the first paint and the one open() does before
+	-- the panel is up just land.
+	if not first and self:isOpen() then
+		UIMotion.fadeIn(faded, self._fadeBases)
 	end
 end
 
@@ -516,6 +639,16 @@ function CustomTitleUI:_submitForm()
 	if not self._submitCallback then
 		return
 	end
+	-- The server answers an empty title with MSG_TITLE_EMPTY and spends no quota on it,
+	-- so the refusal is shown where it happened — the field shakes and the panel stays
+	-- open — instead of closing and surfacing a toast. Remove is what clears a title.
+	if self._input.Text:match("^%s*$") then
+		UIMotion.wiggle(self._input, 6)
+		return
+	end
+	-- No acknowledgement comes back to this panel, so the pop is on the form being
+	-- sendable; it plays over the closing panel.
+	UIMotion.pop(UIMotion.scaleTargetOf(self._submit), 1.2)
 	self._submitCallback({
 		title = self._input.Text,
 		size = self._selectedSize,
@@ -567,22 +700,39 @@ function CustomTitleUI:applyPayload(payload: any, resetForm: boolean?)
 	if self._quotaLabel and self._quotaLabel:IsA("TextLabel") then
 		local remaining = tonumber(payload.customTitleRemaining) or 0
 		local max = Config.CustomTitle.MAX_CHANGES_PER_WINDOW
-		local text = string.format("%d of %d title changes left this week.", remaining, max)
+		local function render(value: number): string
+			return string.format("%d of %d title changes left this week.", value, max)
+		end
+		-- Only the plain countdown is a number rolling; every other line is a sentence.
+		local counts = true
+		local text = render(remaining)
 		local resetsAt = tonumber(payload.customTitleResetsAt)
 		if payload.customTitleFreeAvailable == true then
 			-- The free slot is what is opening the panel: the rolling quota is not
 			-- what they are spending, so counting it down would mislead.
 			text = Config.CustomTitle.MSG_FREE_TITLE
+			counts = false
 		elseif payload.customTitleUnlimited == true then
 			-- The buyer runs without a quota: counting down would be a lie.
 			text = "Change your title as often as you like."
+			counts = false
 		elseif remaining <= 0 and resetsAt then
 			local hours = math.max(1, math.ceil((resetsAt - os.time()) / 3600))
 			text = if hours >= 24
 				then string.format("No changes left. One returns in %d day(s).", math.ceil(hours / 24))
 				else string.format("No changes left. One returns in %d hour(s).", hours)
+			counts = false
 		end
-		self._quotaLabel.Text = text
+		-- A slot spent while the panel is up counts down instead of jumping. Any other
+		-- payload — and every one that arrives behind a closed panel — is written
+		-- straight in, and an unchanged line is not touched at all.
+		local previous = self._quotaShown
+		if counts and previous ~= nil and previous ~= remaining and self:isOpen() then
+			UIMotion.countTo(self._quotaLabel, previous, remaining, 0.5, render)
+		elseif self._quotaLabel.Text ~= text then
+			self._quotaLabel.Text = text
+		end
+		self._quotaShown = if counts then remaining else nil
 	end
 
 	-- Locked = the player may not edit at all. The message spells out every way in
@@ -610,6 +760,20 @@ function CustomTitleUI:open(payload: any)
 		self._backdrop.Visible = true
 	end
 	self:_present(self._panel)
+
+	-- The form arrives under the panel's own pop: its rows drop in through the
+	-- content's own UIPadding (equal and opposite, so nothing resizes) and cascade.
+	if self._content and self._content:IsA("GuiObject") then
+		UIMotion.slideInVertical(self._content, -1, 14)
+		local rows: { GuiObject } = {}
+		for _, child in ipairs(self._content:GetChildren()) do
+			if child:IsA("GuiObject") and child.Visible then
+				table.insert(rows, child)
+				self:_captureFades(child)
+			end
+		end
+		UIMotion.stagger(rows, self._fadeBases)
+	end
 end
 
 function CustomTitleUI:close(immediate: boolean?)
@@ -624,6 +788,9 @@ function CustomTitleUI:close(immediate: boolean?)
 		end)
 		self._presetSummaryEffect = nil
 	end
+	-- The summary effect went with it, so the next open() has to repaint even when the
+	-- preset and typeface did not change.
+	self._choiceKey = nil
 	-- Whichever of the three is on screen plays the same dismissal; the other two
 	-- take the immediate path, since _dismiss no-ops on an already-hidden frame.
 	self:_dismiss(self._presetModal, immediate)

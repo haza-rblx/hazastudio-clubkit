@@ -4,14 +4,17 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
 local TextChatService = game:GetService("TextChatService")
-local TweenService = game:GetService("TweenService")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
+local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 local ChatTagStore = require(script.Parent.Parent.Services.ChatTagStore)
 local log = Logger.new("Client.CoupleController")
 
 local _connections: { RBXScriptConnection } = {}
+-- Looping motion (UIMotion.pulse) hands back a stop function; they are stopped here so a
+-- destroyed controller never leaves a tween breathing on a surviving instance.
+local _cleanups: { () -> () } = {}
 
 local function track(conn: RBXScriptConnection): RBXScriptConnection
 	table.insert(_connections, conn)
@@ -19,6 +22,10 @@ local function track(conn: RBXScriptConnection): RBXScriptConnection
 end
 
 local function destroy()
+	for _, stop in ipairs(_cleanups) do
+		stop()
+	end
+	table.clear(_cleanups)
 	for _, conn in ipairs(_connections) do
 		conn:Disconnect()
 	end
@@ -80,14 +87,22 @@ local function animateSlidingPill(backgroundPill: GuiObject, selectedButton: Tex
 	local targetAnchorPoint = Vector2.new(normalizedPos, 0.5)
 	local targetPosition = UDim2.new(normalizedPos, 0, 0.5, 0)
 	
+	-- Couple-status echoes re-assert the active tab; the pill is already there, so do not replay.
+	if backgroundPill.AnchorPoint == targetAnchorPoint and backgroundPill.Position == targetPosition then
+		return
+	end
+
 	-- Set anchor point immediately, animate position with smooth easing
 	backgroundPill.AnchorPoint = targetAnchorPoint
-	local tween = TweenService:Create(
-		backgroundPill,
-		TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-		{ Position = targetPosition }
-	)
-	tween:Play()
+	-- Layout safety (ADR 0011): the pill is an absolutely positioned overlay sitting behind the
+	-- laid-out tab buttons, so a Position tween is only meaningful while its parent has no layout.
+	-- If a buyer design ever parents it under one, snap instead of tweening against that layout.
+	local pillParent = backgroundPill.Parent
+	if pillParent == nil or pillParent:FindFirstChildWhichIsA("UIGridStyleLayout") then
+		backgroundPill.Position = targetPosition
+		return
+	end
+	UIMotion.tween(backgroundPill, 0.32, { Position = targetPosition }, Enum.EasingStyle.Quint)
 end
 local function highlightFirstMatch(text: string, query: string): string
 	local safeText = escapeRichText(text)
@@ -353,6 +368,71 @@ local function init(deps: { icon: any? }?): ()
 	local confirmRejectConn: RBXScriptConnection? = nil
 	local anim = AnimationHelper.new()
 	-- ============================================================
+	-- Helpers - motion (ADR 0011)
+	-- ============================================================
+	-- Designed transparency of everything this panel fades, captured once before the first fade
+	-- touches it. Weak keys: pooled player cards may be released.
+	local fadeBases = (setmetatable({}, { __mode = "k" }) :: any) :: { [GuiObject]: number }
+	-- Press/hover is bound once per instance; bindConfirmButtons and the pooled card list both
+	-- re-enter with the same buttons.
+	local motionBound = (setmetatable({}, { __mode = "k" }) :: any) :: { [Instance]: boolean }
+	-- Where each card's highlight is heading, so a running tween is not restarted by an echo.
+	local cardTargetTransparency = (setmetatable({}, { __mode = "k" }) :: any) :: { [Instance]: number }
+	local activeTabPage: GuiObject? = nil
+	local lastListSignature: string? = nil
+	local waitingPulseStop: (() -> ())? = nil
+	local function trackAll(conns: { RBXScriptConnection }): ()
+		for _, conn in ipairs(conns) do
+			track(conn)
+		end
+	end
+	-- Press squash + hover lift on any kit button, with the connections owned by this controller.
+	local function bindButtonMotion(button: Instance?): ()
+		if not button or not button:IsA("GuiObject") or motionBound[button] then
+			return
+		end
+		motionBound[button] = true
+		trackAll(UIMotion.bindPress(button :: GuiObject))
+		trackAll(UIMotion.bindHover(button :: GuiObject))
+	end
+	-- Text/images UIMotion can fade; Frames and layouts have no transparency channel.
+	local function fadeTargetsOf(root: Instance): { GuiObject }
+		local targets: { GuiObject } = {}
+		for _, desc in ipairs(root:GetDescendants()) do
+			if desc:IsA("TextLabel") or desc:IsA("ImageLabel") then
+				table.insert(targets, desc :: GuiObject)
+			end
+		end
+		return targets
+	end
+	local function captureOnce(elements: { GuiObject }): ()
+		local pending: { GuiObject } = {}
+		for _, element in ipairs(elements) do
+			if fadeBases[element] == nil then
+				table.insert(pending, element)
+			end
+		end
+		if #pending > 0 then
+			UIMotion.captureBases(pending, fadeBases)
+		end
+	end
+	-- Fades a group's text/images in. `delay` lets the content land after the dialog has finished
+	-- travelling (AnimationHelper still owns the arrival itself).
+	local function fadeInGroup(root: Instance, delay: number?): ()
+		local targets = fadeTargetsOf(root)
+		captureOnce(targets)
+		UIMotion.fadeIn(targets, fadeBases, delay)
+	end
+	local function setCurrentCoupleText(text: string): ()
+		-- The server echoes full couple state on every sync; only a real change re-fades.
+		if currentCoupleLbl.Text == text then
+			return
+		end
+		currentCoupleLbl.Text = text
+		captureOnce({ currentCoupleLbl :: GuiObject })
+		UIMotion.fadeIn({ currentCoupleLbl :: GuiObject }, fadeBases)
+	end
+	-- ============================================================
 	-- Helpers - foto
 	-- ============================================================
 	local function getThumbnail(userId: number): string
@@ -432,6 +512,10 @@ local function init(deps: { icon: any? }?): ()
 			task.defer(function()
 				setOverlayVisible(notifWrapper.Visible)
 			end)
+			-- Closed: the next open is a real arrival again, so let the tab page and the player
+			-- list replay their entrance.
+			activeTabPage = nil
+			lastListSignature = nil
 		end
 	end
 	local function stopRing(): ()
@@ -440,12 +524,20 @@ local function init(deps: { icon: any? }?): ()
 			ringHandle = nil
 		end
 	end
+	local function stopWaitingPulse(): ()
+		if waitingPulseStop then
+			waitingPulseStop()
+			waitingPulseStop = nil
+		end
+	end
+	table.insert(_cleanups, stopWaitingPulse)
 	local function showNotif(frame: Frame): ()
 		setOverlayVisible(true)
 		notifWrapper.Visible = true
 		confirmFrame.Visible = frame == confirmFrame
 		rejectedFrame.Visible = frame == rejectedFrame
 		waitingFrame.Visible = frame == waitingFrame
+		stopWaitingPulse()
 		if frame == confirmFrame then
 			anim:swingIn(confirmFrame, notifWrapper, nil)
 		elseif frame == waitingFrame then
@@ -454,10 +546,27 @@ local function init(deps: { icon: any? }?): ()
 		elseif frame == rejectedFrame then
 			anim:scalePop(rejectedFrame, nil)
 		end
+		-- The dialog arrives first (swing/pop above, AnimationHelper's signature moment); its text
+		-- and avatars fade up as it lands.
+		fadeInGroup(frame, 0.12)
+		if frame == confirmFrame then
+			UIMotion.pop(confirmSenderPfp, 1.18)
+			UIMotion.pop(confirmLocalPfp, 1.18)
+		elseif frame == waitingFrame then
+			UIMotion.pop(waitingTargetPfp, 1.15)
+			if waitingTargetPfp then
+				-- A slow wobble on the target's avatar for as long as we are waiting. Rotation is
+				-- layout-neutral, so this is safe wherever the design puts the photo.
+				waitingPulseStop = UIMotion.pulse(waitingTargetPfp, "Rotation", 4, 1.4)
+			end
+		elseif frame == rejectedFrame then
+			UIMotion.wiggle(rejectedPartnerPfp, 10)
+		end
 	end
 	local disconnectConfirmButtons: () -> ()
 	local function hideNotif(): ()
 		stopRing()
+		stopWaitingPulse()
 		disconnectConfirmButtons()
 		if rejectedFrame.Visible then
 			anim:scatterFragments(rejectedFrame, notifWrapper, function()
@@ -498,7 +607,10 @@ local function init(deps: { icon: any? }?): ()
 		if acceptBtn then
 			acceptBtn.Active = true
 			acceptBtn.Selectable = true
+			bindButtonMotion(acceptBtn)
+			local acceptIcon = UIMotion.scaleTargetOf(acceptBtn)
 			confirmAcceptConn = acceptBtn.Activated:Connect(function()
+				UIMotion.pop(acceptIcon, 1.3)
 				disconnectConfirmButtons()
 				RemoteRespond:FireServer({ requestId = requestId, accepted = true })
 				hideNotif()
@@ -507,7 +619,10 @@ local function init(deps: { icon: any? }?): ()
 		if rejectBtn then
 			rejectBtn.Active = true
 			rejectBtn.Selectable = true
+			bindButtonMotion(rejectBtn)
+			local rejectIcon = UIMotion.scaleTargetOf(rejectBtn)
 			confirmRejectConn = rejectBtn.Activated:Connect(function()
+				UIMotion.pop(rejectIcon, 1.18)
 				disconnectConfirmButtons()
 				RemoteRespond:FireServer({ requestId = requestId, accepted = false })
 				hideNotif()
@@ -543,6 +658,19 @@ local function init(deps: { icon: any? }?): ()
 		if backgroundPill then
 			local selectedButton = if showRequest then requestButton else breakUpButton
 			animateSlidingPill(backgroundPill, selectedButton, tabButtons)
+		end
+
+		-- The page now on top slides in through equal and opposite UIPadding, so the laid-out
+		-- content wrapper never changes size (ADR 0011). Couple-status syncs re-assert the same
+		-- tab on every echo; only a real switch animates.
+		local page: GuiObject? = (
+			if isCoupled then breakupTaken elseif showRequest then requestContent else breakupSingle
+		) :: any
+		if page ~= activeTabPage then
+			activeTabPage = page
+			if page and mainWrapper.Visible then
+				UIMotion.slideIn(page, if showRequest then -1 else 1)
+			end
 		end
 	end
 	local refreshPlayerCardSelection: () -> ()
@@ -580,6 +708,12 @@ local function init(deps: { icon: any? }?): ()
 		local button = playerSelectorCard:Clone() :: TextButton
 		button.Visible = false
 		button.Parent = scrollableList
+		-- Fresh clone: its designed transparencies are captured here, before any stagger has
+		-- touched them, and press/hover is bound once — after parenting, so UIMotion judges the
+		-- card from its real ancestry (a CanvasGroup list must never receive a UIScale).
+		captureOnce(fadeTargetsOf(button))
+		bindButtonMotion(button)
+		cardTargetTransparency[button] = button.BackgroundTransparency
 		local newEntry: PlayerListEntry = {
 			button = button,
 			connection = nil,
@@ -595,6 +729,9 @@ local function init(deps: { icon: any? }?): ()
 				entry.connection = nil
 			end
 			entry.button.Visible = false
+			-- Retired row: drop any running highlight tween before resetting it by hand.
+			UIMotion.cancel(entry.button)
+			cardTargetTransparency[entry.button] = playerCardDefaultTransparency
 			entry.button.BackgroundTransparency = playerCardDefaultTransparency
 		end
 	end
@@ -602,9 +739,14 @@ local function init(deps: { icon: any? }?): ()
 		for _, entry in ipairs(playerCardPool) do
 			local userId = entry.button:GetAttribute("PlayerUserId")
 			local isSelected = selectedUserId ~= nil and type(userId) == "number" and selectedUserId == userId
-			entry.button.BackgroundTransparency = if isSelected
-				then playerCardSelectedTransparency
-				else playerCardDefaultTransparency
+			local target = if isSelected then playerCardSelectedTransparency else playerCardDefaultTransparency
+			-- Transparency only: the cards are laid out in the scrolling list, so nothing here may
+			-- change their size (ADR 0011). Rows already heading there are left alone, so a couple
+			-- status echo never restarts the tween.
+			if cardTargetTransparency[entry.button] ~= target then
+				cardTargetTransparency[entry.button] = target
+				UIMotion.tween(entry.button, 0.18, { BackgroundTransparency = target })
+			end
 		end
 	end
 	local function isPlayerMatchingQuery(
@@ -635,9 +777,13 @@ local function init(deps: { icon: any? }?): ()
 		if searchBox then
 			currentQuery = string.gsub(searchBox.Text, "^%s*(.-)%s*$", "%1")
 		end
+		local renderedRows: { GuiObject } = {}
+		local signatureParts: { string } = { currentQuery }
 		for index, pd in ipairs(players) do
 			local entry = ensurePlayerCard(index)
 			local card = entry.button
+			table.insert(renderedRows, card :: GuiObject)
+			table.insert(signatureParts, tostring(pd.userId))
 			if entry.connection then
 				entry.connection:Disconnect()
 				entry.connection = nil
@@ -666,6 +812,9 @@ local function init(deps: { icon: any? }?): ()
 			local uid = pd.userId
 			local displayName = pd.displayName
 			entry.connection = card.Activated:Connect(function()
+				-- The card's avatar (or whatever UIMotion deems scalable here) pops; under a
+				-- CanvasGroup list it refuses and the highlight alone carries the choice.
+				UIMotion.pop(UIMotion.scaleTargetOf(card), 1.18)
 				selectedUserId = uid
 				selectedDisplayName = displayName
 				-- Set displayName on TextBox
@@ -685,6 +834,13 @@ local function init(deps: { icon: any? }?): ()
 			end
 		end
 		hideUnusedPlayerCards(#players + 1)
+		-- Cascade only on a real render. The server echoes full couple state on every sync and
+		-- each echo re-runs the search; an unchanged roster must not replay its entrance.
+		local signature = table.concat(signatureParts, "\0")
+		if signature ~= lastListSignature then
+			lastListSignature = signature
+			UIMotion.stagger(renderedRows, fadeBases)
+		end
 		if selectedUserId and not selectedStillExists then
 			clearSelectedTarget()
 			return
@@ -717,6 +873,7 @@ local function init(deps: { icon: any? }?): ()
 	clearSelectedTarget()
 	-- Waiting CloseButton
 	if waitingCloseBtn then
+		bindButtonMotion(waitingCloseBtn)
 		waitingCloseBtn.Activated:Connect(function()
 			hideNotif()
 		end)
@@ -732,7 +889,7 @@ local function init(deps: { icon: any? }?): ()
 		partnerName = type(data.partnerName) == "string" and data.partnerName or ""
 		partnerId = type(data.partnerId) == "number" and data.partnerId or nil
 		if isCoupled then
-			currentCoupleLbl.Text = "Your current couple: " .. partnerName
+			setCurrentCoupleText("Your current couple: " .. partnerName)
 			refreshPartnerPhoto()
 			setTab(false)
 		else
@@ -765,15 +922,21 @@ local function init(deps: { icon: any? }?): ()
 	-- ============================================================
 	-- Header buttons
 	-- ============================================================
+	bindButtonMotion(requestButton)
+	bindButtonMotion(breakUpButton)
 	requestButton.Activated:Connect(function()
-		if not isCoupled then
-			setTab(true)
+		if isCoupled then
+			-- Locked to the breakup tab: shake the tab the player pressed in vain.
+			UIMotion.wiggle(requestButton, 6)
+			return
 		end
+		setTab(true)
 	end)
 	breakUpButton.Activated:Connect(function()
 		setTab(false)
 	end)
 	if closeModalButton then
+		bindButtonMotion(closeModalButton)
 		closeModalButton.Activated:Connect(function()
 			showPanel(false)
 		end)
@@ -781,10 +944,15 @@ local function init(deps: { icon: any? }?): ()
 	-- ============================================================
 	-- Send request
 	-- ============================================================
+	bindButtonMotion(sendButton)
+	local sendIcon = UIMotion.scaleTargetOf(sendButton)
 	sendButton.Activated:Connect(function()
 		if not selectedUserId then
+			-- Nothing picked: shake the button the player just pressed in vain.
+			UIMotion.wiggle(sendButton, 6)
 			return
 		end
+		UIMotion.pop(sendIcon, 1.25)
 		local reqId = HttpService:GenerateGUID(false)
 		_currentRequestId = reqId
 		if waitingTargetPfp then
@@ -799,7 +967,10 @@ local function init(deps: { icon: any? }?): ()
 	-- ============================================================
 	-- Breakup
 	-- ============================================================
+	bindButtonMotion(breakupBtn)
+	local breakupIcon = UIMotion.scaleTargetOf(breakupBtn)
 	breakupBtn.Activated:Connect(function()
+		UIMotion.pop(breakupIcon, 1.2)
 		local previousPartnerId = partnerId
 		RemoteBreakup:FireServer({
 			requestId = HttpService:GenerateGUID(false),
@@ -855,8 +1026,11 @@ local function init(deps: { icon: any? }?): ()
 			isCoupled = true
 			partnerName = type(data.partnerName) == "string" and data.partnerName or ""
 			partnerId = type(data.partnerId) == "number" and data.partnerId or nil
-			currentCoupleLbl.Text = "Your current couple: " .. partnerName
+			setCurrentCoupleText("Your current couple: " .. partnerName)
 			refreshPartnerPhoto()
+			-- Accepted: the two photos on the breakup tab celebrate the match.
+			UIMotion.pop(breakupPartnerPfp, 1.3)
+			UIMotion.pop(breakupPlayerPfp, 1.3)
 			if partnerName ~= "" then
 				applyLocalCoupleChatTag(localPlayer.UserId, partnerName)
 			end
@@ -878,12 +1052,14 @@ local function init(deps: { icon: any? }?): ()
 				local tryAgain = inputArea:FindFirstChild("TryAgainButton") :: TextButton?
 				local closeBtn = inputArea:FindFirstChild("CloseButton") :: TextButton?
 				if tryAgain then
+					bindButtonMotion(tryAgain)
 					tryAgain.Activated:Once(function()
 						hideNotif()
 						showPanel(true)
 					end)
 				end
 				if closeBtn then
+					bindButtonMotion(closeBtn)
 					closeBtn.Activated:Once(function()
 						hideNotif()
 					end)

@@ -8,7 +8,7 @@ local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Con
 local SliderSelectorUtil = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.SliderSelectorUtil)
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
 local MotionPresets = require(script.Parent.Parent.Utils.MotionPresets)
-local PressFeedback = require(script.Parent.Parent.Utils.PressFeedback)
+local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 local NotifService = require(script.Parent.Parent.Services.NotifService)
 
 export type PlayerEntry = {
@@ -133,6 +133,42 @@ local function clearChildren(parent: Instance, keepNames: { [string]: boolean }?
 		end
 		child:Destroy()
 	end
+end
+
+-- Everything UIMotion could fade under `root` (it skips whatever has no transparency channel).
+-- A designed value is recorded once per instance: a second capture while a fade is running
+-- would bank the mid-fade value as the resting one, and the element would stay ghosted.
+local function collectFadeTargets(root: Instance, bases: { [GuiObject]: number }): { GuiObject }
+	local targets: { GuiObject } = {}
+	local pending: { GuiObject } = {}
+	-- Hidden subtrees stay out of it: SheetBody keeps the design masters that openSheet clones
+	-- from, and a clone taken while its master was mid-fade would bank 1 as its resting value.
+	local function onScreen(node: Instance): boolean
+		local current: Instance? = node
+		while current ~= nil and current ~= root do
+			if current:IsA("GuiObject") and not current.Visible then
+				return false
+			end
+			current = current.Parent
+		end
+		return true
+	end
+	local function consider(node: Instance)
+		if node:IsA("GuiObject") and node.Visible and onScreen(node) then
+			table.insert(targets, node)
+			if bases[node] == nil then
+				table.insert(pending, node)
+			end
+		end
+	end
+	consider(root)
+	for _, descendant in ipairs(root:GetDescendants()) do
+		consider(descendant)
+	end
+	if #pending > 0 then
+		UIMotion.captureBases(pending, bases)
+	end
+	return targets
 end
 
 local function makeLabel(parent: Instance, name: string, text: string, size: number, weight: Enum.FontWeight, color: Color3, props: { [string]: any }?): TextLabel
@@ -266,8 +302,18 @@ function AdminHubUI.new(gui: ScreenGui)
 	self._keepDim = false
 	self._dimTween = nil :: Tween?
 	self._greetingRole = "Player"
-	self._pressHandles = {} :: { { Destroy: (self: any) -> () } }
 	self._footConnections = {} :: { RBXScriptConnection }
+	-- Press/hover connections split by lifetime: player rows die on every re-render, sheet
+	-- content dies on every openSheet, static chrome lives as long as the panel.
+	self._rowConnections = {} :: { RBXScriptConnection }
+	self._sheetConnections = {} :: { RBXScriptConnection }
+	-- Designed transparency of every element UIMotion fades here. Weak keys: rows and sheet
+	-- content are cloned and destroyed, never pooled.
+	self._fadeBases = (setmetatable({}, { __mode = "k" }) :: any) :: { [GuiObject]: number }
+	self._filterIndex = 0
+	self._galleryEmpty = false
+	self._playerListEmpty = false
+	self._playerListSignature = nil :: string?
 	self._onPlayerPicked = nil :: ((PlayerEntry) -> ())?
 	self._onAction = nil :: ((string) -> ())?
 	self._onGear = nil :: ((string) -> ())?
@@ -301,11 +347,29 @@ function AdminHubUI.new(gui: ScreenGui)
 	return self
 end
 
-function AdminHubUI:_bindPress(target: GuiObject?)
-	if not target then
+-- Press squash + hover lift (ADR 0011), bound once per instance: the controller rebuilds a
+-- sheet's chip row in place when the currency changes, and a second bind would stack two
+-- squashes on one press. `into` decides how long the connections live — UIMotion's pair holds
+-- a UserInputService connection that the instance's own Destroy cannot clean up.
+function AdminHubUI:_bindPress(target: GuiObject?, into: { RBXScriptConnection }?)
+	if not target or target:GetAttribute("AdminHubMotionBound") then
 		return
 	end
-	table.insert(self._pressHandles, PressFeedback.bindPressScale(target))
+	target:SetAttribute("AdminHubMotionBound", true)
+	local sink = into or self._connections
+	for _, connection in ipairs(UIMotion.bindPress(target)) do
+		table.insert(sink, connection)
+	end
+	for _, connection in ipairs(UIMotion.bindHover(target)) do
+		table.insert(sink, connection)
+	end
+end
+
+function AdminHubUI:_clearMotionConnections(list: { RBXScriptConnection })
+	for _, connection in ipairs(list) do
+		connection:Disconnect()
+	end
+	table.clear(list)
 end
 
 function AdminHubUI:_bindPressFeedback()
@@ -320,6 +384,9 @@ function AdminHubUI:_bindPressFeedback()
 	for _, desc in ipairs(self._gallery:GetDescendants()) do
 		if desc:IsA("TextButton") and string.sub(desc.Name, 1, 11) == "ActionTile_" then
 			self:_bindPress(desc)
+			-- Tiles live in the place GUI for the panel's whole life, so their designed
+			-- transparencies are captured here, once, before any stagger fades them.
+			collectFadeTargets(desc, self._fadeBases)
 			local gear = desc:FindFirstChild("GearButton")
 			if gear and gear:IsA("GuiButton") then
 				self:_bindPress(gear)
@@ -337,6 +404,9 @@ function AdminHubUI:_snapHideModal(modal: Frame)
 	end
 end
 
+-- The dim backdrop stays on its own pair of tweens rather than UIMotion: it is open/close
+-- chrome (AnimationHelper's half of ADR 0011), the two halves arbitrate through one shared
+-- self._dimTween handle, and _hideDim needs the Completed hook to drop Visible afterwards.
 function AdminHubUI:_showDim()
 	if self._dimTween then
 		self._dimTween:Cancel()
@@ -394,6 +464,8 @@ function AdminHubUI:_forceCloseOverlays()
 	self._overlay = nil
 	self._onPlayerPicked = nil
 	self:_disconnectFoot()
+	self:_clearMotionConnections(self._sheetConnections)
+	self:_clearMotionConnections(self._rowConnections)
 	clearChildren(self._sheetFoot, { GhostButton = true, PrimaryButton = true, UIListLayout = true, UIPadding = true, UICorner = true })
 end
 
@@ -444,14 +516,22 @@ function AdminHubUI:_bindStatic()
 		if desc:IsA("TextButton") and string.sub(desc.Name, 1, 11) == "ActionTile_" then
 			local actionId = desc:GetAttribute("ActionId")
 			if type(actionId) == "string" then
+				-- A tile is only clickable while its action is allowed, so every press here is
+				-- an accepted one: the tile's icon pops as the sheet comes up.
+				local tileIconNode = desc:FindFirstChild("Icon", true)
+				local tileIcon: GuiObject? = if tileIconNode and tileIconNode:IsA("GuiObject") then tileIconNode else nil
 				self:_track(desc.MouseButton1Click:Connect(function()
+					UIMotion.pop(tileIcon, 1.2)
 					if self._onAction then
 						self._onAction(actionId)
 					end
 				end))
 				local gear = desc:FindFirstChild("GearButton")
 				if gear and gear:IsA("TextButton") then
+					local gearButton = gear
 					self:_track(gear.MouseButton1Click:Connect(function()
+						-- Rotation never touches layout, so the gear can spin where it sits.
+						UIMotion.spin(gearButton, 1)
 						if self._onGear then
 							self._onGear(actionId)
 						end
@@ -501,6 +581,21 @@ function AdminHubUI:getRestoreSpeed(): number
 	return self._restoreSpeed
 end
 
+-- Gear dials are the panel's only counters: a changed value rolls while the panel is on
+-- screen, and snaps whenever it is hidden, fractional, or already showing the new number.
+function AdminHubUI:_setDialValue(label: TextLabel, value: number)
+	local text = tostring(value)
+	if label.Text == text then
+		return
+	end
+	local from = tonumber(label.Text)
+	if from == nil or value % 1 ~= 0 or not self:isVisible() then
+		label.Text = text
+		return
+	end
+	UIMotion.countTo(label, from, value, 0.25)
+end
+
 function AdminHubUI:_syncGearLabels()
 	-- Separate dials: Ungravity gear → float/rise speed, Gravity gear → drop intensity.
 	for _, desc in ipairs(self._gallery:GetDescendants()) do
@@ -516,7 +611,7 @@ function AdminHubUI:_syncGearLabels()
 				label = gear:FindFirstChildWhichIsA("TextLabel", true)
 			end
 			if label and label:IsA("TextLabel") then
-				label.Text = tostring(value)
+				self:_setDialValue(label, value)
 			elseif gear.Text == "" or tonumber(gear.Text) ~= nil then
 				gear.Text = tostring(value)
 			end
@@ -536,16 +631,20 @@ function AdminHubUI:_refreshHeaderTitle()
 end
 
 function AdminHubUI:setFilter(filter: string)
+	local previousIndex = self._filterIndex
 	self._filter = filter
 	local selectedButton: TextButton? = nil
-	for _, button in ipairs(self._tabButtons) do
+	local index = 0
+	for i, button in ipairs(self._tabButtons) do
 		local isCurrent = tostring(button:GetAttribute("Filter")) == filter
 		SliderSelectorUtil.setTabButtonSelected(button, isCurrent)
 		button.BackgroundTransparency = 1
 		if isCurrent then
 			selectedButton = button
+			index = i
 		end
 	end
+	self._filterIndex = index
 	if self._backgroundPill and selectedButton then
 		task.defer(function()
 			if selectedButton.Parent and self._backgroundPill and self._backgroundPill.Parent then
@@ -553,9 +652,17 @@ function AdminHubUI:setFilter(filter: string)
 			end
 		end)
 	end
+	-- A real section switch, not show()'s re-assert of the current one: the gallery travels in
+	-- from the side the new section sits on (slideIn moves content through equal and opposite
+	-- UIPadding, so the scroll frame never changes size) and the chosen tab's label pops.
+	local switched = index ~= 0 and previousIndex ~= 0 and index ~= previousIndex and self._mainWrapper.Visible
+	if switched then
+		UIMotion.slideIn(self._gallery, if index > previousIndex then 1 else -1)
+		UIMotion.pop(UIMotion.scaleTargetOf(selectedButton :: TextButton), 1.12)
+	end
 	-- Keep designer greeting on 1-HeaderTitle (not section names).
 	self:_refreshHeaderTitle()
-	self:_applyFilterVisibility()
+	self:_applyFilterVisibility(switched)
 end
 
 function AdminHubUI:_tileMatchesQuery(tile: TextButton): boolean
@@ -572,7 +679,10 @@ function AdminHubUI:_tileMatchesQuery(tile: TextButton): boolean
 		or string.find(id, self._galleryQuery, 1, true) ~= nil
 end
 
-function AdminHubUI:_applyFilterVisibility()
+-- `animate` is only ever true on a real re-render (a section switch or the panel opening),
+-- never on a search keystroke or an allowed-actions echo from the server.
+function AdminHubUI:_applyFilterVisibility(animate: boolean?)
+	local shown: { GuiObject } = {}
 	for _, section in ipairs(self._gallery:GetChildren()) do
 		if not section:IsA("Frame") then
 			continue
@@ -591,11 +701,24 @@ function AdminHubUI:_applyFilterVisibility()
 					tile.Visible = visible
 					if visible then
 						anyVisible = true
+						table.insert(shown, tile)
 					end
 				end
 			end
 		end
 		section.Visible = anyVisible
+	end
+	-- A search that found nothing shakes the field that caused it — once, on the transition
+	-- into empty, not on every keystroke of a long miss.
+	local empty = #shown == 0 and self._galleryQuery ~= ""
+	if empty ~= self._galleryEmpty then
+		self._galleryEmpty = empty
+		if empty and self._mainWrapper.Visible then
+			UIMotion.wiggle(self._searchInput, 5)
+		end
+	end
+	if animate then
+		UIMotion.stagger(shown, self._fadeBases)
 	end
 end
 
@@ -609,6 +732,8 @@ function AdminHubUI:show()
 		blurName = "AdminHubUIBlur",
 		enableZoom = true,
 	})
+	-- Tiles cascade in under the panel's own pop (same pass that decides their visibility).
+	self:_applyFilterVisibility(true)
 end
 
 function AdminHubUI:hide()
@@ -664,6 +789,8 @@ function AdminHubUI:openPlayerPopup(title: string, onPick: (PlayerEntry) -> ())
 	self._popupTitle.Text = title
 	self._popupSearch.Text = ""
 	self._playerQuery = ""
+	-- A fresh open always cascades, even when the roster is the one we last rendered.
+	self._playerListSignature = nil
 	self:_renderPlayers()
 	-- Switching from sheet → player: snap-hide sheet, keep dim
 	if self._actionPopup.Visible then
@@ -704,8 +831,12 @@ function AdminHubUI:closePlayerPopup(keepDim: boolean?)
 end
 
 function AdminHubUI:_renderPlayers()
+	-- Rows are rebuilt from the template, so last render's press/hover connections go first.
+	self:_clearMotionConnections(self._rowConnections)
 	clearChildren(self._playerList, { PlayerSelectorCard = true })
 	local q = self._playerQuery
+	local entering: { GuiObject } = {}
+	local ids: { string } = {}
 	for _, entry in ipairs(self._players) do
 		local hay = string.lower(entry.displayName .. " " .. entry.username)
 		if q ~= "" and string.find(hay, q, 1, true) == nil then
@@ -715,6 +846,10 @@ function AdminHubUI:_renderPlayers()
 		card.Name = "PlayerCard_" .. tostring(entry.userId)
 		card.Visible = true
 		card.Parent = self._playerList
+		-- Bases are captured at creation, before any stagger has touched this clone's labels.
+		collectFadeTargets(card, self._fadeBases)
+		table.insert(entering, card)
+		table.insert(ids, tostring(entry.userId))
 		local title = card:FindFirstChild("1-Title", true)
 		local sub = card:FindFirstChild("2-SubTitle", true)
 		local badge = card:FindFirstChild("RoleBadge")
@@ -727,8 +862,10 @@ function AdminHubUI:_renderPlayers()
 		if badge and badge:IsA("TextLabel") then
 			badge.Text = entry.role or "Player"
 		end
-		local avatar = card:FindFirstChild("PlayerProfilePicture")
-		if avatar and avatar:IsA("ImageLabel") then
+		local avatarNode = card:FindFirstChild("PlayerProfilePicture")
+		local avatar: ImageLabel? = if avatarNode and avatarNode:IsA("ImageLabel") then avatarNode else nil
+		if avatar then
+			local image = avatar
 			task.spawn(function()
 				local ok, url = pcall(function()
 					return Players:GetUserThumbnailAsync(
@@ -737,9 +874,10 @@ function AdminHubUI:_renderPlayers()
 						Enum.ThumbnailSize.Size48x48
 					)
 				end)
-				if ok and type(url) == "string" and avatar.Parent then
-					avatar.Image = url
-					avatar.ImageTransparency = 0
+				if ok and type(url) == "string" and image.Parent then
+					image.Image = url
+					-- The headshot arrives long after the row did: fade it in on its own.
+					UIMotion.tween(image, 0.22, { ImageTransparency = 0 })
 				end
 			end)
 		end
@@ -748,22 +886,38 @@ function AdminHubUI:_renderPlayers()
 		card.BackgroundTransparency = 1
 		card.MouseEnter:Connect(function()
 			if card.Parent then
-				card.BackgroundTransparency = 0.94
+				UIMotion.tween(card, 0.14, { BackgroundTransparency = 0.94 })
 			end
 		end)
 		card.MouseLeave:Connect(function()
 			if card.Parent then
-				card.BackgroundTransparency = 1
+				UIMotion.tween(card, 0.18, { BackgroundTransparency = 1 })
 			end
 		end)
-		PressFeedback.bindPressScale(card)
+		self:_bindPress(card, self._rowConnections)
 		card.MouseButton1Click:Connect(function()
 			local cb = self._onPlayerPicked
+			-- The chosen row's avatar pops before the popup travels away.
+			UIMotion.pop(avatar, 1.18)
 			self:closePlayerPopup(true)
 			if cb then
 				cb(entry)
 			end
 		end)
+	end
+	-- An empty search shakes the field; a roster the server merely echoed re-renders without
+	-- re-cascading, so an open popup does not flicker every time a player joins.
+	local empty = #entering == 0 and q ~= ""
+	if empty ~= self._playerListEmpty then
+		self._playerListEmpty = empty
+		if empty and self._playerPopup.Visible then
+			UIMotion.wiggle(self._popupSearch, 5)
+		end
+	end
+	local signature = table.concat(ids, ",")
+	if signature ~= self._playerListSignature then
+		self._playerListSignature = signature
+		UIMotion.stagger(entering, self._fadeBases)
 	end
 end
 
@@ -844,6 +998,8 @@ function AdminHubUI:openSheet(
 )
 	self._sheetTitle.Text = title
 	self:_applySheetChrome(chromeActionId or actionId)
+	-- The content that owned these is about to be destroyed and rebuilt.
+	self:_clearMotionConnections(self._sheetConnections)
 	clearChildren(self._sheetBody, self:_sheetBodyKeepNames())
 	clearChildren(self._sheetFoot, { GhostButton = true, PrimaryButton = true, UIListLayout = true, UIPadding = true, UICorner = true })
 	-- Prefer editable sheet masters (ActionTemplates/* or SheetBody/<actionId>).
@@ -871,6 +1027,12 @@ function AdminHubUI:openSheet(
 	self._overlay = "sheet"
 	self:_showDim()
 	self._anim:presentDialog(self._actionPopup)
+	-- The dialog travels first (dialogOpen snap + settle ≈ 0.25s); its freshly built content
+	-- drops in under that and fades up once the sheet has arrived. slideInVertical moves the
+	-- content through equal and opposite UIPadding, so the sheet itself never changes size.
+	UIMotion.fadeIn(collectFadeTargets(contentRoot, self._fadeBases), self._fadeBases, 0.14)
+	UIMotion.slideInVertical(contentRoot, -1, 14)
+	UIMotion.popIn(self._sheetIcon, 0.7)
 end
 
 function AdminHubUI:closeSheet(keepDim: boolean?)
@@ -920,6 +1082,47 @@ function AdminHubUI:_disconnectFoot()
 	end
 end
 
+-- The first visible field the sheet is still waiting on, or nil when anything is filled in.
+-- Amount wins the shake when a sheet has several empty boxes: it is the one the controller
+-- refuses on, and the message beside it is usually optional.
+function AdminHubUI:_emptySheetField(): TextBox?
+	local candidate: TextBox? = nil
+	-- Only boxes the admin can actually see: SheetBody also holds the hidden design masters,
+	-- whose fields are always empty and would shake in place of the real one.
+	local function onScreen(node: Instance): boolean
+		local current: Instance? = node
+		while current ~= nil and current ~= self._sheetBody do
+			if current:IsA("GuiObject") and not current.Visible then
+				return false
+			end
+			current = current.Parent
+		end
+		return true
+	end
+	for _, node in ipairs(self._sheetBody:GetDescendants()) do
+		if node:IsA("TextBox") and node.Visible and onScreen(node) then
+			if string.gsub(node.Text, "^%s*(.-)%s*$", "%1") ~= "" then
+				return nil
+			end
+			if candidate == nil or node.Name == "Amount" then
+				candidate = node
+			end
+		end
+	end
+	return candidate
+end
+
+-- A primary foot press is the sheet's commit: empty-handed, it shakes the field that is
+-- missing; otherwise the sheet's own icon pops as the action goes out.
+function AdminHubUI:_acknowledgePrimary()
+	local field = self:_emptySheetField()
+	if field then
+		UIMotion.wiggle(field, 6)
+		return
+	end
+	UIMotion.pop(self._sheetIcon, 1.2)
+end
+
 function AdminHubUI:setSheetFoot(buttons: { SheetFootButton })
 	self:_disconnectFoot()
 	self._footConnections = {} :: { RBXScriptConnection }
@@ -966,16 +1169,23 @@ function AdminHubUI:setSheetFoot(buttons: { SheetFootButton })
 				self._footConnections,
 				ghostBtn.MouseButton1Click:Connect(secondaryDef.onClick)
 			)
+			-- Template foot buttons outlive every sheet, so their press/hover lives with the panel.
+			self:_bindPress(ghostBtn)
 		else
 			ghostBtn.Visible = false
 		end
 		if primaryDef then
+			local commit = primaryDef.onClick
 			primaryBtn.Visible = true
 			primaryBtn.Text = primaryDef.text
 			table.insert(
 				self._footConnections,
-				primaryBtn.MouseButton1Click:Connect(primaryDef.onClick)
+				primaryBtn.MouseButton1Click:Connect(function()
+					self:_acknowledgePrimary()
+					commit()
+				end)
 			)
+			self:_bindPress(primaryBtn)
 		end
 		return
 	end
@@ -1000,8 +1210,17 @@ function AdminHubUI:setSheetFoot(buttons: { SheetFootButton })
 		if corner then
 			corner.CornerRadius = UDim.new(1, 0)
 		end
-		PressFeedback.bindPressScale(btn)
-		btn.MouseButton1Click:Connect(def.onClick)
+		self:_bindPress(btn, self._sheetConnections)
+		local commit = def.onClick
+		table.insert(
+			self._footConnections,
+			btn.MouseButton1Click:Connect(function()
+				if isPrimary then
+					self:_acknowledgePrimary()
+				end
+				commit()
+			end)
+		)
 	end
 end
 
@@ -1110,7 +1329,8 @@ function AdminHubUI:showSelectedPlayer(parent: Instance, entry: PlayerEntry?, on
 		avatar = row:FindFirstChild("Avatar", true)
 	end
 	if avatar and avatar:IsA("ImageLabel") then
-		avatar.ImageTransparency = 1
+		local image = avatar
+		image.ImageTransparency = 1
 		task.spawn(function()
 			local ok, url = pcall(function()
 				return Players:GetUserThumbnailAsync(
@@ -1119,15 +1339,15 @@ function AdminHubUI:showSelectedPlayer(parent: Instance, entry: PlayerEntry?, on
 					Enum.ThumbnailSize.Size48x48
 				)
 			end)
-			if ok and type(url) == "string" and avatar.Parent then
-				avatar.Image = url
-				avatar.ImageTransparency = 0
+			if ok and type(url) == "string" and image.Parent then
+				image.Image = url
+				UIMotion.tween(image, 0.22, { ImageTransparency = 0 })
 			end
 		end)
 	end
 
 	if onChange then
-		PressFeedback.bindPressScale(row)
+		self:_bindPress(row, self._sheetConnections)
 		row.MouseButton1Click:Connect(onChange)
 	end
 end
@@ -1314,17 +1534,25 @@ function AdminHubUI:addPickGrid(
 	local buttons: { TextButton } = {}
 	local cardH = if cols == 1 then 56 else 96
 
+	-- The first pass paints the resting state instantly; later passes cross-fade the
+	-- highlight, and a repeat of the current selection is not a pass at all.
+	local synced: string? = nil
 	local function sync()
+		if synced == picked then
+			return
+		end
+		local time = if synced == nil then 0 else 0.16
+		synced = picked
 		for _, btn in ipairs(buttons) do
 			local key = tostring(btn:GetAttribute("PickKey") or "")
 			local on = key == picked
-			btn.BackgroundTransparency = if on then 0.90 else 0.96
 			btn.BackgroundColor3 = COLORS.fill
+			UIMotion.tween(btn, time, { BackgroundTransparency = if on then 0.90 else 0.96 })
 			local stroke = btn:FindFirstChildOfClass("UIStroke")
 			if stroke then
-				stroke.Transparency = if on then 0 else 1
 				stroke.Color = COLORS.ring
 				stroke.Thickness = 1.5
+				UIMotion.tween(stroke, time, { Transparency = if on then 0 else 1 })
 			end
 		end
 	end
@@ -1421,7 +1649,7 @@ function AdminHubUI:addPickGrid(
 			sync()
 			onChanged(picked)
 		end)
-		PressFeedback.bindPressScale(btn)
+		self:_bindPress(btn, self._sheetConnections)
 		table.insert(buttons, btn)
 	end
 	sync()
@@ -1459,13 +1687,21 @@ function AdminHubUI:addChipRow(
 
 	local picked = initial
 	local chips: { TextButton } = {}
+	local synced: string? = nil
 	local function sync()
+		if synced == picked then
+			return
+		end
+		local time = if synced == nil then 0 else 0.16
+		synced = picked
 		for _, chip in ipairs(chips) do
 			local on = tostring(chip:GetAttribute("ChipValue") or chip.Text) == picked
 			-- HTML .chip[aria-pressed] → white CTA / ink
-			chip.BackgroundTransparency = if on then 0 else 0.94
-			chip.BackgroundColor3 = if on then COLORS.cta else COLORS.fill
-			chip.TextColor3 = if on then COLORS.ink else COLORS.muted
+			UIMotion.tween(chip, time, {
+				BackgroundTransparency = if on then 0 else 0.94,
+				BackgroundColor3 = if on then COLORS.cta else COLORS.fill,
+				TextColor3 = if on then COLORS.ink else COLORS.muted,
+			})
 		end
 	end
 	for i, value in ipairs(values) do
@@ -1491,7 +1727,7 @@ function AdminHubUI:addChipRow(
 			sync()
 			onChanged(picked)
 		end)
-		PressFeedback.bindPressScale(chip)
+		self:_bindPress(chip, self._sheetConnections)
 		table.insert(chips, chip)
 	end
 	sync()
@@ -1580,28 +1816,39 @@ function AdminHubUI:bindPickCards(
 		picked = tostring(buttons[1]:GetAttribute("PickKey") or picked)
 	end
 
+	local synced: string? = nil
 	local function sync()
+		if synced == picked then
+			return
+		end
+		local time = if synced == nil then 0 else 0.16
+		synced = picked
 		for _, btn in ipairs(buttons) do
 			local key = tostring(btn:GetAttribute("PickKey") or "")
 			local on = key == picked
-			btn.BackgroundTransparency = if on then 0.90 else 0.96
 			btn.BackgroundColor3 = COLORS.fill
+			UIMotion.tween(btn, time, { BackgroundTransparency = if on then 0.90 else 0.96 })
 			local stroke = btn:FindFirstChildOfClass("UIStroke")
 			if stroke then
-				stroke.Transparency = if on then 0 else 1
 				stroke.Color = COLORS.ring
 				stroke.Thickness = 1.5
+				UIMotion.tween(stroke, time, { Transparency = if on then 0 else 1 })
 			end
 		end
 	end
 
 	for _, btn in ipairs(buttons) do
+		-- The designer's card icon pops when the card is chosen; UIMotion refuses the scale
+		-- where the icon is laid out or inside a CanvasGroup, and the highlight carries it.
+		local iconNode = btn:FindFirstChild("IconCircle", true)
+		local icon: GuiObject? = if iconNode and iconNode:IsA("GuiObject") then iconNode else nil
 		btn.MouseButton1Click:Connect(function()
 			picked = tostring(btn:GetAttribute("PickKey") or picked)
 			sync()
+			UIMotion.pop(icon, 1.15)
 			onChanged(picked)
 		end)
-		PressFeedback.bindPressScale(btn)
+		self:_bindPress(btn, self._sheetConnections)
 	end
 	sync()
 	return function()
@@ -1640,12 +1887,20 @@ function AdminHubUI:bindChipRowTemplate(
 		picked = tostring(chips[1]:GetAttribute("ChipValue") or chips[1].Text)
 	end
 
+	local synced: string? = nil
 	local function sync()
+		if synced == picked then
+			return
+		end
+		local time = if synced == nil then 0 else 0.16
+		synced = picked
 		for _, chip in ipairs(chips) do
 			local on = tostring(chip:GetAttribute("ChipValue") or chip.Text) == picked
-			chip.BackgroundTransparency = if on then 0 else 0.94
-			chip.BackgroundColor3 = if on then COLORS.cta else COLORS.fill
-			chip.TextColor3 = if on then COLORS.ink else COLORS.muted
+			UIMotion.tween(chip, time, {
+				BackgroundTransparency = if on then 0 else 0.94,
+				BackgroundColor3 = if on then COLORS.cta else COLORS.fill,
+				TextColor3 = if on then COLORS.ink else COLORS.muted,
+			})
 		end
 	end
 
@@ -1655,7 +1910,7 @@ function AdminHubUI:bindChipRowTemplate(
 			sync()
 			onChanged(picked)
 		end)
-		PressFeedback.bindPressScale(chip)
+		self:_bindPress(chip, self._sheetConnections)
 	end
 	sync()
 	return function()
@@ -1676,12 +1931,20 @@ function AdminHubUI:fillChipRow(
 	end
 	local picked = initial
 	local chips: { TextButton } = {}
+	local synced: string? = nil
 	local function sync()
+		if synced == picked then
+			return
+		end
+		local time = if synced == nil then 0 else 0.16
+		synced = picked
 		for _, chip in ipairs(chips) do
 			local on = tostring(chip:GetAttribute("ChipValue") or chip.Text) == picked
-			chip.BackgroundTransparency = if on then 0 else 0.94
-			chip.BackgroundColor3 = if on then COLORS.cta else COLORS.fill
-			chip.TextColor3 = if on then COLORS.ink else COLORS.muted
+			UIMotion.tween(chip, time, {
+				BackgroundTransparency = if on then 0 else 0.94,
+				BackgroundColor3 = if on then COLORS.cta else COLORS.fill,
+				TextColor3 = if on then COLORS.ink else COLORS.muted,
+			})
 		end
 	end
 	for i, value in ipairs(values) do
@@ -1707,7 +1970,7 @@ function AdminHubUI:fillChipRow(
 			sync()
 			onChanged(picked)
 		end)
-		PressFeedback.bindPressScale(chip)
+		self:_bindPress(chip, self._sheetConnections)
 		table.insert(chips, chip)
 	end
 	sync()
@@ -1718,10 +1981,8 @@ end
 
 function AdminHubUI:destroy()
 	self:_disconnectFoot()
-	for _, handle in ipairs(self._pressHandles) do
-		handle:Destroy()
-	end
-	table.clear(self._pressHandles)
+	self:_clearMotionConnections(self._rowConnections)
+	self:_clearMotionConnections(self._sheetConnections)
 	if self._dimTween then
 		self._dimTween:Cancel()
 		self._dimTween = nil

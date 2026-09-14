@@ -12,6 +12,7 @@ local TitleColorPreset = require(ReplicatedStorage.Hazastudio_ClubKit.OverheadEf
 local AnimationModes = TitleColorPreset.AnimationModes
 local SpecialTitleRenderer = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.SpecialTitleRenderer)
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
+local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 
 type PlayerData = {
 	userId: number,
@@ -22,6 +23,8 @@ type PlayerData = {
 type PlayerListEntry = {
 	button: TextButton,
 	connection: RBXScriptConnection?,
+	-- Last background alpha handed to UIMotion, so an unchanged re-render does not restart the fade.
+	alpha: number?,
 }
 
 export type TitleEditorSnapshot = {
@@ -168,29 +171,35 @@ local function inputPosition(input: InputObject): Vector2
 	return Vector2.new(input.Position.X, input.Position.Y)
 end
 
+-- Selection reads as a colour/transparency crossfade, never a scale: every option row here is
+-- laid out inside a CanvasGroup (ADR 0005). The attribute remembers the state the button was
+-- last put in, so a re-render that changes nothing snaps instead of restarting the tween — the
+-- preset grid re-renders in full on every click.
 local function setButtonSelected(button: GuiButton?, selected: boolean)
 	if not button then
 		return
 	end
+	local time = if button:GetAttribute("UIMotionSelected") == selected then 0 else 0.16
+	button:SetAttribute("UIMotionSelected", selected)
 	button.Visible = true
-	button.BackgroundTransparency = selected and 0 or 0.95
+	UIMotion.tween(button, time, { BackgroundTransparency = if selected then 0 else 0.95 })
 
 	if button:IsA("ImageButton") then
 		local stroke = button:FindFirstChildWhichIsA("UIStroke")
 		if stroke then
-			stroke.Transparency = selected and 0 or 0.5
+			UIMotion.tween(stroke, time, { Transparency = if selected then 0 else 0.5 })
 		end
 		return
 	end
 
 	local textButton = button :: TextButton
 	local contentColor = selected and Color3.fromRGB(12, 12, 12) or Color3.fromRGB(255, 255, 255)
-	textButton.TextColor3 = contentColor
+	UIMotion.tween(textButton, time, { TextColor3 = contentColor })
 	for _, child in ipairs(textButton:GetDescendants()) do
 		if child:IsA("TextLabel") then
-			child.TextColor3 = contentColor
+			UIMotion.tween(child, time, { TextColor3 = contentColor })
 		elseif child:IsA("ImageLabel") or child:IsA("ImageButton") then
-			(child :: ImageLabel).ImageColor3 = contentColor
+			UIMotion.tween(child, time, { ImageColor3 = contentColor })
 		end
 	end
 end
@@ -479,6 +488,17 @@ function AdminPanelUI.new(gui: ScreenGui)
 	self._previewConnections = {} :: { RBXScriptConnection }
 	self._emojiConnections = {} :: { RBXScriptConnection }
 	self._panelDragConnections = {} :: { RBXScriptConnection }
+	-- Press/hover connections on the buttons this panel builds once. Emoji tiles are rebuilt,
+	-- so theirs go into _emojiConnections, which _populateEmojiButtons already disconnects.
+	self._motionConnections = {} :: { RBXScriptConnection }
+	-- Designed transparency of every element UIMotion fades here, captured once per instance
+	-- before the first stagger touches it.
+	self._fadeBases = {} :: { [GuiObject]: number }
+	self._emojiButtons = {} :: { GuiObject }
+	-- Last animated visibility of the reveals below; nil until the first render decides.
+	self._buttonGroupVisible = nil :: boolean?
+	self._selectedInfoVisible = nil :: boolean?
+	self._notFoundVisible = nil :: boolean?
 
 	gui.Enabled = false
 	mainWrapper.Visible = false
@@ -518,11 +538,25 @@ function AdminPanelUI.new(gui: ScreenGui)
 		emojiPicker.Visible = false
 	end)
 
+	self:_captureFadeBases(notFoundCard)
 	self:_populateEmojiButtons()
 	self:_renderSizeOptions()
 	self:_renderFontOptions()
 	self:_populatePresetCards()
 	self:_setSelectedPlayerInfo(nil, nil)
+
+	-- Bound once, on the buttons that exist for the life of the panel. Size/font rows are
+	-- destroyed and rebuilt on every click, so they are deliberately left to the crossfade in
+	-- setButtonSelected rather than accumulating a binding per rebuild.
+	self:_bindButtonMotion(closeButton)
+	self:_bindButtonMotion(saveTitleButton)
+	self:_bindButtonMotion(deleteTitleButton)
+	self:_bindButtonMotion(addEmojiButton)
+	self:_bindButtonMotion(emojiCloseButton)
+	local tabButton = selector:FindFirstChild("GiveTitleTabButton")
+	if tabButton and tabButton:IsA("GuiObject") then
+		self:_bindButtonMotion(tabButton :: GuiObject)
+	end
 
 	for _, connection in ipairs(bindDraggablePanel(mainWrapper, headerWrapper, gui, false)) do
 		table.insert(self._panelDragConnections, connection)
@@ -538,6 +572,38 @@ function AdminPanelUI.new(gui: ScreenGui)
 	end
 
 	return self
+end
+
+-- Press squash + hover lift, with the connections owned by this panel. UIMotion refuses to scale
+-- anything inside a CanvasGroup and this panel has twelve of them, so most of these calls return
+-- no connections at all; the substitutes are the crossfades in setButtonSelected, the group
+-- fades below, and the rotation flourishes on save/delete.
+function AdminPanelUI:_bindButtonMotion(button: GuiObject?, into: { RBXScriptConnection }?)
+	if not button then
+		return
+	end
+	local owner: { RBXScriptConnection } = into or self._motionConnections
+	for _, connection in ipairs(UIMotion.bindPress(button)) do
+		table.insert(owner, connection)
+	end
+	for _, connection in ipairs(UIMotion.bindHover(button)) do
+		table.insert(owner, connection)
+	end
+end
+
+-- Records the designed transparency of everything fadeable under one row, once, at build time.
+-- UIMotion.captureBases ignores anything with no transparency channel.
+function AdminPanelUI:_captureFadeBases(root: GuiObject?)
+	if not root then
+		return
+	end
+	local targets: { GuiObject } = { root }
+	for _, descendant in ipairs(root:GetDescendants()) do
+		if descendant:IsA("GuiObject") then
+			table.insert(targets, descendant :: GuiObject)
+		end
+	end
+	UIMotion.captureBases(targets, self._fadeBases)
 end
 
 function AdminPanelUI:_destroyPresetCardEffects()
@@ -602,6 +668,8 @@ function AdminPanelUI:_populatePresetCards()
 
 		self:_applyPresetCardPreview(card, presetMode)
 		setButtonSelected(card, presetMode == self._selectedPresetMode)
+		-- Built once (only .new calls this), so one binding per card.
+		self:_bindButtonMotion(card)
 
 		card.MouseButton1Click:Connect(function()
 			self._selectedPresetMode = presetMode
@@ -693,6 +761,7 @@ function AdminPanelUI:_populateEmojiButtons()
 		connection:Disconnect()
 	end
 	table.clear(self._emojiConnections)
+	table.clear(self._emojiButtons)
 	for _, child in ipairs(self._emojiList:GetChildren()) do
 		if child:IsA("TextButton") and child ~= self._emojiTemplate then
 			child:Destroy()
@@ -710,6 +779,9 @@ function AdminPanelUI:_populateEmojiButtons()
 			button.Text = emoji
 		end
 		button.Parent = self._emojiList
+		table.insert(self._emojiButtons, button :: GuiObject)
+		self:_captureFadeBases(button)
+		self:_bindButtonMotion(button, self._emojiConnections)
 		table.insert(
 			self._emojiConnections,
 			button.MouseButton1Click:Connect(function()
@@ -732,6 +804,12 @@ end
 function AdminPanelUI:_openEmojiPicker(pointer: Vector2)
 	placeNearPointer(self._emojiPicker, pointer, self._gui)
 	popOpen(self._anim, self._emojiPicker)
+	-- The shell pops (AnimationHelper); the grid drops in under it and the tiles fade up.
+	-- slideInVertical moves the list through equal and opposite UIPadding, so the picker's
+	-- CanvasGroup never changes AbsoluteSize (ADR 0005). The cascade is capped so a 96-tile
+	-- grid settles in a beat rather than seconds.
+	UIMotion.slideInVertical(self._emojiList, -1, 14)
+	UIMotion.stagger(self._emojiButtons, self._fadeBases, 0.012, 18)
 end
 
 function AdminPanelUI:_clearViewport()
@@ -930,13 +1008,37 @@ function AdminPanelUI:_syncRealtimePreview()
 	end
 end
 
+-- The delete button's group appears the moment the selected player turns out to have a title.
+-- It is a CanvasGroup, so it fades instead of popping (ADR 0005). Early-return keeps the server
+-- echo — which re-renders the whole editor on every overhead update — from restarting the fade.
+function AdminPanelUI:_setButtonGroupVisible(visible: boolean)
+	if self._buttonGroupVisible == visible then
+		return
+	end
+	self._buttonGroupVisible = visible
+	local group = self._buttonGroup
+	if not group:IsA("CanvasGroup") then
+		group.Visible = visible
+		return
+	end
+	UIMotion.cancel(group)
+	if visible then
+		group.GroupTransparency = 1
+		group.Visible = true
+		UIMotion.tween(group, 0.22, { GroupTransparency = 0 })
+	else
+		group.Visible = false
+		group.GroupTransparency = 0
+	end
+end
+
 function AdminPanelUI:_applyPlayerInfoContent(playerData: PlayerData?, currentTitle: string?)
 	if not playerData then
 		self._selectedNameLabel.Text = "Select a player"
 		self._selectedUsernameLabel.Text = "@readywhenyouare"
 		self._selectedCurrentTitleLabel.Text = "No custom title yet"
 		self._selectedProfilePicture.Image = ""
-		self._buttonGroup.Visible = false
+		self:_setButtonGroupVisible(false)
 		self:_setAvatarPreviewInputCapture(false)
 		self._avatarPreview.Visible = false
 		return
@@ -945,7 +1047,7 @@ function AdminPanelUI:_applyPlayerInfoContent(playerData: PlayerData?, currentTi
 	self._selectedUsernameLabel.Text = "@" .. playerData.username
 	self._selectedCurrentTitleLabel.Text = currentTitle and ("Current title: " .. currentTitle) or "No custom title yet"
 	self._selectedProfilePicture.Image = getThumbnail(playerData.userId)
-	self._buttonGroup.Visible = currentTitle ~= nil and currentTitle ~= ""
+	self:_setButtonGroupVisible(currentTitle ~= nil and currentTitle ~= "")
 end
 
 function AdminPanelUI:_setSelectedPlayerInfo(playerData: PlayerData?, snapshot: TitleEditorSnapshot?)
@@ -959,8 +1061,16 @@ function AdminPanelUI:_setSelectedPlayerInfo(playerData: PlayerData?, snapshot: 
 		self:applyTitleEditorState(nil, false)
 		self._titleInput.Text = ""
 	end
-	self._selectedPlayerInfo.Visible = playerData ~= nil
-	self._selectPlayerFirstInfo.Visible = playerData == nil
+	local hasPlayer = playerData ~= nil
+	if self._selectedInfoVisible ~= hasPlayer then
+		self._selectedInfoVisible = hasPlayer
+		self._selectedPlayerInfo.Visible = hasPlayer
+		self._selectPlayerFirstInfo.Visible = not hasPlayer
+		-- Picking (or clearing) a player swaps the whole editor head. The incoming block slides
+		-- in through equal and opposite UIPadding, so the scrolling list it lives in keeps its
+		-- height and the rows below it never jump.
+		UIMotion.slideIn(if hasPlayer then self._selectedPlayerInfo else self._selectPlayerFirstInfo, 1)
+	end
 end
 
 function AdminPanelUI:updateSelectedPlayerSnapshot(playerData: PlayerData?, snapshot: TitleEditorSnapshot?)
@@ -985,6 +1095,10 @@ function AdminPanelUI:_ensurePlayerCard(index: number): PlayerListEntry
 	local button = self._playerTemplate:Clone() :: TextButton
 	button.Visible = false
 	button.Parent = self._scrollFrame
+	-- Bases are captured at creation, before any stagger has touched this card's labels, and
+	-- the press/hover binding is made once per pooled card rather than once per render.
+	self:_captureFadeBases(button)
+	self:_bindButtonMotion(button)
 	entry = { button = button, connection = nil }
 	self._playerCardPool[index] = entry
 	return entry
@@ -998,7 +1112,9 @@ function AdminPanelUI:_hideUnusedPlayerCards(firstUnusedIndex: number)
 			entry.connection = nil
 		end
 		entry.button.Visible = false
-		entry.button.BackgroundTransparency = 1
+		-- Snap (and cancel a highlight mid-fade) — the card is off screen.
+		entry.alpha = 1
+		UIMotion.tween(entry.button, 0, { BackgroundTransparency = 1 })
 	end
 end
 
@@ -1008,20 +1124,36 @@ function AdminPanelUI:_refreshPlayerCardSelection()
 		local isSelected = self._selectedPlayer ~= nil
 			and type(userId) == "number"
 			and self._selectedPlayer.userId == userId
-		entry.button.BackgroundTransparency = if isSelected then Config.Gift.CARD_SELECTED_ALPHA else 1
+		local alpha = if isSelected then Config.Gift.CARD_SELECTED_ALPHA else 1
+		-- Only the two cards that actually changed crossfade; the first paint snaps.
+		if entry.alpha ~= alpha then
+			local first = entry.alpha == nil
+			entry.alpha = alpha
+			UIMotion.tween(entry.button, if first then 0 else 0.18, { BackgroundTransparency = alpha })
+		end
 	end
 end
 
 function AdminPanelUI:_renderPlayerList(players: { PlayerData })
 	self._playerTemplate.Visible = false
-	self._notFoundCard.Visible = #players == 0
-	if #players == 0 then
+	local showNotFound = #players == 0
+	if showNotFound then
 		if #self._allPlayers == 0 then
 			setNotFoundCardText(self._notFoundCard, EMPTY_STATE_DEFAULT_TITLE, EMPTY_STATE_DEFAULT_SUBTITLE)
 		else
 			setNotFoundCardText(self._notFoundCard, EMPTY_STATE_SEARCH_TITLE, EMPTY_STATE_SEARCH_SUBTITLE)
 		end
 	end
+	-- The empty state fades in the once the list actually empties, not on every keystroke that
+	-- keeps it empty.
+	if showNotFound ~= self._notFoundVisible then
+		self._notFoundVisible = showNotFound
+		self._notFoundCard.Visible = showNotFound
+		if showNotFound then
+			UIMotion.stagger({ self._notFoundCard :: GuiObject }, self._fadeBases)
+		end
+	end
+	local entering: { GuiObject } = {}
 	local query = trim(self._searchBox.Text)
 	for index, playerData in ipairs(players) do
 		local entry = self:_ensurePlayerCard(index)
@@ -1029,6 +1161,9 @@ function AdminPanelUI:_renderPlayerList(players: { PlayerData })
 		if entry.connection then
 			entry.connection:Disconnect()
 			entry.connection = nil
+		end
+		if not card.Visible then
+			table.insert(entering, card :: GuiObject)
 		end
 		card.Visible = true
 		card.LayoutOrder = index
@@ -1067,6 +1202,9 @@ function AdminPanelUI:_renderPlayerList(players: { PlayerData })
 		end)
 	end
 	self:_hideUnusedPlayerCards(#players + 1)
+	-- Only cards that were hidden a moment ago cascade in; a re-render that just re-labels the
+	-- same rows (a search that narrows, a server echo) leaves them alone.
+	UIMotion.stagger(entering, self._fadeBases)
 	self:_refreshPlayerCardSelection()
 end
 
@@ -1088,8 +1226,13 @@ function AdminPanelUI:populatePlayers(players: { PlayerData })
 end
 
 function AdminPanelUI:setTab(tab: string)
+	local wasVisible = self._inputTitleFrame.Visible
 	self._activeTab = "GiveTitle"
 	self._inputTitleFrame.Visible = true
+	if not wasVisible then
+		-- A page the admin watches arrive slides in; a tab press that changes nothing does not.
+		UIMotion.slideIn(self._inputTitleFrame, 1)
+	end
 	local button = self._selector:FindFirstChild("GiveTitleTabButton")
 	if button then
 		for _, child in ipairs(button:GetChildren()) do
@@ -1154,11 +1297,27 @@ function AdminPanelUI:bindTabButton(tab: string, callback: () -> ())
 end
 
 function AdminPanelUI:bindApplyTitle(callback: () -> ())
-	self._saveTitleButton.MouseButton1Click:Connect(callback)
+	self._saveTitleButton.MouseButton1Click:Connect(function()
+		-- Save lives in the OverlayWrapper CanvasGroup, so it cannot squash (ADR 0005).
+		-- Rotation is the one flourish that is safe there: an empty field shakes the box the
+		-- admin still has to fill, a real save spins the button's icon if it has one.
+		if trim(self._titleInput.Text) == "" then
+			UIMotion.wiggle(self._titleInput, 6)
+		else
+			local icon = self._saveTitleButton:FindFirstChildWhichIsA("ImageLabel")
+			if icon and icon:IsA("ImageLabel") then
+				UIMotion.spin(icon :: GuiObject, 1)
+			end
+		end
+		callback()
+	end)
 end
 
 function AdminPanelUI:bindDeleteTitle(callback: () -> ())
-	self._deleteTitleButton.MouseButton1Click:Connect(callback)
+	self._deleteTitleButton.MouseButton1Click:Connect(function()
+		UIMotion.wiggle(self._deleteTitleButton, 8)
+		callback()
+	end)
 end
 
 function AdminPanelUI:bindEditTitle(_callback: () -> ()) end
@@ -1177,12 +1336,26 @@ function AdminPanelUI:show()
 		blurName = "AdminPanelUIBlur",
 		enableZoom = true,
 	})
+	-- AnimationHelper owns the shell's arrival; the editor page slides in under it so an
+	-- opened panel is never a still frame. Padding-driven, so nothing changes size.
+	UIMotion.slideIn(self._inputTitleFrame, 1, 22)
 end
 
 function AdminPanelUI:hide()
 	self._emojiPicker.Visible = false
 	self:_setAvatarPreviewInputCapture(false)
 	self._avatarPreview.Visible = false
+	-- Nothing loops on this panel, but a card highlight or the button-group reveal can be in
+	-- flight when it closes. Snap each to the value it was heading for (time 0 cancels the
+	-- channel and assigns), so the next open starts from the resting state.
+	if self._buttonGroup:IsA("CanvasGroup") and self._buttonGroupVisible ~= nil then
+		UIMotion.tween(self._buttonGroup, 0, { GroupTransparency = 0 })
+	end
+	for _, entry in ipairs(self._playerCardPool) do
+		if entry.alpha ~= nil then
+			UIMotion.tween(entry.button, 0, { BackgroundTransparency = entry.alpha })
+		end
+	end
 	if not self._mainWrapper.Visible and not self._gui.Enabled then
 		return
 	end

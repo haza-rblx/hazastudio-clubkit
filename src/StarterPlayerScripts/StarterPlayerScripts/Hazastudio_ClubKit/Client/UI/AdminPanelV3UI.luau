@@ -24,6 +24,7 @@ local SliderSelectorUtil = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.U
 local PresetPreview = require(script.Parent.Parent.Utils.PresetPreview)
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
 local MotionPresets = require(script.Parent.Parent.Utils.MotionPresets)
+local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 
 local AdminPanelV3UI = {}
 AdminPanelV3UI.__index = AdminPanelV3UI
@@ -94,10 +95,30 @@ local function setLabelText(root: Instance?, text: string)
 	end
 end
 
+-- Press squash + hover lift (ADR 0011). UIMotion hands its connections back and one of
+-- them lives on UserInputService, so each button owns its own: a pooled row that is
+-- destroyed on the next render must not leave a listener behind.
+function AdminPanelV3UI._bindMotion(button: GuiObject)
+	local connections = UIMotion.bindPress(button)
+	for _, connection in ipairs(UIMotion.bindHover(button)) do
+		table.insert(connections, connection)
+	end
+	if #connections == 0 then
+		return
+	end
+	button.Destroying:Once(function()
+		for _, connection in ipairs(connections) do
+			connection:Disconnect()
+		end
+		table.clear(connections)
+	end)
+end
+
 local function bindButton(instance: Instance?, callback: () -> ())
 	if instance and instance:IsA("GuiButton") then
 		instance.AutoButtonColor = false
 		instance.Activated:Connect(callback)
+		AdminPanelV3UI._bindMotion(instance)
 	end
 end
 
@@ -222,6 +243,17 @@ function AdminPanelV3UI.tryCreate(playerGui: Instance, anim: any?): any?
 	self._selectedPlayer = nil :: PlayerEntry?
 	self._allPlayers = {} :: { PlayerEntry }
 
+	-- Designed transparencies for every fade this panel plays, captured once per element
+	-- and keyed weakly so destroyed rows do not pin their clones.
+	self._fadeBases = setmetatable({}, { __mode = "k" }) :: any
+	-- What is currently painted. The panel repaints from overhead payloads, so every
+	-- painter compares against these before it animates (or rebuilds) anything.
+	self._playerListKey = nil :: string?
+	self._currentTitleText = nil :: string?
+	self._choiceKey = nil :: string?
+	self._imageListKey = nil :: string?
+	self._imageListContent = nil :: string?
+
 	self._applyTitleCallback = nil :: ((TitleForm) -> ())?
 	self._applyImageCallback = nil :: ((ImageForm) -> ())?
 	self._removeCallback = nil :: ((PlayerEntry) -> ())?
@@ -246,7 +278,42 @@ function AdminPanelV3UI:_clearPlayerRows()
 	table.clear(self._playerRows)
 end
 
+-- The designed transparency of every text/image element under `root` (UIMotion ignores
+-- the rest), recorded once per element so a second fade never fades to invisible.
+-- Returns the elements, ready to hand to `fadeIn`.
+function AdminPanelV3UI:_captureFades(root: Instance): { GuiObject }
+	local elements: { GuiObject } = {}
+	if root:IsA("GuiObject") then
+		table.insert(elements, root)
+	end
+	for _, descendant in ipairs(root:GetDescendants()) do
+		if descendant:IsA("GuiObject") then
+			table.insert(elements, descendant)
+		end
+	end
+	local fresh: { GuiObject } = {}
+	for _, element in ipairs(elements) do
+		if self._fadeBases[element] == nil then
+			table.insert(fresh, element)
+		end
+	end
+	UIMotion.captureBases(fresh, self._fadeBases)
+	return elements
+end
+
 function AdminPanelV3UI:_renderPlayers(entries: { PlayerEntry })
+	-- Every keystroke in the search box re-filters, and PlayerAdded/Removing re-rosters:
+	-- rebuilding rows that would come out identical would also re-cascade them.
+	local keyParts: { string } = {}
+	for _, entry in ipairs(entries) do
+		table.insert(keyParts, tostring(entry.userId))
+	end
+	local key = table.concat(keyParts, ",")
+	if self._playerListKey == key then
+		return
+	end
+	self._playerListKey = key
+
 	self:_clearPlayerRows()
 
 	if #entries == 0 then
@@ -280,12 +347,22 @@ function AdminPanelV3UI:_renderPlayers(entries: { PlayerEntry })
 
 		if card:IsA("GuiButton") then
 			card.AutoButtonColor = false
+			AdminPanelV3UI._bindMotion(card)
 			card.Activated:Connect(function()
 				self:selectPlayer(entry)
 			end)
 		end
+		-- Bases come off the fresh clone, before the cascade below touches it.
+		self:_captureFades(card)
 		card.Parent = self._playerList
 		table.insert(self._playerRows, card)
+	end
+
+	-- Results cascade in. Nothing moves: stagger only fades text and images, so the
+	-- ScrollingFrame's UIListLayout keeps every row exactly where it put it. A render
+	-- behind a closed panel skips it; show() cascades what is on screen then.
+	if self:isVisible() then
+		UIMotion.stagger(self._playerRows, self._fadeBases)
 	end
 end
 
@@ -323,8 +400,12 @@ function AdminPanelV3UI:_applySearch(query: string)
 end
 
 function AdminPanelV3UI:selectPlayer(entry: PlayerEntry)
+	-- Re-picking the same card still reloads their snapshot, but the header only
+	-- animates when it is actually showing somebody new.
+	local previous = self._selectedPlayer
+	local changed = previous == nil or previous.userId ~= entry.userId
 	self._selectedPlayer = entry
-	self:_paintSelectedPlayer()
+	self:_paintSelectedPlayer(changed)
 	if self._playerSelectedCallback then
 		self._playerSelectedCallback(entry)
 	end
@@ -361,7 +442,7 @@ end
 
 -- Both tabs carry their own copy of the selected-player header, so paint whichever
 -- ones the GUI actually has.
-function AdminPanelV3UI:_paintSelectedPlayer()
+function AdminPanelV3UI:_paintSelectedPlayer(animate: boolean?)
 	local entry = self._selectedPlayer
 	for _, tab in ipairs({ self._textTab, self._imageTab }) do
 		local selectedInfo = findChild(tab, "SelectedPlayerInfo")
@@ -377,6 +458,12 @@ function AdminPanelV3UI:_paintSelectedPlayer()
 			if picture and picture:IsA("ImageLabel") then
 				picture.Visible = true
 				picture.Image = string.format("rbxthumb://type=AvatarHeadShot&id=%d&w=420&h=420", entry.userId)
+				if animate then
+					-- Grows in only where a scale is safe (centred, parent without a
+					-- layout, no CanvasGroup above it); UIMotion refuses it otherwise
+					-- and the fade below still lands.
+					UIMotion.popIn(UIMotion.scaleTargetOf(picture))
+				end
 			end
 			local infoWrapper = selectedInfo:FindFirstChild("TargetInfoWrapper")
 			local playerInfo = infoWrapper and infoWrapper:FindFirstChild("1-PlayerInformation")
@@ -389,20 +476,40 @@ function AdminPanelV3UI:_paintSelectedPlayer()
 				if subtitle and subtitle:IsA("TextLabel") then
 					subtitle.Text = "@" .. entry.username
 				end
+				if animate then
+					-- The name reads in rather than snapping to the new target.
+					UIMotion.fadeIn(self:_captureFades(playerInfo), self._fadeBases)
+				end
 			end
 		end
 	end
 end
 
 -- Whatever the target's current title is, shown on the text tab's header row.
+--
+-- The live overhead cache pushes this line on every payload for the selected player,
+-- so an unchanged title is dropped here: it costs nothing to repaint, but re-fading a
+-- line that did not move would flicker under someone else's profile edit.
 function AdminPanelV3UI:setCurrentTitle(text: string?)
+	local nextText = if text and text ~= "" then '"' .. text .. '"' else "No title yet"
+	if self._currentTitleText == nextText then
+		return
+	end
+	local first = self._currentTitleText == nil
+	self._currentTitleText = nextText
 	for _, tab in ipairs({ self._textTab, self._imageTab }) do
 		local selectedInfo = findChild(tab, "SelectedPlayerInfo")
 		local infoWrapper = selectedInfo and selectedInfo:FindFirstChild("TargetInfoWrapper")
 		local playerInfo = infoWrapper and infoWrapper:FindFirstChild("1-PlayerInformation")
 		local current = playerInfo and playerInfo:FindFirstChild("3-CurrentTitle")
 		if current and current:IsA("TextLabel") then
-			current.Text = if text and text ~= "" then '"' .. text .. '"' else "No title yet"
+			local elements = self:_captureFades(current)
+			current.Text = nextText
+			-- The title the target actually wears fades to its new value, but only
+			-- while somebody is looking at it.
+			if not first and self:isVisible() then
+				UIMotion.fadeIn(elements, self._fadeBases)
+			end
 		end
 	end
 end
@@ -428,10 +535,17 @@ function AdminPanelV3UI:_buildSizeButtons()
 		if button:IsA("TextButton") then
 			button.Text = sizeKey
 			button.AutoButtonColor = false
+			AdminPanelV3UI._bindMotion(button)
 			button.Activated:Connect(function()
 				if self._selectedSize ~= sizeKey then
 					self._selectedSize = sizeKey
 					self:_buildSizeButtons()
+					-- The row was just rebuilt, so the button that pops is the fresh
+					-- selected-state clone, not the one that was pressed.
+					local chosen = self._sizeButtons[sizeKey]
+					if chosen then
+						UIMotion.pop(UIMotion.scaleTargetOf(chosen), 1.18)
+					end
 				end
 			end)
 		end
@@ -476,13 +590,41 @@ function AdminPanelV3UI:_buildPicker(modal: Instance, entries: { string }, curre
 		end
 		if row:IsA("GuiButton") then
 			row.AutoButtonColor = false
+			AdminPanelV3UI._bindMotion(row)
 			row.Activated:Connect(function()
 				onPick(value)
 			end)
 		end
+		-- Rows are cloned fresh on every (re)build, so their designed transparencies are
+		-- recorded here, once per clone, before any fade touches them.
+		self:_captureFades(row)
 		row.Parent = scroll
 		table.insert(state.rows, row)
 	end
+end
+
+-- The picker's rows cascade in as the modal arrives, never while it is still behind
+-- the panel: the handoff calls this the moment the modal is made visible.
+function AdminPanelV3UI:_staggerPicker(modal: Instance)
+	local state = self._pickerState[modal]
+	if state and #state.rows > 0 then
+		UIMotion.stagger(state.rows, self._fadeBases)
+	end
+end
+
+-- A pick rebuilds the list, so the chosen row is a brand new selected-state clone:
+-- fade its highlight up over the row it replaced and pop whatever inside it can scale
+-- (the rows themselves sit in a UIListLayout, so they are never scaled or moved).
+function AdminPanelV3UI:_flashPickedRow(modal: Instance, value: string)
+	local row = findChild(findChild(modal, "ScrollingFrame"), "Entry_" .. value)
+	if not row or not row:IsA("GuiObject") then
+		return
+	end
+	local base = row.BackgroundTransparency
+	row.BackgroundTransparency = 1
+	UIMotion.tween(row, 0.18, { BackgroundTransparency = base })
+	UIMotion.fadeIn(self:_captureFades(row), self._fadeBases)
+	UIMotion.pop(UIMotion.scaleTargetOf(row), 1.12)
 end
 
 -- ============================================================
@@ -545,7 +687,11 @@ end
 -- a timer: whichever runs first shows `to`, the other finds it already visible and
 -- does nothing. The generation counter keeps a stale timer from re-opening
 -- something after a newer interaction has moved on.
-function AdminPanelV3UI:_handoff(from: GuiObject?, to: GuiObject?)
+--
+-- `onArrive` rides the same one-shot guard as the arrival itself: whichever path wins
+-- makes `to` visible and runs it, the other returns at `to.Visible` — so it fires
+-- exactly once, and never for a handoff a newer interaction superseded.
+function AdminPanelV3UI:_handoff(from: GuiObject?, to: GuiObject?, onArrive: (() -> ())?)
 	self:_bumpMotion()
 	local gen = self._motionGen
 	local function arrive()
@@ -553,6 +699,9 @@ function AdminPanelV3UI:_handoff(from: GuiObject?, to: GuiObject?)
 			return
 		end
 		self:_present(to)
+		if onArrive then
+			onArrive()
+		end
 	end
 	self:_dismiss(from, false, arrive)
 	task.delay(MotionPresets.centerClose().time + HANDOFF_SAFETY, arrive)
@@ -566,7 +715,9 @@ end
 -- A picker takes over the screen rather than stacking on the panel.
 function AdminPanelV3UI:_openPicker(modal: Frame, build: () -> ())
 	build()
-	self:_handoff(self._mainWrapper, modal)
+	self:_handoff(self._mainWrapper, modal, function()
+		self:_staggerPicker(modal)
+	end)
 end
 
 -- Back out of a picker: it hands the screen back to the panel it came from, and
@@ -597,6 +748,7 @@ function AdminPanelV3UI:_openPresetPicker()
 			self._selectedPreset = value
 			self:_refreshChoiceLabels()
 			rebuild()
+			self:_flashPickedRow(modal, value)
 		end)
 	end
 	self:_openPicker(modal, rebuild)
@@ -620,15 +772,30 @@ function AdminPanelV3UI:_openTypefacePicker()
 			self._selectedFont = value
 			self:_refreshChoiceLabels()
 			rebuild()
+			self:_flashPickedRow(modal, value)
 		end)
 	end
 	self:_openPicker(modal, rebuild)
 end
 
+-- The two summary labels are this panel's preview of the title being built. Unchanged
+-- picks return early: repainting one would tear down and rebuild its RenderStepped
+-- preset effect for nothing, and the panel is repainted from live payloads.
+-- `hide()` clears the key, because it destroys the effect this would then skip.
 function AdminPanelV3UI:_refreshChoiceLabels()
+	local key = (self._selectedPreset or "") .. "|" .. (self._selectedFont or "")
+	if self._choiceKey == key then
+		return
+	end
+	local first = self._choiceKey == nil
+	self._choiceKey = key
+
+	local faded: { GuiObject } = {}
 	if self._presetButton then
 		local name = self._presetButton:FindFirstChild("PresetName")
 		if name and name:IsA("TextLabel") then
+			self:_captureFades(name)
+			table.insert(faded, name)
 			name.Text = self._selectedPreset or NO_PRESET_LABEL
 			if self._presetSummaryEffect then
 				pcall(function()
@@ -644,9 +811,16 @@ function AdminPanelV3UI:_refreshChoiceLabels()
 	if self._typefaceButton then
 		local name = self._typefaceButton:FindFirstChild("TypefaceName")
 		if name and name:IsA("TextLabel") then
+			self:_captureFades(name)
+			table.insert(faded, name)
 			name.Text = self._selectedFont or NO_FONT_LABEL
 			TitleFontUtil.applyToTextLabel(name, self._selectedFont)
 		end
+	end
+	-- A pick made on screen reads in; the first paint and the one show() does behind
+	-- a closed panel just land.
+	if not first and self:isVisible() then
+		UIMotion.fadeIn(faded, self._fadeBases)
 	end
 end
 
@@ -655,22 +829,39 @@ end
 -- ============================================================
 
 -- `list` is the place-global registry of images assigned before, newest first.
+--
+-- The remote re-sends the whole registry on every tab switch and every save, so a
+-- render that would come out identical (same images, same selection) is dropped: the
+-- grid is rebuilt only when something actually changed, and it only cascades when the
+-- images themselves did — picking one just lights that tile up.
 function AdminPanelV3UI:setImageList(list: { string })
 	if not self._imageGrid or not self._imageNormal or not self._imageSelected then
 		return
 	end
+	local assetIds = TitleImageDomain.sanitizeList(list, Config.TitleImage.REGISTRY_MAX)
+	local content = table.concat(assetIds, "\n")
+	local key = content .. "\0" .. self._selectedImage
+	if self._imageListKey == key then
+		return
+	end
+	local contentChanged = self._imageListContent ~= content
+	self._imageListKey = key
+	self._imageListContent = content
+
 	for _, row in ipairs(self._imageRows) do
 		row:Destroy()
 	end
 	table.clear(self._imageRows)
 
-	for index, assetId in ipairs(TitleImageDomain.sanitizeList(list, Config.TitleImage.REGISTRY_MAX)) do
+	local chosen: { GuiObject }? = nil
+	for index, assetId in ipairs(assetIds) do
 		local button = (if assetId == self._selectedImage then self._imageSelected else self._imageNormal):Clone()
 		button.Name = "Image_" .. index
 		button.LayoutOrder = index
 		if button:IsA("ImageButton") then
 			button.Image = assetId
 			button.AutoButtonColor = false
+			AdminPanelV3UI._bindMotion(button)
 			button.Activated:Connect(function()
 				self._selectedImage = assetId
 				if self._imageInput and self._imageInput:IsA("TextBox") then
@@ -679,8 +870,24 @@ function AdminPanelV3UI:setImageList(list: { string })
 				self:setImageList(list)
 			end)
 		end
+		local elements = self:_captureFades(button)
+		if assetId == self._selectedImage then
+			chosen = elements
+		end
 		button.Parent = self._imageGrid
 		table.insert(self._imageRows, button)
+	end
+
+	-- The registry also lands while the text tab is open (the controller asks for it on
+	-- every show): there is nothing to cascade then.
+	if self._activeTab ~= TAB_IMAGE or not self:isVisible() then
+		return
+	end
+	-- Transparency only, either way: these tiles sit in a UIGridLayout.
+	if contentChanged then
+		UIMotion.stagger(self._imageRows, self._fadeBases, 0.02)
+	elseif chosen then
+		UIMotion.fadeIn(chosen, self._fadeBases)
 	end
 end
 
@@ -709,6 +916,7 @@ function AdminPanelV3UI:_paintActionLabels()
 end
 
 function AdminPanelV3UI:setTab(tab: string)
+	local previous = self._activeTab
 	self._activeTab = if tab == TAB_IMAGE then TAB_IMAGE else TAB_TEXT
 	if self._textTab and self._textTab:IsA("GuiObject") then
 		self._textTab.Visible = self._activeTab == TAB_TEXT
@@ -729,6 +937,20 @@ function AdminPanelV3UI:setTab(tab: string)
 	if self._tabPill and selectedButton then
 		SliderSelectorUtil.animateSlidingPill(self._tabPill, selectedButton, self._tabButtonOrder)
 	end
+
+	-- A real switch on an open panel: the incoming page travels in from the side the
+	-- pill is coming from, and the option that won pops. slideIn moves the page's
+	-- content through equal and opposite UIPadding, so neither tab changes size.
+	if previous ~= self._activeTab and self._mainWrapper.Visible then
+		local incoming = if self._activeTab == TAB_IMAGE then self._imageTab else self._textTab
+		if incoming and incoming:IsA("GuiObject") then
+			UIMotion.slideIn(incoming, if self._activeTab == TAB_IMAGE then 1 else -1)
+		end
+		if selectedButton then
+			UIMotion.pop(UIMotion.scaleTargetOf(selectedButton), 1.12)
+		end
+	end
+
 	if self._activeTab == TAB_IMAGE and self._imageListCallback then
 		self._imageListCallback()
 	end
@@ -738,19 +960,34 @@ function AdminPanelV3UI:getTab(): string
 	return self._activeTab
 end
 
+-- The save is fire-and-forget — the server answers on the overhead channel, not to this
+-- panel — so the feedback here is about the form: a request that cannot be right shakes
+-- the field that is wrong, and one that can pops the save icon. The panel stays open
+-- either way, so both are visible. Nothing is blocked that was not blocked before.
 function AdminPanelV3UI:_submit()
 	local entry = self._selectedPlayer
 	if not entry then
+		-- Already a no-op; the search field is the thing they still have to use.
+		UIMotion.wiggle(self._searchBox, 6)
 		return
 	end
+	local saveIcon = if self._saveButton then UIMotion.scaleTargetOf(self._saveButton) else nil
 	if self._activeTab == TAB_IMAGE then
 		if not self._applyImageCallback then
 			return
 		end
 		local raw = if self._imageInput and self._imageInput:IsA("TextBox") then self._imageInput.Text else ""
+		local imageId = TitleImageDomain.normalizeAssetId(raw)
+		if imageId == "" and raw ~= "" then
+			-- Typed something that is not an asset id. The request still goes: an
+			-- empty id is how this panel clears an image.
+			UIMotion.wiggle(self._imageInput or self._saveButton, 6)
+		else
+			UIMotion.pop(saveIcon, 1.2)
+		end
 		self._applyImageCallback({
 			targetUsername = entry.username,
-			imageId = TitleImageDomain.normalizeAssetId(raw),
+			imageId = imageId,
 		} :: ImageForm)
 		return
 	end
@@ -758,9 +995,16 @@ function AdminPanelV3UI:_submit()
 	if not self._applyTitleCallback then
 		return
 	end
+	local title = if self._titleInput and self._titleInput:IsA("TextBox") then self._titleInput.Text else ""
+	if title:match("^%s*$") then
+		-- The server refuses an empty title; Remove is the button that clears one.
+		UIMotion.wiggle(self._titleInput or self._saveButton, 6)
+	else
+		UIMotion.pop(saveIcon, 1.2)
+	end
 	self._applyTitleCallback({
 		targetUsername = entry.username,
-		title = if self._titleInput and self._titleInput:IsA("TextBox") then self._titleInput.Text else "",
+		title = title,
 		titleSize = self._selectedSize,
 		presetMode = self._selectedPreset,
 		titleFont = self._selectedFont,
@@ -853,6 +1097,9 @@ function AdminPanelV3UI:show()
 	self:_buildSizeButtons()
 	self:_refreshChoiceLabels()
 	self:_present(self._mainWrapper)
+	-- The roster is usually unchanged since the last open, so it is cascaded here
+	-- rather than by the render that skipped itself.
+	UIMotion.stagger(self._playerRows, self._fadeBases)
 end
 
 function AdminPanelV3UI:hide(immediate: boolean?)
@@ -864,6 +1111,9 @@ function AdminPanelV3UI:hide(immediate: boolean?)
 		end)
 		self._presetSummaryEffect = nil
 	end
+	-- The summary effect just went with it, so the next show() has to repaint even if
+	-- the preset and typeface did not change.
+	self._choiceKey = nil
 
 	-- Whichever of the three is on screen plays the dismissal; the others take the
 	-- immediate path. The ScreenGui only goes dark once every one of them has

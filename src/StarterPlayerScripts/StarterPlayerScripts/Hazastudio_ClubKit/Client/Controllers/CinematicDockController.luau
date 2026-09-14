@@ -15,6 +15,7 @@ local CinematicCameraSystem = require(ReplicatedStorage.Hazastudio_ClubKit.Share
 local DonationExperiencePrefs = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DonationExperiencePrefs)
 local OverheadController = require(script.Parent.OverheadController)
 local MobilePanelManager = require(script.Parent.Parent.Services.MobilePanelManager)
+local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 
 local log = Logger.new("Client.CinematicDockController")
 
@@ -176,6 +177,11 @@ local function ensureScale(guiObject: GuiObject): UIScale
 	return created
 end
 
+-- Raw TweenService, deliberately kept alongside UIMotion (ADR 0011). Everything that is
+-- sequenced on Completed or times a camera cut -- the letterbox bars, the shutter blink, the
+-- dock hide that gates dock.Visible -- must keep its literal duration: MOTION_SCALE must not
+-- stretch it and reduced motion must not snap it, or the shot loses its frames. Motion that is
+-- only feedback goes through UIMotion instead.
 local function tween(instance: Instance, info: TweenInfo, goals: { [string]: any }): Tween
 	local created = TweenService:Create(instance, info, goals)
 	created:Play()
@@ -215,14 +221,15 @@ local function collectFilterButtons(content: ScrollingFrame): { GuiButton }
 	return buttons
 end
 
+-- Colour cross-fade, never scale: these tabs live inside the panel CanvasGroups (ADR 0005) and
+-- are laid out by a UIListLayout, so only BackgroundColor3 is safe to move.
 local function setFilterRowHighlight(filters: { GuiButton }, active: GuiButton?)
 	local activeBg = Color3.fromRGB(65, 65, 65)
 	local idleBg = Color3.fromRGB(22, 22, 22)
 	for _, button in ipairs(filters) do
-		if button == active then
-			button.BackgroundColor3 = activeBg
-		else
-			button.BackgroundColor3 = idleBg
+		local goal = if button == active then activeBg else idleBg
+		if button.BackgroundColor3 ~= goal then
+			UIMotion.tween(button, 0.14, { BackgroundColor3 = goal })
 		end
 	end
 end
@@ -338,14 +345,19 @@ local function setPanelVisible(panel: CanvasGroup?, visible: boolean)
 	if not panel then
 		return
 	end
+	if visible and panel.Visible then
+		-- Already open: refreshDockSelections/showOperatorSession run on every row click, and
+		-- restarting the open pop under the user's finger reads as a flicker.
+		return
+	end
 	panel.Visible = visible
 	local scale = ensureScale(panel)
 	if visible then
 		panel.GroupTransparency = 1
 		scale.Scale = PANEL_BASE_SCALE * 0.94
-		tween(panel, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-			GroupTransparency = 0,
-		})
+		UIMotion.tween(panel, 0.18, { GroupTransparency = 0 })
+		-- The UIScale on this CanvasGroup predates ADR 0011 and ADR 0005; left on TweenService
+		-- rather than routed through UIMotion, so this pass neither extends nor blesses it.
 		tween(scale, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
 			Scale = PANEL_BASE_SCALE,
 		})
@@ -928,8 +940,75 @@ local function init(_deps: {}?)
 
 	-- Forward declaration: rebuildMovementRows called from target handler when
 	-- target type changes, so panel is repopulated with relevant options.
-	local rebuildMovementRows: () -> () = function() end
-	local rebuildTargetRows: (targets: { any }) -> () = function() end
+	-- `animate` is only ever true on a real render (panel opened, fresh target list); the
+	-- rebuilds that run per keystroke or per selection must not re-stagger.
+	local rebuildMovementRows: (animate: boolean?) -> () = function() end
+	local rebuildTargetRows: (targets: { any }, animate: boolean?) -> () = function() end
+
+	-- ADR 0011 vocabulary. Press/hover are bound once per instance and every connection is
+	-- tracked, so destroy() takes them down with the rest.
+	local function bindButtonMotion(button: GuiObject?)
+		if not button then
+			return
+		end
+		for _, connection in ipairs(UIMotion.bindPress(button)) do
+			track(connection)
+		end
+		for _, connection in ipairs(UIMotion.bindHover(button)) do
+			track(connection)
+		end
+	end
+
+	local function popButton(button: GuiObject?)
+		if button then
+			UIMotion.pop(UIMotion.scaleTargetOf(button), 1.18)
+		end
+	end
+
+	-- First small visible image inside a button, for the refresh spin. Rotation is
+	-- layout-neutral and never touches a UIScale, so it is safe even on the buttons the
+	-- magnifier drives. Images wider than 60% of the button are background plates, not icons --
+	-- spinning one of those would turn the whole control over.
+	local function iconOf(button: GuiObject?): GuiObject?
+		if not button then
+			return nil
+		end
+		local limit = button.AbsoluteSize.X * 0.6
+		for _, descendant in ipairs(button:GetDescendants()) do
+			if descendant:IsA("ImageLabel") or descendant:IsA("ImageButton") then
+				local image = descendant :: GuiObject
+				if image.Visible and image.AbsoluteSize.X > 0 and image.AbsoluteSize.X <= limit then
+					return image
+				end
+			end
+		end
+		return nil
+	end
+
+	-- Every GuiObject in a freshly cloned row set, for captureBases/stagger. Rows are new
+	-- clones on each rebuild, so their transparencies are still the designed ones.
+	local function collectRowElements(rows: { GuiObject }): { GuiObject }
+		local elements: { GuiObject } = {}
+		for _, row in ipairs(rows) do
+			table.insert(elements, row)
+			for _, descendant in ipairs(row:GetDescendants()) do
+				if descendant:IsA("GuiObject") then
+					table.insert(elements, descendant :: GuiObject)
+				end
+			end
+		end
+		return elements
+	end
+
+	local function fadeRows(rows: { GuiObject }, stagger: boolean)
+		local elements = collectRowElements(rows)
+		local bases = UIMotion.captureBases(elements)
+		if stagger then
+			UIMotion.stagger(rows, bases)
+		else
+			UIMotion.fadeIn(elements, bases)
+		end
+	end
 
 	local dockAnim = Config.CinematicDock
 	local dockHideDuration = dockAnim.DOCK_CHROME_HIDE_DURATION or 0.18
@@ -995,17 +1074,21 @@ local function init(_deps: {}?)
 		}
 	end
 
-	local function applySpeedButtonVisual(button: TextButton, style: SpeedButtonVisual)
-		button.BackgroundColor3 = style.bg
-		button.TextColor3 = style.text
+	-- Colour only: the magnifier owns every UIScale under the dock, so the speed row says
+	-- "selected" by cross-fading rather than by popping. time 0 snaps (first paint).
+	local function applySpeedButtonVisual(button: TextButton, style: SpeedButtonVisual, animate: boolean?)
+		local fade = if animate then 0.16 else 0
+		UIMotion.tween(button, fade, { BackgroundColor3 = style.bg, TextColor3 = style.text })
 		local strokes = collectSpeedButtonStrokes(button)
 		for index, stroke in ipairs(strokes) do
 			local snapshot = style.strokes[index]
 			if snapshot then
 				stroke.Enabled = snapshot.enabled
-				stroke.Color = snapshot.color
-				stroke.Transparency = snapshot.transparency
-				stroke.Thickness = snapshot.thickness
+				UIMotion.tween(stroke, fade, {
+					Color = snapshot.color,
+					Transparency = snapshot.transparency,
+					Thickness = snapshot.thickness,
+				})
 			elseif #style.strokes == 0 then
 				stroke.Enabled = false
 				stroke.Transparency = 1
@@ -1047,6 +1130,34 @@ local function init(_deps: {}?)
 			})
 		end
 	end
+
+	-- "Recording" tell: exactly one pulse while the operator is broadcasting. Transparency, not
+	-- colour -- refreshBroadcastButton owns the stroke/background colours and would fight it.
+	local broadcastPulseStroke: UIStroke? = if broadcastStrokeSnapshots[1]
+		then broadcastStrokeSnapshots[1].stroke
+		else nil
+	local stopBroadcastPulse: (() -> ())? = nil
+	local function setBroadcastPulse(active: boolean)
+		if active == (stopBroadcastPulse ~= nil) then
+			return
+		end
+		if not active then
+			local stop = stopBroadcastPulse
+			stopBroadcastPulse = nil
+			if stop then
+				stop()
+			end
+			return
+		end
+		local stroke = broadcastPulseStroke
+		if stroke then
+			stopBroadcastPulse = UIMotion.pulse(stroke, "Transparency", math.clamp(stroke.Transparency + 0.5, 0, 1), 1.1)
+		elseif broadcastButton then
+			stopBroadcastPulse =
+				UIMotion.pulse(broadcastButton, "TextTransparency", math.clamp(broadcastButton.TextTransparency + 0.35, 0, 1), 1.1)
+		end
+	end
+
 	dock.Visible = false
 	dock.Position = dockHiddenPosition
 	if trigger then
@@ -1117,21 +1228,26 @@ local function init(_deps: {}?)
 			dockTween:Cancel()
 			dockTween = nil
 		end
+		-- The show half runs on UIMotion and the hide half on TweenService, so drop anything
+		-- UIMotion still has in flight before the other vehicle takes the same property.
+		UIMotion.cancel(dock)
+		UIMotion.cancel(ensureScale(dock))
 		if visible then
 			dock.Visible = true
 			ensureMagnifierRunning()
 			dock.Position = dockHiddenPosition
 			local scale = ensureScale(dock)
 			scale.Scale = dockStartScale
-			dockTween = tween(dock, TweenInfo.new(dockShowDuration, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-				Position = dockPosition,
-			})
-			tween(scale, TweenInfo.new(dockShowDuration, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-				Scale = 1,
-			})
+			-- Nothing is sequenced on this half, so it scales with MOTION_SCALE and snaps under
+			-- reduced motion. dockTween stays nil: UIMotion already cancels per channel.
+			UIMotion.tween(dock, dockShowDuration, { Position = dockPosition }, Enum.EasingStyle.Quint)
+			UIMotion.tween(scale, dockShowDuration, { Scale = 1 }, Enum.EasingStyle.Quint)
 		else
 			releaseMagnifier()
 			local scale = ensureScale(dock)
+			-- Hide stays on TweenService: Completed gates dock.Visible = false, and
+			-- releaseOperatorChromeAfterDockHide hands the mobile chrome back after exactly
+			-- DOCK_HIDE_DURATION. The scale rides along so both halves stay in lockstep with it.
 			dockTween = tween(dock, TweenInfo.new(dockHideDuration, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
 				Position = dockHiddenPosition,
 			})
@@ -1153,18 +1269,26 @@ local function init(_deps: {}?)
 		end
 	end
 
+	local lastSpeedHighlight: number? = nil
 	local function refreshSpeedHighlight()
 		if not speedActiveStyle or not speedIdleStyle then
 			return
 		end
 		local activeSpeed = selectedSpeed or Config.CinematicDock.DEFAULT_SPEED or 1
+		-- refreshDockSelections runs on every row click; repainting an unchanged row would
+		-- restart the cross-fade for nothing.
+		if lastSpeedHighlight == activeSpeed then
+			return
+		end
+		local animate = lastSpeedHighlight ~= nil
+		lastSpeedHighlight = activeSpeed
 		for _, button in ipairs(speedButtons) do
 			local parsed = parseSpeedFromButton(button)
 			local isActive = parsed ~= nil and math.abs(parsed - activeSpeed) < 0.001
 			if isActive then
-				applySpeedButtonVisual(button, speedActiveStyle)
+				applySpeedButtonVisual(button, speedActiveStyle, animate)
 			else
-				applySpeedButtonVisual(button, speedIdleStyle)
+				applySpeedButtonVisual(button, speedIdleStyle, animate)
 			end
 		end
 	end
@@ -1189,11 +1313,17 @@ local function init(_deps: {}?)
 		refreshSpeedHighlight()
 	end
 
+	local lastBroadcastIsStop: boolean? = nil
 	local function refreshBroadcastButton()
 		if not broadcastButton or not broadcastButton.Visible then
 			return
 		end
 		local isStop = startedThisSetup
+		setBroadcastPulse(isStop)
+		if lastBroadcastIsStop == isStop then
+			return
+		end
+		lastBroadcastIsStop = isStop
 		broadcastButton.Text = if isStop then "Stop Broadcast" else "Start Broadcast"
 		if isStop then
 			for _, snapshot in ipairs(broadcastFillSnapshots) do
@@ -1255,6 +1385,9 @@ local function init(_deps: {}?)
 		broadcastButton.Visible = visible
 		if visible then
 			refreshBroadcastButton()
+		else
+			-- Dock chrome is going away: the recording pulse must not keep breathing behind it.
+			setBroadcastPulse(false)
 		end
 	end
 
@@ -1345,6 +1478,7 @@ local function init(_deps: {}?)
 	end
 
 	if trigger then
+		bindButtonMotion(trigger)
 		trigger.MouseEnter:Connect(function()
 			if roleCanUseDock() then
 				openOperatorSession()
@@ -1352,6 +1486,9 @@ local function init(_deps: {}?)
 		end)
 		trigger.Activated:Connect(function()
 			if not roleCanUseDock() then
+				-- Refused: the toast is server-authoritative and rate-limited, so the shake is
+				-- the only immediate feedback the operator gets.
+				UIMotion.wiggle(trigger)
 				denyDockAccess(requestRemote, topbarIcon)
 				return
 			end
@@ -1368,20 +1505,32 @@ local function init(_deps: {}?)
 	end
 
 	if broadcastButton then
+		bindButtonMotion(broadcastButton)
 		broadcastButton.Activated:Connect(function()
 			if not roleCanUseDock() then
+				UIMotion.wiggle(broadcastButton)
 				denyDockAccess(requestRemote, topbarIcon)
 				return
 			end
 			if startedThisSetup then
+				popButton(broadcastButton)
 				stopDockCinematic()
 				return
 			end
+			-- Nothing picked yet: point at the field that is missing. Visual only -- the
+			-- broadcast still enters exactly as before.
+			if not selectedTarget then
+				UIMotion.wiggle(selectTarget)
+			elseif not selectedMovement then
+				UIMotion.wiggle(selectMovement)
+			end
+			popButton(broadcastButton)
 			enterBroadcastMode()
 		end)
 	end
 
 	if closeTargetModal then
+		bindButtonMotion(closeTargetModal)
 		closeTargetModal.Activated:Connect(function()
 			setPanelVisible(targetPanel, false)
 		end)
@@ -1405,12 +1554,15 @@ local function init(_deps: {}?)
 	end)
 
 	if selectMovement then
+		bindButtonMotion(selectMovement)
 		selectMovement.Activated:Connect(function()
 			showOperatorSession()
 			local willShow = not movementPanel.Visible
 			setPanelVisible(movementPanel, willShow)
 			if willShow then
-				rebuildMovementRows()
+				popButton(selectMovement)
+				-- The only real render of this list: stagger here and nowhere else.
+				rebuildMovementRows(true)
 			end
 		end)
 	end
@@ -1440,6 +1592,7 @@ local function init(_deps: {}?)
 		rebuild: () -> ()
 	)
 		for _, button in ipairs(filters) do
+			bindButtonMotion(button)
 			button.Activated:Connect(function()
 				setMode(button.Name)
 				setFilterRowHighlight(filters, button)
@@ -1473,7 +1626,9 @@ local function init(_deps: {}?)
 	if movementContent and movementTemplateSet then
 		local movementKeepRows = buildKeepRowsForTemplateSet(movementTemplateSet)
 		clearDynamicRows(movementContent, movementKeepRows)
-		rebuildMovementRows = function()
+		local lastMovementHighlight: string? = nil
+		local lastMovementRowCount = -1
+		rebuildMovementRows = function(animate: boolean?)
 			clearDynamicRows(movementContent, movementKeepRows)
 			local options = filterMovementOptions(selectedTarget)
 			if selectedMovement then
@@ -1491,6 +1646,8 @@ local function init(_deps: {}?)
 			end
 			refreshDockSelections()
 			local movementLayoutIndex = 0
+			local movementRows: { GuiObject } = {}
+			local movementActiveRow: GuiObject? = nil
 			for _, option in ipairs(options) do
 				if not movementPassesSearch(option) then
 					continue
@@ -1508,6 +1665,10 @@ local function init(_deps: {}?)
 				row.Visible = true
 				row.LayoutOrder = movementLayoutIndex + 20
 				row.Parent = movementContent
+				table.insert(movementRows, row :: GuiObject)
+				if isActive then
+					movementActiveRow = row :: GuiObject
+				end
 				local label = row:FindFirstChildWhichIsA("TextLabel", true)
 				if label then
 					label.Text = option.label
@@ -1532,17 +1693,36 @@ local function init(_deps: {}?)
 					selectedMovement = option.value
 					selectedMovementLabel = option.label
 					showOperatorSession()
+					popButton(selectMovement)
 					refreshDockSelections()
 					rebuildMovementRows()
 					maybePushLiveBroadcast()
 				end)
 			end
+
+			-- Rows are fresh clones, so bases read here are the designed transparencies.
+			-- Cascade only on a real render (panel opened / filter switched); a rebuild driven
+			-- by a keystroke or a selection must not re-run the whole list.
+			if animate and movementLayoutIndex > 0 then
+				fadeRows(movementRows, true)
+			elseif movementActiveRow and selectedMovement ~= lastMovementHighlight then
+				fadeRows({ movementActiveRow }, false)
+			end
+			lastMovementHighlight = selectedMovement
+
+			-- Search that just went empty: shake the field once, not once per keystroke.
+			if movementLayoutIndex == 0 and movementSearchQuery ~= "" and lastMovementRowCount > 0 then
+				UIMotion.wiggle(movementSearch, 5)
+			end
+			lastMovementRowCount = movementLayoutIndex
 		end
 		wireFilterTabs(movementFilters, function()
 			return movementFilterMode
 		end, function(mode: string)
 			movementFilterMode = mode
-		end, rebuildMovementRows)
+		end, function()
+			rebuildMovementRows(true)
+		end)
 		rebuildMovementRows()
 	elseif movementContent then
 		log:warn("Movement state templates incomplete in MainContent")
@@ -1559,10 +1739,15 @@ local function init(_deps: {}?)
 	end
 
 	if selectTarget then
+		bindButtonMotion(selectTarget)
 		selectTarget.Activated:Connect(function()
 			showOperatorSession()
 			local willShow = not targetPanel.Visible
 			if willShow then
+				-- Re-fetching the roster: spin the button's icon. Rotation only, so it cannot
+				-- collide with the magnifier's per-frame UIScale writes.
+				UIMotion.spin(iconOf(selectTarget))
+				popButton(selectTarget)
 				targetsRemote:FireServer()
 			end
 			setPanelVisible(targetPanel, willShow)
@@ -1615,13 +1800,19 @@ local function init(_deps: {}?)
 						CinematicCameraSystem.setSpeed(parsed)
 					end
 					maybePushLiveBroadcast()
+				else
+					-- Refused: the label is not one of Config.CinematicDock.ALLOWED_SPEEDS.
+					-- Rotation, not scale -- the magnifier owns this button's UIScale.
+					UIMotion.wiggle(child, 6)
 				end
 			end)
 		end
 		refreshSpeedHighlight()
 	end
 
-	rebuildTargetRows = function(targets: { any })
+	local lastTargetHighlight: string? = nil
+	local lastTargetRowCount = -1
+	rebuildTargetRows = function(targets: { any }, animate: boolean?)
 		if not targetContent or not targetTemplateSet then
 			return
 		end
@@ -1629,6 +1820,8 @@ local function init(_deps: {}?)
 		clearDynamicRows(targetContent, targetKeepRows)
 
 		local layoutIndex = 0
+		local targetRows: { GuiObject } = {}
+		local targetActiveRow: GuiObject? = nil
 		for _, target in ipairs(targets) do
 			if not targetPassesSearch(target) then
 				continue
@@ -1649,6 +1842,10 @@ local function init(_deps: {}?)
 			row.Visible = true
 			row.LayoutOrder = layoutIndex + 20
 			row.Parent = targetContent
+			table.insert(targetRows, row :: GuiObject)
+			if isActive then
+				targetActiveRow = row :: GuiObject
+			end
 			local label = row:FindFirstChildWhichIsA("TextLabel", true)
 			if label then
 				label.Text = tostring(target.name or target.type or "Target")
@@ -1679,11 +1876,27 @@ local function init(_deps: {}?)
 					rebuildMovementRows()
 				end
 				showOperatorSession()
+				popButton(selectTarget)
 				refreshDockSelections()
 				rebuildTargetRows(targets)
 				maybePushLiveBroadcast()
 			end)
 		end
+
+		-- Same rule as the movement list: cascade only on a real render (a fresh roster from
+		-- the server), otherwise just land the new highlight.
+		local activeKey = getTargetKeyFromRaw(selectedTarget)
+		if animate and layoutIndex > 0 then
+			fadeRows(targetRows, true)
+		elseif targetActiveRow and activeKey ~= lastTargetHighlight then
+			fadeRows({ targetActiveRow }, false)
+		end
+		lastTargetHighlight = activeKey
+
+		if layoutIndex == 0 and targetSearchQuery ~= "" and lastTargetRowCount > 0 then
+			UIMotion.wiggle(targetSearch, 5)
+		end
+		lastTargetRowCount = layoutIndex
 	end
 
 	track(targetsRemote.OnClientEvent:Connect(function(raw: any)
@@ -1696,7 +1909,8 @@ local function init(_deps: {}?)
 		end
 
 		lastTargetList = raw.targets
-		rebuildTargetRows(raw.targets)
+		-- A fresh roster is a real render; stagger it only when the panel is actually on screen.
+		rebuildTargetRows(raw.targets, targetPanel.Visible)
 	end))
 
 	if targetContent and #targetFilters > 0 then
