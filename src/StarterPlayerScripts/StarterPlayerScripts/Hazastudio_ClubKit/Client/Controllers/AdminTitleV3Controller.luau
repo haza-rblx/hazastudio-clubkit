@@ -12,6 +12,7 @@ local Players = game:GetService("Players")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
+local PermissionDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.PermissionDomain)
 local AdminPanelV3UI = require(script.Parent.Parent.UI.AdminPanelV3UI)
 -- Every client already receives an overhead payload per player (that is what
 -- draws the nametags), and OverheadController caches it. Reading the target's
@@ -139,6 +140,38 @@ function AdminTitleV3Controller.init(deps: { remotes: Folder, icon: any?, bindTo
 		table.insert(connections, icon.deselected:Connect(function()
 			panel:hide()
 		end))
+
+		-- Show the icon only to players whose role may use the admin panel. The classic
+		-- AdminController does this when it owns the icon; when v3 owns it that controller
+		-- is not listening (a v3-only place has no 04-AdminPanelv2, so it returns before
+		-- its role listener), and without this the icon stayed disabled for everyone.
+		-- Same source as the classic panel: the local player's overhead payload role.
+		local iconShown = false
+		local function applyAdminAccess()
+			local payload = OverheadController.getCachedPayload(localPlayer.UserId)
+			local role = if type(payload) == "table" and payload.role ~= nil then tostring(payload.role) else nil
+			local allowed = PermissionDomain.canUseAdminPanel(role, localPlayer.UserId)
+			if allowed == iconShown then
+				return
+			end
+			iconShown = allowed
+			icon:setEnabled(allowed)
+			if not allowed then
+				icon:deselect()
+				panel:hide()
+			end
+		end
+		if type(OverheadController.subscribeOverheadCacheUpdated) == "function" then
+			local unsubscribe = OverheadController.subscribeOverheadCacheUpdated(function(userId: number?)
+				if userId == nil or userId == localPlayer.UserId then
+					applyAdminAccess()
+				end
+			end)
+			if type(unsubscribe) == "function" then
+				table.insert(unsubscribers, unsubscribe)
+			end
+		end
+		applyAdminAccess()
 	end
 
 	-- The GUI ships Enabled with its wrapper visible so it can be edited in Studio;
