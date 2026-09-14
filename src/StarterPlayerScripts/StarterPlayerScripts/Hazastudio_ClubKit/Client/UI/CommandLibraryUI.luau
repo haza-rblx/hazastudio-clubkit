@@ -2,11 +2,11 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TextService = game:GetService("TextService")
-local TweenService = game:GetService("TweenService")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local ObjectPool = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.ObjectPool)
-local MotionPresets = require(script.Parent.Parent.Utils.MotionPresets)
+local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
+local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 type ILogger = Types.ILogger
 type CommandLibraryEntry = Types.CommandLibraryEntry
 type CardRefs = {
@@ -113,16 +113,13 @@ local function createCommandLibraryUI(deps: { logger: ILogger })
 	local activeRows = {} :: { TextButton }
 	local rowMetaByInstance = {} :: { [TextButton]: RowMeta }
 	local ui = {}
-	local mainScale = mainWrapper:FindFirstChild("CommandLibraryPopScale") :: UIScale?
-	if not mainScale then
-		mainScale = Instance.new("UIScale")
-		mainScale.Name = "CommandLibraryPopScale"
-		mainScale.Scale = 1
-		mainScale.Parent = mainWrapper
-	end
-	local mainScaleRef = mainScale :: UIScale
-	local activeScaleTween: Tween? = nil
-	local animationToken = 0
+	-- Open/close goes through AnimationHelper so reduced motion and MOTION_SCALE are honoured,
+	-- and so a CanvasGroup wrapper fades instead of scaling (ADR 0005/0011).
+	local anim = AnimationHelper.new()
+	-- Designed transparency of every pooled row element (and the not-found card), captured once.
+	local fadeBases = {} :: { [GuiObject]: number }
+	local notFoundElements: { GuiObject } = {}
+	local lastRenderEmpty = false
 	local listLayout = listCommand:FindFirstChildWhichIsA("UIListLayout")
 	local listPadding = listWrapper:FindFirstChildWhichIsA("UIPadding")
 	listCommand.AutomaticCanvasSize = Enum.AutomaticSize.Y
@@ -143,37 +140,14 @@ local function createCommandLibraryUI(deps: { logger: ILogger })
 	local panelOpen = false
 	local suppressInputCallbacks = false
 
-	local function cancelScaleTween()
-		if activeScaleTween then
-			activeScaleTween:Cancel()
-			activeScaleTween = nil
+	local function collectFadeElements(root: GuiObject): { GuiObject }
+		local elements: { GuiObject } = { root }
+		for _, descendant in ipairs(root:GetDescendants()) do
+			if descendant:IsA("GuiObject") then
+				table.insert(elements, descendant)
+			end
 		end
-	end
-
-	local function tweenMainScale(
-		startScale: number,
-		targetScale: number,
-		tweenInfo: TweenInfo,
-		onCompleted: (() -> ())?
-	)
-		animationToken += 1
-		local token = animationToken
-		cancelScaleTween()
-		mainScaleRef.Scale = startScale
-
-		local tween = TweenService:Create(mainScaleRef, tweenInfo, { Scale = targetScale })
-		activeScaleTween = tween
-		tween.Completed:Once(function(playbackState: Enum.PlaybackState)
-			if token ~= animationToken or playbackState ~= Enum.PlaybackState.Completed then
-				return
-			end
-
-			activeScaleTween = nil
-			if onCompleted then
-				onCompleted()
-			end
-		end)
-		tween:Play()
+		return elements
 	end
 
 	local function measureInputTextWidth(text: string): number
@@ -422,6 +396,13 @@ local function createCommandLibraryUI(deps: { logger: ILogger })
 			isClicked = false,
 		}
 		rowMetaByInstance[row] = meta
+		-- Once per pooled instance: rows are reused, never rebuilt, so binding here cannot
+		-- accumulate. Press/hover no-op while the kit's CanvasGroup wrappers are in place
+		-- (UIMotion refuses to scale under a rasterized group) — the variant swap below is
+		-- the visible feedback there; a buyer GUI without the group gets the squash too.
+		UIMotion.captureBases(collectFadeElements(row), fadeBases)
+		UIMotion.bindPress(row)
+		UIMotion.bindHover(row)
 		local function fireFill()
 			if not cardClickCallback or not meta.entryId then
 				return
@@ -442,6 +423,7 @@ local function createCommandLibraryUI(deps: { logger: ILogger })
 		row.Activated:Connect(function()
 			meta.isClicked = true
 			applyVariant(row)
+			UIMotion.pop(refs.icon)
 			fireFill()
 			task.delay(0.12, function()
 				if rowMetaByInstance[row] ~= meta then
@@ -452,7 +434,10 @@ local function createCommandLibraryUI(deps: { logger: ILogger })
 			end)
 		end)
 		if refs.icon then
-			refs.icon.Activated:Connect(fireFill)
+			refs.icon.Activated:Connect(function()
+				UIMotion.pop(refs.icon)
+				fireFill()
+			end)
 		end
 		return row
 	end, resetRow, 32)
@@ -495,6 +480,8 @@ local function createCommandLibraryUI(deps: { logger: ILogger })
 		notFoundTemplate.Visible = false
 	end
 	hideTemplateRows()
+	notFoundElements = collectFadeElements(notFoundTemplate)
+	UIMotion.captureBases(notFoundElements, fadeBases)
 	mainWrapper.Visible = false
 	setListFixedHeight()
 	inputTextBox.ClearTextOnFocus = false
@@ -504,6 +491,8 @@ local function createCommandLibraryUI(deps: { logger: ILogger })
 	inputTextBox:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateBlinkCaret)
 	inputTextBox.Focused:Connect(startBlinkCaret)
 	inputTextBox.FocusLost:Connect(stopBlinkCaret)
+	UIMotion.bindPress(runButton)
+	UIMotion.bindHover(runButton)
 	function ui:bindInputChanged(callback: (string) -> ())
 		inputChangedCallback = callback
 		inputTextBox:GetPropertyChangedSignal("Text"):Connect(function()
@@ -535,6 +524,8 @@ local function createCommandLibraryUI(deps: { logger: ILogger })
 			end
 		end)
 		runButton.Activated:Connect(function()
+			-- Rotation, not scale: the run icon lives inside a CanvasGroup wrapper.
+			UIMotion.spin(runButton, 1)
 			if executeCallback then
 				executeCallback(inputTextBox.Text)
 			end
@@ -550,12 +541,13 @@ local function createCommandLibraryUI(deps: { logger: ILogger })
 	function ui:show()
 		panelOpen = true
 		setInputInteractivity(true)
+		-- Resting alpha of the wrapper groups: the fade below reads this as its end state.
 		mainWrapper.GroupTransparency = 0
 		inputWrapper.GroupTransparency = 0
 		listWrapper.GroupTransparency = 0
-		mainWrapper.Visible = true
-		local open = MotionPresets.centerOpen()
-		tweenMainScale(open.startScale, 1, MotionPresets.centerOpenInfo(), nil)
+		-- presentCenterPanel sets Visible and, for a CanvasGroup, fades GroupTransparency
+		-- from 1 back to its resting value instead of scaling the rasterized group.
+		anim:presentCenterPanel((mainWrapper :: any) :: Frame)
 	end
 	function ui:hide()
 		local wasOpen = panelOpen
@@ -567,10 +559,7 @@ local function createCommandLibraryUI(deps: { logger: ILogger })
 		suppressInputCallbacks = true
 		inputTextBox.Text = ""
 		suppressInputCallbacks = false
-		local close = MotionPresets.centerClose()
-		tweenMainScale(1, close.endScale, MotionPresets.centerCloseInfo(), function()
-			mainWrapper.Visible = false
-			mainScaleRef.Scale = 1
+		anim:dismissCenterPanel((mainWrapper :: any) :: Frame, function()
 			releaseRows()
 			releaseKeyboardCapture()
 		end)
@@ -638,9 +627,18 @@ local function createCommandLibraryUI(deps: { logger: ILogger })
 		if #entries == 0 then
 			notFoundTemplate.Visible = true
 			notFoundTemplate.Parent = listCommand
+			if panelOpen then
+				UIMotion.fadeIn(notFoundElements, fadeBases)
+				-- Only on the edge into "no such command", not on every keystroke that stays empty.
+				if hasQuery and not lastRenderEmpty then
+					UIMotion.wiggle(inputWrapper, 5)
+				end
+			end
+			lastRenderEmpty = true
 			applyListMeasuredHeight(hasQuery)
 			return
 		end
+		lastRenderEmpty = false
 		notFoundTemplate.Visible = false
 		for index, entry in ipairs(entries) do
 			entriesById[entry.id] = entry
@@ -652,6 +650,10 @@ local function createCommandLibraryUI(deps: { logger: ILogger })
 			local baseVariant = hasQuery and "matched" or "normal"
 			configureRow(row, entry, index, baseVariant)
 			table.insert(activeRows, row)
+		end
+		-- A render is a search/role change, never a scroll: the list is rebuilt each time.
+		if panelOpen then
+			UIMotion.stagger(activeRows :: { GuiObject }, fadeBases)
 		end
 		applyListMeasuredHeight(hasQuery)
 	end

@@ -18,6 +18,7 @@ local GroupMotion = require(script.Parent.Parent.Utils.GroupMotion)
 local GuiFade = require(script.Parent.Parent.Utils.GuiFade)
 local NotificationCenterGui = require(script.Parent.Parent.Utils.NotificationCenterGui)
 local TextFit = require(script.Parent.Parent.Utils.TextFit)
+local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 
 local log = Logger.new("JoinGreetingController")
 
@@ -119,7 +120,16 @@ local function tween(instance: Instance, info: TweenInfo, goals: { [string]: any
 	return created
 end
 
+-- ADR 0011: reduced motion lands on the goal and falls straight through the wait, so a sequence
+-- built on Completed:Wait (enter, message crossfade, exit) keeps running in order without
+-- moving anything. The CountDownBar is a real timer and stays on `tween` below.
 local function tweenWait(instance: Instance, info: TweenInfo, goals: { [string]: any })
+	if UIMotion.reduced() then
+		for property, value in pairs(goals) do
+			(instance :: any)[property] = value
+		end
+		return
+	end
 	local created = tween(instance, info, goals)
 	created.Completed:Wait()
 end
@@ -179,6 +189,11 @@ local function setCardAlpha(card: GuiObject, fade: GuiFade.Snapshot?, alpha: num
 end
 
 local function tweenCardAlpha(card: GuiObject, fade: GuiFade.Snapshot?, info: TweenInfo, alpha: number)
+	-- ADR 0011: same end state, no crossfade — still through GuiFade for a Frame card.
+	if UIMotion.reduced() then
+		setCardAlpha(card, fade, alpha)
+		return
+	end
 	if fade then
 		GuiFade.tween(fade, info, alpha)
 	elseif card:IsA("CanvasGroup") then
@@ -230,13 +245,15 @@ local function findAmountLabel(root: Instance): TextLabel?
 	return findNamedTextIn(root, AMOUNT_LABEL_NAMES)
 end
 
-local function resolveAmountText(payload: Payload): string
+-- `overrideAmount` renders an in-between value for UIMotion.countTo; without it the payload's
+-- own pre-formatted text (when the server sent one) always wins.
+local function resolveAmountText(payload: Payload, overrideAmount: number?): string
 	local amountText = payload.amountText
-	if type(amountText) == "string" and amountText ~= "" then
+	if overrideAmount == nil and type(amountText) == "string" and amountText ~= "" then
 		return amountText
 	end
-	local amount = tonumber(payload.amount)
-	if not amount or amount <= 0 then
+	local amount = if overrideAmount ~= nil then overrideAmount else tonumber(payload.amount)
+	if not amount or (amount <= 0 and overrideAmount == nil) then
 		return ""
 	end
 	local kind = tostring(payload.amountKind or payload.categoryKind or "")
@@ -342,6 +359,14 @@ local function fillCard(card: GuiObject, payload: Payload)
 	if amountLabel and amountText ~= "" then
 		amountLabel.Text = amountText
 		amountLabel.Visible = true
+		-- A numeric amount rolls up to its value; a server-supplied string has nothing to count.
+		local preformatted = type(payload.amountText) == "string" and payload.amountText ~= ""
+		local amountValue = tonumber(payload.amount)
+		if not preformatted and amountValue and amountValue > 0 then
+			UIMotion.countTo(amountLabel, 0, amountValue, 0.5, function(value: number): string
+				return resolveAmountText(payload, value)
+			end)
+		end
 		if chipLabel then
 			chipLabel.Text = chipText
 		end
@@ -474,10 +499,31 @@ local function playGreeting(refs: Refs, payload: Payload)
 	-- Width/progress only — leave CountDownBar colors / Studio UIGradient alone (no role tint).
 	-- V2 drains from the designed bar width; V1 always started full width.
 	local countDownBar = findFrame(card, "CountDownBar")
+	-- Draining the bar is a Size tween, so it must not be a layout child (ADR 0011): in a
+	-- UIListLayout its siblings would slide as it empties. Such a bar simply stays full.
+	if countDownBar and countDownBar.Parent and countDownBar.Parent:FindFirstChildWhichIsA("UIGridStyleLayout") then
+		countDownBar = nil
+	end
 	if countDownBar then
 		local barStartWidth = if refs.isV2 then countDownBar.Size.X.Scale else 1
 		countDownBar.Size = UDim2.new(barStartWidth, 0, countDownBar.Size.Y.Scale, countDownBar.Size.Y.Offset)
 	end
+
+	-- Content cascade (ADR 0011), in reading order; each lookup tolerates a template without
+	-- that row. Captured once per card, before any fade has touched a designed transparency.
+	local contentRows: { GuiObject } = {}
+	local function addRow(element: GuiObject?)
+		if element then
+			table.insert(contentRows, element)
+		end
+	end
+	addRow(findImage(card, "Profpic"))
+	addRow(findText(card, "SenderDisplayName"))
+	addRow(findText(card, "SenderUsername"))
+	addRow(findText(card, "Versatilechiptext"))
+	addRow(findAmountLabel(card))
+	addRow(findText(card, "Message"))
+	local contentBases = UIMotion.captureBases(contentRows)
 
 	local fade = if card:IsA("CanvasGroup") then nil else GuiFade.capture(card)
 	setCardAlpha(card, fade, 1)
@@ -514,7 +560,16 @@ local function playGreeting(refs: Refs, payload: Payload)
 	tweenCardAlpha(card, fade, enterInfo, 0)
 	tweenWait(scale, enterInfo, { Scale = normalScale })
 
+	-- The card has landed; its content arrives a beat later. popIn is refused on a V1
+	-- CanvasGroup card (ADR 0005) and on an off-centre headshot, so V1 just gets the cascade.
+	UIMotion.stagger(contentRows, contentBases, 0.04)
+	UIMotion.popIn(findImage(card, "Profpic"), 0.7)
+
 	if countDownBar then
+		-- Layout-safe by the guard above, and deliberately still on TweenService rather than
+		-- UIMotion.tween: this is the card's timer, not a flourish. It has to run in real
+		-- seconds (UIMotion scales by MOTION_SCALE) and to keep depleting under reduced motion,
+		-- where UIMotion would empty it in one frame. Colours stay the designer's (no tint).
 		tween(countDownBar, TweenInfo.new(showDuration, Enum.EasingStyle.Linear, Enum.EasingDirection.Out), {
 			Size = UDim2.new(0, 0, countDownBar.Size.Y.Scale, countDownBar.Size.Y.Offset),
 		})

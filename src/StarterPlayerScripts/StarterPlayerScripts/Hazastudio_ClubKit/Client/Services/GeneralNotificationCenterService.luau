@@ -1,13 +1,13 @@
 --!strict
 
 local Players = game:GetService("Players")
-local TweenService = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local MotionPresets = require(script.Parent.Parent.Utils.MotionPresets)
 local NotificationCenterGui = require(script.Parent.Parent.Utils.NotificationCenterGui)
+local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 
 local log = Logger.new("GeneralNotificationCenterService")
 
@@ -56,6 +56,10 @@ type Refs = {
 	baseTitleColor: Color3,
 	baseDescriptionTransparency: number,
 	baseDescriptionColor: Color3,
+	-- Content cascade (ADR 0011): rows in reading order + their designed transparencies,
+	-- captured once per resolved panel because the toast panel is reused for every card.
+	fadeRows: { GuiObject },
+	fadeBases: { [GuiObject]: number },
 }
 
 local PANEL_NAME = "GeneralNotificationCenter"
@@ -264,6 +268,7 @@ local function resolveRefsOnce(): Refs?
 
 	local stroke = panel:FindFirstChildWhichIsA("UIStroke")
 	local scale = makeScale(panel)
+	local fadeRows: { GuiObject } = { icon, title, description }
 
 	local refs: Refs = {
 		rootGui = rootGui,
@@ -286,6 +291,8 @@ local function resolveRefsOnce(): Refs?
 		baseTitleColor = title.TextColor3,
 		baseDescriptionTransparency = description.TextTransparency,
 		baseDescriptionColor = description.TextColor3,
+		fadeRows = fadeRows,
+		fadeBases = UIMotion.captureBases(fadeRows),
 	}
 
 	panel.Visible = false
@@ -394,12 +401,6 @@ local function enqueue(payload: ResolvedPayload)
 	table.insert(queue, payload)
 end
 
-local function tween(instance: Instance, tweenInfo: TweenInfo, goal: { [string]: any }): Tween
-	local createdTween = TweenService:Create(instance, tweenInfo, goal)
-	createdTween:Play()
-	return createdTween
-end
-
 local function applyHiddenState(refs: Refs)
 	refs.panel.Position = refs.basePosition
 	refs.panel.BackgroundTransparency = 1
@@ -423,6 +424,20 @@ local function cleanupDisplay(refs: Refs?)
 	end
 
 	local currentRefs = refs :: Refs
+	-- The panel is reused by the next toast, so nothing may still be tweening toward this one.
+	local motionTargets: { Instance } = {
+		currentRefs.panel,
+		currentRefs.scale,
+		currentRefs.icon,
+		currentRefs.title,
+		currentRefs.description,
+	}
+	if currentRefs.stroke then
+		table.insert(motionTargets, currentRefs.stroke)
+	end
+	for _, target in ipairs(motionTargets) do
+		UIMotion.cancel(target)
+	end
 	applyHiddenState(currentRefs)
 	currentRefs.panel.Visible = false
 	currentRefs.panel.Position = currentRefs.basePosition
@@ -478,33 +493,36 @@ local function playNotification(refs: Refs, payload: ResolvedPayload)
 		refs.basePosition.Y.Offset + PANEL_ENTRY_OFFSET
 	)
 
+	-- The designed toast arrival (MotionPresets.toastIn) now runs through UIMotion, so reduced
+	-- motion snaps it; easing still comes from the preset rather than constants here.
 	local enterInfo = MotionPresets.toastInInfo()
 	local entryDuration = MotionPresets.scaledTime(PANEL_ENTRY_DURATION)
+	local enterStyle, enterDirection = enterInfo.EasingStyle, enterInfo.EasingDirection
 
-	local _enterTweens = {
-		tween(refs.panel, enterInfo, {
-			Position = refs.basePosition,
-			BackgroundTransparency = refs.baseBackgroundTransparency,
-		}),
-		tween(refs.scale, enterInfo, {
-			Scale = PANEL_SETTLE_SCALE,
-		}),
-		tween(refs.icon, enterInfo, {
-			ImageTransparency = refs.baseIconTransparency,
-		}),
-		tween(refs.title, enterInfo, {
-			TextTransparency = refs.baseTitleTransparency,
-		}),
-		tween(refs.description, enterInfo, {
-			TextTransparency = refs.baseDescriptionTransparency,
-		}),
-	}
+	UIMotion.tween(refs.panel, PANEL_ENTRY_DURATION, {
+		Position = refs.basePosition,
+		BackgroundTransparency = refs.baseBackgroundTransparency,
+	}, enterStyle, enterDirection)
+	UIMotion.tween(refs.scale, PANEL_ENTRY_DURATION, { Scale = PANEL_SETTLE_SCALE }, enterStyle, enterDirection)
 
 	if refs.stroke and refs.baseStrokeTransparency ~= nil then
-		table.insert(_enterTweens, tween(refs.stroke, enterInfo, {
-			Transparency = refs.baseStrokeTransparency,
-		}))
+		UIMotion.tween(
+			refs.stroke,
+			PANEL_ENTRY_DURATION,
+			{ Transparency = refs.baseStrokeTransparency },
+			enterStyle,
+			enterDirection
+		)
 	end
+
+	-- Content lands a beat after the card: icon, then title, then body. The designed values are
+	-- applied first so a reduced-motion player (stagger no-ops) still reads a filled toast.
+	refs.icon.ImageTransparency = refs.baseIconTransparency
+	refs.title.TextTransparency = refs.baseTitleTransparency
+	refs.description.TextTransparency = refs.baseDescriptionTransparency
+	UIMotion.stagger(refs.fadeRows, refs.fadeBases, 0.05)
+	-- Refused on a V1 CanvasGroup GUI or an off-centre icon; the panel itself is never scaled here.
+	UIMotion.popIn(refs.icon, 0.6)
 
 	task.wait(entryDuration + ANIMATION_SETTLE_BUFFER)
 
@@ -529,29 +547,19 @@ local function playNotification(refs: Refs, payload: ResolvedPayload)
 		refs.basePosition.Y.Offset + PANEL_EXIT_OFFSET
 	)
 
-	local _exitTweens = {
-		tween(refs.panel, exitInfo, {
-			Position = exitPosition,
-			BackgroundTransparency = 1,
-		}),
-		tween(refs.scale, exitInfo, {
-			Scale = PANEL_START_SCALE,
-		}),
-		tween(refs.icon, exitInfo, {
-			ImageTransparency = 1,
-		}),
-		tween(refs.title, exitInfo, {
-			TextTransparency = 1,
-		}),
-		tween(refs.description, exitInfo, {
-			TextTransparency = 1,
-		}),
-	}
+	local exitStyle, exitDirection = exitInfo.EasingStyle, exitInfo.EasingDirection
+
+	UIMotion.tween(refs.panel, PANEL_EXIT_DURATION, {
+		Position = exitPosition,
+		BackgroundTransparency = 1,
+	}, exitStyle, exitDirection)
+	UIMotion.tween(refs.scale, PANEL_EXIT_DURATION, { Scale = PANEL_START_SCALE }, exitStyle, exitDirection)
+	UIMotion.tween(refs.icon, PANEL_EXIT_DURATION, { ImageTransparency = 1 }, exitStyle, exitDirection)
+	UIMotion.tween(refs.title, PANEL_EXIT_DURATION, { TextTransparency = 1 }, exitStyle, exitDirection)
+	UIMotion.tween(refs.description, PANEL_EXIT_DURATION, { TextTransparency = 1 }, exitStyle, exitDirection)
 
 	if refs.stroke then
-		table.insert(_exitTweens, tween(refs.stroke, exitInfo, {
-			Transparency = 1,
-		}))
+		UIMotion.tween(refs.stroke, PANEL_EXIT_DURATION, { Transparency = 1 }, exitStyle, exitDirection)
 	end
 
 	task.wait(exitDuration + ANIMATION_SETTLE_BUFFER)

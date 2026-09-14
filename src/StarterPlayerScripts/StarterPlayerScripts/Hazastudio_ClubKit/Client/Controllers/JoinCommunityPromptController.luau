@@ -7,6 +7,8 @@
 -- when Features.VipOnCommunityJoin is enabled (server still verifies IsInGroup).
 -- Center-modal motion: AnimationHelper presentCenterPanel / dismissCenterPanel
 -- (same family as ShopUI / GiftUI / PaidBroadcastUI — scale 0.96↔1 + PanelBlur + FOV zoom).
+-- Everything the modal does while it is open goes through UIMotion (ADR 0011): the two
+-- buttons squash and lift, the CTA kicks its icon, and the content fades in behind the pop.
 
 local GroupService = game:GetService("GroupService")
 local Players = game:GetService("Players")
@@ -17,6 +19,7 @@ local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local BrandLogoApplier = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.BrandLogoApplier)
 local RejoinMode = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Session.RejoinMode)
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
+local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 local MobileScaleService = require(script.Parent.Parent.Services.MobileScaleService)
 
 local log = Logger.new("JoinCommunityPrompt")
@@ -65,6 +68,11 @@ type Refs = {
 	subheadlineLabel: TextLabel?,
 	subtitleLabel: TextLabel?,
 	bodyLabel: TextLabel?,
+	-- Every GuiObject under MainWrapper plus the designed transparency of the ones that can
+	-- fade, captured at resolve time — before any fade has touched them — so the content
+	-- fade always returns to the buyer's own values rather than to whatever it last left.
+	fadeTargets: { GuiObject },
+	fadeBases: { [GuiObject]: number },
 }
 
 local refs: Refs? = nil
@@ -648,6 +656,13 @@ local function resolveRefs(): Refs?
 	end
 	counterLeft, counterLabel = findCounterLeft(thumbnailHost, mainWrapper)
 
+	local fadeTargets: { GuiObject } = {}
+	for _, descendant in ipairs(mainWrapper:GetDescendants()) do
+		if descendant:IsA("GuiObject") then
+			table.insert(fadeTargets, descendant)
+		end
+	end
+
 	return {
 		root = rootInst :: ScreenGui,
 		mainWrapper = mainWrapper :: Frame,
@@ -662,6 +677,8 @@ local function resolveRefs(): Refs?
 		bodyLabel = findTextLabel(mainWrapper, "Body"),
 		titleLabel = findTextLabel(mainWrapper, "1-Title"),
 		subheadlineLabel = findTextLabel(mainWrapper, "2-SubTitle"),
+		fadeTargets = fadeTargets,
+		fadeBases = UIMotion.captureBases(fadeTargets),
 	}
 end
 
@@ -728,10 +745,16 @@ local function fillMemberThumbnailsAsync(groupId: number, generation: number)
 	if r.thumbnailHost and r.thumbnailTemplate then
 		local host = r.thumbnailHost
 		local template = r.thumbnailTemplate
+		-- The clones are made after the content fade may already have started on the template,
+		-- and nothing tweens a clone — so each one starts at the template's designed value.
+		local templateBase = r.fadeBases[template]
 		for index, sample in ipairs(merged) do
 			local clone = template:Clone()
 			clone.Name = "PlayerProfileThumbnail_" .. tostring(index)
 			clone.Image = headshotUrl(sample.userId)
+			if templateBase ~= nil then
+				clone.ImageTransparency = templateBase
+			end
 			clone.Visible = true
 			clone.LayoutOrder = index
 			clone.Parent = host
@@ -865,6 +888,15 @@ local function wireButtons(groupId: number)
 	wired = true
 	local r = refs
 
+	-- Press squash and (pointer devices only) hover lift. UIMotion decides for itself whether
+	-- the button or its label is the safe thing to scale, so a laid-out CTA never pushes its
+	-- neighbours. Bound once per session behind `wired`; this controller has no teardown path
+	-- and the prompt GUI outlives everything it is connected to.
+	UIMotion.bindPress(r.closeButton)
+	UIMotion.bindHover(r.closeButton)
+	UIMotion.bindPress(r.joinButton)
+	UIMotion.bindHover(r.joinButton)
+
 	r.closeButton.MouseButton1Click:Connect(function()
 		dismissModal(nil)
 	end)
@@ -873,6 +905,8 @@ local function wireButtons(groupId: number)
 		if isClosing then
 			return
 		end
+		-- The CTA answers with a kick of its own before the modal leaves.
+		UIMotion.pop(UIMotion.scaleTargetOf(r.joinButton), 1.18)
 		if alreadyJoinedThisOpen then
 			-- Already a member: dismiss only (do not PromptJoinAsync / CoreGui).
 			-- Still ask server to grant VIP if Features.VipOnCommunityJoin is on
@@ -924,6 +958,10 @@ local function showModal(groupId: number)
 	isOpen = true
 	isClosing = false
 	anim:presentCenterPanel(r.mainWrapper, nil, MODAL_BLUR_OPTIONS)
+	-- Content settles in a beat behind the panel's own pop, so the pop reads as the modal
+	-- arriving rather than as everything landing at once. Transparency only — nothing here
+	-- changes a size, so it is safe above the CanvasGroups a buyer design may use.
+	UIMotion.fadeIn(r.fadeTargets, r.fadeBases, 0.1)
 
 	-- Thumbnails / member count are best-effort and must not block open.
 	fillGeneration += 1

@@ -7,24 +7,30 @@ local UserInputService = game:GetService("UserInputService")
 local ObjectPool = require(script.Parent.Parent.Utils.ObjectPool)
 local ScrollIndicatorHelper = require(script.Parent.Parent.Utils.ScrollIndicatorHelper)
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
-local PressFeedback = require(script.Parent.Parent.Utils.PressFeedback)
+local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 local SliderSelectorUtil = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.SliderSelectorUtil)
 
 local DancePanelUIBinder = {} :: any
 DancePanelUIBinder.__index = DancePanelUIBinder
 
+-- Row/state motion goes through UIMotion (ADR 0011), which takes a duration + easing rather
+-- than a TweenInfo, so the panel's timings live here as specs.
+type MotionSpec = { time: number, style: Enum.EasingStyle?, dir: Enum.EasingDirection? }
+
 local LIGHT_TEXT_COLOR = Color3.fromRGB(255, 255, 255)
 local DARK_TEXT_COLOR = Color3.fromRGB(12, 12, 12)
-local KNOB_POP_TWEEN = TweenInfo.new(0.16, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 local KNOB_HIDE_TWEEN = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-local ROW_STATE_TWEEN = TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
-local ROW_FAST_TWEEN = TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
-local ROW_IMAGE_TWEEN = TweenInfo.new(0.25, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
-local ROW_GRADIENT_TWEEN = TweenInfo.new(4, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1)
+local ROW_STATE_MOTION: MotionSpec = { time = 0.5, style = Enum.EasingStyle.Quart, dir = Enum.EasingDirection.Out }
+local ROW_FAST_MOTION: MotionSpec = { time = 0.25, style = Enum.EasingStyle.Quart, dir = Enum.EasingDirection.Out }
+local ROW_IMAGE_MOTION: MotionSpec = { time = 0.25, style = Enum.EasingStyle.Linear, dir = Enum.EasingDirection.Out }
+-- The played row's gradient breathes a full turn and back instead of spinning forever: a
+-- reversing UIMotion.pulse is the only loop that honours reduced motion and stops on close.
+local ROW_GRADIENT_PERIOD = 4
 -- Wutwut press feedback: soft gray tint (not full played white) + short fade.
 local WUTWUT_PRESS_BLEND = 0.3
-local WUTWUT_PRESS_TWEEN = TweenInfo.new(0.07, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-local WUTWUT_RELEASE_TWEEN = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local WUTWUT_PRESS_MOTION: MotionSpec = { time = 0.07, style = Enum.EasingStyle.Quad, dir = Enum.EasingDirection.Out }
+local WUTWUT_RELEASE_MOTION: MotionSpec = { time = 0.12, style = Enum.EasingStyle.Quad, dir = Enum.EasingDirection.Out }
+local ROW_STAGGER_MAX = 12
 local SPEED_STEP = 0.01
 local PANEL_OPEN_SCALE = 1
 local SPEED_HANDLE_AUTO_HIDE_DELAY = 2
@@ -193,10 +199,11 @@ local function isPointInside(gui: GuiObject?, point: Vector2): boolean
 		and point.Y <= position.Y + size.Y
 end
 
-local function tweenProperties(instance: Instance, goal: { [string]: any }, tweenInfo: TweenInfo?)
-	local tween = TweenService:Create(instance, tweenInfo or ROW_STATE_TWEEN, goal)
-	tween:Play()
-	return tween
+-- One vocabulary for every row repaint (ADR 0011): per-property channels, so the wutwut press
+-- tint and a state repaint driving the same properties replace each other instead of fighting.
+local function tweenProperties(instance: Instance, goal: { [string]: any }, spec: MotionSpec?)
+	local motion = spec or ROW_STATE_MOTION
+	UIMotion.tween(instance, motion.time, goal, motion.style, motion.dir)
 end
 
 local function setPanelAlpha(panelRoot: GuiObject, alpha: number)
@@ -267,7 +274,14 @@ function DancePanelUIBinder.new(deps: {
 	self._rowPressVisualConnections = {}
 	self._favoritePressConnections = {}
 	self._descendantsCache = {} -- Cache for row descendants (key = row instance)
-	self._rowGradientTweens = {}
+	self._rowGradientStops = {} -- UIMotion.pulse stop functions per played row
+	self._motionConnections = {} :: { RBXScriptConnection }
+	-- Pooled rows are bound (and their fade bases captured) once per instance, not per render.
+	self._rowMotionBound = {}
+	self._rowFadeBases = {}
+	self._categoryOrder = { Dance = 1, Favorites = 2, Pose = 3 }
+	self._syncOverlayShown = nil :: boolean?
+	self._searchWasEmpty = true
 	self._dragMoveConn = nil
 	self._dragEndConn = nil
 	self._sliderMoveConn = nil
@@ -552,14 +566,30 @@ function DancePanelUIBinder:_hideReferenceRows()
 	end
 end
 
+-- Press squash + hover lift for one button. UIMotion decides whether a scale is safe here
+-- (laid-out siblings, CanvasGroup ancestors) and returns no connections when it is not.
+-- `into` lets a pooled row own its connections, so they die with the row and not with the panel.
+function DancePanelUIBinder:_bindButtonMotion(button: GuiObject?, into: { RBXScriptConnection }?)
+	if not button then
+		return
+	end
+	local store = into or self._motionConnections
+	for _, connection in ipairs(UIMotion.bindPress(button)) do
+		table.insert(store, connection)
+	end
+	for _, connection in ipairs(UIMotion.bindHover(button)) do
+		table.insert(store, connection)
+	end
+end
+
 function DancePanelUIBinder:_bindTabs()
 	self.refs.danceTabButton.AutoButtonColor = false
 	self.refs.poseTabButton.AutoButtonColor = false
 	if self.refs.favoritesTabButton then
 		self.refs.favoritesTabButton.AutoButtonColor = false
 	end
-	PressFeedback.bindPressScale(self.refs.danceTabButton)
-	PressFeedback.bindPressScale(self.refs.poseTabButton)
+	self:_bindButtonMotion(self.refs.danceTabButton)
+	self:_bindButtonMotion(self.refs.poseTabButton)
 	bindPressDown(self.refs.danceTabButton, function()
 		self:setCategory("Dance")
 	end)
@@ -567,7 +597,7 @@ function DancePanelUIBinder:_bindTabs()
 		self:setCategory("Pose")
 	end)
 	if self.refs.favoritesTabButton then
-		PressFeedback.bindPressScale(self.refs.favoritesTabButton)
+		self:_bindButtonMotion(self.refs.favoritesTabButton)
 		bindPressDown(self.refs.favoritesTabButton, function()
 			self:setCategory("Favorites")
 		end)
@@ -575,14 +605,23 @@ function DancePanelUIBinder:_bindTabs()
 end
 
 function DancePanelUIBinder:_bindSearch()
+	-- Optional magnifier/clear glyph: spins when the query is wiped. Rotation is layout-neutral,
+	-- so it is safe inside the search box's CanvasGroup; absent on layouts that ship without one.
+	local searchIcon = self.refs.searchBox:FindFirstChildWhichIsA("ImageLabel")
 	self.refs.searchBox:GetPropertyChangedSignal("Text"):Connect(function()
 		self._searchQuery = string.lower(self.refs.searchBox.Text)
+		local isEmpty = self._searchQuery == ""
+		if isEmpty and not self._searchWasEmpty then
+			UIMotion.spin(searchIcon)
+		end
+		self._searchWasEmpty = isEmpty
 		self:_clearCategoryScrollMemory()
 		self:rebuildList(true)
 	end)
 end
 
 function DancePanelUIBinder:_bindSyncOverlay()
+	self:_bindButtonMotion(self.refs.syncOverlay)
 	self.refs.syncOverlay.Activated:Connect(function()
 		if self._unsyncRequested then
 			self._unsyncRequested()
@@ -696,13 +735,13 @@ function DancePanelUIBinder:_updateSpeedKnobVisibility()
 
 	if shouldShow then
 		speedHandle.Visible = true
-		local tween = TweenService:Create(knobScale, KNOB_POP_TWEEN, {
-			Scale = 1,
-		})
-		tween:Play()
+		UIMotion.tween(knobScale, 0.16, { Scale = 1 }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 		return
 	end
 
+	-- The one bespoke tween left in this panel (ADR 0011 allows it with a reason): the knob may
+	-- only stop being Visible once it has finished shrinking — it is a hit-test blocker for the
+	-- rows behind it — and UIMotion.tween returns nothing to hang a Completed callback on.
 	local tween = TweenService:Create(knobScale, KNOB_HIDE_TWEEN, {
 		Scale = 0.82,
 	})
@@ -849,7 +888,11 @@ function DancePanelUIBinder:_bindCustomSpeed()
 
 	local resetSpeedButton = self.refs.resetSpeedButton
 	if resetSpeedButton then
+		self:_bindButtonMotion(resetSpeedButton)
+		local resetIcon = resetSpeedButton:FindFirstChildWhichIsA("ImageLabel")
 		self._resetSpeedConn = resetSpeedButton.Activated:Connect(function()
+			-- Rewind spin: layout-neutral, so it works wherever the button sits.
+			UIMotion.spin(resetIcon, -1)
 			self:setCurrentSpeed(self.config.DEFAULT_SPEED)
 		end)
 	end
@@ -941,7 +984,7 @@ end
 
 function DancePanelUIBinder:_applyWutwutPressTint(row: GuiButton, animationName: string, pressed: boolean)
 	local baseRef = self:_getRowBaseReference(animationName)
-	local tweenInfo = if pressed then WUTWUT_PRESS_TWEEN else WUTWUT_RELEASE_TWEEN
+	local tweenInfo = if pressed then WUTWUT_PRESS_MOTION else WUTWUT_RELEASE_MOTION
 	local targetBg = if pressed
 		then baseRef.BackgroundColor3:Lerp(Color3.new(1, 1, 1), WUTWUT_PRESS_BLEND)
 		else baseRef.BackgroundColor3
@@ -1060,36 +1103,54 @@ function DancePanelUIBinder:_disconnectRowConnections(row: GuiButton)
 end
 
 function DancePanelUIBinder:_stopRowGradient(row: GuiButton)
-	local tweens = self._rowGradientTweens[row]
-	if not tweens then
+	local stops = self._rowGradientStops[row]
+	if not stops then
 		return
 	end
 
-	for _, tween in ipairs(tweens) do
-		tween:Cancel()
-		tween:Destroy()
+	for _, stop in ipairs(stops) do
+		stop()
 	end
-	self._rowGradientTweens[row] = nil
+	self._rowGradientStops[row] = nil
 end
 
+-- The PLAYING row breathes: its gradients sweep a full turn and back on a UIMotion.pulse.
+-- Already running is left alone, so a state echo (favorites repaint, sync push) never restarts
+-- the loop mid-cycle; nothing is started while the panel is closed.
 function DancePanelUIBinder:_startRowGradient(row: GuiButton)
-	self:_stopRowGradient(row)
+	if self._rowGradientStops[row] or not self._isOpen then
+		return
+	end
 
-	local tweens = {}
+	local stops: { () -> () } = {}
 	local descendants = self._descendantsCache[row] or row:GetDescendants()
 	for _, descendant in ipairs(descendants) do
 		if descendant:IsA("UIGradient") and descendant.Enabled then
 			local gradient = descendant :: UIGradient
-			local tween = TweenService:Create(gradient, ROW_GRADIENT_TWEEN, {
-				Rotation = gradient.Rotation + 360,
-			})
-			tween:Play()
-			table.insert(tweens, tween)
+			table.insert(stops, UIMotion.pulse(gradient, "Rotation", gradient.Rotation + 360, ROW_GRADIENT_PERIOD))
 		end
 	end
 
-	if #tweens > 0 then
-		self._rowGradientTweens[row] = tweens
+	if #stops > 0 then
+		self._rowGradientStops[row] = stops
+	end
+end
+
+-- Nothing loops while the panel is closed (ADR 0011).
+function DancePanelUIBinder:_stopAllRowGradients()
+	for _, row in ipairs(self._activeRows) do
+		self:_stopRowGradient(row)
+	end
+end
+
+function DancePanelUIBinder:_resumeRowGradient()
+	local animationName = self._currentAnimName
+	if animationName == nil then
+		return
+	end
+	local row = self._activeRowsByName[animationName]
+	if row and row.Parent then
+		self:_syncRowGradient(row, self:_isRowPlayedVisual(animationName))
 	end
 end
 
@@ -1177,10 +1238,31 @@ function DancePanelUIBinder:_createRow(animation: AnimationEntry, layoutOrder: n
 		label.Text = animation.Name
 	end
 
+	-- Press/hover and fade bases belong to the pooled instance, not to this render. The pool
+	-- destroys rows once it is full, so each row owns its connections and drops them with itself.
+	if not self._rowMotionBound[row] then
+		local rowMotion: { RBXScriptConnection } = {}
+		self._rowMotionBound[row] = rowMotion
+		self:_bindButtonMotion(row, rowMotion)
+		self:_bindButtonMotion(getFavoriteButton(row), rowMotion)
+		table.insert(rowMotion, row.Destroying:Connect(function()
+			self._rowMotionBound[row] = nil
+			if label then
+				self._rowFadeBases[label] = nil
+			end
+		end))
+		if label then
+			UIMotion.captureBases({ label }, self._rowFadeBases)
+		end
+	end
+
 	self._rowPressConnections[row] = bindPressDown(row, function(input)
 		if not self:_isRowInputAllowed(row, input) then
 			return
 		end
+		-- Rows live inside a CanvasGroup and a UIListLayout, so a scale pop is forbidden
+		-- (ADR 0005 / 0011). Rotation is layout-neutral: the name gives a small kick instead.
+		UIMotion.wiggle(label, 3)
 		if self._emoteSelected then
 			self._emoteSelected(animation)
 		end
@@ -1214,6 +1296,8 @@ function DancePanelUIBinder:_createRow(animation: AnimationEntry, layoutOrder: n
 			if not self:_isRowInputAllowed(row, input) then
 				return
 			end
+			-- Star flips with a spin; the badge fade to its new state rides _syncRowVisualState.
+			UIMotion.spin(getFavoriteBadge(row))
 			if self._favoriteToggled then
 				self._favoriteToggled(animation.Name)
 			end
@@ -1321,7 +1405,7 @@ function DancePanelUIBinder:_syncRowVisualState(row: GuiButton, animationName: s
 							BackgroundTransparency = templateDescendant.BackgroundTransparency,
 							ImageColor3 = templateDescendant.ImageColor3,
 							ImageTransparency = templateDescendant.ImageTransparency,
-						}, ROW_IMAGE_TWEEN)
+						}, ROW_IMAGE_MOTION)
 					else
 						descendant.BackgroundColor3 = templateDescendant.BackgroundColor3
 						descendant.BackgroundTransparency = templateDescendant.BackgroundTransparency
@@ -1353,7 +1437,7 @@ function DancePanelUIBinder:_syncRowVisualState(row: GuiButton, animationName: s
 		if animate then
 			tweenProperties(badge, {
 				ImageTransparency = targetTransparency,
-			}, ROW_FAST_TWEEN)
+			}, ROW_FAST_MOTION)
 		else
 			badge.ImageTransparency = targetTransparency
 		end
@@ -1475,6 +1559,8 @@ function DancePanelUIBinder:rebuildListIncremental(resetScroll: boolean?)
 				return
 			end
 			local chunkEnd = math.min(index + chunkSize - 1, #filtered)
+			local isFirstChunk = index == 1
+			local entranceRows: { GuiObject } = {}
 			for rowIndex = index, chunkEnd do
 				local animation = filtered[rowIndex]
 				local row = self:_createRow(animation, rowIndex)
@@ -1482,6 +1568,14 @@ function DancePanelUIBinder:rebuildListIncremental(resetScroll: boolean?)
 				row.Parent = self.refs.mainContent
 				table.insert(self._activeRows, row)
 				self._activeRowsByName[animation.Name] = row
+				if isFirstChunk then
+					table.insert(entranceRows, row)
+				end
+			end
+			-- Only the first screenful cascades in (a category or search change); rows reached by
+			-- scrolling a long list are built later and just appear.
+			if isFirstChunk then
+				UIMotion.stagger(entranceRows, self._rowFadeBases, nil, ROW_STAGGER_MAX)
 			end
 			index = chunkEnd + 1
 			task.wait()
@@ -1513,9 +1607,16 @@ function DancePanelUIBinder:setCategory(category: string)
 	end
 
 	self:_saveCurrentCategoryScroll()
+	local previousOrder = self._categoryOrder[self._currentCategory]
+	local nextOrder = self._categoryOrder[category]
 	self._currentCategory = category
 	self:_applyTabVisuals()
 	self._listDirty = true
+	-- The list travels the way the pill does. slideIn moves content with equal and opposite
+	-- padding, so the scroll keeps its width and the panel does not resize (ADR 0011).
+	if self._isOpen and previousOrder and nextOrder then
+		UIMotion.slideIn(self.refs.mainContent, if nextOrder > previousOrder then 1 else -1)
+	end
 	if self._isOpen then
 		self._pendingRestoreScrollY = self._scrollByCategory[category] or 0
 		self:rebuildListIncremental(false)
@@ -1611,7 +1712,9 @@ function DancePanelUIBinder:setCurrentSpeed(speed: number, suppressCallback: boo
 end
 
 function DancePanelUIBinder:setSyncOverlay(isVisible: boolean, leaderDisplay: string?, animName: string?)
-	self.refs.syncOverlay.Visible = isVisible
+	if self.refs.syncOverlay.Visible ~= isVisible then
+		self.refs.syncOverlay.Visible = isVisible
+	end
 
 	if self.refs.syncLeaderLabel then
 		self.refs.syncLeaderLabel.Text = isVisible
@@ -1623,6 +1726,29 @@ function DancePanelUIBinder:setSyncOverlay(isVisible: boolean, leaderDisplay: st
 	end
 	if self.refs.syncAutoRouteLabel then
 		self.refs.syncAutoRouteLabel.Text = "Auto re-route lead : ON"
+	end
+
+	-- The server echoes the whole sync state; only a real appearance fades the overlay in.
+	if self._syncOverlayShown ~= isVisible then
+		self._syncOverlayShown = isVisible
+		if isVisible then
+			if not self._syncFadeBases then
+				-- Any of these three is optional on a given layout (phone drops some).
+				local fade: { GuiObject } = {}
+				if self.refs.syncLeaderLabel then
+					table.insert(fade, self.refs.syncLeaderLabel)
+				end
+				if self.refs.syncTapLabel then
+					table.insert(fade, self.refs.syncTapLabel)
+				end
+				if self.refs.syncAutoRouteLabel then
+					table.insert(fade, self.refs.syncAutoRouteLabel)
+				end
+				self._syncFade = fade
+				self._syncFadeBases = UIMotion.captureBases(fade)
+			end
+			UIMotion.fadeIn(self._syncFade, self._syncFadeBases)
+		end
 	end
 
 	self:setCurrentAnimName(animName)
@@ -1640,6 +1766,10 @@ function DancePanelUIBinder:setOpen(isOpen: boolean, immediate: boolean?)
 	panelScale.Scale = PANEL_OPEN_SCALE
 	restoreMobileBakedPanelScale(panelRoot, self.config)
 
+	if not isOpen then
+		self:_stopAllRowGradients()
+	end
+
 	if immediate then
 		panelRoot.Visible = isOpen
 		panelRoot.Position = self._openPosition
@@ -1647,11 +1777,15 @@ function DancePanelUIBinder:setOpen(isOpen: boolean, immediate: boolean?)
 		setPanelAlpha(panelRoot, if isOpen then 0 else 1)
 		animFrame.Visible = isOpen
 		restoreMobileBakedPanelScale(panelRoot, self.config)
+		if isOpen then
+			self:_resumeRowGradient()
+		end
 		return
 	end
 
 	if isOpen then
 		self:_ensureListBuilt()
+		self:_resumeRowGradient()
 		panelRoot.Visible = true
 		panelRoot.Position = self._openPosition
 		panelRoot.AnchorPoint = self._openAnchorPoint
@@ -1731,7 +1865,18 @@ function DancePanelUIBinder:destroy()
 	end
 	self._pressedAnimName = nil
 
-	-- Clear active rows
+	-- Press / hover connections: panel-level (tabs, sync overlay, reset) and per pooled row.
+	for _, connection in ipairs(self._motionConnections) do
+		connection:Disconnect()
+	end
+	table.clear(self._motionConnections)
+	for _, rowMotion in pairs(self._rowMotionBound) do
+		for _, connection in ipairs(rowMotion) do
+			connection:Disconnect()
+		end
+	end
+
+	-- Clear active rows (also stops every UIMotion.pulse still breathing on a played row)
 	self:_clearActiveRows()
 
 	-- Cleanup object pool
@@ -1743,7 +1888,9 @@ function DancePanelUIBinder:destroy()
 	table.clear(self._rowPressConnections)
 	table.clear(self._rowPressVisualConnections)
 	table.clear(self._favoritePressConnections)
-	table.clear(self._rowGradientTweens)
+	table.clear(self._rowGradientStops)
+	table.clear(self._rowMotionBound)
+	table.clear(self._rowFadeBases)
 
 	-- Clear descendants cache
 	table.clear(self._descendantsCache)

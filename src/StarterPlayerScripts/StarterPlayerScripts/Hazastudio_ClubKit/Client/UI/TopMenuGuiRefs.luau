@@ -15,6 +15,9 @@ export type Refs = {
 	phoneMenu: ScrollingFrame,
 	desktopButtons: ButtonMap,
 	phoneButtons: ButtonMap,
+	-- The same buttons in visual order, for the open cascade (ADR 0011).
+	desktopRows: { GuiObject },
+	phoneRows: { GuiObject },
 }
 
 local BUTTON_NAMES = {
@@ -61,6 +64,28 @@ local function resolveButtons(menuRoot: Instance): ButtonMap
 	return buttons
 end
 
+-- Top to bottom: sections sort by name (Section1..Section4), rows inside one section by
+-- LayoutOrder then name — what a UIListLayout does under either SortOrder while the designs leave
+-- LayoutOrder at 0. Order only decides the cascade, so a design that disagrees still animates.
+local function orderRows(buttons: ButtonMap): { GuiObject }
+	local rows: { GuiObject } = {}
+	for _, button in pairs(buttons) do
+		table.insert(rows, button)
+	end
+	table.sort(rows, function(a: GuiObject, b: GuiObject): boolean
+		local sectionA = if a.Parent then a.Parent.Name else ""
+		local sectionB = if b.Parent then b.Parent.Name else ""
+		if sectionA ~= sectionB then
+			return sectionA < sectionB
+		end
+		if a.LayoutOrder ~= b.LayoutOrder then
+			return a.LayoutOrder < b.LayoutOrder
+		end
+		return a.Name < b.Name
+	end)
+	return rows
+end
+
 local function resolveRoot(playerGui: PlayerGui, guiName: string): ScreenGui
 	local existing = playerGui:FindFirstChild(guiName)
 	if existing and existing:IsA("ScreenGui") then
@@ -89,12 +114,17 @@ function TopMenuGuiRefs.resolve(playerGui: PlayerGui): Refs
 	local desktopMenu = asFrame(expect(root, cfg.DESKTOP_FRAME_NAME, 15))
 	local phoneMenu = asScrollingFrame(expect(root, cfg.PHONE_FRAME_NAME, 15))
 
+	local desktopButtons = resolveButtons(desktopMenu)
+	local phoneButtons = resolveButtons(phoneMenu)
+
 	return {
 		root = root,
 		desktopMenu = desktopMenu,
 		phoneMenu = phoneMenu,
-		desktopButtons = resolveButtons(desktopMenu),
-		phoneButtons = resolveButtons(phoneMenu),
+		desktopButtons = desktopButtons,
+		phoneButtons = phoneButtons,
+		desktopRows = orderRows(desktopButtons),
+		phoneRows = orderRows(phoneButtons),
 	}
 end
 

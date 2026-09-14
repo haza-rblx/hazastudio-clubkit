@@ -105,10 +105,12 @@ local function makeWrapper(parent: Instance): Frame
 	wrapper.BorderSizePixel = 0
 	wrapper.Parent = parent
 
-	-- Leaf: icon on the left, vertically centered
+	-- Leaf: icon on the left, vertically centered. Anchored at its centre (position compensated
+	-- by half its 32px width, so it sits exactly where it always did) — that is what lets
+	-- UIMotion.popIn scale it on arrival; the wrapper has no layout, so nothing else moves.
 	local icon = makeLeafIcon(wrapper, "NotificationIcon", "rbxassetid://0")
-	icon.Position = UDim2.new(0, 0, 0.5, -16)
-	icon.AnchorPoint = Vector2.new(0, 0.5)
+	icon.Position = UDim2.new(0, 16, 0.5, -16)
+	icon.AnchorPoint = Vector2.new(0.5, 0.5)
 
 	-- Leaf: title stacked above description on the right
 	local title = makeLeafTitle(wrapper, "NotificationTitle", "Notification")

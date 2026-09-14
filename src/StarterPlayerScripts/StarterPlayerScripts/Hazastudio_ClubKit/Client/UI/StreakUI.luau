@@ -1,11 +1,14 @@
 --!strict
 -- Client/UI/StreakUI.lua
 -- Display only. Animasi fire streak.
--- Flow: Overlay fade in -> StreakImage scalePop -> counter animate -> glow pulse -> auto-dismiss
-local TweenService      = game:GetService("TweenService")
+-- Flow: Overlay fade in -> StreakImage scalePop -> counter roll -> glow pulse -> auto-dismiss
+-- AnimationHelper still owns arrival and departure (scalePop / scaleOut / startRotation);
+-- everything in between goes through UIMotion (ADR 0011), so reduced motion is honoured and
+-- the glow never breathes behind a disabled ScreenGui.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config          = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
+local UIMotion        = require(script.Parent.Parent.Utils.UIMotion)
 local UIShadowHelper  = require(script.Parent.Parent.Utils.UIShadowHelper)
 -- Warna api normal vs milestone
 local COLOR_DESATURATED = Color3.fromRGB(170, 170, 170)
@@ -35,6 +38,8 @@ function StreakUI.new(gui: ScreenGui)
 	self._rotBg    = overlay:FindFirstChild("RotatingBackground") :: ImageLabel?
 	self._rotHandle = nil
 	self._playId   = 0
+	-- Stop functions for every loop started while the overlay is up; dismiss drains them.
+	self._glowStops = {} :: { () -> () }
 	-- Hide on init
 	gui.Enabled            = false
 	overlay.Visible        = false
@@ -42,78 +47,72 @@ function StreakUI.new(gui: ScreenGui)
 	UIShadowHelper.apply(imgLabel, "STREAK_GLOW")
 	return self
 end
--- Animate counter from 0 to target
+-- MotionPresets.scaledTime without a second require: MOTION_SCALE stretches every UIMotion
+-- tween, so the steps chained off one have to stretch with it or they fire mid-animation.
+function StreakUI:_scaledTime(seconds: number): number
+	local motion = (Config :: any).UIMotion
+	local scale = if type(motion) == "table" then (tonumber(motion.MOTION_SCALE) or 1) else 1
+	return seconds * math.clamp(scale, 0.25, 2)
+end
+-- Counter roll 0 -> target. UIMotion.countTo owns the digits (and snaps them under reduced
+-- motion); the follow-up is scheduled for the same stretched duration so the spark burst
+-- lands on the last digit rather than before or after it.
 function StreakUI:_animateCounter(target: number, onDone: () -> ())
-	local label    = self._count
 	local duration = Config.Streak.COUNTER_DURATION
-	local steps    = math.min(target, 30) -- max 30 langkah
-	local interval = duration / steps
-	local current  = 0
-	local step     = math.max(1, math.floor(target / steps))
-	label.Text = "0"
-	task.spawn(function()
-		while current < target do
-			task.wait(interval)
-			current = math.min(current + step, target)
-			label.Text = tostring(current)
-		end
-		label.Text = tostring(target)
-		onDone()
-	end)
+	self._count.Text = "0"
+	UIMotion.countTo(self._count, 0, target, duration)
+	task.delay(if UIMotion.reduced() then 0 else self:_scaledTime(duration), onDone)
 end
--- Glow pulse: scale out -> in, N kali
-function StreakUI:_glowPulse(onDone: () -> ())
-	local img    = self._img
-	local count  = Config.Streak.GLOW_PULSE_COUNT
-	local sizeOut = Config.Streak.GLOW_PULSE_SIZE_OUT
-	local sizeIn  = Config.Streak.GLOW_PULSE_SIZE_IN
+-- Glow pulse: the shadow breathes for as long as the overlay is up (the old fixed
+-- GLOW_PULSE_COUNT burst is gone), and the flame breathes with it when that is safe.
+function StreakUI:_startGlow()
+	self:_stopGlow()
+	local img     = self._img
 	local glowCfg = Config.UIShadow.STREAK_GLOW
-	local done   = 0
-	local tOut   = 0.22
-	local tIn    = 0.18
-	local function pulse()
-		if done >= count then
-			onDone()
-			return
+	local period  = 0.2 -- one symmetric half-cycle replaces the old 0.22 out / 0.18 in pair
+	local shadow  = UIShadowHelper.get(img)
+	if shadow then
+		if not UIMotion.reduced() then
+			UIShadowHelper.setTransparency(img, glowCfg.PulseMin)
 		end
-		done += 1
-		UIShadowHelper.tweenTransparency(img, glowCfg.PulseMax, tOut)
-		TweenService:Create(img,
-			TweenInfo.new(tOut, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
-			{ Size = UDim2.new(0, sizeOut, 0, sizeOut) }
-		):Play()
-		task.delay(tOut, function()
-			UIShadowHelper.tweenTransparency(img, glowCfg.PulseMin, tIn)
-			TweenService:Create(img,
-				TweenInfo.new(tIn, Enum.EasingStyle.Sine, Enum.EasingDirection.In),
-				{ Size = UDim2.new(0, sizeIn, 0, sizeIn) }
-			):Play()
-			task.delay(tIn, pulse)
-		end)
+		table.insert(self._glowStops, UIMotion.pulse(shadow, "Transparency", glowCfg.PulseMax, period))
 	end
-	pulse()
+	-- Size only moves on a centred, layout-free image outside any CanvasGroup: breathing a
+	-- laid-out child would shove its siblings (ADR 0011) and resizing a rasterized group
+	-- would re-create its texture (ADR 0005). canScale is that exact question.
+	if UIMotion.canScale(img) and not UIMotion.reduced() then
+		local sizeIn  = Config.Streak.GLOW_PULSE_SIZE_IN
+		local sizeOut = Config.Streak.GLOW_PULSE_SIZE_OUT
+		img.Size = UDim2.new(0, sizeIn, 0, sizeIn)
+		table.insert(self._glowStops, UIMotion.pulse(img, "Size", UDim2.new(0, sizeOut, 0, sizeOut), period))
+	end
 end
--- Shake for milestone
+function StreakUI:_stopGlow()
+	for _, stop in ipairs(self._glowStops) do
+		stop()
+	end
+	table.clear(self._glowStops)
+end
+-- Shake for milestone. Rotation instead of the old Position nudges: it reads the same, never
+-- touches layout, and stops itself when the image leaves.
 function StreakUI:_shake()
-	local img    = self._img
-	local origin = img.Position
-	local shakes = { 8, -8, 6, -6, 4, -4, 2, -2, 0 }
-	task.spawn(function()
-		for _, offset in ipairs(shakes) do
-			img.Position = UDim2.new(
-				origin.X.Scale, origin.X.Offset + offset,
-				origin.Y.Scale, origin.Y.Offset
-			)
-			task.wait(0.04)
-		end
-		img.Position = origin
-	end)
+	UIMotion.wiggle(self._img, 10)
 end
 -- Spark particles flying out from StreakImage
 function StreakUI:_spawnParticles(colorSet: { Color3 })
+	-- A 45-spark burst is the first thing a player who asked for less motion wants gone.
+	if UIMotion.reduced() then
+		return
+	end
 	local cfg     = Config.Streak
 	local COUNT   = cfg.PARTICLE_COUNT
 	local overlay = self._overlay
+	-- The sparks are our own absolutely-positioned children of the backdrop, not template
+	-- rows. If a buyer's Overlay lays its children out, a flying Frame would shove the card
+	-- around instead of flying, so that place gets no burst.
+	if overlay:FindFirstChildWhichIsA("UIGridStyleLayout") then
+		return
+	end
 	for i = 1, COUNT do
 		task.spawn(function()
 			local angle    = (i / COUNT) * math.pi * 2 + math.random() * 0.6
@@ -137,15 +136,12 @@ function StreakUI:_spawnParticles(colorSet: { Color3 })
 			local targetX  = 0.5 + math.cos(angle) * dist
 			local targetY  = 0.5 + math.sin(angle) * dist
 			local duration = cfg.PARTICLE_DUR_MIN + math.random() * cfg.PARTICLE_DUR_VAR
-			TweenService:Create(spark,
-				TweenInfo.new(duration, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
-				{
-					Position               = UDim2.new(targetX, 0, targetY, 0),
-					BackgroundTransparency = 1,
-					Size                   = UDim2.new(0, size * 0.2, 0, size * 0.2),
-				}
-			):Play()
-			task.delay(duration, function()
+			UIMotion.tween(spark, duration, {
+				Position               = UDim2.new(targetX, 0, targetY, 0),
+				BackgroundTransparency = 1,
+				Size                   = UDim2.new(0, size * 0.2, 0, size * 0.2),
+			}, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+			task.delay(self:_scaledTime(duration), function()
 				spark:Destroy()
 			end)
 		end)
@@ -167,6 +163,11 @@ function StreakUI:play(payload: {
 		or (isMile and COLOR_MILESTONE)
 		or COLOR_NORMAL
 	self._playId          += 1
+	-- A second notif landing mid-show: kill the old loops before repainting the glow, or
+	-- their stop functions would restore the previous colour on top of the new one. The
+	-- token then keeps the older sequence's steps from touching this one.
+	self:_stopGlow()
+	local playToken = self._playId
 	self._img.ImageColor3  = COLOR_DESATURATED
 	self._count.Text       = "0"
 	self._gui.Enabled      = true
@@ -182,43 +183,62 @@ function StreakUI:play(payload: {
 		Color = Config.UIShadow.STREAK_COLORS[colorKey],
 		Transparency = Config.UIShadow.STREAK_GLOW.Transparency,
 	})
-	TweenService:Create(self._img,
-		TweenInfo.new(COLOR_TWEEN_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-		{ ImageColor3 = imageColor }
-	):Play()
+	UIMotion.tween(
+		self._img,
+		COLOR_TWEEN_TIME,
+		{ ImageColor3 = imageColor },
+		Enum.EasingStyle.Quad,
+		Enum.EasingDirection.Out
+	)
 	-- 1. Fade in overlay
 	self._overlay.BackgroundTransparency = 1
-	TweenService:Create(self._overlay,
-		TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-		{ BackgroundTransparency = Config.Streak.OVERLAY_TRANSPARENCY }
-	):Play()
+	UIMotion.tween(
+		self._overlay,
+		0.3,
+		{ BackgroundTransparency = Config.Streak.OVERLAY_TRANSPARENCY },
+		Enum.EasingStyle.Quad,
+		Enum.EasingDirection.Out
+	)
 	-- 2. StreakImage scalePop
 	self._anim:scalePop(self._img :: Frame, function()
-		-- 3. Counter animate
+		if self._playId ~= playToken then return end
+		-- 3. The reveal kick, then the glow breathes for as long as the overlay is up.
+		-- scalePop has already made AnimationHelper's own UIScale, so the UIMotionScale
+		-- this pop adds is the second child and never gets picked up as the panel scale.
+		UIMotion.pop(self._img, 1.12)
+		if payload.didIncrement then
+			UIMotion.wiggle(self._img, 6)
+		end
+		self:_startGlow()
+		-- 4. Counter roll
 		self:_animateCounter(days, function()
+			if self._playId ~= playToken then return end
 			-- Particles explode after counter finishes
 			self:_spawnParticles(PARTICLE_COLORS[colorKey])
-			-- 4. Milestone shake
+			-- 5. Milestone shake
 			if isMile then self:_shake() end
-			-- 5. Glow pulse
-			self:_glowPulse(function()
-				-- 6. Auto-dismiss after SHOW_DURATION
-				task.delay(Config.Streak.SHOW_DURATION, function()
-					self:dismiss()
-				end)
+			-- 6. Auto-dismiss after SHOW_DURATION
+			task.delay(Config.Streak.SHOW_DURATION, function()
+				if self._playId ~= playToken then return end
+				self:dismiss()
 			end)
 		end)
 	end)
 end
 function StreakUI:dismiss()
 	local playId = self._playId
+	-- Nothing may keep breathing behind a disabled ScreenGui.
+	self:_stopGlow()
 	UIShadowHelper.setTransparency(self._img, Config.UIShadow.STREAK_GLOW.Transparency)
 	self._anim:scaleOut(self._img :: Frame, nil)
-	TweenService:Create(self._overlay,
-		TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
-		{ BackgroundTransparency = 1 }
-	):Play()
-	task.delay(0.3, function()
+	UIMotion.tween(
+		self._overlay,
+		0.3,
+		{ BackgroundTransparency = 1 },
+		Enum.EasingStyle.Quad,
+		Enum.EasingDirection.In
+	)
+	task.delay(self:_scaledTime(0.3), function()
 		-- Notif baru keburu main duluan: jangan disembunyiin
 		if self._playId ~= playId then return end
 		if self._rotHandle then
@@ -227,9 +247,12 @@ function StreakUI:dismiss()
 		end
 		self._gui.Enabled = false
 		self._overlay.Visible = false
-		-- Reset UIScale for berikutnya
-		local s = self._img:FindFirstChildWhichIsA("UIScale") :: UIScale?
-		if s then s.Scale = 1 end
+		-- Reset every UIScale for berikutnya: AnimationHelper's and the one UIMotion.pop adds.
+		for _, child in ipairs(self._img:GetChildren()) do
+			if child:IsA("UIScale") then
+				(child :: UIScale).Scale = 1
+			end
+		end
 	end)
 end
 return StreakUI

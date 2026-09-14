@@ -5,6 +5,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
+local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 
 type CarryStyleEntry = {
@@ -83,6 +84,9 @@ local function createCarryUI(deps: CarryUIDeps)
 
 	local ui = {}
 	local connections: { RBXScriptConnection } = {}
+	-- Style buttons are rebuilt by setStyles; their press/hover connections include one on
+	-- UserInputService, which would outlive the destroyed button, so they are owned separately.
+	local styleMotionConnections: { RBXScriptConnection } = {}
 	local styleButtons: { TextButton } = {}
 	local openedAt = 0
 	local styleSelectedCallback: ((string) -> ())? = nil
@@ -100,6 +104,21 @@ local function createCarryUI(deps: CarryUIDeps)
 	local function track(connection: RBXScriptConnection): ()
 		table.insert(connections, connection)
 	end
+
+	local function trackMotion(into: { RBXScriptConnection }, bound: { RBXScriptConnection }): ()
+		for _, connection in ipairs(bound) do
+			table.insert(into, connection)
+		end
+	end
+
+	local function bindButtonFeel(button: GuiButton, into: { RBXScriptConnection }): ()
+		trackMotion(into, UIMotion.bindPress(button))
+		trackMotion(into, UIMotion.bindHover(button))
+	end
+
+	bindButtonFeel(acceptButton, connections)
+	bindButtonFeel(rejectButton, connections)
+	bindButtonFeel(dropAction, connections)
 
 	local function closeStylePickerFromOutside(): ()
 		ui:hideStylePicker()
@@ -141,12 +160,17 @@ local function createCarryUI(deps: CarryUIDeps)
 	end))
 
 	track(dropAction.Activated:Connect(function()
+		UIMotion.wiggle(dropAction, 8)
 		if dropCallback then
 			dropCallback()
 		end
 	end))
 
 	function ui:setStyles(styles: { CarryStyleEntry }): ()
+		for _, connection in ipairs(styleMotionConnections) do
+			connection:Disconnect()
+		end
+		table.clear(styleMotionConnections)
 		for _, button in ipairs(styleButtons) do
 			button:Destroy()
 		end
@@ -160,8 +184,12 @@ local function createCarryUI(deps: CarryUIDeps)
 			setButtonLabel(button, style.displayName)
 			button.Parent = carryTypes
 			table.insert(styleButtons, button)
+			bindButtonFeel(button, styleMotionConnections)
 
 			track(button.Activated:Connect(function()
+				-- Laid out by carryTypes, so the squash lands on the button's label (UIMotion
+				-- re-anchors it once); the button itself never scales.
+				UIMotion.pop(UIMotion.scaleTargetOf(button))
 				if styleSelectedCallback then
 					styleSelectedCallback(style.name)
 				end
@@ -233,6 +261,10 @@ local function createCarryUI(deps: CarryUIDeps)
 			connection:Disconnect()
 		end
 		table.clear(connections)
+		for _, connection in ipairs(styleMotionConnections) do
+			connection:Disconnect()
+		end
+		table.clear(styleMotionConnections)
 		for _, button in ipairs(styleButtons) do
 			button:Destroy()
 		end

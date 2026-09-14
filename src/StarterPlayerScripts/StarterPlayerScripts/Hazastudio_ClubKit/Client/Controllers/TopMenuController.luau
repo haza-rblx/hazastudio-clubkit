@@ -10,7 +10,7 @@ local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Con
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
 local MotionPresets = require(script.Parent.Parent.Utils.MotionPresets)
-local PressFeedback = require(script.Parent.Parent.Utils.PressFeedback)
+local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 local UISpring = require(script.Parent.Parent.Utils.UISpring)
 local LeaderstatsVisibilityService = require(script.Parent.Parent.Services.LeaderstatsVisibilityService)
 local PhoneLayout = require(script.Parent.Parent.Utils.PhoneLayout)
@@ -60,6 +60,10 @@ local menuAnimToken = 0
 local clickOutsideConnection: RBXScriptConnection? = nil
 local viewportConnection: RBXScriptConnection? = nil
 local blockedMenuIcons: { [any]: boolean } = {}
+-- ADR 0011: the rows' designed text/image transparencies, captured once at init. Re-reading them
+-- at open time would bake a half-faded value in as the resting value if the menu is re-opened
+-- while the previous cascade is still running.
+local rowFadeBases: { [GuiObject]: number } = {}
 local _initConnections: { RBXScriptConnection } = {}
 local _initUnsubs: { () -> () } = {}
 
@@ -72,6 +76,14 @@ local function trackInitUnsub(unsub: () -> ())
 end
 
 local BUTTONS = Config.TopbarMenu.BUTTONS
+
+-- ADR 0011: the sidebar spring settles in one step when the player asked Roblox for less motion.
+local function isReducedMotion(): boolean
+	local ok, value = pcall(function()
+		return GuiService.ReducedMotionEnabled
+	end)
+	return ok and value == true
+end
 
 local function stopMenuSprings()
 	if menuPosSpring then
@@ -484,6 +496,13 @@ local function springMenuTo(opts: {
 		end
 	end
 
+	if isReducedMotion() then
+		settledPos = true
+		settledFade = true
+		tryFinish()
+		return
+	end
+
 	menuPosSpring = UISpring.driveNumber({
 		frequency = MotionPresets.sidebarSpringFrequency(),
 		position = startX,
@@ -642,6 +661,14 @@ local function showMenu()
 	end
 	activeFrame.Visible = true
 
+	-- ADR 0011: rows light up top to bottom behind the slide. Only on a real open — showMenu
+	-- already returns early for an open menu, and the visibility refreshes never reach here.
+	UIMotion.stagger(
+		if activeFrame == refs.phoneMenu then refs.phoneRows else refs.desktopRows,
+		rowFadeBases,
+		0.035
+	)
+
 	if animHelper then
 		animHelper:cancelPanel(activeFrame)
 	end
@@ -696,14 +723,75 @@ local function closeMenuThen(action: () -> ())
 	action()
 end
 
-local function bindButton(button: TextButton?, action: () -> ())
+-- Section rows are UIListLayout children inside the sidebar's CanvasGroup, so UIMotion.canScale
+-- refuses them (and everything under them): bindPress/bindHover hand back no connections on the
+-- shipped GUI. The stand-ins are layout-neutral — a background tint under the pointer and a spin
+-- on the row's icon when it fires; neither touches Size/Position, so no sibling ever moves.
+local function bindButton(button: GuiButton?, action: () -> ())
 	if not button then
 		return
 	end
-	PressFeedback.bindPressScale(button)
-	button.Activated:Connect(function()
+	local row = button
+	for _, connection in ipairs(UIMotion.bindPress(row)) do
+		trackInitConnection(connection)
+	end
+	for _, connection in ipairs(UIMotion.bindHover(row)) do
+		trackInitConnection(connection)
+	end
+
+	local icon = row:FindFirstChildWhichIsA("ImageLabel", true)
+		or row:FindFirstChildWhichIsA("ImageButton", true)
+	local rest = row.BackgroundTransparency
+	-- Tint toward whichever side has headroom, so an opaque row and a see-through one both react.
+	local accent = if rest >= 0.5 then math.max(rest - 0.22, 0) else math.min(rest + 0.18, 1)
+	local hovering, pressed = false, false
+	local function refreshTint()
+		if not row.Parent then
+			return
+		end
+		local goal = rest
+		if pressed then
+			goal = accent
+		elseif hovering then
+			goal = (rest + accent) * 0.5
+		end
+		UIMotion.tween(row, if pressed then 0.08 else 0.18, { BackgroundTransparency = goal })
+	end
+	local function isPress(input: InputObject): boolean
+		return input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch
+	end
+
+	trackInitConnection(row.InputBegan:Connect(function(input: InputObject)
+		if isPress(input) then
+			pressed = true
+			refreshTint()
+		end
+	end))
+	trackInitConnection(row.InputEnded:Connect(function(input: InputObject)
+		if isPress(input) then
+			pressed = false
+			refreshTint()
+		end
+	end))
+	trackInitConnection(row.MouseLeave:Connect(function()
+		hovering, pressed = false, false
+		refreshTint()
+	end))
+	-- A finger never hovers, and on touch MouseEnter fires on tap and would fight the press tint.
+	if not (UserInputService.TouchEnabled and not UserInputService.MouseEnabled) then
+		trackInitConnection(row.MouseEnter:Connect(function()
+			hovering = true
+			refreshTint()
+		end))
+	end
+
+	trackInitConnection(button.Activated:Connect(function()
+		pressed = false
+		refreshTint()
+		UIMotion.spin(icon :: GuiObject?, 1)
 		closeMenuThen(action)
-	end)
+	end))
 end
 
 local function trimString(value: string): string
@@ -745,21 +833,21 @@ end
 
 local function bindGuiObjectClick(target: GuiObject, action: () -> ())
 	if target:IsA("GuiButton") then
-		local button = target :: GuiButton
-		PressFeedback.bindPressScale(button)
-		button.Activated:Connect(function()
-			closeMenuThen(action)
-		end)
+		bindButton(target :: GuiButton, action)
 		return
 	end
+	-- The invite chip is a Frame in a laid-out row: rotation is the one flourish a UIListLayout
+	-- ignores, so it wiggles instead of popping.
+	local chipIcon = target:FindFirstChildWhichIsA("ImageLabel", true)
 	target.Active = true
-	target.InputBegan:Connect(function(input: InputObject)
+	trackInitConnection(target.InputBegan:Connect(function(input: InputObject)
 		if input.UserInputType ~= Enum.UserInputType.MouseButton1
 			and input.UserInputType ~= Enum.UserInputType.Touch then
 			return
 		end
+		UIMotion.wiggle(if chipIcon then chipIcon :: ImageLabel else target, 6)
 		closeMenuThen(action)
-	end)
+	end))
 end
 
 local function applyDiscordInvite(menuRoot: Instance)
@@ -878,6 +966,19 @@ function TopMenuController.init(deps: InitDeps)
 
 	wireButtons(refs.desktopButtons)
 	wireButtons(refs.phoneButtons)
+	-- Record the rows' designed transparencies once, before any cascade has touched them.
+	for _, rows in ipairs({ refs.desktopRows, refs.phoneRows }) do
+		local elements: { GuiObject } = {}
+		for _, row in ipairs(rows) do
+			table.insert(elements, row)
+			for _, descendant in ipairs(row:GetDescendants()) do
+				if descendant:IsA("GuiObject") then
+					table.insert(elements, descendant)
+				end
+			end
+		end
+		UIMotion.captureBases(elements, rowFadeBases)
+	end
 	applyDiscordInvite(refs.desktopMenu)
 	applyDiscordInvite(refs.phoneMenu)
 

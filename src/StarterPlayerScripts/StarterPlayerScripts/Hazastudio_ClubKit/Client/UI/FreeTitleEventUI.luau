@@ -19,7 +19,7 @@ local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Con
 local TitleEventDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.TitleEventDomain)
 local DonationAmountFormat = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DonationAmountFormat)
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
-local PressFeedback = require(script.Parent.Parent.Utils.PressFeedback)
+local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 local PhoneLayout = require(script.Parent.Parent.Utils.PhoneLayout)
 
 local FreeTitleEventUI = {}
@@ -91,9 +91,17 @@ function FreeTitleEventUI.tryCreate(playerGui: Instance): any?
 	self._openLabel = openButton:FindFirstChildWhichIsA("TextLabel")
 	self._openLabelText = if self._openLabel then self._openLabel.Text else nil
 	self._unlocked = true
+	self._stateApplied = false
 	self._tweens = {} :: { Tween }
+	-- Stop functions for the idle pulses, and the connections press/hover feedback owns.
+	self._stops = {} :: { () -> () }
+	self._connections = {} :: { RBXScriptConnection }
+	-- The card's own resting scale lives on self._scale; the breathing needs a UIScale of its
+	-- own on the wrapper, and only where scaling the wrapper cannot move anything else.
+	self._wrapperScale = if self._wrapper and UIMotion.canScale(self._wrapper)
+		then getOrCreateScale(self._wrapper)
+		else nil
 	self._rotation = nil :: any
-	self._pressHandles = {} :: { any }
 	self._running = false
 	self._dismissed = false
 
@@ -105,7 +113,7 @@ function FreeTitleEventUI.tryCreate(playerGui: Instance): any?
 end
 
 -- ============================================================
--- Tween bookkeeping — everything started here is stoppable, so hiding the card
+-- Motion bookkeeping — everything started here is stoppable, so hiding the card
 -- leaves nothing animating behind it.
 -- ============================================================
 
@@ -123,31 +131,76 @@ function FreeTitleEventUI:_stopTweens()
 	table.clear(self._tweens)
 end
 
+-- Every loop and channel this card owns, put back at rest.
+function FreeTitleEventUI:_stopMotion()
+	for _, stop in ipairs(self._stops) do
+		stop()
+	end
+	table.clear(self._stops)
+	self:_stopTweens()
+	UIMotion.cancel(self._frame)
+	UIMotion.cancel(self._scale)
+	if self._wrapperScale then
+		UIMotion.cancel(self._wrapperScale)
+	end
+end
+
+-- MotionPresets.scaledTime without a second require: MOTION_SCALE stretches every UIMotion
+-- tween, so the steps chained off one have to stretch with it.
+function FreeTitleEventUI:_scaledTime(seconds: number): number
+	local motion = (Config :: any).UIMotion
+	local scale = if type(motion) == "table" then (tonumber(motion.MOTION_SCALE) or 1) else 1
+	return seconds * math.clamp(scale, 0.25, 2)
+end
+
+-- The card sits in the buyer's own IconGroup. Where that group lays its children out, both
+-- Position and a UIScale belong to the layout — travelling or scaling the card would shove
+-- the icons beside it — so the entrance and exit degrade to a plain show/hide (ADR 0011).
+function FreeTitleEventUI:_isLaidOut(): boolean
+	local parent = self._frame.Parent
+	return parent ~= nil and parent:FindFirstChildWhichIsA("UIGridStyleLayout") ~= nil
+end
+
+function FreeTitleEventUI:_bindButtonMotion(button: GuiObject)
+	for _, connection in ipairs(UIMotion.bindPress(button)) do
+		table.insert(self._connections, connection)
+	end
+	for _, connection in ipairs(UIMotion.bindHover(button)) do
+		table.insert(self._connections, connection)
+	end
+end
+
 function FreeTitleEventUI:_wire()
-	table.insert(self._pressHandles, PressFeedback.bindPressScale(self._openButton))
+	self:_bindButtonMotion(self._openButton)
 	self._openButton.AutoButtonColor = false
-	self._openButton.Activated:Connect(function()
-		-- `Interactable` already stops this, but the callback opens a panel the
-		-- server may refuse — better to never ask than to ask and be told no.
-		if not self._unlocked then
-			return
-		end
-		self:_punch()
-		if self._openCallback then
-			self._openCallback()
-		end
-	end)
+	table.insert(
+		self._connections,
+		self._openButton.Activated:Connect(function()
+			-- `Interactable` already stops this, but the callback opens a panel the
+			-- server may refuse — better to never ask than to ask and be told no.
+			if not self._unlocked then
+				return
+			end
+			self:_punch()
+			if self._openCallback then
+				self._openCallback()
+			end
+		end)
+	)
 
 	local close = self._closeButton
 	if close and close:IsA("GuiButton") then
-		table.insert(self._pressHandles, PressFeedback.bindPressScale(close))
+		self:_bindButtonMotion(close)
 		close.AutoButtonColor = false
-		close.Activated:Connect(function()
-			-- The player's own call: it stays gone for the session rather than
-			-- popping back on the next payload.
-			self._dismissed = true
-			self:hide()
-		end)
+		table.insert(
+			self._connections,
+			close.Activated:Connect(function()
+				-- The player's own call: it stays gone for the session rather than
+				-- popping back on the next payload.
+				self._dismissed = true
+				self:hide()
+			end)
+		)
 	end
 end
 
@@ -155,8 +208,8 @@ end
 -- Idle life
 -- ============================================================
 
--- All three idle motions are ping-pong tweens (`repeatCount = -1, reverses = true`)
--- rather than per-frame work, so an idle card costs nothing measurable.
+-- The idle motions are ping-pong loops rather than per-frame work, so an idle card costs
+-- nothing measurable — and each one hands back a stop function that hide() drains.
 function FreeTitleEventUI:_startIdle()
 	local c = cfg()
 
@@ -164,25 +217,24 @@ function FreeTitleEventUI:_startIdle()
 		self._rotation = AnimationHelper:startRotation(self._sunburst, c.ROTATION_SPEED)
 	end
 
-	local bob = TweenService:Create(
-		self._frame,
-		TweenInfo.new(c.BOB_TIME, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
-		{ Position = offsetY(self._restingPos, -c.BOB_OFFSET) }
-	)
-	self:_track(bob)
-	bob:Play()
-
-	if self._wrapper then
-		local breathe = TweenService:Create(
-			getOrCreateScale(self._wrapper),
-			TweenInfo.new(c.BREATHE_TIME, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
-			{ Scale = c.BREATHE_SCALE }
+	-- The float: Position only where the layout is not the one deciding it.
+	if not self:_isLaidOut() then
+		table.insert(
+			self._stops,
+			UIMotion.pulse(self._frame, "Position", offsetY(self._restingPos, -c.BOB_OFFSET), c.BOB_TIME)
 		)
-		self:_track(breathe)
-		breathe:Play()
 	end
 
-	if self._shine then
+	-- The breathing scale — the card's one persistent pulse. self._wrapperScale is nil
+	-- wherever scaling the wrapper could move a sibling or re-raster a CanvasGroup.
+	if self._wrapperScale then
+		table.insert(self._stops, UIMotion.pulse(self._wrapperScale, "Scale", c.BREATHE_SCALE, c.BREATHE_TIME))
+	end
+
+	-- The one raw tween left in this file: the gold sweep has to repeat WITHOUT reversing and
+	-- with a pause between sweeps, and UIMotion.pulse is a ping-pong by definition — a sheen
+	-- running backwards reads as a glitch. Reduced motion is honoured by skipping it outright.
+	if self._shine and not UIMotion.reduced() then
 		self._shine.Offset = Vector2.new(-1, 0)
 		local shine = TweenService:Create(
 			self._shine,
@@ -210,40 +262,18 @@ end
 -- A short scale-and-tilt kick. Used both for the periodic pulse and as the
 -- feedback when the card is pressed.
 function FreeTitleEventUI:_punch()
-	-- Only while the card is actually living on screen: the recovery half of this
-	-- animation is guarded by the same flag, so punching a stopped card would leave
-	-- its scale stuck at the peak.
+	-- Only while the card is actually living on screen.
 	if not self._running then
 		return
 	end
 	local c = cfg()
-	local target = self._wrapper or self._frame
-	local scale = getOrCreateScale(target)
-	local base = if target == self._wrapper then c.BREATHE_SCALE else 1
-
-	local up = TweenService:Create(
-		scale,
-		TweenInfo.new(c.PULSE_TIME / 2, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-		{ Scale = c.PULSE_SCALE }
-	)
-	local tiltInfo = TweenInfo.new(c.PULSE_TIME / 2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, 1, true)
-	local tilt = TweenService:Create(self._frame, tiltInfo, { Rotation = c.PULSE_TILT })
-	self:_track(up)
-	self:_track(tilt)
-	up:Play()
-	tilt:Play()
-	up.Completed:Once(function()
-		if not self._running then
-			return
-		end
-		local down = TweenService:Create(
-			scale,
-			TweenInfo.new(c.PULSE_TIME / 2, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
-			{ Scale = base }
-		)
-		self:_track(down)
-		down:Play()
-	end)
+	-- pop bounces on a UIScale of its own, so it no longer has to hand the breathing loop
+	-- its resting scale back afterwards — the two multiply instead of fighting.
+	local target: GuiObject = if self._wrapper and UIMotion.canScale(self._wrapper)
+		then self._wrapper
+		else self._frame
+	UIMotion.pop(target, c.PULSE_SCALE, c.PULSE_TIME / 2)
+	UIMotion.wiggle(self._frame, c.PULSE_TILT)
 end
 
 -- ============================================================
@@ -265,16 +295,24 @@ function FreeTitleEventUI:applyState(payload: any)
 	-- Already able to edit by any route (level reached, or an admin-granted title):
 	-- the card is just a shortcut then, so it must not read as locked.
 	local unlocked = payload.canEditSpecialTitle == true or payload.titleEventMet == true
+	-- Overhead and level payloads echo the whole state on every refresh. Only a real change
+	-- may repaint or animate, or the card would shake itself apart on a still screen.
+	local changed = (not self._stateApplied) or self._unlocked ~= unlocked
+	self._stateApplied = true
 	self._unlocked = unlocked
 
-	if self._openButton:IsA("TextButton") or self._openButton:IsA("ImageButton") then
+	if changed and (self._openButton:IsA("TextButton") or self._openButton:IsA("ImageButton")) then
 		self._openButton.Interactable = unlocked
+	end
+	if changed and not unlocked and self._running then
+		-- "Not yet" said in motion: rotation only, so nothing about the layout moves.
+		UIMotion.wiggle(self._frame, c.PULSE_TILT * 2)
 	end
 	if not self._openLabel then
 		return
 	end
 	if unlocked then
-		self._openLabel.Text = self._openLabelText or self._openLabel.Text
+		self:_setOpenLabel(self._openLabelText or self._openLabel.Text)
 		return
 	end
 
@@ -287,16 +325,24 @@ function FreeTitleEventUI:applyState(payload: any)
 			else {},
 	} :: any)
 	if not pending then
-		self._openLabel.Text = self._openLabelText or self._openLabel.Text
+		self:_setOpenLabel(self._openLabelText or self._openLabel.Text)
 		return
 	end
 	local amount = math.max(1, math.floor(tonumber(pending.requirement) or 1))
 	if pending.axis == "robux" then
-		self._openLabel.Text = string.format(c.MSG_LOCKED_ROBUX, amount)
+		self:_setOpenLabel(string.format(c.MSG_LOCKED_ROBUX, amount))
 	elseif pending.axis == "cash" then
-		self._openLabel.Text = string.format(c.MSG_LOCKED_CASH, DonationAmountFormat.formatCash(amount))
+		self:_setOpenLabel(string.format(c.MSG_LOCKED_CASH, DonationAmountFormat.formatCash(amount)))
 	else
-		self._openLabel.Text = string.format(c.MSG_LOCKED_LEVEL, amount)
+		self:_setOpenLabel(string.format(c.MSG_LOCKED_LEVEL, amount))
+	end
+end
+
+-- Same wording arriving again is not a repaint.
+function FreeTitleEventUI:_setOpenLabel(text: string)
+	local label = self._openLabel
+	if label and label.Text ~= text then
+		label.Text = text
 	end
 end
 
@@ -324,27 +370,28 @@ function FreeTitleEventUI:playEntrance()
 		end
 
 		self._running = true
-		local rest = restingScale()
 		self._frame.Rotation = 0
-		self._scale.Scale = 0.75 * rest
-		self._frame.Position = offsetX(self._restingPos, c.ENTER_OFFSET)
+		-- The resting scale is the card's size, not part of the entrance: popIn grows a
+		-- UIScale of its own on top of it, so a phone-scaled card still lands at its own size.
+		self._scale.Scale = restingScale()
+		local canTravel = not self:_isLaidOut()
+		self._frame.Position = if canTravel
+			then offsetX(self._restingPos, c.ENTER_OFFSET)
+			else self._restingPos
 		self._frame.Visible = true
 
-		local slide = TweenService:Create(
-			self._frame,
-			TweenInfo.new(c.ENTER_TIME, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-			{ Position = self._restingPos }
-		)
-		local pop = TweenService:Create(
-			self._scale,
-			TweenInfo.new(c.ENTER_TIME, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-			{ Scale = rest }
-		)
-		self:_track(slide)
-		self:_track(pop)
-		slide:Play()
-		pop:Play()
-		slide.Completed:Once(function()
+		if canTravel then
+			UIMotion.tween(
+				self._frame,
+				c.ENTER_TIME,
+				{ Position = self._restingPos },
+				Enum.EasingStyle.Back,
+				Enum.EasingDirection.Out
+			)
+		end
+		UIMotion.popIn(self._frame, 0.75)
+
+		task.delay(self:_scaledTime(c.ENTER_TIME), function()
 			if self._runToken ~= token or not self._running then
 				return
 			end
@@ -358,7 +405,7 @@ end
 function FreeTitleEventUI:hide(immediate: boolean?)
 	self._runToken = (self._runToken or 0) + 1
 	self._running = false
-	self:_stopTweens()
+	self:_stopMotion()
 	if self._rotation then
 		AnimationHelper:stopRotation(self._rotation)
 		self._rotation = nil
@@ -369,8 +416,8 @@ function FreeTitleEventUI:hide(immediate: boolean?)
 		self._frame.Position = self._restingPos
 		self._frame.Rotation = 0
 		self._scale.Scale = restingScale()
-		if self._wrapper then
-			getOrCreateScale(self._wrapper).Scale = 1
+		if self._wrapperScale then
+			self._wrapperScale.Scale = 1
 		end
 		-- Hand the buyer's own gradient back where it started.
 		if self._shine then
@@ -384,19 +431,32 @@ function FreeTitleEventUI:hide(immediate: boolean?)
 	end
 
 	local c = cfg()
-	local out = TweenService:Create(
+	-- Travelling off the right edge and shrinking both need a card the layout is not placing.
+	if self:_isLaidOut() then
+		settle()
+		return
+	end
+	UIMotion.tween(
 		self._frame,
-		TweenInfo.new(c.EXIT_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
-		{ Position = offsetX(self._restingPos, c.ENTER_OFFSET) }
+		c.EXIT_TIME,
+		{ Position = offsetX(self._restingPos, c.ENTER_OFFSET) },
+		Enum.EasingStyle.Quad,
+		Enum.EasingDirection.In
 	)
-	local shrink = TweenService:Create(
+	UIMotion.tween(
 		self._scale,
-		TweenInfo.new(c.EXIT_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
-		{ Scale = 0.75 * restingScale() }
+		c.EXIT_TIME,
+		{ Scale = 0.75 * restingScale() },
+		Enum.EasingStyle.Quad,
+		Enum.EasingDirection.In
 	)
-	out:Play()
-	shrink:Play()
-	out.Completed:Once(settle)
+	-- An entrance that started while this exit was still running owns the card now.
+	local token = self._runToken
+	task.delay(self:_scaledTime(c.EXIT_TIME), function()
+		if self._runToken == token then
+			settle()
+		end
+	end)
 end
 
 function FreeTitleEventUI:isVisible(): boolean
@@ -404,13 +464,13 @@ function FreeTitleEventUI:isVisible(): boolean
 end
 
 function FreeTitleEventUI:destroy()
+	-- hide(true) has already drained every loop; this is the press/hover feedback and the
+	-- two Activated handlers, which the old press handles never actually released.
 	self:hide(true)
-	for _, handle in ipairs(self._pressHandles) do
-		if type(handle) == "table" and type(handle.destroy) == "function" then
-			pcall(handle.destroy)
-		end
+	for _, connection in ipairs(self._connections) do
+		connection:Disconnect()
 	end
-	table.clear(self._pressHandles)
+	table.clear(self._connections)
 end
 
 return FreeTitleEventUI

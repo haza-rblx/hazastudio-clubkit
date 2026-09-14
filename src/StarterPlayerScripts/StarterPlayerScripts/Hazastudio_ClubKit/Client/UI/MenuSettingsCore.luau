@@ -10,6 +10,7 @@ local DonationProviderDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shar
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local GraphicsQuality = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.GraphicsQuality)
 local OverheadLayerPolicy = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.OverheadLayerPolicy)
+local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 
 type SettingsPayload = Types.SettingsPayload
 
@@ -1099,14 +1100,37 @@ local function setToggleVisual(row: TextButton, enabled: boolean)
 	if not toggle or not toggle:IsA("Frame") then
 		return
 	end
+	-- Settings echo the whole payload back, so repaint only on a real change; the first
+	-- paint (previous == nil) snaps, every later one travels.
+	local previous = row:GetAttribute("MenuToggleOn")
+	if previous == enabled then
+		return
+	end
+	row:SetAttribute("MenuToggleOn", enabled)
+	local animate = previous ~= nil
 	local shell = toggle:FindFirstChildWhichIsA("Frame")
 	if shell then
-		shell.BackgroundColor3 = enabled and Color3.fromRGB(223, 223, 223) or Color3.fromRGB(62, 62, 62)
+		UIMotion.tween(shell, if animate then 0.18 else 0, {
+			BackgroundColor3 = enabled and Color3.fromRGB(223, 223, 223) or Color3.fromRGB(62, 62, 62),
+		})
 		local inner = shell:FindFirstChildWhichIsA("Frame")
 		if inner then
-			inner.BackgroundColor3 = enabled and Color3.fromRGB(0, 0, 0) or Color3.fromRGB(255, 255, 255)
-			inner.Position = enabled and UDim2.new(1, 0, 0, 0) or UDim2.new(0, 0, 0, 0)
+			UIMotion.tween(inner, if animate then 0.18 else 0, {
+				BackgroundColor3 = enabled and Color3.fromRGB(0, 0, 0) or Color3.fromRGB(255, 255, 255),
+			})
+			local target = enabled and UDim2.new(1, 0, 0, 0) or UDim2.new(0, 0, 0, 0)
+			local travel = inner.AbsoluteSize.X
 			inner.AnchorPoint = Vector2.new(if enabled then 1 else 0, 0)
+			-- Tweening the thumb's Position is layout-safe: it is absolutely placed inside the
+			-- track, which carries no UIListLayout/UIGridLayout, so nothing else moves with it.
+			-- The flipped AnchorPoint has to be paid back as an offset first, or the thumb
+			-- would jump its own width before the travel starts.
+			if animate and travel > 0 and shell:FindFirstChildWhichIsA("UIGridStyleLayout") == nil then
+				inner.Position = enabled and UDim2.new(0, travel, 0, 0) or UDim2.new(1, -travel, 0, 0)
+				UIMotion.tween(inner, 0.26, { Position = target }, Enum.EasingStyle.Back)
+			else
+				inner.Position = target
+			end
 		end
 	end
 end
@@ -1170,7 +1194,9 @@ local function applyAdjustWrapperLayout(wrapper: Instance?, templateRowHeight: n
 	end
 end
 
-local function setSliderPercentVisual(row: GuiObject, percent: number, displayText: string)
+-- `animate` is only ever true for a value that arrived from outside (store patch / reset);
+-- a drag stays direct so the fill never lags the finger.
+local function setSliderPercentVisual(row: GuiObject, percent: number, displayText: string, animate: boolean?)
 	local fillRoot = row:FindFirstChild("AdjustWrapper")
 	if not fillRoot or not fillRoot:IsA("GuiObject") then
 		return
@@ -1178,7 +1204,13 @@ local function setSliderPercentVisual(row: GuiObject, percent: number, displayTe
 	local clampedPercent = math.clamp(percent, 0, 1)
 	local widthFrame = fillRoot:FindFirstChild("AdjustableFrameWidth")
 	if widthFrame and widthFrame:IsA("Frame") then
-		widthFrame.Size = UDim2.new(clampedPercent, 0, 1, 0)
+		local nextSize = UDim2.new(clampedPercent, 0, 1, 0)
+		-- Tweening the fill's Size is layout-safe: it is sized against AdjustWrapper, which
+		-- holds no UIListLayout/UIGridLayout, so no sibling reflows with it.
+		local travels = animate == true
+			and widthFrame.Size ~= nextSize
+			and fillRoot:FindFirstChildWhichIsA("UIGridStyleLayout") == nil
+		UIMotion.tween(widthFrame, if travels then 0.2 else 0, { Size = nextSize })
 		local draggable = widthFrame:FindFirstChild("DraggableIcon")
 		if draggable and draggable:IsA("ImageLabel") then
 			draggable.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -1198,9 +1230,16 @@ local function formatSliderValue(item: any, value: number): string
 	return if item.format then item.format(value) else tostring(math.floor(value + 0.5))
 end
 
-local function setSliderVisual(row: GuiObject, item: any, value: number, minValue: number, maxValue: number)
+local function setSliderVisual(
+	row: GuiObject,
+	item: any,
+	value: number,
+	minValue: number,
+	maxValue: number,
+	animate: boolean?
+)
 	local percent = if maxValue > minValue then math.clamp((value - minValue) / (maxValue - minValue), 0, 1) else 0
-	setSliderPercentVisual(row, percent, formatSliderValue(item, value))
+	setSliderPercentVisual(row, percent, formatSliderValue(item, value), animate)
 end
 
 local function snapSliderValue(raw: number, minValue: number, maxValue: number, step: number): number
@@ -1385,7 +1424,7 @@ local function createSliderRow(
 			row = row,
 			setValue = function(nextValue: number)
 				currentValue = snapSliderValue(nextValue, item.min, item.max, item.step or 1)
-				setSliderVisual(row, item, currentValue, item.min, item.max)
+				setSliderVisual(row, item, currentValue, item.min, item.max, true)
 			end,
 		}
 	end
@@ -1498,8 +1537,14 @@ end
 
 local function setSegmentedButtonVisual(button: TextButton, label: string, selected: boolean, iconImage: string?)
 	button.Text = ""
-	button.BackgroundTransparency = if selected then 0 else 0.95
 	button.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	-- The highlight fades between options instead of snapping; the first paint (previous ==
+	-- nil) and a repaint that changes nothing both land at once.
+	local previous = button:GetAttribute("MenuSegmentedOn")
+	button:SetAttribute("MenuSegmentedOn", selected)
+	UIMotion.tween(button, if previous == nil or previous == selected then 0 else 0.18, {
+		BackgroundTransparency = if selected then 0 else 0.95,
+	})
 	local color = if selected then Color3.fromRGB(0, 0, 0) else Color3.fromRGB(255, 255, 255)
 	setSettingIcon(button, iconImage)
 	setTextAndIconColor(button, color)

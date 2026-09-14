@@ -11,7 +11,7 @@ local NotifService = require(script.Parent.Parent.Services.NotifService)
 local LeaderstatsVisibilityService = require(script.Parent.Parent.Services.LeaderstatsVisibilityService)
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
 local MotionPresets = require(script.Parent.Parent.Utils.MotionPresets)
-local PressFeedback = require(script.Parent.Parent.Utils.PressFeedback)
+local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 local MenuGuiRefs = require(script.Parent.MenuGuiRefs)
 local ProfileTabBinder = require(script.Parent.ProfileTabBinder)
 local CustomTitleUI = require(script.Parent.CustomTitleUI)
@@ -255,6 +255,9 @@ function MenuShellUI.new(gui: ScreenGui)
 	self._wrapperShownPosition = refs.outerWrapper.Position
 	self._anim = AnimationHelper.new()
 	self._backdropActive = false
+	-- Designed transparencies for the open cascade, captured once per element and keyed
+	-- weakly so a rebuilt settings section does not pin its old clones.
+	self._fadeBases = setmetatable({}, { __mode = "k" }) :: any
 
 	local tabButtons = refs.tabButtons
 	self._tabIdleStyle = if tabButtons.profileIdle
@@ -338,6 +341,65 @@ function MenuShellUI:openCustomTitlePanel(): boolean
 	return true
 end
 
+-- UIMotion hands back its press/hover connections; PressFeedback used to own them and drop
+-- them when the button was destroyed, so keep exactly that contract (the hover pair also
+-- holds a UserInputService connection that must not outlive the button).
+function MenuShellUI:_bindButtonMotion(button: GuiObject)
+	local connections = UIMotion.bindPress(button)
+	for _, connection in ipairs(UIMotion.bindHover(button)) do
+		table.insert(connections, connection)
+	end
+	if #connections == 0 then
+		return
+	end
+	button.Destroying:Once(function()
+		for _, connection in ipairs(connections) do
+			connection:Disconnect()
+		end
+		table.clear(connections)
+	end)
+end
+
+-- The active/idle swap repaints the whole tab button from a snapshot; fading its text and
+-- icons back in turns that snap into a cross-fade. Bases are read straight after the
+-- repaint, so they are always the designed values even on a second switch.
+function MenuShellUI:_fadeTabButton(button: TextButton?)
+	if not button then
+		return
+	end
+	local elements: { GuiObject } = { button }
+	for _, descendant in ipairs(button:GetDescendants()) do
+		if descendant:IsA("GuiObject") then
+			table.insert(elements, descendant)
+		end
+	end
+	UIMotion.fadeIn(elements, UIMotion.captureBases(elements))
+end
+
+-- Rows of the page that is about to be shown cascade in. Bases are captured once per
+-- element, at its designed transparency, so a second cascade never fades to invisible.
+function MenuShellUI:_staggerTab(tab: ScrollingFrame)
+	local bases = self._fadeBases
+	local rows: { GuiObject } = {}
+	local fresh: { GuiObject } = {}
+	for _, child in ipairs(tab:GetChildren()) do
+		if not child:IsA("GuiObject") or not child.Visible then
+			continue
+		end
+		table.insert(rows, child)
+		if bases[child] == nil then
+			table.insert(fresh, child)
+		end
+		for _, descendant in ipairs(child:GetDescendants()) do
+			if descendant:IsA("GuiObject") and bases[descendant] == nil then
+				table.insert(fresh, descendant)
+			end
+		end
+	end
+	UIMotion.captureBases(fresh, bases)
+	UIMotion.stagger(rows, bases)
+end
+
 function MenuShellUI:_wireTabs()
 	local buttons = self._refs.tabButtons
 	local wired: { [TextButton]: boolean } = {}
@@ -348,7 +410,7 @@ function MenuShellUI:_wireTabs()
 		end
 		wired[button] = true
 		disableAutoButtonColor(button)
-		PressFeedback.bindPressScale(button)
+		self:_bindButtonMotion(button)
 		button.Activated:Connect(function()
 			self:_selectTab(tabKey)
 		end)
@@ -395,10 +457,17 @@ function MenuShellUI:_selectTab(tabKey: string)
 		return
 	end
 	self:_hideProfileFieldModal(nil, true)
+	local previousIndex = table.find(TAB_KEYS, self._activeTabKey)
+	local nextIndex = table.find(TAB_KEYS, tabKey)
+	local switched = previousIndex ~= nil and nextIndex ~= nil and previousIndex ~= nextIndex
 	self._activeTabKey = tabKey
 	self._refs.profileTab.Visible = tabKey == "profile"
 	self._refs.settingsTab.Visible = tabKey == "settings"
 	self:_applyTabButtonStyles()
+	if switched then
+		local buttons = self._refs.tabButtons
+		self:_fadeTabButton(if tabKey == "profile" then buttons.profileButton else buttons.settingsButton)
+	end
 
 	if tabKey == "settings" then
 		self._settings:buildIfNeeded(self._settings:getPayload())
@@ -416,6 +485,14 @@ function MenuShellUI:_selectTab(tabKey: string)
 		if localPlayer then
 			self._profile:ensureAvatarLoaded(localPlayer.UserId)
 		end
+	end
+
+	-- Slide only on a real switch inside an open panel — opening plays the sidebar tween
+	-- instead — and only after the page has been built and patched, so the settings tab
+	-- owns its own UIPadding before UIMotion parks its slide padding beside it.
+	if switched and self._visible then
+		local page = if tabKey == "profile" then self._refs.profileTab else self._refs.settingsTab
+		UIMotion.slideIn(page, if (nextIndex :: number) > (previousIndex :: number) then 1 else -1)
 	end
 end
 
@@ -444,14 +521,14 @@ function MenuShellUI:_wireModal()
 	local refs = self._refs
 	if refs.modalCancelButton then
 		disableAutoButtonColor(refs.modalCancelButton)
-		PressFeedback.bindPressScale(refs.modalCancelButton)
+		self:_bindButtonMotion(refs.modalCancelButton)
 		refs.modalCancelButton.Activated:Connect(function()
 			self:_hideProfileFieldModal()
 		end)
 	end
 	if refs.modalUpdateButton then
 		disableAutoButtonColor(refs.modalUpdateButton)
-		PressFeedback.bindPressScale(refs.modalUpdateButton)
+		self:_bindButtonMotion(refs.modalUpdateButton)
 		refs.modalUpdateButton.Activated:Connect(function()
 			self:_submitProfileFieldModal()
 		end)
@@ -524,6 +601,12 @@ function MenuShellUI:_showProfileFieldModal(request: ProfileTabBinder.ProfileFie
 
 	if not request.canEdit then
 		if request.field == "specialTitle" then
+			-- Refused edit: the locked row shakes so the warning has a source on screen.
+			-- Rotation, so the row stays put inside its UIListLayout.
+			local locked = self._refs.specialTitleInput
+			if locked then
+				UIMotion.wiggle(locked.row, 5)
+			end
 			NotifService.warn(Config.ProfileMenu.MSG_TITLE_LOCKED)
 		end
 		return
@@ -698,7 +781,13 @@ function MenuShellUI:show()
 	end
 
 	self:_selectTab(self._activeTabKey)
-	
+
+	-- Cascade the page in behind the sidebar tween, but only on a real open: re-showing an
+	-- already-visible panel must not restart the fade under the player's cursor.
+	if not wasVisible then
+		self:_staggerTab(if self._activeTabKey == "profile" then self._refs.profileTab else self._refs.settingsTab)
+	end
+
 	-- Add click-outside detection
 	if self._clickOutsideConnection then
 		self._clickOutsideConnection:Disconnect()

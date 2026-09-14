@@ -3,11 +3,10 @@
 -- Display only. Manages 03-GiftSystemGUI.
 -- Tabs: VIP / VVIP / ELITE. Player list. Notification.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local TweenService = game:GetService("TweenService")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local ShopDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.ShopDomain)
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
-local PressFeedback = require(script.Parent.Parent.Utils.PressFeedback)
+local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 -- ============================================================
 -- Mapping tier -> GUI elements
 -- ============================================================
@@ -67,15 +66,23 @@ local function animateSlidingPill(backgroundPill: GuiObject, selectedButton: Tex
 	-- Target position and anchor point
 	local targetAnchorPoint = Vector2.new(normalizedPos, 0.5)
 	local targetPosition = UDim2.new(normalizedPos, 0, 0.5, 0)
-	
-	-- Set anchor point immediately, animate position with smooth easing
+
+	-- Re-opening the panel re-applies the active tab; the pill is already there.
+	if backgroundPill.AnchorPoint == targetAnchorPoint and backgroundPill.Position == targetPosition then
+		return
+	end
+
+	-- Set anchor point immediately, animate position with smooth easing.
 	backgroundPill.AnchorPoint = targetAnchorPoint
-	local tween = TweenService:Create(
-		backgroundPill,
-		TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-		{ Position = targetPosition }
-	)
-	tween:Play()
+	-- Layout safety (ADR 0011): the pill is absolutely positioned behind the laid-out buttons,
+	-- so its own parent must have no layout for a Position tween to mean anything. If a buyer
+	-- design ever puts it under one, snap instead of tweening against the layout.
+	local pillParent = backgroundPill.Parent
+	if pillParent == nil or pillParent:FindFirstChildWhichIsA("UIGridStyleLayout") then
+		backgroundPill.Position = targetPosition
+		return
+	end
+	UIMotion.tween(backgroundPill, 0.32, { Position = targetPosition }, Enum.EasingStyle.Quint)
 end
 
 -- ============================================================
@@ -90,6 +97,7 @@ local EMPTY_STATE_SEARCH_SUBTITLE = "Try another display name or username."
 type PlayerListEntry = {
 	button: TextButton,
 	connection: RBXScriptConnection?,
+	alpha: number?,
 }
 local function escapeRichText(text: string): string
 	return text:gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;")
@@ -154,6 +162,16 @@ end
 -- ============================================================
 -- Private helper: find all RotatingBackground under root
 -- ============================================================
+-- Text/images UIMotion can fade: everything else (Frames, layouts) has no transparency channel.
+local function collectFadeTargets(root: Instance): { GuiObject }
+	local result: { GuiObject } = {}
+	for _, desc in ipairs(root:GetDescendants()) do
+		if desc:IsA("TextLabel") or desc:IsA("ImageLabel") then
+			table.insert(result, desc :: GuiObject)
+		end
+	end
+	return result
+end
 local function collectRotatingBgs(root: Instance): { ImageLabel }
 	local result: { ImageLabel } = {}
 	for _, desc in ipairs(root:GetDescendants()) do
@@ -274,6 +292,10 @@ function GiftUI.new(gui: ScreenGui)
 	self._allPlayers = {} :: { { userId: number, displayName: string, username: string } }
 	self._playerCardPool = {} :: { PlayerListEntry }
 	self._isClosing = false
+	-- Designed transparency of every element UIMotion fades here (cards, empty state, notif),
+	-- captured once before the first fade touches it.
+	self._fadeBases = {} :: { [GuiObject]: number }
+	self._connections = {} :: { RBXScriptConnection }
 	-- RotatingBackground: only notification preserved
 	self._notifRotBgs = collectRotatingBgs(notifWrapper)
 	self._notifRotHandles = {} :: { any }
@@ -283,11 +305,34 @@ function GiftUI.new(gui: ScreenGui)
 	notifWrapper.Visible = false
 	mainWrapper.Visible = false
 	if searchBox then
-		searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+		table.insert(self._connections, searchBox:GetPropertyChangedSignal("Text"):Connect(function()
 			self:_applyPlayerSearch()
-		end)
+		end))
 	end
 	return self
+end
+-- Press squash + hover lift on any kit button, with the connections owned by this panel.
+function GiftUI:_bindButtonMotion(button: GuiObject)
+	for _, connection in ipairs(UIMotion.bindPress(button)) do
+		table.insert(self._connections, connection)
+	end
+	for _, connection in ipairs(UIMotion.bindHover(button)) do
+		table.insert(self._connections, connection)
+	end
+end
+-- Fades a group in, capturing any element's designed transparency the first time it is seen.
+function GiftUI:_fadeInGroup(root: Instance)
+	local targets = collectFadeTargets(root)
+	local pending: { GuiObject } = {}
+	for _, element in ipairs(targets) do
+		if self._fadeBases[element] == nil then
+			table.insert(pending, element)
+		end
+	end
+	if #pending > 0 then
+		UIMotion.captureBases(pending, self._fadeBases)
+	end
+	UIMotion.fadeIn(targets, self._fadeBases)
 end
 -- ============================================================
 -- Tab helpers
@@ -313,18 +358,43 @@ function GiftUI:setTab(tier: string)
 	if TAB_FRAME[normalizedTier] == nil then
 		normalizedTier = DEFAULT_TIER
 	end
+	local previousTier = self._activeTier
 	self._activeTier = normalizedTier
 	self._selectedPlayer = nil -- reset selected when switching tab
 	-- Show/hide tab frames
+	local activeFrame: Frame? = nil
 	for _, t in ipairs(TIERS) do
 		local frameName = TAB_FRAME[t]
 		local frame = self._contentWrapper:FindFirstChild(frameName) :: Frame?
 		if frame then
 			frame.Visible = (t == normalizedTier)
+			if t == normalizedTier then
+				activeFrame = frame
+			end
 		end
 		self:_setTabActive(t, t == normalizedTier)
 	end
-	
+
+	-- A real switch inside an open panel slides the incoming tier's form in from the direction
+	-- of travel and pops the tab that won. Opening plays the panel pop instead (MainWrapper is
+	-- still hidden when show() calls setTab).
+	local activeIndex = self._tierIndex[normalizedTier]
+	if previousTier ~= normalizedTier and self._mainWrapper.Visible then
+		if activeFrame then
+			local previousIndex = self._tierIndex[previousTier] or 0
+			UIMotion.slideIn(activeFrame, if (activeIndex or 0) >= previousIndex then 1 else -1)
+		end
+		local activeButton = activeIndex and self._tabButtons[activeIndex]
+		if activeButton then
+			local badge = (
+				activeButton:FindFirstChildWhichIsA("ImageLabel")
+				or activeButton:FindFirstChildWhichIsA("TextLabel")
+			) :: GuiObject?
+			UIMotion.pop(badge, 1.12)
+		end
+	end
+
+
 	-- Animate BackgroundPill to active tab
 	if self._backgroundPill and #self._tabButtons > 0 then
 		-- Find active button by tier index
@@ -371,9 +441,12 @@ function GiftUI:_ensurePlayerCard(index: number, template: TextButton): PlayerLi
 	local card = template:Clone()
 	card.Visible = false
 	card.Parent = self._scrollFrame
+	-- Bases are captured at creation, before any stagger has touched this card's labels.
+	UIMotion.captureBases(collectFadeTargets(card), self._fadeBases)
 	entry = {
 		button = card,
 		connection = nil,
+		alpha = nil,
 	}
 	self._playerCardPool[index] = entry
 	return entry
@@ -386,7 +459,9 @@ function GiftUI:_hideUnusedPlayerCards(firstUnusedIndex: number)
 			entry.connection = nil
 		end
 		entry.button.Visible = false
-		entry.button.BackgroundTransparency = 1
+		-- Snap (and cancel any highlight mid-fade) — the card is off screen.
+		entry.alpha = 1
+		UIMotion.tween(entry.button, 0, { BackgroundTransparency = 1 })
 	end
 end
 function GiftUI:_refreshPlayerCardSelection()
@@ -395,7 +470,13 @@ function GiftUI:_refreshPlayerCardSelection()
 		local isSelected = self._selectedPlayer ~= nil
 			and type(userId) == "number"
 			and self._selectedPlayer.userId == userId
-		entry.button.BackgroundTransparency = if isSelected then Config.Gift.CARD_SELECTED_ALPHA else 1
+		local alpha = if isSelected then Config.Gift.CARD_SELECTED_ALPHA else 1
+		-- Every render re-asserts the whole list's selection: only the card that changed moves.
+		if entry.alpha ~= alpha then
+			local first = entry.alpha == nil
+			entry.alpha = alpha
+			UIMotion.tween(entry.button, if first then 0 else 0.18, { BackgroundTransparency = alpha })
+		end
 	end
 end
 function GiftUI:_isPlayerMatch(
@@ -435,7 +516,13 @@ function GiftUI:_renderPlayerList(players: { { userId: number, displayName: stri
 	local selectedStillExists = false
 	template.Visible = false
 	if notFoundCard then
-		notFoundCard.Visible = (#players == 0)
+		-- Fade the empty state in only when it actually appears, not on every keystroke.
+		if notFoundCard.Visible ~= (#players == 0) then
+			notFoundCard.Visible = (#players == 0)
+			if notFoundCard.Visible then
+				self:_fadeInGroup(notFoundCard)
+			end
+		end
 		if #players == 0 then
 			if #self._allPlayers == 0 then
 				setNotFoundCardText(notFoundCard, EMPTY_STATE_DEFAULT_TITLE, EMPTY_STATE_DEFAULT_SUBTITLE)
@@ -448,12 +535,17 @@ function GiftUI:_renderPlayerList(players: { { userId: number, displayName: stri
 	if self._searchBox then
 		currentQuery = string.gsub(self._searchBox.Text, "^%s*(.-)%s*$", "%1")
 	end
+	-- Cards the search just revealed cascade in; cards that were already on screen stay put.
+	local entering: { GuiObject } = {}
 	for index, pd in ipairs(players) do
 		local entry = self:_ensurePlayerCard(index, template)
 		local card = entry.button
 		if entry.connection then
 			entry.connection:Disconnect()
 			entry.connection = nil
+		end
+		if not card.Visible then
+			table.insert(entering, card :: GuiObject)
 		end
 		card.Visible = true
 		card.Parent = scrollFrame
@@ -485,6 +577,8 @@ function GiftUI:_renderPlayerList(players: { { userId: number, displayName: stri
 			if inputBox then
 				inputBox.Text = user
 			end
+			-- The chosen card's avatar pops (UIMotion refuses it if the card is laid out).
+			UIMotion.pop(profilePicture, 1.18)
 			self:_refreshPlayerCardSelection()
 		end)
 		if self._selectedPlayer and self._selectedPlayer.userId == uid then
@@ -492,6 +586,7 @@ function GiftUI:_renderPlayerList(players: { { userId: number, displayName: stri
 		end
 	end
 	self:_hideUnusedPlayerCards(#players + 1)
+	UIMotion.stagger(entering, self._fadeBases)
 	if self._selectedPlayer and not selectedStillExists then
 		self:_clearSelectedPlayer()
 		return
@@ -540,6 +635,15 @@ function GiftUI:show(tierHint: string?)
 		blurName = "GiftUIBlur",
 		enableZoom = true
 	})
+	-- The controller refreshes the list before show(), so the cards are already on screen and
+	-- would not count as "entering". Cascade whatever is listed as the panel pops open.
+	local rows: { GuiObject } = {}
+	for _, entry in ipairs(self._playerCardPool) do
+		if entry.button.Visible then
+			table.insert(rows, entry.button :: GuiObject)
+		end
+	end
+	UIMotion.stagger(rows, self._fadeBases)
 end
 function GiftUI:hide()
 	if self._isClosing then
@@ -632,6 +736,10 @@ function GiftUI:showNotification(tier: string, senderName: string)
 	-- swingIn animation
 	if content then
 		self._anim:swingIn(content :: Frame, self._notifWrapper, nil)
+		-- The card swings in; its contents drop in under it and fade up. slideInVertical moves
+		-- them with equal and opposite UIPadding, so the card itself never changes size.
+		UIMotion.slideInVertical(content :: Frame, -1, 14)
+		self:_fadeInGroup(content)
 	end
 end
 function GiftUI:hideNotification()
@@ -655,8 +763,8 @@ function GiftUI:bindTabButton(tier: string, callback: () -> ())
 	local tierIndex = self._tierIndex[normalizedTier]
 	local btn = tierIndex and self._tabButtons[tierIndex]
 	if btn then
-		PressFeedback.bindPressScale(btn)
-		btn.MouseButton1Click:Connect(callback)
+		self:_bindButtonMotion(btn)
+		table.insert(self._connections, btn.MouseButton1Click:Connect(callback))
 	end
 end
 function GiftUI:bindGiftButton(tier: string, callback: () -> ())
@@ -669,14 +777,25 @@ function GiftUI:bindGiftButton(tier: string, callback: () -> ())
 	local inputArea = tabFrame and tabFrame:FindFirstChild("InputArea") :: Frame?
 	local btn = inputArea and inputArea:FindFirstChild(GIFT_BTN[normalizedTier]) :: TextButton?
 	if btn then
-		PressFeedback.bindPressScale(btn)
-		btn.MouseButton1Click:Connect(callback)
+		self:_bindButtonMotion(btn)
+		local icon = btn:FindFirstChildWhichIsA("ImageLabel")
+		table.insert(self._connections, btn.MouseButton1Click:Connect(function()
+			-- Display-only read of the same target the controller is about to ask for: a send
+			-- pops the button's icon, nothing to send shakes the field the player must fill.
+			local userId, username = self:getTarget()
+			if userId == nil and (username == nil or #username == 0) then
+				UIMotion.wiggle((self:_getActiveInputBox() or btn) :: GuiObject, 6)
+			else
+				UIMotion.pop(icon :: GuiObject?, 1.25)
+			end
+			callback()
+		end))
 	end
 end
 function GiftUI:bindClose(callback: () -> ())
 	if self._closeBtn then
-		PressFeedback.bindPressScale(self._closeBtn)
-		self._closeBtn.Activated:Connect(callback)
+		self:_bindButtonMotion(self._closeBtn)
+		table.insert(self._connections, self._closeBtn.Activated:Connect(callback))
 	end
 end
 function GiftUI:bindNotifClose(callback: () -> ())
@@ -686,9 +805,24 @@ function GiftUI:bindNotifClose(callback: () -> ())
 		local inputArea = content and content:FindFirstChild("InputArea") :: Frame?
 		local btn = inputArea and inputArea:FindFirstChildWhichIsA("TextButton") :: TextButton?
 		if btn then
-			PressFeedback.bindPressScale(btn)
-			btn.MouseButton1Click:Connect(callback)
+			self:_bindButtonMotion(btn)
+			table.insert(self._connections, btn.MouseButton1Click:Connect(callback))
 		end
 	end
+end
+-- Cleanup path for every connection this panel owns (press/hover feedback, click handlers,
+-- the search listener) plus the notification's rotation handles.
+function GiftUI:destroy()
+	for _, connection in ipairs(self._connections) do
+		connection:Disconnect()
+	end
+	table.clear(self._connections)
+	for _, entry in ipairs(self._playerCardPool) do
+		if entry.connection then
+			entry.connection:Disconnect()
+			entry.connection = nil
+		end
+	end
+	self:hideNotification()
 end
 return GiftUI

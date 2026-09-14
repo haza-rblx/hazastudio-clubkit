@@ -9,6 +9,7 @@ local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Con
 local InventoryStore = require(script.Parent.Parent.State.InventoryStore)
 local InventoryDragController = require(script.Parent.InventoryDragController)
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
+local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 
 type HotbarSlotViewModel = InventoryStore.HotbarSlotViewModel
 type Refs = BackpackGuiRefs.Refs
@@ -17,14 +18,26 @@ type ILogger = Types.ILogger
 type CellEntry = {
 	button: GuiButton,
 	toolKey: string?,
+	connections: { RBXScriptConnection },
 }
 
 local BackpackUIBinder = {}
 BackpackUIBinder.__index = BackpackUIBinder
 
-local function renderToolOnButton(button: GuiButton, viewModel: HotbarSlotViewModel): ()
+local function renderToolOnButton(
+	button: GuiButton,
+	viewModel: HotbarSlotViewModel,
+	equippedTransparency: number
+): ()
 	button.Visible = true
 	button.BackgroundTransparency = 1
+
+	if viewModel.isEquipped then
+		-- Cells are rebuilt on every render, so the equipped highlight fades in on the fresh
+		-- cell rather than tweening between two states it never sees.
+		button.BackgroundColor3 = Config.Hotbar.EQUIPPED_BACKGROUND_COLOR
+		UIMotion.tween(button, 0.22, { BackgroundTransparency = equippedTransparency })
+	end
 
 	local imageLabel = button:FindFirstChildWhichIsA("ImageLabel", true)
 	if imageLabel and imageLabel:IsA("ImageLabel") then
@@ -56,6 +69,7 @@ function BackpackUIBinder.new(deps: {
 	self._unsubscribers = {} :: { () -> () }
 	self._pendingSlots = nil :: { HotbarSlotViewModel }?
 	self._pendingOpen = nil :: boolean?
+	self._wasOpen = false
 
 	self._refs.itemTemplate.Visible = false
 	self._refs.wrapper.Visible = false
@@ -93,6 +107,9 @@ end
 
 function BackpackUIBinder:_clearCells(): ()
 	for _, cell in ipairs(self._cells) do
+		for _, connection in ipairs(cell.connections) do
+			connection:Disconnect()
+		end
 		if cell.button and cell.button.Parent then
 			cell.button:Destroy()
 		end
@@ -136,6 +153,11 @@ function BackpackUIBinder:_render(slots: { HotbarSlotViewModel }, isOpen: boolea
 end
 
 function BackpackUIBinder:_renderNow(slots: { HotbarSlotViewModel }, isOpen: boolean): ()
+	-- Rows cascade in when the panel opens, never on the rebuilds that follow (drag flush,
+	-- inventory echo) — those repaint the same grid and must stay still.
+	local animateRows = isOpen and self._wasOpen ~= true
+	self._wasOpen = isOpen
+
 	if not isOpen then
 		if self._inventoryDrag then
 			self._inventoryDrag:onBackpackGridRebuilding()
@@ -151,6 +173,12 @@ function BackpackUIBinder:_renderNow(slots: { HotbarSlotViewModel }, isOpen: boo
 	local maxSlots = math.max(1, math.floor(tonumber(Config.Backpack.MAX_GRID_SLOTS) or 48))
 	local limit = math.min(#slots, maxSlots)
 	local dragCells = {} :: { any }
+	local rows = {} :: { GuiObject }
+	local bases = {} :: { [GuiObject]: number }
+	-- The template's own cell background is the equipped highlight's resting value; a fully
+	-- transparent template gets a light wash so the highlight is visible at all.
+	local designedBackground = self._refs.itemTemplate.BackgroundTransparency
+	local equippedTransparency = if designedBackground < 1 then designedBackground else 0.4
 
 	for index = 1, limit do
 		local viewModel = slots[index]
@@ -164,16 +192,40 @@ function BackpackUIBinder:_renderNow(slots: { HotbarSlotViewModel }, isOpen: boo
 		button.Visible = true
 		button.Parent = self._refs.scrollFrame
 
-		renderToolOnButton(button, viewModel)
+		renderToolOnButton(button, viewModel, equippedTransparency)
 
 		local refs = BackpackGuiRefs.slotRefsFromButton(button)
 		if refs.dragDetector then
 			refs.dragDetector.Enabled = false
 		end
 
+		local connections = {} :: { RBXScriptConnection }
+		-- Grid cells are laid out, so the squash must land on the cell's icon, never on a
+		-- UIScale added to the cell itself.
+		if not UIMotion.canScale(button) then
+			for _, connection in ipairs(UIMotion.bindPress(button)) do
+				table.insert(connections, connection)
+			end
+			for _, connection in ipairs(UIMotion.bindHover(button)) do
+				table.insert(connections, connection)
+			end
+		end
+
+		if animateRows then
+			local elements = { button :: GuiObject }
+			for _, descendant in ipairs(button:GetDescendants()) do
+				if descendant:IsA("GuiObject") then
+					table.insert(elements, descendant :: GuiObject)
+				end
+			end
+			UIMotion.captureBases(elements, bases)
+			table.insert(rows, button :: GuiObject)
+		end
+
 		table.insert(self._cells, {
 			button = button,
 			toolKey = viewModel.toolKey,
+			connections = connections,
 		})
 
 		table.insert(dragCells, {
@@ -188,6 +240,10 @@ function BackpackUIBinder:_renderNow(slots: { HotbarSlotViewModel }, isOpen: boo
 
 	if self._inventoryDrag then
 		self._inventoryDrag:setBackpackCells(dragCells)
+	end
+
+	if animateRows and #rows > 0 then
+		UIMotion.stagger(rows, bases, 0.025, 16)
 	end
 end
 

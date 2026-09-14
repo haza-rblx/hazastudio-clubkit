@@ -24,6 +24,7 @@ local Workspace = game:GetService("Workspace")
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
+local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 
 local pi    = math.pi
 local abs   = math.abs
@@ -587,6 +588,23 @@ local function createMobileFreecamController(deps: {
 	local mobileControls = screenGui:FindFirstChild("MobileControls")
 	local hideControls = screenGui:FindFirstChild("hidecontrols")
 
+	-- Designed transparencies of the freecam button cluster, read once before any fade runs.
+	local clusterElements: { GuiObject } = {}
+	local function collectCluster(root: Instance?)
+		if not root or not root:IsA("GuiObject") then
+			return
+		end
+		table.insert(clusterElements, root :: GuiObject)
+		for _, descendant in ipairs(root:GetDescendants()) do
+			if descendant:IsA("GuiObject") then
+				table.insert(clusterElements, descendant)
+			end
+		end
+	end
+	collectCluster(mobileControls)
+	collectCluster(hideControls)
+	local clusterBases = UIMotion.captureBases(clusterElements)
+
 	-- Hold-to-move binding: tekan = set 1, lepas/leave = set 0.
 	local function bindHold(button: Instance?, key: string)
 		if not button or not button:IsA("GuiButton") then
@@ -661,6 +679,11 @@ local function createMobileFreecamController(deps: {
 			if hiddenFrame and hiddenFrame:IsA("GuiObject") then hiddenFrame.Visible = false end
 		end
 		hidden = false
+		if isOn then
+			-- Visible is already true above, so the pad and buttons take input from the first
+			-- frame; the fade only moves transparency and never gates a touch.
+			UIMotion.fadeIn(clusterElements, clusterBases)
+		end
 	end
 
 	local function setActive(isOn: boolean)
@@ -692,12 +715,24 @@ local function createMobileFreecamController(deps: {
 	if hideControls then
 		local closeBtn = hideControls:FindFirstChild("close")
 		if closeBtn and closeBtn:IsA("GuiButton") then
+			for _, conn in ipairs(UIMotion.bindPress(closeBtn :: GuiButton)) do
+				track(conn)
+			end
+			for _, conn in ipairs(UIMotion.bindHover(closeBtn :: GuiButton)) do
+				track(conn)
+			end
 			track((closeBtn :: GuiButton).MouseButton1Click:Connect(function()
 				setActive(false)
 			end))
 		end
 		local toggleBtn = hideControls:FindFirstChild("TextButton")
 		if toggleBtn and toggleBtn:IsA("GuiButton") then
+			for _, conn in ipairs(UIMotion.bindPress(toggleBtn :: GuiButton)) do
+				track(conn)
+			end
+			for _, conn in ipairs(UIMotion.bindHover(toggleBtn :: GuiButton)) do
+				track(conn)
+			end
 			track((toggleBtn :: GuiButton).MouseButton1Click:Connect(function()
 				hidden = not hidden
 				local shown = hideControls:FindFirstChild("shown")
@@ -706,6 +741,9 @@ local function createMobileFreecamController(deps: {
 				if hiddenFrame and hiddenFrame:IsA("GuiObject") then hiddenFrame.Visible = hidden end
 				if mobileControls and mobileControls:IsA("GuiObject") then
 					(mobileControls :: GuiObject).Visible = not hidden
+				end
+				if not hidden then
+					UIMotion.fadeIn(clusterElements, clusterBases)
 				end
 			end))
 		end

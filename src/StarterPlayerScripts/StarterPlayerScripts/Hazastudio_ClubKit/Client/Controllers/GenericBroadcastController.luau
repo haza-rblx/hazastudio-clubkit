@@ -13,6 +13,7 @@ local GenericBroadcastLayoutBridge = require(script.Parent.Parent.Services.Gener
 local GroupMotion = require(script.Parent.Parent.Utils.GroupMotion)
 local GuiFade = require(script.Parent.Parent.Utils.GuiFade)
 local NotificationCenterGui = require(script.Parent.Parent.Utils.NotificationCenterGui)
+local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 
 local log = Logger.new("GenericBroadcastController")
 
@@ -219,6 +220,11 @@ local function setCardAlpha(card: GuiObject, fade: GuiFade.Snapshot?, alpha: num
 end
 
 local function tweenCardAlpha(card: GuiObject, fade: GuiFade.Snapshot?, info: TweenInfo, alpha: number)
+	-- ADR 0011: same end state, no crossfade — still through GuiFade for a Frame card.
+	if UIMotion.reduced() then
+		setCardAlpha(card, fade, alpha)
+		return
+	end
 	if fade then
 		GuiFade.tween(fade, info, alpha)
 	elseif card:IsA("CanvasGroup") then
@@ -232,7 +238,16 @@ local function tween(instance: Instance, info: TweenInfo, goals: { [string]: any
 	return created
 end
 
+-- ADR 0011: reduced motion lands on the goal and falls straight through the wait, so a sequence
+-- built on Completed:Wait (enter, exit) keeps running in order without moving anything. The
+-- CountDownBar is a real timer and stays on `tween` above.
 local function tweenWait(instance: Instance, info: TweenInfo, goals: { [string]: any })
+	if UIMotion.reduced() then
+		for property, value in pairs(goals) do
+			(instance :: any)[property] = value
+		end
+		return
+	end
 	local created = tween(instance, info, goals)
 	created.Completed:Wait()
 end
@@ -331,9 +346,14 @@ local function restackActiveCards()
 		if active.card.Parent and not active.dismissing then
 			active.card.LayoutOrder = index
 			setCardContentVisible(active.card, true)
-			tween(active.scale, TweenInfo.new(RESTACK_DURATION, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-				Scale = active.normalScale,
-			})
+			-- ADR 0011: the restack settles to the same resting scale, without travelling there.
+			if UIMotion.reduced() then
+				active.scale.Scale = active.normalScale
+			else
+				tween(active.scale, TweenInfo.new(RESTACK_DURATION, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+					Scale = active.normalScale,
+				})
+			end
 		end
 	end
 end
@@ -396,12 +416,34 @@ local function playBroadcast(refs: Refs, payload: Payload)
 	end
 
 	local countDownBar = findFrame(card, "CountDownBar")
+	-- Draining the bar is a Size tween, so it must not be a layout child (ADR 0011): in a
+	-- UIListLayout its siblings would slide as it empties. Such a bar keeps the accent but
+	-- stays full width.
+	local canDrainBar = countDownBar ~= nil
+		and countDownBar.Parent ~= nil
+		and countDownBar.Parent:FindFirstChildWhichIsA("UIGridStyleLayout") == nil
 	-- V2 drains from the designed bar width; V1 always started full width.
 	local barStartWidth = if refs.isV2 and countDownBar then countDownBar.Size.X.Scale else 1
 	if countDownBar then
-		countDownBar.Size = UDim2.new(barStartWidth, 0, countDownBar.Size.Y.Scale, countDownBar.Size.Y.Offset)
+		if canDrainBar then
+			countDownBar.Size = UDim2.new(barStartWidth, 0, countDownBar.Size.Y.Scale, countDownBar.Size.Y.Offset)
+		end
 		applyCountDownBarAccent(countDownBar, tostring(payload.senderRole or "Member"))
 	end
+
+	-- Content cascade (ADR 0011), in reading order; each lookup tolerates a template without
+	-- that row. Captured once per card, before any fade has touched a designed transparency.
+	local contentRows: { GuiObject } = {}
+	local function addRow(element: GuiObject?)
+		if element then
+			table.insert(contentRows, element)
+		end
+	end
+	addRow(findImage(card, "SenderProfileImage"))
+	addRow(findText(card, "SenderNameandUsername"))
+	addRow(findImage(card, "SenderRole"))
+	addRow(findText(card, "TheMessage"))
+	local contentBases = UIMotion.captureBases(contentRows)
 
 	local fade = if card:IsA("CanvasGroup") then nil else GuiFade.capture(card)
 	setCardAlpha(card, fade, 1)
@@ -430,11 +472,29 @@ local function playBroadcast(refs: Refs, payload: Payload)
 	})
 	restackActiveCards()
 
+	-- The card has landed; sender and message arrive a beat later. popIn is refused on a V1
+	-- CanvasGroup card (ADR 0005) and on an off-centre headshot, so V1 just gets the cascade.
+	UIMotion.stagger(contentRows, contentBases, 0.04)
+	UIMotion.popIn(findImage(card, "SenderProfileImage"), 0.7)
+
 	local duration = math.max(tonumber(payload.duration) or Config.Announcement.SHOW_DURATION, 1)
-	if countDownBar then
-		tween(countDownBar, TweenInfo.new(duration, Enum.EasingStyle.Linear, Enum.EasingDirection.Out), {
-			Size = UDim2.new(0, 0, countDownBar.Size.Y.Scale, countDownBar.Size.Y.Offset),
+	if countDownBar and canDrainBar then
+		local bar = countDownBar
+		-- Kept on TweenService rather than UIMotion.tween: this is the card's timer, not a
+		-- flourish. It has to run in real seconds (UIMotion scales by MOTION_SCALE) and it has
+		-- to keep depleting under reduced motion, where UIMotion would empty it in one frame.
+		tween(bar, TweenInfo.new(duration, Enum.EasingStyle.Linear, Enum.EasingDirection.Out), {
+			Size = UDim2.new(0, 0, bar.Size.Y.Scale, bar.Size.Y.Offset),
 		})
+		-- Last quarter: the accent warms toward the warning colour, so a card about to leave
+		-- reads as running out. One-shot, and dropped if the card is already on its way out.
+		local warmAt = duration * 0.75
+		task.delay(warmAt, function()
+			if active.dismissing or not bar.Parent then
+				return
+			end
+			UIMotion.tween(bar, duration - warmAt, { BackgroundColor3 = Config.Notify.COLOR_WARNING })
+		end)
 	end
 
 	task.spawn(function()

@@ -7,6 +7,7 @@ local TweenService = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local MotionPresets = require(script.Parent.Parent.Utils.MotionPresets)
+local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local AvatarViewport3D = require(script.Parent.Parent.Utils.AvatarViewport3D)
@@ -337,6 +338,52 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 		end
 	end
 
+	-- Entrance motion (ADR 0011). Rows cascade (badge list first, then the action buttons); the
+	-- header/bio/counter labels fade together. Bases are captured once here, before anything has
+	-- faded, so fadeIn/stagger always return each element to its own designed transparency.
+	local entranceRows: { GuiObject } = {
+		ownerBadge,
+		devBadge,
+		adminBadge,
+		memberBadge,
+		vipBadge,
+		vvipBadge,
+		eliteBadge,
+		streakBadge,
+		likeBadge,
+		communityBadge,
+		likeButton,
+		carryButton,
+		syncDanceButton,
+		investigateAvatarButton,
+		sendFriendRequestButton,
+		sendGiftButton,
+	}
+	local entranceFade: { GuiObject } = {
+		displayNameLabel,
+		usernameLabel,
+		bioContent,
+		relationshipContent,
+		connectionCountLabel,
+		followersCountLabel,
+	}
+	local entranceBases: { [GuiObject]: number } = {}
+	do
+		local rowElements: { GuiObject } = {}
+		for _, row in ipairs(entranceRows) do
+			for _, descendant in ipairs(row:GetDescendants()) do
+				-- The rows themselves are never captured: syncDanceButton.TextTransparency is state
+				-- (enabled/disabled) and the like heart's transparency is the liked colour, so
+				-- neither may be restored by a fade.
+				if descendant:IsA("GuiObject") and descendant ~= likeButtonBadgeVisual then
+					table.insert(rowElements, descendant)
+				end
+			end
+		end
+		UIMotion.captureBases(rowElements, entranceBases)
+		UIMotion.captureBases(entranceFade, entranceBases)
+	end
+
 	-- Hide by default
 	mainWrapper.Visible = false
 	loadingScreen.Visible = false
@@ -345,7 +392,8 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 	local onCloseCallback: (() -> ())? = nil
 	local loadingTextThread: thread? = nil
 	local closeButtonConnection: RBXScriptConnection? = nil
-	local loadingScreenTween: Tween? = nil
+	-- Guards the delayed hide of the loading overlay; the slide itself runs through UIMotion.
+	local loadingHideToken = 0
 	local investigateAvatarButtonConnection: RBXScriptConnection? = nil
 	local sendFriendRequestButtonConnection: RBXScriptConnection? = nil
 	local giftButtonConnection: RBXScriptConnection? = nil
@@ -375,13 +423,18 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 	local statusBasePosition = statusPopUp.Position
 	local statusBaseRotation = statusPopUp.Rotation
 	local statusTweenToken = 0
-	local likeButtonBadgeScale = getOrCreateUIScale(likeButtonBadgeVisual or likeButton)
+	local stopStatusPulse: (() -> ())? = nil
+	local currentStatusText: string? = nil
+	local likeCountValue: number? = nil
+	local likeButtonIsLiked = false
+	local motionConnections: { RBXScriptConnection } = {}
 	local mainWrapperScale = getOrCreateUIScale(mainWrapper) :: UIScale
 	local likeButtonBaseTransparency = likeButton.BackgroundTransparency
 	local likeButtonBaseTextTransparency = likeButton.TextTransparency
 	local likeButtonLabelBaseTransparency = likeButtonLabel and likeButtonLabel.TextTransparency or 0
 	local likeButtonBadgeBaseColor = Color3.fromRGB(255, 255, 255)
 	local likeButtonBadgeBaseTransparency = 0
+	local likeButtonBadgeBaseRotation = 0
 	local setLikeButtonText: (text: string) -> ()
 	local setSyncDanceButtonText: (text: string) -> ()
 	local setLikeBadgeVisual: (color: Color3, transparency: number) -> ()
@@ -396,6 +449,9 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 	likeButton.TextTransparency = 1
 
 	if likeButtonBadgeVisual then
+		if likeButtonBadgeVisual:IsA("GuiObject") then
+			likeButtonBadgeBaseRotation = likeButtonBadgeVisual.Rotation
+		end
 		if likeButtonBadgeVisual:IsA("ImageLabel") or likeButtonBadgeVisual:IsA("ImageButton") then
 			likeButtonBadgeBaseColor = likeButtonBadgeVisual.ImageColor3
 			likeButtonBadgeBaseTransparency = likeButtonBadgeVisual.ImageTransparency
@@ -514,6 +570,14 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 	end
 
 	local function resetVisualState()
+		-- Nothing may loop while the panel is hidden (ADR 0011).
+		if stopStatusPulse then
+			stopStatusPulse()
+			stopStatusPulse = nil
+		end
+		currentStatusText = nil
+		likeCountValue = nil
+		likeButtonIsLiked = false
 		-- Backdrop flag must match the visual reset so a later close does not
 		-- double-dismiss (or leave the camera zoomed) after a re-load cycle.
 		if backdropActive then
@@ -569,10 +633,13 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 		end
 
 		setLikeButtonText(LIKE_BUTTON_TEXT_IDLE)
-		setLikeBadgeVisual(likeButtonBadgeBaseColor, likeButtonBadgeBaseTransparency)
-		if likeButtonBadgeScale then
-			likeButtonBadgeScale.Scale = 1
+		-- Cancel before writing the resting values: a cancelled tween leaves the property where it
+		-- stopped, so the order matters. Rotation is restored too, in case a wiggle was cut short.
+		if likeButtonBadgeVisual and likeButtonBadgeVisual:IsA("GuiObject") then
+			UIMotion.cancel(likeButtonBadgeVisual)
+			UIMotion.tween(likeButtonBadgeVisual, 0, { Rotation = likeButtonBadgeBaseRotation })
 		end
+		setLikeBadgeVisual(likeButtonBadgeBaseColor, likeButtonBadgeBaseTransparency)
 		likeButtonPending = false
 		applyLikePendingState()
 
@@ -583,53 +650,27 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 
 	local function stopStatusAnimation(resetVisual: boolean)
 		statusTweenToken += 1
+		if stopStatusPulse then
+			stopStatusPulse()
+			stopStatusPulse = nil
+		end
 		if resetVisual then
+			UIMotion.cancel(statusPopUp)
+			UIMotion.cancel(statusPopUpLabel)
 			statusPopUp.Position = statusBasePosition
 			statusPopUp.Rotation = statusBaseRotation
 			statusPopUpLabel.TextTransparency = 0
 		end
 	end
 
+	-- The old hand-rolled rise/fall loop is now one UIMotion.pulse on Rotation: rotation never
+	-- touches layout, the pulse stops (and restores the resting angle) from one place, and
+	-- reduced motion leaves the bubble still.
 	local function startStatusFloatLoop()
-		local token = statusTweenToken
-		task.spawn(function()
-			while statusPopUp.Visible and token == statusTweenToken do
-				local riseTween = TweenService:Create(
-					statusPopUp,
-					TweenInfo.new(1.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
-					{
-						Position = UDim2.new(
-							statusBasePosition.X.Scale,
-							statusBasePosition.X.Offset,
-							statusBasePosition.Y.Scale,
-							statusBasePosition.Y.Offset - 3
-						),
-						Rotation = statusBaseRotation - 0.75,
-					}
-				)
-				riseTween:Play()
-				riseTween.Completed:Wait()
-				if not statusPopUp.Visible or token ~= statusTweenToken then
-					break
-				end
-
-				local fallTween = TweenService:Create(
-					statusPopUp,
-					TweenInfo.new(1.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
-					{
-						Position = statusBasePosition,
-						Rotation = statusBaseRotation + 0.4,
-					}
-				)
-				fallTween:Play()
-				fallTween.Completed:Wait()
-			end
-
-			if token == statusTweenToken and statusPopUp.Parent then
-				statusPopUp.Position = statusBasePosition
-				statusPopUp.Rotation = statusBaseRotation
-			end
-		end)
+		if stopStatusPulse then
+			stopStatusPulse()
+		end
+		stopStatusPulse = UIMotion.pulse(statusPopUp, "Rotation", statusBaseRotation + 0.9, 1.8)
 	end
 
 	setLikeButtonText = function(text: string)
@@ -642,9 +683,17 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 
 	setSyncDanceButtonText = function(text: string)
 		if syncDanceButtonLabel then
+			-- Sync state is echoed in full on every repaint; an unchanged label must not restart
+			-- the swap.
+			if syncDanceButtonLabel.Text == text then
+				return
+			end
 			syncDanceButton.Text = ""
 			syncDanceButtonLabel.Text = text
 		else
+			if syncDanceButton.Text == text then
+				return
+			end
 			syncDanceButton.Text = text
 		end
 	end
@@ -660,20 +709,11 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 
 	local function tweenLikeButtonText(text: string)
 		if likeButtonLabel then
-			local fadeOut = TweenService:Create(
-				likeButtonLabel,
-				TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-				{ TextTransparency = 1 }
-			)
-			fadeOut.Completed:Once(function()
-				likeButtonLabel.Text = text
-				TweenService:Create(
-					likeButtonLabel,
-					TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-					{ TextTransparency = likeButtonLabelBaseTransparency }
-				):Play()
-			end)
-			fadeOut:Play()
+			-- Swap first, then fade the new label up from invisible: one UIMotion channel instead
+			-- of a fade-out whose Completed callback had to drive a second tween.
+			local label: GuiObject = likeButtonLabel
+			likeButtonLabel.Text = text
+			UIMotion.fadeIn({ label }, { [label] = likeButtonLabelBaseTransparency })
 		end
 
 		likeButton.Text = ""
@@ -704,22 +744,18 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 		end
 
 		if likeButtonBadgeVisual:IsA("ImageLabel") or likeButtonBadgeVisual:IsA("ImageButton") then
-			TweenService
-				:Create(likeButtonBadgeVisual, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-					ImageColor3 = color,
-					ImageTransparency = transparency,
-				})
-				:Play()
+			UIMotion.tween(likeButtonBadgeVisual, 0.18, {
+				ImageColor3 = color,
+				ImageTransparency = transparency,
+			})
 			return
 		end
 
 		if likeButtonBadgeVisual:IsA("GuiObject") then
-			TweenService
-				:Create(likeButtonBadgeVisual, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-					BackgroundColor3 = color,
-					BackgroundTransparency = transparency,
-				})
-				:Play()
+			UIMotion.tween(likeButtonBadgeVisual, 0.18, {
+				BackgroundColor3 = color,
+				BackgroundTransparency = transparency,
+			})
 		end
 	end
 
@@ -730,6 +766,53 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 		likeButton.Selectable = canInteract
 		likeButton.BackgroundTransparency = canInteract and likeButtonBaseTransparency
 			or math.min(0.35, likeButtonBaseTransparency + 0.2)
+	end
+
+	-- The bit of a button that a success pop should bounce. UIMotion.pop refuses anything that is
+	-- laid out or under a CanvasGroup, so a nil/unsafe icon simply means no pop.
+	local function iconOf(button: GuiObject?): GuiObject?
+		if not button then
+			return nil
+		end
+		return button:FindFirstChildWhichIsA("ImageLabel", true)
+	end
+
+	-- Press squash + hover lift for every button in the panel. Bound (and unbound) alongside the
+	-- Activated connections in _setActionButtons — this file's existing connection cleanup path.
+	local function bindButtonMotion()
+		for _, connection in ipairs(motionConnections) do
+			connection:Disconnect()
+		end
+		table.clear(motionConnections)
+
+		local buttons: { GuiObject? } = {
+			draggableIcon,
+			likeButton,
+			carryButton,
+			syncDanceButton,
+			investigateAvatarButton,
+			sendFriendRequestButton,
+			sendGiftButton,
+		}
+		for _, button in ipairs(buttons) do
+			if not button then
+				continue
+			end
+			for _, connection in ipairs(UIMotion.bindPress(button)) do
+				table.insert(motionConnections, connection)
+			end
+			for _, connection in ipairs(UIMotion.bindHover(button)) do
+				table.insert(motionConnections, connection)
+			end
+		end
+	end
+
+	-- Content coming alive once the panel is already on screen: header/bio/counters fade together,
+	-- badges then action buttons cascade. Transparency only, so it is safe inside the badge
+	-- UIListLayout and under the CanvasGroups.
+	local function playEntrance()
+		UIMotion.fadeIn(entranceFade, entranceBases)
+		UIMotion.stagger(entranceRows, entranceBases, nil, 12)
 	end
 
 	local function isGuiPointInside(guiObject: GuiObject, point: Vector2): boolean
@@ -765,6 +848,8 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 			closeButtonConnection = nil
 		end
 
+		bindButtonMotion()
+
 		-- Wire draggable icon as close button (click to close)
 		closeButtonConnection = draggableIcon.InputBegan:Connect(function(input)
 			if
@@ -787,6 +872,7 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 		end
 		if delaySeconds <= 0 then
 			presentPanelFromBottom()
+			playEntrance()
 			if afterOpenCallback then
 				afterOpenCallback()
 			end
@@ -797,6 +883,7 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 				return
 			end
 			presentPanelFromBottom()
+			playEntrance()
 			if afterOpenCallback then
 				afterOpenCallback()
 			end
@@ -810,10 +897,8 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 			task.cancel(loadingTextThread)
 			loadingTextThread = nil
 		end
-		if loadingScreenTween then
-			loadingScreenTween:Cancel()
-			loadingScreenTween = nil
-		end
+		loadingHideToken += 1
+		UIMotion.cancel(loadingScreen)
 
 		-- Do not disconnect button connections here — Roblox event order:
 		-- InputBegan (mouse down) → handler close panel → Activated (mouse up).
@@ -838,10 +923,12 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 	end
 
 	function ui:setLoading(loading: boolean)
-		if loadingScreenTween then
-			loadingScreenTween:Cancel()
-			loadingScreenTween = nil
-		end
+		loadingHideToken += 1
+		local hideToken = loadingHideToken
+		-- ui:close() leaves MainContent hidden, so this is the moment the content is actually
+		-- revealed again — and the only place the entrance may replay on an already-open panel.
+		local contentWasHidden = not mainContent.Visible
+		UIMotion.cancel(loadingScreen)
 
 		if loading then
 			resetVisualState()
@@ -877,20 +964,23 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 			-- Show main content immediately
 			mainContent.Visible = true
 
-			-- Slide loading screen up and hide with spring-like animation
-			local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-			local tween = TweenService:Create(loadingScreen, tweenInfo, {
-				Position = UDim2.fromScale(0, -1),
-			})
-			loadingScreenTween = tween
-
-			tween:Play()
-			tween.Completed:Once(function(playbackState)
-				if playbackState == Enum.PlaybackState.Completed and loadingScreen.Parent then
+			-- Slide loading screen up and hide with spring-like animation. Position is safe to
+			-- tween here: LoadingScreen is a full-bleed overlay inside 02-MainContentWrapper, not a
+			-- child of any UIListLayout/UIGridLayout.
+			local slideTime = 0.5
+			UIMotion.tween(loadingScreen, slideTime, { Position = UDim2.fromScale(0, -1) }, Enum.EasingStyle.Back)
+			task.delay(MotionPresets.scaledTime(slideTime), function()
+				if hideToken == loadingHideToken and loadingScreen.Parent then
 					loadingScreen.Visible = false
 				end
-				loadingScreenTween = nil
 			end)
+
+			if contentWasHidden then
+				-- Content revealed to a player who is already looking at the open panel. Fade only:
+				-- slideInVertical would parent a second UIPadding to a section that may already own
+				-- one from the design, and Roblox honours only one per GuiObject.
+				playEntrance()
+			end
 		end
 	end
 
@@ -1099,20 +1189,37 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 	end
 
 	function ui:_setLikeCount(likesCount: number)
-		if likesCount > 0 then
-			likeBadge.Visible = true
-			if likeCountLabel then
-				likeCountLabel.Text = formatCompactCount(likesCount)
-			end
+		local count = math.max(0, math.floor(likesCount))
+		likeBadge.Visible = count > 0
+
+		if not likeCountLabel then
+			return
+		end
+		-- Overhead-driven repaints echo the same total; rolling the counter again would be motion
+		-- with nothing behind it.
+		if likeCountValue == count then
+			return
+		end
+		local previous = likeCountValue
+		likeCountValue = count
+
+		if count <= 0 then
+			likeCountLabel.Text = "0"
+		elseif previous == nil then
+			-- First paint of this profile: land on the number, do not roll up from nowhere.
+			likeCountLabel.Text = formatCompactCount(count)
 		else
-			likeBadge.Visible = false
-			if likeCountLabel then
-				likeCountLabel.Text = "0"
-			end
+			UIMotion.countTo(likeCountLabel, previous, count, nil, formatCompactCount)
 		end
 	end
 
 	function ui:_applyLikeButtonState(isLiked: boolean, animate: boolean?)
+		-- Server echoes the full state on every repaint; only a real transition may move anything.
+		if animate ~= true and likeButtonIsLiked == isLiked then
+			return
+		end
+		likeButtonIsLiked = isLiked
+
 		local targetText = if isLiked then likedButtonText() else LIKE_BUTTON_TEXT_IDLE
 		local targetColor = if isLiked then LIKE_BUTTON_ACTIVE_COLOR else likeButtonBadgeBaseColor
 		local targetTransparency = if isLiked then LIKE_BUTTON_ACTIVE_TRANSPARENCY else likeButtonBadgeBaseTransparency
@@ -1120,21 +1227,12 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 		if animate then
 			tweenLikeButtonText(targetText)
 			tweenLikeBadgeVisual(targetColor, targetTransparency)
-			if likeButtonBadgeScale then
-				likeButtonBadgeScale.Scale = 1
-				local popOut = TweenService:Create(
-					likeButtonBadgeScale,
-					TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-					{ Scale = 1.12 }
-				)
-				popOut.Completed:Once(function()
-					TweenService:Create(
-						likeButtonBadgeScale :: UIScale,
-						TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-						{ Scale = 1 }
-					):Play()
-				end)
-				popOut:Play()
+			-- The heart pops when the like lands and shakes when it is taken back. pop() refuses a
+			-- laid-out or CanvasGroup-parented target on its own, so no UIScale can disturb the row.
+			if isLiked then
+				UIMotion.pop(likeButtonBadgeVisual :: any, 1.4)
+			else
+				UIMotion.wiggle(likeButtonBadgeVisual :: any, 6)
 			end
 			return
 		end
@@ -1146,9 +1244,6 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 		end
 		likeButton.Text = ""
 		likeButton.TextTransparency = 1
-		if likeButtonBadgeScale then
-			likeButtonBadgeScale.Scale = 1
-		end
 	end
 
 	function ui:_setCommunity(communityId: number?, communityName: string?, communityLogoUrl: string?)
@@ -1184,11 +1279,19 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 	end
 
 	function ui:_setStatusPopup(statusText: string?)
+		local nextText = if statusText and #statusText > 0 then statusText else nil
+		-- Overhead/profile payloads repaint the same status often; replaying the drop-in each time
+		-- would make the bubble twitch.
+		if currentStatusText == nextText then
+			return
+		end
+		currentStatusText = nextText
+
 		stopStatusAnimation(true)
 
-		if statusText and #statusText > 0 then
+		if nextText then
 			statusPopUp.Visible = true
-			statusPopUpLabel.Text = statusText
+			statusPopUpLabel.Text = nextText
 
 			statusPopUpLabel.TextTransparency = 1
 			statusPopUp.Position = UDim2.new(
@@ -1199,24 +1302,21 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 			)
 			statusPopUp.Rotation = statusBaseRotation - 3
 
+			-- Position is safe to tween: StatusPopUp is an absolutely-positioned overlay inside
+			-- IllustrationSection (no UIListLayout/UIGridLayout there), which is why the pre-existing
+			-- drop-in already moved it.
 			local localToken = statusTweenToken
-			local tweenInfo = TweenInfo.new(0.45, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
-			local tween1 = TweenService:Create(statusPopUp, tweenInfo, {
+			UIMotion.tween(statusPopUp, 0.45, {
 				Position = statusBasePosition,
 				Rotation = statusBaseRotation,
-			})
-			local tween2 = TweenService:Create(statusPopUpLabel, tweenInfo, {
-				TextTransparency = 0,
-			})
+			}, Enum.EasingStyle.Quint)
+			UIMotion.tween(statusPopUpLabel, 0.45, { TextTransparency = 0 }, Enum.EasingStyle.Quint)
 
-			tween1.Completed:Once(function()
+			task.delay(MotionPresets.scaledTime(0.45), function()
 				if localToken == statusTweenToken and statusPopUp.Visible then
 					startStatusFloatLoop()
 				end
 			end)
-
-			tween1:Play()
-			tween2:Play()
 		else
 			statusPopUp.Visible = false
 			statusPopUpLabel.Text = ""
@@ -1279,6 +1379,8 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 			carryButtonConnection = nil
 		end
 
+		bindButtonMotion()
+
 		buttonsGroup.Visible = buttonsGroupDefaultVisible
 		for _, separator in ipairs(actionSeparators) do
 			separator.gui.Visible = separator.visible
@@ -1310,7 +1412,10 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 				investigateAvatarButtonConnection = investigateAvatarButton.Activated:Connect(function()
 					log:debug("InvestigateAvatar activated", { targetUserId = currentTargetUserId })
 					if currentTargetUserId then
+						UIMotion.pop(iconOf(investigateAvatarButton), 1.3)
 						investigateAvatarCallback(currentTargetUserId)
+					else
+						UIMotion.wiggle(iconOf(investigateAvatarButton), 8)
 					end
 				end)
 			end
@@ -1318,7 +1423,10 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 		if payload.canSendFriendRequest and sendFriendRequestCallback then
 			sendFriendRequestButtonConnection = sendFriendRequestButton.Activated:Connect(function()
 				if currentTargetUserId then
+					UIMotion.pop(iconOf(sendFriendRequestButton), 1.3)
 					sendFriendRequestCallback(currentTargetUserId)
+				else
+					UIMotion.wiggle(iconOf(sendFriendRequestButton), 8)
 				end
 			end)
 		end
@@ -1326,7 +1434,10 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 		if payload.canSendGift and sendGiftCallback then
 			giftButtonConnection = sendGiftButton.Activated:Connect(function()
 				if currentTargetUserId then
+					UIMotion.pop(iconOf(sendGiftButton), 1.3)
 					sendGiftCallback(currentTargetUserId)
+				else
+					UIMotion.wiggle(iconOf(sendGiftButton), 8)
 				end
 			end)
 		end
@@ -1334,6 +1445,11 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 		if payload.canLike and likeButtonCallback then
 			likeButtonConnection = likeButton.Activated:Connect(function()
 				if currentTargetUserId then
+					-- Daily mode: the like is already spent until WIB midnight, so the controller
+					-- will refuse this click. Shake the heart rather than leave a dead button.
+					if likeButtonIsLiked and Config.AvatarContext.DAILY_LIKE_RESET == true then
+						UIMotion.wiggle(likeButtonBadgeVisual :: any, 8)
+					end
 					likeButtonCallback(currentTargetUserId)
 				end
 			end)
@@ -1342,7 +1458,10 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 		if payload.canCarry and carryCallback then
 			carryButtonConnection = carryButton.Activated:Connect(function()
 				if currentTargetUserId then
+					UIMotion.pop(iconOf(carryButton), 1.3)
 					carryCallback(currentTargetUserId)
+				else
+					UIMotion.wiggle(iconOf(carryButton), 8)
 				end
 			end)
 		end
@@ -1350,7 +1469,10 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 		if payload.canSyncDance and syncDanceCallback then
 			syncDanceButtonConnection = syncDanceButton.Activated:Connect(function()
 				if currentTargetUserId then
+					UIMotion.pop(iconOf(syncDanceButton), 1.3)
 					syncDanceCallback(currentTargetUserId)
+				else
+					UIMotion.wiggle(iconOf(syncDanceButton), 8)
 				end
 			end)
 		end

@@ -7,6 +7,7 @@ local GraphicsQuality = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Util
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local ScrollIndicatorHelper = require(script.Parent.Parent.Utils.ScrollIndicatorHelper)
 local GroupedRowCornerUtil = require(script.Parent.Parent.Utils.GroupedRowCornerUtil)
+local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 local MenuGuiRefs = require(script.Parent.MenuGuiRefs)
 local MenuSettingsCore = require(script.Parent.MenuSettingsCore)
 
@@ -49,7 +50,22 @@ function SettingsTabBinder:bindReset(callback: () -> ())
 	self._resetCallback = callback
 	if self._resetButton and not self._resetBound then
 		self._resetBound = true
-		self._resetButton.Activated:Connect(function()
+		local button: TextButton = self._resetButton
+		-- Press/hover connections are owned here and dropped with the button, the same
+		-- contract PressFeedback had (bindPress also holds a UserInputService connection).
+		local motion = UIMotion.bindPress(button)
+		for _, connection in ipairs(UIMotion.bindHover(button)) do
+			table.insert(motion, connection)
+		end
+		button.Destroying:Once(function()
+			for _, connection in ipairs(motion) do
+				connection:Disconnect()
+			end
+			table.clear(motion)
+		end)
+		button.Activated:Connect(function()
+			-- "Reset" reads as a refresh, so its icon turns over once.
+			UIMotion.spin(button:FindFirstChildWhichIsA("ImageLabel", true), -1)
 			if self._resetCallback then
 				self._resetCallback()
 			end

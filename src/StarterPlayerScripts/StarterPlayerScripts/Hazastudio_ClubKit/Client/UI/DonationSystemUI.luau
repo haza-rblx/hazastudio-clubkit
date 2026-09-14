@@ -2,7 +2,6 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
 local GeneralNotificationCenterService = require(script.Parent.Parent.Services.GeneralNotificationCenterService)
@@ -16,6 +15,7 @@ local DonationSystemGuiRefs = require(script.Parent.DonationSystemGuiRefs)
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
 local AvatarViewport3D = require(script.Parent.Parent.Utils.AvatarViewport3D)
 local AvatarPrewarmShared = require(script.Parent.Parent.Utils.AvatarPrewarmShared)
+local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 
 type Refs = DonationSystemGuiRefs.Refs
 
@@ -38,6 +38,7 @@ export type DonationSystemUI = {
 	refreshDonorProfile: (self: DonationSystemUI, fetchProfile: (() -> DonorProfilePayload?)?) -> (),
 	bindProfileRefresh: (self: DonationSystemUI, fetchProfile: () -> DonorProfilePayload?) -> (),
 	setDonationResult: (self: DonationSystemUI, ok: boolean, message: string?) -> (),
+	destroy: (self: DonationSystemUI) -> (),
 }
 
 local DonationSystemUI = {}
@@ -94,18 +95,35 @@ local function applyCashFeatureVisibility(refs: Refs, cashEnabled: boolean)
 	setGuiVisible(cashStatsRoot, cashEnabled)
 end
 
-local function setDisplayText(target: GuiObject?, text: string)
+-- The display setDisplayText actually paints. countTo and the transparency tweens resolve through
+-- the same helper so a rolling number and its fade can never land on two different labels.
+local function textDisplayOf(target: GuiObject?): GuiObject?
 	if not target then
-		return
+		return nil
 	end
 	if target:IsA("TextLabel") or target:IsA("TextButton") then
-		target.Text = text
-		return
+		return target
 	end
 	local childLabel = target:FindFirstChildWhichIsA("TextLabel", true)
 		or target:FindFirstChildWhichIsA("TextButton", true)
 	if childLabel and (childLabel:IsA("TextLabel") or childLabel:IsA("TextButton")) then
-		childLabel.Text = text
+		return childLabel :: GuiObject
+	end
+	return nil
+end
+
+-- A button's centred icon: what pop/spin/wiggle target when the button itself sits in a layout.
+local function iconOf(button: GuiObject?): GuiObject?
+	if not button then
+		return nil
+	end
+	return button:FindFirstChildWhichIsA("ImageLabel") or button:FindFirstChildWhichIsA("ImageButton")
+end
+
+local function setDisplayText(target: GuiObject?, text: string)
+	local display = textDisplayOf(target)
+	if display then
+		(display :: any).Text = text
 	end
 end
 
@@ -171,9 +189,7 @@ end
 
 local ACTIVE_GRADIENT = "UIGradient-Gold"
 local NORMAL_GRADIENT = "UIGradient-Normal"
-local TAB_SWITCH_TIME = 0.14
-local TAB_ACTIVE_SCALE = 1
-local TAB_INACTIVE_SCALE = 0.96
+local TAB_INACTIVE_FADE = 0.3
 local SAFE_EMOJIS = {
 	"😀",
 	"😃",
@@ -268,6 +284,11 @@ local SAFE_EMOJIS = {
 	"📌",
 	"✅",
 }
+
+-- countTo hands the format function a mid-roll float; a rank below 1 is "no rank yet".
+local function rankDigits(value: number): string
+	return DonationAmountFormat.formatRank(if value >= 1 then math.floor(value) else nil)
+end
 
 local function formatRobux(value: number): string
 	local s = tostring(math.floor(value))
@@ -371,25 +392,21 @@ local function animateSlidingPill(backgroundPill: GuiObject, selectedButton: Tex
 	
 	-- Set anchor point immediately, animate position with spring smooth
 	backgroundPill.AnchorPoint = targetAnchorPoint
-	local tween = TweenService:Create(
-		backgroundPill,
-		TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-		{ Position = targetPosition }
-	)
-	tween:Play()
-end
-
-local function getOrCreateUIScale(frame: GuiObject, name: string): UIScale
-	local existing = frame:FindFirstChild(name)
-	if existing and existing:IsA("UIScale") then
-		return existing
+	-- Position is layout-safe here only because the pill is an absolutely-positioned overlay in
+	-- the selector, a sibling of the tab-button container. If a layout ever owns it, the layout
+	-- wins over Position anyway, so snap and skip the tween rather than fight it (ADR 0011).
+	local pillParent = backgroundPill.Parent
+	if pillParent and pillParent:FindFirstChildWhichIsA("UIGridStyleLayout") then
+		backgroundPill.Position = targetPosition
+		return
 	end
-
-	local scale = Instance.new("UIScale")
-	scale.Name = name
-	scale.Scale = 1
-	scale.Parent = frame
-	return scale
+	UIMotion.tween(
+		backgroundPill,
+		0.5,
+		{ Position = targetPosition },
+		Enum.EasingStyle.Quint,
+		Enum.EasingDirection.Out
+	)
 end
 
 local function popOpenFromTopCenter(anim: AnimationHelper.AnimationHelper, panel: GuiObject)
@@ -480,6 +497,13 @@ function DonationSystemUI.new(refs: Refs): DonationSystemUI
 	self._emojiPicker = nil :: GuiObject?
 	self._emojiConnections = {} :: { RBXScriptConnection }
 	self._cashDonationEnabled = isCashDonationEnabled()
+	self._motionConnections = {} :: { RBXScriptConnection }
+	-- Designed transparencies, captured once per instance so a re-open mid-fade cannot bake an
+	-- intermediate value in as "designed". Weak keys: stat label refs are re-resolved at runtime.
+	self._fadeBases = (setmetatable({}, { __mode = "k" }) :: any) :: { [GuiObject]: number }
+	self._shownStats = {} :: { [string]: { value: number, display: GuiObject? } }
+	self._shownTab = nil :: string?
+	self._ctaPulseStop = nil :: (() -> ())?
 
 	refs.root.Enabled = false
 	refs.mainWrapper.Visible = false
@@ -528,6 +552,7 @@ function DonationSystemUI.new(refs: Refs): DonationSystemUI
 		self:_setTab("saweria")
 	end)
 	refs.cancelButton.Activated:Connect(function()
+		UIMotion.pop(iconOf(refs.cancelButton))
 		self:_hideMessageModal(true)
 	end)
 	refs.continueButton.Activated:Connect(function()
@@ -535,6 +560,7 @@ function DonationSystemUI.new(refs: Refs): DonationSystemUI
 	end)
 	if refs.closeButton then
 		refs.closeButton.Activated:Connect(function()
+			UIMotion.pop(iconOf(refs.closeButton))
 			self:hide()
 			if self._closeCallback then
 				self._closeCallback()
@@ -550,6 +576,14 @@ function DonationSystemUI.new(refs: Refs): DonationSystemUI
 		self:_setupEmojiPicker(refs.addEmojiButton)
 	end
 
+	self:_bindButtonMotion(refs.robuxTabButton)
+	self:_bindButtonMotion(refs.saweriaTabButton)
+	self:_bindButtonMotion(refs.cancelButton)
+	self:_bindButtonMotion(refs.continueButton)
+	self:_bindButtonMotion(refs.closeButton)
+	self:_bindButtonMotion(refs.copyLinkButton)
+	self:_bindButtonMotion(refs.addEmojiButton)
+
 	applyCashFeatureVisibility(refs, self._cashDonationEnabled)
 	if not self._cashDonationEnabled then
 		self._activeTab = "robux"
@@ -557,6 +591,116 @@ function DonationSystemUI.new(refs: Refs): DonationSystemUI
 
 	self:_setTab(self._activeTab)
 	return self
+end
+
+-- ============================================================
+-- Motion (ADR 0011 vocabulary only)
+-- ============================================================
+
+-- Press squash + hover lift. UIMotion refuses unsafe targets (laid-out buttons, CanvasGroup
+-- descendants) and hands back an empty list, so these calls cost nothing where scale is illegal.
+function DonationSystemUI:_bindButtonMotion(button: GuiObject?, into: { RBXScriptConnection }?)
+	if button == nil then
+		return
+	end
+	local sink = into or self._motionConnections
+	for _, connection in ipairs(UIMotion.bindPress(button)) do
+		table.insert(sink, connection)
+	end
+	for _, connection in ipairs(UIMotion.bindHover(button)) do
+		table.insert(sink, connection)
+	end
+end
+
+function DonationSystemUI:_fadeElements(elements: { GuiObject })
+	if #elements == 0 then
+		return
+	end
+	local pending: { GuiObject } = {}
+	for _, element in ipairs(elements) do
+		if self._fadeBases[element] == nil then
+			table.insert(pending, element)
+		end
+	end
+	if #pending > 0 then
+		UIMotion.captureBases(pending, self._fadeBases)
+	end
+	UIMotion.fadeIn(elements, self._fadeBases)
+end
+
+-- Fades a revealed section's text/images back in. Capped: a long section must not take seconds.
+function DonationSystemUI:_fadeSection(root: GuiObject, limit: number?)
+	local elements: { GuiObject } = {}
+	local cap = limit or 40
+	for _, descendant in ipairs(root:GetDescendants()) do
+		if
+			descendant:IsA("ImageLabel")
+			or descendant:IsA("ImageButton")
+			or descendant:IsA("TextLabel")
+			or descendant:IsA("TextButton")
+			or descendant:IsA("TextBox")
+		then
+			table.insert(elements, descendant :: GuiObject)
+			if #elements >= cap then
+				break
+			end
+		end
+	end
+	self:_fadeElements(elements)
+end
+
+-- The incoming page slides in from the side of travel (UIMotion slides through the page's own
+-- design padding, offset from its designed values) while its content fades in.
+function DonationSystemUI:_revealPage(page: GuiObject, direction: number)
+	UIMotion.slideIn(page, direction)
+	self:_fadeSection(page)
+end
+
+-- Selection highlight: the gradient swap stays, but the inactive tab's label eases out instead
+-- of snapping. The designed transparency is the active target, so a hidden label stays hidden.
+function DonationSystemUI:_paintTabButton(button: TextButton, active: boolean)
+	setTabButtonActive(button, active)
+	local display: GuiObject = button
+	if button.Text == "" then
+		local label = button:FindFirstChildWhichIsA("TextLabel", true)
+		if label then
+			display = label :: GuiObject
+		end
+	end
+	local base = self._fadeBases[display]
+	if base == nil then
+		base = (display :: any).TextTransparency
+		self._fadeBases[display] = base
+	end
+	local target = if active then base else math.min(1, base + TAB_INACTIVE_FADE)
+	if math.abs((display :: any).TextTransparency - target) < 0.001 then
+		return
+	end
+	UIMotion.tween(display, 0.18, { TextTransparency = target })
+end
+
+-- One breathing loop per panel, on the confirm CTA, started only once the modal has finished
+-- presenting (so `pulse` reads the resting value, not a mid-present one) and stopped on close.
+function DonationSystemUI:_startCtaPulse()
+	self:_stopCtaPulse()
+	local button = self._refs.continueButton
+	if not button.Parent then
+		return
+	end
+	local stroke = button:FindFirstChildWhichIsA("UIStroke")
+	if stroke then
+		self._ctaPulseStop = UIMotion.pulse(stroke, "Transparency", math.min(1, stroke.Transparency + 0.55), 1.4)
+	elseif button.BackgroundTransparency < 1 then
+		self._ctaPulseStop =
+			UIMotion.pulse(button, "BackgroundTransparency", math.min(0.9, button.BackgroundTransparency + 0.16), 1.6)
+	end
+end
+
+function DonationSystemUI:_stopCtaPulse()
+	if self._ctaPulseStop then
+		self._ctaPulseStop()
+		self._ctaPulseStop = nil
+	end
 end
 
 -- Show 3D avatar in donation panel donor profile.
@@ -644,9 +788,17 @@ function DonationSystemUI:_setTab(tabName: string)
 	inactiveFrame.Visible = false
 	activeFrame.Visible = true
 
-	setTabButtonActive(self._refs.robuxTabButton, isRobux)
-	setTabButtonActive(self._refs.saweriaTabButton, not isRobux)
-	
+	-- Slide only on a real switch inside an open panel; opening plays the panel pop instead, and
+	-- show() re-asserts the current tab on every open (unchanged repaint must not re-animate).
+	local previousTab = self._shownTab
+	self._shownTab = tabName
+	if previousTab ~= nil and previousTab ~= tabName and self._refs.mainWrapper.Visible then
+		self:_revealPage(activeFrame, if isRobux then -1 else 1)
+	end
+
+	self:_paintTabButton(self._refs.robuxTabButton, isRobux)
+	self:_paintTabButton(self._refs.saweriaTabButton, not isRobux)
+
 	-- Animate sliding pill to selected tab
 	if self._refs.backgroundPill then
 		local selectedButton = if isRobux then self._refs.robuxTabButton else self._refs.saweriaTabButton
@@ -660,8 +812,12 @@ end
 function DonationSystemUI:_showMessageModal(product: Product)
 	self._selectedProduct = product
 	self._refs.messageBox.Text = ""
-	if self._refs.continueText then
-		self._refs.continueText.Text = ("Continue donate - %s Robux"):format(formatRobux(product.price))
+	local continueText = self._refs.continueText
+	if continueText then
+		-- Fresh user action every time the modal opens, so the price is free to roll up.
+		UIMotion.countTo(continueText, 0, product.price, nil, function(value: number): string
+			return ("Continue donate - %s Robux"):format(formatRobux(value))
+		end)
 	end
 
 	if self._emojiPicker then
@@ -671,6 +827,7 @@ function DonationSystemUI:_showMessageModal(product: Product)
 	local function showInputModal()
 		self._anim:presentCenterPanel(self._refs.inputModal, function()
 			self._refs.messageBox:CaptureFocus()
+			self:_startCtaPulse()
 		end)
 	end
 
@@ -687,6 +844,7 @@ end
 
 function DonationSystemUI:_hideMessageModal(restoreMain: boolean?)
 	self._selectedProduct = nil
+	self:_stopCtaPulse()
 	if self._emojiPicker then
 		self._emojiPicker.Visible = false
 	end
@@ -705,8 +863,11 @@ end
 function DonationSystemUI:_confirmDonation()
 	local product = self._selectedProduct
 	if not product then
+		-- Nothing selected: the press is refused, so say so instead of dying silently.
+		UIMotion.wiggle(self._refs.continueButton, 6)
 		return
 	end
+	UIMotion.pop(iconOf(self._refs.continueButton))
 
 	local message = trim(self._refs.messageBox.Text)
 	message = truncateUtf8(message, Config.Donation.ROBUX_MESSAGE_MAX_LENGTH)
@@ -720,6 +881,7 @@ end
 function DonationSystemUI:_handleCopySaweriaLink()
 	local providerName = getExternalProviderName()
 	local link = getExternalProviderLink()
+	UIMotion.spin(iconOf(self._refs.copyLinkButton))
 	if self._refs.saweriaLink then
 		focusAndSelectLink(self._refs.saweriaLink, link)
 	end
@@ -758,6 +920,11 @@ function DonationSystemUI:populateProducts(products: { Product })
 	local configuredProducts = table.clone(products)
 	local hasProducts = #configuredProducts > 0 and template ~= nil
 
+	-- Freshly cloned cards carry the template's designed transparencies, so bases are correct
+	-- every time and the table is replaced wholesale (no reference kept to a destroyed card).
+	local cards: { GuiObject } = {}
+	local cardFadeTargets: { GuiObject } = {}
+
 	if hasProducts and template then
 		for index, product in ipairs(configuredProducts) do
 			local card = template:Clone()
@@ -766,6 +933,13 @@ function DonationSystemUI:populateProducts(products: { Product })
 			card.LayoutOrder = template.LayoutOrder + index
 			card.Visible = true
 			card.Parent = refs.robuxScroll
+
+			table.insert(cards, card)
+			for _, descendant in ipairs(card:GetDescendants()) do
+				if descendant:IsA("GuiObject") then
+					table.insert(cardFadeTargets, descendant)
+				end
+			end
 
 			local productName = findTextLabel(card, "ProductName")
 			if productName then
@@ -778,25 +952,40 @@ function DonationSystemUI:populateProducts(products: { Product })
 
 			local donationButton = card:FindFirstChild("DonationButton", true)
 			if donationButton and donationButton:IsA("TextButton") then
+				local cardButton = donationButton :: TextButton
 				table.insert(
 					self._productConnections,
-					donationButton.Activated:Connect(function()
+					cardButton.Activated:Connect(function()
+						UIMotion.pop(iconOf(cardButton))
 						self:_showMessageModal(product)
 					end)
 				)
+				self:_bindButtonMotion(cardButton, self._productConnections)
 			else
 				table.insert(
 					self._productConnections,
 					card.Activated:Connect(function()
+						UIMotion.pop(iconOf(card))
 						self:_showMessageModal(product)
 					end)
 				)
+				self:_bindButtonMotion(card, self._productConnections)
 			end
 		end
 	end
 
+	if #cards > 0 then
+		UIMotion.stagger(cards, UIMotion.captureBases(cardFadeTargets), 0.035, 10)
+	end
+
 	if notFoundCard then
-		notFoundCard.Visible = not hasProducts
+		local showNotFound = not hasProducts
+		if notFoundCard.Visible ~= showNotFound then
+			notFoundCard.Visible = showNotFound
+			if showNotFound then
+				self:_fadeSection(notFoundCard, 12)
+			end
+		end
 	end
 end
 
@@ -851,9 +1040,13 @@ function DonationSystemUI:_setupEmojiPicker(addEmojiButton: TextButton)
 		end
 		button.Parent = emojiList
 
+		-- ~90 emoji cells: a pop on the picked glyph costs one tween, while bindPress/bindHover
+		-- here would mean hundreds of live connections (one of them on UserInputService) for a
+		-- grid child that UIMotion cannot scale anyway.
 		table.insert(
 			self._emojiConnections,
 			button.MouseButton1Click:Connect(function()
+				UIMotion.pop(if label then label :: GuiObject else button)
 				self:_appendMessageEmoji(emoji)
 				picker.Visible = false
 			end)
@@ -861,12 +1054,15 @@ function DonationSystemUI:_setupEmojiPicker(addEmojiButton: TextButton)
 	end
 
 	if self._refs.emojiCloseButton then
+		local closeButton = self._refs.emojiCloseButton
 		table.insert(
 			self._emojiConnections,
-			self._refs.emojiCloseButton.Activated:Connect(function()
+			closeButton.Activated:Connect(function()
+				UIMotion.pop(iconOf(closeButton))
 				picker.Visible = false
 			end)
 		)
+		self:_bindButtonMotion(closeButton, self._emojiConnections)
 	end
 
 	table.insert(
@@ -909,11 +1105,20 @@ end
 function DonationSystemUI:_appendMessageEmoji(emoji: string)
 	local current = trim(self._refs.messageBox.Text)
 	local nextText = if current == "" then emoji else current .. " " .. emoji
-	self._refs.messageBox.Text = truncateUtf8(nextText, Config.Donation.ROBUX_MESSAGE_MAX_LENGTH)
+	local accepted = truncateUtf8(nextText, Config.Donation.ROBUX_MESSAGE_MAX_LENGTH)
+	if accepted ~= nextText then
+		-- Message already at the limit: the emoji got cut, so refuse it visibly.
+		UIMotion.wiggle(self._refs.messageBox, 5)
+	end
+	self._refs.messageBox.Text = accepted
 	self._refs.messageBox.CursorPosition = -1
 end
 
 function DonationSystemUI:setDonationResult(ok: boolean, message: string?)
+	if not ok and self._refs.mainWrapper.Visible then
+		-- Rotation never touches layout, so the whole panel can shake safely (ADR 0011).
+		UIMotion.wiggle(self._refs.mainWrapper, 2.5)
+	end
 	GeneralNotificationCenterService.show({
 		title = if ok then "Donation" else "Donation",
 		description = message or (if ok then "Thank you for the support." else "Donation could not be started."),
@@ -939,19 +1144,55 @@ function DonationSystemUI:applyDonorProfile(profile: DonorProfilePayload?)
 	if displayName == "" then
 		displayName = tostring(data.username or "")
 	end
-	if refs.displayNameLabel then
+	if refs.displayNameLabel and refs.displayNameLabel.Text ~= displayName then
 		refs.displayNameLabel.Text = displayName
 	end
 	if refs.usernameLabel then
 		local username = tostring(data.username or "")
-		refs.usernameLabel.Text = if username ~= "" then "@" .. username else ""
+		local usernameText = if username ~= "" then "@" .. username else ""
+		if refs.usernameLabel.Text ~= usernameText then
+			refs.usernameLabel.Text = usernameText
+		end
 	end
-	setDisplayText(refs.robuxRankLabel, DonationAmountFormat.formatRank(data.robuxRank))
-	setDisplayText(refs.robuxValueLabel, DonationAmountFormat.formatCompact(data.robuxTotal))
+	self:_paintStat(refs.robuxRankLabel, "robuxRank", tonumber(data.robuxRank) or -1, rankDigits)
+	self:_paintStat(
+		refs.robuxValueLabel,
+		"robuxTotal",
+		tonumber(data.robuxTotal) or 0,
+		DonationAmountFormat.formatCompact
+	)
 	if self._cashDonationEnabled then
-		setDisplayText(refs.saweriaRankLabel, DonationAmountFormat.formatRank(data.cashRank))
-		setDisplayText(refs.saweriaValueLabel, DonationAmountFormat.formatCompact(data.cashTotal))
+		self:_paintStat(refs.saweriaRankLabel, "cashRank", tonumber(data.cashRank) or -1, rankDigits)
+		self:_paintStat(
+			refs.saweriaValueLabel,
+			"cashTotal",
+			tonumber(data.cashTotal) or 0,
+			DonationAmountFormat.formatCompact
+		)
 	end
+end
+
+-- The server echoes the whole leaderboard payload on every push, so this runs dozens of times a
+-- minute with identical numbers (the 2026-09-02 repaint storm). Only a real change is painted,
+-- and only an open panel rolls the digits — a closed one just takes the value.
+function DonationSystemUI:_paintStat(target: GuiObject?, key: string, value: number, format: (number) -> string)
+	local display = textDisplayOf(target)
+	local previous = self._shownStats[key]
+	if previous ~= nil and previous.value == value and previous.display == display then
+		return
+	end
+	if display == nil then
+		return
+	end
+	local rollFrom = if previous ~= nil and previous.display == display and previous.value >= 0 and value >= 0
+		then previous.value
+		else nil
+	self._shownStats[key] = { value = value, display = display }
+	if rollFrom ~= nil and self._refs.mainWrapper.Visible then
+		UIMotion.countTo(display :: any, rollFrom, value, nil, format)
+		return
+	end
+	(display :: any).Text = format(value)
 end
 
 function DonationSystemUI:bindProfileRefresh(fetchProfile: () -> DonorProfilePayload?)
@@ -1004,6 +1245,7 @@ function DonationSystemUI:show()
 		enableZoom = true
 	})
 	DonationSystemGuiRefs.refreshStatLabelRefs(self._refs)
+	self:_playEntrance()
 	if self._profileRefreshHandler then
 		self:refreshDonorProfile(self._profileRefreshHandler)
 	end
@@ -1016,7 +1258,29 @@ function DonationSystemUI:show()
 	-- on first boot), fallback thumbnail + seamless upgrade subscribe.
 	if self._refs.avatarViewport then
 		self:_showDonationAvatar(Players.LocalPlayer.UserId)
+		-- No-op unless the viewport is centred and outside any layout/CanvasGroup (canScale).
+		UIMotion.popIn(self._refs.avatarViewport, 0.82)
 	end
+end
+
+-- Panel open: donor identity and stat chips fade back in behind the AnimationHelper pop.
+function DonationSystemUI:_playEntrance()
+	local refs = self._refs
+	local elements: { GuiObject } = {}
+	local function add(candidate: GuiObject?)
+		if candidate then
+			table.insert(elements, candidate)
+		end
+	end
+	add(refs.displayNameLabel)
+	add(refs.usernameLabel)
+	add(refs.robuxRankLabel)
+	add(refs.robuxValueLabel)
+	if self._cashDonationEnabled then
+		add(refs.saweriaRankLabel)
+		add(refs.saweriaValueLabel)
+	end
+	self:_fadeElements(elements)
 end
 
 function DonationSystemUI:hide()
@@ -1029,6 +1293,7 @@ function DonationSystemUI:hide()
 
 	self._isMainVisible = false
 	self._isClosingMain = true
+	self:_stopCtaPulse()
 	if self._refs.inputModal.Visible then
 		self._refs.inputModal.Visible = false
 	end
@@ -1060,6 +1325,7 @@ function DonationSystemUI:closeAll()
 	self._isMainVisible = false
 	self._isClosingMain = false
 	self._selectedProduct = nil
+	self:_stopCtaPulse()
 	self._refs.mainWrapper.Visible = false
 	self._refs.inputModal.Visible = false
 	self._refs.messageBox.Text = ""
@@ -1068,6 +1334,21 @@ function DonationSystemUI:closeAll()
 	end
 	self._refs.root.Enabled = false
 	self:_stopRotatingBackgrounds()
+end
+
+-- Single teardown for everything this panel owns. Nothing calls it today (the controller keeps
+-- one UI for the session), but every motion connection and the CTA loop land here rather than
+-- leaking if a caller ever does.
+function DonationSystemUI:destroy()
+	self:closeAll()
+	for _, connections in
+		ipairs({ self._motionConnections, self._productConnections, self._emojiConnections } :: { { RBXScriptConnection } })
+	do
+		for _, connection in ipairs(connections) do
+			connection:Disconnect()
+		end
+		table.clear(connections)
+	end
 end
 
 return DonationSystemUI

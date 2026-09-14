@@ -21,6 +21,7 @@ local ClientThumbnailCache = require(script.Parent.Parent.Utils.ClientThumbnailC
 local WorldEffectDispatch = require(script.Parent.Parent.Utils.WorldEffectDispatch)
 local DonationVfxClientGate = require(script.Parent.Parent.Utils.DonationVfxClientGate)
 local GroupMotion = require(script.Parent.Parent.Utils.GroupMotion)
+local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 local NotificationCenterGui = require(script.Parent.Parent.Utils.NotificationCenterGui)
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local OverheadController = require(script.Parent.OverheadController)
@@ -780,13 +781,30 @@ local function setVisible(obj: GuiObject?, v: boolean)
 		obj.Visible = v
 	end
 end
--- Create tween, play, and return — shorthand
+-- Create tween, play, and return — shorthand.
+-- ADR 0011: under reduced motion the goal is applied at once and the tween is handed back
+-- unplayed. Every caller of these two is a flourish; the toast's countdown bar is a real timer
+-- and goes straight to TweenService so it keeps depleting.
 local function tween(instance: Instance, info: TweenInfo, goal: { [string]: any }): Tween
 	local t = TweenService:Create(instance, info, goal)
+	if UIMotion.reduced() then
+		for property, value in pairs(goal) do
+			(instance :: any)[property] = value
+		end
+		return t
+	end
 	t:Play()
 	return t
 end
 local function tweenWait(instance: Instance, info: TweenInfo, goal: { [string]: any })
+	-- Snap and fall straight through the wait, so a sequence built on Completed:Wait keeps
+	-- running in order instead of blocking on a tween that was never played.
+	if UIMotion.reduced() then
+		for property, value in pairs(goal) do
+			(instance :: any)[property] = value
+		end
+		return
+	end
 	tween(instance, info, goal).Completed:Wait()
 end
 
@@ -1825,6 +1843,17 @@ local function init(_deps: {}?)
 	-- Stage-2 display channel: fired when the notification actually starts
 	-- rendering on screen. Optional — nil on older servers; reports are skipped.
 	local notifDisplayRemote = remotes:WaitForChild(Config.Donation.REMOTE_NOTIF_DISPLAY or "DonationNotifDisplay", 10) :: RemoteEvent?
+	-- Highlight breath (ADR 0011). One toast is on screen at a time, so a single stop
+	-- function is enough; every path that takes the toast down calls stopHighlight.
+	local stopHighlightPulse: (() -> ())? = nil
+	local function stopHighlight()
+		local stop = stopHighlightPulse
+		if not stop then
+			return
+		end
+		stopHighlightPulse = nil
+		stop()
+	end
 	-- BACKGROUND SPIN LOOP
 	-- Called after panel finish entrance animation.
 	-- Loop runs until token changes (when exit is called).
@@ -1836,11 +1865,24 @@ local function init(_deps: {}?)
 		-- Wrapper already visible; fade in bg separately
 		bg.Rotation = 0
 		bg.ImageTransparency = 1
-		-- Fade in background
-		tween(bg, TweenInfo.new(BG_FADE_IN_DUR, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-			ImageTransparency = 0.9,
-		})
-		-- Spin loop - setiap iterasi 360 deg linear
+		-- Fade in background (UIMotion channel — snaps under reduced motion)
+		UIMotion.tween(bg, BG_FADE_IN_DUR, { ImageTransparency = 0.9 }, Enum.EasingStyle.Quad)
+		-- ...then breathe under the card while the toast sits there: 0.9 -> 0.78 on a slow
+		-- sine. Same ImageTransparency channel as the fade, so it starts only once the fade
+		-- is done; UIMotion.pulse skips it entirely under reduced motion.
+		task.delay(BG_FADE_IN_DUR, function()
+			if animToken ~= token or not bg.Parent then
+				return
+			end
+			stopHighlight()
+			stopHighlightPulse = UIMotion.pulse(bg, "ImageTransparency", 0.78, 1.6)
+		end)
+		-- Spin loop - setiap iterasi 360 deg linear.
+		-- ADR 0011: under reduced motion the background never spins — it stays at the rest
+		-- rotation set above, while the fade (a UIMotion channel) still lands it at 0.9.
+		if UIMotion.reduced() then
+			return
+		end
 		task.spawn(function()
 			local currentRotation = 0
 			while animToken == token do
@@ -1894,13 +1936,12 @@ local function init(_deps: {}?)
 					TweenInfo.new(STAGGER_FADE_DUR, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
 					{ Position = origPos }
 				)
-				-- Fade in opacity (separate so tweens can run together)
+				-- Fade in opacity (separate so tweens can run together). Routed through
+				-- UIMotion so it snaps under reduced motion; the wait keeps the reveal
+				-- order and total timing of the inline position tween above unchanged.
 				if isTextLabel then
-					tweenWait(
-						elem :: TextLabel,
-						TweenInfo.new(STAGGER_FADE_DUR, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
-						{ TextTransparency = 0 }
-					)
+					UIMotion.tween(elem, STAGGER_FADE_DUR, { TextTransparency = 0 }, Enum.EasingStyle.Quart)
+					task.wait(STAGGER_FADE_DUR)
 				end
 			end
 			revealElement(refs.senderDisplayName :: GuiObject?, STAGGER_DELAY_SENDER)
@@ -1998,6 +2039,12 @@ local function init(_deps: {}?)
 		-- slide + GroupTransparency carry the entrance/exit instead.
 		refs.panelScale.Scale = GroupMotion.scaleTarget(refs.panel, ENTER_SCALE_FROM)
 		refs.panel.GroupTransparency = 1
+		-- The avatar fades in with the content stagger; start it hidden here, while the
+		-- whole panel is still transparent, so nothing blinks. populateGui puts it back
+		-- to 0 for the next notification.
+		if refs.senderProfpic then
+			refs.senderProfpic.ImageTransparency = 1
+		end
 		refs.panel.Visible = true
 		refs.donationWrapper.Visible = true
 		setVisible(refs.backgroundWrapper, true) -- wrapper visible but bg still transparent
@@ -2032,6 +2079,27 @@ local function init(_deps: {}?)
 		-- Panel settled; start background effects and content reveal
 		startBackgroundSpin(refs, token)
 		staggerReveal(refs, token)
+		-- Micro-life on arrival (ADR 0011). Every one of these is layout-neutral: the
+		-- panel is a CanvasGroup, so nothing here scales or moves it (ADR 0005).
+		if refs.senderProfpic then
+			UIMotion.tween(refs.senderProfpic, STAGGER_FADE_DUR, { ImageTransparency = 0 }, Enum.EasingStyle.Quart)
+		end
+		if refs.roleBadge and refs.roleBadge.Visible then
+			-- Rotation never affects layout, so the badge can shake inside the group.
+			UIMotion.wiggle(refs.roleBadge, 10)
+		end
+		-- Roll the amount up from zero. Skipped when the label auto-sizes: its width would
+		-- change every frame and re-lay out (and re-rasterise) the panel. V2 has already
+		-- fitted TextSize against the final string by now, so the roll cannot resize text.
+		local rollLabel = refs.donationValue
+		if rollLabel and rollLabel.AutomaticSize == Enum.AutomaticSize.None then
+			local isRobuxAmount = payload.source == "robux"
+			UIMotion.countTo(rollLabel, 0, tonumber(payload.amount) or 0, 0.55, function(value: number): string
+				return if isRobuxAmount
+					then DonationAmountFormat.formatGrouped(value)
+					else DonationAmountFormat.formatCash(value)
+			end)
+		end
 		-- CountDownBar: tween width 100% -> 0% for display duration (per-tier).
 		local notifDuration = resolveNotifDuration(payload)
 		-- Drain faster when more notifs are waiting (no drops).
@@ -2048,24 +2116,26 @@ local function init(_deps: {}?)
 		end
 		if refs.countDownBar then
 			refs.countDownBar.Size = UDim2.new(1, 0, refs.countDownBar.Size.Y.Scale, refs.countDownBar.Size.Y.Offset)
-			tween(
+			-- Deliberately raw TweenService and not the local `tween`: the bar is the toast's
+			-- timer, not a flourish, so it has to keep depleting under reduced motion, where
+			-- `tween` would empty it in one frame.
+			TweenService:Create(
 				refs.countDownBar,
 				TweenInfo.new(notifDuration, Enum.EasingStyle.Linear, Enum.EasingDirection.Out),
 				{ Size = UDim2.new(0, 0, refs.countDownBar.Size.Y.Scale, refs.countDownBar.Size.Y.Offset) }
-			)
+			):Play()
 		end
 		-- Wait for display duration per tier.
 		task.wait(notifDuration)
 		-- EXIT SEQUENCE
 		-- Stop all loops by invalidating token
 		animToken += 1
+		-- Stop the highlight breath before the fade: both drive ImageTransparency, and a
+		-- repeating tween left running would fight the fade-out.
+		stopHighlight()
 		-- Fade out background first
 		if refs.rotatingBackground and refs.rotatingBackground.Parent then
-			tween(
-				refs.rotatingBackground,
-				TweenInfo.new(BG_FADE_OUT_DUR, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-				{ ImageTransparency = 1 }
-			)
+			UIMotion.tween(refs.rotatingBackground, BG_FADE_OUT_DUR, { ImageTransparency = 1 }, Enum.EasingStyle.Quad)
 		end
 		-- Anticipation: slight compress first (like a "breath" before jump)
 		tweenWait(
@@ -2120,6 +2190,7 @@ local function init(_deps: {}?)
 				showingNotifPayload = nil
 				syncDonationBroadcastLayout()
 				animToken += 1 -- invalidate all loop
+				stopHighlight() -- the toast died mid-show; the breath must not outlive it
 				local refs = guiRefs
 				if refs then
 					pcall(setDonationHudHidden, playerGui, false)

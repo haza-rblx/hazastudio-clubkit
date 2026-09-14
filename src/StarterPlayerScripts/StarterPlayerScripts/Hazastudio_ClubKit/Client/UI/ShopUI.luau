@@ -2,12 +2,11 @@
 -- Client/UI/ShopUI.lua
 -- Display only. No remotes, no business logic.
 -- Handles: show/hide modal, benefit carousel (fade), notification.
-local TweenService = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local ShopDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.ShopDomain)
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
-local PressFeedback = require(script.Parent.Parent.Utils.PressFeedback)
+local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 -- Mapping tier -> GUI element names
 local TIER_CARD: { [string]: string } = {
 }
@@ -128,6 +127,34 @@ local function clearIndicatorGuiObjects(wrapper: Instance)
 		end
 	end
 end
+local function fadeProperty(object: GuiObject): string?
+	if object:IsA("ImageLabel") or object:IsA("ImageButton") then
+		return "ImageTransparency"
+	elseif object:IsA("TextLabel") or object:IsA("TextButton") then
+		return "TextTransparency"
+	end
+	return nil
+end
+-- Dot appearance: colour eases, anything the indicator's UIListLayout measures is set outright
+-- (ADR 0005 / ADR 0011 — never tween Size or Position of a laid-out child).
+local function applyDotAppearance(dot: GuiObject, template: GuiObject)
+	if dot.Size ~= template.Size then
+		dot.Size = template.Size
+	end
+	UIMotion.tween(dot, 0.18, {
+		BackgroundColor3 = template.BackgroundColor3,
+		BackgroundTransparency = template.BackgroundTransparency,
+	})
+	if dot:IsA("ImageLabel") and template:IsA("ImageLabel") then
+		if dot.Image ~= template.Image then
+			dot.Image = template.Image
+		end
+		UIMotion.tween(dot, 0.18, {
+			ImageColor3 = template.ImageColor3,
+			ImageTransparency = template.ImageTransparency,
+		})
+	end
+end
 type BenefitEntry = { icon: string, title: string, description: string }
 type TierRefs = {
 	card: Frame,
@@ -168,8 +195,15 @@ function ShopUI.new(gui: ScreenGui)
 	self._anim = AnimationHelper.new()
 	self._carouselEnabled = false
 	self._destroyed = false
+	self._connections = {} :: { RBXScriptConnection }
+	self._priceLabels = {} :: { { label: TextLabel, price: number } }
+	self._cardOrder = {} :: { GuiObject }
+	self._cardBases = {} :: { [GuiObject]: number }
+	self._notifFade = {} :: { [Instance]: { GuiObject } }
+	self._notifBases = {} :: { [Instance]: { [GuiObject]: number } }
 	self:_buildRefs()
 	self:_initPrices()
+	self:_captureMotionBases()
 	self:_initCarousels()
 	-- Hide all on init
 	self._mainWrapper.Visible = false
@@ -254,14 +288,55 @@ function ShopUI:_initPrices()
 			priceLabel.Text = tostring(entry.price)
 			priceLabel.Visible = true
 			hideLegacyPriceDuplicates(priceWrapper or piw, priceLabel)
+			-- Only whole prices roll on open: countTo's default format must land on the exact
+			-- same string the label already shows.
+			local price = tonumber(entry.price)
+			if price and price % 1 == 0 and tostring(entry.price) == tostring(math.floor(price)) then
+				table.insert(self._priceLabels, { label = priceLabel, price = price })
+			end
 		else
 			warn("[ShopUI] Price label not found for " .. tier .. " (" .. cardName .. ")")
 		end
 	end
 end
--- Rebuild indicator dots to match benefit count and active index
+-- Designed transparency of every card element, captured once before any fade touches them, so
+-- the open stagger and the carousel swap can fade back to the buyer's own values.
+function ShopUI:_captureMotionBases()
+	for _, tier in ipairs(Config.Membership.SHOP_TIERS or {}) do
+		local refs = self._tierRefs[tier]
+		if not refs or not refs.card then
+			continue
+		end
+		table.insert(self._cardOrder, refs.card)
+		local elements: { GuiObject } = { refs.card }
+		for _, desc in ipairs(refs.card:GetDescendants()) do
+			if desc:IsA("GuiObject") then
+				table.insert(elements, desc)
+			end
+		end
+		UIMotion.captureBases(elements, self._cardBases)
+	end
+end
+-- Rebuild indicator dots to match benefit count and active index. Same count = same dots, so the
+-- active one eases into its colour instead of the whole row being destroyed and re-cloned.
 function ShopUI:_buildIndicators(refs: TierRefs, count: number, activeIndex: number)
 	local wrapper = refs.indicatorWrapper
+	local dots: { GuiObject } = {}
+	for _, child in ipairs(wrapper:GetChildren()) do
+		if child:IsA("GuiObject") and string.sub(child.Name, 1, 4) == "Dot_" then
+			table.insert(dots, child)
+		end
+	end
+	if #dots == count then
+		for i, dot in ipairs(dots) do
+			local template = (i == activeIndex) and refs.indicatorActive or refs.indicatorDisable
+			if template then
+				applyDotAppearance(dot, template)
+			end
+		end
+		wrapper.Visible = count > 1
+		return
+	end
 	-- Remove previous dots
 	clearIndicatorGuiObjects(wrapper)
 	wrapper.Visible = count > 1
@@ -289,61 +364,20 @@ function ShopUI:_applySlide(tier: string, index: number)
 	if not benefit then
 		return
 	end
-	if refs.benefitIcon then
+	if refs.benefitIcon and refs.benefitIcon.Image ~= benefit.icon then
 		refs.benefitIcon.Image = benefit.icon
 	end
-	if refs.benefitTitle then
+	if refs.benefitTitle and refs.benefitTitle.Text ~= benefit.title then
 		refs.benefitTitle.Text = benefit.title
 	end
-	if refs.benefitDesc then
+	if refs.benefitDesc and refs.benefitDesc.Text ~= benefit.description then
 		refs.benefitDesc.Text = benefit.description
 	end
 	self:_buildIndicators(refs, #cs.benefits, index)
 	cs.index = index
 end
--- Fade out -> swap content -> fade in
-local function buildExitProps(obj: Instance, basePosition: UDim2, offsetScale: number): { [string]: any }?
-	local props: { [string]: any } = {
-		Position = basePosition + UDim2.fromScale(offsetScale, 0),
-	}
-	if obj:IsA("ImageLabel") then
-		props.ImageTransparency = 1
-	elseif obj:IsA("TextLabel") then
-		props.TextTransparency = 1
-		props.TextStrokeTransparency = 1
-	else
-		return nil
-	end
-	return props
-end
-local function buildEnterProps(obj: Instance, basePosition: UDim2, offsetScale: number): { [string]: any }?
-	local props: { [string]: any } = {
-		Position = basePosition + UDim2.fromScale(offsetScale, 0),
-	}
-	if obj:IsA("ImageLabel") then
-		props.ImageTransparency = 1
-	elseif obj:IsA("TextLabel") then
-		props.TextTransparency = 1
-		props.TextStrokeTransparency = 1
-	else
-		return nil
-	end
-	return props
-end
-local function buildRestProps(obj: Instance, basePosition: UDim2): { [string]: any }?
-	local props: { [string]: any } = {
-		Position = basePosition,
-	}
-	if obj:IsA("ImageLabel") then
-		props.ImageTransparency = 0
-	elseif obj:IsA("TextLabel") then
-		props.TextTransparency = 0
-		props.TextStrokeTransparency = 0
-	else
-		return nil
-	end
-	return props
-end
+-- Fade out -> swap content -> cascade back in. The icon/title/description live inside the card's
+-- layouts, so only transparency moves (ADR 0011); the old Position tweens fought the layout.
 function ShopUI:_fadeToSlide(tier: string, nextIndex: number)
 	local refs = self._tierRefs[tier]
 	local cs = self._carousels[tier]
@@ -353,66 +387,35 @@ function ShopUI:_fadeToSlide(tier: string, nextIndex: number)
 	cs.animating = true
 	local fadeTime = Config.Shop.CAROUSEL_FADE_TIME
 	local staggerTime = Config.Shop.CAROUSEL_STAGGER_TIME or 0.06
-	local slideOffset = Config.Shop.CAROUSEL_SLIDE_OFFSET or 0.03
-	local targets = {
-		refs.benefitIcon :: Instance?,
-		refs.benefitTitle :: Instance?,
-		refs.benefitDesc :: Instance?,
-	}
-	local basePositions: { [Instance]: UDim2 } = {}
-	for index, obj in ipairs(targets) do
-		if not obj then
-			continue
-		end
-		local guiObj = obj :: GuiObject
-		local basePosition = guiObj.Position
-		basePositions[obj] = basePosition
-		local directionOffset = slideOffset + ((index - 1) * 0.015)
-		local exitProps = buildExitProps(obj, basePosition, directionOffset)
-		if exitProps then
-			task.delay((index - 1) * staggerTime, function()
-				TweenService
-					:Create(obj, TweenInfo.new(fadeTime, Enum.EasingStyle.Quad, Enum.EasingDirection.In), exitProps)
-					:Play()
-			end)
+	-- Built one by one, not as an array literal: a missing icon would leave a nil hole that ipairs
+	-- stops on, silently dropping the title and description fades.
+	local targets: { GuiObject } = {}
+	local function addTarget(obj: GuiObject?)
+		if obj and self._cardBases[obj] ~= nil then
+			table.insert(targets, obj)
 		end
 	end
-	task.wait(fadeTime + ((#targets - 1) * staggerTime))
-	self:_applySlide(tier, nextIndex)
+	addTarget(refs.benefitIcon)
+	addTarget(refs.benefitTitle)
+	addTarget(refs.benefitDesc)
 	for _, obj in ipairs(targets) do
-		if not obj then
-			continue
-		end
-		local basePosition = basePositions[obj]
-		if not basePosition then
-			continue
-		end
-		local objIndex = table.find(targets, obj) or 1
-		local directionOffset = slideOffset + ((objIndex - 1) * 0.015)
-		local enterProps = buildEnterProps(obj, basePosition, -directionOffset)
-		if enterProps then
-			for prop, value in pairs(enterProps) do
-				(obj :: any)[prop] = value
-			end
+		local property = fadeProperty(obj)
+		if property then
+			UIMotion.tween(obj, fadeTime, { [property] = 1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 		end
 	end
-	for index, obj in ipairs(targets) do
-		if not obj then
-			continue
-		end
-		local basePosition = basePositions[obj]
-		if not basePosition then
-			continue
-		end
-		local restProps = buildRestProps(obj, basePosition)
-		if restProps then
-			task.delay((index - 1) * staggerTime, function()
-				TweenService
-					:Create(obj, TweenInfo.new(fadeTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), restProps)
-					:Play()
-			end)
+	task.wait(fadeTime)
+	self:_applySlide(tier, nextIndex)
+	-- Back to the designed value first: under reduced motion the fade-out above snapped to 1 and
+	-- stagger() is a no-op, so this is what keeps the new benefit visible.
+	for _, obj in ipairs(targets) do
+		local property = fadeProperty(obj)
+		if property then
+			UIMotion.tween(obj, 0, { [property] = self._cardBases[obj] })
 		end
 	end
+	UIMotion.stagger(targets, self._cardBases, staggerTime)
+	UIMotion.pop(refs.benefitIcon, 1.12)
 	task.wait(fadeTime + ((#targets - 1) * staggerTime))
 	cs.animating = false
 end
@@ -454,6 +457,11 @@ function ShopUI:show()
 		blurName = "ShopUIBlur",
 		enableZoom = true
 	})
+	-- Cards cascade in behind the panel's own open animation, then the prices roll up.
+	UIMotion.stagger(self._cardOrder, self._cardBases, 0.05)
+	for _, entry in ipairs(self._priceLabels) do
+		UIMotion.countTo(entry.label, 0, entry.price, 0.45)
+	end
 end
 function ShopUI:hide()
 	self._carouselEnabled = false
@@ -466,6 +474,20 @@ end
 function ShopUI:destroy()
 	self._destroyed = true
 	self._carouselEnabled = false
+	for _, connection in ipairs(self._connections) do
+		connection:Disconnect()
+	end
+	table.clear(self._connections)
+end
+-- Press squash + hover lift + click, all owned by self._connections so destroy() releases them.
+function ShopUI:_bindButton(button: GuiButton, callback: () -> ())
+	for _, connection in ipairs(UIMotion.bindPress(button)) do
+		table.insert(self._connections, connection)
+	end
+	for _, connection in ipairs(UIMotion.bindHover(button)) do
+		table.insert(self._connections, connection)
+	end
+	table.insert(self._connections, button.MouseButton1Click:Connect(callback))
 end
 function ShopUI:showNotification(tier: string, playerDisplayName: string)
 	local normalizedTier = normalizeTier(tier)
@@ -500,6 +522,24 @@ function ShopUI:showNotification(tier: string, playerDisplayName: string)
 	local content2 = notif:FindFirstChild("1-RequestContent") :: Frame?
 	if content2 then
 		self._anim:swingIn(content2, self._notifWrapper, nil)
+		local elements = self._notifFade[content2]
+		local bases = self._notifBases[content2]
+		if not (elements and bases) then
+			elements = {}
+			for _, desc in ipairs(content2:GetDescendants()) do
+				if desc:IsA("GuiObject") then
+					table.insert(elements, desc)
+				end
+			end
+			bases = UIMotion.captureBases(elements)
+			self._notifFade[content2] = elements
+			self._notifBases[content2] = bases
+		end
+		UIMotion.fadeIn(elements, bases, 0.08)
+		local icon = jumbotron and jumbotron:FindFirstChildWhichIsA("ImageLabel")
+		if icon then
+			UIMotion.pop(icon, 1.25)
+		end
 	end
 end
 function ShopUI:hideNotification()
@@ -540,8 +580,11 @@ function ShopUI:bindBuyButton(tier: string, callback: () -> ())
 	local inputArea = refs.card:FindFirstChild("InputArea") :: Frame?
 	local btn = inputArea and inputArea:FindFirstChild("Buy" .. suffix .. "Button") :: TextButton?
 	if btn then
-		PressFeedback.bindPressScale(btn)
-		btn.MouseButton1Click:Connect(callback)
+		local button = btn :: TextButton
+		self:_bindButton(button, function()
+			UIMotion.pop(UIMotion.scaleTargetOf(button), 1.18)
+			callback()
+		end)
 	end
 end
 function ShopUI:bindGiftButton(tier: string, callback: () -> ())
@@ -557,14 +600,16 @@ function ShopUI:bindGiftButton(tier: string, callback: () -> ())
 	local inputArea = refs.card:FindFirstChild("InputArea") :: Frame?
 	local btn = inputArea and inputArea:FindFirstChild("Gift" .. suffix .. "Button") :: TextButton?
 	if btn then
-		PressFeedback.bindPressScale(btn)
-		btn.MouseButton1Click:Connect(callback)
+		local button = btn :: TextButton
+		self:_bindButton(button, function()
+			UIMotion.pop(UIMotion.scaleTargetOf(button), 1.18)
+			callback()
+		end)
 	end
 end
 function ShopUI:bindClose(callback: () -> ())
 	if self._closeBtn then
-		PressFeedback.bindPressScale(self._closeBtn)
-		self._closeBtn.MouseButton1Click:Connect(callback)
+		self:_bindButton(self._closeBtn, callback)
 	end
 end
 -- Bind "Wow, thanks!" button on specific notification tier
@@ -579,8 +624,11 @@ function ShopUI:bindNotifClose(tier: string, callback: () -> ())
 	local inputArea = content and content:FindFirstChild("InputArea") :: Frame?
 	local btn = inputArea and inputArea:FindFirstChildWhichIsA("TextButton") :: TextButton?
 	if btn then
-		PressFeedback.bindPressScale(btn)
-		btn.MouseButton1Click:Connect(callback)
+		local button = btn :: TextButton
+		self:_bindButton(button, function()
+			UIMotion.pop(UIMotion.scaleTargetOf(button), 1.18)
+			callback()
+		end)
 	end
 end
 return ShopUI

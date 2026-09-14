@@ -12,6 +12,7 @@ local MobilePanelManager = require(script.Parent.Parent.Services.MobilePanelMana
 local HotbarGuiRefs = require(script.Parent.HotbarGuiRefs)
 local InventoryStore = require(script.Parent.Parent.State.InventoryStore)
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
+local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 
 type HotbarSlotViewModel = InventoryStore.HotbarSlotViewModel
 type Refs = HotbarGuiRefs.Refs
@@ -265,15 +266,26 @@ end
 
 local HOTBAR_TOOL_KEY_ATTRIBUTE = "InventoryToolKey"
 
-local function renderToolSlot(slot: RenderSlot, viewModel: HotbarSlotViewModel): ()
+-- `animate` is false for the drag lift and for every render made while a drag is live or
+-- settling: the reorder preview re-points each slot at a different tool every frame, so an
+-- unchanged repaint (equip echo, chrome show) must not read as a change either.
+local function renderToolSlot(slot: RenderSlot, viewModel: HotbarSlotViewModel, animate: boolean?): ()
 	local refs = slot.refs
+	local previous = slot.viewModel
 	slot.viewModel = viewModel
 	refs.button:SetAttribute(HOTBAR_TOOL_KEY_ATTRIBUTE, viewModel.toolKey)
 	refs.button.Visible = true
 	refs.button.LayoutOrder = slot.originalLayoutOrder
-	refs.button.BackgroundColor3 = if viewModel.isEquipped
+	local background = if viewModel.isEquipped
 		then Config.Hotbar.EQUIPPED_BACKGROUND_COLOR
 		else slot.originalBackgroundColor
+	local sameTool = previous ~= nil and previous.toolKey == viewModel.toolKey
+	if animate ~= true or not sameTool then
+		refs.button.BackgroundColor3 = background
+	elseif previous ~= nil and previous.isEquipped ~= viewModel.isEquipped then
+		-- Selected-slot highlight glides; a repaint that changes nothing leaves it alone.
+		UIMotion.tween(refs.button, 0.16, { BackgroundColor3 = background })
+	end
 	refs.button.BackgroundTransparency = slot.originalBackgroundTransparency
 	setButtonText(refs.button, viewModel.displayName)
 
@@ -311,6 +323,8 @@ function HotbarUIBinder.new(deps: {
 	self._equipRequested = nil :: ((string) -> ())?
 	self._stickerRequested = nil :: (() -> ())?
 	self._lastStickerRequestClock = 0
+	self._lastDragToolKey = nil :: string?
+	self._dragRenderActive = false
 	self._mouseReady = false
 	self._pendingEquipKey = nil :: string?
 	self._backpackButton = deps.refs.backpackButton
@@ -343,6 +357,7 @@ function HotbarUIBinder.new(deps: {
 					self._inventoryDrag:sweepArtifacts()
 				end
 				self:_render(self._store:get().hotbarSlots, self._store:get().hasTools)
+				self:_popDroppedSlot()
 			end)
 		end
 	end
@@ -360,6 +375,12 @@ end
 
 function HotbarUIBinder:_trackConnection(connection: RBXScriptConnection): ()
 	table.insert(self._connections, connection)
+end
+
+function HotbarUIBinder:_trackConnections(connections: { RBXScriptConnection }): ()
+	for _, connection in ipairs(connections) do
+		table.insert(self._connections, connection)
+	end
 end
 
 function HotbarUIBinder:_trackUnsubscriber(unsubscribe: () -> ()): ()
@@ -400,6 +421,56 @@ function HotbarUIBinder:_findSlotByToolKey(toolKey: string): RenderSlot?
 	end
 
 	return nil
+end
+
+-- Slot buttons live in the wrapper's UIListLayout and their own UIScale belongs to the dock
+-- zoom loop, so every pop/squash goes on the slot's icon instead. UIMotion re-anchors a lone
+-- icon once (pixel-neutral) and returns nil for anything it cannot scale safely.
+function HotbarUIBinder:_iconTargetOf(refs: SlotRefs): GuiObject?
+	local icon = refs.imageLabel
+	local host: GuiObject = refs.button
+	if icon and icon.Parent and icon.Parent:IsA("GuiObject") then
+		host = icon.Parent :: GuiObject
+	end
+	local target = UIMotion.scaleTargetOf(host)
+	if icon ~= nil and target ~= icon and UIMotion.canScale(icon) then
+		return icon
+	end
+	if target == refs.button then
+		return nil
+	end
+	return target
+end
+
+function HotbarUIBinder:_animateSlotChange(
+	slot: RenderSlot,
+	previous: HotbarSlotViewModel?,
+	viewModel: HotbarSlotViewModel
+): ()
+	local icon = self:_iconTargetOf(slot.refs)
+	if icon == nil then
+		return
+	end
+
+	if previous == nil or previous.toolKey ~= viewModel.toolKey then
+		UIMotion.popIn(icon, 0.72)
+	elseif viewModel.isEquipped and not previous.isEquipped then
+		UIMotion.pop(icon, 1.18)
+	end
+end
+
+-- One pop on the slot the drag landed in; the settling render itself stays motionless.
+function HotbarUIBinder:_popDroppedSlot(): ()
+	local toolKey = self._lastDragToolKey
+	self._lastDragToolKey = nil
+	if toolKey == nil then
+		return
+	end
+
+	local landing = self:_findSlotByToolKey(toolKey)
+	if landing then
+		UIMotion.pop(self:_iconTargetOf(landing.refs), 1.16)
+	end
 end
 
 function HotbarUIBinder:_findViewModelByToolKey(slots: { HotbarSlotViewModel }, toolKey: string): HotbarSlotViewModel?
@@ -538,6 +609,39 @@ end
 function HotbarUIBinder:_connectInput(): ()
 	local useExternalDrag = self._inventoryDrag ~= nil
 
+	-- Press/hover feedback is bound whichever drag path is active; these listeners only read
+	-- input, they never consume it, so tap-equip and InventoryDragController are untouched.
+	for _, slot in ipairs(self._slots) do
+		local button = slot.refs.button
+		-- A slot must never gain a second UIScale: its own belongs to the dock zoom loop.
+		-- canScale is true only where UIMotion would squash the button itself, so bind the
+		-- squash only when it lands on the icon.
+		if not UIMotion.canScale(button) then
+			self:_trackConnections(UIMotion.bindPress(button))
+			self:_trackConnections(UIMotion.bindHover(button))
+		end
+		self:_trackConnection(button.InputBegan:Connect(function(input: InputObject)
+			if
+				input.UserInputType ~= Enum.UserInputType.MouseButton1
+				and input.UserInputType ~= Enum.UserInputType.Touch
+			then
+				return
+			end
+
+			local viewModel = slot.viewModel
+			if viewModel ~= nil and not viewModel.isEmpty and viewModel.toolKey ~= nil then
+				return
+			end
+			-- Nothing equippable here: refuse visibly instead of swallowing the tap.
+			UIMotion.wiggle(button, 6)
+		end))
+	end
+
+	if self._backpackButton then
+		self:_trackConnections(UIMotion.bindPress(self._backpackButton))
+		self:_trackConnections(UIMotion.bindHover(self._backpackButton))
+	end
+
 	for index, slot in ipairs(self._slots) do
 		local button = slot.refs.button
 
@@ -643,6 +747,7 @@ function HotbarUIBinder:_connectInput(): ()
 		self._dragState = nil
 		self._dragPreviewSlots = nil
 		self:_render(self._store:get().hotbarSlots, self._store:get().hasTools)
+		self:_popDroppedSlot()
 	end))
 	else
 		for index, slot in ipairs(self._slots) do
@@ -703,9 +808,14 @@ function HotbarUIBinder:_connectInput(): ()
 			end
 		end
 
+		self:_trackConnections(UIMotion.bindPress(self._refs.stickerButton))
+		self:_trackConnections(UIMotion.bindHover(self._refs.stickerButton))
+
 		local function requestStickerPanel()
 			local now = os.clock()
 			if now - self._lastStickerRequestClock < 0.35 then
+				-- Throttled: the trigger still answers the tap so it never feels dead.
+				UIMotion.wiggle(self._refs.stickerButton, 5)
 				return
 			end
 			self._lastStickerRequestClock = now
@@ -789,6 +899,19 @@ function HotbarUIBinder:_render(slots: { HotbarSlotViewModel }, hasTools: boolea
 
 	local dragState = self._dragState
 	local externalDragKey = if self._inventoryDrag then self._inventoryDrag:getActiveDragToolKey() else nil
+	if externalDragKey then
+		self._lastDragToolKey = externalDragKey
+	elseif dragState and dragState.isDragging then
+		self._lastDragToolKey = dragState.toolKey
+	end
+
+	-- Motion is off while a drag is live and on the render that settles it: the reorder preview
+	-- hands each slot a different tool every frame, which would otherwise read as ten new items.
+	local dragging = dragState ~= nil
+		or externalDragKey ~= nil
+		or (self._inventoryDrag ~= nil and self._inventoryDrag:hasActiveDragSession() == true)
+	local animate = not dragging and self._dragRenderActive ~= true
+	self._dragRenderActive = dragging
 
 	if dragState and dragState.lift then
 		local draggedViewModel = self:_findViewModelByToolKey(slots, dragState.toolKey)
@@ -867,7 +990,11 @@ function HotbarUIBinder:_render(slots: { HotbarSlotViewModel }, hasTools: boolea
 			continue
 		end
 
-		renderToolSlot(renderSlot, viewModel)
+		local previousModel = renderSlot.viewModel
+		renderToolSlot(renderSlot, viewModel, animate)
+		if animate then
+			self:_animateSlotChange(renderSlot, previousModel, viewModel)
+		end
 		renderSlot.refs.button.LayoutOrder = visualIndex * 10
 		visualIndex += 1
 	end

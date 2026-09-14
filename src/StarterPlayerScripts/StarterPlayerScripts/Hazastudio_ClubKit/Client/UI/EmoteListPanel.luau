@@ -5,6 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
+local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 
 local EmoteListPanel = {}
 EmoteListPanel.__index = EmoteListPanel
@@ -29,6 +30,10 @@ function EmoteListPanel.new(deps: {
 	self._favoriteToggled = nil
 	self._speedChanged = nil
 	self._activeRows = {}
+	-- Rows are destroyed and rebuilt on every search keystroke; bindPress also connects to
+	-- UserInputService, which would outlive the row, so those connections are owned here.
+	self._rowMotionConns = {}
+	self._lastRenderEmpty = false
 	self._danceAnims = {}
 	self._poseAnims = {}
 	self._favoritedAnims = {}
@@ -46,21 +51,22 @@ function EmoteListPanel.new(deps: {
 		self:updateDisplay()
 	end)
 
-	if self.controlBtns.dance then
-		self.controlBtns.dance.Activated:Connect(function()
-			self:setCategory("Dance")
+	local function bindCategoryButton(button: GuiButton?, category: string)
+		if not button then
+			return
+		end
+		local control = button :: GuiButton
+		UIMotion.bindPress(control)
+		UIMotion.bindHover(control)
+		control.Activated:Connect(function()
+			UIMotion.pop(UIMotion.scaleTargetOf(control))
+			self:setCategory(category)
 		end)
 	end
-	if self.controlBtns.pose then
-		self.controlBtns.pose.Activated:Connect(function()
-			self:setCategory("Pose")
-		end)
-	end
-	if self.controlBtns.fav then
-		self.controlBtns.fav.Activated:Connect(function()
-			self:setCategory("Favorite")
-		end)
-	end
+
+	bindCategoryButton(self.controlBtns.dance, "Dance")
+	bindCategoryButton(self.controlBtns.pose, "Pose")
+	bindCategoryButton(self.controlBtns.fav, "Favorite")
 
 	self:_setupSpeedSlider()
 	return self
@@ -141,10 +147,23 @@ function EmoteListPanel:setFavorites(favorites: { [string]: boolean })
 end
 
 function EmoteListPanel:updateDisplay()
+	for _, connection in ipairs(self._rowMotionConns) do
+		connection:Disconnect()
+	end
+	self._rowMotionConns = {}
 	for _, row in ipairs(self._activeRows) do
 		row:Destroy()
 	end
 	self._activeRows = {}
+
+	local function bindRowFeel(button: GuiButton)
+		for _, connection in ipairs(UIMotion.bindPress(button)) do
+			table.insert(self._rowMotionConns, connection)
+		end
+		for _, connection in ipairs(UIMotion.bindHover(button)) do
+			table.insert(self._rowMotionConns, connection)
+		end
+	end
 
 	local source = {}
 	if self._currentCategory == "Pose" then
@@ -174,6 +193,7 @@ function EmoteListPanel:updateDisplay()
 			local mainButton = row:FindFirstChild("TemplateBtn")
 			if mainButton and mainButton:IsA("TextButton") then
 				mainButton.Text = animation.Name
+				bindRowFeel(mainButton)
 				mainButton.Activated:Connect(function()
 					local now = os.clock()
 					-- Wutwut: same-emote spam must beat WUTWUT_CHAIN_WINDOW (0.45s).
@@ -187,6 +207,8 @@ function EmoteListPanel:updateDisplay()
 					end
 					self._lastEmoteSelectionAt = now
 					self._lastSelectedAnimationName = animation.Name
+					-- Row is laid out by containerList, so the squash lands on the label.
+					UIMotion.pop(UIMotion.scaleTargetOf(mainButton))
 					if self._emoteSelected then
 						self._emoteSelected(animation)
 					end
@@ -196,7 +218,9 @@ function EmoteListPanel:updateDisplay()
 			local favoriteButton = row:FindFirstChild("FavoriteBtn")
 			if favoriteButton and favoriteButton:IsA("GuiButton") then
 					(favoriteButton :: any).Text = self._favoritedAnims[animation.Name] and "*" or "o"
+				bindRowFeel(favoriteButton)
 				favoriteButton.Activated:Connect(function()
+					UIMotion.pop(UIMotion.scaleTargetOf(favoriteButton))
 					if self._favoriteToggled then
 						self._favoriteToggled(animation.Name)
 					end
@@ -207,6 +231,26 @@ function EmoteListPanel:updateDisplay()
 			table.insert(self._activeRows, row)
 		end
 	end
+
+	-- Every call here is a real re-render (search, category, favourites, emote load), never a
+	-- scroll: the rows above were just cloned, so the cascade cannot fire on scrolling.
+	local bases: { [GuiObject]: number } = {}
+	for _, row in ipairs(self._activeRows) do
+		local elements: { GuiObject } = { row }
+		for _, descendant in ipairs(row:GetDescendants()) do
+			if descendant:IsA("GuiObject") then
+				table.insert(elements, descendant)
+			end
+		end
+		UIMotion.captureBases(elements, bases)
+	end
+	UIMotion.stagger(self._activeRows, bases)
+
+	local isEmpty = #self._activeRows == 0
+	if isEmpty and not self._lastRenderEmpty and self._searchQuery ~= "" then
+		UIMotion.wiggle(self.searchBox, 5)
+	end
+	self._lastRenderEmpty = isEmpty
 end
 
 function EmoteListPanel:bindEmoteSelected(callback: (Animation) -> ())

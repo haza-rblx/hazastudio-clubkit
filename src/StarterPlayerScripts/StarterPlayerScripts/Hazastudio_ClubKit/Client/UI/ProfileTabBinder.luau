@@ -8,6 +8,7 @@ local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local AvatarPrewarmShared = require(script.Parent.Parent.Utils.AvatarPrewarmShared)
 local AvatarViewport3D = require(script.Parent.Parent.Utils.AvatarViewport3D)
 local GroupedRowCornerUtil = require(script.Parent.Parent.Utils.GroupedRowCornerUtil)
+local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 local ButtonVisualUtil = require(script.Parent.ButtonVisualUtil)
 local MenuGuiRefs = require(script.Parent.MenuGuiRefs)
 local MenuSettingsCore = require(script.Parent.MenuSettingsCore)
@@ -80,7 +81,12 @@ local function setLikeCount(badgeGroup: Frame, likesCount: number)
 	local label = likeFrame:FindFirstChild("LikeCounts", true)
 		or likeFrame:FindFirstChildWhichIsA("TextLabel", true)
 	if label and label:IsA("TextLabel") then
-		label.Text = formatCompactCount(likesCount)
+		-- The server echoes the whole payload, so roll the counter only when it really moved.
+		local target = math.max(0, math.floor(likesCount))
+		if label.Text == formatCompactCount(target) then
+			return
+		end
+		UIMotion.countTo(label, tonumber(label.Text) or 0, target, 0.5, formatCompactCount)
 	end
 end
 
@@ -152,14 +158,37 @@ local function setToggleVisual(row: TextButton, enabled: boolean)
 	if not toggle or not toggle:IsA("Frame") then
 		return
 	end
+	-- Server state arrives as a full echo, so repaint only on a real change; the first
+	-- paint (previous == nil) snaps, every later one travels.
+	local previous = row:GetAttribute("MenuToggleOn")
+	if previous == enabled then
+		return
+	end
+	row:SetAttribute("MenuToggleOn", enabled)
+	local animate = previous ~= nil
 	local shell = toggle:FindFirstChildWhichIsA("Frame")
 	if shell then
-		shell.BackgroundColor3 = if enabled then Color3.fromRGB(223, 223, 223) else Color3.fromRGB(62, 62, 62)
+		UIMotion.tween(shell, if animate then 0.18 else 0, {
+			BackgroundColor3 = if enabled then Color3.fromRGB(223, 223, 223) else Color3.fromRGB(62, 62, 62),
+		})
 		local inner = shell:FindFirstChildWhichIsA("Frame")
 		if inner then
-			inner.BackgroundColor3 = if enabled then Color3.fromRGB(0, 0, 0) else Color3.fromRGB(255, 255, 255)
-			inner.Position = if enabled then UDim2.new(1, 0, 0, 0) else UDim2.new(0, 0, 0, 0)
+			UIMotion.tween(inner, if animate then 0.18 else 0, {
+				BackgroundColor3 = if enabled then Color3.fromRGB(0, 0, 0) else Color3.fromRGB(255, 255, 255),
+			})
+			local target = if enabled then UDim2.new(1, 0, 0, 0) else UDim2.new(0, 0, 0, 0)
+			local travel = inner.AbsoluteSize.X
 			inner.AnchorPoint = Vector2.new(if enabled then 1 else 0, 0)
+			-- Tweening the thumb's Position is layout-safe: it is absolutely placed inside the
+			-- track, which carries no UIListLayout/UIGridLayout, so nothing else moves with it.
+			-- The flipped AnchorPoint has to be paid back as an offset first, or the thumb
+			-- would jump its own width before the travel starts.
+			if animate and travel > 0 and shell:FindFirstChildWhichIsA("UIGridStyleLayout") == nil then
+				inner.Position = if enabled then UDim2.new(0, travel, 0, 0) else UDim2.new(1, -travel, 0, 0)
+				UIMotion.tween(inner, 0.26, { Position = target }, Enum.EasingStyle.Back)
+			else
+				inner.Position = target
+			end
 		end
 	end
 end
@@ -354,12 +383,12 @@ local function formatProfileFieldDisplay(field: string, rawValue: any): string
 	return PROFILE_FIELD_EMPTY_LABELS[field] or ""
 end
 
-local function setProfileFieldRowDisplay(valueBox: TextBox?, field: string, rawValue: any)
+local function setProfileFieldRowDisplay(self: any, valueBox: TextBox?, field: string, rawValue: any)
 	if not valueBox then
 		return
 	end
 	valueBox.PlaceholderText = ""
-	valueBox.Text = formatProfileFieldDisplay(field, rawValue)
+	self:_setText(valueBox, formatProfileFieldDisplay(field, rawValue))
 end
 
 local function getProfileFieldValue(payload: ProfileMenuPayload?, field: string): string
@@ -421,8 +450,10 @@ local function wireProfileFieldRow(
 		} :: ProfileFieldModalRequest)
 	end
 
+	self:_bindButtonMotion(rowRefs.row)
 	rowRefs.row.Activated:Connect(openModal)
 	if rowRefs.actionButton then
+		self:_bindButtonMotion(rowRefs.actionButton)
 		rowRefs.actionButton.Activated:Connect(openModal)
 	end
 end
@@ -443,7 +474,42 @@ function ProfileTabBinder.new(refs: Refs)
 	self._currentOverhead = nil :: OverheadPayload?
 	self._showCoupleEnabled = false
 	self._coupleModeStyles = nil :: { [string]: CoupleModeStyleRefs }?
+	-- Designed transparencies for the text/badge fades, captured once per element and keyed
+	-- weakly so a destroyed badge frame is not pinned here.
+	self._fadeBases = setmetatable({}, { __mode = "k" }) :: any
 	return self
+end
+
+-- Every profile label is repainted from a full server echo, so a repaint that changes
+-- nothing must not restart the fade (that is the "panel repaints 53x" class of bug).
+function ProfileTabBinder:_setText(label: GuiObject, text: string)
+	if (label :: any).Text == text then
+		return
+	end
+	local bases = self._fadeBases
+	if bases[label] == nil then
+		UIMotion.captureBases({ label }, bases)
+	end
+	(label :: any).Text = text
+	UIMotion.fadeIn({ label }, bases)
+end
+
+-- UIMotion hands back its press/hover connections; nothing else owns them, so they are
+-- dropped with the button (bindPress also holds a UserInputService connection).
+function ProfileTabBinder:_bindButtonMotion(button: GuiObject)
+	local connections = UIMotion.bindPress(button)
+	for _, connection in ipairs(UIMotion.bindHover(button)) do
+		table.insert(connections, connection)
+	end
+	if #connections == 0 then
+		return
+	end
+	button.Destroying:Once(function()
+		for _, connection in ipairs(connections) do
+			connection:Disconnect()
+		end
+		table.clear(connections)
+	end)
 end
 
 function ProfileTabBinder:bindProfileChange(callback: (string, any) -> ())
@@ -489,7 +555,9 @@ function ProfileTabBinder:bindIfNeeded()
 		local button = if styleRefs then styleRefs.button else resolveCoupleModeButton(profileTab, modeDef.buttonNames)
 		if button then
 			button.AutoButtonColor = false
+			self:_bindButtonMotion(button)
 			button.Activated:Connect(function()
+				UIMotion.pop(UIMotion.scaleTargetOf(button), 1.12)
 				setCoupleModeVisual(self._coupleModeStyles, profileTab, modeDef.key)
 				if self._currentPayload then
 					self:patchProfileField("relationshipMode", modeDef.key)
@@ -500,6 +568,7 @@ function ProfileTabBinder:bindIfNeeded()
 	end
 
 	if refs.showCoupleToggle then
+		self:_bindButtonMotion(refs.showCoupleToggle)
 		refs.showCoupleToggle.Activated:Connect(function()
 			fireProfileChange("showCoupleName", not self._showCoupleEnabled)
 		end)
@@ -573,11 +642,31 @@ function ProfileTabBinder:_setBadges(visibleBadges: { string }?)
 		end
 	end
 
+	-- Badges that just earned their place cascade in; a repeated payload leaves the row still.
+	local appeared: { GuiObject } = {}
+	local fresh: { GuiObject } = {}
 	for _, frameName in ipairs(BADGE_FRAME_NAMES) do
 		local frame = badgeGroup:FindFirstChild(frameName)
 		if frame and frame:IsA("GuiObject") then
-			frame.Visible = visibleSet[frameName] == true
+			local visible = visibleSet[frameName] == true
+			if visible and not frame.Visible then
+				table.insert(appeared, frame)
+				if self._fadeBases[frame] == nil then
+					table.insert(fresh, frame)
+				end
+				for _, descendant in ipairs(frame:GetDescendants()) do
+					if descendant:IsA("GuiObject") and self._fadeBases[descendant] == nil then
+						table.insert(fresh, descendant)
+					end
+				end
+			end
+			frame.Visible = visible
 		end
+	end
+
+	if #appeared > 0 then
+		UIMotion.captureBases(fresh, self._fadeBases)
+		UIMotion.stagger(appeared, self._fadeBases, 0.04)
 	end
 end
 
@@ -590,13 +679,13 @@ function ProfileTabBinder:patchProfile(payload: ProfileMenuPayload, overhead: Ov
 	local localPlayer = Players.LocalPlayer
 
 	if refs.displayNameLabel then
-		refs.displayNameLabel.Text = payload.displayName
+		self:_setText(refs.displayNameLabel, payload.displayName)
 	end
 	if refs.usernameLabel and localPlayer then
 		refs.usernameLabel.Text = "@" .. localPlayer.Name
 	end
 	if refs.bioContent then
-		refs.bioContent.Text = formatProfileFieldDisplay("bio", payload.bio)
+		self:_setText(refs.bioContent, formatProfileFieldDisplay("bio", payload.bio))
 	end
 	if refs.statusPopupLabel or refs.statusPopupFrame or refs.statusPopup then
 		local statusText = payload.statusText
@@ -607,16 +696,21 @@ function ProfileTabBinder:patchProfile(payload: ProfileMenuPayload, overhead: Ov
 			refs.statusPopup.Visible = showStatus
 		end
 		if refs.statusPopupLabel then
-			refs.statusPopupLabel.Text = if showStatus then (statusText :: string) else ""
+			self:_setText(refs.statusPopupLabel, if showStatus then (statusText :: string) else "")
 		end
 	end
 	if refs.relationshipLine then
-		refs.relationshipLine.Text = getRelationshipDisplay(payload, overhead)
+		self:_setText(refs.relationshipLine, getRelationshipDisplay(payload, overhead))
 	end
 
 	local streakDays = if overhead then overhead.streakDays else 0
 	if refs.streakCountLabel then
-		refs.streakCountLabel.Text = tostring(streakDays)
+		-- The streak counts up when it actually moves; a repeated payload leaves it alone.
+		local streakTarget = tonumber(streakDays) or 0
+		local streakShown = tonumber(refs.streakCountLabel.Text) or 0
+		if streakShown ~= streakTarget then
+			UIMotion.countTo(refs.streakCountLabel, streakShown, streakTarget, 0.5)
+		end
 	end
 
 	setCoupleModeVisual(self._coupleModeStyles, refs.profileTab, payload.relationshipMode)
@@ -633,22 +727,22 @@ function ProfileTabBinder:patchProfile(payload: ProfileMenuPayload, overhead: Ov
 
 	if refs.displayNameInput and refs.displayNameInput.valueBox then
 		refs.displayNameInput.valueBox.PlaceholderText = ""
-		refs.displayNameInput.valueBox.Text = formatDisplayNameRowDisplay(payload)
+		self:_setText(refs.displayNameInput.valueBox, formatDisplayNameRowDisplay(payload))
 	end
 	if refs.specialTitleInput then
 		refs.specialTitleInput.row.Visible = true
-		setProfileFieldRowDisplay(refs.specialTitleInput.valueBox, "specialTitle", payload.specialTitle)
+		setProfileFieldRowDisplay(self, refs.specialTitleInput.valueBox, "specialTitle", payload.specialTitle)
 		if refs.specialTitleInput.valueBox then
 			refs.specialTitleInput.valueBox.TextEditable = false
 		end
 		refs.specialTitleInput.row.Active = true
 	end
 	if refs.bioInput then
-		setProfileFieldRowDisplay(refs.bioInput.valueBox, "bio", payload.bio)
+		setProfileFieldRowDisplay(self, refs.bioInput.valueBox, "bio", payload.bio)
 	end
 	if refs.statusInput then
 		refs.statusInput.row.Visible = true
-		setProfileFieldRowDisplay(refs.statusInput.valueBox, "statusText", payload.statusText)
+		setProfileFieldRowDisplay(self, refs.statusInput.valueBox, "statusText", payload.statusText)
 	end
 
 	local editableFieldWrapper = (refs.displayNameInput and refs.displayNameInput.row.Parent)

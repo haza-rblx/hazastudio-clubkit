@@ -9,6 +9,7 @@ local UserInputService = game:GetService("UserInputService")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
 local GroupMotion = require(script.Parent.Parent.Utils.GroupMotion)
+local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 
 local StickerController = {}
@@ -198,7 +199,45 @@ function StickerController.create(deps: {
 	self._openedAt = 0
 	self._stickers = {} :: { string }
 	self._selectedSticker = ""
+	-- Grid cells in render order (parallel to _stickers), the designed transparency of
+	-- everything UIMotion fades here, and what the last render/selection paint actually drew.
+	-- Weak keys: cells are destroyed and re-cloned whenever the sticker set really changes.
+	self._itemButtons = {} :: { ImageButton }
+	self._fadeBases = (setmetatable({}, { __mode = "k" }) :: any) :: { [GuiObject]: number }
+	self._renderedKey = nil :: string?
+	self._paintedSelection = nil :: string?
 	return self
+end
+
+-- Press squash + hover lift on a kit button, with the connections owned by this controller.
+-- `perItem` routes to _trackItem (grid cells, dropped on the next real render) instead of
+-- _track (panel-lifetime buttons, dropped in destroy).
+function StickerController:_bindButtonMotion(button: GuiObject, perItem: boolean)
+	for _, connection in ipairs(UIMotion.bindPress(button)) do
+		if perItem then
+			self:_trackItem(connection)
+		else
+			self:_track(connection)
+		end
+	end
+	for _, connection in ipairs(UIMotion.bindHover(button)) do
+		if perItem then
+			self:_trackItem(connection)
+		else
+			self:_track(connection)
+		end
+	end
+end
+
+-- Text/images UIMotion can fade: everything else (Frames, layouts) has no transparency channel.
+function StickerController:_fadeTargetsOf(root: Instance): { GuiObject }
+	local targets: { GuiObject } = {}
+	for _, desc in ipairs(root:GetDescendants()) do
+		if desc:IsA("TextLabel") or desc:IsA("ImageLabel") then
+			table.insert(targets, desc :: GuiObject)
+		end
+	end
+	return targets
 end
 
 function StickerController:_track(connection: RBXScriptConnection)
@@ -214,6 +253,9 @@ function StickerController:_clearItems()
 		connection:Disconnect()
 	end
 	table.clear(self._itemConnections)
+	table.clear(self._itemButtons)
+	self._renderedKey = nil
+	self._paintedSelection = nil
 
 	local refs = self._refs
 	if not refs then
@@ -283,6 +325,13 @@ function StickerController:_bindGui(): boolean
 	self._modalScale = ensureScale(refs.modal, "RuntimeStickerModalScale")
 	-- ADR 0005: the modal may be a CanvasGroup (buyer GUI revision) — keep it size-stable.
 	self._modalScale.Scale = GroupMotion.scaleTarget(refs.modal, Config.Sticker.MODAL_CLOSED_SCALE)
+
+	-- Press/hover on the three panel-lifetime buttons. UIMotion refuses to scale anything under
+	-- a CanvasGroup (ADR 0005), so on a buyer GUI whose side panel or modal is a group these
+	-- bind to nothing rather than re-rasterising it.
+	self:_bindButtonMotion(refs.uploadButton, false)
+	self:_bindButtonMotion(refs.cancelButton, false)
+	self:_bindButtonMotion(refs.addButton, false)
 
 	self:_track(refs.uploadButton.Activated:Connect(function()
 		self:_setModalOpen(true)
@@ -360,6 +409,8 @@ function StickerController:_animateSidePanel(isOpen: boolean)
 		refs.sidePanel.Visible = true
 		setSidePanelTransparency(refs.sidePanel, 0)
 		self._anim:presentCenterPanel(refs.sidePanel :: any, nil)
+		-- The grid is already built when the panel opens, so the cells cascade in with the pop.
+		UIMotion.stagger(self._itemButtons :: { GuiObject }, self._fadeBases)
 		return
 	end
 
@@ -386,6 +437,14 @@ function StickerController:_animateModal(isOpen: boolean)
 	end
 
 	local closedScale = GroupMotion.scaleTarget(refs.modal, Config.Sticker.MODAL_CLOSED_SCALE)
+	-- ADR 0011: reduced motion lands on the state the tween would have ended in. The token was
+	-- bumped and any previous tween cancelled above, and _modalTween is left nil, so a toggle
+	-- that arrives later still wins exactly as it would against a running tween.
+	if UIMotion.reduced() then
+		scale.Scale = if isOpen then 1 else closedScale
+		refs.modal.Visible = isOpen
+		return
+	end
 	if isOpen then
 		scale.Scale = closedScale
 		refs.modal.Visible = true
@@ -459,6 +518,21 @@ function StickerController:_setModalOpen(isOpen: boolean)
 			refs.previewImage.Image = ""
 		end
 		refs.textBox:CaptureFocus()
+		-- The modal scales open; its content drops in under it and fades up as it lands.
+		-- slideInVertical moves the content with equal and opposite UIPadding, so the modal
+		-- (a CanvasGroup on some buyer GUIs) never changes size.
+		UIMotion.slideInVertical(refs.modal :: GuiObject, -1, 14)
+		local targets = self:_fadeTargetsOf(refs.modal)
+		local pending: { GuiObject } = {}
+		for _, element in ipairs(targets) do
+			if self._fadeBases[element] == nil then
+				table.insert(pending, element)
+			end
+		end
+		if #pending > 0 then
+			UIMotion.captureBases(pending, self._fadeBases)
+		end
+		UIMotion.fadeIn(targets, self._fadeBases, 0.08)
 	end
 end
 
@@ -481,7 +555,15 @@ function StickerController:_setPreviewFromInput()
 	end
 
 	local image = normalizeImage(refs.textBox.Text)
+	-- Fires on every keystroke: most of them do not change the resolved asset.
+	if refs.previewImage.Image == image then
+		return
+	end
 	refs.previewImage.Image = image
+	if image ~= "" then
+		-- Refused under a CanvasGroup modal (ADR 0005); the image swap alone carries it there.
+		UIMotion.pop(refs.previewImage, 1.14)
+	end
 end
 
 function StickerController:_selectSticker(image: string)
@@ -505,10 +587,15 @@ function StickerController:_addStickerFromInput()
 
 	local image = normalizeImage(refs.textBox.Text)
 	if image == "" then
+		-- Nothing usable typed: shake the field the player has to fix. Rotation never affects
+		-- layout, so this is safe even on a laid-out or grouped modal.
+		UIMotion.wiggle(refs.textBox :: GuiObject, 6)
 		self._log:warn("Sticker input ignored, invalid asset id")
 		return
 	end
 
+	-- A real send pops the button UIMotion deems safe to scale (nothing, on a grouped modal).
+	UIMotion.pop(UIMotion.scaleTargetOf(refs.addButton :: GuiObject), 1.25)
 	if self._addRemote then
 		self._addRemote:FireServer({ image = image })
 	end
@@ -535,9 +622,44 @@ function StickerController:_applySync(payload: any)
 	self:_render()
 end
 
+-- Repaints which cell is picked. The cells sit in the list's layout and may be inside a
+-- CanvasGroup side panel, so the highlight is stroke colour/width (and a pop where UIMotion
+-- allows one), never size.
+function StickerController:_paintSelection(animate: boolean)
+	if self._paintedSelection == self._selectedSticker then
+		return
+	end
+	self._paintedSelection = self._selectedSticker
+
+	for index, button in ipairs(self._itemButtons) do
+		local isSelected = self._stickers[index] == self._selectedSticker
+		local stroke = button:FindFirstChildWhichIsA("UIStroke")
+		if stroke then
+			UIMotion.tween(stroke, if animate then 0.18 else 0, {
+				Color = if isSelected then Color3.fromRGB(255, 255, 255) else Color3.fromRGB(30, 30, 30),
+				Thickness = if isSelected then 2 else 1,
+			})
+		end
+		if isSelected and animate then
+			-- scaleTargetOf returns nothing under a CanvasGroup side panel or for a cell the
+			-- grid lays out with no scalable child; the stroke alone carries the pick there.
+			UIMotion.pop(UIMotion.scaleTargetOf(button :: GuiObject), 1.12)
+		end
+	end
+end
+
 function StickerController:_render()
 	local refs = self._refs
 	if not refs then
+		return
+	end
+
+	-- The server echoes the whole sticker set back on every change, and picking one re-renders
+	-- locally too. Rebuilding the grid for an echo that only moved the selection would destroy
+	-- the cell mid-pop and restart the cascade, so an unchanged set only repaints.
+	local key = table.concat(self._stickers, "\1")
+	if self._renderedKey == key and #self._itemButtons == #self._stickers then
+		self:_paintSelection(true)
 		return
 	end
 
@@ -553,18 +675,21 @@ function StickerController:_render()
 		button.LayoutOrder = index
 		button.Parent = refs.list
 
-		local stroke = button:FindFirstChildWhichIsA("UIStroke")
-		if stroke then
-			stroke.Color = if image == self._selectedSticker
-				then Color3.fromRGB(255, 255, 255)
-				else Color3.fromRGB(30, 30, 30)
-			stroke.Thickness = if image == self._selectedSticker then 2 else 1
-		end
+		-- Fresh clone: bases captured and press/hover bound once, here, before any cascade has
+		-- touched this cell.
+		UIMotion.captureBases({ button :: GuiObject }, self._fadeBases)
+		UIMotion.captureBases(self:_fadeTargetsOf(button), self._fadeBases)
+		table.insert(self._itemButtons, button)
+		self:_bindButtonMotion(button :: GuiObject, true)
 
 		self:_trackItem(button.Activated:Connect(function()
 			self:_selectSticker(image)
 		end))
 	end
+
+	self._renderedKey = key
+	self:_paintSelection(false)
+	UIMotion.stagger(self._itemButtons :: { GuiObject }, self._fadeBases)
 end
 
 function StickerController:init()
