@@ -1479,16 +1479,6 @@ Config.FeatureFlags = {
 	-- since the card is a door to that panel.
 	FreeTitleEventEnabled = false,
 	MusicPlayerEnabled = true,
-	-- Merge Hazastudio_ClubKitConfig/MusicCatalog into MusicLibrary DataStore on boot.
-	MusicCatalogSeedEnabled = true,
-	-- Read-only music library: skip DataStore entirely; library from MusicCatalog +
-	-- in-game requests (in-memory only). Manage tab hidden. Buyer: Features.MusicReadOnlyLibrary.
-	MusicReadOnlyLibraryEnabled = false,
-	-- Music library from the web (ADR 0010): fetched from the VPS at boot and polled; the
-	-- MusicLibrary_v1 DataStore becomes a read-through cache and nothing in-game edits the
-	-- library (Manage tab hidden). Wins over MusicReadOnlyLibraryEnabled when both are on.
-	-- Buyer: Features.MusicWebLibrary.
-	MusicWebLibraryEnabled = false,
 	SettingsEnabled = true,
 	HotbarEnabled = true,
 	LoadingScreenEnabled = true,
@@ -3311,8 +3301,9 @@ Config.Leaderboards = {
 -- MUSIC PLAYER
 -- ============================================================
 Config.Music = {
-	-- GUI (music-v3 branch: v3 ScreenGui; renamed back to "06-MusicPlayerGUI" at the 3.0 cut)
-	GUI_NAME = "06-MusicPlayerGUIv3",
+	-- GUI: the v3 ScreenGui (3.0). The v2 panel it replaced is kept only as a rollback RBXM in
+	-- docs/releases/3.0.0/rollback/.
+	GUI_NAME = "06-MusicPlayerGUI",
 	TOPBAR_LABEL = "",
 	TOPBAR_ORDER = 1, -- Right strip: leftmost, immediately left of Command
 	TOPBAR_ICON = Config.Icons.Topbar.Music,
@@ -3330,40 +3321,16 @@ Config.Music = {
 		nowPlaying = "1-NowPlayingTab",
 		reqSong = "2-ReqSongTab",
 		dj = "3-DJTab",
-		manage = "4-ManageTracksTab",
 	},
 	TAB_LABELS = {
 		nowPlaying = "Now Playing",
 		reqSong = "Library",
 		dj = "DJ",
-		manage = "Manage",
 	},
 
 	SPECIAL_PLAYLIST_FAVORITES_ID = "__favorites__",
 	SPECIAL_PLAYLIST_NEW_DROPS_ID = "__new_drops__",
-	SPECIAL_PLAYLIST_REQUEST_HISTORY_ID = "__request_history__",
-	SPECIAL_PLAYLIST_REQUEST_HISTORY_NAME = "Requested",
-	-- MusicCatalog seed (ClubKitConfig.Features.MusicCatalogSeed)
-	CATALOG_DEFAULT_PLAYLIST_NAME = "Legacy",
-	CATALOG_SYNC_SOURCE = "music-catalog-seeder",
 	-- Music is global: single server-wide session, every player hears the same track.
-	-- Ranks allowed to access Manage tab
-	-- Owner=255, CoOwner=254, Developer=200, Admin=100
-	-- Add DJ rank here when the role is created
-	MANAGE_ALLOWED_RANKS = { 255, 251, 250},
-	MANAGE_ALLOWED_EXACT_RANKS = { 60 },
-	MANAGE_ALLOWED_INTERNAL_ROLES = {
-		Owner = true,
-		Staff = true,
-		Moderator = true,
-		LeadDance = false,
-		DJ = true,
-		CoOwner = true, -- legacy
-		AfterTeam = true, -- legacy
-		Developer = true, -- legacy
-		Admin = false, -- legacy
-		Investor = true, -- legacy alias → Staff
-	},
 
 	-- DataStore
 	DATASTORE_NAME = scopedDataStoreKey("MusicLibrary_v1"),
@@ -3392,8 +3359,6 @@ Config.Music = {
 	REMOTE_FAVORITES_SYNC = "MusicFavoritesSync", -- S->C owner-only
 	REMOTE_SET_DJ_MODE = "MusicSetDjMode", -- C->S (RE)
 	REMOTE_DJ_EFFECT = "MusicDjEffect", -- C->S (DJ effect change)
-	REMOTE_MANAGE_PLAYLIST = "MusicManagePlaylist", -- C->S (admin only, RE)
-	REMOTE_MANAGE_TRACK = "MusicManageTrack", -- C->S (admin only, RE)
 	REMOTE_RESOLVE_REQUEST_ASSET = "MusicResolveRequestAsset", -- C->S (RE)
 	REMOTE_TRANSPORT = "MusicTransport", -- C->S (RE) v3: pause/resume/seek/previous/clear/remove/request_many
 	-- 30s: get_state / get_playlists / get_tracks yield through MusicRepository
@@ -3732,6 +3697,13 @@ Config.Music = {
 	-- REQUEST_TRACK_MAX_PER_USER_QUEUE slots instead).
 	REQUEST_MANY_MAX = 25,
 	REQUEST_TRACK_MAX_PER_USER_QUEUE = 100,
+	-- Play-once request (3.0, ADR 0010): a pasted audio asset ID plays once and is never saved.
+	-- PLAY_ONCE_REQUEST comes from ClubKitConfig.Music.PlayOnceRequest: "everyone" | "control" | "off".
+	-- Players without musicControl: MAX_PENDING waiting at a time, MAX_PER_WINDOW per WINDOW_SECONDS.
+	PLAY_ONCE_REQUEST = "everyone",
+	PLAY_ONCE_MAX_PENDING = 1,
+	PLAY_ONCE_MAX_PER_WINDOW = 3,
+	PLAY_ONCE_WINDOW_SECONDS = 600,
 	READ_RATE_MAX = 8,
 	READ_RATE_WINDOW = 10,
 	DURATION_REPORT_RATE_MAX = 4,
@@ -3821,7 +3793,7 @@ Config.MobileScale = {
 	SHOP_GUI = 0.6, -- 02-ShopGUI
 	GIFT_GUI = 0.68, -- 03-GiftSystemGUI
 	STREAK_GUI = 0.6, -- 05-StreakGUI
-	MUSIC_GUI = 0.62, -- 06-MusicPlayerGUI
+	MUSIC_GUI = 0.56, -- 06-MusicPlayerGUI (v3 is 1000 px wide vs v2's 900: 0.62 × 0.9)
 	MENU_GUI = 0.7, -- 07-MenuGUI
 	DONATION_GUI = 0.65, -- 09-DonationSystemGUI
 	HOTBAR_GUI = 0.8, -- 10-HotbarGUI / HotbarGUI

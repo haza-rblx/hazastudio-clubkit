@@ -130,3 +130,34 @@ Until the pull transport exists, the customer area still reaches the game by the
 **Consequences:**
 - The Open Cloud key is no longer used to publish for a pulling game. The kit rewrites its own cache after every applied pull.
 - A game whose flag is switched back off keeps its last cache but receives no further web edits until the flag is on again. The import row is not removed, so the push does not resume on its own.
+
+## Addendum — 2026-09-14: 3.0 opens the library to every venue
+
+**Context.** 3.0 makes the web the only place the library is edited: the Manage tab goes, and `MusicWebLibrary` defaults to `true`. But the dashboard Musik page was gated by `games.music_enabled`, and on 2026-09-14 that flag was `1` for one venue out of 30. Shipping 3.0 as planned would have carried 29 venues' libraries to the web and left them no place to edit them.
+
+**Decision (owner).** In 3.0 the Musik page opens for every venue. `games.music_enabled` no longer gates the page; it gates only the Studio / BRM tier (uploads, YouTube import). This is the commercial line already written above — managing tracks by asset ID is free, uploading is paid — now applied to access, not only described.
+
+**Alternatives considered.**
+- Keep the web default `false` and in-game editing alive until venues are moved one by one. Rejected: the v3 GUI has no Manage tab, so it would mean carrying the whole Manage code path into 3.0.
+- Flip the default anyway and leave access as it was. Rejected: it would silently freeze the library of every venue without dashboard access.
+
+**Also decided with it.**
+- **Request From ID becomes a play-once request.** The pasted asset goes into the queue and is not written to the library. The pre-3.0 behaviour created a library track, which cannot exist when the web is the only writer. It is open to every player. The owner chose that over restricting it to `musicControl`, accepting that the kit can check an asset is Audio but not what it contains. Two things bound that risk:
+- Its own limits: one waiting play-once track per player and three requests per ten minutes. The normal request limits (100 per 30 s, 100 slots) would let one player queue a hundred arbitrary sounds.
+- A buyer switch, `Music.PlayOnceRequest` = `"everyone"` (default) / `"control"` / `"off"`, added through schema + template so no buyer file is patched (ADR 0001).
+- **`MusicCatalog.luau` is retired, not deleted.** It is a buyer-owned file (ADR 0001): the engine stops reading it and the schema marks `MusicCatalogSeed` and `MusicReadOnlyLibrary` retired. Its tracks already live in the DataStore library, which the first-boot import carries to the web.
+
+**Consequences.**
+- clubkit-infra must change before the 3.0 rollout: `music-context` stops denying on `music_disabled`, and upload routes check `music_enabled` themselves.
+- **The page opens per venue, automatically.** It opens once that venue's game reports kit 3.0 or newer through the licence heartbeat (`games.kit_version_sort`). Until then it explains that the update comes first. This is how the page avoids letting a 2.x venue edit a library its game does not read yet.
+
+## Addendum — 2026-09-14: `MusicWebLibrary` retires in 3.0 instead of defaulting to `true`
+
+**Context.** The plan was to flip `Features.MusicWebLibrary` to `true` in 3.0. Fill-forward never overrides a value the buyer has, and the 2.13 config patch writes `MusicWebLibrary = false` into every buyer file it touches. A new default would therefore reach almost nobody. A buyer left on `false` would also run a library that nothing can edit once the Manage tab is gone.
+
+**Decision (owner).** The engine stops reading the flag and every 3.0 venue runs the web library. The schema lists it in `RETIRED_KEYS` next to `MusicCatalogSeed` and `MusicReadOnlyLibrary`.
+
+**Consequences.**
+- Rollback from 3.0 is the 2.x engine, not a flag.
+- A venue without `Donation.ApiUrl` and the API secret keeps playing its DataStore cache and gets no library changes until it is configured.
+- `MusicRepository`'s read-only write guard no longer has a caller; it goes with the Manage code in Stage F slice 3.

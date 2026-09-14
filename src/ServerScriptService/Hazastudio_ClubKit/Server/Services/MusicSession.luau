@@ -9,6 +9,7 @@ local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Con
 local MusicDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicDomain)
 local MusicDurationPolicy = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicDurationPolicy)
 local MusicTransportPolicy = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicTransportPolicy)
+local MusicPlayOncePolicy = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicPlayOncePolicy)
 local NetworkPerfCounters = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.NetworkPerfCounters)
 local MusicAssetValidator = require(script.Parent.MusicAssetValidator)
 
@@ -21,15 +22,13 @@ local function createMusicSession(deps: {
 	logger: any,
 	config: any,
 	getMembers: () -> { Player },
-	isManageAllowed: (player: Player) -> boolean,
-	isControlAllowed: ((player: Player) -> boolean)?,
+	isControlAllowed: (player: Player) -> boolean,
 })
 	local repo = deps.repo
 	local log = deps.logger
 	local config = deps.config
 	local getMembers = deps.getMembers
-	local isManageAllowed = deps.isManageAllowed
-	local isControlAllowed = deps.isControlAllowed or deps.isManageAllowed
+	local isControlAllowed = deps.isControlAllowed
 
 	local session = {}
 
@@ -87,6 +86,8 @@ local function createMusicSession(deps: {
 	local PLAYED_HISTORY_MAX = 20
 	local playedHistory: { QueueEntry } = {}
 	local skipHistoryOnce = false
+	-- Play-once tracks (3.0): never in the library, kept only while an entry still points at them.
+	local playOnceTracks: { [string]: TrackInfo } = {}
 
 	local function newEntryId(): string
 		return HttpService:GenerateGUID(false)
@@ -109,6 +110,10 @@ local function createMusicSession(deps: {
 	local function getTrackById(trackId: string?): TrackInfo?
 		if not trackId or trackId == "" then
 			return nil
+		end
+		local playOnce = playOnceTracks[trackId]
+		if playOnce then
+			return playOnce
 		end
 		return repo:getTrack(trackId)
 	end
@@ -156,11 +161,45 @@ local function createMusicSession(deps: {
 		return total
 	end
 
+	local function countPendingPlayOnce(userId: number): number
+		local total = 0
+		for _, entry in ipairs(state.queue) do
+			if entry.requesterUserId == userId and playOnceTracks[entry.trackId] then
+				total += 1
+			end
+		end
+		return total
+	end
+
+	-- Drops play-once tracks nothing points at any more (aged out of Previous history, removed, cleared).
+	local function releasePlayOnceTracks()
+		if next(playOnceTracks) == nil then
+			return
+		end
+		local referenced: { [string]: true } = {}
+		if state.currentTrackId then
+			referenced[state.currentTrackId :: string] = true
+		end
+		for _, entries in ipairs({ state.queue, autoBuffer, playedHistory }) do
+			for _, entry in ipairs(entries) do
+				referenced[entry.trackId] = true
+			end
+		end
+		for trackId in pairs(playOnceTracks) do
+			if not referenced[trackId] then
+				playOnceTracks[trackId] = nil
+			end
+		end
+	end
+
 	local function enrichTrack(track: TrackInfo?, entry: QueueEntry?): any?
 		if not track then
 			return nil
 		end
 		local enriched = table.clone(track :: any) :: any
+		if playOnceTracks[track.id] then
+			enriched.isPlayOnce = true
+		end
 		local playlist = repo:getPlaylist(track.playlistId)
 		if playlist then
 			enriched.playlist = playlist
@@ -483,8 +522,8 @@ local function createMusicSession(deps: {
 		end
 		resolveZombieCurrentTrack("syncStateToPlayer")
 		local payload = session:getState()
-		payload.isManageAllowed = isManageAllowed(player)
 		payload.isControlAllowed = isControlAllowed(player)
+		payload.isPlayOnceAllowed = MusicPlayOncePolicy.isOffered(config.PLAY_ONCE_REQUEST, payload.isControlAllowed)
 		_onStateSync(player, payload)
 	end
 
@@ -758,6 +797,7 @@ local function createMusicSession(deps: {
 		state.currentEntry = nil
 		cancelAutoAdvance()
 		clearPlaybackFinishVotes()
+		releasePlayOnceTracks()
 
 		local validateOnServer = config.ASSET_VALIDATE_ON_SERVER ~= false
 		local usePreloadValidate = config.ASSET_VALIDATE_USE_PRELOAD == true
@@ -1102,6 +1142,40 @@ local function createMusicSession(deps: {
 		}
 	end
 
+	-- Play-once request (3.0). The service has already checked the switch, the limits and the asset.
+	function session:requestPlayOnce(player: Player, track: TrackInfo): (boolean, string, any?)
+		if state.isDjMode and not canControlDuringDjMode(player) then
+			return false, "dj_only", nil
+		end
+		playOnceTracks[track.id] = track
+		clearAutoBuffer()
+		sanitizeQueue()
+		local entry = MusicDomain.newUserQueueEntry(track.id, newEntryId(), player)
+		log:info("Play-once track requested", { player = player.Name, assetId = track.parts[1] })
+
+		if not state.isPlaying then
+			state.queue = { entry }
+			session:advanceQueue()
+			return true, "", {
+				track = track,
+				outcome = "playing_now",
+				queuePosition = 0,
+			}
+		end
+
+		table.insert(state.queue, entry)
+		broadcastQueueUpdated()
+		return true, "", {
+			track = track,
+			outcome = "queued",
+			queuePosition = #state.queue,
+		}
+	end
+
+	function session:countPendingPlayOnce(userId: number): number
+		return countPendingPlayOnce(userId)
+	end
+
 	function session:voteSkip(player: Player, voteType: string?): (boolean, string)
 		if not state.isPlaying then
 			return false, "not_playing"
@@ -1328,6 +1402,7 @@ local function createMusicSession(deps: {
 			return false, "queue_empty"
 		end
 		table.clear(state.queue)
+		releasePlayOnceTracks()
 		if shouldMaintainAutoBuffer() then
 			ensureAutoBufferDepth(getAutoQueueDepth())
 		end
@@ -1342,6 +1417,7 @@ local function createMusicSession(deps: {
 			return false, result.reason
 		end
 		state.queue = result.queue
+		releasePlayOnceTracks()
 		if shouldMaintainAutoBuffer() then
 			ensureAutoBufferDepth(getAutoQueueDepth())
 		end

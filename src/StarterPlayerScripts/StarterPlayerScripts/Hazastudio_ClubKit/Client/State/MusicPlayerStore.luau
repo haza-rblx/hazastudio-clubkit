@@ -66,7 +66,7 @@ end
 return createStore({
 	-- Panel visibility
 	isOpen    = false,
-	activeTab = "nowplaying",  -- "nowplaying" | "request" | "manage"
+	activeTab = "nowplaying",  -- "nowplaying" | "request" | "dj"
 
 	-- Now Playing
 	currentTrack    = nil,     -- TrackInfo?
@@ -90,19 +90,8 @@ return createStore({
 	favoriteTrackIds   = {},   -- { [trackId]: true } mirror from Player attribute favorites
 	searchQuery        = "",
 
-	-- Manage tab
-	manageSubView   = "idle",  -- "idle" | "edit_track" | "edit_playlist"
-	editingTrack    = nil,     -- TrackInfo? (nil = create mode)
-	editingPlaylist = nil,     -- PlaylistInfo? (nil = create mode)
-	selectedTrackPlaylistId = nil, -- string? selected playlist in upload/edit track form
-	isManageAllowed = false,
+	-- Privileges and request state (the library is edited only in the customer area, ADR 0010)
 	isControlAllowed = false,  -- live control: DJ tab, DJ-mode bypass (ADR 0010)
-	isLoading       = false,   -- loading state for form submission
-
-	-- Cover & Font customization state
-	selectedCoverType  = "gradient",  -- "gradient" | "image"
-	selectedCoverValue = 1,           -- gradient index (number) or image assetId (string)
-	selectedFontFace   = "Original", -- font name from FONT_PRESETS
-	selectedPlaylistVisibility = "public", -- "public" | "private"
-	playlistNamePreview = "",         -- current playlist name for preview in gradient cards
+	isPlayOnceAllowed = false, -- Request From ID box (play-once, 3.0); the server decides per player
+	isLoading       = false,   -- a Request From ID lookup is in flight
 })

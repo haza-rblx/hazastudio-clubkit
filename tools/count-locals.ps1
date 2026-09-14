@@ -16,8 +16,7 @@ $root = Split-Path -Parent $PSScriptRoot
 $defaultPaths = @(
 	"src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Main.client.luau",
 	"src\ServerScriptService\Hazastudio_ClubKit\Server\Main.server.luau",
-	"src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\MusicPlayerUIBinder.luau",
-	"src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\UI\MusicPlayerUIBinderPart2.luau",
+	"src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\Controllers\MusicPlayerController.luau",
 	"src\StarterPlayerScripts\StarterPlayerScripts\Hazastudio_ClubKit\Client\Init\ClientModuleBag.luau",
 	"src\ServerScriptService\Hazastudio_ClubKit\Server\Init\ServerModuleBag.luau"
 )

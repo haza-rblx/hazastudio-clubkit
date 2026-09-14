@@ -528,17 +528,13 @@ ClubKitConfigSchema.defaults = {
 		MinDonationRobux = 0,
 		MinDonationCash = 0,
 	},
+	-- Request From ID: a pasted Roblox audio ID plays once and is never saved to the library.
+	-- PlayOnceRequest: "everyone" | "control" (musicControl holders only) | "off".
+	Music = {
+		PlayOnceRequest = "everyone",
+	},
 	Features = {
 		MusicPlayer = true,
-		MusicCatalogSeed = true,
-		-- Read-only music library: skip DataStore entirely; library comes from MusicCatalog
-		-- + in-game requests (kept in memory only, lost on restart). Manage tab hidden.
-		-- false (default) = editable mode (DataStore read/write, in-game edits persist).
-		MusicReadOnlyLibrary = false,
-		-- Music library from the web: edit playlists/tracks in the customer area; the game
-		-- fetches them and keeps a DataStore copy as a cache. Manage tab hidden. Wins over
-		-- MusicReadOnlyLibrary when both are true. false (default) = library lives in-game.
-		MusicWebLibrary = false,
 		SyncDance = true,
 		-- Place-only BHMS dance/sync pack. When true: skip Club Kit dance panel + SyncService;
 		-- ACM Sync Dance routes to ReplicatedStorage.SyncBhmsAcmBridge.
@@ -603,9 +599,6 @@ ClubKitConfigSchema.FEATURE_MANIFEST = {
 		name = "Music & dance",
 		items = {
 			{ key = "MusicPlayer", label = "Music player" },
-			{ key = "MusicCatalogSeed", label = "Default playlist" },
-			{ key = "MusicReadOnlyLibrary", label = "Read-only music library (no DataStore)" },
-			{ key = "MusicWebLibrary", label = "Music library from the web (customer area)" },
 			{ key = "SyncDance", label = "Sync dance" },
 			{ key = "LegacySyncBhms", label = "Legacy SyncBhms place-pack" },
 			{ key = "WutwutDance", label = "Wutwut dance restart" },
@@ -757,6 +750,38 @@ function ClubKitConfigSchema.fillForward(schema: any, buyer: any, filledPaths: {
 	end
 
 	return result
+end
+
+-- Buyer keys the engine no longer reads. They are not in `defaults` (never filled forward) or in
+-- FEATURE_MANIFEST (never offered in the plugin). A buyer file that still carries one is left as
+-- it is (ADR 0001); ConfigBootstrap names them once in the boot log.
+ClubKitConfigSchema.RETIRED_KEYS = {
+	["Features.MusicCatalogSeed"] = "3.0: the music library is edited in the customer area; MusicCatalog.luau is no longer read",
+	["Features.MusicReadOnlyLibrary"] = "3.0: the web library is the only music library",
+	["Features.MusicWebLibrary"] = "3.0: the web library is always on",
+} :: { [string]: string }
+
+-- Dotted paths of retired keys present in a buyer config (any value, false included), sorted.
+function ClubKitConfigSchema.findRetired(buyer: any): { string }
+	local found: { string } = {}
+	if type(buyer) ~= "table" then
+		return found
+	end
+	for path in pairs(ClubKitConfigSchema.RETIRED_KEYS) do
+		local node: any = buyer
+		for _, segment in ipairs(string.split(path, ".")) do
+			if type(node) ~= "table" then
+				node = nil
+				break
+			end
+			node = node[segment]
+		end
+		if node ~= nil then
+			table.insert(found, path)
+		end
+	end
+	table.sort(found)
+	return found
 end
 
 ClubKitConfigSchema.deepClone = deepClone

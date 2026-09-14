@@ -38,25 +38,15 @@ local CALLBACK_SETTERS = {
 	"setOnDjEffectEnabledChanged",
 	"setOnDjEffectValueChanged",
 	"setOnDjResetRequested",
-	"setOnManageSubView",
-	"setOnManagePlaylist",
-	"setOnManageTrack",
 	"setOnResolveRequestAsset",
 	"setOnFormNotify",
 	"setOnTransport",
 	"setOnAdminSkip",
 }
 
--- v2-only (aura overlay) or retired with Manage (stage F).
+-- v2-only (aura overlay).
 local PENDING_METHODS = {
 	"setLoudnessSoundProvider",
-	-- Manage (moves to the dashboard, ADR 0010)
-	"renderManagePlaylists",
-	"renderManageTracks",
-	"populateTrackForm",
-	"populatePlaylistForm",
-	"setManageSubView",
-	"setManageAllowed",
 }
 
 local PanelShell = {}
@@ -181,6 +171,11 @@ function PanelShell:bindAll()
 	for _, template in ipairs(templates) do
 		template.Visible = false
 	end
+
+	-- The ScreenGui ships disabled, so a place whose controller never starts shows nothing. The shell
+	-- turns it on here with the panel closed: the vote modal must be able to appear while it is closed.
+	refs.mainWrapper.Visible = false
+	refs.root.Enabled = true
 
 	for _, key in ipairs(TAB_KEYS) do
 		local button = (refs.tabButtons :: any)[key]
@@ -330,10 +325,6 @@ end
 
 function PanelShell:renderTracks(tracks: { [any]: any }?, query: string?)
 	self._library:renderTracks(tracks, query)
-end
-
-function PanelShell:openAddToQueueConfirmation(track: any, _parentPlaylist: any?)
-	self._library:requestResolvedTrack(track)
 end
 
 function PanelShell:destroy()

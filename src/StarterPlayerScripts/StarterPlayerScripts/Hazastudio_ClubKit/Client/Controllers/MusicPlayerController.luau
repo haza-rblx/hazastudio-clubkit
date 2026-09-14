@@ -186,9 +186,9 @@ end
 
 function MusicPlayerController.create(
 	deps: {
-		refs: any, -- MusicPlayerGuiRefs.Refs
+		refs: any, -- Music.GuiRefs.Refs
 		store: any,
-		binder: any, -- MusicPlayerUIBinder
+		binder: any, -- Music.PanelShell
 		remotes: Folder,
 		config: any, -- Config.Music
 		topbarIcon: any, -- MusicTopbarIcon wrapper (owns lifecycle, fan-out events)
@@ -264,8 +264,6 @@ function MusicPlayerController.create(
 	self._getTracksRE = nil :: RemoteEvent?
 	self._favoriteTrackRE = nil :: RemoteEvent?
 	self._setDjModeRE = nil :: RemoteEvent?
-	self._managePlRE = nil :: RemoteEvent?
-	self._manageTrRE = nil :: RemoteEvent?
 	self._resolveRequestAssetRE = nil :: RemoteEvent?
 	self._connections = {} :: { RBXScriptConnection }
 	self._unsubscribers = {} :: { () -> () }
@@ -1740,8 +1738,8 @@ function MusicPlayerController:_applyServerState(data: any, options: { forcePlay
 	self._store:set({
 		isDjMode = data.isDjMode == true,
 		djOwnerUserId = type(data.djOwnerUserId) == "number" and data.djOwnerUserId or nil,
-		isManageAllowed = data.isManageAllowed == true,
 		isControlAllowed = data.isControlAllowed == true,
+		isPlayOnceAllowed = data.isPlayOnceAllowed == true,
 		queue = newQueue,
 		prefetchBuffer = newBuffer,
 	})
@@ -2267,33 +2265,6 @@ function MusicPlayerController:_renderRequestSnapshot()
 	self._binder:renderTracks(tracks, state.searchQuery)
 end
 
-function MusicPlayerController:_renderManageSnapshot()
-	local store = self._store
-	local state = store:get()
-	local playlists = state.playlists or {}
-	local tracks = {}
-	local hasTracksSnapshot = false
-
-	if self:_isCacheFresh(self._playlistsLoadedAt) then
-		playlists = self._playlistsCache
-	end
-
-	local cachedTracks = self._tracksCacheByPlaylist[self:_cacheKeyForPlaylist(nil)]
-	if cachedTracks and self:_isCacheFresh(cachedTracks.loadedAt) then
-		tracks = cachedTracks.data
-		hasTracksSnapshot = true
-	end
-
-	store:set({
-		playlists = playlists,
-		manageTracks = if hasTracksSnapshot then tracks else state.manageTracks,
-	})
-	self._binder:renderManagePlaylists(playlists, state.managePlaylistSearchQuery)
-	if hasTracksSnapshot then
-		self._binder:renderManageTracks(tracks, state.manageTrackSearchQuery)
-	end
-end
-
 function MusicPlayerController:_isPanelSessionActive(expectedSessionId: number?): boolean
 	if not self._isPanelOpen then
 		return false
@@ -2354,34 +2325,6 @@ function MusicPlayerController:_resolveTrackName(trackId: string?, fallbackName:
 	end
 
 	return "Track itu"
-end
-
-function MusicPlayerController:_resolvePlaylistName(playlistId: string?, fallbackName: string?): string
-	local normalizedPlaylistId = if type(playlistId) == "string" and playlistId ~= "" then playlistId else nil
-	if normalizedPlaylistId then
-		local statePlaylist = (self._store:get().playlists or {})[normalizedPlaylistId]
-		if type(statePlaylist) == "table" then
-			local playlistName = trimNotificationText(tostring(statePlaylist.name or ""))
-			if playlistName ~= "" then
-				return playlistName
-			end
-		end
-
-		local cachedPlaylist = self._playlistsCache[normalizedPlaylistId]
-		if type(cachedPlaylist) == "table" then
-			local playlistName = trimNotificationText(tostring(cachedPlaylist.name or ""))
-			if playlistName ~= "" then
-				return playlistName
-			end
-		end
-	end
-
-	local fallback = trimNotificationText(tostring(fallbackName or ""))
-	if fallback ~= "" then
-		return fallback
-	end
-
-	return "playlist itu"
 end
 
 -- Init
@@ -2471,8 +2414,6 @@ function MusicPlayerController:initEngine()
 	self._getTracksRE = self:_waitMusicRemote(config.REMOTE_GET_TRACKS)
 	self._favoriteTrackRE = self:_waitMusicRemote(config.REMOTE_FAVORITE_TRACK)
 	self._setDjModeRE = self:_waitMusicRemote(config.REMOTE_SET_DJ_MODE)
-	self._managePlRE = self:_waitMusicRemote(config.REMOTE_MANAGE_PLAYLIST)
-	self._manageTrRE = self:_waitMusicRemote(config.REMOTE_MANAGE_TRACK)
 	self._resolveRequestAssetRE = self:_waitMusicRemote(config.REMOTE_RESOLVE_REQUEST_ASSET)
 
 	if
@@ -2722,9 +2663,6 @@ function MusicPlayerController:initPanel()
 		if state.activeTab == "request" then
 			binder:renderTracks(state.tracks, query)
 			binder:renderPlaylists(state.playlists, query)
-		elseif state.activeTab == "manage" then
-			binder:renderManagePlaylists(state.playlists or {}, state.managePlaylistSearchQuery)
-			binder:renderManageTracks(state.manageTracks or state.tracks or {}, state.manageTrackSearchQuery)
 		end
 	end)
 
@@ -2805,28 +2743,6 @@ function MusicPlayerController:initPanel()
 		return true
 	end)
 
-	binder:setOnManageSubView(function(subView, data)
-		store:set({
-			manageSubView = subView,
-			editingTrack = if subView == "edit_track" and data ~= nil then data else nil,
-			editingPlaylist = if subView == "edit_playlist" and data ~= nil then data else nil,
-		})
-		if subView == "edit_track" then
-			binder:populateTrackForm(data)
-		elseif subView == "edit_playlist" then
-			binder:populatePlaylistForm(data)
-		end
-		binder:setManageSubView(subView)
-	end)
-
-	binder:setOnManagePlaylist(function(action, data)
-		self:_handleManagePlaylist(action, data)
-	end)
-
-	binder:setOnManageTrack(function(action, data)
-		self:_handleManageTrack(action, data)
-	end)
-
 	binder:setOnResolveRequestAsset(function(assetIdRaw)
 		self:_resolveRequestAsset(assetIdRaw)
 	end)
@@ -2843,10 +2759,6 @@ function MusicPlayerController:initPanel()
 
 	-- Volume store subscription lives in initEngine via _bindSettingsVolumeControls.
 
-	-- isManageAllowed -> push to binder via setManageAllowed
-	self:_trackUnsubscriber(store:subscribe("isManageAllowed", function(allowed)
-		binder:setManageAllowed(allowed == true)
-	end))
 	-- isControlAllowed -> DJ tab access (live control, ADR 0010)
 	self:_trackUnsubscriber(store:subscribe("isControlAllowed", function(allowed)
 		binder:setControlAllowed(allowed == true)
@@ -2856,9 +2768,6 @@ function MusicPlayerController:initPanel()
 		if isDjMode ~= true then
 			self:_resetDjEffects()
 		end
-		self:_setMusicIconVisible(self:_computeIconVisible())
-	end))
-	self:_trackUnsubscriber(store:subscribe("isManageAllowed", function()
 		self:_setMusicIconVisible(self:_computeIconVisible())
 	end))
 
@@ -2961,21 +2870,7 @@ function MusicPlayerController:_openPanel()
 	-- Restore last tab, then refresh data matching that tab.
 	binder:switchTab(activeTab)
 
-	if activeTab == "manage" then
-		self:_renderManageSnapshot()
-		store:set({
-			manageSubView = "idle",
-			editingTrack = nil,
-			editingPlaylist = nil,
-		})
-		task.spawn(function()
-			if not self:_isPanelSessionActive(panelSessionId) then
-				return
-			end
-			binder:setManageSubView("idle")
-			self:_loadManageData(false, panelSessionId)
-		end)
-	elseif activeTab == "request" then
+	if activeTab == "request" then
 		self:_renderRequestSnapshot()
 		local selectedPlaylistId = store:get().selectedPlaylistId
 		task.spawn(function()
@@ -3001,24 +2896,11 @@ end
 
 function MusicPlayerController:_onTabSelected(tab: string)
 	local panelSessionId = self._panelSessionId
-	if tab ~= "manage" then
-		self._binder:setManageSubView("idle")
-	end
 	if tab == "request" then
 		self:_renderRequestSnapshot()
 		local selectedPlaylistId = self._store:get().selectedPlaylistId
 		task.spawn(function()
 			self:_loadLibraryData(selectedPlaylistId, panelSessionId)
-		end)
-	elseif tab == "manage" then
-		self:_renderManageSnapshot()
-		task.spawn(function()
-			if not self:_isPanelSessionActive(panelSessionId) then
-				return
-			end
-			-- Ensure manage sections visible (idle state)
-			self._binder:setManageSubView("idle")
-			self:_loadManageData(false, panelSessionId)
 		end)
 	end
 end
@@ -3108,94 +2990,7 @@ function MusicPlayerController:_loadLibraryData(playlistId: string?, expectedSes
 	end
 end
 
-function MusicPlayerController:_loadManageData(forceRefresh: boolean?, expectedSessionId: number?)
-	if not self:_isPanelSessionActive(expectedSessionId) then
-		return
-	end
-	local playlists = self:_fetchPlaylists(forceRefresh)
-	local tracks = self:_fetchTracks(nil, forceRefresh)
-
-	if not self:_isPanelSessionActive(expectedSessionId) then
-		return
-	end
-
-	if playlists then
-		self._store:set({ playlists = playlists })
-		self._binder:renderManagePlaylists(playlists, self._store:get().managePlaylistSearchQuery)
-	end
-	if tracks then
-		self._store:set({ manageTracks = tracks })
-		self._binder:renderManageTracks(tracks, self._store:get().manageTrackSearchQuery)
-	end
-end
-
-function MusicPlayerController:_findManageTrackById(trackId: string): any?
-	local tracks = self._store:get().manageTracks
-	if type(tracks) ~= "table" or trackId == "" then
-		return nil
-	end
-	return tracks[trackId]
-end
-
-function MusicPlayerController:_findManagePlaylistById(playlistId: string): any?
-	local playlists = self._store:get().playlists
-	if type(playlists) ~= "table" or playlistId == "" then
-		return nil
-	end
-	return playlists[playlistId]
-end
-
-function MusicPlayerController:_reopenManageTrackCreate(): ()
-	self._store:set({
-		manageSubView = "edit_track",
-		editingTrack = nil,
-	})
-	self._binder:populateTrackForm(nil)
-	self._binder:setManageSubView("edit_track")
-end
-
-function MusicPlayerController:_reopenManageTrackEdit(trackId: string?): ()
-	if not trackId then
-		return
-	end
-	local track = self:_findManageTrackById(tostring(trackId))
-	if not track then
-		return
-	end
-	self._store:set({
-		manageSubView = "edit_track",
-		editingTrack = track,
-	})
-	self._binder:populateTrackForm(track)
-	self._binder:setManageSubView("edit_track")
-end
-
-function MusicPlayerController:_reopenManagePlaylistCreate(): ()
-	self._store:set({
-		manageSubView = "edit_playlist",
-		editingPlaylist = nil,
-	})
-	self._binder:populatePlaylistForm(nil)
-	self._binder:setManageSubView("edit_playlist")
-end
-
-function MusicPlayerController:_reopenManagePlaylistEdit(playlistId: string?): ()
-	if not playlistId then
-		return
-	end
-	local playlist = self:_findManagePlaylistById(tostring(playlistId))
-	if not playlist then
-		return
-	end
-	self._store:set({
-		manageSubView = "edit_playlist",
-		editingPlaylist = playlist,
-	})
-	self._binder:populatePlaylistForm(playlist)
-	self._binder:setManageSubView("edit_playlist")
-end
-
--- Manage playlist handler
+-- Request From ID (play-once, 3.0)
 
 function MusicPlayerController:_resolveRequestAsset(assetIdRaw: string)
 	if not self._resolveRequestAssetRE then
@@ -3221,236 +3016,52 @@ function MusicPlayerController:_resolveRequestAsset(assetIdRaw: string)
 
 		store:set({ isLoading = false })
 
-		if type(result) ~= "table" or result.ok ~= true or type(result.data) ~= "table" then
-			local err = if type(result) == "table" then tostring(result.error or "request_failed") else "request_failed"
-			local message = if err == "rate_limited"
-				then "You're resolving IDs too fast. Give it a moment."
-				elseif err == "invalid_asset_id" or err == "asset_not_loadable"
-				then "That doesn't look like a valid audio asset ID."
-				elseif err == "no_permission"
-				then "Only DJs/admins can request tracks by asset ID."
-				else "Couldn't resolve that asset ID."
-			self._log:warn("ResolveRequestAsset failed", { error = err, assetId = assetIdRaw })
-			self:_showNotification({
-				message = message,
-				title = "Request failed",
-				description = message,
-				domain = "music",
-			}, "error")
+		-- Success is announced by the server ("Now playing" / "Added to queue"); only failures land here.
+		if type(result) == "table" and result.ok == true then
 			return
 		end
-
-		local track = result.data
-		self:_invalidateLibraryCache()
-		local requestHistoryId = tostring(self._config.SPECIAL_PLAYLIST_REQUEST_HISTORY_ID or "__request_history__")
-		self:_invalidateTrackCacheForPlaylist(requestHistoryId)
-
-		task.spawn(function()
-			self:_loadPlaylists(self._panelSessionId)
-		end)
-		if store:get().selectedPlaylistId == requestHistoryId then
-			task.spawn(function()
-				self:_loadTracks(requestHistoryId, true, self._panelSessionId)
-			end)
-		end
-
-		local playlists = store:get().playlists or {}
-		local parentPlaylist = playlists[track.playlistId]
-		if not parentPlaylist and track.playlistId == requestHistoryId then
-			parentPlaylist = {
-				id = requestHistoryId,
-				name = tostring(self._config.SPECIAL_PLAYLIST_REQUEST_HISTORY_NAME or "Requested"),
-				coverType = "gradient",
-				coverValue = 1,
-			}
-		end
-		self._binder:openAddToQueueConfirmation(track, parentPlaylist)
-	end)
-end
-
-function MusicPlayerController:_handleManagePlaylist(action: string, data: { [string]: any })
-	if not self._managePlRE then
-		return
-	end
-
-	local store = self._store
-	store:set({ isLoading = true })
-
-	task.spawn(function()
-		local completed, unexpectedErr = xpcall(function()
-			local result = self:_requestMusicAsync("manage_playlist", self._managePlRE, {
-				action = action,
-				data = data,
-			})
-
-			if type(result) == "table" and result.ok then
-				self._log:info("Playlist " .. action .. " success")
-				self:_invalidateLibraryCache()
-				local resultData = type(result.data) == "table" and result.data or nil
-				local playlistId = if resultData then resultData.id else data.id
-				local playlistName =
-					self:_resolvePlaylistName(playlistId, if resultData then resultData.name else data.name)
-				if action == "delete" and store:get().selectedPlaylistId == data.id then
-					store:set({
-						selectedPlaylistId = nil,
-						tracks = {},
-					})
-					self._binder:renderTracks({}, store:get().searchQuery)
-				end
-
-				if action == "delete" then
-					self:_showNotification({
-						message = "Playlist deleted successfully",
-						title = "Playlist removed",
-						description = string.format('"%s" is out of your library.', playlistName),
-					}, "success")
-				elseif action == "update" then
-					self:_showNotification({
-						message = "Playlist saved successfully",
-						title = "Playlist updated",
-						description = string.format('"%s" is live with its latest changes.', playlistName),
-					}, "success")
-				else
-					self:_showNotification({
-						message = "Playlist saved successfully",
-						title = "Playlist created",
-						description = string.format('"%s" is ready for your next picks.', playlistName),
-					}, "success")
-				end
-				store:set({
-					editingPlaylist = nil,
-					manageSubView = "idle",
-				})
-				self._binder:setManageSubView("idle")
-				-- Refresh playlist list
-				self:_loadPlaylists()
-				self:_loadManageData(true)
+		local err = if type(result) == "table" then tostring(result.error or "request_failed") else "request_failed"
+		local retryAfter = if type(result) == "table" and type(result.data) == "table"
+			then tonumber(result.data.retryAfter)
+			else nil
+		local level = "error"
+		local message
+		if err == "rate_limited" then
+			level = "warning"
+			if retryAfter and retryAfter > 0 then
+				local wait = if retryAfter >= 60
+					then string.format("%d min", math.ceil(retryAfter / 60))
+					else string.format("%d s", math.ceil(retryAfter))
+				message = "You can request another song by ID in " .. wait .. "."
 			else
-				local err = if type(result) == "table" then result.error else tostring(result)
-				local playlistName = self:_resolvePlaylistName(data.id, data.name)
-				self._log:warn("Playlist " .. action .. " failed", { error = err })
-				self:_showNotification({
-					message = "Failed to save playlist: " .. err,
-					title = "Playlist save failed",
-					description = string.format('"%s" could not be saved just yet.', playlistName),
-				}, "error")
-				if action == "update" then
-					self:_reopenManagePlaylistEdit(data.id)
-				elseif action == "create" then
-					self:_reopenManagePlaylistCreate()
-				end
+				message = "You're requesting songs by ID too fast. Give it a moment."
 			end
-		end, debug.traceback)
-
-		store:set({ isLoading = false })
-		if not completed then
-			local playlistName = self:_resolvePlaylistName(data.id, data.name)
-			self._log:error("Playlist " .. action .. " handler crashed", { error = tostring(unexpectedErr) })
-			self:_showNotification({
-				message = "Failed to save playlist due to an unexpected client error",
-				title = "Playlist save failed",
-				description = string.format('"%s" ran into an unexpected client-side error.', playlistName),
-			}, "error")
-			if action == "update" then
-				self:_reopenManagePlaylistEdit(data.id)
-			elseif action == "create" then
-				self:_reopenManagePlaylistCreate()
-			end
+		elseif err == "pending_limit" then
+			level = "warning"
+			message = "Your last song by ID is still waiting in the queue."
+		elseif err == "dj_only" then
+			level = "warning"
+			message = "DJ mode is on, so only the DJ can queue songs right now."
+		elseif err == "disabled" then
+			message = "Requests by asset ID are turned off in this game."
+		elseif err == "control_only" then
+			message = "Only DJs and admins can request songs by asset ID here."
+		elseif err == "asset_not_audio" then
+			message = "That asset ID isn't an audio file."
+		elseif err == "asset_unverified" then
+			message = "Couldn't check that asset right now. Try again in a moment."
+		elseif err == "invalid_asset_id" then
+			message = "That doesn't look like a valid audio asset ID."
+		else
+			message = "Couldn't request that asset ID."
 		end
-	end)
-end
-
--- Manage track handler
-
-function MusicPlayerController:_handleManageTrack(action: string, data: { [string]: any })
-	if not self._manageTrRE then
-		return
-	end
-
-	local store = self._store
-	store:set({ isLoading = true })
-
-	task.spawn(function()
-		local completed, unexpectedErr = xpcall(function()
-			local result = self:_requestMusicAsync("manage_track", self._manageTrRE, {
-				action = action,
-				data = data,
-			})
-
-			if type(result) == "table" and result.ok then
-				self._log:info("Track " .. action .. " success")
-				self:_invalidateLibraryCache()
-				local resultData = type(result.data) == "table" and result.data or nil
-				local trackName = self:_resolveTrackName(
-					if resultData then resultData.id else data.id,
-					if resultData then resultData.name else data.name
-				)
-				if action == "delete" then
-					self:_showNotification({
-						message = "Track deleted successfully",
-						title = "Track removed",
-						description = string.format('"%s" is out of the library.', trackName),
-					}, "success")
-				elseif action == "update" then
-					self:_showNotification({
-						message = "Track saved successfully",
-						title = "Track updated",
-						description = string.format('"%s" is live with its latest changes.', trackName),
-					}, "success")
-				else
-					self:_showNotification({
-						message = "Track saved successfully",
-						title = "Track saved",
-						description = string.format('"%s" is ready to be queued.', trackName),
-					}, "success")
-				end
-				store:set({
-					editingTrack = nil,
-					manageSubView = "idle",
-					selectedTrackPlaylistId = data.playlistId or store:get().selectedTrackPlaylistId,
-				})
-				self._binder:setManageSubView("idle")
-				-- Refresh track list
-				self:_loadManageData(true)
-				local selectedPlaylistId = store:get().selectedPlaylistId
-				if selectedPlaylistId then
-					self:_loadTracks(selectedPlaylistId, true)
-				end
-			else
-				local err = if type(result) == "table" then result.error else tostring(result)
-				local trackName = self:_resolveTrackName(data.id, data.name)
-				self._log:warn("Track " .. action .. " failed", { error = err })
-				self:_showNotification({
-					message = (if action == "delete" then "Failed to delete track: " else "Failed to save track: ")
-						.. err,
-					title = if action == "delete" then "Track delete failed" else "Track save failed",
-					description = string.format('"%s" could not be processed just yet.', trackName),
-				}, "error")
-				if action == "update" then
-					self:_reopenManageTrackEdit(data.id)
-				elseif action == "upload" then
-					self:_reopenManageTrackCreate()
-				end
-			end
-		end, debug.traceback)
-
-		store:set({ isLoading = false })
-		if not completed then
-			local trackName = self:_resolveTrackName(data.id, data.name)
-			self._log:error("Track " .. action .. " handler crashed", { error = tostring(unexpectedErr) })
-			self:_showNotification({
-				message = if action == "delete"
-					then "Failed to delete track due to an unexpected client error"
-					else "Failed to save track due to an unexpected client error",
-				title = if action == "delete" then "Track delete failed" else "Track save failed",
-				description = string.format('"%s" ran into an unexpected client-side error.', trackName),
-			}, "error")
-			if action == "update" then
-				self:_reopenManageTrackEdit(data.id)
-			elseif action == "upload" then
-				self:_reopenManageTrackCreate()
-			end
-		end
+		self._log:warn("PlayOnceRequest failed", { error = err, assetId = assetIdRaw })
+		self:_showNotification({
+			message = message,
+			title = "Request failed",
+			description = message,
+			domain = "music",
+		}, level)
 	end)
 end
 

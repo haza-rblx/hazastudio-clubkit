@@ -12,14 +12,12 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local MusicDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicDomain)
 local PermissionDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.PermissionDomain)
+local MusicPlayOncePolicy = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicPlayOncePolicy)
 
 local RateLimiter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.RateLimiter)
 local HttpApiCounter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.HttpApiCounter)
 local HttpApi = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.HttpApi)
-local TextFilterUtil = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.TextFilterUtil)
 local createMusicSession = require(script.Parent.MusicSession)
-local MusicAssetValidator = require(script.Parent.MusicAssetValidator)
-local MusicCatalogSeeder = require(script.Parent.MusicCatalogSeeder)
 local MusicLibraryProvider = require(script.Parent.MusicLibraryProvider)
 
 type TrackInfo = MusicDomain.TrackInfo
@@ -49,13 +47,8 @@ local function createMusicService(deps: {
 
 	local SPECIAL_PLAYLIST_FAVORITES_ID = tostring(config.SPECIAL_PLAYLIST_FAVORITES_ID or "__favorites__")
 	local SPECIAL_PLAYLIST_NEW_DROPS_ID = tostring(config.SPECIAL_PLAYLIST_NEW_DROPS_ID or "__new_drops__")
-	local SPECIAL_PLAYLIST_REQUEST_HISTORY_ID =
-		tostring(config.SPECIAL_PLAYLIST_REQUEST_HISTORY_ID or "__request_history__")
-	local SPECIAL_PLAYLIST_REQUEST_HISTORY_NAME =
-		tostring(config.SPECIAL_PLAYLIST_REQUEST_HISTORY_NAME or "Requested")
 	local NEW_DROPS_WINDOW_SECONDS = tonumber(config.NEW_DROPS_WINDOW_SECONDS) or (7 * 24 * 60 * 60)
 	local isStudioMode = RunService:IsStudio()
-	local isLibraryReloadInFlight = false
 	local durationUpdateInFlight = {} :: { [string]: boolean }
 
 	-- Teardown handles. MusicService is NOT registered via trackLifecycle (it
@@ -64,7 +57,6 @@ local function createMusicService(deps: {
 	-- unsubscribe EventBus, and destroy sessions. Without this, a Rojo
 	-- hot-reload orphaned the poll `while true` thread + stale EventBus
 	-- subscriber + stacked PlayerRemoving handlers.
-	local _pollThread: thread? = nil
 	local _playerRemovingConn: RBXScriptConnection? = nil
 	local _eventBusUnsub: (() -> ())? = nil
 	local _webProvider: any = nil
@@ -80,7 +72,9 @@ local function createMusicService(deps: {
 	-- Rate limiters: per-player, shared across the whole server
 	local voteSkipLimiter = RateLimiter.new(config.VOTE_SKIP_RATE_MAX, config.VOTE_SKIP_RATE_WINDOW)
 	local requestTrackLimiter = RateLimiter.new(config.REQUEST_TRACK_RATE_MAX, config.REQUEST_TRACK_RATE_WINDOW)
-	local manageLimiter = RateLimiter.new(config.MANAGE_RATE_MAX, config.MANAGE_RATE_WINDOW)
+	-- Accepted play-once requests per player (os.time), pruned to the window on every accept.
+	-- Kept across rejoin so leaving and coming back does not reset the limit.
+	local playOnceRequestTimes = {} :: { [number]: { number } }
 
 	local function normalizeAssetId(raw: any): string?
 		local text = tostring(raw or ""):gsub("^%s+", ""):gsub("%s+$", "")
@@ -94,34 +88,6 @@ local function createMusicService(deps: {
 
 	local function isPlaylistPrivate(playlist: PlaylistInfo?): boolean
 		return type(playlist) == "table" and (playlist :: any).visibility == "private"
-	end
-
-	function service:ensureRequestHistoryPlaylist(): PlaylistInfo
-		local existing = repo:getPlaylist(SPECIAL_PLAYLIST_REQUEST_HISTORY_ID)
-		if existing then
-			return existing
-		end
-
-		local playlist: PlaylistInfo = MusicDomain.buildPlaylist({
-			id = SPECIAL_PLAYLIST_REQUEST_HISTORY_ID,
-			name = SPECIAL_PLAYLIST_REQUEST_HISTORY_NAME,
-			visibility = "public",
-			coverType = "gradient",
-			coverValue = 1,
-			trackIds = {},
-		})
-		if Config.FeatureFlags.MusicWebLibraryEnabled == true then
-			-- The customer area owns the library in web mode: a playlist saved here would be erased
-			-- by the next snapshot and rewrite the cache on every boot.
-			return playlist
-		end
-		local saveResult = repo:savePlaylist(playlist)
-		if not saveResult.ok then
-			log:warn("Failed to bootstrap request history playlist", { error = saveResult.error })
-		else
-			log:info("Request history playlist bootstrapped", { id = SPECIAL_PLAYLIST_REQUEST_HISTORY_ID })
-		end
-		return playlist
 	end
 
 	-- Callbacks forwarded from the session to the controller
@@ -190,22 +156,16 @@ local function createMusicService(deps: {
 		return false
 	end
 
-	function service:isManageAllowed(player: Player): boolean
-		-- Read-only library: nobody can manage music (hides Manage tab + blocks manage remotes).
-		-- Web library: the customer area is the only editor (ADR 0010).
-		if
-			Config.FeatureFlags.MusicReadOnlyLibraryEnabled == true
-			or Config.FeatureFlags.MusicWebLibraryEnabled == true
-		then
-			return false
-		end
-		return service:_hasMusicPrivilege(player, PermissionDomain.canManageMusic, "musicManage")
-	end
-
-	-- Live control: DJ mode, effects, speed, skip, private playlists (ADR 0010). Not switched off by
-	-- a read-only library — those are runtime actions during an event, not edits to the library.
+	-- Live control: DJ mode, effects, speed, skip, private playlists (ADR 0010). The library itself is
+	-- edited only in the customer area, so there is no in-game manage privilege any more (3.0).
 	function service:isControlAllowed(player: Player): boolean
 		return service:_hasMusicPrivilege(player, PermissionDomain.canControlMusic, "musicControl")
+	end
+
+	-- Whether this player sees Request From ID. Every per-player state payload must carry it: the
+	-- client stores the field as sent, so a payload without it hides the box.
+	function service:isPlayOnceOffered(player: Player): boolean
+		return MusicPlayOncePolicy.isOffered(config.PLAY_ONCE_REQUEST, service:isControlAllowed(player))
 	end
 
 	-- ============================================================
@@ -222,9 +182,6 @@ local function createMusicService(deps: {
 			logger = log,
 			config = config,
 			getMembers = getMembers,
-			isManageAllowed = function(player: Player): boolean
-				return service:isManageAllowed(player)
-			end,
 			isControlAllowed = function(player: Player): boolean
 				return service:isControlAllowed(player)
 			end,
@@ -300,7 +257,7 @@ local function createMusicService(deps: {
 		end
 
 		-- Subscribe to Overhead:Payload so roleCache stays up-to-date
-		-- without a DataStore call every time isManageAllowed runs.
+		-- without a DataStore call every time isControlAllowed runs.
 		if eventBus and type(eventBus.on) == "function" then
 			_eventBusUnsub = eventBus:on("Overhead:Payload", function(payload: any)
 				if type(payload) == "table" and type(payload.userId) == "number" and type(payload.role) == "string" then
@@ -311,87 +268,32 @@ local function createMusicService(deps: {
 
 		startGlobalSession()
 
-		local webLibrary = Config.FeatureFlags.MusicWebLibraryEnabled == true
-		local readOnly = not webLibrary and Config.FeatureFlags.MusicReadOnlyLibraryEnabled == true
-		if webLibrary then
-			if Config.FeatureFlags.MusicReadOnlyLibraryEnabled == true then
-				log:warn("MusicWebLibrary and MusicReadOnlyLibrary are both on; the web library wins")
-			end
-			-- ADR 0010: start from the DataStore cache so music plays even with the VPS down, then
-			-- let the web replace it. No catalog seed and no DataStore poll: the web is the only writer.
-			local cacheResult = repo:loadAll()
-			if not cacheResult.ok then
-				log:warn("Music web library: cache unreadable, waiting for the web", { error = cacheResult.error })
-			end
-			_webProvider = MusicLibraryProvider.new({
-				repo = repo,
-				logger = log,
-				onLibraryApplied = function(removedTrackIds: { [string]: true })
-					service:_onWebLibraryApplied(removedTrackIds)
-				end,
-				getPlayingTrackId = function(): string?
-					if not session then
-						return nil
-					end
-					-- currentEntry, not track: track resolves through the repository and is nil
-					-- exactly when the id is the one that needs protecting.
-					local current = session:getState()
-					local entry = type(current) == "table" and current.currentEntry or nil
-					return if type(entry) == "table" and type(entry.trackId) == "string" then entry.trackId else nil
-				end,
-			})
-			_webProvider:start()
-			log:info("MusicService initialized (web library)")
-		elseif readOnly then
-			-- Read-only library: no DataStore read. Seed from MusicCatalog into memory,
-			-- skip the sync poll loop. Request-history playlist is created in-memory via
-			-- the repository's read-only write guard.
-			local catalogOk, catalogErr = pcall(function()
-				MusicCatalogSeeder.merge({
-					repo = repo,
-					config = config,
-					logger = log,
-					featureFlags = Config.FeatureFlags,
-				})
-			end)
-			if not catalogOk then
-				log:warn("MusicCatalogSeed failed", { error = tostring(catalogErr) })
-			end
-			service:ensureRequestHistoryPlaylist()
-			log:info("MusicService initialized (read-only library, no DataStore)")
-		else
-			local result = repo:loadAll()
-			if not result.ok then
-				log:error("Failed to load music library", { error = result.error })
-			else
-				local catalogOk, catalogErr = pcall(function()
-					MusicCatalogSeeder.merge({
-						repo = repo,
-						config = config,
-						logger = log,
-						featureFlags = Config.FeatureFlags,
-					})
-				end)
-				if not catalogOk then
-					log:warn("MusicCatalogSeed failed", { error = tostring(catalogErr) })
-				end
-				log:info("MusicService initialized")
-				service:ensureRequestHistoryPlaylist()
-				local pollInterval = tonumber(config.SYNC_POLL_INTERVAL) or 0
-				if pollInterval > 0 then
-					_pollThread = task.spawn(function()
-						-- Loop berhenti ketika _destroyed di-flip oleh destroy().
-						while not _destroyed do
-							task.wait(pollInterval)
-							if _destroyed then
-								break
-							end
-							service:reloadLibraryFromStore("poll")
-						end
-					end)
-				end
-			end
+		-- 3.0 (ADR 0010): the web is the only library, for every venue. Start from the DataStore
+		-- cache so music plays even with the VPS down, then let the web replace it. No catalog
+		-- seed and no DataStore poll: the web is the only writer.
+		local cacheResult = repo:loadAll()
+		if not cacheResult.ok then
+			log:warn("Music web library: cache unreadable, waiting for the web", { error = cacheResult.error })
 		end
+		_webProvider = MusicLibraryProvider.new({
+			repo = repo,
+			logger = log,
+			onLibraryApplied = function(removedTrackIds: { [string]: true })
+				service:_onWebLibraryApplied(removedTrackIds)
+			end,
+			getPlayingTrackId = function(): string?
+				if not session then
+					return nil
+				end
+				-- currentEntry, not track: track resolves through the repository and is nil
+				-- exactly when the id is the one that needs protecting.
+				local current = session:getState()
+				local entry = type(current) == "table" and current.currentEntry or nil
+				return if type(entry) == "table" and type(entry.trackId) == "string" then entry.trackId else nil
+			end,
+		})
+		_webProvider:start()
+		log:info("MusicService initialized (web library)")
 
 		_playerRemovingConn = Players.PlayerRemoving:Connect(function(player: Player)
 			local userId = player.UserId
@@ -411,10 +313,6 @@ local function createMusicService(deps: {
 		if _webProvider then
 			_webProvider:destroy()
 			_webProvider = nil
-		end
-		if _pollThread then
-			task.cancel(_pollThread)
-			_pollThread = nil
 		end
 		if _playerRemovingConn then
 			_playerRemovingConn:Disconnect()
@@ -471,29 +369,9 @@ local function createMusicService(deps: {
 		return visible
 	end
 
-	function service:reloadLibraryFromStore(reason: string?): (boolean, string)
-		if Config.FeatureFlags.MusicWebLibraryEnabled == true then
-			-- The DataStore is only a cache in web mode; reloading it would undo a newer web snapshot.
-			return true, "web_library"
-		end
-		if Config.FeatureFlags.MusicReadOnlyLibraryEnabled == true then
-			return true, "read_only"
-		end
-		if isLibraryReloadInFlight then return false, "reload_in_flight" end
-		isLibraryReloadInFlight = true
-		local result = repo:loadAll()
-		isLibraryReloadInFlight = false
-		if not result.ok then
-			log:warn("Music library reload failed — session queues left untouched", {
-				reason = reason,
-				error = result.error,
-			})
-			return false, result.error
-		end
-		if session then
-			session:onLibraryReloaded()
-		end
-		return true, ""
+	function service:reloadLibraryFromStore(_reason: string?): (boolean, string)
+		-- The DataStore is only a cache of the web library; reloading it would undo a newer snapshot.
+		return true, "web_library"
 	end
 
 	-- Web snapshot applied: tracks the owner removed leave the queue and the auto buffer (the song
@@ -558,155 +436,70 @@ local function createMusicService(deps: {
 		return filtered
 	end
 
-	function service:resolveOrCreateTrackForAsset(player: Player, rawAssetId: any): (boolean, string, TrackInfo?)
-		-- Writes a new track + appends to the shared request-history playlist,
-		-- and spends MarketplaceService budget — same admin/DJ gate as the
-		-- other track/playlist-mutating methods in this service.
-		if not service:isManageAllowed(player) then
-			return false, "no_permission", nil
-		end
+	local function playOnceLimits(): MusicPlayOncePolicy.Limits
+		return {
+			maxPending = math.max(1, math.floor(tonumber(config.PLAY_ONCE_MAX_PENDING) or 1)),
+			maxPerWindow = math.max(1, math.floor(tonumber(config.PLAY_ONCE_MAX_PER_WINDOW) or 3)),
+			windowSeconds = math.max(1, tonumber(config.PLAY_ONCE_WINDOW_SECONDS) or 600),
+		}
+	end
+
+	local function evaluatePlayOnce(player: Player, now: number): MusicPlayOncePolicy.Decision
+		return MusicPlayOncePolicy.evaluate({
+			mode = config.PLAY_ONCE_REQUEST,
+			isControl = service:isControlAllowed(player),
+			pendingCount = getOrCreateSession():countPendingPlayOnce(player.UserId),
+			recentRequestTimes = playOnceRequestTimes[player.UserId] or {},
+			now = now,
+			limits = playOnceLimits(),
+		})
+	end
+
+	-- Request From ID (3.0, ADR 0010): the asset joins the queue for one play and is never saved.
+	-- Evaluated again after GetProductInfoAsync yields, so parallel requests cannot all pass the limits.
+	function service:requestPlayOnce(player: Player, rawAssetId: any): (boolean, string, any?)
 		local assetId = normalizeAssetId(rawAssetId)
 		if not assetId then
 			return false, "invalid_asset_id", nil
 		end
-
-		local usePreload = config.ASSET_VALIDATE_USE_PRELOAD == true
-		local assetValid = if usePreload
-			then MusicAssetValidator.isPartAssetLoadable(assetId)
-			else MusicAssetValidator.isPartAssetIdValid(assetId)
-		if not assetValid then
-			return false, "asset_not_loadable", nil
+		local before = evaluatePlayOnce(player, os.time())
+		if not before.allowed then
+			return false, before.reason, { retryAfter = before.retryAfter }
 		end
 
-		local requestHistoryPlaylist = service:ensureRequestHistoryPlaylist()
-
-		local tracksResult = repo:getTracks()
-		if not tracksResult.ok then
-			return false, "library_unavailable", nil
-		end
-
-		for trackId, track in pairs(tracksResult.value) do
-			local firstPart = type(track.parts) == "table" and track.parts[1] or nil
-			if tostring(firstPart or "") == assetId then
-				local playlist = repo:getPlaylist(requestHistoryPlaylist.id)
-				if playlist then
-					local alreadyListed = false
-					for _, listedTrackId in ipairs(playlist.trackIds) do
-						if listedTrackId == trackId then
-							alreadyListed = true
-							break
-						end
-					end
-					if not alreadyListed then
-						local updatedTrackIds = table.clone(playlist.trackIds)
-						table.insert(updatedTrackIds, trackId)
-						local updatedPlaylist: PlaylistInfo = {
-							id = playlist.id,
-							name = playlist.name,
-							visibility = (playlist :: any).visibility,
-							coverType = playlist.coverType,
-							coverValue = playlist.coverValue,
-							fontFace = playlist.fontFace,
-							trackIds = updatedTrackIds,
-							syncUpdatedAt = playlist.syncUpdatedAt,
-							syncDeletedAt = playlist.syncDeletedAt,
-							syncRevision = playlist.syncRevision,
-							syncSource = playlist.syncSource,
-						}
-						local savePlaylistResult = repo:savePlaylist(updatedPlaylist)
-						if not savePlaylistResult.ok then
-							log:warn("Failed to append track to request history playlist", {
-								trackId = trackId,
-								error = savePlaylistResult.error,
-							})
-						end
-					end
-				end
-				return true, "", track
-			end
-		end
-
-		local trackName = "Audio " .. assetId
-		local trackCreator = "Unknown"
 		local productOk, productInfo = pcall(function()
-			return MarketplaceService:GetProductInfoAsync(tonumber(assetId), Enum.InfoType.Asset)
+			return MarketplaceService:GetProductInfoAsync(tonumber(assetId) :: number, Enum.InfoType.Asset)
 		end)
-		if productOk and type(productInfo) == "table" then
-			-- Verify the asset is actually Audio. Without this a client can
-			-- submit an arbitrary (non-audio) image/mesh asset ID; its thumbnail
-			-- would be stored on the request-history playlist and rendered to
-			-- all clients. The canonical Roblox audio AssetTypeId is 70
-			-- (Enum.AssetType.Audio.Value).
-			local AUDIO_ASSET_TYPE_ID = 70
-			if productInfo.AssetTypeId ~= AUDIO_ASSET_TYPE_ID then
-				return false, "asset_not_audio", nil
-			end
-			if type(productInfo.Name) == "string" and productInfo.Name ~= "" then
-				trackName = productInfo.Name
-			end
-			if type(productInfo.Creator) == "table" and type(productInfo.Creator.Name) == "string" then
-				if productInfo.Creator.Name ~= "" then
-					trackCreator = productInfo.Creator.Name
-				end
-			end
-		end
-
-		local coverValue = ("rbxthumb://type=Asset&id=%s&w=150&h=150"):format(assetId)
 		local now = os.time()
-		local trackId = HttpService:GenerateGUID(false)
-		local track: TrackInfo = MusicDomain.buildTrack({
-			id = trackId,
-			name = trackName,
-			creator = trackCreator,
-			playlistId = requestHistoryPlaylist.id,
-			parts = { assetId },
-			totalDuration = 0,
-			coverType = "image",
-			coverValue = coverValue,
-			createdAt = now,
-			updatedAt = now,
-		})
-
-		local saveTrackResult = repo:saveTrack(track)
-		if not saveTrackResult.ok then
-			return false, "save_failed", nil
-		end
-
-		local playlist = repo:getPlaylist(requestHistoryPlaylist.id) or requestHistoryPlaylist
-		local updatedTrackIds = table.clone(playlist.trackIds)
-		table.insert(updatedTrackIds, trackId)
-		local updatedPlaylist: PlaylistInfo = {
-			id = playlist.id,
-			name = playlist.name,
-			visibility = (playlist :: any).visibility,
-			coverType = playlist.coverType,
-			coverValue = playlist.coverValue,
-			fontFace = playlist.fontFace,
-			trackIds = updatedTrackIds,
-			syncUpdatedAt = playlist.syncUpdatedAt,
-			syncDeletedAt = playlist.syncDeletedAt,
-			syncRevision = playlist.syncRevision,
-			syncSource = playlist.syncSource,
-		}
-		local savePlaylistResult = repo:savePlaylist(updatedPlaylist)
-		if not savePlaylistResult.ok then
-			local rollbackResult = repo:deleteTrack(trackId)
-			if not rollbackResult.ok then
-				log:error("Rollback failed after save request history playlist failed", {
-					trackId = trackId,
-					error = rollbackResult.error,
-				})
-			end
-			return false, "save_failed", nil
-		end
-
-		log:info("Request asset resolved to track", {
-			by = player.Name,
+		local track, buildReason = MusicPlayOncePolicy.buildTrack({
 			assetId = assetId,
-			trackId = trackId,
-			name = trackName,
+			productInfo = if productOk then productInfo else nil,
+			guid = HttpService:GenerateGUID(false),
+			now = now,
 		})
-		return true, "", track
+		if not track then
+			return false, buildReason, nil
+		end
+
+		local after = evaluatePlayOnce(player, now)
+		if not after.allowed then
+			return false, after.reason, { retryAfter = after.retryAfter }
+		end
+		local ok, err, resultData = getOrCreateSession():requestPlayOnce(player, track)
+		if not ok then
+			return false, err, nil
+		end
+
+		local windowSeconds = playOnceLimits().windowSeconds
+		local kept: { number } = {}
+		for _, requestedAt in ipairs(playOnceRequestTimes[player.UserId] or {}) do
+			if now - requestedAt < windowSeconds then
+				table.insert(kept, requestedAt)
+			end
+		end
+		table.insert(kept, now)
+		playOnceRequestTimes[player.UserId] = kept
+		return true, "", resultData
 	end
 
 	function service:addFavoriteTrack(player: Player, trackId: string): (boolean, string, boolean)
@@ -828,6 +621,13 @@ local function createMusicService(deps: {
 		if durationUpdateInFlight[trackId] then
 			return
 		end
+		if MusicPlayOncePolicy.isPlayOnceId(trackId) then
+			-- Play-once tracks live only in the session; there is no library row to update.
+			if session then
+				session:onDurationUpdated(trackId, duration)
+			end
+			return
+		end
 		local track = repo:getTrack(trackId)
 		if not track then
 			return
@@ -862,263 +662,6 @@ local function createMusicService(deps: {
 
 	function service:reportPlaybackFinished(player: Player, trackId: string): (boolean, string)
 		return getOrCreateSession():reportPlaybackFinished(player, trackId)
-	end
-
-	-- Manage-tab free text (playlist/track names, creators) renders in the
-	-- music UI for every player — filter before it is stored (G4, ADR 0004).
-	-- Non-string values pass through untouched (update path keeps existing).
-	local MUSIC_TEXT_MAX_LENGTH = 64
-	local function makeManageTextFilter(player: Player): (any) -> (boolean, string)
-		return function(value: any): (boolean, string)
-			if type(value) ~= "string" then
-				return true, value
-			end
-			local filtered = TextFilterUtil.filterForBroadcast(player.UserId, value, MUSIC_TEXT_MAX_LENGTH)
-			if not filtered then
-				return false, "filter_failed"
-			end
-			return true, filtered
-		end
-	end
-
-	function service:managePlaylist(player: Player, action: string, data: { [string]: any }): (boolean, string, any)
-		if not service:isManageAllowed(player) then return false, "no_permission", nil end
-		local allowed, _ = manageLimiter:check(player.UserId)
-		if not allowed then return false, "rate_limited", nil end
-
-		local filteredManageText = makeManageTextFilter(player)
-
-		if action == "create" then
-			local ok, err = MusicDomain.validatePlaylist(data)
-			if not ok then return false, err, nil end
-			local nameOk, filteredName = filteredManageText(data.name)
-			if not nameOk then return false, "filter_failed", nil end
-			local id = HttpService:GenerateGUID(false)
-			local playlist: PlaylistInfo = MusicDomain.buildPlaylist({
-				id = id,
-				name = filteredName,
-				visibility = type(data.visibility) == "string" and data.visibility or "public",
-				coverType = data.coverType,
-				coverValue = data.coverValue,
-				fontFace = data.fontFace,
-				trackIds = {},
-			})
-			local result = repo:savePlaylist(playlist)
-			if not result.ok then return false, "save_failed", nil end
-			log:info("Playlist created", { by = player.Name, id = id, name = data.name })
-			return true, "", playlist
-
-		elseif action == "update" then
-			local id = tostring(data.id or "")
-			local existing = repo:getPlaylist(id)
-			if not existing then return false, "playlist_not_found", nil end
-			local nameOk, filteredName = filteredManageText(type(data.name) == "string" and data.name or existing.name)
-			if not nameOk then return false, "filter_failed", nil end
-			local updated: PlaylistInfo = {
-				id = id,
-				name = filteredName,
-				visibility = type(data.visibility) == "string" and data.visibility
-					or (existing :: any).visibility
-					or "public",
-				coverType = type(data.coverType) == "string" and data.coverType or existing.coverType,
-				coverValue = data.coverValue ~= nil and data.coverValue or existing.coverValue,
-				fontFace = type(data.fontFace) == "string" and data.fontFace or existing.fontFace,
-				trackIds = existing.trackIds,
-			}
-			local result = repo:savePlaylist(updated)
-			if not result.ok then return false, "save_failed", nil end
-			log:info("Playlist updated", { by = player.Name, id = id })
-			return true, "", updated
-
-		elseif action == "delete" then
-			local id = tostring(data.id or "")
-			local existing = repo:getPlaylist(id)
-			if not existing then return false, "playlist_not_found", nil end
-			local deletedLookup: { [string]: true } = {}
-			for _, trackId in ipairs(existing.trackIds) do
-				deletedLookup[trackId] = true
-				local deleteTrackResult = repo:deleteTrack(trackId)
-				if not deleteTrackResult.ok then
-					log:warn("Failed to delete track when removing playlist", {
-						playlistId = id,
-						trackId = trackId,
-						error = deleteTrackResult.error,
-					})
-					return false, "delete_failed", nil
-				end
-			end
-			local result = repo:deletePlaylist(id)
-			if not result.ok then return false, "delete_failed", nil end
-			if session then
-				session:pruneDeletedTracks(deletedLookup)
-			end
-			log:info("Playlist deleted", {
-				by = player.Name,
-				id = id,
-				deletedTrackCount = #existing.trackIds,
-			})
-			return true, "", nil
-		end
-
-		return false, "unknown_action", nil
-	end
-
-	function service:manageTrack(player: Player, action: string, data: { [string]: any }): (boolean, string, any)
-		if not service:isManageAllowed(player) then return false, "no_permission", nil end
-		local allowed, _ = manageLimiter:check(player.UserId)
-		if not allowed then return false, "rate_limited", nil end
-
-		local filteredManageText = makeManageTextFilter(player)
-
-		if action == "upload" then
-			local ok, err = MusicDomain.validateTrack(data)
-			if not ok then return false, err, nil end
-			local nameOk, filteredName = filteredManageText(data.name)
-			if not nameOk then return false, "filter_failed", nil end
-			local creatorOk, filteredCreator = filteredManageText(data.creator)
-			if not creatorOk then return false, "filter_failed", nil end
-			local playlist = repo:getPlaylist(tostring(data.playlistId or ""))
-			if not playlist then return false, "playlist_not_found", nil end
-			local id = HttpService:GenerateGUID(false)
-			local now = os.time()
-			local parts: { string } = {}
-			for i, p in ipairs(data.parts) do
-				if i > config.MAX_TRACK_PARTS then break end
-				table.insert(parts, tostring(p))
-			end
-			local track: TrackInfo = MusicDomain.buildTrack({
-				id = id,
-				name = filteredName,
-				creator = filteredCreator,
-				playlistId = data.playlistId,
-				parts = parts,
-				totalDuration = 0,
-				playbackSpeed = data.playbackSpeed,
-				createdAt = now,
-				updatedAt = now,
-			})
-			local saveResult = repo:saveTrack(track)
-			if not saveResult.ok then return false, "save_failed", nil end
-			local updatedPlaylist: PlaylistInfo = {
-				id = playlist.id,
-				name = playlist.name,
-				visibility = (playlist :: any).visibility,
-				coverType = playlist.coverType,
-				coverValue = playlist.coverValue,
-				fontFace = playlist.fontFace,
-				trackIds = {},
-			}
-			for _, trackId in ipairs(playlist.trackIds) do
-				table.insert(updatedPlaylist.trackIds, trackId)
-			end
-			table.insert(updatedPlaylist.trackIds, id)
-			local playlistSaveResult = repo:savePlaylist(updatedPlaylist)
-			if not playlistSaveResult.ok then
-				local rollbackResult = repo:deleteTrack(id)
-				if not rollbackResult.ok then
-					log:error("Rollback failed after save playlist music failed", {
-						trackId = id,
-						playlistId = playlist.id,
-						error = rollbackResult.error,
-					})
-				end
-				return false, "save_failed", nil
-			end
-			log:info("Track uploaded", { by = player.Name, id = id, name = data.name })
-			return true, "", track
-
-		elseif action == "update" then
-			local id = tostring(data.id or "")
-			local existing = repo:getTrack(id)
-			if not existing then return false, "track_not_found", nil end
-			local nextPlaylistId = existing.playlistId
-			if type(data.playlistId) == "string" and data.playlistId ~= "" then
-				nextPlaylistId = data.playlistId
-			end
-			if nextPlaylistId ~= existing.playlistId and not repo:getPlaylist(nextPlaylistId) then
-				return false, "playlist_not_found", nil
-			end
-			local parts = existing.parts
-			local partsWereReplaced = false
-			if type(data.parts) == "table" and #data.parts >= 1 then
-				partsWereReplaced = true
-				parts = {}
-				for i, p in ipairs(data.parts) do
-					if i > config.MAX_TRACK_PARTS then break end
-					table.insert(parts, tostring(p))
-				end
-			end
-			local nextPlaybackSpeed = (existing :: any).playbackSpeed
-			if (data :: any).playbackSpeed ~= nil then
-				local parsedPlaybackSpeed = tonumber((data :: any).playbackSpeed)
-				if parsedPlaybackSpeed and parsedPlaybackSpeed > 0 then
-					nextPlaybackSpeed = parsedPlaybackSpeed
-				else
-					nextPlaybackSpeed = nil
-				end
-			end
-			local nameOk, filteredName = filteredManageText(type(data.name) == "string" and data.name or existing.name)
-			if not nameOk then return false, "filter_failed", nil end
-			local creatorOk, filteredCreator = filteredManageText(
-				type(data.creator) == "string" and data.creator or existing.creator
-			)
-			if not creatorOk then return false, "filter_failed", nil end
-			local updated: TrackInfo = {
-				id = id,
-				name = filteredName,
-				creator = filteredCreator,
-				playlistId = nextPlaylistId,
-				parts = parts,
-				totalDuration = if partsWereReplaced then 0 else existing.totalDuration,
-				playbackSpeed = nextPlaybackSpeed,
-				createdAt = existing.createdAt,
-				updatedAt = os.time(),
-			}
-			local result = repo:saveTrack(updated)
-			if not result.ok then return false, "save_failed", nil end
-			if nextPlaylistId ~= existing.playlistId then
-				local oldPlaylist = repo:getPlaylist(existing.playlistId)
-				if oldPlaylist then
-					local nextOldTrackIds = {}
-					for _, trackId in ipairs(oldPlaylist.trackIds) do
-						if trackId ~= id then table.insert(nextOldTrackIds, trackId) end
-					end
-					oldPlaylist.trackIds = nextOldTrackIds
-					local oldSave = repo:savePlaylist(oldPlaylist)
-					if not oldSave.ok then return false, "save_failed", nil end
-				end
-				local newPlaylist = repo:getPlaylist(nextPlaylistId)
-				if newPlaylist then
-					local alreadyListed = false
-					for _, trackId in ipairs(newPlaylist.trackIds) do
-						if trackId == id then
-							alreadyListed = true
-							break
-						end
-					end
-					if not alreadyListed then
-						table.insert(newPlaylist.trackIds, id)
-						local newSave = repo:savePlaylist(newPlaylist)
-						if not newSave.ok then return false, "save_failed", nil end
-					end
-				end
-			end
-			log:info("Track updated", { by = player.Name, id = id })
-			return true, "", updated
-
-		elseif action == "delete" then
-			local id = tostring(data.id or "")
-			local result = repo:deleteTrack(id)
-			if not result.ok then return false, "delete_failed", nil end
-			local deletedLookup: { [string]: true } = { [id] = true }
-			if session then
-				session:pruneDeletedTracks(deletedLookup)
-			end
-			log:info("Track deleted", { by = player.Name, id = id })
-			return true, "", nil
-		end
-
-		return false, "unknown_action", nil
 	end
 
 	function service:syncPlayerSessionState(player: Player)

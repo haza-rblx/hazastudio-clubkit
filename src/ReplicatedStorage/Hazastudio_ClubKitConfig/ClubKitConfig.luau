@@ -766,22 +766,31 @@ ClubKitConfig.FreeTitleEvent = {
 }
 
 -- =============================================================================
+-- MUSIC
+-- =============================================================================
+--   PlayOnceRequest
+--     Who may paste a Roblox audio asset ID in the music panel ("Request From
+--     ID") to play it once. The song joins the queue for one play and is never
+--     added to your library — the library is edited in the customer area.
+--       "everyone"  every player (default)
+--       "control"   only players with music control (DJs / admins)
+--       "off"       nobody; the box is hidden
+--     Players without music control may have one such song waiting at a time
+--     and request at most three every ten minutes.
+--
+ClubKitConfig.Music = {
+	PlayOnceRequest = "everyone",
+}
+
+-- =============================================================================
 -- FEATURES (disable modules you do not use)
 -- =============================================================================
 ClubKitConfig.Features = {
+	-- The music library is edited at customer.hazastudio.id; the game fetches it on boot and
+	-- every minute and keeps a DataStore copy so music still plays if the web is unreachable.
+	-- Needs Donation.ApiUrl + Secrets.DonationApiSecret. (MusicCatalogSeed, MusicReadOnlyLibrary
+	-- and MusicWebLibrary were retired in 3.0; leaving them in an older file does nothing.)
 	MusicPlayer = true,
-	-- Bulk seed from Hazastudio_ClubKitConfig/MusicCatalog.luau into DataStore on boot.
-	-- false = skip merge (tracks already seeded stay in library).
-	MusicCatalogSeed = true,
-	-- Read-only music library: no DataStore at all (fast boot, no DataStore errors).
-	-- Library = MusicCatalog + in-game requests (kept in memory only, lost on restart).
-	-- Manage tab hidden. In-game edits are NOT saved. false (default) = editable mode.
-	MusicReadOnlyLibrary = false,
-	-- Music library from the web: edit playlists and tracks at customer.hazastudio.id;
-	-- the game fetches them on boot and every minute, and keeps a DataStore copy so music
-	-- still plays if the web is unreachable. Manage tab hidden. Needs Donation.ApiUrl +
-	-- Secrets.DonationApiSecret. Wins over MusicReadOnlyLibrary. false (default) = in-game library.
-	MusicWebLibrary = false,
 	SyncDance = true,
 	-- Rapid re-click of the PLAYING emote hard-restarts it (fade 0 "wutwut" stutter).
 	-- false = classic behavior (same-emote click toggles the dance off). Default false.

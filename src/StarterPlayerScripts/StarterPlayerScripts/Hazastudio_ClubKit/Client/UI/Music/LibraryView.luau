@@ -226,11 +226,12 @@ function LibraryView:bind()
 	table.insert(self._unsubscribers, store:subscribe("isControlAllowed", function()
 		self:_renderDetail()
 	end))
-	-- Request by asset ID creates a library track, so it follows the manage privilege (off in web mode).
-	table.insert(self._unsubscribers, store:subscribe("isManageAllowed", function(allowed)
+	-- Request by asset ID plays the song once and never touches the library (3.0); the server
+	-- decides per player from ClubKitConfig.Music.PlayOnceRequest.
+	table.insert(self._unsubscribers, store:subscribe("isPlayOnceAllowed", function(allowed)
 		Visuals.setVisible(refs.requestFromId, allowed == true)
 	end))
-	Visuals.setVisible(refs.requestFromId, store:get().isManageAllowed == true)
+	Visuals.setVisible(refs.requestFromId, store:get().isPlayOnceAllowed == true)
 
 	self:_renderDetail()
 end
@@ -605,12 +606,6 @@ function LibraryView:renderTracks(tracks: { [any]: any }?, query: string?)
 end
 
 -- v3 has no confirmation modal: a resolved asset goes straight to the queue.
-function LibraryView:requestResolvedTrack(track: any)
-	if type(track) == "table" and track.id then
-		self._fire("OnRequestTrack", track.id)
-	end
-end
-
 function LibraryView:destroy()
 	for _, connection in ipairs(self._connections) do
 		connection:Disconnect()

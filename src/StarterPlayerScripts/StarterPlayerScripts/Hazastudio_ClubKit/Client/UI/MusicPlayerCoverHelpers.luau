@@ -1,5 +1,5 @@
 --!strict
--- Cover / title helpers for MusicPlayerUIBinder (register pressure offload).
+-- Cover / title helpers shared by the v3 music views (Visuals, NowPlayingView, LibraryView).
 
 local AssetService = game:GetService("AssetService")
 

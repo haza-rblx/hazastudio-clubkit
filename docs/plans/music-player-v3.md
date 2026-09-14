@@ -133,13 +133,46 @@ Semua remote baru: payload divalidasi, `requestId` idempoten, rate limiter, gate
 | **Remove from queue** | by `entryId`, bukan index | — | Index balapan dengan server. Requester boleh hapus miliknya (bukan gate). |
 | **requestMany(trackIds, shuffle)** | cap 25, pakai `REQUEST_TRACK_RATE_*` | Add sets / Shuffle | Bukan gate — pemain biasa boleh, kena rate limit. |
 
-**Keputusan implementasi E (2026-09-13):** satu remote `MusicTransport` dengan field `action` (bukan tujuh remote). Logika waktu murni di `Shared/Domain/MusicTransportPolicy` (spec lune 53/53): pause membekukan `pausedElapsed`, resume/seek menggeser `startServerTime`+`expectedEndServerTime` sehingga timer auto-advance, progress bar, dan posisi `Sound` membaca satu jam. **Menyimpang dari tabel di atas:** `requestMany` untuk pemain biasa dibatasi sisa slot `REQUEST_TRACK_MAX_PER_USER_QUEUE` (default 3), bukan 25 — cap 25 (`REQUEST_MANY_MAX`) hanya untuk `musicControl`, supaya satu playlist tidak memborong antrean pemain lain. Ikon pause: desain hanya punya satu ikon; atribut `PauseImage` (opsional `PlayImage`) pada `PlayorPauseButton.ImageLabel` membuat tombol berganti ikon.
+**Keputusan implementasi E (2026-09-13):** satu remote `MusicTransport` dengan field `action` (bukan tujuh remote). Logika waktu murni di `Shared/Domain/MusicTransportPolicy` (spec lune 53/53): pause membekukan `pausedElapsed`, resume/seek menggeser `startServerTime`+`expectedEndServerTime` sehingga timer auto-advance, progress bar, dan posisi `Sound` membaca satu jam. **Menyimpang dari tabel di atas:** `requestMany` untuk pemain biasa dibatasi sisa slot `REQUEST_TRACK_MAX_PER_USER_QUEUE` (nilai engine saat ini **100**, bukan 3 seperti yang sempat tertulis di sini — dikoreksi 2026-09-14), bukan 25 — cap 25 (`REQUEST_MANY_MAX`) hanya untuk `musicControl`, supaya satu playlist tidak memborong antrean pemain lain. Ikon pause: desain hanya punya satu ikon; atribut `PauseImage` (opsional `PlayImage`) pada `PlayorPauseButton.ImageLabel` membuat tombol berganti ikon.
 
 **Gerbang E:** pemain biasa yang menembak remote gate langsung ditolak server (uji dengan `eval_client_runtime`); pause 5 menit lalu resume → posisi tepat, tidak ada auto-advance; seek bolak-balik 20× tanpa klik audio; dua client posisinya selisih < 1 s.
 
 ---
 
 ## Stage F — Potong rilis 3.0 (merge `music-v3` → `main`)
+
+**Keputusan owner 2026-09-14 (ronde 1):**
+- **Q1 = a:** halaman Musik dibuka untuk semua venue di 3.0. `music_enabled` hanya menggate upload/YouTube (ADR 0010 addendum 2026-09-14). Ini butuh perubahan di clubkit-infra sebelum rollout.
+- **Q2 = b:** Request From ID menjadi *play-once*: masuk antrean untuk satu kali putar, tidak ditulis ke library.
+- **Q3:** `MusicCatalog.luau`, `MusicCatalogSeed`, dan `MusicReadOnlyLibrary` tidak lagi dibaca engine, schema menandainya pensiun, dan file milik buyer tidak disentuh.
+- **Q4 (urutan):** rilis 2.13 dulu dari `main` (Stage A/B, daily like, fix ikon admin v3). Setelah itu merge `music-v3` → `main` dan kerjakan Stage F di sana.
+- **Q5 (gerbang):**
+  - Sebelum merge: uji otomatis + uji solo + uji 2 pemain oleh owner.
+  - Sebelum rilis 3.0: instance ≤ 800, MicroProfiler (Reclass mati), emulator HP, VPS mati, `maintenance_until` lampau, join saat pause.
+- **Q6:** sesuai rencana di bawah (rename GUI, RBXM wajib, RBXM v2 untuk rollback, `Enabled = false`, `MobileScale` dihitung ulang).
+
+**Keputusan owner 2026-09-14 (ronde 2):**
+- **Q7 = b:** Request From ID (putar sekali) terbuka untuk semua pemain, kena rate limit request dan jatah antrean per pemain. Owner menerima risiko moderasi audio. Server tetap menolak asset yang bukan Audio.
+- **Q8 = c:** halaman Musik terbuka otomatis per venue begitu game-nya melapor kit ≥ 3.0 lewat heartbeat lisensi. Sebelum itu halaman menjelaskan bahwa update dulu.
+- **Q9 = b:** rilis 2.13 ditunda. Isi tambahannya ditanyakan di ronde 3.
+
+**Keputusan owner 2026-09-14 (ronde 3):**
+- **Q10:** request putar sekali punya batas sendiri: maksimal 1 lagu menunggu per pemain dan 3 permintaan per 10 menit. Ditambah saklar buyer `Music.PlayOnceRequest` = `"everyone"` (default) / `"control"` / `"off"` lewat schema + template.
+- **Q11:** 2.13 tidak menambah isi. Isinya tetap Stage A, Stage B (flag mati), daily like reset, dan fix ikon Admin Panel v3.
+
+**Urutan eksekusi F:**
+1. Rilis 2.13 dari `main` (menunggu "okay this is update 2.13").
+2. Merge `music-v3` → `main`.
+3. Kit:
+   - Hapus kode Manage, binder v2, dan `MusicCatalogSeeder`. **Status 2026-09-14:** kode Manage + `MusicCatalogSeeder` terhapus (irisan 2–3); file binder v2 dihapus dari repo (owner, `git rm`); tiga ModuleScript-nya juga sudah dihapus dari place THE BASIC TEST lewat MCP. `MusicCatalog.luau` template dibiarkan (ADR 0010: pensiun, bukan dihapus).
+   - Pensiunkan `MusicReadOnlyLibrary`/`MusicCatalogSeed` di schema.
+   - ~~Default `MusicWebLibrary = true`.~~ **`MusicWebLibrary` ikut pensiun, web selalu nyala** (owner 2026-09-14; ADR 0010 addendum). Alasan: patch config 2.13 menulis `MusicWebLibrary = false` ke file buyer, jadi default baru tidak akan sampai.
+   - Request From ID jadi putar sekali, dengan batas dan saklar di atas.
+   - `count-locals`.
+4. clubkit-infra: halaman Musik terbuka per venue saat `kit_version_sort` ≥ 3.0; upload/YouTube tetap digate `music_enabled`.
+5. Place: rename GUI v3 → `06-MusicPlayerGUI`, hapus v2, `Enabled = false`, hitung ulang `MobileScale`, RBXM v2 untuk rollback. **Status 2026-09-14 (THE BASIC TEST):** selesai. RBXM v2 di `docs/releases/3.0.0/rollback/06-MusicPlayerGUI_v2.rbxm`, dicek lengkap sebelum v2 dihapus; `MUSIC_GUI` 0.56 (belum diukur di emulator HP). Ketemu dan dibetulkan: `get_state` tidak membawa `isPlayOnceAllowed`, jadi kotak Request From ID di v3 tersembunyi.
+6. Gerbang sebelum merge (step 2): uji 2 pemain oleh owner. Gerbang sebelum rilis 3.0: angka performa.
+7. `code-review` dua sumbu, dokumen rilis 3.0.0. Bump versi hanya setelah "okay this is update 3.0".
 
 - Hapus kode Manage: `MusicPlayerUIBinderPart2` (~140 ref), `MusicPlayerUIBinder` (~56), `MusicPlayerController` (~78), `MusicController` (~35); `MusicCatalogSeeder`, `MusicCatalog.luau`; modal Track/Playlist.
 - `Features.MusicWebLibrary` default `true`; `MusicReadOnlyLibrary` dipensiunkan (fill-forward abaikan).
@@ -168,4 +201,4 @@ Cara ukur: `capture_micro_profiler` via MCP; **matikan plugin Reclass** dulu (ma
 Desktop; emulator Galaxy A16; `multiplayer_playtest` 2 pemain (DJ + biasa); VPS mati; `maintenance_until` lampau; boot dingin 2× berturut tanpa error; pemain join saat lagu jalan (sync posisi); pemain join saat pause.
 
 ## Rollback
-- A: config fill-forward aditif — tidak ada yang hilang. B: `MusicWebLibrary=false`. C–E: cabang belum di-merge. F: RBXM v2 di `docs/releases/3.0.0/`, config lama tetap valid.
+- A: config fill-forward aditif — tidak ada yang hilang. B (2.13): `MusicWebLibrary=false`; mulai 3.0 flag itu pensiun, rollback = engine 2.x. C–E: cabang belum di-merge. F: RBXM v2 di `docs/releases/3.0.0/`, config lama tetap valid.

@@ -98,20 +98,9 @@ export type StateSyncPayload = {
 	prefetchBuffer: { TrackInfo }?,
 	isDjMode: boolean,
 	djOwnerUserId: number?,
-	isManageAllowed: boolean,
 	isControlAllowed: boolean?,
+	isPlayOnceAllowed: boolean?,
 	djEffects: any?,
-}
-
--- Action payload for RF Manage
-export type ManagePlaylistPayload = {
-	action : string,  -- "create" | "update" | "delete"
-	data   : { [string]: any },
-}
-
-export type ManageTrackPayload = {
-	action : string,  -- "upload" | "update" | "delete"
-	data   : { [string]: any },
 }
 
 -- ============================================================

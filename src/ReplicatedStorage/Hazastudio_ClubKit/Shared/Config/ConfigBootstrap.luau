@@ -166,6 +166,10 @@ local function buildClubKitState(): any
 	if #filledPaths > 0 then
 		log:info("fillForward filled " .. tostring(#filledPaths) .. " path(s): " .. table.concat(filledPaths, ", "))
 	end
+	local retired = ClubKitConfigSchema.findRetired(ClubKitConfig)
+	if #retired > 0 then
+		log:info("ClubKitConfig keys retired and ignored (safe to delete): " .. table.concat(retired, ", "))
+	end
 	local state = deepMerge(ClubKitDefaults, buyerFilled)
 	local showcaseOverlay = loadShowcaseOverlay()
 	if showcaseOverlay then
@@ -543,6 +547,13 @@ function ConfigBootstrap.apply(config: any)
 		}, nil).active
 	end
 
+	-- Play-once request switch. MusicPlayOncePolicy owns what a mode means (unknown text counts
+	-- as "everyone"), so this only carries the string over, lower-cased.
+	local music = clubKit.Music
+	if type(config.Music) == "table" and type(music) == "table" and type(music.PlayOnceRequest) == "string" then
+		config.Music.PLAY_ONCE_REQUEST = string.lower(music.PlayOnceRequest)
+	end
+
 	local shop = clubKit.Shop
 	if type(config.Shop) == "table" and type(shop) == "table" and type(shop.Products) == "table" then
 		for tierKey, product in pairs(shop.Products) do
@@ -646,9 +657,6 @@ function ConfigBootstrap.apply(config: any)
 	if type(config.FeatureFlags) == "table" and type(features) == "table" then
 		local map = {
 			MusicPlayer = "MusicPlayerEnabled",
-			MusicCatalogSeed = "MusicCatalogSeedEnabled",
-			MusicReadOnlyLibrary = "MusicReadOnlyLibraryEnabled",
-			MusicWebLibrary = "MusicWebLibraryEnabled",
 			SyncDance = "SyncDanceEnabled",
 			LegacySyncBhms = "LegacySyncBhmsEnabled",
 			AdminHub = "AdminHubEnabled",

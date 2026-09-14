@@ -209,8 +209,6 @@ local function createMusicController(deps: {
 		local favoriteTrackRE = getOrCreate(remotes, config.REMOTE_FAVORITE_TRACK,  "RemoteEvent") :: RemoteEvent
 		local setDjModeRE     = getOrCreate(remotes, config.REMOTE_SET_DJ_MODE,     "RemoteEvent") :: RemoteEvent
 		local djEffectRE      = getOrCreate(remotes, config.REMOTE_DJ_EFFECT,       "RemoteEvent") :: RemoteEvent
-		local managePlRE      = getOrCreate(remotes, config.REMOTE_MANAGE_PLAYLIST, "RemoteEvent") :: RemoteEvent
-		local manageTrRE      = getOrCreate(remotes, config.REMOTE_MANAGE_TRACK,    "RemoteEvent") :: RemoteEvent
 		local resolveRequestAssetRE = getOrCreate(
 			remotes,
 			config.REMOTE_RESOLVE_REQUEST_ASSET,
@@ -258,7 +256,6 @@ local function createMusicController(deps: {
 		local favoriteTrackCache = makeIdempotencyCache()
 		local djModeCache      = makeIdempotencyCache()
 		local djEffectCache    = makeIdempotencyCache()
-		local manageCache      = makeIdempotencyCache()
 
 		local voteSkipLimiter = RateLimiter.new(config.VOTE_SKIP_RATE_MAX, config.VOTE_SKIP_RATE_WINDOW)
 		local requestTrackLimiter = RateLimiter.new(config.REQUEST_TRACK_RATE_MAX, config.REQUEST_TRACK_RATE_WINDOW)
@@ -313,12 +310,6 @@ local function createMusicController(deps: {
 				voteStateNetwork:fireList(members, payload)
 			end
 		end)
-
-		if type(service.ensureRequestHistoryPlaylist) == "function" then
-			task.spawn(function()
-				service:ensureRequestHistoryPlaylist()
-			end)
-		end
 
 		-- VoteSkip
 		voteSkipRE.OnServerEvent:Connect(function(player: Player, raw: any)
@@ -521,8 +512,8 @@ local function createMusicController(deps: {
 					service:syncPlayerSessionState(player)
 				end
 				local currentState = service:getState(player)
-				currentState.isManageAllowed = service:isManageAllowed(player)
 				currentState.isControlAllowed = service:isControlAllowed(player)
+				currentState.isPlayOnceAllowed = service:isPlayOnceOffered(player)
 				fireMusicResponse(responseRE, player, "get_state", (raw :: any).requestId, true, currentState, nil)
 			end)
 		end)
@@ -586,14 +577,20 @@ local function createMusicController(deps: {
 				local assetId = type((raw :: any).assetId) == "string" and (raw :: any).assetId
 					or type((raw :: any).assetId) == "number" and tostring((raw :: any).assetId)
 					or ""
-				local ok, err, track = service:resolveOrCreateTrackForAsset(player, assetId)
+				-- 3.0: Request From ID is a play-once request — queued for one play, never saved.
+				local ok, err, resultData = service:requestPlayOnce(player, assetId)
+				if ok then
+					notifyMusicRequestSuccess(notify, player, resultData)
+				else
+					log:debug("PlayOnceRequest rejected", { player = player.Name, reason = err })
+				end
 				fireMusicResponse(
 					responseRE,
 					player,
 					"resolve_request_asset",
 					(raw :: any).requestId,
 					ok,
-					track,
+					resultData,
 					if ok then nil else err
 				)
 			end)
@@ -713,56 +710,6 @@ local function createMusicController(deps: {
 				end)
 			end
 		end)
-		-- ManagePlaylist (RE, write, admin only)
-		managePlRE.OnServerEvent:Connect(function(player: Player, raw: any)
-			local valid, reason = validatePayload(raw)
-			if not valid then
-				log:warn("ManagePlaylist: invalid payload", { player = player.Name, reason = reason })
-				fireMusicResponse(responseRE, player, "manage_playlist", type(raw) == "table" and raw.requestId or nil, false, nil, "invalid_request")
-				return
-			end
-			if not manageLimiter:check(player.UserId) then
-				fireMusicResponse(responseRE, player, "manage_playlist", (raw :: any).requestId, false, nil, "rate_limited")
-				return
-			end
-			if not checkIdempotency(manageCache, (raw :: any).requestId) then
-				fireMusicResponse(responseRE, player, "manage_playlist", (raw :: any).requestId, false, nil, "duplicate_request")
-				return
-			end
-
-			task.spawn(function()
-				local action = type(raw.action) == "string" and raw.action or ""
-				local data   = type(raw.data) == "table" and raw.data or {}
-				local ok, _err, result = service:managePlaylist(player, action, data)
-				-- Do not expose internal error details to client
-				fireMusicResponse(responseRE, player, "manage_playlist", (raw :: any).requestId, ok, if ok then result else nil, if ok then nil else "request_failed")
-			end)
-		end)
-		-- ManageTrack (RE, write, admin only)
-		manageTrRE.OnServerEvent:Connect(function(player: Player, raw: any)
-			local valid, reason = validatePayload(raw)
-			if not valid then
-				log:warn("ManageTrack: invalid payload", { player = player.Name, reason = reason })
-				fireMusicResponse(responseRE, player, "manage_track", type(raw) == "table" and raw.requestId or nil, false, nil, "invalid_request")
-				return
-			end
-			if not manageLimiter:check(player.UserId) then
-				fireMusicResponse(responseRE, player, "manage_track", (raw :: any).requestId, false, nil, "rate_limited")
-				return
-			end
-			if not checkIdempotency(manageCache, (raw :: any).requestId) then
-				fireMusicResponse(responseRE, player, "manage_track", (raw :: any).requestId, false, nil, "duplicate_request")
-				return
-			end
-
-			task.spawn(function()
-				local action = type(raw.action) == "string" and raw.action or ""
-				local data   = type(raw.data) == "table" and raw.data or {}
-				local ok, _err, result = service:manageTrack(player, action, data)
-				fireMusicResponse(responseRE, player, "manage_track", (raw :: any).requestId, ok, if ok then result else nil, if ok then nil else "request_failed")
-			end)
-		end)
-
 		log:info("MusicController initialized")
 	end
 	return controller

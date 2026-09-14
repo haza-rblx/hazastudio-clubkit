@@ -6,9 +6,7 @@
 -- Main only keeps hoisted musicFavoritesRepo / _musicService handles.
 
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 
 export type MusicBootstrapDeps = {
 	musicConfig: any,
@@ -48,10 +46,6 @@ function MusicBootstrap.start(deps: MusicBootstrapDeps): MusicBootstrapResult
 	local musicRepo = MusicRepository.new({
 		config = musicConfig,
 		logger = Logger.new("MusicRepository"),
-		-- The web library keeps a DataStore cache, so it must be able to write even when
-		-- MusicReadOnlyLibrary is also on (the web mode wins; see MusicService.init).
-		readOnly = Config.FeatureFlags.MusicReadOnlyLibraryEnabled == true
-			and Config.FeatureFlags.MusicWebLibraryEnabled ~= true,
 	})
 	local musicFavoritesRepo = MusicFavoritesRepository.new({
 		config = musicConfig,
