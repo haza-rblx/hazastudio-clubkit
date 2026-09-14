@@ -14,6 +14,7 @@ local MusicAssetLoadService = require(script.Parent.Parent.Services.MusicAssetLo
 local MusicAssetCache = require(script.Parent.Parent.Services.MusicAssetCache)
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local MusicDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicDomain)
+local MusicLibraryModel = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicLibraryModel)
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local NetworkPerfCounters = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.NetworkPerfCounters)
 
@@ -234,6 +235,7 @@ function MusicPlayerController.create(
 	self._playbackStartClock = 0 :: number -- os.clock when current track playback started (stall guard)
 	self._playbackEpoch = 0 -- bumped on stop; invalidates stale Loaded/Ended callbacks
 	self._partAdvanceInFlight = false -- part N→N+1 transition
+	self._isPaused = false -- mirrors playbackTiming.isPaused; paused sounds count as active
 	self._partDurations = {} :: { [number]: number } -- cache duration per part
 	self._assetFailureReportedTrackIds = {} :: { [string]: boolean }
 	self._prefetchGeneration = 0
@@ -253,6 +255,7 @@ function MusicPlayerController.create(
 	self._voteSkipRE = nil :: RemoteEvent?
 	self._requestTrackRE = nil :: RemoteEvent?
 	self._adminSkipRE = nil :: RemoteEvent?
+	self._transportRE = nil :: RemoteEvent?
 	self._reportFailureRE = nil :: RemoteEvent?
 	self._playbackIncidentRE = nil :: RemoteEvent?
 	self._musicResponseRE = nil :: RemoteEvent?
@@ -346,8 +349,82 @@ function MusicPlayerController:_onTimingUpdated(data: any)
 		return
 	end
 	self._store:set(self:_buildStoreTimingPatch(data))
+	self:_syncTransportToSounds()
 	if self._panelInitialized then
 		self._binder:refreshProgressFromStore()
+	end
+end
+
+-- Elapsed seconds of the current track. The store timing knows about pause (frozen) and seek
+-- (moved start), so it wins over a start time captured before either happened.
+function MusicPlayerController:_elapsedFromStart(startServerTime: number): number
+	local timing = self._store:get().playbackTiming
+	local now = workspace:GetServerTimeNow()
+	if type(timing) == "table" and (tonumber(timing.startServerTime) or 0) > 0 then
+		return MusicDomain.getTimingElapsedSeconds(timing, now)
+	end
+	return now - startServerTime
+end
+
+-- Applies the server's pause state to the live sounds (same instances: Pause/Resume, never
+-- recreate), then lines the playing part up with a moved clock.
+function MusicPlayerController:_syncTransportToSounds()
+	local timing = self._store:get().playbackTiming
+	local paused = type(timing) == "table" and timing.isPaused == true
+	if paused ~= self._isPaused then
+		self._isPaused = paused
+		for _, sound in pairs(self._activeSounds) do
+			if sound and sound.Parent then
+				if paused then
+					if sound.IsPlaying then
+						sound:Pause()
+					end
+				elseif sound.IsLoaded and not sound.IsPlaying then
+					sound:Resume()
+				end
+			end
+		end
+	end
+	if not paused then
+		self:_correctPlaybackDrift()
+	end
+end
+
+-- Seek / resume moved the server clock. Small drift is left alone; a larger one moves
+-- TimePosition on the same Sound. Only a jump out of the playing part restarts playback.
+function MusicPlayerController:_correctPlaybackDrift()
+	local DRIFT_TOLERANCE_SECONDS = 0.75
+	local state = self._store:get()
+	local track = state.currentTrack
+	if type(track) ~= "table" or track.id ~= self._currentTrackId or self._partAdvanceInFlight then
+		return
+	end
+	local partIndex, sound = next(self._activeSounds)
+	if type(partIndex) ~= "number" or not sound or not sound.Parent or not sound.IsLoaded then
+		return
+	end
+	local accumulated = 0
+	for index = 1, partIndex - 1 do
+		local duration = self._partDurations[index]
+		if not duration or duration <= 0 then
+			return
+		end
+		accumulated += duration
+	end
+	local partDuration = self._partDurations[partIndex]
+	if not partDuration or partDuration <= 0 then
+		return
+	end
+	local startServerTime = tonumber(state.startServerTime) or 0
+	local target = self:_elapsedFromStart(startServerTime) - accumulated
+	if target < 0 or target >= partDuration then
+		self:_stopAllSounds(0)
+		self:_seekToElapsed(track, startServerTime)
+		return
+	end
+	local rawTarget = self:_getRawTimePositionFromElapsed(target)
+	if math.abs(sound.TimePosition - rawTarget) > DRIFT_TOLERANCE_SECONDS * self._playbackSpeed then
+		sound.TimePosition = rawTarget
 	end
 end
 
@@ -699,7 +776,7 @@ function MusicPlayerController:_playFromPart(
 		-- now so asset load delay does not cause desync.
 		local effectiveSeekTo: number
 		if startServerTime and startServerTime > 0 then
-			local freshElapsed = workspace:GetServerTimeNow() - startServerTime
+			local freshElapsed = self:_elapsedFromStart(startServerTime)
 			effectiveSeekTo = math.max(0, freshElapsed - (accumDur or 0))
 		else
 			effectiveSeekTo = seekTo
@@ -741,6 +818,10 @@ function MusicPlayerController:_playFromPart(
 			sound.TimePosition = rawSeekTo
 		end
 		sound:Play()
+		if self._isPaused then
+			-- Joined or restarted while the DJ has it paused: load in place, wait for resume.
+			sound:Pause()
+		end
 		if (fadeInDuration or 0) > 0 then
 			local resolvedFadeInDuration = fadeInDuration or 0
 			local targetVolume = math.clamp(tonumber(self._store:get().volume) or volume, 0, 1)
@@ -967,6 +1048,7 @@ local SKIP_REASON_MESSAGES: { [string]: { title: string, message: string } } = {
 	asset_failure = { title = "Track Skipped", message = "Track skipped (audio failed to load)" },
 	track_deleted = { title = "Track Removed", message = "Track was removed from library" },
 	track_unavailable = { title = "Track Unavailable", message = "Track data is no longer available" },
+	previous = { title = "Previous Track", message = "The DJ went back to the previous track" },
 }
 
 -- Track changed handler
@@ -1042,6 +1124,7 @@ function MusicPlayerController:_onTrackChanged(data: any)
 		self:_primeTrackPartDurations(track)
 		self:_schedulePrefetchFromStore(track)
 		self:_markPlaybackStart(track.id, startServerTime)
+		self:_syncTransportToSounds()
 		return
 	end
 
@@ -1060,6 +1143,7 @@ function MusicPlayerController:_onTrackChanged(data: any)
 		})
 		self._binder:updateTrackDisplay(track)
 		self._binder:startProgressTracking()
+		self:_syncTransportToSounds()
 		return
 	end
 
@@ -1093,6 +1177,8 @@ function MusicPlayerController:_onTrackChanged(data: any)
 		self:_setBaseSpeed(math.max(0.05, tonumber(self._config.PLAYBACK_SPEED) or 1))
 	end
 
+	-- Pause flag first so sounds created below start paused when the song is paused.
+	self:_syncTransportToSounds()
 	-- Pass through startServerTime; _seekToElapsed computes elapsed fresh.
 	self:_seekToElapsed(track, startServerTime)
 	self:_schedulePrefetchFromStore(track)
@@ -1133,7 +1219,7 @@ function MusicPlayerController:_seekToElapsed(track: any, startServerTime: numbe
 		return
 	end
 
-	local elapsed = workspace:GetServerTimeNow() - startServerTime
+	local elapsed = self:_elapsedFromStart(startServerTime)
 
 	-- If duration already known, find the correct part.
 	-- If not yet -> play from part 1 (fresh seek done when sound loaded).
@@ -1720,6 +1806,7 @@ function MusicPlayerController:_applyServerState(data: any, options: { forcePlay
 			isPlaying = serverIsPlaying,
 		})
 		self._binder:updateTrackDisplay(incomingTrack)
+		self:_syncTransportToSounds()
 		if serverIsPlaying then
 			self:_markPlaybackStart(incomingTrack.id, incomingStartServerTime)
 		end
@@ -1743,6 +1830,7 @@ function MusicPlayerController:_applyServerState(data: any, options: { forcePlay
 			isPlaying = serverIsPlaying,
 		})
 		self._binder:updateTrackDisplay(incomingTrack)
+		self:_syncTransportToSounds()
 		return
 	end
 
@@ -1779,7 +1867,8 @@ function MusicPlayerController:_hasActivePlayback(): boolean
 	for _, sound in pairs(self._activeSounds) do
 		if sound and sound.Parent then
 			-- Loading counts as active; IsPlaying-only caused false self-heal + double audio.
-			if sound.IsPlaying or not sound.IsLoaded then
+			-- A paused sound is healthy too, or the watchdog would restart a song the DJ paused.
+			if sound.IsPlaying or not sound.IsLoaded or self._isPaused then
 				return true
 			end
 		end
@@ -1819,6 +1908,7 @@ function MusicPlayerController:_forceStartPlaybackFromStore(): boolean
 		self:_setBaseSpeed(math.max(0.05, tonumber(self._config.PLAYBACK_SPEED) or 1))
 	end
 
+	self:_syncTransportToSounds()
 	self:_seekToElapsed(track, startServerTime)
 	self:_markPlaybackStart(track.id, startServerTime)
 	self:_schedulePrefetchFromStore(track)
@@ -1963,6 +2053,46 @@ function MusicPlayerController:_bootstrapInitialPlayback()
 		isPlaying = self._store:get().isPlaying == true,
 		hasTrack = type(self._store:get().currentTrack) == "table",
 	})
+end
+
+-- v3 transport actions (pause, resume, seek, previous, clear, remove, request_many).
+function MusicPlayerController:_sendTransport(action: string, payload: { [string]: any }?)
+	local request = if type(payload) == "table" then table.clone(payload) else {}
+	request.action = action
+	task.spawn(function()
+		local result = self:_requestMusicAsync("transport", self._transportRE, request)
+		if type(result) == "table" and result.ok == true then
+			if action == "request_many" then
+				local added = if type(result.data) == "table" then tonumber(result.data.added) or 0 else 0
+				self:_showNotification({
+					title = "Added to queue",
+					message = string.format("%d %s added to the queue", added, if added == 1 then "track" else "tracks"),
+					domain = "music",
+					dedupeKey = "music_request_many",
+				}, "success")
+			end
+			return
+		end
+		local err = if type(result) == "table" then tostring(result.error or "request_failed") else "request_failed"
+		local messages = {
+			rate_limited = "Slow down a little and try again.",
+			no_permission = "Only DJs can control playback.",
+			not_playing = "Nothing is playing right now.",
+			queue_empty = "The queue is already empty.",
+			queue_limit_reached = "Your queue is full. Let a song play first.",
+			nothing_to_add = "Everything in this set is already queued.",
+			not_owner = "You can only remove your own requests.",
+			not_found = "That request already left the queue.",
+			dj_only = "The DJ is controlling the queue right now.",
+		}
+		self._log:debug("Transport failed", { action = action, error = err })
+		self:_showNotification({
+			title = "Music",
+			message = messages[err] or "That music action didn't go through.",
+			domain = "music",
+			dedupeKey = "music_transport_" .. err,
+		}, "warning")
+	end)
 end
 
 function MusicPlayerController:_toggleDjMode()
@@ -2326,6 +2456,7 @@ function MusicPlayerController:initEngine()
 	self._voteSkipRE = self:_waitMusicRemote(config.REMOTE_VOTE_SKIP)
 	self._requestTrackRE = self:_waitMusicRemote(config.REMOTE_REQUEST_TRACK)
 	self._adminSkipRE = self:_waitMusicRemote(config.REMOTE_ADMIN_SKIP)
+	self._transportRE = self:_waitMusicRemote(config.REMOTE_TRANSPORT)
 	local reportFailure = remotes:FindFirstChild(config.REMOTE_REPORT_FAILURE)
 	self._reportFailureRE = if reportFailure and reportFailure:IsA("RemoteEvent")
 		then reportFailure :: RemoteEvent
@@ -2484,6 +2615,16 @@ function MusicPlayerController:initPanel()
 	binder:setOnRequestTrack(function(trackId)
 		if self._requestTrackRE then
 			self._requestTrackRE:FireServer({ trackId = trackId, requestId = HttpService:GenerateGUID(false) })
+		end
+	end)
+
+	binder:setOnTransport(function(action: string, payload: any)
+		self:_sendTransport(action, payload)
+	end)
+
+	binder:setOnAdminSkip(function()
+		if self._adminSkipRE then
+			self._adminSkipRE:FireServer({ requestId = HttpService:GenerateGUID(false) })
 		end
 	end)
 
@@ -2904,6 +3045,14 @@ function MusicPlayerController:_loadTracks(playlistId: string?, forceRefresh: bo
 	if not self:_isPanelSessionActive(expectedSessionId) then
 		return
 	end
+	-- DJ Sets are derived from allTracks on the client; there is nothing to fetch.
+	if MusicLibraryModel.isDjSetId(playlistId) then
+		local store = self._store
+		local subset = MusicLibraryModel.tracksForDjSet(store:get().allTracks or {}, playlistId :: string)
+		store:set({ tracks = subset })
+		self._binder:renderTracks(subset, store:get().searchQuery)
+		return
+	end
 	local result = self:_fetchTracks(playlistId, forceRefresh)
 	if result and self:_isPanelSessionActive(expectedSessionId) then
 		local store = self._store
@@ -2933,9 +3082,25 @@ function MusicPlayerController:_loadLibraryData(playlistId: string?, expectedSes
 		return
 	end
 
-	local tracks = self:_fetchTracks(playlistId, false)
+	-- Every track this player may see (the server leaves private ones out): DJ Sets derive from it.
+	local allTracks = self:_fetchTracks(nil, false)
 	if not self:_isPanelSessionActive(expectedSessionId) then
 		return
+	end
+	if allTracks and allTracks ~= self._store:get().allTracks then
+		self._store:set({ allTracks = allTracks, djSets = MusicLibraryModel.deriveDjSets(allTracks) })
+	end
+
+	local tracks
+	if MusicLibraryModel.isDjSetId(playlistId) then
+		tracks = MusicLibraryModel.tracksForDjSet(self._store:get().allTracks or {}, playlistId :: string)
+	elseif playlistId == nil or playlistId == "" then
+		tracks = allTracks
+	else
+		tracks = self:_fetchTracks(playlistId, false)
+		if not self:_isPanelSessionActive(expectedSessionId) then
+			return
+		end
 	end
 	if tracks then
 		self._store:set({ tracks = tracks })

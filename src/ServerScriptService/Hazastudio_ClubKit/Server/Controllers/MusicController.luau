@@ -216,6 +216,7 @@ local function createMusicController(deps: {
 			config.REMOTE_RESOLVE_REQUEST_ASSET,
 			"RemoteEvent"
 		) :: RemoteEvent
+		local transportRE = getOrCreate(remotes, config.REMOTE_TRANSPORT, "RemoteEvent") :: RemoteEvent
 
 		-- NetworkManagers batch per-Heartbeat. Music broadcasts fan out to many
 		-- listeners (track change, queue update, vote state, response).
@@ -277,6 +278,8 @@ local function createMusicController(deps: {
 			config.RESOLVE_REQUEST_ASSET_RATE_WINDOW
 		)
 		local resolveRequestAssetCache = makeIdempotencyCache()
+		local transportCache = makeIdempotencyCache()
+		local transportLimiter = RateLimiter.new(config.TRANSPORT_RATE_MAX, config.TRANSPORT_RATE_WINDOW)
 		-- Wire callbacks to Service
 		-- skipReason: optional string for client notification (vote_skip, admin_skip, etc.)
 		service:setOnTrackChanged(function(payload: any, members: { Player }, skipReason: string?)
@@ -397,6 +400,66 @@ local function createMusicController(deps: {
 					log:debug("AdminSkip rejected", { player = player.Name, reason = err })
 					notifyMusicFailure(notify, player, "admin", err, config)
 				end
+			end)
+		end)
+		-- Transport (v3): pause / resume / seek / previous / clear / remove / request_many.
+		local TRANSPORT_ACTIONS = {
+			pause = true,
+			resume = true,
+			seek = true,
+			previous = true,
+			clear = true,
+			remove = true,
+			request_many = true,
+		}
+		local MAX_BULK_TRACK_IDS = 200
+		local MAX_SEEK_SECONDS = 30
+		transportRE.OnServerEvent:Connect(function(player: Player, raw: any)
+			local valid, reason = validatePayload(raw)
+			if not valid then
+				log:warn("Transport: invalid payload", { player = player.Name, reason = reason })
+				return
+			end
+			local requestId = (raw :: any).requestId
+			local action = if type((raw :: any).action) == "string" then (raw :: any).action else ""
+			if not TRANSPORT_ACTIONS[action] then
+				fireMusicResponse(responseRE, player, "transport", requestId, false, nil, "invalid_action")
+				return
+			end
+			if not transportLimiter:check(player.UserId) then
+				fireMusicResponse(responseRE, player, "transport", requestId, false, nil, "rate_limited")
+				return
+			end
+			if not checkIdempotency(transportCache, requestId) then
+				return
+			end
+
+			local delta = (raw :: any).delta
+			local trackIds: { string } = {}
+			if type((raw :: any).trackIds) == "table" then
+				for _, trackId in ipairs((raw :: any).trackIds) do
+					if #trackIds >= MAX_BULK_TRACK_IDS then
+						break
+					end
+					if type(trackId) == "string" and trackId ~= "" and #trackId <= 128 then
+						table.insert(trackIds, trackId)
+					end
+				end
+			end
+			local payload = {
+				entryId = if type((raw :: any).entryId) == "string" then (raw :: any).entryId else nil,
+				delta = if type(delta) == "number" and delta == delta
+					then math.clamp(delta, -MAX_SEEK_SECONDS, MAX_SEEK_SECONDS)
+					else nil,
+				shuffle = (raw :: any).shuffle == true,
+				trackIds = trackIds,
+			}
+			task.spawn(function()
+				local ok, err, data = service:transport(player, action, payload)
+				if not ok then
+					log:debug("Transport rejected", { player = player.Name, action = action, reason = err })
+				end
+				fireMusicResponse(responseRE, player, "transport", requestId, ok, data, err)
 			end)
 		end)
 		-- ReportFailure: client-side asset failure telemetry (no global skip).

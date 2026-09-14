@@ -298,6 +298,7 @@ if Config.FeatureFlags.MusicPlayerEnabled then
 	ensureRemoteEvent(Remotes, musicConfig.REMOTE_DJ_EFFECT)
 	ensureRemoteEvent(Remotes, musicConfig.REMOTE_MANAGE_PLAYLIST)
 	ensureRemoteEvent(Remotes, musicConfig.REMOTE_MANAGE_TRACK)
+	ensureRemoteEvent(Remotes, musicConfig.REMOTE_TRANSPORT)
 end
 -- Late-bound controller remotes: create early so client boot does not wait on heavy server wiring.
 provisionEarlyRemotes(ReplicatedStorage, Remotes, Config)

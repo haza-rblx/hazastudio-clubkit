@@ -8,6 +8,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local MusicDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicDomain)
 local MusicDurationPolicy = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicDurationPolicy)
+local MusicTransportPolicy = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicTransportPolicy)
 local NetworkPerfCounters = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.NetworkPerfCounters)
 local MusicAssetValidator = require(script.Parent.MusicAssetValidator)
 
@@ -55,6 +56,8 @@ local function createMusicSession(deps: {
 		expectedEndServerTime = 0,
 		effectivePlaybackSpeed = globalPlaybackSpeed,
 		isPlaying = false,
+		isPaused = false,
+		pausedElapsed = 0,
 		isDjMode = false,
 		djOwnerUserId = nil :: number?,
 		queue = {} :: { QueueEntry },
@@ -80,6 +83,10 @@ local function createMusicSession(deps: {
 	local lastSystemTrackId = nil :: string?
 	local autoBuffer: { QueueEntry } = {}
 	local playbackFinishVotes = {} :: { [number]: true }
+	-- Entries that already played (newest last), for Previous. Session-only.
+	local PLAYED_HISTORY_MAX = 20
+	local playedHistory: { QueueEntry } = {}
+	local skipHistoryOnce = false
 
 	local function newEntryId(): string
 		return HttpService:GenerateGUID(false)
@@ -111,11 +118,16 @@ local function createMusicSession(deps: {
 	end
 
 	local function buildTiming(): PlaybackTiming
-		return MusicDomain.buildPlaybackTiming(
+		local timing = MusicDomain.buildPlaybackTiming(
 			state.startServerTime,
 			state.expectedEndServerTime,
 			state.effectivePlaybackSpeed
 		)
+		if state.isPaused then
+			timing.isPaused = true
+			timing.pausedElapsed = state.pausedElapsed
+		end
+		return timing
 	end
 
 	local function clearPlaybackFinishVotes()
@@ -126,6 +138,8 @@ local function createMusicSession(deps: {
 		state.startServerTime = 0
 		state.expectedEndServerTime = 0
 		state.effectivePlaybackSpeed = globalPlaybackSpeed
+		state.isPaused = false
+		state.pausedElapsed = 0
 	end
 
 	local function isSystemEntry(entry: QueueEntry?): boolean
@@ -293,6 +307,10 @@ local function createMusicSession(deps: {
 
 	local function scheduleAdvanceToExpectedEnd(trackId: string)
 		cancelAutoAdvance()
+		-- A paused song never ends by itself; resume reschedules from the moved clock.
+		if state.isPaused then
+			return
+		end
 		local token = advanceScheduleToken
 		local now = workspace:GetServerTimeNow()
 		local remaining = state.expectedEndServerTime - now
@@ -366,6 +384,15 @@ local function createMusicSession(deps: {
 		local newSpeed = getEffectivePlaybackSpeed(track)
 		if math.abs(oldSpeed - newSpeed) < 0.001 then
 			state.effectivePlaybackSpeed = newSpeed
+			return
+		end
+		if state.isPaused then
+			-- Frozen position stays; only the part still to play stretches or shrinks.
+			local total = math.max(0, state.expectedEndServerTime - state.startServerTime)
+			local remainingPaused = math.max(0, total - state.pausedElapsed) * (oldSpeed / newSpeed)
+			state.effectivePlaybackSpeed = newSpeed
+			state.expectedEndServerTime = state.startServerTime + state.pausedElapsed + remainingPaused
+			broadcastTimingUpdated(nil)
 			return
 		end
 		local remainingWall = math.max(0, state.expectedEndServerTime - now)
@@ -705,6 +732,8 @@ local function createMusicSession(deps: {
 		state.currentEntry = nextEntry
 		state.startServerTime = workspace:GetServerTimeNow()
 		state.isPlaying = true
+		state.isPaused = false
+		state.pausedElapsed = 0
 		state.voteSkipVoters = {}
 		clearPlaybackFinishVotes()
 
@@ -717,6 +746,14 @@ local function createMusicSession(deps: {
 			clearVoteSession("cancelled")
 		end
 		local previousTrackId = state.currentTrackId
+		local previousEntry = state.currentEntry
+		if previousEntry and not skipHistoryOnce then
+			table.insert(playedHistory, previousEntry)
+			while #playedHistory > PLAYED_HISTORY_MAX do
+				table.remove(playedHistory, 1)
+			end
+		end
+		skipHistoryOnce = false
 		state.currentTrackId = nil
 		state.currentEntry = nil
 		cancelAutoAdvance()
@@ -924,6 +961,10 @@ local function createMusicSession(deps: {
 	end
 
 	function session:onDurationUpdated(trackId: string, wallDuration: number): boolean
+		if state.isPaused then
+			-- The clock is frozen; a reported length would be measured against a moving start.
+			return true
+		end
 		local track = getTrackById(trackId)
 		local decision = MusicDurationPolicy.evaluate({
 			isCurrentTrack = state.currentTrackId == trackId,
@@ -961,6 +1002,9 @@ local function createMusicSession(deps: {
 		end
 		if state.currentTrackId ~= trackId or not state.isPlaying then
 			return true, ""
+		end
+		if state.isPaused then
+			return true, "paused"
 		end
 
 		playbackFinishVotes[player.UserId] = true
@@ -1202,6 +1246,161 @@ local function createMusicSession(deps: {
 		rescheduleTimingForSpeedChange()
 		syncDjEffectsToAllMembers()
 		return true, ""
+	end
+
+	-- ============================================================
+	-- Transport (v3 stage E). Timing math lives in MusicTransportPolicy.
+	-- ============================================================
+
+	local function currentTransportTiming(): any
+		return {
+			startServerTime = state.startServerTime,
+			expectedEndServerTime = state.expectedEndServerTime,
+			effectivePlaybackSpeed = state.effectivePlaybackSpeed,
+			isPaused = state.isPaused,
+			pausedElapsed = state.pausedElapsed,
+		}
+	end
+
+	local function applyTransportTiming(timing: any)
+		state.startServerTime = timing.startServerTime
+		state.expectedEndServerTime = timing.expectedEndServerTime
+		state.isPaused = timing.isPaused == true
+		state.pausedElapsed = if state.isPaused then tonumber(timing.pausedElapsed) or 0 else 0
+		clearPlaybackFinishVotes()
+		if state.isPaused then
+			cancelAutoAdvance()
+		else
+			scheduleAdvanceToExpectedEnd(state.currentTrackId or "")
+		end
+		broadcastTimingUpdated(nil)
+	end
+
+	local function runTimingAction(action: (any, number) -> any, label: string): (boolean, string)
+		if not state.isPlaying or not state.currentTrackId then
+			return false, "not_playing"
+		end
+		local result = action(currentTransportTiming(), workspace:GetServerTimeNow())
+		if not result.ok then
+			return false, result.reason
+		end
+		applyTransportTiming(result.timing)
+		log:info("Playback " .. label, { trackId = state.currentTrackId, paused = state.isPaused })
+		return true, ""
+	end
+
+	function session:pause(): (boolean, string)
+		return runTimingAction(MusicTransportPolicy.pause, "paused")
+	end
+
+	function session:resume(): (boolean, string)
+		return runTimingAction(MusicTransportPolicy.resume, "resumed")
+	end
+
+	function session:seek(deltaSeconds: number): (boolean, string)
+		return runTimingAction(function(timing: any, now: number)
+			return MusicTransportPolicy.seek(timing, now, deltaSeconds)
+		end, "seeked")
+	end
+
+	function session:previous(): (boolean, string)
+		if not state.isPlaying or not state.currentEntry then
+			return false, "not_playing"
+		end
+		local now = workspace:GetServerTimeNow()
+		local elapsed = MusicTransportPolicy.elapsed(currentTransportTiming(), now)
+		if MusicTransportPolicy.previous(elapsed, #playedHistory) == "restart" then
+			return runTimingAction(function(timing: any, clockNow: number)
+				return MusicTransportPolicy.seek(timing, clockNow, -elapsed)
+			end, "restarted")
+		end
+		-- Back to the last played song; the song on air returns to the front of the queue.
+		local previousEntry = table.remove(playedHistory) :: QueueEntry
+		table.insert(state.queue, 1, state.currentEntry :: QueueEntry)
+		table.insert(state.queue, 1, previousEntry)
+		skipHistoryOnce = true
+		session:advanceQueue("previous")
+		return true, ""
+	end
+
+	function session:clearQueue(): (boolean, string)
+		if #state.queue == 0 then
+			return false, "queue_empty"
+		end
+		table.clear(state.queue)
+		if shouldMaintainAutoBuffer() then
+			ensureAutoBufferDepth(getAutoQueueDepth())
+		end
+		broadcastQueueUpdated()
+		log:info("Queue cleared")
+		return true, ""
+	end
+
+	function session:removeQueueEntry(player: Player, entryId: string, canControlAll: boolean): (boolean, string)
+		local result = MusicTransportPolicy.removeEntry(state.queue, entryId, player.UserId, canControlAll)
+		if not result.ok then
+			return false, result.reason
+		end
+		state.queue = result.queue
+		if shouldMaintainAutoBuffer() then
+			ensureAutoBufferDepth(getAutoQueueDepth())
+		end
+		broadcastQueueUpdated()
+		return true, ""
+	end
+
+	-- Add sets / Shuffle. Live control gets config.REQUEST_MANY_MAX; everyone else only the free
+	-- slots of the per-user queue limit, so a playlist cannot take the queue from other players.
+	function session:requestMany(
+		player: Player,
+		trackIds: { any },
+		shuffle: boolean,
+		canControlAll: boolean
+	): (boolean, string, any?)
+		if state.isDjMode and not canControlDuringDjMode(player) then
+			return false, "dj_only", nil
+		end
+		local cap = if canControlAll
+			then math.max(1, math.floor(tonumber(config.REQUEST_MANY_MAX) or 25))
+			else math.max(0, requestTrackMaxPerUserQueue - countQueuedTracksForUser(player.UserId))
+		if cap <= 0 then
+			return false, "queue_limit_reached", nil
+		end
+		local excluded: { [string]: boolean } = {}
+		if state.currentTrackId then
+			excluded[state.currentTrackId] = true
+		end
+		for _, entry in ipairs(state.queue) do
+			excluded[entry.trackId] = true
+		end
+		local planned = MusicTransportPolicy.planRequestMany(trackIds, {
+			cap = cap,
+			excluded = excluded,
+			shuffle = shuffle,
+			random = function(upper: number): number
+				return randomGenerator:NextInteger(1, upper)
+			end,
+		})
+
+		clearAutoBuffer()
+		sanitizeQueue()
+		local added = 0
+		for _, trackId in ipairs(planned) do
+			if repo:getTrack(trackId) then
+				table.insert(state.queue, MusicDomain.newUserQueueEntry(trackId, newEntryId(), player))
+				added += 1
+			end
+		end
+		if added == 0 then
+			return false, "nothing_to_add", nil
+		end
+		log:info("Tracks requested in bulk", { player = player.Name, added = added, shuffle = shuffle })
+		if not state.isPlaying then
+			session:advanceQueue()
+		else
+			broadcastQueueUpdated()
+		end
+		return true, "", { added = added }
 	end
 
 	function session:getDjEffectState(): any

@@ -52,6 +52,8 @@ export type PlaybackTiming = {
 	startServerTime: number,
 	expectedEndServerTime: number,
 	effectivePlaybackSpeed: number,
+	isPaused: boolean?,      -- v3 transport: elapsed is frozen at pausedElapsed
+	pausedElapsed: number?,
 }
 
 export type PlaybackState = {
@@ -193,6 +195,9 @@ end
 function MusicDomain.getTimingElapsedSeconds(timing: PlaybackTiming?, now: number?): number
 	if type(timing) ~= "table" then
 		return 0
+	end
+	if timing.isPaused == true then
+		return math.max(0, tonumber(timing.pausedElapsed) or 0)
 	end
 	local clockNow = if type(now) == "number" then now else 0
 	return math.max(0, clockNow - timing.startServerTime)

@@ -456,13 +456,19 @@ local function createMusicService(deps: {
 			return result.value
 		end
 
-		local filtered: { [string]: PlaylistInfo } = {}
+		-- A private playlist keeps its card for everyone (the v3 Library shows the PrivateWall);
+		-- only musicControl holders receive its track ids.
+		local visible: { [string]: PlaylistInfo } = {}
 		for id, playlist in pairs(result.value) do
-			if not isPlaylistPrivate(playlist) then
-				filtered[id] = playlist
+			if isPlaylistPrivate(playlist) then
+				local card = table.clone(playlist)
+				card.trackIds = {}
+				visible[id] = card
+			else
+				visible[id] = playlist
 			end
 		end
-		return filtered
+		return visible
 	end
 
 	function service:reloadLibraryFromStore(reason: string?): (boolean, string)
@@ -505,11 +511,24 @@ local function createMusicService(deps: {
 	function service:getTracksForPlaylist(player: Player?, playlistId: string?): { [string]: TrackInfo }
 		local result = repo:getTracks()
 		if not result.ok then return {} end
+		local canSeePrivate = player ~= nil and service:isControlAllowed(player)
+		local playlistsById: { [string]: PlaylistInfo } = {}
+		if not canSeePrivate then
+			local playlistsResult = repo:getPlaylists()
+			if playlistsResult.ok then
+				playlistsById = playlistsResult.value
+			end
+		end
+		-- Tracks of a private playlist never reach players without musicControl, whichever list
+		-- asks: all tracks (DJ Sets are derived from it), favourites and new drops included.
+		local function isVisible(track: TrackInfo): boolean
+			return canSeePrivate or not isPlaylistPrivate(playlistsById[track.playlistId])
+		end
 		if playlistId == SPECIAL_PLAYLIST_FAVORITES_ID then
 			local favorites = getFavoriteTrackIds(player)
 			local filtered: { [string]: TrackInfo } = {}
 			for id, track in pairs(result.value) do
-				if favorites[id] == true then filtered[id] = track end
+				if favorites[id] == true and isVisible(track) then filtered[id] = track end
 			end
 			return filtered
 		end
@@ -517,20 +536,24 @@ local function createMusicService(deps: {
 			local now = os.time()
 			local filtered: { [string]: TrackInfo } = {}
 			for id, track in pairs(result.value) do
-				if isTrackInNewDrops(track, now) then filtered[id] = track end
+				if isTrackInNewDrops(track, now) and isVisible(track) then filtered[id] = track end
 			end
 			return filtered
 		end
 		if playlistId and playlistId ~= "" then
 			local playlist = repo:getPlaylist(playlistId)
-			if isPlaylistPrivate(playlist) and not (player and service:isControlAllowed(player)) then
+			if isPlaylistPrivate(playlist) and not canSeePrivate then
 				return {}
 			end
+			local filtered: { [string]: TrackInfo } = {}
+			for id, track in pairs(result.value) do
+				if track.playlistId == playlistId then filtered[id] = track end
+			end
+			return filtered
 		end
-		if not playlistId or playlistId == "" then return result.value end
 		local filtered: { [string]: TrackInfo } = {}
 		for id, track in pairs(result.value) do
-			if track.playlistId == playlistId then filtered[id] = track end
+			if isVisible(track) then filtered[id] = track end
 		end
 		return filtered
 	end
@@ -727,6 +750,47 @@ local function createMusicService(deps: {
 		local sess = getOrCreateSession()
 		log:info("AdminSkip via global command")
 		return sess:adminSkip()
+	end
+
+	-- v3 transport. Pause / resume / seek / previous / clear need live control; removing your own
+	-- queue entry and bulk requests do not (the session caps them per player).
+	function service:transport(player: Player, action: string, payload: any): (boolean, string, any?)
+		local sess = getOrCreateSession()
+		local canControl = service:isControlAllowed(player)
+		if action == "remove" then
+			local ok, err = sess:removeQueueEntry(player, tostring(payload.entryId or ""), canControl)
+			return ok, err, nil
+		elseif action == "request_many" then
+			if not isStudioMode then
+				local allowed, _ = requestTrackLimiter:check(player.UserId)
+				if not allowed then
+					return false, "rate_limited", nil
+				end
+			end
+			return sess:requestMany(player, payload.trackIds or {}, payload.shuffle == true, canControl)
+		end
+
+		if not canControl then
+			return false, "no_permission", nil
+		end
+		local ok, err
+		if action == "pause" then
+			ok, err = sess:pause()
+		elseif action == "resume" then
+			ok, err = sess:resume()
+		elseif action == "seek" then
+			ok, err = sess:seek(tonumber(payload.delta) or 0)
+		elseif action == "previous" then
+			ok, err = sess:previous()
+		elseif action == "clear" then
+			ok, err = sess:clearQueue()
+		else
+			return false, "invalid_action", nil
+		end
+		if ok then
+			log:info("Transport " .. action .. " by " .. player.Name)
+		end
+		return ok, err, nil
 	end
 
 	-- reportTrackFailure: client reports local load failure. Logged only — never

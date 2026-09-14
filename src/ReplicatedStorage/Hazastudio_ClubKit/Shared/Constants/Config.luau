@@ -3395,6 +3395,7 @@ Config.Music = {
 	REMOTE_MANAGE_PLAYLIST = "MusicManagePlaylist", -- C->S (admin only, RE)
 	REMOTE_MANAGE_TRACK = "MusicManageTrack", -- C->S (admin only, RE)
 	REMOTE_RESOLVE_REQUEST_ASSET = "MusicResolveRequestAsset", -- C->S (RE)
+	REMOTE_TRANSPORT = "MusicTransport", -- C->S (RE) v3: pause/resume/seek/previous/clear/remove/request_many
 	-- 30s: get_state / get_playlists / get_tracks yield through MusicRepository
 	-- (DataStore cache miss = ~500ms, BudgetGate defer up to 5s) plus per-track
 	-- thumbnail resolution. 10s tripped on cold boot.
@@ -3727,6 +3728,9 @@ Config.Music = {
 	VOTE_SKIP_RATE_WINDOW = 30,
 	REQUEST_TRACK_RATE_MAX = 100,
 	REQUEST_TRACK_RATE_WINDOW = 30,
+	-- v3 Add sets / Shuffle: max tracks one DJ/admin request can queue (players get their free
+	-- REQUEST_TRACK_MAX_PER_USER_QUEUE slots instead).
+	REQUEST_MANY_MAX = 25,
 	REQUEST_TRACK_MAX_PER_USER_QUEUE = 100,
 	READ_RATE_MAX = 8,
 	READ_RATE_WINDOW = 10,
@@ -3743,6 +3747,8 @@ Config.Music = {
 	DJ_MODE_RATE_WINDOW = 60,
 	DJ_EFFECT_RATE_MAX = 150,
 	DJ_EFFECT_RATE_WINDOW = 60,
+	TRANSPORT_RATE_MAX = 30,
+	TRANSPORT_RATE_WINDOW = 30,
 	-- D2 (quota-efficiency-pass-2026-06, Phase 1): extended from 15s to 30s.
 	-- Music library rarely changes. Revert to 15s via Config if admin upload track UX issue.
 	-- DataStore-heavy path, not HTTP-API culprit. Default OK.

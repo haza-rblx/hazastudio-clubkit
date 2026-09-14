@@ -85,6 +85,8 @@ return createStore({
 	playlists          = {},   -- { [id]: PlaylistInfo }
 	selectedPlaylistId = nil,  -- string? playlistId or special playlist id
 	tracks             = {},   -- { [id]: TrackInfo } from playlist yang dipilih
+	allTracks          = {},   -- { [id]: TrackInfo } every track this player may see (v3 DJ Sets)
+	djSets             = {},   -- { MusicLibraryModel.DjSet } derived once per allTracks load
 	favoriteTrackIds   = {},   -- { [trackId]: true } mirror from Player attribute favorites
 	searchQuery        = "",
 
