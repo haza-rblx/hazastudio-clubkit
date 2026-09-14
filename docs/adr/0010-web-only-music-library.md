@@ -112,3 +112,21 @@ Until the pull transport exists, the customer area still reaches the game by the
 - The push still needs the customer's key, so the free tier still cannot publish: the flusher quietly skips libraries with no Open Cloud profile. Automatic publishing fixes forgetting, not the free tier. Only the pull transport above does that.
 - The dirty set is in memory. A restart loses at most the few seconds between an edit and the next flush; the next edit marks it again. Persisting it would be a second source of truth about what the game has.
 - Everything in this addendum is interim. When the kit pulls, the flusher and the dirty set are deleted; the customer-area status copy ("perubahan langsung dikirim ke game") stays true and does not change.
+
+## Addendum — 2026-09-14: a pulling game is never merged back
+
+**Found live on THE BASIC.** The dashboard showed 4 tracks and the game 9, and one track kept returning to an asset Roblox had rejected. Three defects fed each other:
+1. Every library read rewrote tracks from their upload queue rows.
+2. The availability check called every asset still in moderation review revoked. That set off an auto re-upload whose result was judged the same way.
+3. The Open Cloud push, still running for a game that pulls, merged the game's `MusicLibrary_v1` back into BRM. That entry is only the game's cache of its last pull. A revoked track is absent from BRM's view, so the cache's stale entry won and was written back: LANY XXL's finished re-upload was replaced by the rejected asset two seconds after it landed.
+
+**Decision (owner):** for a game on the web library — marked by its one-time import row (`club_kit_library_imports`) — BRM is the only writer. `syncClubKitMusicLibrary` neither reads nor writes the game's DataStore for it and does no write-back; it returns a summary of what the pull serves. Games without an import row keep the Open Cloud push unchanged.
+
+**Also decided with it:**
+- **One "revoked" rule.** brm-api `isLibraryItemRevoked` — status revoked, recovery given up, or a removal notice — decides both what the dashboard lists as revoked and what the pull leaves out. The dashboard and the game cannot disagree about a track again.
+- **An explicit re-check reaches revoked tracks.** A single-track forced refresh may re-check a revoked track. A bulk refresh still skips them.
+- **The dashboard shows every track with its asset status**, including revoked ones: available, being checked, in Roblox review, check failed, partially revoked (multi-part), revoked with Roblox's reason, re-uploading, needs action. Each playlist card counts the tracks the game does not play. The chip and that count use the server's pull rule (`dashboard/src/lib/asset-status.ts`).
+
+**Consequences:**
+- The Open Cloud key is no longer used to publish for a pulling game. The kit rewrites its own cache after every applied pull.
+- A game whose flag is switched back off keeps its last cache but receives no further web edits until the flag is on again. The import row is not removed, so the push does not resume on its own.
