@@ -1,10 +1,19 @@
 --!strict
 -- Calm press micro-interaction. Uses a dedicated UIScale child so it never fights
 -- AnimationHelper / panel open UIScale on ancestors or the same GuiObject.
+local GuiService = game:GetService("GuiService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 
 local MotionPresets = require(script.Parent.MotionPresets)
+
+-- ADR 0011: no squash when the player asked Roblox for less motion. Same pcall as UIMotion.reduced.
+local function reduced(): boolean
+	local ok, value = pcall(function()
+		return GuiService.ReducedMotionEnabled
+	end)
+	return ok and value == true
+end
 
 export type PressHandle = {
 	Destroy: (self: PressHandle) -> (),
@@ -50,6 +59,10 @@ function PressFeedback.bindPressScale(target: GuiObject): PressHandle
 			return
 		end
 		cancelTween()
+		if reduced() then
+			scale.Scale = 1
+			return
+		end
 		local tween = TweenService:Create(scale, info, { Scale = goalScale })
 		activeTween = tween
 		tween.Completed:Once(function()

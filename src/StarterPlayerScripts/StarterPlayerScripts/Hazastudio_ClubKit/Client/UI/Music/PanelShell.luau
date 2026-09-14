@@ -12,7 +12,7 @@ local AnimationHelper = require(script.Parent.Parent.Parent.Utils.AnimationHelpe
 local DjView = require(script.Parent.DjView)
 local GuiRefs = require(script.Parent.GuiRefs)
 local LibraryView = require(script.Parent.LibraryView)
-local MusicMotion = require(script.Parent.MusicMotion)
+local UIMotion = require(script.Parent.Parent.Parent.Utils.UIMotion)
 local NowPlayingView = require(script.Parent.NowPlayingView)
 local VoteModalView = require(script.Parent.VoteModalView)
 
@@ -128,7 +128,7 @@ function PanelShell:_applyTab(tab: string)
 	local previousIndex = table.find(TAB_KEYS, self._shownTab)
 	local nextIndex = table.find(TAB_KEYS, tab)
 	if previousIndex and nextIndex and previousIndex ~= nextIndex and refs.mainWrapper.Visible then
-		MusicMotion.slideIn((refs.tabFrames :: any)[tab], if nextIndex > previousIndex then 1 else -1)
+		UIMotion.slideIn((refs.tabFrames :: any)[tab], if nextIndex > previousIndex then 1 else -1)
 	end
 	self._shownTab = tab
 	for _, key in ipairs(TAB_KEYS) do
@@ -194,7 +194,7 @@ function PanelShell:bindAll()
 	end))
 
 	for _, button in ipairs({ refs.closeButton, table.unpack(refs.tabButtonOrder) }) do
-		for _, connection in ipairs(MusicMotion.bindPress(button)) do
+		for _, connection in ipairs(UIMotion.bindPress(button)) do
 			self:_connect(connection)
 		end
 	end

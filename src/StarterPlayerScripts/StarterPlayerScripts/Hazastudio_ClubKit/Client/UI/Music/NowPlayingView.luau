@@ -12,7 +12,7 @@ local Workspace = game:GetService("Workspace")
 local MusicDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicDomain)
 local Cover = require(script.Parent.Parent.MusicPlayerCoverHelpers)
 local GuiRefs = require(script.Parent.GuiRefs)
-local MusicMotion = require(script.Parent.MusicMotion)
+local UIMotion = require(script.Parent.Parent.Parent.Utils.UIMotion)
 local Visuals = require(script.Parent.Visuals)
 
 local PROGRESS_INTERVAL = 0.2
@@ -87,9 +87,9 @@ function NowPlayingView:bind()
 	)
 	self:_bindPress(refs.voteSkipButton)
 	self._heroFade = { refs.trackTitle, refs.trackCreator, refs.cover, refs.requesterName, refs.playlistTitle }
-	self._heroBases = MusicMotion.captureBases(self._heroFade)
+	self._heroBases = UIMotion.captureBases(self._heroFade)
 	self._djFade = { refs.djAvatar, refs.djName }
-	self._djBases = MusicMotion.captureBases(self._djFade)
+	self._djBases = UIMotion.captureBases(self._djFade)
 	self:_bindTransport()
 	-- Playlist names/covers arrive with the library; re-resolve what is already on screen.
 	table.insert(
@@ -110,7 +110,7 @@ end
 -- ============================================================
 
 function NowPlayingView:_bindPress(button: GuiObject)
-	for _, connection in ipairs(MusicMotion.bindPress(button)) do
+	for _, connection in ipairs(UIMotion.bindPress(button)) do
 		table.insert(self._connections, connection)
 	end
 end
@@ -124,7 +124,7 @@ function NowPlayingView:updateTrack(track: any?)
 	-- A new song glides in; re-syncs of the same song (playlists arriving, state echoes) do not.
 	if currentKey ~= nil and currentKey ~= previousKey and self._heroBases then
 		task.defer(function()
-			MusicMotion.fadeIn(self._heroFade, self._heroBases)
+			UIMotion.fadeIn(self._heroFade, self._heroBases)
 		end)
 	end
 	if not current then
@@ -182,13 +182,13 @@ function NowPlayingView:setDjMode(enabled: boolean)
 	Visuals.setVisible(refs.djStage, enabled)
 	if not enabled then
 		if self._heroBases then
-			MusicMotion.fadeIn(self._heroFade, self._heroBases)
+			UIMotion.fadeIn(self._heroFade, self._heroBases)
 		end
 		return
 	end
 	if self._djBases then
-		MusicMotion.fadeIn(self._djFade, self._djBases)
-		MusicMotion.popIn(refs.djAvatar, 0.7)
+		UIMotion.fadeIn(self._djFade, self._djBases)
+		UIMotion.popIn(refs.djAvatar, 0.7)
 	end
 	local owner = if type(ownerId) == "number" then Players:GetPlayerByUserId(ownerId) else nil
 	local djName = if owner then owner.DisplayName else "The DJ"
@@ -220,19 +220,19 @@ function NowPlayingView:_bindTransport()
 		return button:FindFirstChildWhichIsA("ImageLabel")
 	end
 	connect(rewind, function()
-		MusicMotion.spin(iconOf(rewind), -1)
+		UIMotion.spin(iconOf(rewind), -1)
 		self._fire("OnTransport", "seek", { delta = -SEEK_STEP_SECONDS })
 	end)
 	connect(seek, function()
-		MusicMotion.spin(iconOf(seek), 1)
+		UIMotion.spin(iconOf(seek), 1)
 		self._fire("OnTransport", "seek", { delta = SEEK_STEP_SECONDS })
 	end)
 	connect(previous, function()
-		MusicMotion.wiggle(iconOf(previous), 14)
+		UIMotion.wiggle(iconOf(previous), 14)
 		self._fire("OnTransport", "previous")
 	end)
 	connect(nextButton, function()
-		MusicMotion.wiggle(iconOf(nextButton), 14)
+		UIMotion.wiggle(iconOf(nextButton), 14)
 		self._fire("OnAdminSkip")
 	end)
 	connect(playPause, function()
@@ -257,7 +257,7 @@ function NowPlayingView:_bindTransport()
 		end
 		self._clearArmed = true
 		Visuals.setText(clearLabel, CLEAR_CONFIRM_TEXT)
-		MusicMotion.wiggle(refs.clearQueueButton, 3)
+		UIMotion.wiggle(refs.clearQueueButton, 3)
 		local token = self._clearToken
 		task.delay(CLEAR_CONFIRM_SECONDS, function()
 			if token == self._clearToken and self._clearArmed then
@@ -291,7 +291,7 @@ function NowPlayingView:_paintPlayPause()
 	local image = if self:_isPaused() or not self._pauseImage then self._playImage else self._pauseImage
 	if icon.Image ~= image then
 		icon.Image = image
-		MusicMotion.popIn(icon, 0.55)
+		UIMotion.popIn(icon, 0.55)
 	end
 end
 
@@ -351,7 +351,7 @@ function NowPlayingView:_renderProgress(force: boolean)
 		-- Glide forward between 5 Hz samples; jumps (new track, seek back, pause) snap.
 		local glide = not force and self._progressShown ~= nil and progress > self._progressShown
 		self._progressShown = progress
-		MusicMotion.tween(
+		UIMotion.tween(
 			refs.progressFill,
 			if glide then PROGRESS_INTERVAL else 0,
 			{ Size = UDim2.new(progress, 0, 1, 0) },
@@ -435,14 +435,14 @@ function NowPlayingView:_row(index: number): QueueRow
 		self._connections,
 		remove.Activated:Connect(function()
 			if row.entryId then
-				MusicMotion.wiggle(remove:FindFirstChildWhichIsA("ImageLabel"), 16)
+				UIMotion.wiggle(remove:FindFirstChildWhichIsA("ImageLabel"), 16)
 				self._fire("OnTransport", "remove", { entryId = row.entryId })
 			end
 		end)
 	)
 	self:_bindPress(remove)
 	row.fade = { row.title, row.creator, row.length, row.requester, row.coverImage }
-	row.fadeBases = MusicMotion.captureBases(row.fade)
+	row.fadeBases = UIMotion.captureBases(row.fade)
 	instance.Parent = self._template.Parent
 	self._rows[index] = row
 	return row
@@ -490,7 +490,7 @@ function NowPlayingView:renderQueue(queue: { any }, force: boolean?)
 		if force or row.key ~= key then
 			-- A slot that now holds a different entry fades in; forced re-resolves do not.
 			if not force and row.fade and row.fadeBases then
-				MusicMotion.fadeIn(row.fade, row.fadeBases, ROW_STAGGER_SECONDS * math.min(entering, 8))
+				UIMotion.fadeIn(row.fade, row.fadeBases, ROW_STAGGER_SECONDS * math.min(entering, 8))
 				entering += 1
 			end
 			row.key = key

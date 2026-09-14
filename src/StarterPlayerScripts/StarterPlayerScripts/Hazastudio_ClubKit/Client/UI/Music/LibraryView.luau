@@ -10,7 +10,7 @@ local MusicLibraryModel = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Do
 local Cover = require(script.Parent.Parent.MusicPlayerCoverHelpers)
 local GuiRefs = require(script.Parent.GuiRefs)
 local ListPool = require(script.Parent.ListPool)
-local MusicMotion = require(script.Parent.MusicMotion)
+local UIMotion = require(script.Parent.Parent.Parent.Utils.UIMotion)
 local Visuals = require(script.Parent.Visuals)
 
 local ROW_STAGGER_SECONDS = 0.03
@@ -52,7 +52,7 @@ local function setBackgroundTransparency(object: GuiObject, value: number)
 		return
 	end
 	shownBackground[object] = value
-	MusicMotion.tween(object, if shown == nil then 0 else 0.18, { BackgroundTransparency = value })
+	UIMotion.tween(object, if shown == nil then 0 else 0.18, { BackgroundTransparency = value })
 end
 
 local SET_REQUEST_LOCK_SECONDS = 1.5
@@ -65,9 +65,9 @@ local function setButtonEnabled(button: GuiButton, enabled: boolean)
 	local transparency = if enabled then 0 else DISABLED_TRANSPARENCY
 	for _, child in ipairs(button:GetChildren()) do
 		if child:IsA("TextLabel") then
-			MusicMotion.tween(child, 0.2, { TextTransparency = transparency })
+			UIMotion.tween(child, 0.2, { TextTransparency = transparency })
 		elseif child:IsA("ImageLabel") then
-			MusicMotion.tween(child, 0.2, { ImageTransparency = transparency })
+			UIMotion.tween(child, 0.2, { ImageTransparency = transparency })
 		end
 	end
 end
@@ -166,18 +166,18 @@ function LibraryView:bind()
 	local addSetIcon = refs.addSetButton:FindFirstChildWhichIsA("ImageLabel")
 	self:_connect(refs.shuffleButton.Activated:Connect(function()
 		if refs.shuffleButton.Interactable then
-			MusicMotion.spin(shuffleIcon)
+			UIMotion.spin(shuffleIcon)
 		end
 		requestSet(true)
 	end))
 	self:_connect(refs.addSetButton.Activated:Connect(function()
 		if refs.addSetButton.Interactable then
-			MusicMotion.wiggle(addSetIcon, 12)
+			UIMotion.wiggle(addSetIcon, 12)
 		end
 		requestSet(false)
 	end))
 	for _, button in ipairs({ refs.favoritesButton, refs.newDropsButton, refs.requestButton }) do
-		for _, connection in ipairs(MusicMotion.bindPress(button)) do
+		for _, connection in ipairs(UIMotion.bindPress(button)) do
 			self:_connect(connection)
 		end
 	end
@@ -271,7 +271,7 @@ function LibraryView:_playlistRow(kind: string, index: number): PlaylistRow
 	}
 	self:_connect(instance.Activated:Connect(function()
 		if row.id then
-			MusicMotion.wiggle(cover, 5)
+			UIMotion.wiggle(cover, 5)
 			self:_select(row.id)
 		end
 	end))
@@ -457,10 +457,10 @@ function LibraryView:_renderDetail()
 		self._detailSelection = selected
 		if not self._detailBases then
 			self._detailFade = { refs.detailCover, refs.detailTitle, refs.detailSubtitle, refs.detailOwnerName }
-			self._detailBases = MusicMotion.captureBases(self._detailFade)
+			self._detailBases = UIMotion.captureBases(self._detailFade)
 		end
 		if not first then
-			MusicMotion.fadeIn(self._detailFade, self._detailBases)
+			UIMotion.fadeIn(self._detailFade, self._detailBases)
 		end
 	end
 end
@@ -497,15 +497,15 @@ function LibraryView:_createTrackRow(instance: GuiObject): any
 		row.addToken += 1
 		local token = row.addToken
 		addButton.Interactable = false
-		MusicMotion.spin(row.addIcon)
-		MusicMotion.tween(row.addIcon, 0.2, { ImageTransparency = DISABLED_TRANSPARENCY })
+		UIMotion.spin(row.addIcon)
+		UIMotion.tween(row.addIcon, 0.2, { ImageTransparency = DISABLED_TRANSPARENCY })
 		task.delay(ADD_FEEDBACK_SECONDS, function()
 			if row.addToken ~= token then
 				return
 			end
 			addButton.Interactable = true
-			MusicMotion.tween(row.addIcon, 0.2, { ImageTransparency = 0 })
-			MusicMotion.pop(row.addIcon, 1.2)
+			UIMotion.tween(row.addIcon, 0.2, { ImageTransparency = 0 })
+			UIMotion.pop(row.addIcon, 1.2)
 		end)
 	end))
 	self:_connect(likeButton.Activated:Connect(function()
@@ -517,12 +517,12 @@ function LibraryView:_createTrackRow(instance: GuiObject): any
 		self._fire("OnAddFavoriteTrack", trackId, favorites[trackId] == true)
 	end))
 	for _, button in ipairs({ addButton, likeButton }) do
-		for _, connection in ipairs(MusicMotion.bindPress(button)) do
+		for _, connection in ipairs(UIMotion.bindPress(button)) do
 			self:_connect(connection)
 		end
 	end
 	row.fade = { row.title, row.creator, row.length, row.coverImage }
-	row.fadeBases = MusicMotion.captureBases(row.fade)
+	row.fadeBases = UIMotion.captureBases(row.fade)
 	return row
 end
 
@@ -537,14 +537,14 @@ function LibraryView:_applyLiked(row: any, animate: boolean?)
 	local changed = row.likedShown ~= nil
 	row.likedShown = liked
 	if animate and changed then
-		MusicMotion.tween(row.likeIcon, 0.2, { ImageTransparency = transparency })
+		UIMotion.tween(row.likeIcon, 0.2, { ImageTransparency = transparency })
 		if liked then
-			MusicMotion.pop(row.likeIcon, 1.45, 0.14)
+			UIMotion.pop(row.likeIcon, 1.45, 0.14)
 		else
-			MusicMotion.wiggle(row.likeIcon, 10)
+			UIMotion.wiggle(row.likeIcon, 10)
 		end
 	else
-		MusicMotion.tween(row.likeIcon, 0, { ImageTransparency = transparency })
+		UIMotion.tween(row.likeIcon, 0, { ImageTransparency = transparency })
 	end
 end
 
@@ -553,13 +553,13 @@ function LibraryView:_bindTrackRow(row: any, track: any, index: number)
 	row.likedShown = nil
 	row.addToken += 1
 	row.addButton.Interactable = true
-	MusicMotion.tween(row.addIcon, 0, { ImageTransparency = 0 })
-	local restRotation = tonumber(row.addIcon:GetAttribute("MusicMotionRotation"))
+	UIMotion.tween(row.addIcon, 0, { ImageTransparency = 0 })
+	local restRotation = tonumber(row.addIcon:GetAttribute("UIMotionRotation"))
 	if restRotation then
-		MusicMotion.tween(row.addIcon, 0, { Rotation = restRotation })
+		UIMotion.tween(row.addIcon, 0, { Rotation = restRotation })
 	end
 	if self._rowEntranceActive then
-		MusicMotion.fadeIn(row.fade, row.fadeBases, ROW_STAGGER_SECONDS * math.min(self._rowEntranceCount, ROW_STAGGER_MAX))
+		UIMotion.fadeIn(row.fade, row.fadeBases, ROW_STAGGER_SECONDS * math.min(self._rowEntranceCount, ROW_STAGGER_MAX))
 		self._rowEntranceCount += 1
 	end
 	Visuals.setText(row.title, tostring(track.name or ""))

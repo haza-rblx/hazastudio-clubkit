@@ -8,7 +8,7 @@
 local UserInputService = game:GetService("UserInputService")
 
 local GuiRefs = require(script.Parent.GuiRefs)
-local MusicMotion = require(script.Parent.MusicMotion)
+local UIMotion = require(script.Parent.Parent.Parent.Utils.UIMotion)
 local Visuals = require(script.Parent.Visuals)
 
 local SWITCH_TIME = 0.18
@@ -127,8 +127,8 @@ function DjView:_paintToggle(toggle: Toggle, enabled: boolean)
 		end
 		return
 	end
-	MusicMotion.tween(toggle.track, SWITCH_TIME, trackGoal)
-	MusicMotion.tween(toggle.thumb, SWITCH_TIME, thumbGoal, Enum.EasingStyle.Back)
+	UIMotion.tween(toggle.track, SWITCH_TIME, trackGoal)
+	UIMotion.tween(toggle.thumb, SWITCH_TIME, thumbGoal, Enum.EasingStyle.Back)
 end
 
 function DjView:_paintSlider(slider: Slider, animate: boolean?)
@@ -139,9 +139,9 @@ function DjView:_paintSlider(slider: Slider, animate: boolean?)
 		slider.shownPercent = percent
 		local goal = UDim2.new(percent, 0, 1, 0)
 		if animate then
-			MusicMotion.tween(slider.fill, FILL_TIME, { Size = goal }, Enum.EasingStyle.Quart)
+			UIMotion.tween(slider.fill, FILL_TIME, { Size = goal }, Enum.EasingStyle.Quart)
 		else
-			MusicMotion.tween(slider.fill, 0, { Size = goal })
+			UIMotion.tween(slider.fill, 0, { Size = goal })
 		end
 	end
 	if slider.label then
@@ -270,8 +270,8 @@ function DjView:bind()
 		Visuals.setText(need(clone, "TextLabel", "TextLabel"), tostring(item.label or itemId))
 		local label = need(clone, "TextLabel", "TextLabel")
 		self:_connect(clone.Activated:Connect(function()
-			MusicMotion.wiggle(clone, 4)
-			MusicMotion.pop(MusicMotion.scaleTargetOf(label), 1.15)
+			UIMotion.wiggle(clone, 4)
+			UIMotion.pop(UIMotion.scaleTargetOf(label), 1.15)
 			self._fire("OnDjSoundboardTriggered", itemId)
 		end))
 		clone.Visible = true
@@ -280,11 +280,11 @@ function DjView:bind()
 	end
 
 	self:_connect(refs.resetButton.Activated:Connect(function()
-		MusicMotion.spin(refs.resetButton:FindFirstChildWhichIsA("ImageLabel"), -1)
+		UIMotion.spin(refs.resetButton:FindFirstChildWhichIsA("ImageLabel"), -1)
 		self._fire("OnDjResetRequested")
 	end))
 	for _, button in ipairs({ refs.resetButton, refs.modeToggle }) do
-		for _, connection in ipairs(MusicMotion.bindPress(button)) do
+		for _, connection in ipairs(UIMotion.bindPress(button)) do
 			self:_connect(connection)
 		end
 	end
@@ -316,7 +316,7 @@ function DjView:bind()
 		self:_connect(button.Activated:Connect(function()
 			self._fire("OnDjPlaybackSpeedChanged", value)
 		end))
-		for _, connection in ipairs(MusicMotion.bindPress(button)) do
+		for _, connection in ipairs(UIMotion.bindPress(button)) do
 			self:_connect(connection)
 		end
 	end
@@ -419,12 +419,12 @@ function DjView:setPlaybackSpeed(speed: number)
 		local becameActive = active and preset.active ~= nil
 		preset.active = active
 		local transparency = if active then math.max(0, preset.baseTransparency - 0.18) else preset.baseTransparency
-		MusicMotion.tween(preset.button, SWITCH_TIME, { BackgroundTransparency = transparency })
+		UIMotion.tween(preset.button, SWITCH_TIME, { BackgroundTransparency = transparency })
 		if preset.stroke then
-			MusicMotion.tween(preset.stroke, SWITCH_TIME, { Transparency = if active then 0 else 0.35 })
+			UIMotion.tween(preset.stroke, SWITCH_TIME, { Transparency = if active then 0 else 0.35 })
 		end
 		if becameActive then
-			MusicMotion.pop(MusicMotion.scaleTargetOf(preset.button), 1.2)
+			UIMotion.pop(UIMotion.scaleTargetOf(preset.button), 1.2)
 		end
 	end
 end

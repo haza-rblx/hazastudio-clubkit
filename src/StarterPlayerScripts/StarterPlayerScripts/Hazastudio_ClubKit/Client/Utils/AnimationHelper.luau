@@ -1,5 +1,6 @@
 --!strict
 -- PATH: StarterPlayerScripts/Client/Utils/AnimationHelper.lua (ModuleScript)
+local GuiService = game:GetService("GuiService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
@@ -77,6 +78,21 @@ local SCATTER_DIRS: { { number } } = {
 local function makeInfo(t: number, style: Enum.EasingStyle, dir: Enum.EasingDirection): TweenInfo
 	return MotionPresets.makeInfo(t, style, dir)
 end
+-- ADR 0011: when the player asked Roblox for less motion, every path below snaps to the state
+-- its tween would have ended in and skips blur/zoom. Same pcall pattern as UIMotion.reduced.
+local function reduced(): boolean
+	local ok, value = pcall(function()
+		return GuiService.ReducedMotionEnabled
+	end)
+	return ok and value == true
+end
+-- Reduced-motion completion for untracked paths: deferred so callers keep the "onDone runs
+-- after this call returns" ordering a tween gives them.
+local function deferDone(onDone: (() -> ())?): ()
+	if onDone then
+		task.defer(onDone)
+	end
+end
 local function getOrCreateUIScale(frame: Frame): UIScale
 	local existing = frame:FindFirstChildWhichIsA("UIScale") :: UIScale?
 	if existing then
@@ -127,6 +143,18 @@ local function resolveRestingPosition(frame: Frame): UDim2
 	end
 	return frame.Position
 end
+-- Reduced-motion completion for token-tracked paths: clears the registry like a finished tween
+-- and only fires onDone if no newer animation on the target began before the deferred tick.
+local function snapComplete(target: Instance, token: number, onDone: (() -> ())?): ()
+	completeTweens(target)
+	if onDone then
+		task.defer(function()
+			if isCurrentAnimation(target, token) then
+				onDone()
+			end
+		end)
+	end
+end
 -- ============================================================
 -- Size-stable variants (ADR 0005)
 -- A CanvasGroup is rasterized to a texture sized by its AbsoluteSize; scaling it (or any
@@ -153,6 +181,12 @@ end
 local function presentGroupFade(group: CanvasGroup, info: TweenInfo, onDone: (() -> ())?): ()
 	local resting = resolveRestingGroupAlpha(group)
 	local token = beginAnimation(group)
+	if reduced() then
+		group.GroupTransparency = resting
+		group.Visible = true
+		snapComplete(group, token, onDone)
+		return
+	end
 	group.GroupTransparency = 1
 	group.Visible = true
 	local fade = TweenService:Create(group, info, { GroupTransparency = resting })
@@ -172,6 +206,12 @@ end
 local function dismissGroupFade(group: CanvasGroup, info: TweenInfo, onDone: (() -> ())?): ()
 	local resting = resolveRestingGroupAlpha(group)
 	local token = beginAnimation(group)
+	if reduced() then
+		group.Visible = false
+		group.GroupTransparency = resting
+		snapComplete(group, token, onDone)
+		return
+	end
 	group.Visible = true
 	local fade = TweenService:Create(group, info, { GroupTransparency = 1 })
 	registerTweens(group, { fade }, group.Position)
@@ -269,6 +309,12 @@ function AnimationHelper:scalePop(modal: Frame, onDone: (() -> ())?): ()
 		return
 	end
 	local uiScale = getOrCreateUIScale(modal)
+	if reduced() then
+		uiScale.Scale = 1
+		modal.Visible = true
+		deferDone(onDone)
+		return
+	end
 	uiScale.Scale = 0
 	modal.Visible = true
 	local t = TweenService:Create(
@@ -296,6 +342,13 @@ function AnimationHelper:scaleCenterPop(modal: Frame, onDone: (() -> ())?): ()
 		return
 	end
 	local uiScale = getOrCreateUIScale(modal)
+	if reduced() then
+		-- Nothing scales, so AnchorPoint/Position never need compensating.
+		uiScale.Scale = 1
+		modal.Visible = true
+		deferDone(onDone)
+		return
+	end
 	uiScale.Scale = 0
 	modal.Visible = true
 	-- Compensate AnchorPoint -> scale from center during animation
@@ -336,6 +389,12 @@ function AnimationHelper:scaleOut(modal: Frame, onDone: (() -> ())?): ()
 		return
 	end
 	local uiScale = getOrCreateUIScale(modal)
+	if reduced() then
+		modal.Visible = false
+		uiScale.Scale = 1
+		deferDone(onDone)
+		return
+	end
 	local t = TweenService:Create(
 		uiScale,
 		makeInfo(SCALE_OUT_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
@@ -358,6 +417,12 @@ function AnimationHelper:presentPanel(modal: Frame, onDone: (() -> ())?): ()
 	local preset = MotionPresets.panelOpen()
 	local restingPos = resolveRestingPosition(modal)
 	local token = beginAnimation(modal)
+	if reduced() then
+		modal.Position = restingPos
+		modal.Visible = true
+		snapComplete(modal, token, onDone)
+		return
+	end
 	local settlePos = offsetPosition(restingPos, preset.settleYOffset)
 	modal.Position = offsetPosition(restingPos, preset.yOffset)
 	modal.Visible = true
@@ -397,6 +462,12 @@ function AnimationHelper:dismissPanel(modal: Frame, onDone: (() -> ())?): ()
 	local preset = MotionPresets.panelClose()
 	local restingPos = resolveRestingPosition(modal)
 	local token = beginAnimation(modal)
+	if reduced() then
+		modal.Visible = false
+		modal.Position = restingPos
+		snapComplete(modal, token, onDone)
+		return
+	end
 	local targetPos = offsetPosition(restingPos, preset.yOffset)
 	modal.Visible = true
 	local positionTween = TweenService:Create(
@@ -457,7 +528,7 @@ function AnimationHelper:_shouldUseBackgroundBlur(): boolean
 end
 
 function AnimationHelper:_animatePanelBlur(blur: BlurEffect, targetSize: number)
-	if not self:_shouldUseBackgroundBlur() then
+	if reduced() or not self:_shouldUseBackgroundBlur() then
 		blur.Size = 0
 		blur.Enabled = false
 		return
@@ -482,16 +553,45 @@ local function isPanelZoomEnabled(): boolean
 	return type(panelZoom) == "table" and panelZoom.ENABLED == true
 end
 
-function AnimationHelper:_tweenCameraZoom(deltaFov: number)
-	if not isPanelZoomEnabled() then return end
+-- ADR 0011: what each present actually applied to the camera, newest last. Dismiss used to
+-- mirror +PANEL_CAMERA_FOV_DELTA, which is the wrong amount whenever the clamp bit, the zoom
+-- config was switched, or reduced motion turned on while the panel was open — and the camera
+-- then kept an offset it could never lose. Undo exactly what went in instead.
+local appliedCameraFovDeltas: { number } = {}
+
+function AnimationHelper:_applyCameraFov(deltaFov: number, snap: boolean): number
 	local camera = workspace.CurrentCamera
-	if not camera then return end
-	
+	if not camera or deltaFov == 0 then return 0 end
+
 	local targetFov = math.clamp(camera.FieldOfView + deltaFov, 1, 120)
+	local applied = targetFov - camera.FieldOfView
+	if applied == 0 then return 0 end
+	if snap then
+		camera.FieldOfView = targetFov
+		return applied
+	end
 	local tween = TweenService:Create(camera, self:_getPanelEffectTweenInfo(), {
 		FieldOfView = targetFov,
 	})
 	tween:Play()
+	return applied
+end
+
+function AnimationHelper:_tweenCameraZoom(deltaFov: number)
+	if reduced() or not isPanelZoomEnabled() then
+		-- Still record the (zero) delta so the matching dismiss pops this panel's own entry.
+		table.insert(appliedCameraFovDeltas, 0)
+		return
+	end
+	table.insert(appliedCameraFovDeltas, self:_applyCameraFov(deltaFov, false))
+end
+
+function AnimationHelper:_restoreCameraZoom()
+	local applied = table.remove(appliedCameraFovDeltas)
+	if applied == nil or applied == 0 then return end
+	-- Always undone, even when reduced motion or the zoom config turned off while the panel was
+	-- open: in that case the camera snaps back rather than tweening, but it does go back.
+	self:_applyCameraFov(-applied, reduced() or not isPanelZoomEnabled())
 end
 
 function AnimationHelper:presentBackdropEffects(options: {
@@ -545,15 +645,21 @@ function AnimationHelper:dismissBackdropEffects(options: {
 		if blur and blur:IsA("BlurEffect") then
 			local done = trackAsync()
 			self:_animatePanelBlur(blur, 0)
-			task.delay(blurConfig.FADE_OUT + 0.05, function()
+			if reduced() then
+				-- Blur was never faded in; nothing to wait for.
 				blur.Enabled = false
-				done()
-			end)
+				task.defer(done)
+			else
+				task.delay(blurConfig.FADE_OUT + 0.05, function()
+					blur.Enabled = false
+					done()
+				end)
+			end
 		end
 	end
 
 	if opts.enableZoom then
-		self:_tweenCameraZoom(PANEL_CAMERA_FOV_DELTA)
+		self:_restoreCameraZoom()
 	end
 
 	if pending == 0 then
@@ -579,6 +685,12 @@ function AnimationHelper:presentCenterPanel(modal: Frame, onDone: (() -> ())?, o
 	end
 	local uiScale = getOrCreateUIScale(modal)
 	local token = beginAnimation(modal)
+	if reduced() then
+		uiScale.Scale = 1
+		modal.Visible = true
+		snapComplete(modal, token, onDone)
+		return
+	end
 
 	uiScale.Scale = openPreset.startScale
 	modal.Visible = true
@@ -619,6 +731,12 @@ function AnimationHelper:dismissCenterPanel(modal: Frame, onDone: (() -> ())?, o
 	end
 	local uiScale = getOrCreateUIScale(modal)
 	local token = beginAnimation(modal)
+	if reduced() then
+		modal.Visible = false
+		uiScale.Scale = 1
+		snapComplete(modal, token, onDone)
+		return
+	end
 
 	modal.Visible = true
 	local scaleTween = TweenService:Create(
@@ -647,6 +765,12 @@ function AnimationHelper:presentDialog(modal: Frame, onDone: (() -> ())?): ()
 	local preset = MotionPresets.dialogOpen()
 	local restingPos = resolveRestingPosition(modal)
 	local token = beginAnimation(modal)
+	if reduced() then
+		modal.Position = restingPos
+		modal.Visible = true
+		snapComplete(modal, token, onDone)
+		return
+	end
 	local settlePos = offsetPosition(restingPos, preset.settleYOffset)
 	modal.Position = offsetPosition(restingPos, preset.yOffset)
 	modal.Visible = true
@@ -686,6 +810,12 @@ function AnimationHelper:dismissDialog(modal: Frame, onDone: (() -> ())?): ()
 	local preset = MotionPresets.dialogClose()
 	local restingPos = resolveRestingPosition(modal)
 	local token = beginAnimation(modal)
+	if reduced() then
+		modal.Visible = false
+		modal.Position = restingPos
+		snapComplete(modal, token, onDone)
+		return
+	end
 	local targetPos = offsetPosition(restingPos, preset.yOffset)
 	modal.Visible = true
 	local positionTween = TweenService:Create(
@@ -721,6 +851,12 @@ function AnimationHelper:slideOut(modal: Frame, onDone: (() -> ())?): ()
 	if uiScale then
 		uiScale.Scale = 1
 	end
+	if reduced() then
+		modal.Visible = false
+		modal.Position = origPos
+		deferDone(onDone)
+		return
+	end
 	modal.Visible = true
 	local slideInfo = makeInfo(SLIDE_OUT_TIME, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
 	-- Slide downward
@@ -745,6 +881,14 @@ end
 -- Scatter Fragments - for Rejected frame dismiss
 -- ============================================================
 function AnimationHelper:scatterFragments(modal: Frame, overlay: Frame, onDone: (() -> ())?): ()
+	if reduced() then
+		-- Where the scatter ends: no fragments, overlay faded out and hidden, modal shown again.
+		overlay.BackgroundTransparency = 1
+		overlay.Visible = false
+		modal.Visible = true
+		deferDone(onDone)
+		return
+	end
 	task.defer(function()
 		local frags = buildFragments(modal)
 		modal.Visible = false
@@ -790,6 +934,14 @@ function AnimationHelper:swingIn(modal: Frame, overlay: Frame, onDone: (() -> ()
 	-- Size-stable (ADR 0005): rotation does not resize a CanvasGroup texture, scale does.
 	local uiScale: UIScale? = if GroupMotion.isStable(modal) then nil else getOrCreateUIScale(modal)
 	local finalRotation = modal.Rotation
+	if reduced() then
+		if uiScale then
+			uiScale.Scale = 1
+		end
+		modal.Visible = true
+		deferDone(onDone)
+		return
+	end
 	modal.Visible = true
 	modal.Rotation = -12
 	-- Do not fade overlay — leave transparent
@@ -819,6 +971,14 @@ local ROTATION_DEFAULT_SPEED = 5
 function AnimationHelper:startRotation(image: ImageLabel, speed: number?): RotationHandle
 	local duration = speed or ROTATION_DEFAULT_SPEED
 	image.Rotation = 0
+	if reduced() then
+		local still: RotationHandle = {
+			stop = function()
+				image.Rotation = 0
+			end,
+		}
+		return still
+	end
 	local tween = TweenService:Create(
 		image,
 		TweenInfo.new(duration, Enum.EasingStyle.Linear, Enum.EasingDirection.In, -1, false, 0),
@@ -892,6 +1052,15 @@ function AnimationHelper:progressRing(ring: Frame, durationSec: number, onDone: 
 			end
 		end
 	end)
+	if reduced() then
+		-- The ring is a timeout, so the countdown keeps its full duration; only the arc sweep is skipped.
+		task.delay(durationSec, function()
+			if not stopped and onDone then
+				onDone()
+			end
+		end)
+		return handle
+	end
 	arcTween.Completed:Once(function()
 		if stopped then
 			return

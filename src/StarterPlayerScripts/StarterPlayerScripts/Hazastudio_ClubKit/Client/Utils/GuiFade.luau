@@ -3,7 +3,16 @@
 -- from a plain Frame (no GroupTransparency), e.g. notification center V2 with UIShadow.
 -- capture() once the card is filled, then set()/tween() an alpha: 0 = as designed, 1 = gone.
 
+local GuiService = game:GetService("GuiService")
 local TweenService = game:GetService("TweenService")
+
+-- ADR 0011: tween() applies the end alpha at once under reduced motion. Same pcall as UIMotion.reduced.
+local function reduced(): boolean
+	local ok, value = pcall(function()
+		return GuiService.ReducedMotionEnabled
+	end)
+	return ok and value == true
+end
 
 type Entry = {
 	instance: Instance,
@@ -67,7 +76,12 @@ function GuiFade.set(snapshot: Snapshot, alpha: number)
 	GuiFade.apply(snapshot, alpha)
 end
 
-function GuiFade.tween(snapshot: Snapshot, info: TweenInfo, alpha: number): Tween
+-- Returns the driver tween, or nil when reduced motion applied the alpha immediately.
+function GuiFade.tween(snapshot: Snapshot, info: TweenInfo, alpha: number): Tween?
+	if reduced() then
+		GuiFade.set(snapshot, alpha)
+		return nil
+	end
 	local created = TweenService:Create(snapshot.driver, info, { Value = alpha })
 	created:Play()
 	return created
