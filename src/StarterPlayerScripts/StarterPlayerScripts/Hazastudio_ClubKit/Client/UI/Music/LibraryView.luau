@@ -10,7 +10,11 @@ local MusicLibraryModel = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Do
 local Cover = require(script.Parent.Parent.MusicPlayerCoverHelpers)
 local GuiRefs = require(script.Parent.GuiRefs)
 local ListPool = require(script.Parent.ListPool)
+local MusicMotion = require(script.Parent.MusicMotion)
 local Visuals = require(script.Parent.Visuals)
+
+local ROW_STAGGER_SECONDS = 0.03
+local ROW_STAGGER_MAX = 10
 
 local SEARCH_DEBOUNCE = 0.15
 local ADD_FEEDBACK_SECONDS = 1
@@ -38,10 +42,17 @@ local function trackCountText(count: number): string
 	return string.format("%d %s", count, if count == 1 then "Track" else "Tracks")
 end
 
+-- Goal per object, so a selection re-render does not restart a highlight that is mid-fade.
+local shownBackground: { [GuiObject]: number } = setmetatable({}, { __mode = "k" }) :: any
+
 local function setBackgroundTransparency(object: GuiObject, value: number)
-	if object.BackgroundTransparency ~= value then
-		object.BackgroundTransparency = value
+	local shown = shownBackground[object]
+	if shown == value or (shown == nil and object.BackgroundTransparency == value) then
+		shownBackground[object] = value
+		return
 	end
+	shownBackground[object] = value
+	MusicMotion.tween(object, if shown == nil then 0 else 0.18, { BackgroundTransparency = value })
 end
 
 local SET_REQUEST_LOCK_SECONDS = 1.5
@@ -54,9 +65,9 @@ local function setButtonEnabled(button: GuiButton, enabled: boolean)
 	local transparency = if enabled then 0 else DISABLED_TRANSPARENCY
 	for _, child in ipairs(button:GetChildren()) do
 		if child:IsA("TextLabel") then
-			child.TextTransparency = transparency
+			MusicMotion.tween(child, 0.2, { TextTransparency = transparency })
 		elseif child:IsA("ImageLabel") then
-			child.ImageTransparency = transparency
+			MusicMotion.tween(child, 0.2, { ImageTransparency = transparency })
 		end
 	end
 end
@@ -78,6 +89,8 @@ function LibraryView.new(deps: { refs: GuiRefs.Refs, store: any, config: any, fi
 	self._trackCount = 0
 	self._items = {} :: { any }
 	self._setRequestLockedUntil = 0
+	self._rowEntranceUntil = 0
+	self._rowEntranceFirst = 1
 	self._lastSelection = nil :: string?
 	self._searchToken = 0
 	self._connections = {} :: { RBXScriptConnection }
@@ -101,8 +114,8 @@ function LibraryView.new(deps: { refs: GuiRefs.Refs, store: any, config: any, fi
 		createRow = function(instance: GuiObject): any
 			return self:_createTrackRow(instance)
 		end,
-		bindRow = function(row: any, track: any)
-			self:_bindTrackRow(row, track)
+		bindRow = function(row: any, track: any, index: number)
+			self:_bindTrackRow(row, track, index)
 		end,
 	})
 	return self
@@ -149,12 +162,25 @@ function LibraryView:bind()
 			self:_applySetButtons()
 		end)
 	end
+	local shuffleIcon = refs.shuffleButton:FindFirstChildWhichIsA("ImageLabel")
+	local addSetIcon = refs.addSetButton:FindFirstChildWhichIsA("ImageLabel")
 	self:_connect(refs.shuffleButton.Activated:Connect(function()
+		if refs.shuffleButton.Interactable then
+			MusicMotion.spin(shuffleIcon)
+		end
 		requestSet(true)
 	end))
 	self:_connect(refs.addSetButton.Activated:Connect(function()
+		if refs.addSetButton.Interactable then
+			MusicMotion.wiggle(addSetIcon, 12)
+		end
 		requestSet(false)
 	end))
+	for _, button in ipairs({ refs.favoritesButton, refs.newDropsButton, refs.requestButton }) do
+		for _, connection in ipairs(MusicMotion.bindPress(button)) do
+			self:_connect(connection)
+		end
+	end
 	self:_applySetButtons()
 	Visuals.setVisible(refs.detailOwnerAvatar, false)
 
@@ -191,7 +217,7 @@ function LibraryView:bind()
 
 	table.insert(self._unsubscribers, store:subscribe("favoriteTrackIds", function()
 		self._trackPool:forEachRendered(function(row)
-			self:_applyLiked(row)
+			self:_applyLiked(row, true)
 		end)
 	end))
 	table.insert(self._unsubscribers, store:subscribe("djSets", function()
@@ -244,6 +270,7 @@ function LibraryView:_playlistRow(kind: string, index: number): PlaylistRow
 	}
 	self:_connect(instance.Activated:Connect(function()
 		if row.id then
+			MusicMotion.wiggle(cover, 5)
 			self:_select(row.id)
 		end
 	end))
@@ -423,6 +450,18 @@ function LibraryView:_renderDetail()
 	end
 	Visuals.applyCover(refs.detailCover, coverSource, self._config)
 
+	-- Picking another set fades its header in; repaints of the same set stay still.
+	if self._detailSelection ~= selected then
+		local first = self._detailSelection == nil and self._detailBases == nil
+		self._detailSelection = selected
+		if not self._detailBases then
+			self._detailFade = { refs.detailCover, refs.detailTitle, refs.detailSubtitle, refs.detailOwnerName }
+			self._detailBases = MusicMotion.captureBases(self._detailFade)
+		end
+		if not first then
+			MusicMotion.fadeIn(self._detailFade, self._detailBases)
+		end
+	end
 end
 
 -- ============================================================
@@ -457,13 +496,15 @@ function LibraryView:_createTrackRow(instance: GuiObject): any
 		row.addToken += 1
 		local token = row.addToken
 		addButton.Interactable = false
-		row.addIcon.ImageTransparency = DISABLED_TRANSPARENCY
+		MusicMotion.spin(row.addIcon)
+		MusicMotion.tween(row.addIcon, 0.2, { ImageTransparency = DISABLED_TRANSPARENCY })
 		task.delay(ADD_FEEDBACK_SECONDS, function()
 			if row.addToken ~= token then
 				return
 			end
 			addButton.Interactable = true
-			row.addIcon.ImageTransparency = 0
+			MusicMotion.tween(row.addIcon, 0.2, { ImageTransparency = 0 })
+			MusicMotion.pop(row.addIcon, 1.2)
 		end)
 	end))
 	self:_connect(likeButton.Activated:Connect(function()
@@ -474,22 +515,52 @@ function LibraryView:_createTrackRow(instance: GuiObject): any
 		local favorites = self._store:get().favoriteTrackIds or {}
 		self._fire("OnAddFavoriteTrack", trackId, favorites[trackId] == true)
 	end))
+	for _, button in ipairs({ addButton, likeButton }) do
+		for _, connection in ipairs(MusicMotion.bindPress(button)) do
+			self:_connect(connection)
+		end
+	end
+	row.fade = { row.title, row.creator, row.length, row.coverImage }
+	row.fadeBases = MusicMotion.captureBases(row.fade)
 	return row
 end
 
-function LibraryView:_applyLiked(row: any)
+-- animate: the like state changed while the row stayed on screen (not a rebind to another track).
+function LibraryView:_applyLiked(row: any, animate: boolean?)
 	local favorites = self._store:get().favoriteTrackIds or {}
-	local transparency = if row.trackId and favorites[row.trackId] == true then LIKED_TRANSPARENCY else UNLIKED_TRANSPARENCY
-	if row.likeIcon.ImageTransparency ~= transparency then
-		row.likeIcon.ImageTransparency = transparency
+	local liked = row.trackId ~= nil and favorites[row.trackId] == true
+	local transparency = if liked then LIKED_TRANSPARENCY else UNLIKED_TRANSPARENCY
+	if row.likedShown == liked then
+		return
+	end
+	local changed = row.likedShown ~= nil
+	row.likedShown = liked
+	if animate and changed then
+		MusicMotion.tween(row.likeIcon, 0.2, { ImageTransparency = transparency })
+		if liked then
+			MusicMotion.pop(row.likeIcon, 1.45, 0.14)
+		else
+			MusicMotion.wiggle(row.likeIcon, 10)
+		end
+	else
+		MusicMotion.tween(row.likeIcon, 0, { ImageTransparency = transparency })
 	end
 end
 
-function LibraryView:_bindTrackRow(row: any, track: any)
+function LibraryView:_bindTrackRow(row: any, track: any, index: number)
 	row.trackId = tostring(track.id)
+	row.likedShown = nil
 	row.addToken += 1
 	row.addButton.Interactable = true
-	row.addIcon.ImageTransparency = 0
+	MusicMotion.tween(row.addIcon, 0, { ImageTransparency = 0 })
+	local restRotation = tonumber(row.addIcon:GetAttribute("MusicMotionRotation"))
+	if restRotation then
+		MusicMotion.tween(row.addIcon, 0, { Rotation = restRotation })
+	end
+	if self._rowEntranceActive then
+		MusicMotion.fadeIn(row.fade, row.fadeBases, ROW_STAGGER_SECONDS * math.min(self._rowEntranceCount, ROW_STAGGER_MAX))
+		self._rowEntranceCount += 1
+	end
 	Visuals.setText(row.title, tostring(track.name or ""))
 	Visuals.setText(row.creator, tostring(track.creator or ""))
 	Visuals.setText(row.length, Visuals.formatClock(tonumber(track.totalDuration) or 0))
@@ -522,7 +593,12 @@ function LibraryView:renderTracks(tracks: { [any]: any }?, query: string?)
 		local items = MusicLibraryModel.filterTracks(tracks or {}, query, selected == self._newDropsId)
 		self._items = items
 		self._trackCount = #items
+		-- Rows rebound by this redraw (a new set or search) cascade in. Rows reached later by
+		-- scrolling are bound outside it and just appear; a same-list refresh rebinds nothing.
+		self._rowEntranceActive = true
+		self._rowEntranceCount = 0
 		self._trackPool:setItems(items, resetScroll)
+		self._rowEntranceActive = false
 	end
 	self:_applySetButtons()
 	self:_renderDetail()

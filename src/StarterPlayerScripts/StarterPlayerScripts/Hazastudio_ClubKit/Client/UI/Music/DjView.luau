@@ -8,7 +8,11 @@
 local UserInputService = game:GetService("UserInputService")
 
 local GuiRefs = require(script.Parent.GuiRefs)
+local MusicMotion = require(script.Parent.MusicMotion)
 local Visuals = require(script.Parent.Visuals)
+
+local SWITCH_TIME = 0.18
+local FILL_TIME = 0.2
 
 local SPEED_MIN, SPEED_MAX, SPEED_STEP = 0.25, 2, 0.05
 local TOGGLE_DEBOUNCE = 0.18
@@ -19,10 +23,11 @@ local THUMB_ON = Color3.fromRGB(18, 18, 22)
 local THUMB_OFF = Color3.fromRGB(255, 255, 255)
 local PRESET_NAMES = { "025", "050", "100", "150", "200" }
 
-type Toggle = { button: TextButton, track: Frame, thumb: Frame }
+type Toggle = { button: TextButton, track: Frame, thumb: Frame, shown: boolean? }
 type Slider = {
 	host: GuiObject,
 	fill: Frame,
+	shownPercent: number?,
 	label: TextLabel?,
 	min: number,
 	max: number,
@@ -83,7 +88,8 @@ function DjView.new(deps: { refs: GuiRefs.Refs, store: any, config: any, fire: (
 	self._sliders = {} :: { [string]: Slider }
 	self._effectToggles = {} :: { [string]: Toggle }
 	self._effectEnabled = {} :: { [string]: boolean }
-	self._presets = {} :: { { value: number, button: TextButton, stroke: UIStroke?, baseTransparency: number } }
+	self._presets =
+		{} :: { { value: number, button: TextButton, stroke: UIStroke?, baseTransparency: number, active: boolean? } }
 	self._activeSlider = nil :: Slider?
 	self._clones = {} :: { Instance }
 	self._connections = {} :: { RBXScriptConnection }
@@ -98,28 +104,45 @@ end
 -- Switches and sliders
 -- ============================================================
 
+-- Painting compares against the goal, not the live value: a tween in flight must not restart.
 function DjView:_paintToggle(toggle: Toggle, enabled: boolean)
-	local trackColor = if enabled then TRACK_ON else TRACK_OFF
-	if toggle.track.BackgroundColor3 ~= trackColor then
-		toggle.track.BackgroundColor3 = trackColor
+	if toggle.shown == enabled then
+		return
 	end
-	local anchor = Vector2.new(if enabled then 1 else 0, 0.5)
-	if toggle.thumb.AnchorPoint ~= anchor then
-		toggle.thumb.AnchorPoint = anchor
-		toggle.thumb.Position = UDim2.new(if enabled then 1 else 0, 0, 0.5, 0)
+	-- The first paint is the design default, not a change the player made.
+	local animate = toggle.shown ~= nil
+	toggle.shown = enabled
+	local trackGoal = { BackgroundColor3 = if enabled then TRACK_ON else TRACK_OFF }
+	local thumbGoal = {
+		AnchorPoint = Vector2.new(if enabled then 1 else 0, 0.5),
+		Position = UDim2.new(if enabled then 1 else 0, 0, 0.5, 0),
+		BackgroundColor3 = if enabled then THUMB_ON else THUMB_OFF,
+	}
+	if not animate then
+		for property, value in pairs(trackGoal) do
+			(toggle.track :: any)[property] = value
+		end
+		for property, value in pairs(thumbGoal) do
+			(toggle.thumb :: any)[property] = value
+		end
+		return
 	end
-	local thumbColor = if enabled then THUMB_ON else THUMB_OFF
-	if toggle.thumb.BackgroundColor3 ~= thumbColor then
-		toggle.thumb.BackgroundColor3 = thumbColor
-	end
+	MusicMotion.tween(toggle.track, SWITCH_TIME, trackGoal)
+	MusicMotion.tween(toggle.thumb, SWITCH_TIME, thumbGoal, Enum.EasingStyle.Back)
 end
 
-function DjView:_paintSlider(slider: Slider)
+function DjView:_paintSlider(slider: Slider, animate: boolean?)
 	local percent = if slider.max > slider.min
 		then math.clamp((slider.value - slider.min) / (slider.max - slider.min), 0, 1)
 		else 0
-	if slider.fill.Size.X.Scale ~= percent then
-		slider.fill.Size = UDim2.new(percent, 0, 1, 0)
+	if slider.shownPercent ~= percent then
+		slider.shownPercent = percent
+		local goal = UDim2.new(percent, 0, 1, 0)
+		if animate then
+			MusicMotion.tween(slider.fill, FILL_TIME, { Size = goal }, Enum.EasingStyle.Quart)
+		else
+			MusicMotion.tween(slider.fill, 0, { Size = goal })
+		end
 	end
 	if slider.label then
 		Visuals.setText(slider.label, slider.format(slider.value))
@@ -245,7 +268,10 @@ function DjView:bind()
 		clone.Name = itemId
 		clone.LayoutOrder = index
 		Visuals.setText(need(clone, "TextLabel", "TextLabel"), tostring(item.label or itemId))
+		local label = need(clone, "TextLabel", "TextLabel")
 		self:_connect(clone.Activated:Connect(function()
+			MusicMotion.wiggle(clone, 4)
+			MusicMotion.pop(MusicMotion.scaleTargetOf(label), 1.15)
 			self._fire("OnDjSoundboardTriggered", itemId)
 		end))
 		clone.Visible = true
@@ -254,8 +280,14 @@ function DjView:bind()
 	end
 
 	self:_connect(refs.resetButton.Activated:Connect(function()
+		MusicMotion.spin(refs.resetButton:FindFirstChildWhichIsA("ImageLabel"), -1)
 		self._fire("OnDjResetRequested")
 	end))
+	for _, button in ipairs({ refs.resetButton, refs.modeToggle }) do
+		for _, connection in ipairs(MusicMotion.bindPress(button)) do
+			self:_connect(connection)
+		end
+	end
 
 	self._sliders.speed = self:_bindSlider(
 		refs.speedSliderHost,
@@ -284,7 +316,9 @@ function DjView:bind()
 		self:_connect(button.Activated:Connect(function()
 			self._fire("OnDjPlaybackSpeedChanged", value)
 		end))
-
+		for _, connection in ipairs(MusicMotion.bindPress(button)) do
+			self:_connect(connection)
+		end
 	end
 
 	for index, effect in ipairs(djConfig.EFFECTS or {}) do
@@ -375,20 +409,22 @@ function DjView:setPlaybackSpeed(speed: number)
 	local slider = self._sliders.speed
 	if slider and self._activeSlider ~= slider then
 		slider.value = snap(value, SPEED_MIN, SPEED_MAX, SPEED_STEP)
-		self:_paintSlider(slider)
+		self:_paintSlider(slider, true)
 	end
 	for _, preset in ipairs(self._presets) do
 		local active = math.abs(value - preset.value) < 0.001
-		local transparency = if active then math.max(0, preset.baseTransparency - 0.18) else preset.baseTransparency
-		if preset.button.BackgroundTransparency ~= transparency then
-			preset.button.BackgroundTransparency = transparency
+		if preset.active == active then
+			continue
 		end
-		local stroke = preset.stroke
-		if stroke then
-			local strokeTransparency = if active then 0 else 0.35
-			if stroke.Transparency ~= strokeTransparency then
-				stroke.Transparency = strokeTransparency
-			end
+		local becameActive = active and preset.active ~= nil
+		preset.active = active
+		local transparency = if active then math.max(0, preset.baseTransparency - 0.18) else preset.baseTransparency
+		MusicMotion.tween(preset.button, SWITCH_TIME, { BackgroundTransparency = transparency })
+		if preset.stroke then
+			MusicMotion.tween(preset.stroke, SWITCH_TIME, { Transparency = if active then 0 else 0.35 })
+		end
+		if becameActive then
+			MusicMotion.pop(MusicMotion.scaleTargetOf(preset.button), 1.2)
 		end
 	end
 end
@@ -406,7 +442,7 @@ function DjView:setEffectValue(effectId: string, itemId: string, value: number)
 	local slider = self._sliders[tostring(effectId) .. "::" .. tostring(itemId)]
 	if slider and self._activeSlider ~= slider then
 		slider.value = snap(tonumber(value) or 0, slider.min, slider.max, slider.step)
-		self:_paintSlider(slider)
+		self:_paintSlider(slider, true)
 	end
 end
 

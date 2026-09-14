@@ -12,6 +12,7 @@ local AnimationHelper = require(script.Parent.Parent.Parent.Utils.AnimationHelpe
 local DjView = require(script.Parent.DjView)
 local GuiRefs = require(script.Parent.GuiRefs)
 local LibraryView = require(script.Parent.LibraryView)
+local MusicMotion = require(script.Parent.MusicMotion)
 local NowPlayingView = require(script.Parent.NowPlayingView)
 local VoteModalView = require(script.Parent.VoteModalView)
 
@@ -133,6 +134,13 @@ end
 
 function PanelShell:_applyTab(tab: string)
 	local refs: Refs = self._refs
+	-- Slide only on a real switch inside an open panel; opening plays the panel pop instead.
+	local previousIndex = table.find(TAB_KEYS, self._shownTab)
+	local nextIndex = table.find(TAB_KEYS, tab)
+	if previousIndex and nextIndex and previousIndex ~= nextIndex and refs.mainWrapper.Visible then
+		MusicMotion.slideIn((refs.tabFrames :: any)[tab], if nextIndex > previousIndex then 1 else -1)
+	end
+	self._shownTab = tab
 	for _, key in ipairs(TAB_KEYS) do
 		local selected = key == tab
 		local frame = (refs.tabFrames :: any)[key]
@@ -190,6 +198,11 @@ function PanelShell:bindAll()
 		self:_fire("OnCloseRequested")
 	end))
 
+	for _, button in ipairs({ refs.closeButton, table.unpack(refs.tabButtonOrder) }) do
+		for _, connection in ipairs(MusicMotion.bindPress(button)) do
+			self:_connect(connection)
+		end
+	end
 
 	self._nowPlaying:bind()
 	self._vote:bind()

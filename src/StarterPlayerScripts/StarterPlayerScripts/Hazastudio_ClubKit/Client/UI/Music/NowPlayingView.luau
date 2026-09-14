@@ -12,9 +12,11 @@ local Workspace = game:GetService("Workspace")
 local MusicDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicDomain)
 local Cover = require(script.Parent.Parent.MusicPlayerCoverHelpers)
 local GuiRefs = require(script.Parent.GuiRefs)
+local MusicMotion = require(script.Parent.MusicMotion)
 local Visuals = require(script.Parent.Visuals)
 
 local PROGRESS_INTERVAL = 0.2
+local ROW_STAGGER_SECONDS = 0.04
 local AUTO_PLAYLIST_LABEL = "Auto Playlist"
 local SEEK_STEP_SECONDS = 10
 local CLEAR_CONFIRM_SECONDS = 3
@@ -32,6 +34,8 @@ type QueueRow = {
 	remove: ImageButton,
 	entryId: string?,
 	key: string?,
+	fade: { GuiObject }?,
+	fadeBases: { [GuiObject]: number }?,
 }
 
 local function findPlaylist(playlists: any, playlistId: any): any?
@@ -81,7 +85,11 @@ function NowPlayingView:bind()
 			self._fire("OnVoteSkip", "skip")
 		end)
 	)
-
+	self:_bindPress(refs.voteSkipButton)
+	self._heroFade = { refs.trackTitle, refs.trackCreator, refs.cover, refs.requesterName, refs.playlistTitle }
+	self._heroBases = MusicMotion.captureBases(self._heroFade)
+	self._djFade = { refs.djAvatar, refs.djName }
+	self._djBases = MusicMotion.captureBases(self._djFade)
 	self:_bindTransport()
 	-- Playlist names/covers arrive with the library; re-resolve what is already on screen.
 	table.insert(
@@ -101,10 +109,24 @@ end
 -- Hero
 -- ============================================================
 
+function NowPlayingView:_bindPress(button: GuiObject)
+	for _, connection in ipairs(MusicMotion.bindPress(button)) do
+		table.insert(self._connections, connection)
+	end
+end
+
 function NowPlayingView:updateTrack(track: any?)
 	local refs = self._refs
+	local previousKey = if self._track then tostring(self._track.queueEntryId or self._track.id) else nil
 	self._track = if type(track) == "table" then track else nil
 	local current = self._track
+	local currentKey = if current then tostring(current.queueEntryId or current.id) else nil
+	-- A new song glides in; re-syncs of the same song (playlists arriving, state echoes) do not.
+	if currentKey ~= nil and currentKey ~= previousKey and self._heroBases then
+		task.defer(function()
+			MusicMotion.fadeIn(self._heroFade, self._heroBases)
+		end)
+	end
 	if not current then
 		Visuals.setText(refs.trackTitle, "No track playing")
 		Visuals.setText(refs.trackCreator, "")
@@ -159,7 +181,14 @@ function NowPlayingView:setDjMode(enabled: boolean)
 	Visuals.setVisible(refs.hero, not enabled)
 	Visuals.setVisible(refs.djStage, enabled)
 	if not enabled then
+		if self._heroBases then
+			MusicMotion.fadeIn(self._heroFade, self._heroBases)
+		end
 		return
+	end
+	if self._djBases then
+		MusicMotion.fadeIn(self._djFade, self._djBases)
+		MusicMotion.popIn(refs.djAvatar, 0.7)
 	end
 	local owner = if type(ownerId) == "number" then Players:GetPlayerByUserId(ownerId) else nil
 	local djName = if owner then owner.DisplayName else "The DJ"
@@ -187,21 +216,32 @@ function NowPlayingView:_bindTransport()
 	local pauseImage = icon:GetAttribute("PauseImage")
 	self._pauseImage = if type(pauseImage) == "string" and pauseImage ~= "" then pauseImage else nil
 
+	local iconOf = function(button: GuiButton): GuiObject?
+		return button:FindFirstChildWhichIsA("ImageLabel")
+	end
 	connect(rewind, function()
+		MusicMotion.spin(iconOf(rewind), -1)
 		self._fire("OnTransport", "seek", { delta = -SEEK_STEP_SECONDS })
 	end)
 	connect(seek, function()
+		MusicMotion.spin(iconOf(seek), 1)
 		self._fire("OnTransport", "seek", { delta = SEEK_STEP_SECONDS })
 	end)
 	connect(previous, function()
+		MusicMotion.wiggle(iconOf(previous), 14)
 		self._fire("OnTransport", "previous")
 	end)
 	connect(nextButton, function()
+		MusicMotion.wiggle(iconOf(nextButton), 14)
 		self._fire("OnAdminSkip")
 	end)
 	connect(playPause, function()
 		self._fire("OnTransport", if self:_isPaused() then "resume" else "pause")
 	end)
+	for _, button in ipairs(refs.transportButtons) do
+		self:_bindPress(button)
+	end
+	self:_bindPress(refs.clearQueueButton)
 
 	-- No modal in v3: the first press arms, a second press within 3 s clears.
 	local clearLabel = GuiRefs.need(refs.clearQueueButton, "TextLabel", "TextLabel") :: TextLabel
@@ -217,6 +257,7 @@ function NowPlayingView:_bindTransport()
 		end
 		self._clearArmed = true
 		Visuals.setText(clearLabel, CLEAR_CONFIRM_TEXT)
+		MusicMotion.wiggle(refs.clearQueueButton, 3)
 		local token = self._clearToken
 		task.delay(CLEAR_CONFIRM_SECONDS, function()
 			if token == self._clearToken and self._clearArmed then
@@ -250,6 +291,7 @@ function NowPlayingView:_paintPlayPause()
 	local image = if self:_isPaused() or not self._pauseImage then self._playImage else self._pauseImage
 	if icon.Image ~= image then
 		icon.Image = image
+		MusicMotion.popIn(icon, 0.55)
 	end
 end
 
@@ -305,8 +347,16 @@ function NowPlayingView:_renderProgress(force: boolean)
 	local refs = self._refs
 	local elapsed, total = self:_progressSeconds()
 	local progress = if total > 0 then math.clamp(elapsed / total, 0, 1) else 0
-	if refs.progressFill.Size.X.Scale ~= progress then
-		refs.progressFill.Size = UDim2.new(progress, 0, 1, 0)
+	if self._progressShown ~= progress then
+		-- Glide forward between 5 Hz samples; jumps (new track, seek back, pause) snap.
+		local glide = not force and self._progressShown ~= nil and progress > self._progressShown
+		self._progressShown = progress
+		MusicMotion.tween(
+			refs.progressFill,
+			if glide then PROGRESS_INTERVAL else 0,
+			{ Size = UDim2.new(progress, 0, 1, 0) },
+			Enum.EasingStyle.Linear
+		)
 	end
 	-- Text only when the displayed second changes; the bar is a single property.
 	local second = math.floor(elapsed)
@@ -385,10 +435,14 @@ function NowPlayingView:_row(index: number): QueueRow
 		self._connections,
 		remove.Activated:Connect(function()
 			if row.entryId then
+				MusicMotion.wiggle(remove:FindFirstChildWhichIsA("ImageLabel"), 16)
 				self._fire("OnTransport", "remove", { entryId = row.entryId })
 			end
 		end)
 	)
+	self:_bindPress(remove)
+	row.fade = { row.title, row.creator, row.length, row.requester, row.coverImage }
+	row.fadeBases = MusicMotion.captureBases(row.fade)
 	instance.Parent = self._template.Parent
 	self._rows[index] = row
 	return row
@@ -425,6 +479,7 @@ end
 function NowPlayingView:renderQueue(queue: { any }, force: boolean?)
 	local playlists = self._store:get().playlists
 	local count = 0
+	local entering = 0
 	for _, track in ipairs(queue) do
 		if type(track) ~= "table" then
 			continue
@@ -433,6 +488,11 @@ function NowPlayingView:renderQueue(queue: { any }, force: boolean?)
 		local row = self:_row(count)
 		local key = string.format("%s|%s", tostring(track.queueEntryId or track.id), tostring(track.requesterUserId))
 		if force or row.key ~= key then
+			-- A slot that now holds a different entry fades in; forced re-resolves do not.
+			if not force and row.fade and row.fadeBases then
+				MusicMotion.fadeIn(row.fade, row.fadeBases, ROW_STAGGER_SECONDS * math.min(entering, 8))
+				entering += 1
+			end
 			row.key = key
 			self:_bindRow(row, track, findPlaylist(playlists, track.playlistId))
 		end
