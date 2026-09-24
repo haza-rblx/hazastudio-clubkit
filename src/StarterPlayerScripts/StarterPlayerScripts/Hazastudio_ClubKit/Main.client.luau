@@ -583,6 +583,11 @@ do
 	-- bricks when the owner opts in via Config.AntiTamper.BRICK_ON_DETECT.
 	local SaveInstanceGuardService = require(script.Parent.Client.Services.SaveInstanceGuardService)
 	SaveInstanceGuardService.start()
+
+	-- Foreign GUI detector (ADR 0012). Log-only: it names the GUI and the scripts in
+	-- it and never kicks. PlayerGui only — CoreGui is not reachable from here.
+	local ForeignGuiGuardService = require(script.Parent.Client.Services.ForeignGuiGuardService)
+	ForeignGuiGuardService.start()
 end
 
 local SharedContextModule = Shared:WaitForChild("ContextModule", LoadingConfig.BOOTSTRAP_WAIT_TIMEOUT)
@@ -670,6 +675,7 @@ trackClientLifecycle("GenericBroadcastController", ClientMods.GenericBroadcastCo
 trackClientLifecycle("JoinGreetingController", JoinGreetingController)
 trackClientLifecycle("ChatTagsController", ClientMods.ChatTagsController)
 trackClientLifecycle("StreakController", ClientMods.StreakController)
+trackClientLifecycle("EventBoardController", ClientMods.EventBoardController)
 trackClientLifecycle("AfkGuardController", ClientMods.AfkGuardController)
 trackClientLifecycle("CoupleController", ClientMods.CoupleController)
 trackClientLifecycle("CinematicDockController", ClientMods.CinematicDockController)
@@ -926,7 +932,6 @@ end
 local TOPBAR_FILL_COLOR = Color3.fromRGB(7, 7, 7)
 local TOPBAR_FILL_TRANSPARENCY = 0
 local TOPBAR_OUTLINE_OVERLAY_NAME = "CodexTopbarOutlineOverlay"
-local topbarOutlineIdByWidget = setmetatable({}, { __mode = "k" }) :: { [GuiObject]: string }
 local function setTopbarFill(icon: any, color: Color3)
 	if type(icon.modifyTheme) == "function" then
 		icon:modifyTheme({
@@ -976,22 +981,6 @@ local function removeTopbarOutline(icon: any)
 		existingOutline:Destroy()
 	end
 
-	local playerGui = Players.LocalPlayer:FindFirstChildOfClass("PlayerGui")
-	if not playerGui then
-		return
-	end
-	local overlay = playerGui:FindFirstChild(TOPBAR_OUTLINE_OVERLAY_NAME)
-	if not overlay then
-		return
-	end
-	local hostName = topbarOutlineIdByWidget[widget]
-	if hostName then
-		local host = overlay:FindFirstChild(hostName)
-		if host then
-			host:Destroy()
-		end
-		topbarOutlineIdByWidget[widget] = nil
-	end
 end
 
 local function scheduleTopbarOutline(icon: any)
@@ -1432,8 +1421,26 @@ trackBootTask("GiftShopInit", function()
 	trackClientLifecycle("ShopController", shopCtrl)
 end)
 -- === Streak ===
+-- Event board (ADR 0015): the menu's Event tab + the join post popup. Nothing without EventTab.
+trackBootTask("EventBoardController.init", function()
+	ClientMods.EventBoardController.init({ remotes = Remotes })
+end)
 trackBootTask("StreakController.init", function()
-	ClientMods.StreakController.init({ remotes = Remotes })
+	ClientMods.StreakController.init({
+		remotes = Remotes,
+		-- Daily Quest addon icon; only called when the addon is on and installed.
+		createTopbarIcon = function()
+			local icon = Icon.new()
+			icon:setImage(Config.DailyQuest.TOPBAR_ICON)
+			icon:setLabel("")
+			placeTopbarIcon(icon, Config.DailyQuest.TOPBAR_ORDER)
+			setCompactTopbarWidth(icon, 36)
+			removeTopbarInnerPadding(icon)
+			styleTopbarPill(icon)
+			enlargeTopbarIcon(icon, 36, 10)
+			return icon
+		end,
+	})
 end)
 trackBootTask("AfkGuardController.init", function()
 	if Config.FeatureFlags.AfkGuardEnabled ~= false and Config.AfkGuard.ENABLED == true then
@@ -1742,45 +1749,50 @@ if clubKitOwnedSyncDance then
 			})
 		)
 
-		local syncLeadIcon = Icon.new()
-		syncLeadIcon:setLabel("Lead Dance")
-		placeTopbarIconLeft(syncLeadIcon, Config.Music.TOPBAR_ORDER + 2)
-		setCompactTopbarWidth(syncLeadIcon, 96)
-		removeTopbarInnerPadding(syncLeadIcon)
-		if type(syncLeadIcon.modifyTheme) == "function" then
-			syncLeadIcon:modifyTheme({
-				{ "IconImage", "Visible", false },
-				{ "PaddingLeft", "Size", UDim2.fromScale(0, 1) },
-			})
-		end
-		styleTopbarPill(syncLeadIcon)
-
-		local function requestLeadDanceSync(targetUserId: number)
-			task.spawn(function()
-				local deadline = os.clock() + 8
-				while os.clock() < deadline do
-					if syncDanceController and type(syncDanceController.requestSyncByUserId) == "function" then
-						syncDanceController:requestSyncByUserId(targetUserId)
-						return
-					end
-					task.wait(0.1)
-				end
-				Logger.new("SyncDanceBootstrap"):warn("Lead Dance sync handler unavailable", {
-					targetUserId = targetUserId,
+		-- Venue gate: Features.LeadDanceTopbar = false hides the pill (following a leader
+		-- from the avatar menu still works).
+		if Config.Sync.LEAD_TOPBAR_ENABLED ~= false then
+			local syncLeadIcon = Icon.new()
+			syncLeadIcon:setLabel("Lead Dance")
+			placeTopbarIconLeft(syncLeadIcon, Config.Music.TOPBAR_ORDER + 2)
+			setCompactTopbarWidth(syncLeadIcon, 96)
+			removeTopbarInnerPadding(syncLeadIcon)
+			if type(syncLeadIcon.modifyTheme) == "function" then
+				syncLeadIcon:modifyTheme({
+					{ "IconImage", "Visible", false },
+					{ "PaddingLeft", "Size", UDim2.fromScale(0, 1) },
 				})
-			end)
+			end
+			styleTopbarPill(syncLeadIcon)
+
+			local function requestLeadDanceSync(targetUserId: number)
+				task.spawn(function()
+					local deadline = os.clock() + 8
+					while os.clock() < deadline do
+						if syncDanceController and type(syncDanceController.requestSyncByUserId) == "function" then
+							syncDanceController:requestSyncByUserId(targetUserId)
+							return
+						end
+						task.wait(0.1)
+					end
+					Logger.new("SyncDanceBootstrap"):warn("Lead Dance sync handler unavailable", {
+						targetUserId = targetUserId,
+					})
+				end)
+			end
+
+			syncLeadTopbarController = trackClientLifecycle(
+				"SyncLeadTopbarController",
+				ClientMods.createSyncLeadTopbarController({
+					icon = syncLeadIcon,
+					iconFactory = function()
+						return Icon.new()
+					end,
+					onRequestSyncToLeader = requestLeadDanceSync,
+				})
+			)
 		end
 
-		syncLeadTopbarController = trackClientLifecycle(
-			"SyncLeadTopbarController",
-			ClientMods.createSyncLeadTopbarController({
-				icon = syncLeadIcon,
-				iconFactory = function()
-					return Icon.new()
-				end,
-				onRequestSyncToLeader = requestLeadDanceSync,
-			})
-		)
 		local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
 		local refs = ClientMods.DancePanelGuiRefs.resolve(playerGui, Config)
 		local emotePanel = trackClientLifecycle(

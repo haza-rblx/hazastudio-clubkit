@@ -199,6 +199,23 @@ local function isPointInside(gui: GuiObject?, point: Vector2): boolean
 		and point.Y <= position.Y + size.Y
 end
 
+-- Nested GuiButtons bubble one input through both, so only the outermost button of a nest may
+-- take the squash (a row's favourite star is bound on its own in _createRow instead).
+-- `skipped` names instances whose whole subtree the sweep leaves alone.
+local function isNestedOrSkipped(button: Instance, root: Instance, skipped: { [Instance]: boolean }): boolean
+	if skipped[button] then
+		return true
+	end
+	local ancestor = button.Parent
+	while ancestor and ancestor ~= root do
+		if ancestor:IsA("GuiButton") or skipped[ancestor] then
+			return true
+		end
+		ancestor = ancestor.Parent
+	end
+	return false
+end
+
 -- One vocabulary for every row repaint (ADR 0011): per-property channels, so the wutwut press
 -- tint and a state repaint driving the same properties replace each other instead of fighting.
 local function tweenProperties(instance: Instance, goal: { [string]: any }, spec: MotionSpec?)
@@ -344,6 +361,7 @@ function DancePanelUIBinder.new(deps: {
 	self:_bindPanelDrag()
 	self:_setupSpeedSlider()
 	self:_bindCustomSpeed()
+	self:_bindPanelButtons()
 	self:_applyTabVisuals()
 	self:_updateSpeedKnobVisibility()
 	restoreMobileBakedPanelScale(self.refs.panelRoot, self.config)
@@ -888,13 +906,43 @@ function DancePanelUIBinder:_bindCustomSpeed()
 
 	local resetSpeedButton = self.refs.resetSpeedButton
 	if resetSpeedButton then
-		self:_bindButtonMotion(resetSpeedButton)
+		-- Resolved before the bind: the icon tier may move the icon into its UIMotionIconSlot,
+		-- where a direct lookup no longer finds it.
 		local resetIcon = resetSpeedButton:FindFirstChildWhichIsA("ImageLabel")
+		self:_bindButtonMotion(resetSpeedButton)
 		self._resetSpeedConn = resetSpeedButton.Activated:Connect(function()
 			-- Rewind spin: layout-neutral, so it works wherever the button sits.
 			UIMotion.spin(resetIcon, -1)
 			self:setCurrentSpeed(self.config.DEFAULT_SPEED)
 		end)
+	end
+end
+
+-- Everything else the live panel shows. The refs only name the buttons this binder drives, and a
+-- layout carries more: v2's tabs come out of a SliderSelector, and the custom-speed / pagination
+-- controls sit wherever the design put them. Only the resolved panelRoot is walked, so the
+-- inactive wrapper variants are never touched; the hidden row templates are skipped because their
+-- clones bind themselves in _createRow. Panel-lifetime connections — this tree never rebuilds,
+-- and UIMotion's own marker keeps buttons bound above from being bound twice.
+function DancePanelUIBinder:_bindPanelButtons()
+	local panelRoot = self.refs.panelRoot
+	local skipped: { [Instance]: boolean } = {}
+	for _, refRow in pairs(self.refs.rowRefs) do
+		skipped[refRow] = true
+	end
+	-- Dragged, not pressed: the speed slider (its knob already carries its own UIScale) and the
+	-- panel's drag handle, both of which hold the input down for the length of a drag.
+	skipped[self.refs.speedWrapper] = true
+	skipped[self.refs.draggableFrame] = true
+
+	for _, descendant in ipairs(panelRoot:GetDescendants()) do
+		if
+			descendant:IsA("GuiButton")
+			and descendant:GetAttribute("UIMotionBound") == nil
+			and not isNestedOrSkipped(descendant, panelRoot, skipped)
+		then
+			self:_bindButtonMotion(descendant)
+		end
 	end
 end
 
@@ -1239,8 +1287,14 @@ function DancePanelUIBinder:_createRow(animation: AnimationEntry, layoutOrder: n
 	end
 
 	-- Press/hover and fade bases belong to the pooled instance, not to this render. The pool
-	-- destroys rows once it is full, so each row owns its connections and drops them with itself.
+	-- destroys rows once it is full, so each row owns its connections and drops them with itself;
+	-- a release (`Parent = nil`) keeps them, UIMotion only tears a bind down on `Destroying`.
 	if not self._rowMotionBound[row] then
+		-- The one bind of this instance happens parented (the ListPool rule): UIMotion picks its
+		-- target from the row's live ancestry (the list layout, the panel CanvasGroup) and
+		-- measures the icon it would lift, so a row bound while detached looked layout-safe when
+		-- it was not. Nothing paints between here and the caller's sync — same thread, no yield.
+		row.Parent = self.refs.mainContent
 		local rowMotion: { RBXScriptConnection } = {}
 		self._rowMotionBound[row] = rowMotion
 		self:_bindButtonMotion(row, rowMotion)
@@ -1260,8 +1314,10 @@ function DancePanelUIBinder:_createRow(animation: AnimationEntry, layoutOrder: n
 		if not self:_isRowInputAllowed(row, input) then
 			return
 		end
-		-- Rows live inside a CanvasGroup and a UIListLayout, so a scale pop is forbidden
-		-- (ADR 0005 / 0011). Rotation is layout-neutral: the name gives a small kick instead.
+		-- Rows live inside a CanvasGroup and a UIListLayout, so no scale tier applies — not the
+		-- row, not its favourite icon; press/hover land on UIMotion's padding/brightness fallback
+		-- — and a scale pop is forbidden (ADR 0005 / 0011). Rotation is layout-neutral: the name
+		-- gives a small kick instead.
 		UIMotion.wiggle(label, 3)
 		if self._emoteSelected then
 			self._emoteSelected(animation)

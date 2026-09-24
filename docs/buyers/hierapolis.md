@@ -151,6 +151,47 @@ Done via MCP in the open Studio session (**not saved until the owner presses Ctr
   graphics menu shows with **no** join prompt under it, prompt + kit UI appear after a preset is picked.
 - Old place (`backup HIERAPOLIS.rbxl`) untouched; its `ReplicatedFirst.LoadingScreen` is Disabled there.
 
+## 2026-09-18 — bug pass (DPC team, Auto Dance, loading pack, Cenz panel, Wutwut speed)
+
+Six changes in this place, all still **unsaved** — the owner owes one **Ctrl+S**. Nine scripts
+plus two instance/property changes. Engine-side fixes also landed in the repo (see
+`CHANGELOG [Unreleased]` + `UPGRADE_PROGRESS`); the rest is place-only.
+
+| # | What | Where it lives |
+|---|---|---|
+| 1 | **DPC team flipped players to Neutral.** 21 role keys share the Team label `DPC` but carried 4 different `teamColor`s, and `getOrCreateTeam` repainted the shared Team with whoever was syncing. Roblox keys team membership by `TeamColor`, so every repaint dropped that team's players to Neutral → endless "You are now on the DPC team". Team colour now comes from the label's canonical role. | engine (`RolesDomain`, `Config`, `OverheadController`) + hotfix here |
+| 2 | **Auto Dance re-opened the dance panel** every shuffle tick, because it drives the same `onEmoteSelected` that reveals the panel for a manual pick. Suppressed while Auto runs. | engine (`SyncController`, `AutoDanceController`) + hotfix here |
+| 3 | **Wutwut fought the speed slider** — followers walked backwards through speeds. Two writers to `activeSpeeds`. | engine (`SyncService`) + hotfix here |
+| 4 | **Owner / CoOwner renamed** to `THE PRESIDENT` / `THE ARCHON` in rank row, chat tag and player list (owner call). `Owner` gained an explicit `toolFolder = "OWNER"` — without it the engine falls back to `chatTag` and the rename would have pointed Owner at a folder that does not exist, losing all 12 tools. | `extras/place-packs/Hierapolis/HierapolisCustom.luau` + place |
+| 5 | **CinematicLoading was off in four places at once** (script parented to `Teams`, `Disabled = true`, and `LoadingScreen = true` in *both* `ClubKitConfig` and the `HierapolisCustom` overlay — the overlay wins). Restored all four. Also fixed the pack's double backpack and the Potato-preset freeze — see that pack's README. | `extras/place-packs/CinematicLoading/` + place |
+| 6 | **Cenz GLights panel auto-opened.** `StarterGui.CenzGLightsController.Enabled` was `true`, and the whitelist gate ran after `task.wait(1)` using `FindFirstChild`. Panel now starts closed and opens only from the COMA topbar button; the gate runs immediately via `WaitForChild`. Verified both ways: non-whitelisted never sees it (no 1 s flash), whitelisted gets 0 self-opens over 40 s and the button still opens it. | place-only (third-party scripts) |
+
+**A rename here is never only cosmetic.** `chatTag` feeds the Rank row, the chat tag, the
+PlayerList Team name **and** the tool folder when a role has no explicit `toolFolder`. Check all
+four before changing one.
+
+### Still open from this pass
+
+- [ ] **Owner + CoOwner now say the same words twice**: the rank row shows `THE PRESIDENT` /
+      `THE ARCHON` and their overhead chip repeats it. Set `chip = false` on either role in
+      `HierapolisCustom` if that reads double — owner's call, not done.
+- [ ] **Two different DPC ranks online at once has not been observed on the patched build.**
+      The mechanism and the colour-conflict count were both measured, but the buyer's original
+      two-player repro was not re-run. Needs Start Server + 2 Players.
+- [ ] **`SyncRateLimit.SPEED_CHANGE` is `max 20 / 2 s` = exactly the client's 100 ms throttle** —
+      zero headroom, so the trailing final-value fire can be dropped and leave followers on a
+      stale speed. Suspected, **not measured** (the test ramp was only 3.3/s).
+- [ ] **Boot takes ~44 s** in a Studio playtest, most of it the loading pack waiting on the kit's
+      `ClubKitBootSettled`. Not attributed — Studio boot numbers here are unreliable. Owner levers:
+      `PresentedByDuration` (hard 5 s) and `MaxWait` in the pack's `SETTINGS`.
+- [ ] **`CenzServerController` is still the pirated build** noted on 2026-09-02: it overrides
+      `require` so the Cenz licence module returns a stub, prints `Cracked By STUDIO DEV` each boot,
+      and the Cenz server-side whitelist is therefore dead. ~31 KB of obfuscated server code from an
+      untrusted source with full access to the kit's DataStore and `Secrets.luau`. **Not touched** —
+      owner's decision, and the licensing side belongs with Cenz.
+- [ ] Last playtest did not tear down cleanly (`teardown did not settle`). Confirm Studio is back
+      in Edit mode before Ctrl+S.
+
 ## Open items / not done
 
 - [ ] The Emperor ramp is derived, not buyer-supplied — swap in real stops if the buyer sends them.

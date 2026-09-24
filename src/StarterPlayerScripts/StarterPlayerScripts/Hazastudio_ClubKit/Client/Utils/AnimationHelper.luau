@@ -6,6 +6,7 @@ local TweenService = game:GetService("TweenService")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local MotionPresets = require(script.Parent.MotionPresets)
 local GroupMotion = require(script.Parent.GroupMotion)
+local InstanceState = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.InstanceState)
 -- ============================================================
 -- Types
 -- ============================================================
@@ -103,42 +104,60 @@ local function getOrCreateUIScale(frame: Frame): UIScale
 	s.Parent = frame
 	return s
 end
-local function weakInstanceKeyTable<T>(): T
-	return setmetatable({}, { __mode = "k" }) :: any
-end
-local activeTweens: { [Instance]: { Tween } } = weakInstanceKeyTable()
-local activeTokens: { [Instance]: number } = weakInstanceKeyTable()
-local activeRestingPositions: { [Instance]: UDim2 } = weakInstanceKeyTable()
+-- Per-target motion bookkeeping: one STRONG record per Instance, reclaimed on its `Destroying`
+-- (InstanceState; ADR 0011 addendum, 2026-09-17). These used to be weak-keyed tables, and Roblox
+-- drops such an entry while the panel is still alive — which orphaned an in-flight present/dismiss
+-- so the next one could neither cancel it nor read the resting position it was aimed from.
+type MotionRecord = {
+	-- Tweens of the animation in flight, so the next animation on the target cancels them.
+	tweens: { Tween }?,
+	-- Bumped by every animation; a Completed handler for an older token does nothing.
+	token: number,
+	-- Where the in-flight travel is heading, so a new one starting mid-flight aims from rest.
+	restingPosition: UDim2?,
+	-- GroupTransparency at rest, captured before the first group fade (size-stable path, ADR 0005).
+	restingGroupAlpha: number?,
+}
+local motion = InstanceState.new(function(): MotionRecord
+	return { token = 0 }
+end)
 local function cancelActiveTweens(target: Instance): ()
-	local tweens = activeTweens[target]
-	if not tweens then
+	local record = motion.get(target)
+	local tweens = if record then record.tweens else nil
+	if not record or not tweens then
 		return
 	end
-	activeTweens[target] = nil
+	record.tweens = nil
 	for _, tween in ipairs(tweens) do
 		tween:Cancel()
 	end
 end
 local function beginAnimation(target: Instance): number
-	local token = (activeTokens[target] or 0) + 1
-	activeTokens[target] = token
+	local record = motion.of(target)
+	record.token += 1
 	cancelActiveTweens(target)
-	return token
+	return record.token
 end
 local function isCurrentAnimation(target: Instance, token: number): boolean
-	return activeTokens[target] == token
+	local record = motion.get(target)
+	return record ~= nil and record.token == token
 end
 local function registerTweens(target: Instance, tweens: { Tween }, restingPos: UDim2): ()
-	activeTweens[target] = tweens
-	activeRestingPositions[target] = restingPos
+	local record = motion.of(target)
+	record.tweens = tweens
+	record.restingPosition = restingPos
 end
 local function completeTweens(target: Instance): ()
-	activeTweens[target] = nil
-	activeRestingPositions[target] = nil
+	local record = motion.get(target)
+	if record then
+		record.tweens = nil
+		record.restingPosition = nil
+	end
 end
 local function resolveRestingPosition(frame: Frame): UDim2
-	local cached = activeRestingPositions[frame]
-	if activeTweens[frame] and cached then
+	local record = motion.get(frame)
+	local cached = if record then record.restingPosition else nil
+	if record and record.tweens and cached then
 		return cached
 	end
 	return frame.Position
@@ -164,10 +183,10 @@ end
 --   * Frame wrapping one  -> dialog snap/settle travel (position only)
 -- UIScale instances already on the target are left untouched (mobile scaling lives there).
 -- ============================================================
-local restingGroupAlpha: { [Instance]: number } = weakInstanceKeyTable()
 local function resolveRestingGroupAlpha(group: CanvasGroup): number
-	local cached = restingGroupAlpha[group]
-	if activeTweens[group] and cached ~= nil then
+	local record = motion.of(group)
+	local cached = record.restingGroupAlpha
+	if record.tweens and cached ~= nil then
 		return cached
 	end
 	local current = group.GroupTransparency
@@ -175,7 +194,7 @@ local function resolveRestingGroupAlpha(group: CanvasGroup): number
 	if current >= 0.999 then
 		current = 0
 	end
-	restingGroupAlpha[group] = current
+	record.restingGroupAlpha = current
 	return current
 end
 local function presentGroupFade(group: CanvasGroup, info: TweenInfo, onDone: (() -> ())?): ()
@@ -774,9 +793,12 @@ function AnimationHelper:presentDialog(modal: Frame, onDone: (() -> ())?): ()
 	local settlePos = offsetPosition(restingPos, preset.settleYOffset)
 	modal.Position = offsetPosition(restingPos, preset.yOffset)
 	modal.Visible = true
+	-- DialogOpenPreset carries no style fields (its shape is consumed elsewhere), so the curve is
+	-- written here. Quint Out to match MotionPresets.panelOpen's snap after the 2026-09-16 feel
+	-- pass — a dialog and a panel must not arrive along different curves.
 	local snapTween = TweenService:Create(
 		modal,
-		makeInfo(preset.snapTime, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+		makeInfo(preset.snapTime, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
 		{ Position = settlePos }
 	)
 	local settleTween = TweenService:Create(

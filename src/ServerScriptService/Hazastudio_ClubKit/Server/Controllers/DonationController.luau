@@ -38,6 +38,7 @@ local function createDonationController(deps: {
 	remotes           : Folder,
 	leaderboardRepository: any?,
 	avatarLikeRepository: any?,
+	progressLeaderboardRepository: any?,
 	leaderboardsRemote: RemoteEvent?,
 	leaderboardsSnapshotRemote: RemoteEvent?,
 	leaderboardsSnapshotResponseRemote: RemoteEvent?,
@@ -50,6 +51,7 @@ local function createDonationController(deps: {
 	local remotesFolder      = deps.remotes
 	local leaderboardRepository = deps.leaderboardRepository
 	local avatarLikeRepository = deps.avatarLikeRepository
+	local progressLeaderboardRepository = deps.progressLeaderboardRepository
 	local leaderboardsRemote = deps.leaderboardsRemote
 	local leaderboardsSnapshotRemote = deps.leaderboardsSnapshotRemote
 	local leaderboardsSnapshotResponseRemote = deps.leaderboardsSnapshotResponseRemote
@@ -158,6 +160,9 @@ local function createDonationController(deps: {
 			robux = payload._robuxState or "empty",
 			community = payload._communityState or "empty",
 			likes = payload._likesState or "empty",
+			level = payload._levelState or "empty",
+			streak = payload._streakState or "empty",
+			couple = payload._coupleState or "empty",
 			saweria = if not isDonationApiConfigured() then "not_configured"
 				elseif saweriaCount > 0 then "ready"
 				elseif saweriaFetchOk == false then "error"
@@ -166,6 +171,9 @@ local function createDonationController(deps: {
 		payload._robuxState = nil
 		payload._communityState = nil
 		payload._likesState = nil
+		payload._levelState = nil
+		payload._streakState = nil
+		payload._coupleState = nil
 	end
 
 	local function splitArgs(rawText: string): {string}
@@ -235,7 +243,7 @@ local function createDonationController(deps: {
 
 	local function workspacePayloadFingerprint(payload: { [string]: any }): string
 		local parts = { tostring(payload.updatedAt or 0) }
-		for _, key in { "robux", "community", "saweria", "dailySaweria", "dailyRobux", "dailyCombined", "likes" } do
+		for _, key in { "robux", "community", "saweria", "dailySaweria", "dailyRobux", "dailyCombined", "likes", "level", "streak", "couple" } do
 			local list = payload[key]
 			if type(list) == "table" then
 				table.insert(parts, key .. ":" .. tostring(#list))
@@ -337,6 +345,9 @@ local function createDonationController(deps: {
 			dailyRobux = {},
 			dailyCombined = {},
 			likes = {},
+			level = {},
+			streak = {},
+			couple = {},
 		}
 
 		if leaderboardRepository then
@@ -377,6 +388,23 @@ local function createDonationController(deps: {
 				log:debug("getTopLeaderboard returned Err", { error = tostring(likesResult.error) })
 			end
 			payload._likesState = resolveDatastoreBoardState(likesOk, likesResult, #payload.likes)
+		end
+		if progressLeaderboardRepository then
+			for _, board in {
+				{ key = "level", limit = Config.Leaderboards.LEVEL_LIMIT },
+				{ key = "streak", limit = Config.Leaderboards.STREAK_LIMIT },
+				{ key = "couple", limit = Config.Leaderboards.COUPLE_LIMIT },
+			} do
+				local ok, result = pcall(function()
+					return progressLeaderboardRepository:getTop(board.key, board.limit)
+				end)
+				if ok and type(result) == "table" and result.ok then
+					payload[board.key] = result.value
+				elseif not ok then
+					log:warn("progress leaderboard error", { board = board.key, error = tostring(result) })
+				end
+				payload["_" .. board.key .. "State"] = resolveDatastoreBoardState(ok, result, #payload[board.key])
+			end
 		end
 		local saweriaFetchOk = true
 		if donationService and type(donationService.getWorkspaceSaweriaLeaderboard) == "function" then
@@ -443,6 +471,22 @@ local function createDonationController(deps: {
 		enrichSafe(payload.community)
 		enrichSafe(payload.saweria)
 		enrichSafe(payload.likes)
+		enrichSafe(payload.level)
+		enrichSafe(payload.streak)
+		-- Couple rows carry a second player: enrich those as rows of their own, then copy across.
+		if type(payload.couple) == "table" and #payload.couple > 0 then
+			local partners = {}
+			for index, entry in ipairs(payload.couple) do
+				partners[index] = { userId = entry.partnerId }
+			end
+			enrichSafe(partners)
+			for index, entry in ipairs(payload.couple) do
+				local partner = partners[index]
+				entry.partnerDisplayName = partner.displayName
+				entry.partnerUsername = partner.username
+				entry.partnerThumbnail = partner.thumbnail
+			end
+		end
 		enrichSafe(payload.dailySaweria)
 		if Config.Leaderboards.DAILY_ROBUX_ENABLED == true or Config.Leaderboards.DAILY_COMBINED_ENABLED == true then
 			enrichSafe(payload.dailyRobux)
@@ -465,6 +509,9 @@ local function createDonationController(deps: {
 			dailyRobux = #payload.dailyRobux,
 			dailyCombined = #(payload.dailyCombined or {}),
 			likes = #payload.likes,
+			level = #payload.level,
+			streak = #payload.streak,
+			couple = #payload.couple,
 		})
 
 		attachBoardStates(payload, saweriaFetchOk)
@@ -632,6 +679,9 @@ local function createDonationController(deps: {
 			dailyRobux = {},
 			dailyCombined = {},
 			likes = {},
+			level = {},
+			streak = {},
+			couple = {},
 		}
 		attachBoardStates(payload, true)
 		return payload
@@ -664,6 +714,19 @@ local function createDonationController(deps: {
 			leaderboardsNetwork:fireAllClients(payloadOrErr)
 		end
 	end)
+
+	-- Level and streak move all the time while donations drive every other rebuild; refresh on a
+	-- slow timer so those two boards follow without a donation.
+	if progressLeaderboardRepository then
+		task.spawn(function()
+			local interval = math.max(30, tonumber(Config.Leaderboards.PROGRESS_REFRESH_INTERVAL) or 120)
+			task.wait(LEADERBOARD_PREWARM_DELAY_SEC + interval)
+			while true do
+				scheduleWorkspaceLeaderboardRefresh({ force = true, immediate = false })
+				task.wait(interval)
+			end
+		end)
+	end
 
 	-- Server-push leaderboard to new joiners. Uses cached (empty until warm, then
 	-- hot payload) so join never triggers a cold GetSortedAsync/GetAsync storm.

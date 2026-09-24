@@ -12,6 +12,7 @@ local DonationExperiencePrefs = require(ReplicatedStorage.Hazastudio_ClubKit.Sha
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local HttpApiCounter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.HttpApiCounter)
 local ClientHttpApi = require(script.Parent.Parent.Parent.Utils.ClientHttpApi)
+local AvatarGiant = require(script.Parent.Parent.Parent.Utils.AvatarGiant)
 
 -- Helper function to scale particle effects
 local function scaleParticleEffect(particleEmitter, scaleFactor)
@@ -36,7 +37,7 @@ local function scaleParticleEffect(particleEmitter, scaleFactor)
 end
 
 -- Camera shaker module
-local CameraShaker = require(script.CameraShaker)
+local CameraShaker = require(script.Parent.CameraShaker)
 
 -- Giant spawn: ClubKitConfig.Donation.NukeWorldPosition + aerial offset (legacy Y≈242).
 local DEFAULT_GIANT_SPAWN = Vector3.new(17.124, 242.798, 44.581)
@@ -56,13 +57,34 @@ end
 
 local GIANT_SPAWN_POSITION = resolveGiantSpawnPosition()
 
+-- Giant height in avatar multiples. 232 reproduces the legacy giant's on-screen size
+-- (~1192 studs, measured against the old Smite3 rig) so the hammer stays in
+-- proportion: biggest hammer part 531 vs torso 518, ratio ~1.0. Layered clothing was
+-- photographed intact at this scale on 2026-09-18 -- the old rig's nudity came from
+-- the bundled rig itself, not from being big.
+local GIANT_SCALE = tonumber((Config.Donation :: any).GIANT_SCALE) or 50
+
+
 local function applyGiantAppearance(userId, character)
 	-- HTTP API telemetry counter (quota-efficiency-pass-2026-06, Phase 0).
 	-- Only fire when wrapper disabled (when enabled, wrapper's internal counter handles it).
 	if (not (Config.ClientHttpApi and Config.ClientHttpApi.ENABLED)) and Config.HttpApi and Config.HttpApi.COUNTERS_ENABLED then
 		HttpApiCounter.record("greenhammer_hd_total")
 	end
-	local humanoidDescription = ClientHttpApi.getHumanoidDescriptionFromUserIdAsync(userId)
+	-- Cloned: the cache hands back the same instance and the scale fields below mutate it.
+	local humanoidDescription = AvatarGiant.fetchDescription(userId)
+	if not humanoidDescription then
+		return nil
+	end
+
+	-- The donor's 3D clothing rides on a separate shell that mirrors this rig's pose:
+	-- Humanoid scale values cannot carry layered clothing, Model:ScaleTo can. This rig
+	-- keeps driving the animation, the hammer and the portal exactly as before, and the
+	-- transparency pass below hides it. See Client/Utils/AvatarGiant.
+	local shell = AvatarGiant.attachShell(character, humanoidDescription, GIANT_SCALE)
+
+	-- This rig is invisible, so layered garments on it would only break the deformation.
+	AvatarGiant.stripLayered(humanoidDescription)
 
 	-- Scale up the character massively
 	humanoidDescription.DepthScale = humanoidDescription.DepthScale * 53
@@ -78,6 +100,8 @@ local function applyGiantAppearance(userId, character)
 			part.Transparency = 1
 		end
 	end
+
+	return shell
 end
 
 -- Random rotation for effects
@@ -86,6 +110,8 @@ local randomRotation = math.random(-180, 180)
 -- Main nature effect function
 local function createNatureEffect(donatorName, recipientName, donationAmount, donatorUserId)
 	-- Clone the main effect model
+	-- Clothing shell handle; destroyed with the effect model below.
+	local giantShell = nil
 	local effectModel = ReplicatedStorage.WorldEffects.Smite3:Clone()
 	SoundAssetSanitizer.removeBlockedSounds(effectModel)
 	local diamondHammer = effectModel.DiamondHammer
@@ -193,7 +219,7 @@ local function createNatureEffect(donatorName, recipientName, donationAmount, do
 			end
 		end
 
-		applyGiantAppearance(userId, effectModel)
+		giantShell = applyGiantAppearance(userId, effectModel)
 		effectModel.Humanoid.BodyDepthScale.Value = 50
 		effectModel.Humanoid.HeadScale.Value = 50
 		effectModel.Humanoid.BodyHeightScale.Value = 50
@@ -810,6 +836,10 @@ local function createNatureEffect(donatorName, recipientName, donationAmount, do
 	giantAnimation:GetMarkerReachedSignal("FadeEnd"):Connect(function()
 		hammerFlameConnection:Disconnect()
 		wait(5)
+		if giantShell then
+			giantShell:destroy()
+			giantShell = nil
+		end
 		effectModel:Destroy()
 	end)
 

@@ -484,6 +484,40 @@ function RolesDomain.buildTeamColors(): { [string]: string }
 	return map
 end
 
+-- Several roles collapse onto one PlayerList Team: the team's name is
+-- upper(ChatPrimaryTagLabel[roleKey]), and a buyer can put many ranks on one label
+-- (HIERAPOLIS has 21 role keys on "DPC"). A Team carries exactly ONE TeamColor, so
+-- that color must be a function of the LABEL, never of whichever role happens to be
+-- syncing. When it followed the role, every sync rewrote the team's color -- and
+-- because Roblox keys team membership by TeamColor, each rewrite dropped that team's
+-- players to Neutral and the next sync re-added them, spamming
+-- "You are now on the <team> team".
+-- Highest ChatPrimaryTagPriority owns the color; ties break on the role key so the
+-- pick survives a restart (pairs() order does not).
+function RolesDomain.buildTeamColorRoleByLabel(
+	labelByRole: { [string]: string },
+	priorityByRole: { [string]: number }
+): { [string]: string }
+	local canonical: { [string]: string } = {}
+	local bestPriority: { [string]: number } = {}
+	for roleKey, label in pairs(labelByRole) do
+		if type(label) == "string" and label ~= "" then
+			local teamName = string.upper(label)
+			local priority = tonumber(priorityByRole[roleKey]) or 0
+			local currentBest = bestPriority[teamName]
+			if
+				currentBest == nil
+				or priority > currentBest
+				or (priority == currentBest and roleKey < canonical[teamName])
+			then
+				bestPriority[teamName] = priority
+				canonical[teamName] = roleKey
+			end
+		end
+	end
+	return canonical
+end
+
 function RolesDomain.buildBadgeVisibility(membershipBadgeFrames: { [string]: string? }): { [string]: { string } }
 	local roles = getRoles()
 	local map: { [string]: { string } } = {}
@@ -764,6 +798,8 @@ function RolesDomain.applyDerivedConfig(config: any)
 	config.ChatPrimaryTagColor = RolesDomain.buildChatPrimaryTagColor(config.RoleColorPalette)
 	config.SpecialRank = RolesDomain.buildSpecialRank()
 	config.PlayerList.TEAM_COLORS = RolesDomain.buildTeamColors()
+	config.PlayerList.TEAM_COLOR_ROLE =
+		RolesDomain.buildTeamColorRoleByLabel(config.ChatPrimaryTagLabel, config.ChatPrimaryTagPriority)
 	syncMembershipChatColors(config)
 
 	local membershipFrames = {

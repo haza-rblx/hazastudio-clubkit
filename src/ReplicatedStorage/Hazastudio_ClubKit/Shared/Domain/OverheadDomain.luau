@@ -10,6 +10,7 @@ local TitleFontUtil = require(script.Parent.Parent.Utils.TitleFontUtil)
 local Types = require(script.Parent.Types)
 local LevelDomain = require(script.Parent.LevelDomain)
 local OverheadLayerPolicy = require(script.Parent.OverheadLayerPolicy)
+local DailyQuestDomain = require(script.Parent.DailyQuestDomain)
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TitleColorPreset = require(ReplicatedStorage.Hazastudio_ClubKit.OverheadEffects.TitleColorPreset)
@@ -693,6 +694,7 @@ function OverheadDomain.defaultStoredData(): OverheadStoredData
 		suppressCommunityBadge = false,
 		streakDays = 0,
 		lastLoginAt = 0,
+		dailyQuest = nil,
 		level = 1,
 		xp = 0,
 		_version = 1,
@@ -737,6 +739,7 @@ function OverheadDomain.applyHardcoded(stored: OverheadStoredData, userId: numbe
 		suppressCommunityBadge = stored.suppressCommunityBadge,
 		streakDays = stored.streakDays,
 		lastLoginAt = stored.lastLoginAt,
+		dailyQuest = stored.dailyQuest,
 		level = stored.level,
 		xp = stored.xp,
 		_version = stored._version,
@@ -1142,6 +1145,7 @@ function OverheadDomain.sanitize(raw: any): OverheadStoredData
 		suppressCommunityBadge = raw.suppressCommunityBadge == true,
 		streakDays = type(raw.streakDays) == "number" and math.max(0, raw.streakDays) or 0,
 		lastLoginAt = type(raw.lastLoginAt) == "number" and math.max(0, raw.lastLoginAt) or 0,
+		dailyQuest = DailyQuestDomain.sanitizeState(raw.dailyQuest),
 		level = normalizedLevel,
 		xp = normalizedXp,
 		_version = type(raw._version) == "number" and raw._version or 1,

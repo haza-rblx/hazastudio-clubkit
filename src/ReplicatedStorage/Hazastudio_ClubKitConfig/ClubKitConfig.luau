@@ -722,6 +722,45 @@ ClubKitConfig.CustomTitle = {
 }
 
 -- =============================================================================
+-- DAILY QUEST (the 1000-02-DQ-ADDON panel)
+-- =============================================================================
+--   Only used when Features.DailyQuest = true AND the 1000-02-DQ-ADDON ScreenGui
+--   is installed in StarterGui. With both, the daily streak no longer goes up
+--   by itself when a player joins: they press "Check in harian" in the panel.
+--   The panel opens by itself after join if they have not checked in today, and
+--   from its topbar icon any time.
+--
+--   QuestId
+--     A name for this quest, e.g. "oktober-2026". Every player's quest progress
+--     belongs to this id — change it to run a new quest and everyone starts at 0.
+--     Empty = no quest: the check-in button still keeps the streak going.
+--
+--   TargetDays
+--     Check-in days needed. Also how many day circles the panel shows. Skipping
+--     one day is forgiven; skipping two or more starts the quest over at day 1.
+--
+--   StartDate / DueDate
+--     "YYYY-MM-DD", Indonesian time (WIB). Both days count. Check-ins before
+--     StartDate or after DueDate keep the streak but not quest progress.
+--
+--   RewardTier
+--     Membership given FOREVER to whoever reaches TargetDays ("Tier1" = VIP,
+--     or a tier label like "VIP"). Players who already have it or higher finish
+--     the quest without a second copy. Everyone in the server sees who finished.
+--
+--   Title
+--     The quest sentence. {days} = TargetDays, {tier} = the reward's name.
+--
+ClubKitConfig.DailyQuest = {
+	QuestId = "",
+	TargetDays = 30,
+	StartDate = "",
+	DueDate = "",
+	RewardTier = "Tier1",
+	Title = "Pertahankan streak selama {days} hari dan dapatkan {tier} gratis!",
+}
+
+-- =============================================================================
 -- FREE TITLE EVENT (the ADDON-FreeTitleEventTrigger card)
 -- =============================================================================
 --   An event card that floats on screen and opens the custom title panel. It is
@@ -778,8 +817,49 @@ ClubKitConfig.FreeTitleEvent = {
 --     Players without music control may have one such song waiting at a time
 --     and request at most three every ten minutes.
 --
+--   MaxVolume
+--     How loud the music plays when a player's Settings slider is at 100%.
+--     The slider stays a 0-100% scale; the percentage is multiplied by this
+--     number to get the actual Sound.Volume.
+--       1   Roblox's normal loudness (how the kit sounded before 3.0)
+--       4   four times louder (default)
+--     Roblox allows up to 10. Anything above 1 is amplification, and
+--     amplification clips: a loud master plus a boosted DJ equalizer band
+--     distorts audibly. Lower this if your venue's tracks sound crunchy.
+--
 ClubKitConfig.Music = {
 	PlayOnceRequest = "everyone",
+	MaxVolume = 4,
+}
+
+-- =============================================================================
+-- ANTI-TAMPER — foreign GUI report
+-- =============================================================================
+--   A GUI that was not in a player's PlayerGui once the game finished loading is
+--   reported to HazaStudio's Discord by name, together with the names of any
+--   scripts inside it. Most exploit tools are a GUI, so this is how we learn what
+--   is actually being used in club places.
+--
+--   It only ever REPORTS. Nobody is kicked, nothing is blocked, and there is no
+--   switch to make it kick — a false accusation costs a paying guest.
+--
+--   What it can see: PlayerGui only. Executors that hide their window in CoreGui
+--   are invisible to the game, so a quiet report is not proof of a clean server.
+--
+--   Privacy: only GUIs that appear AFTER loading are sent. The GUIs your place
+--   ships with are snapshotted on each client and never leave that client.
+--
+--   ForeignGuiDetect      false turns the report off completely.
+--   ForeignGuiGraceSeconds  how long after loading the snapshot is taken. Raise it
+--                         if your place builds GUIs late and they get reported.
+--   ForeignGuiAllowNames  names that are never reported (admin systems, place
+--                         add-ons). Anything already sitting in StarterGui is
+--                         allowed automatically — you do not need to list it.
+--
+ClubKitConfig.AntiTamper = {
+	ForeignGuiDetect = true,
+	ForeignGuiGraceSeconds = 20,
+	ForeignGuiAllowNames = { "Adonis", "Adonis_Loader", "Kohl's Admin", "HD Admin", "BasicAdmin", "Chat" },
 }
 
 -- =============================================================================
@@ -795,6 +875,10 @@ ClubKitConfig.Features = {
 	-- Rapid re-click of the PLAYING emote hard-restarts it (fade 0 "wutwut" stutter).
 	-- false = classic behavior (same-emote click toggles the dance off). Default false.
 	WutwutDance = false,
+	-- "Auto" topbar toggle that shuffles dance emotes on an interval. false = hide it.
+	AutoDance = true,
+	-- "Lead Dance" topbar pill (who is leading the floor, tap to follow). false = hide it.
+	LeadDanceTopbar = true,
 	-- true = place uses extras/place-packs/SyncBhms (ACM Sync Dance → BHMS).
 	-- Disables Club Kit dance panel + SyncService. false = SyncBhmsGate no-ops pack (hide topbar Dance).
 	-- THE BASIC TEST 1.3: set true only when playtesting SyncBhms pack.
@@ -810,9 +894,17 @@ ClubKitConfig.Features = {
 	-- only. Needs the 1000-01-CT-ADDON ScreenGui installed in StarterGui; without it the
 	-- old modal is used even when this is true.
 	SelfCustomTitle = false,
+	-- Daily Quest: players press a daily check-in button in the 1000-02-DQ-ADDON panel
+	-- to keep their streak, and finishing the quest gives a membership forever (see
+	-- ClubKitConfig.DailyQuest). false (default) = streak goes up on join as before.
+	-- Needs the 1000-02-DQ-ADDON ScreenGui in StarterGui; without it this does nothing.
+	DailyQuest = false,
 	-- Custom-title panel v3 (04-AdminPanelv3) owns the admin topbar icon instead of
 	-- the classic 04-AdminPanelv2. Needs that ScreenGui installed in StarterGui.
 	AdminPanelV3 = false,
+	-- Image custom titles inside 04-AdminPanelv3. A paid add-on, sold apart from the
+	-- standard package; leave false unless this venue bought it.
+	ImageCustomTitle = false,
 	Hotbar = true,
 	LoadingScreen = true,
 	LevelSystem = true,

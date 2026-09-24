@@ -11,7 +11,9 @@ local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Con
 local LeaderboardIdentity = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.LeaderboardIdentity)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local DonationAmountFormat = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DonationAmountFormat)
+local InstanceState = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.InstanceState)
 local WorkspaceLeaderboardRenderer = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Leaderboards.WorkspaceLeaderboardRenderer)
+local BoardAmbience = require(script.Parent.Parent.UI.BoardAmbience)
 
 local log = Logger.new("Client.WorkspaceLeaderboards")
 
@@ -27,6 +29,7 @@ local function destroy()
 		conn:Disconnect()
 	end
 	table.clear(_connections)
+	BoardAmbience.stop()
 end
 
 type BoardSpec = WorkspaceLeaderboardRenderer.BoardSpec
@@ -115,32 +118,41 @@ local DAILY_CARD_STAGGER = 0.09 -- delay between card entries for the domino eff
 local DAILY_BATCH_HOLD = 5.2
 local DAILY_SEQUENCE_RESTART_DELAY = 0.6
 
-local function weakKeyTable<T>(): T
-	return setmetatable({}, { __mode = "k" }) :: any
-end
-
-local lastValueTextByLabel: { [TextLabel]: string } = weakKeyTable()
-local valueNumberByLabel: { [TextLabel]: number } = weakKeyTable()
-local valueCounterGenerationByLabel: { [TextLabel]: number } = weakKeyTable()
-local supportingCardFingerprintByCard: { [GuiObject]: string } = weakKeyTable()
-local supportingCardFadeGenerationByCard: { [GuiObject]: number } = weakKeyTable()
-local originalTextSizeByLabel: { [TextLabel]: number } = weakKeyTable()
-local lastTimestampTextByLabel: { [TextLabel]: string } = weakKeyTable()
-local originalTextTransparencyByLabel: { [TextLabel]: number } = weakKeyTable()
-local originalTextStrokeTransparencyByLabel: { [TextLabel]: number } = weakKeyTable()
-local originalImageSizeByLabel: { [ImageLabel]: UDim2 } = weakKeyTable()
-local originalImageTransparencyByLabel: { [ImageLabel]: number } = weakKeyTable()
-local originalBackgroundTransparencyByGui: { [GuiObject]: number } = weakKeyTable()
-local originalStrokeTransparencyByStroke: { [UIStroke]: number } = weakKeyTable()
-local avatarPulsedByImage: { [ImageLabel]: boolean } = weakKeyTable()
-local cardEntered: { [GuiObject]: boolean } = weakKeyTable()
-local originalCardRotation: { [GuiObject]: number } = weakKeyTable()
-local originalPodiumSize: { [GuiObject]: UDim2 } = weakKeyTable()
-local podiumLoopStartedByGui: { [SurfaceGui]: boolean } = weakKeyTable()
-local dailyShowcaseStateByGui: { [SurfaceGui]: any } = weakKeyTable()
+-- Everything this controller remembers about a board element — designed values captured before the
+-- first animation touched them, last-painted text, generation counters, loop guards — in one STRONG
+-- record per Instance, reclaimed on its `Destroying` (InstanceState; ADR 0011 addendum,
+-- 2026-09-17). These were 21 weak-keyed tables, and Roblox drops a weak entry while the label is
+-- still on the board: a lost "original" was re-captured mid-pulse (a grown TextSize or a
+-- transparency of 1 as the design), a lost generation let a superseded counter keep writing, and a
+-- lost loop guard started a second podium loop on the same board. Fields are optional because each
+-- is captured by the animation that needs it, at its own first touch, exactly as before.
+type Marks = {
+	lastValueText: string?,
+	valueNumber: number?,
+	valueCounterGeneration: number?,
+	supportingCardFingerprint: string?,
+	supportingCardFadeGeneration: number?,
+	originalTextSize: number?,
+	lastTimestampText: string?,
+	originalTextTransparency: number?,
+	originalTextStrokeTransparency: number?,
+	originalImageSize: UDim2?,
+	originalImageTransparency: number?,
+	originalBackgroundTransparency: number?,
+	originalStrokeTransparency: number?,
+	avatarPulsed: boolean?,
+	cardEntered: boolean?,
+	originalCardRotation: number?,
+	originalPodiumSize: UDim2?,
+	podiumLoopStarted: boolean?,
+	dailyShowcaseState: any,
+	dailyOriginalAnchor: Vector2?,
+	dailyOriginalPosition: UDim2?,
+}
+local marks = InstanceState.new(function(): Marks
+	return {}
+end)
 local dailyResolverWarnedByKey: { [string]: boolean } = {}
-local dailyOriginalAnchorByGui: { [GuiObject]: Vector2 } = weakKeyTable()
-local dailyOriginalPositionByGui: { [GuiObject]: UDim2 } = weakKeyTable()
 
 local animatePodiumValueCounter: (podium: GuiObject, spec: BoardSpec) -> ()
 local playAttentionShake: (guiObject: GuiObject, scaleAmount: number?) -> ()
@@ -173,8 +185,9 @@ local function scaleUDim2(size: UDim2, scale: number): UDim2
 end
 
 local function pulseValueLabel(label: TextLabel)
-	local originalSize = originalTextSizeByLabel[label] or label.TextSize
-	originalTextSizeByLabel[label] = originalSize
+	local record = marks.of(label)
+	local originalSize = record.originalTextSize or label.TextSize
+	record.originalTextSize = originalSize
 	label.TextSize = originalSize
 
 	local up = playTween(label, VALUE_PULSE_UP, {
@@ -188,8 +201,9 @@ local function pulseValueLabel(label: TextLabel)
 end
 
 local function blinkFooterLabel(label: TextLabel)
-	local originalTransparency = originalTextTransparencyByLabel[label] or label.TextTransparency
-	originalTextTransparencyByLabel[label] = originalTransparency
+	local record = marks.of(label)
+	local originalTransparency = record.originalTextTransparency or label.TextTransparency
+	record.originalTextTransparency = originalTransparency
 	label.TextTransparency = originalTransparency
 
 	local blinkTransparency = math.clamp(originalTransparency + 0.45, 0, 0.85)
@@ -206,8 +220,9 @@ local function pulseImage(imageLabel: ImageLabel)
 		return
 	end
 
-	local originalSize = originalImageSizeByLabel[imageLabel] or imageLabel.Size
-	originalImageSizeByLabel[imageLabel] = originalSize
+	local record = marks.of(imageLabel)
+	local originalSize = record.originalImageSize or imageLabel.Size
+	record.originalImageSize = originalSize
 	imageLabel.Size = originalSize
 
 	local up = playTween(imageLabel, IMAGE_PULSE_UP, { Size = scaleUDim2(originalSize, 1.06) })
@@ -219,13 +234,14 @@ local function pulseImage(imageLabel: ImageLabel)
 end
 
 local function animateCardEntrance(card: GuiObject, rank: number)
-	if cardEntered[card] then
+	local record = marks.of(card)
+	if record.cardEntered then
 		return
 	end
 
-	cardEntered[card] = true
-	local originalRotation = originalCardRotation[card] or card.Rotation
-	originalCardRotation[card] = originalRotation
+	record.cardEntered = true
+	local originalRotation = record.originalCardRotation or card.Rotation
+	record.originalCardRotation = originalRotation
 	card.Rotation = originalRotation + if rank % 2 == 0 then -1.5 else 1.5
 
 	task.delay(math.min((rank - 1) * 0.035, 0.35), function()
@@ -236,8 +252,9 @@ local function animateCardEntrance(card: GuiObject, rank: number)
 end
 
 local function animatePodiumRise(podium: GuiObject, spec: BoardSpec)
-	local originalSize = originalPodiumSize[podium] or podium.Size
-	originalPodiumSize[podium] = originalSize
+	local record = marks.of(podium)
+	local originalSize = record.originalPodiumSize or podium.Size
+	record.originalPodiumSize = originalSize
 	podium.Size = UDim2.new(originalSize.X.Scale, originalSize.X.Offset, 0, 0)
 	animatePodiumValueCounter(podium, spec)
 	playTween(podium, PODIUM_RISE, { Size = originalSize })
@@ -269,11 +286,12 @@ local function playPodiumSequence(gui: SurfaceGui, spec: BoardSpec)
 end
 
 local function ensurePodiumLoop(gui: SurfaceGui, spec: BoardSpec)
-	if podiumLoopStartedByGui[gui] then
+	local record = marks.of(gui)
+	if record.podiumLoopStarted then
 		return
 	end
 
-	podiumLoopStartedByGui[gui] = true
+	record.podiumLoopStarted = true
 	task.spawn(function()
 		task.wait(2)
 		while gui.Parent do
@@ -281,13 +299,22 @@ local function ensurePodiumLoop(gui: SurfaceGui, spec: BoardSpec)
 			playPodiumSequence(gui, spec)
 			task.wait(math.max(1, PODIUM_LOOP_INTERVAL - (os.clock() - startedAt)))
 		end
-		podiumLoopStartedByGui[gui] = nil
+		record.podiumLoopStarted = nil
 	end)
 end
 
+-- `value` is in display units: a level number, a count of days. The level board's stored score
+-- (level * LEVEL_SCORE_SCALE + xp) is turned into its level before it gets here.
 local function formatDonationValue(kind: string, value: number): string
 	if kind == "saweria" or kind == "saweriaPoster" then
 		return DonationAmountFormat.formatCashBoard(value)
+	end
+	if kind == "level" then
+		return "LV " .. tostring(math.floor(value))
+	end
+	if kind == "streak" or kind == "couple" then
+		local days = math.floor(value)
+		return tostring(days) .. (if days == 1 then " DAY" else " DAYS")
 	end
 	return DonationAmountFormat.formatGrouped(value)
 end
@@ -524,7 +551,7 @@ local function findValueLabel(root: Instance, kind: string): TextLabel?
 	local valueNames = if kind == "likes"
 		then { "TotalLikesValue" }
 		elseif kind == "community" then { "DonationTotalValue", "TotalDonationValue", "TotalDonationsValue" }
-		elseif kind == "saweria" then { "TotalValue", "TotalDonationValue", "TotalDonation" }
+		elseif kind == "saweria" or kind == "level" or kind == "streak" or kind == "couple" then { "TotalValue", "TotalDonationValue", "TotalDonation" }
 		else { "RobuxTotalValue", "TotalDonationsValue", "TotalValue" }
 
 	local named = findDescendant(root, valueNames, "TextLabel")
@@ -535,7 +562,7 @@ local function findValueLabel(root: Instance, kind: string): TextLabel?
 	local wrapperNames = if kind == "likes"
 		then { "TotalLikesWrapper" }
 		elseif kind == "community" then { "DonationTotal", "TotalDonationWrapper", "TotalLikesWrapper" }
-		elseif kind == "saweria" then { "TotalDonoWrapper", "TotalDonationWrapper", "TotalDonation" }
+		elseif kind == "saweria" or kind == "level" or kind == "streak" or kind == "couple" then { "TotalDonoWrapper", "TotalDonationWrapper", "TotalDonation" }
 		else { "TotalDonationsWrapper", "TotalDonationWrapper" }
 
 	local wrapper = findDescendant(root, wrapperNames, nil)
@@ -550,8 +577,9 @@ local function findValueLabel(root: Instance, kind: string): TextLabel?
 end
 
 local function nextValueCounterGeneration(label: TextLabel): number
-	local generation = (valueCounterGenerationByLabel[label] or 0) + 1
-	valueCounterGenerationByLabel[label] = generation
+	local record = marks.of(label)
+	local generation = (record.valueCounterGeneration or 0) + 1
+	record.valueCounterGeneration = generation
 	return generation
 end
 
@@ -587,7 +615,8 @@ animatePodiumValueCounter = function(podium: GuiObject, spec: BoardSpec)
 		return
 	end
 
-	local finalValue = valueNumberByLabel[label]
+	local record = marks.of(label)
+	local finalValue = record.valueNumber
 	if finalValue == nil then
 		finalValue = tonumber((label.Text:gsub("[^%d]", ""))) or 0
 	end
@@ -603,7 +632,7 @@ animatePodiumValueCounter = function(podium: GuiObject, spec: BoardSpec)
 	label.Text = formatDonationValue(spec.kind, 0)
 
 	task.spawn(function()
-		while label.Parent and valueCounterGenerationByLabel[label] == generation do
+		while label.Parent and record.valueCounterGeneration == generation do
 			local alpha = math.clamp((os.clock() - startedAt) / VALUE_COUNTER_DURATION, 0, 1)
 			local easedAlpha = 1 - ((1 - alpha) ^ 3)
 			label.Text = formatDonationValue(spec.kind, finalValue * easedAlpha)
@@ -615,80 +644,91 @@ animatePodiumValueCounter = function(podium: GuiObject, spec: BoardSpec)
 			RunService.Heartbeat:Wait()
 		end
 
-		if label.Parent and valueCounterGenerationByLabel[label] == generation then
+		if label.Parent and record.valueCounterGeneration == generation then
 			label.Text = formatDonationValue(spec.kind, finalValue)
 		end
 	end)
 end
 
 local function nextSupportingCardFadeGeneration(card: GuiObject): number
-	local generation = (supportingCardFadeGenerationByCard[card] or 0) + 1
-	supportingCardFadeGenerationByCard[card] = generation
+	local record = marks.of(card)
+	local generation = (record.supportingCardFadeGeneration or 0) + 1
+	record.supportingCardFadeGeneration = generation
 	return generation
 end
 
 local function applySupportingFadeStart(instance: Instance)
+	-- Only the classes below get a record; a UICorner or layout under the card never did.
+	if not (instance:IsA("GuiObject") or instance:IsA("UIStroke")) then
+		return
+	end
+	local record = marks.of(instance)
 	if instance:IsA("GuiObject") then
-		originalBackgroundTransparencyByGui[instance] = originalBackgroundTransparencyByGui[instance]
+		record.originalBackgroundTransparency = record.originalBackgroundTransparency
 			or instance.BackgroundTransparency
 		instance.BackgroundTransparency = 1
 	end
 
 	if instance:IsA("TextLabel") then
-		originalTextTransparencyByLabel[instance] = originalTextTransparencyByLabel[instance]
+		record.originalTextTransparency = record.originalTextTransparency
 			or instance.TextTransparency
-		originalTextStrokeTransparencyByLabel[instance] = originalTextStrokeTransparencyByLabel[instance]
+		record.originalTextStrokeTransparency = record.originalTextStrokeTransparency
 			or instance.TextStrokeTransparency
 		instance.TextTransparency = 1
 		instance.TextStrokeTransparency = 1
 	end
 
 	if instance:IsA("ImageLabel") then
-		originalImageTransparencyByLabel[instance] = originalImageTransparencyByLabel[instance]
+		record.originalImageTransparency = record.originalImageTransparency
 			or instance.ImageTransparency
 		instance.ImageTransparency = 1
 	end
 
 	if instance:IsA("UIStroke") then
-		originalStrokeTransparencyByStroke[instance] = originalStrokeTransparencyByStroke[instance]
+		record.originalStrokeTransparency = record.originalStrokeTransparency
 			or instance.Transparency
 		instance.Transparency = 1
 	end
 end
 
 local function tweenSupportingFadeTarget(instance: Instance)
+	if not (instance:IsA("GuiObject") or instance:IsA("UIStroke")) then
+		return
+	end
+	local record = marks.of(instance)
 	if instance:IsA("GuiObject") then
 		playTween(instance, SUPPORTING_CARD_FADE, {
-			BackgroundTransparency = originalBackgroundTransparencyByGui[instance] or instance.BackgroundTransparency,
+			BackgroundTransparency = record.originalBackgroundTransparency or instance.BackgroundTransparency,
 		})
 	end
 
 	if instance:IsA("TextLabel") then
 		playTween(instance, SUPPORTING_CARD_FADE, {
-			TextTransparency = originalTextTransparencyByLabel[instance] or instance.TextTransparency,
-			TextStrokeTransparency = originalTextStrokeTransparencyByLabel[instance] or instance.TextStrokeTransparency,
+			TextTransparency = record.originalTextTransparency or instance.TextTransparency,
+			TextStrokeTransparency = record.originalTextStrokeTransparency or instance.TextStrokeTransparency,
 		})
 	end
 
 	if instance:IsA("ImageLabel") then
 		playTween(instance, SUPPORTING_CARD_FADE, {
-			ImageTransparency = originalImageTransparencyByLabel[instance] or instance.ImageTransparency,
+			ImageTransparency = record.originalImageTransparency or instance.ImageTransparency,
 		})
 	end
 
 	if instance:IsA("UIStroke") then
 		playTween(instance, SUPPORTING_CARD_FADE, {
-			Transparency = originalStrokeTransparencyByStroke[instance] or instance.Transparency,
+			Transparency = record.originalStrokeTransparency or instance.Transparency,
 		})
 	end
 end
 
 local function animateSupportingCardFade(card: GuiObject, rank: number)
+	local record = marks.of(card)
 	local generation = nextSupportingCardFadeGeneration(card)
 	local delaySeconds = math.min(math.max(rank - 4, 0) * 0.035, 0.35)
 
 	task.delay(delaySeconds, function()
-		if not card.Parent or supportingCardFadeGenerationByCard[card] ~= generation then
+		if not card.Parent or record.supportingCardFadeGeneration ~= generation then
 			return
 		end
 
@@ -703,7 +743,7 @@ local function animateSupportingCardFade(card: GuiObject, rank: number)
 			end
 		end
 
-		if not card.Parent or supportingCardFadeGenerationByCard[card] ~= generation then
+		if not card.Parent or record.supportingCardFadeGeneration ~= generation then
 			return
 		end
 
@@ -718,16 +758,24 @@ end
 local function setValue(root: Instance, kind: string, value: number, shouldPulse: boolean?)
 	local label = findValueLabel(root, kind)
 	if label then
+		if kind == "level" then
+			value = value / Config.Leaderboards.LEVEL_SCORE_SCALE
+		elseif kind == "couple" then
+			value = math.floor(math.max(0, os.time() - value) / 86400) + 1
+		end
 		local normalizedValue = math.floor(math.max(value, 0))
-		local text = DonationAmountFormat.formatGrouped(normalizedValue)
-		local previous = lastValueTextByLabel[label]
-		valueNumberByLabel[label] = normalizedValue
+		local text = if kind == "level" or kind == "streak" or kind == "couple"
+			then formatDonationValue(kind, normalizedValue)
+			else DonationAmountFormat.formatGrouped(normalizedValue)
+		local record = marks.of(label)
+		local previous = record.lastValueText
+		record.valueNumber = normalizedValue
 		nextValueCounterGeneration(label)
 		label.Text = text
 		if shouldPulse ~= false and previous and previous ~= text then
 			pulseValueLabel(label)
 		end
-		lastValueTextByLabel[label] = text
+		record.lastValueText = text
 	end
 end
 
@@ -869,7 +917,7 @@ local function updateCard(
 	local isBasicCard = forceBasicStyle == true or rank >= 4
 
 	if not entry then
-		supportingCardFingerprintByCard[card] = nil
+		marks.of(card).supportingCardFingerprint = nil
 		nextSupportingCardFadeGeneration(card)
 		card.Visible = false
 		return
@@ -880,8 +928,9 @@ local function updateCard(
 	local shouldFadeSupportingCard = false
 	if isBasicCard then
 		local fingerprint = getCardFingerprint(entry, rank, kind)
-		shouldFadeSupportingCard = supportingCardFingerprintByCard[card] ~= fingerprint
-		supportingCardFingerprintByCard[card] = fingerprint
+		local record = marks.of(card)
+		shouldFadeSupportingCard = record.supportingCardFingerprint ~= fingerprint
+		record.supportingCardFingerprint = fingerprint
 	end
 
 	card.Visible = true
@@ -919,14 +968,15 @@ local function updateCard(
 		if label then
 			local normalizedValue = math.floor(math.max(amountValue, 0))
 			local text = formatDonationValue(currencyKind, normalizedValue)
-			local previous = lastValueTextByLabel[label]
-			valueNumberByLabel[label] = normalizedValue
+			local record = marks.of(label)
+			local previous = record.lastValueText
+			record.valueNumber = normalizedValue
 			nextValueCounterGeneration(label)
 			label.Text = text
 			if previous and previous ~= text then
 				pulseValueLabel(label)
 			end
-			lastValueTextByLabel[label] = text
+			record.lastValueText = text
 		end
 	else
 		setValue(card, currencyKind, amountValue, not isBasicCard)
@@ -948,9 +998,9 @@ local function updateCard(
 		end
 	end
 
-	if imageLabel and (imageChanged or not avatarPulsedByImage[imageLabel]) and not isBasicCard then
+	if imageLabel and (imageChanged or not marks.of(imageLabel).avatarPulsed) and not isBasicCard then
 		imageLabel.Visible = true
-		avatarPulsedByImage[imageLabel] = true
+		marks.of(imageLabel).avatarPulsed = true
 		task.delay(math.min(rank * 0.04, 0.4), function()
 			if imageLabel.Parent then
 				pulseImage(imageLabel)
@@ -959,6 +1009,20 @@ local function updateCard(
 	elseif imageLabel then
 		imageLabel.Visible = true
 	end
+end
+
+-- Same rule as WorkspaceLeaderboardRenderer: ranks 5+ clone the plain row when the board has one.
+local function getRowSource(template: GuiObject): GuiObject
+	local parent = template.Parent
+	if parent then
+		for _, suffix in ipairs({ "Plain", "6+" }) do
+			local plain = parent:FindFirstChild(template.Name .. suffix)
+			if plain and plain:IsA("GuiObject") then
+				return plain
+			end
+		end
+	end
+	return template
 end
 
 local function getRow(template: GuiObject, rank: number): GuiObject
@@ -974,7 +1038,7 @@ local function getRow(template: GuiObject, rank: number): GuiObject
 		return existing
 	end
 
-	local clone = template:Clone()
+	local clone = getRowSource(template):Clone()
 	clone.Name = rowName
 	clone.LayoutOrder = rank
 	clone.Parent = parent
@@ -1103,12 +1167,15 @@ local function resetDailyShowcase(gui: SurfaceGui, entries: { any }, kind: strin
 		ensureUIScale(title).Scale = 0.82
 	end
 	if list then
-		dailyOriginalAnchorByGui[list] = dailyOriginalAnchorByGui[list] or list.AnchorPoint
-		dailyOriginalPositionByGui[list] = dailyOriginalPositionByGui[list] or list.Position
+		local record = marks.of(list)
+		local originalAnchor = record.dailyOriginalAnchor or list.AnchorPoint
+		local originalPosition = record.dailyOriginalPosition or list.Position
+		record.dailyOriginalAnchor = originalAnchor
+		record.dailyOriginalPosition = originalPosition
 		list.Visible = false
 		-- Alternating layout: list fills the whole board using its original transform.
-		list.AnchorPoint = dailyOriginalAnchorByGui[list]
-		list.Position = dailyOriginalPositionByGui[list]
+		list.AnchorPoint = originalAnchor
+		list.Position = originalPosition
 		ensureUIScale(list).Scale = 0.82
 	end
 	if footer then
@@ -1207,14 +1274,15 @@ local function startDailyShowcaseLoop(gui: SurfaceGui, entries: { any }, kind: s
 	end
 	local fingerprint = table.concat(fingerprintParts, "\n")
 
-	local state = dailyShowcaseStateByGui[gui]
+	local record = marks.of(gui)
+	local state = record.dailyShowcaseState
 	if not state then
 		state = {
 			generation = 0,
 			thread = nil,
 			fingerprint = nil,
 		}
-		dailyShowcaseStateByGui[gui] = state
+		record.dailyShowcaseState = state
 	end
 
 	if state.fingerprint == fingerprint and state.thread ~= nil then
@@ -1324,8 +1392,8 @@ local function startDailyShowcaseLoop(gui: SurfaceGui, entries: { any }, kind: s
 			list.Visible = false
 		end
 
-		if dailyShowcaseStateByGui[gui] == state then
-			dailyShowcaseStateByGui[gui] = nil
+		if record.dailyShowcaseState == state then
+			record.dailyShowcaseState = nil
 		end
 	end)
 end
@@ -1355,12 +1423,13 @@ updateTimestamp = function(gui: SurfaceGui, updatedAt: number)
 			descendant:IsA("TextLabel")
 			and (descendant.Name == "LastUpdateText" or descendant.Text:find("Latest update"))
 		then
-			local previous = lastTimestampTextByLabel[descendant]
+			local record = marks.of(descendant)
+			local previous = record.lastTimestampText
 			descendant.Text = text
 			if previous == nil or previous ~= text then
 				blinkFooterLabel(descendant)
 			end
-			lastTimestampTextByLabel[descendant] = text
+			record.lastTimestampText = text
 		end
 	end
 end
@@ -1394,6 +1463,9 @@ local function playWorkspaceAnimations(payload: any)
 end
 
 local function init(_deps: {}?)
+	-- Board idle motion runs whether or not the data remotes ever show up.
+	BoardAmbience.start()
+
 	local Remotes = ReplicatedStorage:WaitForChild("Remotes", 15)
 	if not Remotes then
 		log:warn("Remotes folder not found")

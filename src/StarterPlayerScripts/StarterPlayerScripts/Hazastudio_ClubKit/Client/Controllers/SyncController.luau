@@ -41,6 +41,13 @@ function SyncController.create(deps: {
 	self._knownDanceAnimationIds = {} :: { [string]: boolean }
 	self._knownDanceAnimationNames = {} :: { [string]: boolean }
 
+	-- Selecting an emote pops the dance panel open, because a manual pick comes FROM
+	-- the panel and the player expects to see the preparing state land on the row they
+	-- clicked. Auto Dance reuses the very same path, so every shuffle tick was
+	-- re-opening a panel the player had just closed. Auto Dance clears this flag while
+	-- it runs; everything else leaves it alone.
+	self._openPanelOnSelect = true
+
 	-- Wutwut chain tracking (rapid same-emote re-click = restart)
 	self._lastEmoteClickName = ""
 	self._lastEmoteClickTime = 0
@@ -175,13 +182,12 @@ end
 
 function SyncController:_queuePendingAnimation(animation: Animation)
 	-- Kept for compatibility; play path no longer gates on warmup.
-	self.store:set({
+	self.store:set(self:_withPanelReveal({
 		isDancePreparing = true,
-		isPanelOpen = true,
 		visualAnim = animation.Name,
 		pendingAnimationName = animation.Name,
 		pendingAnimationObject = animation,
-	})
+	}))
 end
 
 function SyncController:_handleNotification(payload: any)
@@ -304,13 +310,12 @@ function SyncController:_handleNotification(payload: any)
 			if self:_isStaleAnimAck(animName) then
 				return
 			end
-			self.store:set({
+			self.store:set(self:_withPanelReveal({
 				currentAnim = animName,
 				visualAnim = animName,
-				isPanelOpen = true,
 				isDancePreparing = false,
 				_clear = { "pendingAnimationName", "pendingAnimationObject" },
-			})
+			}))
 		elseif result == "stopped" then
 			-- Ignore stop ack while a newer play selection is in flight.
 			local state = self.store:get()
@@ -352,6 +357,21 @@ end
 
 function SyncController:getVisualAnimName()
 	return self.store:get().visualAnim
+end
+
+-- Whether picking an emote should reveal the dance panel. Auto Dance turns this off
+-- for as long as it runs, so its shuffle stops re-opening a panel the player closed.
+-- Explicit open/close/toggle are unaffected — a deliberate gesture always wins.
+function SyncController:setOpenPanelOnSelect(enabled: boolean)
+	self._openPanelOnSelect = enabled ~= false
+end
+
+-- Adds the panel reveal to a store patch, unless it is currently suppressed.
+function SyncController:_withPanelReveal(patch: { [string]: any }): { [string]: any }
+	if self._openPanelOnSelect ~= false then
+		patch.isPanelOpen = true
+	end
+	return patch
 end
 
 function SyncController:togglePanel()
@@ -526,13 +546,12 @@ function SyncController:onEmoteSelected(animation: Animation)
 	end
 
 	-- Optimistic UI + FireServer immediately. Warm asset cache only — no local Play.
-	self.store:set({
+	self.store:set(self:_withPanelReveal({
 		visualAnim = animationName,
 		isDancePreparing = true,
-		isPanelOpen = true,
 		pendingAnimationName = animationName,
 		pendingAnimationObject = animation,
-	})
+	}))
 	self:_fireAnimationAction(animation, true)
 	self._lastEmoteClickName = animationName
 	self._lastEmoteClickTime = now

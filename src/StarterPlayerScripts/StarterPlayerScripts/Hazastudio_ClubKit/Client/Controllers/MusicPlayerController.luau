@@ -38,6 +38,17 @@ local FALLBACK_REMOTE_REQUEST_TIMEOUT = 10
 local FALLBACK_FAVORITES_PLAYLIST_ID = "__favorites__"
 local FALLBACK_NEW_DROPS_PLAYLIST_ID = "__new_drops__"
 local FALLBACK_FAVORITES_ATTRIBUTE_KEY = "MusicFavoriteTrackIds"
+local FALLBACK_MAX_VOLUME = 4
+
+-- Ceiling for every Sound.Volume this controller writes. Settings sends a 0-100% slider through
+-- SettingsController as an already-scaled Sound.Volume (100% = this number), so the clamps here
+-- must agree with it or the top of the slider would be silently cut back to 1.0.
+-- Read per call: ConfigBootstrap projects the buyer's ClubKitConfig.Music.MaxVolume onto Config.
+local function getMaxVolume(): number
+	local music = (Config :: any).Music
+	local configured = if type(music) == "table" then tonumber(music.MAX_VOLUME) else nil
+	return math.clamp(configured or FALLBACK_MAX_VOLUME, 0, 10)
+end
 
 -- All kit music Sounds hang off one SoundGroup so the whole player can be ducked at once.
 -- External loading contract (Config.ClientBoot.EXTERNAL_LOADING_ATTRIBUTE): while a place pack's
@@ -563,14 +574,27 @@ function MusicPlayerController:_applyCachedPartDuration(partIndex: number, asset
 	return false
 end
 
+function MusicPlayerController:_getPrefetchPartsAhead(): number
+	return math.max(1, math.floor(tonumber(self._config.PREFETCH_PARTS_AHEAD) or 2))
+end
+
 function MusicPlayerController:_schedulePrefetchPartsForTrack(track: any, trackSlot: number, gen: number)
 	if type(track) ~= "table" or type(track.parts) ~= "table" then
 		return
 	end
-	for partIndex, partAssetId in ipairs(track.parts) do
-		-- Current track (slot 0): all parts highest priority. Queue lookahead: lower.
+	-- A window, not the whole track: the part playing (or part 1 of a queued track) plus the
+	-- next PREFETCH_PARTS_AHEAD. For the current track that window starts at the part on air.
+	local first = 1
+	if trackSlot == 0 and track.id == self._currentTrackId then
+		for partIndex in pairs(self._activeSounds) do
+			first = math.max(first, partIndex)
+		end
+	end
+	local last = math.min(#track.parts, first + self:_getPrefetchPartsAhead())
+	for partIndex = first, last do
+		-- Current track (slot 0): highest priority. Queue lookahead: lower.
 		local priority = if trackSlot == 0 then 1 elseif trackSlot == 1 and partIndex == 1 then 2 else 3
-		self._assetCache:scheduleAsset(partAssetId, priority, gen)
+		self._assetCache:scheduleAsset(track.parts[partIndex], priority, gen)
 	end
 end
 
@@ -668,7 +692,7 @@ function MusicPlayerController:_playFromPart(
 	local playbackEpoch = self._playbackEpoch
 	local assetId = track.parts[partIndex]
 	if self:_isPrefetchEnabled() then
-		for upcomingIndex = partIndex + 1, #track.parts do
+		for upcomingIndex = partIndex + 1, math.min(#track.parts, partIndex + self:_getPrefetchPartsAhead()) do
 			self._assetCache:scheduleAsset(track.parts[upcomingIndex], 0, self._prefetchGeneration)
 		end
 		local cached = self._assetCache:getEntry(assetId)
@@ -822,7 +846,7 @@ function MusicPlayerController:_playFromPart(
 		end
 		if (fadeInDuration or 0) > 0 then
 			local resolvedFadeInDuration = fadeInDuration or 0
-			local targetVolume = math.clamp(tonumber(self._store:get().volume) or volume, 0, 1)
+			local targetVolume = math.clamp(tonumber(self._store:get().volume) or volume, 0, getMaxVolume())
 			local fadeTween = TweenService:Create(
 				sound,
 				TweenInfo.new(resolvedFadeInDuration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
@@ -836,7 +860,7 @@ function MusicPlayerController:_playFromPart(
 					return
 				end
 				-- Re-assert store volume so a interrupted/stuck fade cannot leave Volume=0.
-				sound.Volume = math.clamp(tonumber(self._store:get().volume) or targetVolume, 0, 1)
+				sound.Volume = math.clamp(tonumber(self._store:get().volume) or targetVolume, 0, getMaxVolume())
 			end)
 			fadeTween:Play()
 		end
@@ -972,6 +996,20 @@ end
 
 function MusicPlayerController:_primeTrackPartDurations(track: any)
 	if type(track) ~= "table" or type(track.parts) ~= "table" then
+		return
+	end
+
+	-- The web library sends each part's length. Using it skips one probe Sound per part —
+	-- 26 simultaneous loads for a 3-hour set — and places a late joiner in the right part
+	-- at once. A part's real TimeLength still replaces its entry when it loads.
+	local known = MusicDomain.readPartDurations(track.partDurations, track.parts)
+	if known then
+		for partIndex, rawDuration in ipairs(known) do
+			if not self._partDurations[partIndex] or self._partDurations[partIndex] <= 0 then
+				self._partDurations[partIndex] = self:_getEffectivePartDuration(rawDuration)
+			end
+		end
+		self:_tryReportDuration(track)
 		return
 	end
 
@@ -1164,7 +1202,6 @@ function MusicPlayerController:_onTrackChanged(data: any)
 
 	self._binder:updateTrackDisplay(track)
 	self._binder:startProgressTracking()
-	self:_primeTrackPartDurations(track)
 
 	-- Apply per-track playback speed sebagai baseline.
 	-- If track has its own speed, use it. Otherwise reset to global config.
@@ -1174,6 +1211,8 @@ function MusicPlayerController:_onTrackChanged(data: any)
 	else
 		self:_setBaseSpeed(math.max(0.05, tonumber(self._config.PLAYBACK_SPEED) or 1))
 	end
+	-- After the speed: known part lengths are converted with it synchronously.
+	self:_primeTrackPartDurations(track)
 
 	-- Pause flag first so sounds created below start paused when the song is paused.
 	self:_syncTransportToSounds()
@@ -1257,7 +1296,7 @@ end
 -- Volume sync to all sounds
 
 function MusicPlayerController:_applyVolume(volume: number)
-	local safeVolume = math.clamp(tonumber(volume) or 0, 0, 1)
+	local safeVolume = math.clamp(tonumber(volume) or 0, 0, getMaxVolume())
 	for _, sound in pairs(self._activeSounds) do
 		if sound and sound.Parent then
 			sound.Volume = safeVolume
@@ -1286,7 +1325,7 @@ function MusicPlayerController:_bindSettingsVolumeControls()
 		if type(attrValue) ~= "number" then
 			return
 		end
-		local safeVolume = math.clamp(attrValue, 0, 1)
+		local safeVolume = math.clamp(attrValue, 0, getMaxVolume())
 		local previousVolume = store:get().volume
 		store:set({
 			volume = safeVolume,
@@ -1897,7 +1936,6 @@ function MusicPlayerController:_forceStartPlaybackFromStore(): boolean
 	})
 	self._binder:updateTrackDisplay(track)
 	self._binder:startProgressTracking()
-	self:_primeTrackPartDurations(track)
 
 	local trackSpeed = tonumber((track :: any).playbackSpeed)
 	if trackSpeed and trackSpeed > 0 then
@@ -1905,6 +1943,8 @@ function MusicPlayerController:_forceStartPlaybackFromStore(): boolean
 	else
 		self:_setBaseSpeed(math.max(0.05, tonumber(self._config.PLAYBACK_SPEED) or 1))
 	end
+	-- After the speed: known part lengths are converted with it synchronously.
+	self:_primeTrackPartDurations(track)
 
 	self:_syncTransportToSounds()
 	self:_seekToElapsed(track, startServerTime)
@@ -2668,7 +2708,7 @@ function MusicPlayerController:initPanel()
 
 	binder:setOnVolumeChanged(function(volume)
 		store:set({
-			volume = math.clamp(tonumber(volume) or store:get().volume, 0, 1),
+			volume = math.clamp(tonumber(volume) or store:get().volume, 0, getMaxVolume()),
 		})
 	end)
 

@@ -1095,6 +1095,26 @@ local function _fieldToDisplay(field: string, value: any): string
 	return tostring(value)
 end
 
+-- Settings rows and option chips are live clones (the GUI's own templates are destroyed once a
+-- section is built) and a rebuild destroys them again, so their press/hover connections are
+-- dropped with the button — bindPress also holds a UserInputService connection that would
+-- otherwise outlive it.
+local function bindRowMotion(button: GuiButton)
+	local connections = UIMotion.bindPress(button)
+	for _, connection in ipairs(UIMotion.bindHover(button)) do
+		table.insert(connections, connection)
+	end
+	if #connections == 0 then
+		return
+	end
+	button.Destroying:Once(function()
+		for _, connection in ipairs(connections) do
+			connection:Disconnect()
+		end
+		table.clear(connections)
+	end)
+end
+
 local function setToggleVisual(row: TextButton, enabled: boolean)
 	local toggle = row:FindFirstChild("Toggle")
 	if not toggle or not toggle:IsA("Frame") then
@@ -1456,6 +1476,7 @@ local function createToggleRow(
 	setSettingIcon(row, resolveSettingIcon(item))
 	setToggleVisual(row, currentValue)
 
+	bindRowMotion(row)
 	row.Activated:Connect(function()
 		currentValue = not currentValue
 		setToggleVisual(row, currentValue)
@@ -1619,6 +1640,9 @@ local function createSegmentedRow(
 			optionValues[button] = optionValue
 			optionIcons[button] = resolveOptionIcon(option)
 			setSegmentedButtonVisual(button, optionLabel, optionValue == currentValue, optionIcons[button])
+			-- Only the chips that carry an option: the spare buttons below are hidden, and a
+			-- hidden button must never take the squash.
+			bindRowMotion(button)
 			button.Activated:Connect(function()
 				if optionValue == currentValue then
 					return

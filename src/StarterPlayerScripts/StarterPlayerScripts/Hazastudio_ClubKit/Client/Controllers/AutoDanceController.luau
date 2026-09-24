@@ -70,6 +70,18 @@ local function createAutoDanceController(deps: {
 	local lastAnimation: Animation? = nil
 	local unsubscribeSync: (() -> ())? = nil
 
+	-- Auto is meant to be unattended: onEmoteSelected reveals the dance panel because a
+	-- manual pick comes from it, but the shuffle would then re-open a panel the player
+	-- had just closed, once every MIN..MAX seconds. Suppress the reveal while auto runs
+	-- and hand it back on the way out. An explicit open/close/toggle is never affected.
+	local function setPanelReveal(allowed: boolean)
+		pcall(function()
+			if type(syncController.setOpenPanelOnSelect) == "function" then
+				syncController:setOpenPanelOnSelect(allowed)
+			end
+		end)
+	end
+
 	local function isSyncing(): boolean
 		local ok, syncing = pcall(function()
 			local store = syncController.store
@@ -114,6 +126,8 @@ local function createAutoDanceController(deps: {
 		end
 		enabled = nextEnabled
 		generation += 1
+
+		setPanelReveal(not enabled)
 
 		if enabled then
 			-- Following a leader and shuffling your own emotes conflict; drop the sync.
@@ -216,6 +230,8 @@ local function createAutoDanceController(deps: {
 		enabled = false
 		generation += 1
 		lastAnimation = nil
+		-- Never leave the panel reveal suppressed for the rest of the session.
+		setPanelReveal(true)
 		if unsubscribeSync then
 			pcall(unsubscribeSync)
 			unsubscribeSync = nil

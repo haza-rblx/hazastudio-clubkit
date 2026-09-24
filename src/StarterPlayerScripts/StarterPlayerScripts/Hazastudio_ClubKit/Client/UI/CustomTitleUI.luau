@@ -176,9 +176,11 @@ function CustomTitleUI.tryCreate(playerGui: Instance, anim: any?): any?
 	self._removeCallback = nil :: (() -> ())?
 	self._built = false
 
-	-- Designed transparencies for every fade this panel plays, captured once per element
-	-- and keyed weakly so rebuilt picker rows do not pin their old clones.
-	self._fadeBases = setmetatable({}, { __mode = "k" }) :: any
+	-- Designed transparencies for every fade this panel plays, captured once per element. Strong
+	-- keys on purpose (ADR 0011 addendum, 2026-09-17): a weak entry is dropped while the element is
+	-- alive, and the next capture would then record a mid-cascade transparency as the design.
+	-- Rebuilt picker rows keep their entries here until the panel goes — bytes per row.
+	self._fadeBases = {} :: { [GuiObject]: number }
 	-- What is currently painted: the server echoes a whole payload after any profile
 	-- change, so both painters compare against these before they animate.
 	self._choiceKey = nil :: string?

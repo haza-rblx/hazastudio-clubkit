@@ -27,6 +27,7 @@ ClubKitConfigSchema.ARRAY_REPLACE_KEYS = {
 	Profiles = true,
 	Communities = true,
 	TopSpenders = true,
+	ForeignGuiAllowNames = true,
 }
 
 -- Mirror of buyer template fillable defaults (safe additive keys + section shapes).
@@ -518,6 +519,18 @@ ClubKitConfigSchema.defaults = {
 		-- admin grant never consumes it and removing the title never refunds it.
 		FreeFirstTitle = false,
 	},
+	-- Daily Quest addon. Only read when Features.DailyQuest is true and the
+	-- 1000-02-DQ-ADDON ScreenGui is installed. Dates are "YYYY-MM-DD" in WIB, DueDate
+	-- inclusive. An empty QuestId or unreadable dates = no quest (check-in still works).
+	-- Changing QuestId starts everyone's progress over. RewardTier is permanent.
+	DailyQuest = {
+		QuestId = "",
+		TargetDays = 30,
+		StartDate = "",
+		DueDate = "",
+		RewardTier = "Tier1",
+		Title = "Pertahankan streak selama {days} hari dan dapatkan {tier} gratis!",
+	},
 	-- Free Title event. A threshold above 0 switches its requirement on; Mode says
 	-- how the active ones combine: "Any" | "All" | "Disabled". A qualifying player
 	-- may create a title below CustomTitle.MinLevel; the quota still applies, and
@@ -530,8 +543,20 @@ ClubKitConfigSchema.defaults = {
 	},
 	-- Request From ID: a pasted Roblox audio ID plays once and is never saved to the library.
 	-- PlayOnceRequest: "everyone" | "control" (musicControl holders only) | "off".
+	-- MaxVolume: Sound.Volume at the Settings slider's 100%. 1 = the Roblox default loudness,
+	-- 4 = four times louder (the kit default). Above 1.0 Roblox amplifies, and amplification clips.
 	Music = {
 		PlayOnceRequest = "everyone",
+		MaxVolume = 4,
+	},
+	-- Foreign GUI report (ADR 0012). A GUI that was not in PlayerGui once boot settled is
+	-- named in the vendor's Discord alongside the scripts inside it. Log-only by design —
+	-- there is no kick/brick switch for this signal. ForeignGuiDetect = false turns the
+	-- whole thing off; the allow list is for third-party GUIs a place creates at runtime.
+	AntiTamper = {
+		ForeignGuiDetect = true,
+		ForeignGuiGraceSeconds = 20,
+		ForeignGuiAllowNames = { "Adonis", "Adonis_Loader", "Kohl's Admin", "HD Admin", "BasicAdmin", "Chat" },
 	},
 	Features = {
 		MusicPlayer = true,
@@ -543,6 +568,10 @@ ClubKitConfigSchema.defaults = {
 		-- Wutwut: rapid same-emote re-click hard-restarts the playing dance (fade 0 stutter).
 		-- Default false — classic same-emote click toggles the dance off.
 		WutwutDance = false,
+		-- "Auto" topbar toggle that shuffles dance emotes (Config.AutoDance). Default true.
+		AutoDance = true,
+		-- "Lead Dance" topbar pill (Config.Sync.LEAD_TOPBAR_ENABLED). Default true.
+		LeadDanceTopbar = true,
 		-- WIP Admin Hub UI. Default false — classic 04-AdminPanelv2 until hub is ready.
 		AdminHub = false,
 		-- Avatar Context Menu v2 (redesign: static ProfilePicture + backdrop zoom/blur).
@@ -552,9 +581,15 @@ ClubKitConfigSchema.defaults = {
 		-- gated by CustomTitle.MinLevel + rolling quota. false (default) = old text-only
 		-- modal. Falls back to the old modal when the ScreenGui is not installed.
 		SelfCustomTitle = false,
+		-- Daily Quest addon (1000-02-DQ-ADDON): manual daily check-in button + streak quest
+		-- with a permanent membership reward. false (default) = streak advances on join.
+		-- Falls back to join-time streak when the ScreenGui is not installed.
+		DailyQuest = false,
 		-- Custom-title panel v3 (04-AdminPanelv3) takes the admin topbar icon from
 		-- the classic 04-AdminPanelv2. Needs that ScreenGui installed.
 		AdminPanelV3 = false,
+		-- Image custom titles: a paid add-on, sold apart from the standard package.
+		ImageCustomTitle = false,
 		Hotbar = true,
 		LoadingScreen = true,
 		LevelSystem = true,
@@ -602,6 +637,8 @@ ClubKitConfigSchema.FEATURE_MANIFEST = {
 			{ key = "SyncDance", label = "Sync dance" },
 			{ key = "LegacySyncBhms", label = "Legacy SyncBhms place-pack" },
 			{ key = "WutwutDance", label = "Wutwut dance restart" },
+			{ key = "AutoDance", label = "Auto dance (topbar)" },
+			{ key = "LeadDanceTopbar", label = "Lead Dance (topbar)" },
 		},
 	},
 	{
@@ -614,6 +651,7 @@ ClubKitConfigSchema.FEATURE_MANIFEST = {
 			{ key = "PromptJoinCommunityOnLoad", label = "Join community prompt" },
 			{ key = "AdminHub", label = "Admin Hub (04-AdminHub)" },
 			{ key = "AdminPanelV3", label = "Custom title panel v3 (04-AdminPanelv3)" },
+		{ key = "ImageCustomTitle", label = "Image custom titles (paid add-on)" },
 			{ key = "AvatarContextMenuV2", label = "Avatar context menu v2 (redesign)" },
 		},
 	},
@@ -625,6 +663,7 @@ ClubKitConfigSchema.FEATURE_MANIFEST = {
 			{ key = "Stickers", label = "Stickers" },
 			{ key = "LevelSystem", label = "Level & XP" },
 			{ key = "SelfCustomTitle", label = "Self-service custom title (1000-01-CT-ADDON)" },
+			{ key = "DailyQuest", label = "Daily streak quest (1000-02-DQ-ADDON)" },
 		},
 	},
 	{

@@ -1678,6 +1678,13 @@ local function init(_deps: {}?)
 				syncFavoriteBadge(row, isFavorited)
 				local favoriteButton = getFavoriteButton(row)
 				if favoriteButton then
+					-- Bound on the clone, never on the state template. The row sits inside the
+					-- panel CanvasGroup (ADR 0005), so no scale tier applies -- not even the
+					-- favourite `Badge` icon, which the icon tier refuses under a rasterized
+					-- group -- and the bind lands on the padding/brightness fallback, or
+					-- no-target when the button paints nothing: the honest answer for the
+					-- coverage audit.
+					bindButtonMotion(favoriteButton)
 					favoriteButton.Activated:Connect(function()
 						if favoritedMovements[movementKey] then
 							favoritedMovements[movementKey] = nil
@@ -1790,6 +1797,9 @@ local function init(_deps: {}?)
 		if not speedIdleStyle and #speedButtons > 0 then
 			speedIdleStyle = captureSpeedButtonVisual(speedButtons[1])
 		end
+		-- Deliberately no bindPress/bindHover: startDockMagnifier drives a UIScale on every
+		-- GuiButton under the dock every frame, and a second UIScale writer would fight it. The
+		-- speed row's feedback is the colour cross-fade above plus the refusal wiggle below.
 		for _, child in ipairs(speedButtons) do
 			child.Activated:Connect(function()
 				local parsed = parseSpeedFromButton(child)
@@ -1853,6 +1863,9 @@ local function init(_deps: {}?)
 			syncFavoriteBadge(row, isFavorited)
 			local favoriteButton = getFavoriteButton(row)
 			if favoriteButton then
+				-- Same as the movement list: bound per clone, no-target while the panel is a
+				-- CanvasGroup.
+				bindButtonMotion(favoriteButton)
 				favoriteButton.Activated:Connect(function()
 					if favoritedTargets[targetKey] then
 						favoritedTargets[targetKey] = nil

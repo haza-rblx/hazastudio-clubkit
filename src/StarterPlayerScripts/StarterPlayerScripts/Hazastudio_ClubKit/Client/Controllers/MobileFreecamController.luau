@@ -605,12 +605,22 @@ local function createMobileFreecamController(deps: {
 	collectCluster(hideControls)
 	local clusterBases = UIMotion.captureBases(clusterElements)
 
+	-- Press squash only: these are hold-to-move touch controls and a finger never hovers.
+	-- bindPress just adds its own InputBegan/InputEnded listeners — it never sets Interactable
+	-- or sinks input — so the MouseButton1Down/Up hold logic below is untouched.
+	local function trackPressFeel(button: GuiButton)
+		for _, conn in ipairs(UIMotion.bindPress(button)) do
+			track(conn)
+		end
+	end
+
 	-- Hold-to-move binding: tekan = set 1, lepas/leave = set 0.
 	local function bindHold(button: Instance?, key: string)
 		if not button or not button:IsA("GuiButton") then
 			return
 		end
 		local btn = button :: GuiButton
+		trackPressFeel(btn)
 		track(btn.MouseButton1Down:Connect(function()
 			keyboard[key] = 1
 		end))
@@ -652,11 +662,13 @@ local function createMobileFreecamController(deps: {
 			end
 		end))
 		if zoomIn and zoomIn:IsA("GuiButton") then
+			trackPressFeel(zoomIn :: GuiButton)
 			track((zoomIn :: GuiButton).MouseButton1Down:Connect(function() zoomDir = -1 end))
 			track((zoomIn :: GuiButton).MouseButton1Up:Connect(function() zoomDir = 0 end))
 			track((zoomIn :: GuiButton).MouseLeave:Connect(function() zoomDir = 0 end))
 		end
 		if zoomOut and zoomOut:IsA("GuiButton") then
+			trackPressFeel(zoomOut :: GuiButton)
 			track((zoomOut :: GuiButton).MouseButton1Down:Connect(function() zoomDir = 1 end))
 			track((zoomOut :: GuiButton).MouseButton1Up:Connect(function() zoomDir = 0 end))
 			track((zoomOut :: GuiButton).MouseLeave:Connect(function() zoomDir = 0 end))

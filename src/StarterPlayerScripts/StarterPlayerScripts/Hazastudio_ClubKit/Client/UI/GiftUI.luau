@@ -443,6 +443,10 @@ function GiftUI:_ensurePlayerCard(index: number, template: TextButton): PlayerLi
 	card.Parent = self._scrollFrame
 	-- Bases are captured at creation, before any stagger has touched this card's labels.
 	UIMotion.captureBases(collectFadeTargets(card), self._fadeBases)
+	-- Press/hover bound once per clone, after parenting so UIMotion judges the card from its real
+	-- ancestry (a CanvasGroup list must never receive a UIScale). Pooled cards live as long as the
+	-- panel, so re-rendering the list adds no connections.
+	self:_bindButtonMotion(card)
 	entry = {
 		button = card,
 		connection = nil,
@@ -777,8 +781,10 @@ function GiftUI:bindGiftButton(tier: string, callback: () -> ())
 	local inputArea = tabFrame and tabFrame:FindFirstChild("InputArea") :: Frame?
 	local btn = inputArea and inputArea:FindFirstChild(GIFT_BTN[normalizedTier]) :: TextButton?
 	if btn then
-		self:_bindButtonMotion(btn)
+		-- Resolved before the bind: the icon tier may move the icon into its UIMotionIconSlot,
+		-- where a direct lookup no longer finds it.
 		local icon = btn:FindFirstChildWhichIsA("ImageLabel")
+		self:_bindButtonMotion(btn)
 		table.insert(self._connections, btn.MouseButton1Click:Connect(function()
 			-- Display-only read of the same target the controller is about to ask for: a send
 			-- pops the button's icon, nothing to send shakes the field the player must fill.

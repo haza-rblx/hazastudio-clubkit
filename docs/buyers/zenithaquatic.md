@@ -1,6 +1,25 @@
 # Buyer: Zenith Aquatic — place "[KASMARAN💞] LANGIT SORE."
 
-Status: **fresh install complete, NOT saved / NOT published**. Set up 2026-09-06.
+Status: **reinstalled at 2.12.0 on 2026-09-23 — NOT saved yet** (see section H). The 2026-09-06
+install below was never saved, so the place came back without the kit.
+
+## H. Reinstall 2026-09-23 (2.12.0)
+
+Place now named `[🌈 A SAFE SPACE] ZENITH AQUATIC [ALPHA]` (same PlaceId/universe). Owner staged
+the 2.12.0 buyer-place pack (`collectMode = buyer_place`, no `Lighting` bucket) in Workspace.
+- `PackagerCore.unpack` over dev-serve, `replaceExisting = false`: 38 placed; skipped (kept the
+  map's own) `ServerStorage/{DonationEffects,DonationSounds,Tools}` and `Workspace/hazastudioBoard`.
+  Staging model deleted afterwards (its Scripts would run from Workspace).
+- No source sync (pack is already 2.12.0); no fill-forward (repo HEAD keys are unreleased).
+- Config repointed exactly as section C (the 2.12.0 pack carried `GameKey "the-basic"`, the old
+  workers.dev `ApiUrl`, `Provider "bagibagi"` and the-basic product IDs).
+- Secrets filled from the VPS row via a local `.tmp` file read over dev-serve, then deleted.
+- Playtest: banner `v2.12.0 · build 20260912`, `License verify on boot {status=active}`, VPS row
+  `kit_version 2.12.0` / `last_seen_at 2026-09-23T15:00`. Warnings only the expected ones.
+- Dashboard owner account `zenith` (game 31) — created by the owner with `seed-owner.js`.
+- Owner request: no Auto / Lead Dance topbar pills here. Place carries the unreleased
+  `Features.AutoDance` / `Features.LeadDanceTopbar` switches (anchored diffs on 5 files), both
+  `false` in this config. A future engine update keeps them off (buyer config wins).
 
 Owner-operated place under Hazastudio's own Roblox account (`hazatargz`), not a third-party
 buyer — no buyer-side TODO list, but the same licence + registration path as any venue.

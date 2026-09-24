@@ -185,7 +185,7 @@ local function createBlackHoleEffect(donatorName, recipientName, donationAmount)
 	soundsFolder.Parent = workspace
 
 	-- Setup camera shaker (disabled — no-op dummy)
-	local CameraShaker = require(script.CameraShaker)
+	local CameraShaker = require(script.Parent.CameraShaker)
 	local cameraShaker = {
 		Start = function() end,
 		Stop = function() end,

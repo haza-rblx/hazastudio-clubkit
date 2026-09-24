@@ -397,9 +397,13 @@ local function createCommandLibraryUI(deps: { logger: ILogger })
 		}
 		rowMetaByInstance[row] = meta
 		-- Once per pooled instance: rows are reused, never rebuilt, so binding here cannot
-		-- accumulate. Press/hover no-op while the kit's CanvasGroup wrappers are in place
-		-- (UIMotion refuses to scale under a rasterized group) — the variant swap below is
-		-- the visible feedback there; a buyer GUI without the group gets the squash too.
+		-- accumulate, and a release (`Parent = nil`) keeps the bind — UIMotion only tears it
+		-- down on `Destroying`. Parented hidden before the bind (the ListPool rule): UIMotion
+		-- picks its target from the row's live ancestry. Under the kit's CanvasGroup wrappers
+		-- no scale tier applies, the icon's included (ADR 0005), so press/hover land on the
+		-- padding/brightness fallback beside the variant swap below; a buyer GUI without the
+		-- group gets the scale tiers.
+		row.Parent = listCommand
 		UIMotion.captureBases(collectFadeElements(row), fadeBases)
 		UIMotion.bindPress(row)
 		UIMotion.bindHover(row)
@@ -434,10 +438,12 @@ local function createCommandLibraryUI(deps: { logger: ILogger })
 			end)
 		end)
 		if refs.icon then
-			refs.icon.Activated:Connect(function()
-				UIMotion.pop(refs.icon)
-				fireFill()
-			end)
+			-- The icon is its own button (it fills the row too), so it carries the press squash
+			-- rather than the pop it used to play: the release tween and the pop share the icon's
+			-- UIScale channel and the pop would be cut short by it.
+			UIMotion.bindPress(refs.icon)
+			UIMotion.bindHover(refs.icon)
+			refs.icon.Activated:Connect(fireFill)
 		end
 		return row
 	end, resetRow, 32)
@@ -493,6 +499,14 @@ local function createCommandLibraryUI(deps: { logger: ILogger })
 	inputTextBox.FocusLost:Connect(stopBlinkCaret)
 	UIMotion.bindPress(runButton)
 	UIMotion.bindHover(runButton)
+	-- The run button's art is a child ImageButton, and scaleTargetOf only ever picks a label,
+	-- so the wrapper above always reports "no-target". The squash goes to the art instead, and
+	-- only when the wrapper did not take it — never both.
+	local runIcon = runButton:FindFirstChildWhichIsA("ImageButton")
+	if runIcon and runButton:GetAttribute("UIMotionBound") ~= true then
+		UIMotion.bindPress(runIcon)
+		UIMotion.bindHover(runIcon)
+	end
 	function ui:bindInputChanged(callback: (string) -> ())
 		inputChangedCallback = callback
 		inputTextBox:GetPropertyChangedSignal("Text"):Connect(function()

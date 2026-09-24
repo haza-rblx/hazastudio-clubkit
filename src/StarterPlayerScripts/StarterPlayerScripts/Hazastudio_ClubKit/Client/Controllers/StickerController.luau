@@ -201,9 +201,12 @@ function StickerController.create(deps: {
 	self._selectedSticker = ""
 	-- Grid cells in render order (parallel to _stickers), the designed transparency of
 	-- everything UIMotion fades here, and what the last render/selection paint actually drew.
-	-- Weak keys: cells are destroyed and re-cloned whenever the sticker set really changes.
+	-- Strong keys on purpose (ADR 0011 addendum, 2026-09-17): a weak entry is dropped while the cell
+	-- is alive, and the next capture would then record a mid-cascade transparency as the design.
+	-- Cells are destroyed and re-cloned only when the sticker set really changes, so the old entries
+	-- kept here until the controller goes are bytes per cell.
 	self._itemButtons = {} :: { ImageButton }
-	self._fadeBases = (setmetatable({}, { __mode = "k" }) :: any) :: { [GuiObject]: number }
+	self._fadeBases = {} :: { [GuiObject]: number }
 	self._renderedKey = nil :: string?
 	self._paintedSelection = nil :: string?
 	return self

@@ -10,6 +10,7 @@ local Workspace = game:GetService("Workspace")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local GuiRefs = require(script.Parent.GuiRefs)
+local UIMotion = require(script.Parent.Parent.Parent.Utils.UIMotion)
 local Visuals = require(script.Parent.Visuals)
 
 local IN_INFO = TweenInfo.new(0.1, Enum.EasingStyle.Cubic, Enum.EasingDirection.Out)
@@ -59,6 +60,19 @@ function VoteModalView:bind()
 			self._fire("OnVoteSkip", "skip")
 		end)
 	)
+	for _, button in ipairs({ refs.rejectButton, refs.skipButton }) do
+		self:_bindMotion(button)
+	end
+end
+
+-- Press squash + hover lift, the pairing every other kit panel uses (ADR 0011).
+function VoteModalView:_bindMotion(button: GuiObject)
+	for _, connection in ipairs(UIMotion.bindPress(button)) do
+		table.insert(self._connections, connection)
+	end
+	for _, connection in ipairs(UIMotion.bindHover(button)) do
+		table.insert(self._connections, connection)
+	end
 end
 
 function VoteModalView:_cancelTweens()
@@ -113,8 +127,9 @@ function VoteModalView:_populate(data: any)
 	Visuals.setText(refs.cardCreator, tostring(track.creator or ""))
 	Visuals.setText(refs.cardLength, Visuals.formatClock(tonumber(track.totalDuration) or 0))
 	Visuals.setText(refs.cardPlaylistName, if hasPlaylist then tostring(playlist.name or "") else "")
-	Visuals.setVisible(refs.cardPlaylistName, not (hasPlaylist and playlist.coverType == "image"))
-	Visuals.applyCover(refs.cardCover, playlist, self._config)
+	-- A drawn cover prints its own text; the name label only sits on a track's own image.
+	Visuals.setVisible(refs.cardPlaylistName, false)
+	Visuals.applyTrackCover(refs.cardCover, track, playlist, self._config)
 end
 
 function VoteModalView:open(data: any)

@@ -1006,6 +1006,11 @@ Config.PlayerList = {
 	-- BrickColor.new(Color3) snaps to nearest preset -> often becomes gray
 	-- Fix: use BrickColor name strings directly for consistent colors
 	TEAM_COLORS = {} :: { [string]: string },
+	-- Team name (upper-cased chat label) -> the one role key whose TEAM_COLORS entry
+	-- that Team is painted with. Many roles can share a Team; only this role's color
+	-- may be written to it, or the Team's color flips on every sync and Roblox drops
+	-- its players to Neutral. Built by RolesDomain.buildTeamColorRoleByLabel.
+	TEAM_COLOR_ROLE = {} :: { [string]: string },
 }
 -- ============================================================
 -- COUPLE SYSTEM
@@ -1092,6 +1097,9 @@ Config.Sync = {
 	REMOTE_VISUAL_STATE = "SyncVisualState",
 	MAX_CHAIN_DEPTH = 100,
 	MAX_PAYLOAD_BYTES = 512, -- Max payload size for sync remotes
+	-- "Lead Dance" topbar pill (who is leading + tap to follow). Buyer gate:
+	-- ClubKitConfig.Features.LeadDanceTopbar.
+	LEAD_TOPBAR_ENABLED = true,
 	ANIM_PRIORITY = Enum.AnimationPriority.Action4,
 	-- Defaults; buyer override via ClubKitConfig.Sync → ConfigBootstrap.
 	-- Salon-style crossfade (matching Stop+Play). Longer = smoother blend.
@@ -1468,10 +1476,19 @@ Config.FeatureFlags = {
 	-- false (default) = old text-only modal, admin-granted titles only.
 	-- Buyer: Features.SelfCustomTitle. Also needs the ScreenGui installed.
 	SelfCustomTitleEnabled = false,
+	-- Daily Quest addon (1000-02-DQ-ADDON): manual daily check-in + streak quest with a
+	-- membership reward. false (default) = streak advances on join as always.
+	-- Buyer: Features.DailyQuest. Also needs the ScreenGui installed in StarterGui.
+	DailyQuestEnabled = false,
 	-- Custom-title panel v3 (04-AdminPanelv3) owns the admin topbar icon instead of
 	-- the classic panel. false (default) = classic 04-AdminPanelv2.
 	-- Buyer: Features.AdminPanelV3. Also needs the ScreenGui installed.
 	AdminPanelV3Enabled = false,
+	-- Image custom titles in 04-AdminPanelv3 (the ImageCustomTitleTab, its Apply and
+	-- the two server remotes). A paid add-on sold apart from the standard package, so
+	-- it is off by default; the panel covers the tab with its LockedState frame when
+	-- the buyer GUI has one. Buyer: Features.ImageCustomTitle.
+	ImageCustomTitleEnabled = false,
 	-- Free Title event card (ADDON-FreeTitleEventTrigger in the buyer's IconGroup).
 	-- Derived by ConfigBootstrap from `ClubKitConfig.FreeTitleEvent.Mode` — there is
 	-- no separate buyer boolean, because "Disabled" is one of the modes and two
@@ -1659,10 +1676,12 @@ Config.PanelZoom = {
 }
 -- Thin UI motion knobs (calm panel language). Full presets live in Client MotionPresets.
 Config.UIMotion = {
-	MOTION_SCALE = 1, -- global duration multiplier (reduced-motion hook)
-	CENTER_OPEN_TIME = 0.28,
-	CENTER_CLOSE_TIME = 0.18,
-	SIDEBAR_SPRING_FREQ = 4.8, -- TopMenu / sidebar critically-damped spring (softer = lower)
+	MOTION_SCALE = 1, -- global duration multiplier (reduced-motion hook); 0.8 = brisker kit, 1.4 = slower
+	-- 2026-09-16 feel pass: the centre panel opens longer and softer, and always closes faster than
+	-- it opens. These shadow the same-named fallbacks in Client/Utils/MotionPresets — change both.
+	CENTER_OPEN_TIME = 0.40,
+	CENTER_CLOSE_TIME = 0.24,
+	SIDEBAR_SPRING_FREQ = 3.8, -- TopMenu / sidebar critically-damped spring (softer = lower)
 	-- CanvasGroup textures are re-created whenever their size changes (Roblox docs), and
 	-- render BLANK when the client's texture budget is exceeded. When true, every UIScale
 	-- pop that would resize a CanvasGroup (or anything containing / inside one) is replaced
@@ -1686,11 +1705,32 @@ Config.CanvasGroupBudget = {
 -- logic + the license/beacon. BRICK is OFF by default: a false brick on a paying
 -- player is worse than missing a thief. Enable it only once you trust the
 -- detector in your place. Detection is always skipped in Studio.
+-- Foreign GUI (ADR 0012) is a LEARNING signal and is deliberately log-only: there is no
+-- kick and no brick knob for it anywhere in the kit. Most Indonesian exploiters run a
+-- GUI executor, so a window that was not in PlayerGui at boot is worth NAMING — but the
+-- detector sees PlayerGui only (CoreGui is nil at LocalScript identity), it has no field
+-- data yet, and a client-side detector that ejects paying guests is the exact failure
+-- SaveInstanceGuardService warns about. Enforcement gets considered after the log says
+-- who actually shows up; until then the report is the whole product.
 Config.AntiTamper = {
 	SAVEINSTANCE_DETECT_ENABLED = true,
 	KICK_ON_DETECT = true,
 	BRICK_ON_DETECT = false,
 	DETECT_POLL_INTERVAL = 2, -- seconds between UGCValidationService probes
+	FOREIGN_GUI_DETECT_ENABLED = true,
+	-- Seconds after PlayerGui exists before the allowlist snapshot is taken. Everything
+	-- present then is legitimate forever. Long enough for a slow client to finish the kit
+	-- boot and for Adonis / Kohl's to have loaded; anything arriving later gets named.
+	FOREIGN_GUI_GRACE_SECONDS = 20,
+	-- Extra GUI names that are never foreign, in the spirit of RuntimeGuard's
+	-- SCRIPT_ALLOW_PARENT_NAMES. Names already in StarterGui, the boot snapshot, or the
+	-- kit's own runtime GUIs do not need listing here.
+	FOREIGN_GUI_ALLOW_NAMES = { "Adonis", "Adonis_Loader", "Kohl's Admin", "HD Admin", "BasicAdmin", "Chat" },
+	-- Distinct GUIs one player may have reported per session (hard ceiling 3 in
+	-- ForeignGuiPolicy) and the whole server's budget, so one exploiter cannot flood
+	-- the Discord feed.
+	FOREIGN_GUI_MAX_REPORTS_PER_PLAYER = 3,
+	FOREIGN_GUI_MAX_REPORTS_PER_SERVER = 8,
 }
 -- Runtime integrity guards (ADR 0008 Layer 2). Watch EFFECTS, not code: a backdoor can
 -- be obfuscated, but a rogue Sound, an injected Script or a remote storm cannot hide.
@@ -2437,6 +2477,30 @@ Config.AvatarContext = {
 	CAMERA_HEIGHT = 1,
 	CAMERA_FOV = 40,
 
+	-- Gaze follow: the 3D avatar's head tracks the cursor while it is over the ACM panel.
+	-- Engine-owned (no ClubKitConfig key); mouse-only, and off under ReducedMotionEnabled.
+	-- Gaze owns the spin too: the body spins at AUTO_ROTATE_SPEED only while the cursor has
+	-- been off the panel for GAZE_RESUME_SPIN_DELAY; cursor in = it turns back to the camera
+	-- and sways a little, the head compensating so the look stays on the cursor.
+	GAZE_FOLLOW_ENABLED = true,
+	GAZE_YAW_LIMIT = 40, -- degrees left/right
+	GAZE_PITCH_LIMIT = 25, -- degrees up/down
+	-- Critically-damped springs (UISpring), in Hz: higher = snappier, lower = floatier.
+	GAZE_HEAD_SPRING_FREQ = 1.6, -- head/neck following the cursor
+	GAZE_BODY_SPRING_FREQ = 0.9, -- body: spin start, turn back to the camera, sway
+	-- 1 = every frame. Skipping frames (2) stepped the head at 30 Hz and read as jitter;
+	-- one viewport's handful of CFrame writes per frame is cheap.
+	GAZE_SKIP_RATE = 1,
+	-- Body lean (R15 only, UpperTorso.Waist): the waist carries this share of the look
+	-- and the neck the rest, so the head still reaches the full angle. R6 = neck only.
+	GAZE_WAIST_ENABLED = true,
+	GAZE_WAIST_YAW_SHARE = 0.35,
+	GAZE_WAIST_PITCH_SHARE = 0.2,
+	GAZE_RESUME_SPIN_DELAY = 1.5, -- seconds the cursor must be away before the spin resumes
+	GAZE_SPIN_RAMP = 3, -- how fast the resumed spin reaches full speed (per second)
+	GAZE_SWAY_ANGLE = 12, -- degrees each side the body sways while gazing; 0 = hold still
+	GAZE_SWAY_PERIOD = 6, -- seconds per full sway
+
 	-- DataStore
 	PROFILE_DATASTORE_KEY = scopedDataStoreKey("Profile_v1"),
 	LIKE_DATASTORE_KEY = scopedDataStoreKey("AvatarLikes_v1"),
@@ -2569,7 +2633,13 @@ Config.TopbarMenu = {
 		PROFILE = "ProfileButton",
 		SETTINGS = "SettingsButton",
 		COMMUNITY = "CommunityButton",
+		QUESTS = "QuestsButton",
+		EVENT = "EventButton",
 	},
+	-- Rows in the 2026-09-24 menu design whose feature is not built yet: shown, and a click answers
+	-- with a notification. Missing from an older GUI = nothing happens.
+	QUESTS_SOON_MESSAGE = "Quests are coming soon.",
+	EVENT_SOON_MESSAGE = "Events are coming soon.",
 }
 -- ============================================================
 -- SETTINGS MENU
@@ -2681,6 +2751,112 @@ Config.CustomTitle = {
 	MSG_INVALID_PRESET = "[Profile] That color preset is not available.",
 	MSG_INVALID_FONT = "[Profile] That typeface is not available.",
 	MSG_INVALID_SIZE = "[Profile] That title size is not available.",
+}
+-- Daily Quest addon (FeatureFlags.DailyQuestEnabled + the 1000-02-DQ-ADDON ScreenGui).
+-- With both present the streak stops advancing on join and the panel's check-in button
+-- advances it instead (CONTEXT.md "Daily Quest addon"). Buyer overrides the quest via
+-- ClubKitConfig.DailyQuest; DailyQuestDomain rejects a quest it cannot run.
+Config.DailyQuest = {
+	GUI_NAME = "1000-02-DQ-ADDON",
+	REMOTE = "DailyQuest", -- RemoteEvent, both directions
+	-- Buyer quest. ID scopes everyone's progress: a new ID starts every player at 0.
+	QUEST_ID = "",
+	TARGET_DAYS = 30,
+	START_DATE = "", -- "YYYY-MM-DD", WIB
+	DUE_DATE = "", -- "YYYY-MM-DD", WIB, inclusive
+	REWARD_TIER = "Tier1", -- any paid membership tier or alias ("VIP", "VVIP", ...)
+	-- Panel copy. {days} = target days, {tier} = the reward tier's label.
+	CATEGORY_TEXT = "Q U E S T",
+	TITLE_TEXT = "Pertahankan streak selama {days} hari dan dapatkan {tier} gratis!",
+	DUE_DATE_TEXT = "Due date : %s.",
+	PROGRESS_TEXT = "Progress quest : %d/%d",
+	MONTH_NAMES = {
+		"January", "February", "March", "April", "May", "June",
+		"July", "August", "September", "October", "November", "December",
+	},
+	BUTTON_CHECK_IN = "Check in harian (%s)", -- %s = HH:MM left today (WIB)
+	BUTTON_WAIT = "Check in lagi dalam %s", -- %s = HH:MM:SS until WIB midnight
+	BUTTON_BUSY = "Menyimpan...",
+	BUTTON_COMPLETED = "Quest selesai!",
+	STATUS_UPCOMING = "Quest belum dimulai",
+	STATUS_ENDED = "Quest sudah berakhir",
+	STATUS_NONE = "Belum ada quest",
+	-- Server-wide announcement when someone completes the quest. %s = display name, %s = tier label.
+	MSG_COMPLETED_ALL = "%s menyelesaikan Daily Streak dan mendapatkan %s!",
+	ANNOUNCE_DELAY = 7, -- seconds, so the finisher's own celebration plays first
+	MSG_COMPLETED_ALREADY = "Quest selesai! Kamu sudah punya %s.",
+	MSG_SAVE_FAILED = "Check in gagal disimpan. Coba lagi sebentar.",
+	-- Check-in presses per player per window (the button is once a day; this only stops spam).
+	RATE_MAX = 6,
+	RATE_WINDOW = 30,
+	-- Client: seconds after gameplay is ready before the panel opens on its own.
+	AUTO_OPEN_DELAY = 4,
+	READY_TIMEOUT = 45,
+	TOPBAR_ICON = "rbxassetid://107879319900293",
+	TOPBAR_ORDER = 12,
+	-- Flame flight from the streak overlay to today's circle. HOLD replaces Streak.SHOW_DURATION
+	-- when a flight follows: the big flame lingers this long after its sparks, then leaves.
+	FLIGHT_HOLD = 1.1,
+	FLIGHT_TIME = 0.8,
+	FLIGHT_ARC = 90, -- px the path bows upward at its midpoint
+	LAND_SPARKS = 10,
+}
+
+-- Event board (ADR 0015): venue posts + venue quests authored in the customer dashboard, shown in
+-- the menu's EventTab (07-MenuGUI). The game pulls them from {Donation.ApiUrl}/v3/event-board.
+Config.EventBoard = {
+	PATH = "/v3/event-board",
+	POLL_SECONDS = 60,
+	POLL_MAX_SECONDS = 600, -- back-off ceiling while the VPS keeps failing
+	-- Last good board, so a VPS outage never empties the tab (one document, key "board").
+	CACHE_KEY = scopedDataStoreKey("EventBoardCache_v1"),
+	-- Per-player progress: per-quest counters, check-in days, claims, join posts already seen.
+	PROGRESS_KEY = scopedDataStoreKey("VenueQuestProgress_v1"),
+	PROGRESS_SAVE_SECONDS = 120, -- periodic flush of counters (claims are written at once)
+	PLAYTIME_TICK_SECONDS = 30,
+	REMOTE = "EventBoard", -- RemoteEvent, both directions
+	RATE_MAX = 10,
+	RATE_WINDOW = 30,
+	-- GUI (07-MenuGUI): the tab, its two sections and the card templates inside them.
+	TAB_NAME = "EventTab",
+	POSTS_SECTION = "PostsSection",
+	QUESTS_SECTION = "QuestsSection",
+	POPUP_NAME = "PopUpMenuTemplate",
+	TEMPLATES = {
+		BASIC = "BasicAnnouncement",
+		IMAGE = "ImageAnnouncement",
+		QUEST = "QuestTemplate",
+		STREAK = "StreakTemplate",
+	},
+	SECTION_TITLES = {
+		posts = "Announcements",
+		quests = "Quests",
+	},
+	SECTION_SUBTITLES = {
+		posts = "News and events from this venue.",
+		quests = "Complete a quest and claim its reward.",
+	},
+	EMPTY_POSTS = "No announcements yet.",
+	EMPTY_QUESTS = "No quests right now.",
+	-- Card copy.
+	DATE_FORMAT = "%s %d, %d", -- month name, day, year
+	DUE_DATE_TEXT = "Due date : %s",
+	PROGRESS_TEXT = "Progress quest : %s", -- e.g. "LV 5/50", "3/30 days", "40/100 Robux", "30/60 min"
+	BUTTON_OPEN_POST = "Check this out",
+	BUTTON_CLOSE_POPUP = "Close",
+	BUTTON_CLAIM = "Claim reward",
+	BUTTON_CLAIMED = "Reward claimed",
+	BUTTON_INCOMPLETE = "Not finished yet",
+	BUTTON_CHECK_IN = "Check in (%s left today)",
+	BUTTON_CHECKED_IN = "Check in again in %s",
+	BUTTON_BUSY = "Saving...",
+	-- Server messages. %s = display name, %s = quest title.
+	MSG_COMPLETED_ALL = "%s completed the quest \"%s\"!",
+	MSG_CLAIMED = "Reward claimed: %s",
+	MSG_REWARD_SKIPPED_MEMBERSHIP = "Quest complete! You already have %s or higher.",
+	MSG_REWARD_SKIPPED_TITLE = "Quest complete! You already have a title, so the title reward was skipped.",
+	MSG_SAVE_FAILED = "Could not save. Try again in a moment.",
+	ANNOUNCE_DELAY = 2,
 }
 -- Free Title event card (FeatureFlags.FreeTitleEventEnabled). A promo card pinned
 -- to the screen edge that opens the self-service title panel — a shortcut only, it
@@ -3175,6 +3351,27 @@ Config.Leaderboards = {
 	METADATA_KEY = scopedDataStoreKey("DonationLeaderboardMetadata_v1"),
 	RECEIPT_KEY = scopedDataStoreKey("DonationRobuxReceipts_v1"),
 	LIKE_ORDERED_KEY = scopedDataStoreKey("AvatarLikesLeaderboard_v1"),
+	-- Level + streak boards (2026-09-23). New OrderedDataStores fed from the Overhead_v1 values;
+	-- nothing existing moves. Level score = level * LEVEL_SCORE_SCALE + xp in that level, so a
+	-- higher level always wins and xp breaks ties (xp per level stays far below the scale).
+	LEVEL_ORDERED_KEY = scopedDataStoreKey("LevelLeaderboard_v1"),
+	STREAK_ORDERED_KEY = scopedDataStoreKey("StreakLeaderboard_v1"),
+	LEVEL_SCORE_SCALE = 10000000,
+	LEVEL_LIMIT = 50,
+	STREAK_LIMIT = 50,
+	-- An xp-only change is written at most this often per player; a level or streak change at once.
+	PROGRESS_XP_WRITE_INTERVAL = 120,
+	-- Boards are otherwise rebuilt only on donations and joins; levels move all the time.
+	PROGRESS_REFRESH_INTERVAL = 120,
+	-- How many of the top streak rows are checked against lastLoginAt for a broken streak.
+	STREAK_VERIFY_TOP = 10,
+	-- Couple board: longest together first. Key "<lowerId>_<higherId>", value = the time the pair
+	-- was first recorded (couples formed before this board existed start counting at their first
+	-- join after it; the kit never stored a coupling date). The top rows are checked against both
+	-- overhead documents so a pair that broke up offline drops off.
+	COUPLE_ORDERED_KEY = scopedDataStoreKey("CoupleLeaderboard_v1"),
+	COUPLE_LIMIT = 50,
+	COUPLE_VERIFY_TOP = 10,
 	-- P1: MemoryStoreService cross-server cache for leaderboard. Default ON
 	-- because MemoryStore quota is cheaper than DataStore GetSortedAsync
 	-- per-experience (10/min). All servers share the same key with TTL
@@ -3370,10 +3567,9 @@ Config.Music = {
 	THUMBNAIL_CACHE_MAX = 100,
 	-- Playback
 	VOTE_SKIP_DURATION = 15,
-	-- Max audio asset IDs per track. GUI 4-AddorEditTrackModal
-	-- currently provides 9 slots (2-TrackIDPart1..9). Increase this value
-	-- only if you add new frames in the GUI too.
-	MAX_TRACK_PARTS = 9,
+	-- Max audio asset IDs per track: a 3-hour set in 7-minute parts. Must match
+	-- the literal in MusicDomain.validateTrack and brm-api's MAX_TRACK_PARTS.
+	MAX_TRACK_PARTS = 26,
 	NEW_DROPS_WINDOW_SECONDS = 7 * 24 * 60 * 60,
 	VOTE_SKIP_THRESHOLD = 0.5, -- 50% of players must vote
 	-- Default playback speed for music GUI when track has no
@@ -3384,6 +3580,12 @@ Config.Music = {
 	PITCH_SEMITONES = 0,
 	TRACK_FADE_IN_TIME = 2,
 	TRACK_FADE_OUT_TIME = 5,
+	-- Sound.Volume that the Settings "Music Volume" slider reaches at 100%. The slider itself
+	-- stays a 0-100% scale and the stored value never changes; the percentage is multiplied by
+	-- this number, so 100% = 4.0, 50% = 2.0, 25% = 1.0. Comes from ClubKitConfig.Music.MaxVolume.
+	-- Roblox accepts Sound.Volume up to 10, and everything above 1.0 is amplification: a loud
+	-- master plus a boosted DJ equalizer band clips and distorts audibly.
+	MAX_VOLUME = 4,
 	-- Client incident watchdog: detect silent playback and self-heal via resync.
 	INCIDENT = {
 		ENABLED = true,
@@ -3426,6 +3628,9 @@ Config.Music = {
 	-- Client audio prefetch (lookahead cache). Set PREFETCH_ENABLED = false to revert to legacy load-at-transition.
 	PREFETCH_ENABLED = true,
 	PREFETCH_TRACKS_AHEAD = 2,
+	-- Parts loaded ahead of the one playing (and of part 1 for queued tracks). A 3-hour set has
+	-- 26 parts; loading them all at once is what this caps. Tracks of 3 parts or fewer are unaffected.
+	PREFETCH_PARTS_AHEAD = 2,
 	PREFETCH_MAX_CONCURRENT = 6,
 	PREFETCH_QUEUE_HIGH_WATERMARK = 16,
 	PREFETCH_QUEUE_PAUSE = 0.12,
@@ -3802,6 +4007,7 @@ Config.MobileScale = {
 	ADMIN_HUB_GUI = 0.5, -- 04-AdminHub root UIScale on phone layout
 	ADMIN_PANEL_V3_GUI = 0.45, -- 04-AdminPanelv3 root UIScale on phone layout
 	CUSTOM_TITLE_GUI = 0.55, -- 1000-01-CT-ADDON root UIScale on phone layout
+	DAILY_QUEST_GUI = 0.75, -- 1000-02-DQ-ADDON root UIScale on phone layout
 	FREE_TITLE_EVENT_CARD = 0.7, -- IconGroup.ADDON-FreeTitleEventTrigger resting UIScale on phone layout
 	JOIN_COMMUN_GUI = 0.48, -- 16-JoinCommunPrompt root UIScale on phone layout
 	STICKER_GUI = 0.8, -- 11-StickerSystemGUI

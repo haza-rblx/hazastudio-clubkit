@@ -513,6 +513,27 @@ function ConfigBootstrap.apply(config: any)
 		end
 	end
 
+	-- Daily Quest addon. Values are carried over as written; DailyQuestDomain.normalizeQuest
+	-- decides whether the quest can run (bad dates or an empty Id = no quest, not a crash).
+	local dailyQuest = clubKit.DailyQuest
+	if type(config.DailyQuest) == "table" and type(dailyQuest) == "table" then
+		for buyerKey, engineKey in pairs({
+			QuestId = "QUEST_ID",
+			StartDate = "START_DATE",
+			DueDate = "DUE_DATE",
+			RewardTier = "REWARD_TIER",
+			Title = "TITLE_TEXT",
+		}) do
+			if type(dailyQuest[buyerKey]) == "string" then
+				config.DailyQuest[engineKey] = dailyQuest[buyerKey]
+			end
+		end
+		local targetDays = tonumber(dailyQuest.TargetDays)
+		if targetDays and targetDays >= 1 then
+			config.DailyQuest.TARGET_DAYS = math.floor(targetDays)
+		end
+	end
+
 	-- Free Title event. `Mode` is the only switch; the engine's boolean flag is
 	-- derived from it, so a buyer never has to keep two settings in agreement.
 	-- TitleEventDomain owns what a mode string means — this only carries values over.
@@ -550,8 +571,38 @@ function ConfigBootstrap.apply(config: any)
 	-- Play-once request switch. MusicPlayOncePolicy owns what a mode means (unknown text counts
 	-- as "everyone"), so this only carries the string over, lower-cased.
 	local music = clubKit.Music
-	if type(config.Music) == "table" and type(music) == "table" and type(music.PlayOnceRequest) == "string" then
-		config.Music.PLAY_ONCE_REQUEST = string.lower(music.PlayOnceRequest)
+	if type(config.Music) == "table" and type(music) == "table" then
+		if type(music.PlayOnceRequest) == "string" then
+			config.Music.PLAY_ONCE_REQUEST = string.lower(music.PlayOnceRequest)
+		end
+		-- Sound.Volume at slider 100%. Clamped to Roblox's own 0..10 accepted range, so a
+		-- mistyped buyer value can never make Sound.Volume assignment throw.
+		local maxVolume = tonumber(music.MaxVolume)
+		if maxVolume then
+			config.Music.MAX_VOLUME = math.clamp(maxVolume, 0, 10)
+		end
+	end
+
+	-- Foreign GUI report (ADR 0012). Only the three buyer-facing knobs project; the caps
+	-- and budgets stay engine-side, and there is deliberately no enforcement knob to map.
+	local antiTamper = clubKit.AntiTamper
+	if type(config.AntiTamper) == "table" and type(antiTamper) == "table" then
+		if type(antiTamper.ForeignGuiDetect) == "boolean" then
+			config.AntiTamper.FOREIGN_GUI_DETECT_ENABLED = antiTamper.ForeignGuiDetect
+		end
+		local graceSeconds = tonumber(antiTamper.ForeignGuiGraceSeconds)
+		if graceSeconds and graceSeconds >= 0 then
+			config.AntiTamper.FOREIGN_GUI_GRACE_SECONDS = graceSeconds
+		end
+		if type(antiTamper.ForeignGuiAllowNames) == "table" then
+			local names: { string } = {}
+			for _, name in ipairs(antiTamper.ForeignGuiAllowNames) do
+				if type(name) == "string" and name ~= "" then
+					table.insert(names, name)
+				end
+			end
+			config.AntiTamper.FOREIGN_GUI_ALLOW_NAMES = names
+		end
 	end
 
 	local shop = clubKit.Shop
@@ -662,7 +713,9 @@ function ConfigBootstrap.apply(config: any)
 			AdminHub = "AdminHubEnabled",
 			AvatarContextMenuV2 = "AvatarContextMenuV2Enabled",
 			SelfCustomTitle = "SelfCustomTitleEnabled",
+			DailyQuest = "DailyQuestEnabled",
 			AdminPanelV3 = "AdminPanelV3Enabled",
+			ImageCustomTitle = "ImageCustomTitleEnabled",
 			Hotbar = "HotbarEnabled",
 			LoadingScreen = "LoadingScreenEnabled",
 			LevelSystem = "LevelSystemEnabled",
@@ -694,6 +747,14 @@ function ConfigBootstrap.apply(config: any)
 		-- (2.4.77 alias, applied above) still forces it on.
 		if type(features.WutwutDance) == "boolean" and type(config.Sync) == "table" then
 			config.Sync.WUTWUT_ENABLED = features.WutwutDance or config.Sync.WUTWUT_ENABLED == true
+		end
+		-- "Auto" dance topbar toggle (gate lives in Config.AutoDance, read by Main.client).
+		if type(features.AutoDance) == "boolean" and type(config.AutoDance) == "table" then
+			config.AutoDance.ENABLED = features.AutoDance
+		end
+		-- "Lead Dance" topbar pill (gate lives in Config.Sync, read by Main.client).
+		if type(features.LeadDanceTopbar) == "boolean" and type(config.Sync) == "table" then
+			config.Sync.LEAD_TOPBAR_ENABLED = features.LeadDanceTopbar
 		end
 		-- Couple chat tag in General (not a FeatureFlags module kill-switch; gate lives in
 		-- Config.Couple.SHOW_CHAT_TAG, read by client ChatTagsController). Default true.

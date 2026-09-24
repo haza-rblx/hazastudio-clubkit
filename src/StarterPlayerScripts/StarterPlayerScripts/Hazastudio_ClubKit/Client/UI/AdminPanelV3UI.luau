@@ -75,6 +75,22 @@ local function asFrame(instance: Instance?): Frame?
 	return if instance and instance:IsA("Frame") then instance :: Frame else nil
 end
 
+-- Direct-child buttons named `suffix` or `<prefix>-suffix`. Kit designs number their
+-- chrome (`3-CloseModalButton`, `99-CloseModalButton`) and the number is the buyer's, so
+-- the name is matched on the part that means something.
+local function collectButtons(parent: Instance?, suffix: string, into: { GuiButton })
+	if not parent then
+		return
+	end
+	local tail = "-" .. suffix
+	for _, child in ipairs(parent:GetChildren()) do
+		local name = child.Name
+		if child:IsA("GuiButton") and (name == suffix or name:sub(-#tail) == tail) then
+			table.insert(into, child)
+		end
+	end
+end
+
 -- Matches the menu shell's own modal reset: an interrupted tween can leave a
 -- UIScale mid-pop, so the resting state is restored alongside the hide.
 local function resetModalVisual(target: GuiObject)
@@ -138,6 +154,9 @@ function AdminPanelV3UI.tryCreate(playerGui: Instance, anim: any?): any?
 	local wrapper = findChild(titleWrapper, "Wrapper")
 	local textTab = findChild(wrapper, "CustomTitleTab")
 	local imageTab = findChild(wrapper, "ImageCustomTitleTab")
+	-- Optional: only a buyer GUI that carries the image-title add-on has this
+	-- frame. Absent is normal and must stay silent.
+	local lockedState = findChild(wrapper, "LockedState")
 	local overlay = findChild(titleWrapper, "OverlayWrapper")
 
 	local searchBox = findChild(selectFrame, "02-SearchBox")
@@ -169,6 +188,12 @@ function AdminPanelV3UI.tryCreate(playerGui: Instance, anim: any?): any?
 
 	self._textTab = textTab
 	self._imageTab = imageTab
+	self._lockedState = lockedState
+	-- Image titles are a paid add-on, sold apart from the standard package, so the
+	-- gate is closed unless the buyer's config opens it. Read defensively: a config
+	-- predating the flag has no key at all, and that has to read as locked.
+	local featureFlags = Config.FeatureFlags :: any
+	self._imageLocked = not (featureFlags ~= nil and featureFlags.ImageCustomTitleEnabled == true)
 	self._activeTab = TAB_TEXT
 
 	-- Text tab refs
@@ -200,8 +225,18 @@ function AdminPanelV3UI.tryCreate(playerGui: Instance, anim: any?): any?
 	self._saveLabelText = if self._saveLabel then self._saveLabel.Text else nil
 	self._removeLabel = if self._removeButton then self._removeButton:FindFirstChildWhichIsA("TextLabel") else nil
 	self._removeLabelText = if self._removeLabel then self._removeLabel.Text else nil
-	self._closeButton = findChild(findChild(mainWrapper, "Header"), "99-CloseModalButton")
-		or findChild(findChild(mainWrapper, "TabSwitcher"), "3-CloseModalButton")
+	-- v3 GUIs carry the v2-era header (`TabSwitcher`, holding its own close control and
+	-- the single `GiveTitleTabButton` option) alongside the `Header` this binder reads.
+	-- Only the first close button found used to be wired, so on a place that shows the
+	-- other one the panel had a dead close. Every one of them closes the panel now, and
+	-- each gets the press/hover motion through `bindButton`.
+	local header = findChild(mainWrapper, "Header")
+	local tabSwitcher = findChild(mainWrapper, "TabSwitcher")
+	self._closeButtons = {} :: { GuiButton }
+	collectButtons(header, "CloseModalButton", self._closeButtons)
+	collectButtons(tabSwitcher, "CloseModalButton", self._closeButtons)
+	-- v2's one tab is v3's text tab, so the legacy option selects it rather than nothing.
+	self._legacyTabButton = if tabSwitcher then tabSwitcher:FindFirstChild("GiveTitleTabButton", true) else nil
 
 	-- Header tabs, resolved the way every other slider header in the kit is: the
 	-- outer `2-SliderSelector` owns the pill, an inner one of the same name (when
@@ -243,9 +278,11 @@ function AdminPanelV3UI.tryCreate(playerGui: Instance, anim: any?): any?
 	self._selectedPlayer = nil :: PlayerEntry?
 	self._allPlayers = {} :: { PlayerEntry }
 
-	-- Designed transparencies for every fade this panel plays, captured once per element
-	-- and keyed weakly so destroyed rows do not pin their clones.
-	self._fadeBases = setmetatable({}, { __mode = "k" }) :: any
+	-- Designed transparencies for every fade this panel plays, captured once per element. Strong
+	-- keys on purpose (ADR 0011 addendum, 2026-09-17): a weak entry is dropped while the element is
+	-- alive, and the next capture would then record a mid-cascade transparency as the design.
+	-- Destroyed rows keep their entries here until the panel goes — bytes per row.
+	self._fadeBases = {} :: { [GuiObject]: number }
 	-- What is currently painted. The panel repaints from overhead payloads, so every
 	-- painter compares against these before it animates (or rebuilds) anything.
 	self._playerListKey = nil :: string?
@@ -918,6 +955,16 @@ end
 function AdminPanelV3UI:setTab(tab: string)
 	local previous = self._activeTab
 	self._activeTab = if tab == TAB_IMAGE then TAB_IMAGE else TAB_TEXT
+	-- Locked add-on. With a LockedState frame the tab stays reachable and that frame
+	-- explains why, which is the whole point of it. Without one there is nothing to
+	-- explain with, so the tab bounces back to text rather than presenting a form
+	-- whose Apply the server will refuse.
+	if self._imageLocked and self._activeTab == TAB_IMAGE and not self._lockedState then
+		self._activeTab = TAB_TEXT
+	end
+	if self._lockedState and self._lockedState:IsA("GuiObject") then
+		self._lockedState.Visible = self._imageLocked and self._activeTab == TAB_IMAGE
+	end
 	if self._textTab and self._textTab:IsA("GuiObject") then
 		self._textTab.Visible = self._activeTab == TAB_TEXT
 	end
@@ -951,7 +998,7 @@ function AdminPanelV3UI:setTab(tab: string)
 		end
 	end
 
-	if self._activeTab == TAB_IMAGE and self._imageListCallback then
+	if self._activeTab == TAB_IMAGE and not self._imageLocked and self._imageListCallback then
 		self._imageListCallback()
 	end
 end
@@ -973,7 +1020,7 @@ function AdminPanelV3UI:_submit()
 	end
 	local saveIcon = if self._saveButton then UIMotion.scaleTargetOf(self._saveButton) else nil
 	if self._activeTab == TAB_IMAGE then
-		if not self._applyImageCallback then
+		if self._imageLocked or not self._applyImageCallback then
 			return
 		end
 		local raw = if self._imageInput and self._imageInput:IsA("TextBox") then self._imageInput.Text else ""
@@ -1039,13 +1086,18 @@ function AdminPanelV3UI:_wire()
 			self._removeCallback(entry)
 		end
 	end)
-	bindButton(self._closeButton, function()
-		self:hide()
-		if self._closeCallback then
-			self._closeCallback()
-		end
-	end)
+	for _, button in ipairs(self._closeButtons) do
+		bindButton(button, function()
+			self:hide()
+			if self._closeCallback then
+				self._closeCallback()
+			end
+		end)
+	end
 
+	bindButton(self._legacyTabButton, function()
+		self:setTab(TAB_TEXT)
+	end)
 	bindButton(self._tabButtons[TAB_TEXT], function()
 		self:setTab(TAB_TEXT)
 	end)

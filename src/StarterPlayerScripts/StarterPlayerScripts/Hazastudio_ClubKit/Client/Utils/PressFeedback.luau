@@ -6,6 +6,7 @@ local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 
 local MotionPresets = require(script.Parent.MotionPresets)
+local UIMotion = require(script.Parent.UIMotion)
 
 -- ADR 0011: no squash when the player asked Roblox for less motion. Same pcall as UIMotion.reduced.
 local function reduced(): boolean
@@ -42,6 +43,9 @@ end
 
 function PressFeedback.bindPressScale(target: GuiObject): PressHandle
 	local scale = getOrCreatePressScale(target)
+	-- Runtime-only marker for the motion coverage audit (a scan lists GuiButtons without it), written
+	-- through UIMotion so the attribute has one writer and its precedence holds.
+	UIMotion.markBound(target, true)
 	local activeTween: Tween? = nil
 	local pressed = false
 	local connections: { RBXScriptConnection } = {}

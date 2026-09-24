@@ -16,6 +16,10 @@ export type TabButtonRefs = {
 	profileActive: TextButton?,
 	settingsIdle: TextButton?,
 	settingsActive: TextButton?,
+	-- Event board tab (ADR 0015); absent in menus without the EventTab design.
+	eventButton: TextButton?,
+	eventIdle: TextButton?,
+	eventActive: TextButton?,
 }
 
 export type MenuGuiRefs = {
@@ -25,6 +29,7 @@ export type MenuGuiRefs = {
 	gradientOverlay: Frame?,
 	profileTab: ScrollingFrame,
 	settingsTab: ScrollingFrame,
+	eventTab: ScrollingFrame?,
 	tabWrapper: GuiObject?,
 	tabSwitcher: ScrollingFrame?,
 	tabButtons: TabButtonRefs,
@@ -171,6 +176,8 @@ local function resolveTabButtons(tabSwitcher: ScrollingFrame?): TabButtonRefs
 	local profileActive = findTabButton(tabSwitcher, { "ProfileTabActive", "ProfileActive" })
 	local settingsIdle = findTabButton(tabSwitcher, { "SettingsTabIdle", "SettingsIdle" })
 	local settingsActive = findTabButton(tabSwitcher, { "SettingsTabActive", "SettingsActive" })
+	local eventIdle = findTabButton(tabSwitcher, { "EventTabIdle", "EventIdle" })
+	local eventActive = findTabButton(tabSwitcher, { "EventTabActive", "EventActive" })
 
 	return {
 		profileButton = profileIdle or profileActive,
@@ -179,6 +186,9 @@ local function resolveTabButtons(tabSwitcher: ScrollingFrame?): TabButtonRefs
 		profileActive = profileActive,
 		settingsIdle = settingsIdle,
 		settingsActive = settingsActive,
+		eventButton = eventIdle or eventActive,
+		eventIdle = eventIdle,
+		eventActive = eventActive,
 	}
 end
 
@@ -242,6 +252,7 @@ function MenuGuiRefsModule.resolve(gui: ScreenGui): MenuGuiRefs?
 		gradientOverlay = asFrame(outerWrapper:FindFirstChild("GradientOverlay")),
 		profileTab = profileTab,
 		settingsTab = settingsTab,
+		eventTab = if contentWrapper then asScrollingFrame(contentWrapper:FindFirstChild("EventTab")) else nil,
 		tabWrapper = tabWrapper,
 		tabSwitcher = tabSwitcher,
 		tabButtons = resolveTabButtons(tabSwitcher),

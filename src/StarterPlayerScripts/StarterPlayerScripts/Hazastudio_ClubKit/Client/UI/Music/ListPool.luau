@@ -85,11 +85,13 @@ end
 
 function ListPool:_newRow(): any
 	local instance = self._opts.template:Clone()
+	-- Parented (hidden) before createRow: UIMotion picks a row's scale target from its live
+	-- ancestry, so a row bound while detached would look layout-safe when it is not.
+	instance.Visible = false
+	instance.Parent = self._opts.container
 	local row = self._opts.createRow(instance)
 	row.instance = instance
 	row.itemKey = nil
-	instance.Visible = false
-	instance.Parent = self._opts.container
 	table.insert(self._all, row)
 	return row
 end

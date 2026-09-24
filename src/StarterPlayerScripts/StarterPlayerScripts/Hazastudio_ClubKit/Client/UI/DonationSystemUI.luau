@@ -113,11 +113,14 @@ local function textDisplayOf(target: GuiObject?): GuiObject?
 end
 
 -- A button's centred icon: what pop/spin/wiggle target when the button itself sits in a layout.
+-- Read at press time, after the button was bound, so it looks inside the UIMotionIconSlot the
+-- icon tier may have moved the icon into — a direct lookup on the button then finds nothing.
 local function iconOf(button: GuiObject?): GuiObject?
 	if not button then
 		return nil
 	end
-	return button:FindFirstChildWhichIsA("ImageLabel") or button:FindFirstChildWhichIsA("ImageButton")
+	local host = button:FindFirstChild("UIMotionIconSlot") or button
+	return host:FindFirstChildWhichIsA("ImageLabel") or host:FindFirstChildWhichIsA("ImageButton")
 end
 
 local function setDisplayText(target: GuiObject?, text: string)
@@ -499,11 +502,20 @@ function DonationSystemUI.new(refs: Refs): DonationSystemUI
 	self._cashDonationEnabled = isCashDonationEnabled()
 	self._motionConnections = {} :: { RBXScriptConnection }
 	-- Designed transparencies, captured once per instance so a re-open mid-fade cannot bake an
-	-- intermediate value in as "designed". Weak keys: stat label refs are re-resolved at runtime.
-	self._fadeBases = (setmetatable({}, { __mode = "k" }) :: any) :: { [GuiObject]: number }
+	-- intermediate value in as "designed". Strong keys on purpose (ADR 0011 addendum, 2026-09-17):
+	-- a weak entry is dropped while the element is alive, which is exactly the mid-fade re-capture
+	-- this table exists to prevent. Stat label refs are re-resolved at runtime; the elements live
+	-- with the panel.
+	self._fadeBases = {} :: { [GuiObject]: number }
 	self._shownStats = {} :: { [string]: { value: number, display: GuiObject? } }
 	self._shownTab = nil :: string?
 	self._ctaPulseStop = nil :: (() -> ())?
+	-- Copy-link button states: idle (the design's own label) → armed (link selected, "press Ctrl+C")
+	-- → copied. Roblox gives games no clipboard access; the focused TextBox does the actual copy.
+	self._copyConnections = {} :: { RBXScriptConnection }
+	self._copyIdleText = nil :: string?
+	self._copyArmed = false
+	self._copyGeneration = 0
 
 	refs.root.Enabled = false
 	refs.mainWrapper.Visible = false
@@ -571,6 +583,7 @@ function DonationSystemUI.new(refs: Refs): DonationSystemUI
 		refs.copyLinkButton.Activated:Connect(function()
 			self:_handleCopySaweriaLink()
 		end)
+		self:_bindCopyFeedback()
 	end
 	if refs.addEmojiButton then
 		self:_setupEmojiPicker(refs.addEmojiButton)
@@ -729,6 +742,8 @@ function DonationSystemUI:_showDonationAvatar(userId: number)
 	if not self._avatarViewport3D then
 		self._avatarViewport3D = AvatarViewport3D.new(viewport)
 		self._avatarViewport3D:setPrewarmPool(self._avatarPool)
+		-- Same cursor gaze as the ACM, anywhere over the donation panel.
+		self._avatarViewport3D:setGazeFollow(true, self._refs.mainWrapper)
 	else
 		self._avatarViewport3D:cleanup()
 	end
@@ -760,6 +775,7 @@ function DonationSystemUI:_showDonationAvatar(userId: number)
 			if not self._avatarViewport3D then
 				self._avatarViewport3D = AvatarViewport3D.new(viewport)
 				self._avatarViewport3D:setPrewarmPool(self._avatarPool)
+				self._avatarViewport3D:setGazeFollow(true, self._refs.mainWrapper)
 			else
 				self._avatarViewport3D:cleanup()
 			end
@@ -878,22 +894,105 @@ function DonationSystemUI:_confirmDonation()
 	end
 end
 
+local COPY_HINT_KEYBOARD = "Press Ctrl+C / Cmd+C"
+local COPY_HINT_TOUCH = "Hold the link, then tap Copy"
+local COPY_DONE = "Copied ✓"
+local COPY_DONE_SECONDS = 2
+local COPY_MODIFIERS = {
+	Enum.KeyCode.LeftControl,
+	Enum.KeyCode.RightControl,
+	Enum.KeyCode.LeftSuper,
+	Enum.KeyCode.RightSuper,
+	Enum.KeyCode.LeftMeta,
+	Enum.KeyCode.RightMeta,
+}
+
+local function copyModifierDown(): boolean
+	for _, key in ipairs(COPY_MODIFIERS) do
+		if UserInputService:IsKeyDown(key) then
+			return true
+		end
+	end
+	return false
+end
+
+function DonationSystemUI:_setCopyLabel(text: string)
+	-- The design's words live in the button's child TextLabel (the button's own Text is empty);
+	-- textDisplayOf would return the TextButton itself and paint a second, overlapping line.
+	local button = self._refs.copyLinkButton
+	if not button then
+		return
+	end
+	local display: GuiObject = button:FindFirstChildWhichIsA("TextLabel", true) or button
+	if self._copyIdleText == nil then
+		self._copyIdleText = (display :: any).Text
+	end
+	(display :: any).Text = text
+end
+
+function DonationSystemUI:_resetCopyLabel()
+	self._copyArmed = false
+	self._copyGeneration += 1
+	if self._copyIdleText ~= nil then
+		self:_setCopyLabel(self._copyIdleText)
+	end
+end
+
+-- The link is selected and focused: tell the player the one key press that copies it (a phone
+-- has no keyboard, so its hint is the system's own long-press Copy).
+function DonationSystemUI:_armCopy()
+	self._copyArmed = true
+	self._copyGeneration += 1
+	local touchOnly = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+	self:_setCopyLabel(if touchOnly then COPY_HINT_TOUCH else COPY_HINT_KEYBOARD)
+end
+
+function DonationSystemUI:_markCopied()
+	self._copyArmed = false
+	self._copyGeneration += 1
+	local generation = self._copyGeneration
+	self:_setCopyLabel(COPY_DONE)
+	UIMotion.pop(iconOf(self._refs.copyLinkButton))
+	task.delay(COPY_DONE_SECONDS, function()
+		if self._copyGeneration == generation and self._copyIdleText ~= nil then
+			self:_setCopyLabel(self._copyIdleText)
+		end
+	end)
+end
+
+function DonationSystemUI:_bindCopyFeedback()
+	local linkBox = self._refs.saweriaLink
+	if not linkBox then
+		return
+	end
+	local connections = self._copyConnections
+	-- Clicking the link box itself selects it too, so it arms the same hint.
+	table.insert(connections, linkBox.Focused:Connect(function()
+		if not self._copyArmed then
+			self:_armCopy()
+		end
+	end))
+	-- The key press still reaches InputBegan while the TextBox has focus (gameProcessed = true);
+	-- the TextBox has already copied its selection by then.
+	table.insert(connections, UserInputService.InputBegan:Connect(function(input: InputObject)
+		if self._copyArmed and input.KeyCode == Enum.KeyCode.C and copyModifierDown() and linkBox:IsFocused() then
+			self:_markCopied()
+		end
+	end))
+	-- Leaving without copying puts the design's label back.
+	table.insert(connections, linkBox.FocusLost:Connect(function()
+		if self._copyArmed then
+			self:_resetCopyLabel()
+		end
+	end))
+end
+
 function DonationSystemUI:_handleCopySaweriaLink()
-	local providerName = getExternalProviderName()
-	local link = getExternalProviderLink()
 	UIMotion.spin(iconOf(self._refs.copyLinkButton))
 	if self._refs.saweriaLink then
-		focusAndSelectLink(self._refs.saweriaLink, link)
+		focusAndSelectLink(self._refs.saweriaLink, getExternalProviderLink())
+		self:_armCopy()
 	end
-
-	GeneralNotificationCenterService.show({
-		title = providerName,
-		description = link,
-		message = "Link selected. Press Ctrl+C to copy.",
-		notifType = "INFO",
-		domain = "donation",
-		dedupeKey = "donation-provider-link",
-	})
 end
 
 function DonationSystemUI:populateProducts(products: { Product })
@@ -969,8 +1068,12 @@ function DonationSystemUI:populateProducts(products: { Product })
 						self:_showMessageModal(product)
 					end)
 				)
-				self:_bindButtonMotion(card, self._productConnections)
 			end
+			-- The card is a button in its own right and is what the finger actually lands on; the
+			-- inner DonationButton has no scalable target of its own, so without this the whole
+			-- product tile stayed dead. UIMotion never picks a target inside a nested button, so
+			-- the two binds cannot fight over one UIScale. Per-render connections, dropped above.
+			self:_bindButtonMotion(card, self._productConnections)
 		end
 	end
 
@@ -1342,7 +1445,12 @@ end
 function DonationSystemUI:destroy()
 	self:closeAll()
 	for _, connections in
-		ipairs({ self._motionConnections, self._productConnections, self._emojiConnections } :: { { RBXScriptConnection } })
+		ipairs({
+			self._motionConnections,
+			self._productConnections,
+			self._emojiConnections,
+			self._copyConnections,
+		} :: { { RBXScriptConnection } })
 	do
 		for _, connection in ipairs(connections) do
 			connection:Disconnect()

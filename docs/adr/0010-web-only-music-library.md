@@ -151,6 +151,23 @@ Until the pull transport exists, the customer area still reaches the game by the
 - clubkit-infra must change before the 3.0 rollout: `music-context` stops denying on `music_disabled`, and upload routes check `music_enabled` themselves.
 - **The page opens per venue, automatically.** It opens once that venue's game reports kit 3.0 or newer through the licence heartbeat (`games.kit_version_sort`). Until then it explains that the update comes first. This is how the page avoids letting a 2.x venue edit a library its game does not read yet.
 
+## Addendum — 2026-09-15: the web stores playlist visibility, and "unset" is not "public"
+
+**Context.** Private playlists (`visibility = "private"`, only `musicControl` can open them) were a kit field with no home in brm-api: no column, no dashboard control, and `applyMergedLibraryToLocal` dropped the value, so the one-time import would have turned every venue's private playlists public. The dashboard's colour picker had the same kind of gap: it stored a hex the pull never sends.
+
+**Decision (owner).**
+- brm-api gets `playlists.visibility`, edited from the dashboard and carried by the pull, the import and the legacy merge.
+- The column is **nullable**: `NULL` means the web never decided, and the pull then sends no key.
+- The cover is one of the kit's 8 gradients or a Roblox Image asset id. Nothing else.
+
+**Why nullable.** `mergeByLatest` layers the local record over the game's. A `NOT NULL DEFAULT 'public'` column would make every local record carry `public`, and being newer it would win, which is exactly the loss this fixes. An absent key lets the game's own value survive; the kit already reads a missing value as public.
+
+**Alternative rejected.** A default of `public` with a special case in the import. It would have to be remembered in every future merge path.
+
+**Consequences.**
+- A playlist set on the web always wins over the game's older value; one never touched keeps the game's.
+- THE BASIC's import had lost nothing: its `Playlists` history since 2026-07-20 holds no private playlist.
+
 ## Addendum — 2026-09-14: `MusicWebLibrary` retires in 3.0 instead of defaulting to `true`
 
 **Context.** The plan was to flip `Features.MusicWebLibrary` to `true` in 3.0. Fill-forward never overrides a value the buyer has, and the 2.13 config patch writes `MusicWebLibrary = false` into every buyer file it touches. A new default would therefore reach almost nobody. A buyer left on `false` would also run a library that nothing can edit once the Manage tab is gone.
@@ -161,3 +178,18 @@ Until the pull transport exists, the customer area still reaches the game by the
 - Rollback from 3.0 is the 2.x engine, not a flag.
 - A venue without `Donation.ApiUrl` and the API secret keeps playing its DataStore cache and gets no library changes until it is configured.
 - `MusicRepository`'s read-only write guard no longer has a caller; it goes with the Manage code in Stage F slice 3.
+
+## Addendum — 2026-09-22: long sets, link covers, and the part cap moves to 26
+
+**Context.** The owner asked for three things at once: a cover looked up with the title, SoundCloud beside YouTube, and tracks up to three hours ("20 mins kek kependekan", mixtapes in a club map). Three hours in 7-minute parts is 26 parts, and 9 was written into three places that have to agree: the kit's `Config.Music.MAX_TRACK_PARTS`, the literal in `MusicDomain.validateTrack`, and brm-api's sync cap. The web pull runs every track through `validateTrack`, so a 10-part track did not play partly — it was dropped.
+
+**Decision.**
+- The cap is **26** in all three places (brm-api derives it: `ceil(3 h / 420 s)`). The duration limit is on the **source** length, which is the in-game play time; the compatibility routes speed the file up and the kit slows it back down.
+- The web library sends **`partDurations`**, one raw length per part. The client stops creating a probe `Sound` for every part and prefetches a window of `PREFETCH_PARTS_AHEAD = 2` parts instead of every remaining one.
+- A link's thumbnail becomes the track's cover, uploaded as `assetType: "Image"` with the venue's own Open Cloud key. Best effort, and never over a cover the library item already has.
+
+**Consequences.**
+- A kit before 3.0 treats a long set two ways. Pulling the web library (the 2.13 opt-in) runs `validateTrack`, which drops a track of more than 9 parts whole. Reading the auto-synced DataStore does not validate, so it plays all 26 parts — but with the old client, which loads every part at once. Long sets are for venues on 3.0; nothing stops a customer uploading one earlier. Today only THE BASIC has the music page (`music_enabled = 1`).
+- One long set is up to 26 audio uploads against the account's 30-day quota (2,000 ID-verified, 100 unverified), and one more for the cover.
+- brm-api's ingest queue runs one job at a time, so a long set holds every other customer's upload for as long as it takes (~15–30 min). A 3-hour set also keeps ~500 MB on disk (source + parts) and nothing reclaims it yet. Both are accepted for now and watched with `df -h`.
+- Silence trimming is skipped above 20 minutes: `silencedetect` runs through `spawnSync`, which would stall every request on brm-api while it decodes a long file.

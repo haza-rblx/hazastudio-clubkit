@@ -200,15 +200,14 @@ function BackpackUIBinder:_renderNow(slots: { HotbarSlotViewModel }, isOpen: boo
 		end
 
 		local connections = {} :: { RBXScriptConnection }
-		-- Grid cells are laid out, so the squash must land on the cell's icon, never on a
-		-- UIScale added to the cell itself.
-		if not UIMotion.canScale(button) then
-			for _, connection in ipairs(UIMotion.bindPress(button)) do
-				table.insert(connections, connection)
-			end
-			for _, connection in ipairs(UIMotion.bindHover(button)) do
-				table.insert(connections, connection)
-			end
+		-- Layout safety is the module's call (ADR 0011): on the laid-out grid the squash lands
+		-- on the cell's icon, and a cell the module says is safe to scale takes it itself. The
+		-- canScale guard that used to sit here left exactly those safe cells with no press.
+		for _, connection in ipairs(UIMotion.bindPress(button)) do
+			table.insert(connections, connection)
+		end
+		for _, connection in ipairs(UIMotion.bindHover(button)) do
+			table.insert(connections, connection)
 		end
 
 		if animateRows then

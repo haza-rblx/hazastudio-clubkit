@@ -468,15 +468,19 @@ function ProfileTabBinder.new(refs: Refs)
 	if refs.avatarViewport then
 		self._avatar = AvatarViewport3D.new(refs.avatarViewport)
 		self._avatar:setPrewarmPool(AvatarPrewarmShared.getPool())
+		-- Same cursor gaze as the ACM, anywhere over the menu panel.
+		self._avatar:setGazeFollow(true, refs.outerWrapper)
 	end
 	self._avatarLoadedUserId = nil :: number?
 	self._currentPayload = nil :: ProfileMenuPayload?
 	self._currentOverhead = nil :: OverheadPayload?
 	self._showCoupleEnabled = false
 	self._coupleModeStyles = nil :: { [string]: CoupleModeStyleRefs }?
-	-- Designed transparencies for the text/badge fades, captured once per element and keyed
-	-- weakly so a destroyed badge frame is not pinned here.
-	self._fadeBases = setmetatable({}, { __mode = "k" }) :: any
+	-- Designed transparencies for the text/badge fades, captured once per element. Strong keys on
+	-- purpose (ADR 0011 addendum, 2026-09-17): a weak entry is dropped while the element is alive,
+	-- and the next capture would then record a mid-fade transparency as the design. A destroyed
+	-- badge frame keeps its entry here until the binder goes — bytes per badge.
+	self._fadeBases = {} :: { [GuiObject]: number }
 	return self
 end
 

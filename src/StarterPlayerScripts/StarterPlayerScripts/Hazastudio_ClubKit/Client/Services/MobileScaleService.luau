@@ -37,6 +37,7 @@ local SCALE_MAP: { [string]: number } = {
 	[Config.CommandLibrary.GUI_NAME] = ms.COMMAND_GUI,
 	[Config.Admin.GUI_NAME_V3] = ms.ADMIN_PANEL_V3_GUI,
 	[Config.CustomTitle.GUI_NAME] = ms.CUSTOM_TITLE_GUI,
+	[Config.DailyQuest.GUI_NAME] = ms.DAILY_QUEST_GUI,
 	["AvatarContextMenu"] = ms.ACM_GUI,
 }
 
@@ -231,6 +232,48 @@ local function applyLoadingScreenFixes(loadingGui: Instance): ()
 	end
 end
 
+-- The music panel's fixed phone scale is too tall for short phones (measured 2026-09-23 on the
+-- Galaxy A06 preset: the screen is 339 px tall, the panel 360 px at 0.56, so its top — the
+-- tab bar — and its bottom were off screen and the tabs unreachable). The panel is centred in the
+-- ScreenGui, so it fits when its design height times the scale fits the ScreenGui's height minus a
+-- margin. Only sizes go in, never the panel's position (it moves while the open animation runs),
+-- and the same sizes give the same scale, so the refit a resize triggers settles at once.
+local MUSIC_EDGE_MARGIN = 8
+local MUSIC_MIN_SCALE = 0.3
+local fittedMusic: { [Instance]: boolean } = {}
+
+local function fitMusicPanel(gui: Instance, base: number): ()
+	local main = gui:FindFirstChild("MainWrapper")
+	local uiScale = gui:FindFirstChildWhichIsA("UIScale")
+	if not (main and main:IsA("GuiObject") and uiScale and gui:IsA("ScreenGui")) then
+		return
+	end
+	local panel = main :: GuiObject
+	local scale = uiScale :: UIScale
+	local screen = gui :: ScreenGui
+	local function fit()
+		local height = panel.AbsoluteSize.Y
+		local room = screen.AbsoluteSize.Y - 2 * MUSIC_EDGE_MARGIN
+		if height <= 0 or room <= 0 or scale.Scale <= 0 then
+			return
+		end
+		local designHeight = height / scale.Scale
+		local wanted = math.clamp(room / designHeight, MUSIC_MIN_SCALE, base)
+		if math.abs(scale.Scale - wanted) > 0.002 then
+			scale.Scale = wanted
+		end
+	end
+	if not fittedMusic[gui] then
+		fittedMusic[gui] = true
+		panel:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
+		screen:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
+		gui.Destroying:Connect(function()
+			fittedMusic[gui] = nil
+		end)
+	end
+	task.defer(fit)
+end
+
 local function applyToGui(child: Instance): ()
 	local name = child.Name
 
@@ -286,6 +329,9 @@ local function applyToGui(child: Instance): ()
 
 	local uiScale = getOrCreateRootScale(child)
 	uiScale.Scale = scale
+	if name == Config.Music.GUI_NAME then
+		fitMusicPanel(child, scale)
+	end
 
 	-- ACM: remove the designer Y-offset baked into MainWrapper
 	if name == "AvatarContextMenu" then
@@ -363,6 +409,15 @@ function MobileScaleService.init(playerGui: PlayerGui): ()
 			local backpackGui = playerGui:FindFirstChild(Config.Backpack.GUI_NAME)
 			if backpackGui then
 				applyBackpackLayout(backpackGui)
+			end
+			-- The phone layout can start after boot (the Studio emulator sizes the viewport later,
+			-- a phone rotated or split-screened): scale and fit the music panel again for the new
+			-- screen instead of leaving the value baked into the template.
+			if isMobile() then
+				local musicGui = playerGui:FindFirstChild(Config.Music.GUI_NAME)
+				if musicGui then
+					applyToGui(musicGui)
+				end
 			end
 		end)
 	end

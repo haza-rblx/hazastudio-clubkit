@@ -100,6 +100,15 @@ function DjView:_connect(connection: RBXScriptConnection)
 	table.insert(self._connections, connection)
 end
 
+function DjView:_bindMotion(button: GuiObject)
+	for _, connection in ipairs(UIMotion.bindPress(button)) do
+		self:_connect(connection)
+	end
+	for _, connection in ipairs(UIMotion.bindHover(button)) do
+		self:_connect(connection)
+	end
+end
+
 -- ============================================================
 -- Switches and sliders
 -- ============================================================
@@ -276,17 +285,20 @@ function DjView:bind()
 		end))
 		clone.Visible = true
 		clone.Parent = self._soundBoardTemplate.Parent
+		-- After parenting: the squash target is chosen from the live ancestry (grid layout, groups).
+		self:_bindMotion(clone)
 		table.insert(self._clones, clone)
 	end
 
+	-- Resolved before the bind below: the icon tier may move the icon into its UIMotionIconSlot,
+	-- where a direct lookup no longer finds it.
+	local resetIcon = refs.resetButton:FindFirstChildWhichIsA("ImageLabel")
 	self:_connect(refs.resetButton.Activated:Connect(function()
-		UIMotion.spin(refs.resetButton:FindFirstChildWhichIsA("ImageLabel"), -1)
+		UIMotion.spin(resetIcon, -1)
 		self._fire("OnDjResetRequested")
 	end))
 	for _, button in ipairs({ refs.resetButton, refs.modeToggle }) do
-		for _, connection in ipairs(UIMotion.bindPress(button)) do
-			self:_connect(connection)
-		end
+		self:_bindMotion(button)
 	end
 
 	self._sliders.speed = self:_bindSlider(
@@ -316,9 +328,7 @@ function DjView:bind()
 		self:_connect(button.Activated:Connect(function()
 			self._fire("OnDjPlaybackSpeedChanged", value)
 		end))
-		for _, connection in ipairs(UIMotion.bindPress(button)) do
-			self:_connect(connection)
-		end
+		self:_bindMotion(button)
 	end
 
 	for index, effect in ipairs(djConfig.EFFECTS or {}) do
@@ -391,6 +401,8 @@ function DjView:_buildEffect(effect: any, index: number)
 
 	clone.Visible = true
 	clone.Parent = self._effectTemplate.Parent
+	-- After parenting: the squash target is chosen from the live ancestry (list layout, groups).
+	self:_bindMotion(toggleButton)
 	table.insert(self._clones, clone)
 end
 

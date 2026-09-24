@@ -6,6 +6,7 @@ local HttpService = game:GetService("HttpService")
 local TextChatService = game:GetService("TextChatService")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
+local InstanceState = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.InstanceState)
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
 local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 local ChatTagStore = require(script.Parent.Parent.Services.ChatTagStore)
@@ -371,12 +372,19 @@ local function init(deps: { icon: any? }?): ()
 	-- Helpers - motion (ADR 0011)
 	-- ============================================================
 	-- Designed transparency of everything this panel fades, captured once before the first fade
-	-- touches it. Weak keys: pooled player cards may be released.
-	local fadeBases = (setmetatable({}, { __mode = "k" }) :: any) :: { [GuiObject]: number }
+	-- touches it. Strong keys on purpose (ADR 0011 addendum, 2026-09-17): a weak entry is dropped
+	-- while the element is alive, and the next capture would then record a mid-cascade transparency
+	-- as the design. Cards are pooled, never destroyed, so nothing accumulates here.
+	local fadeBases = {} :: { [GuiObject]: number }
 	-- Press/hover is bound once per instance; bindConfirmButtons and the pooled card list both
-	-- re-enter with the same buttons.
-	local motionBound = (setmetatable({}, { __mode = "k" }) :: any) :: { [Instance]: boolean }
+	-- re-enter with the same buttons. One STRONG record per button, reclaimed on its `Destroying`
+	-- (InstanceState) — a weak key dropped the guard while the card lived and let a second bind through.
+	local motionBound = InstanceState.new(function(): boolean
+		return true
+	end)
 	-- Where each card's highlight is heading, so a running tween is not restarted by an echo.
+	-- Weak on purpose: a pure cache. A lost entry only restarts the highlight tween toward the same
+	-- target (UIMotion.tween replaces the channel), never a wrong value.
 	local cardTargetTransparency = (setmetatable({}, { __mode = "k" }) :: any) :: { [Instance]: number }
 	local activeTabPage: GuiObject? = nil
 	local lastListSignature: string? = nil
@@ -388,10 +396,10 @@ local function init(deps: { icon: any? }?): ()
 	end
 	-- Press squash + hover lift on any kit button, with the connections owned by this controller.
 	local function bindButtonMotion(button: Instance?): ()
-		if not button or not button:IsA("GuiObject") or motionBound[button] then
+		if not button or not button:IsA("GuiObject") or motionBound.get(button) then
 			return
 		end
-		motionBound[button] = true
+		motionBound.of(button)
 		trackAll(UIMotion.bindPress(button :: GuiObject))
 		trackAll(UIMotion.bindHover(button :: GuiObject))
 	end

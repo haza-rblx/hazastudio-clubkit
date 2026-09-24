@@ -406,12 +406,24 @@ end
 -- probe detected on a client. Separate from the once-only universe_mismatch
 -- beacon; lightly deduped per reason so a spamming exploiter cannot flood the
 -- endpoint. Best-effort — never blocks or errors the caller.
+-- One beacon per distinct reason per server. The foreign-GUI signal (ADR 0012) keys on
+-- the GUI name, so two different tools are two different reports — which is the point of
+-- the signal, but also an unbounded key space if a forged client invents names. This
+-- ceiling is the backstop: at most 24 tamper beacons leave one server, whatever the mix
+-- of kinds. TamperGuard's own per-kind budgets keep foreign GUI to 8 of them.
+local MAX_TAMPER_KEYS = 24
+local _tamperKeyCount = 0
+
 function LicenseService.reportTamper(reason: string, extra: { [string]: any }?): ()
 	local key = tostring(reason)
 	if _tamperReported[key] then
 		return
 	end
+	if _tamperKeyCount >= MAX_TAMPER_KEYS then
+		return
+	end
 	_tamperReported[key] = true
+	_tamperKeyCount += 1
 	postBeacon("tamper:" .. key, extra)
 end
 

@@ -11,6 +11,7 @@ local DonationProviderDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shar
 local DonationAmountFormat = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DonationAmountFormat)
 local LeaderboardIdentity = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.LeaderboardIdentity)
 local LeaderboardDisplayState = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Leaderboards.LeaderboardDisplayState)
+local InstanceState = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.InstanceState)
 
 export type BoardSpec = {
 	rootPart: string,
@@ -73,6 +74,34 @@ local BOARD_SPECS: { BoardSpec } = {
 		topCards = { "1stPlaceCard", "2ndPlaceCard", "3rdPlaceCard" },
 		templateName = "BasicCardTemplate",
 		kind = "saweria",
+	},
+	-- Level + streak boards (V3 design, 2026-09-23): same card names as the saweria board.
+	{
+		rootPart = "LevelDonationBoard",
+		guiName = "LevelDonationBoardGUI",
+		dataKey = "level",
+		limit = Config.Leaderboards.LEVEL_LIMIT,
+		topCards = { "1stPlaceCard", "2ndPlaceCard", "3rdPlaceCard" },
+		templateName = "BasicCardTemplate",
+		kind = "level",
+	},
+	{
+		rootPart = "StreakBoard",
+		guiName = "StreakBoardGUI",
+		dataKey = "streak",
+		limit = Config.Leaderboards.STREAK_LIMIT,
+		topCards = { "1stPlaceCard", "2ndPlaceCard", "3rdPlaceCard" },
+		templateName = "BasicCardTemplate",
+		kind = "streak",
+	},
+	{
+		rootPart = "CoupleBoard",
+		guiName = "CoupleBoardGUI",
+		dataKey = "couple",
+		limit = Config.Leaderboards.COUPLE_LIMIT,
+		topCards = { "1stPlaceCard", "2ndPlaceCard", "3rdPlaceCard" },
+		templateName = "BasicCardTemplate",
+		kind = "couple",
 	},
 	{
 		rootPart = "LikesLeaderboard",
@@ -199,9 +228,25 @@ local GENERIC_GUI_NAMES: { [string]: boolean } = {
 
 local resolverWarnedByKey: { [string]: boolean } = {}
 local warnFn: ((key: string, message: string, payload: any?) -> ())? = nil
-local loadingTextGenerationByLabel: { [TextLabel]: number } = setmetatable({}, { __mode = "k" })
-local originalTextTransparencyByLabel: { [TextLabel]: number } = setmetatable({}, { __mode = "k" })
-local originalTextStrokeTransparencyByLabel: { [TextLabel]: number } = setmetatable({}, { __mode = "k" })
+-- Per-label loading-text bookkeeping: one STRONG record per label, reclaimed on its `Destroying`
+-- (InstanceState; ADR 0011 addendum, 2026-09-17). These were three weak-keyed tables, and Roblox
+-- drops such an entry while the label is still on the board: a lost baseline was re-captured
+-- mid-fade (transparency 1 as the design) and a lost generation let a stopped loading loop carry
+-- on. The baseline is captured the first time a label is touched — the same moment
+-- `ensureLabelFadeBaseline` used to capture it.
+type LabelFade = {
+	generation: number,
+	textTransparency: number,
+	strokeTransparency: number,
+}
+local labelFades = InstanceState.new(function(instance): LabelFade
+	local label = instance :: TextLabel
+	return {
+		generation = 0,
+		textTransparency = label.TextTransparency,
+		strokeTransparency = label.TextStrokeTransparency,
+	}
+end)
 
 local function warnOnce(key: string, message: string, payload: any?)
 	if resolverWarnedByKey[key] then
@@ -213,9 +258,18 @@ local function warnOnce(key: string, message: string, payload: any?)
 	end
 end
 
+-- `value` is in display units: a level number, a count of days. The level board's stored score
+-- (level * LEVEL_SCORE_SCALE + xp) is turned into its level before it gets here.
 local function formatDonationValue(kind: string, value: number): string
 	if kind == "saweria" or kind == "saweriaPoster" then
 		return DonationAmountFormat.formatCashBoard(value)
+	end
+	if kind == "level" then
+		return "LV " .. tostring(math.floor(value))
+	end
+	if kind == "streak" or kind == "couple" then
+		local days = math.floor(value)
+		return tostring(days) .. (if days == 1 then " DAY" else " DAYS")
 	end
 	return DonationAmountFormat.formatGrouped(value)
 end
@@ -395,7 +449,7 @@ local function findValueLabel(root: Instance, kind: string): TextLabel?
 	local valueNames = if kind == "likes"
 		then { "TotalLikesValue" }
 		elseif kind == "community" then { "DonationTotalValue", "TotalDonationValue", "TotalDonationsValue" }
-		elseif kind == "saweria" then { "TotalValue", "TotalDonationValue", "TotalDonation" }
+		elseif kind == "saweria" or kind == "level" or kind == "streak" or kind == "couple" then { "TotalValue", "TotalDonationValue", "TotalDonation" }
 		else { "RobuxTotalValue", "TotalDonationsValue", "TotalValue" }
 
 	local named = findDescendant(root, valueNames, "TextLabel")
@@ -406,7 +460,7 @@ local function findValueLabel(root: Instance, kind: string): TextLabel?
 	local wrapperNames = if kind == "likes"
 		then { "TotalLikesWrapper" }
 		elseif kind == "community" then { "DonationTotal", "TotalDonationWrapper", "TotalLikesWrapper" }
-		elseif kind == "saweria" then { "TotalDonoWrapper", "TotalDonationWrapper", "TotalDonation" }
+		elseif kind == "saweria" or kind == "level" or kind == "streak" or kind == "couple" then { "TotalDonoWrapper", "TotalDonationWrapper", "TotalDonation" }
 		else { "TotalDonationsWrapper", "TotalDonationWrapper" }
 
 	local wrapper = findDescendant(root, wrapperNames, nil)
@@ -423,6 +477,13 @@ end
 local function setValueStatic(root: Instance, kind: string, value: number)
 	local label = findValueLabel(root, kind)
 	if label then
+		if kind == "level" then
+			value = value / Config.Leaderboards.LEVEL_SCORE_SCALE
+		elseif kind == "couple" then
+			-- Stored value is when the pair was first recorded; the board shows days together,
+			-- counting the first day as day 1.
+			value = math.floor(math.max(0, os.time() - value) / 86400) + 1
+		end
 		local normalizedValue = math.floor(math.max(value, 0))
 		label.Text = formatDonationValue(kind, normalizedValue)
 	end
@@ -683,32 +744,24 @@ local function getPosterLoadingCycle(spec: PosterSpec, allTopEmpty: boolean?): {
 	return resolveMessageCycle(primary, cycle)
 end
 
-local function ensureLabelFadeBaseline(label: TextLabel)
-	if originalTextTransparencyByLabel[label] == nil then
-		originalTextTransparencyByLabel[label] = label.TextTransparency
-	end
-	if originalTextStrokeTransparencyByLabel[label] == nil then
-		originalTextStrokeTransparencyByLabel[label] = label.TextStrokeTransparency
-	end
-end
-
 local function restoreLabelFade(label: TextLabel)
-	ensureLabelFadeBaseline(label)
-	label.TextTransparency = originalTextTransparencyByLabel[label]
-	label.TextStrokeTransparency = originalTextStrokeTransparencyByLabel[label]
+	local fade = labelFades.of(label)
+	label.TextTransparency = fade.textTransparency
+	label.TextStrokeTransparency = fade.strokeTransparency
 end
 
 local function stopLoadingTextAnimation(label: TextLabel)
-	loadingTextGenerationByLabel[label] = (loadingTextGenerationByLabel[label] or 0) + 1
+	local fade = labelFades.of(label)
+	fade.generation += 1
 	restoreLabelFade(label)
 end
 
 local function tweenLabelFade(label: TextLabel, fadeIn: boolean, duration: number): boolean
-	ensureLabelFadeBaseline(label)
+	local fade = labelFades.of(label)
 	local goals = if fadeIn
 		then {
-			TextTransparency = originalTextTransparencyByLabel[label],
-			TextStrokeTransparency = originalTextStrokeTransparencyByLabel[label],
+			TextTransparency = fade.textTransparency,
+			TextStrokeTransparency = fade.strokeTransparency,
 		}
 		else {
 			TextTransparency = 1,
@@ -726,8 +779,9 @@ end
 
 local function startLoadingTextAnimation(label: TextLabel, messages: { string })
 	stopLoadingTextAnimation(label)
-	local generation = (loadingTextGenerationByLabel[label] or 0) + 1
-	loadingTextGenerationByLabel[label] = generation
+	local fade = labelFades.of(label)
+	fade.generation += 1
+	local generation = fade.generation
 
 	local cycle: { string } = {}
 	for _, message in ipairs(messages) do
@@ -747,14 +801,14 @@ local function startLoadingTextAnimation(label: TextLabel, messages: { string })
 		local index = 1
 		local isFirstMessage = true
 
-		while label.Parent and loadingTextGenerationByLabel[label] == generation do
+		while label.Parent and fade.generation == generation do
 			local nextText = cycle[index]
 
 			if not isFirstMessage then
 				if not tweenLabelFade(label, false, fadeDuration) then
 					break
 				end
-				if loadingTextGenerationByLabel[label] ~= generation then
+				if fade.generation ~= generation then
 					break
 				end
 			end
@@ -765,7 +819,7 @@ local function startLoadingTextAnimation(label: TextLabel, messages: { string })
 			if not tweenLabelFade(label, true, fadeDuration) then
 				break
 			end
-			if loadingTextGenerationByLabel[label] ~= generation then
+			if fade.generation ~= generation then
 				break
 			end
 
@@ -980,6 +1034,23 @@ local function updateCard(card: GuiObject, entry: any?, rank: number, kind: stri
 	local portraitImage = getEntryImage(entry, kind)
 	setAllNamedImages(card, THUMBNAIL_IMAGE_NAMES, portraitImage)
 	setFirstImage(card, THUMBNAIL_IMAGE_NAMES, portraitImage)
+	if kind == "couple" then
+		-- Two people per row: "A & B", "@a & @b", and the partner's face in PartnerThumbnail.
+		local partner = {
+			userId = entry.partnerId,
+			displayName = entry.partnerDisplayName,
+			username = entry.partnerUsername,
+			thumbnail = entry.partnerThumbnail,
+		}
+		setAllNamedTexts(
+			card,
+			DISPLAY_NAME_LABEL_NAMES,
+			getEntryDisplayName(entry, kind) .. " & " .. getEntryDisplayName(partner, kind)
+		)
+		local usernameA, usernameB = getEntryUsernameText(entry, kind), getEntryUsernameText(partner, kind)
+		setAllNamedTexts(card, USERNAME_LABEL_NAMES, if usernameA ~= "" and usernameB ~= "" then usernameA .. " & " .. usernameB else usernameA .. usernameB)
+		setAllNamedImages(card, { "PartnerThumbnail" }, getEntryImage(partner, kind))
+	end
 
 	if rank >= 4 then
 		local imageLabel = findPath(card, { "Wrapper", "PlayerThumbnailImage" }, "ImageLabel")
@@ -995,6 +1066,21 @@ local function updateCard(card: GuiObject, entry: any?, rank: number, kind: stri
 	setValueStatic(card, kind, tonumber(entry.total) or 0)
 end
 
+-- Rank 4 is the template itself; ranks 5+ are clones of the board's plain row when it has one
+-- (`<template>Plain`, or `<template>6+` as the V3 design names it), else of the template.
+local function getRowSource(template: GuiObject): GuiObject
+	local parent = template.Parent
+	if parent then
+		for _, suffix in ipairs({ "Plain", "6+" }) do
+			local plain = parent:FindFirstChild(template.Name .. suffix)
+			if plain and plain:IsA("GuiObject") then
+				return plain
+			end
+		end
+	end
+	return template
+end
+
 local function getRow(template: GuiObject, rank: number): GuiObject
 	if rank == 4 then
 		template.LayoutOrder = rank
@@ -1008,7 +1094,7 @@ local function getRow(template: GuiObject, rank: number): GuiObject
 		return existing
 	end
 
-	local clone = template:Clone()
+	local clone = getRowSource(template):Clone()
 	clone.Name = rowName
 	clone.LayoutOrder = rank
 	clone.Parent = parent

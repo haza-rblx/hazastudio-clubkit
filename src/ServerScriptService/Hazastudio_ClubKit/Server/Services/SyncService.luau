@@ -685,14 +685,28 @@ local function create(deps: {
 			end
 			activeAnimations[rootPlayer.Name] = animation.Name
 			activeAnimationIds[rootPlayer.Name] = animation.AnimationId
-			if (opts :: any).speed then
+			-- A wutwut restart replays the dance that is ALREADY running, so the speed the
+			-- client tacked onto the remote is nothing the server needs — and letting it
+			-- write here made `activeSpeeds` a two-writer value: the slider wrote one
+			-- sequence, wutwut restarts wrote their own snapshots, and whichever landed
+			-- last won. Measured on HIERAPOLIS 2026-09-18: during a monotonic 1.0 -> 2.0
+			-- slider ramp with wutwut on, the leader's server-side track stepped BACKWARDS
+			-- 3 times (2 times on the repeat run); with wutwut off, 0 times. Followers
+			-- inherit that value, so it read as "the followers lag".
+			if (opts :: any).speed and not isRestart then
 				activeSpeeds[rootPlayer.Name] = (opts :: any).speed
 			elseif activeSpeeds[rootPlayer.Name] == nil then
 				activeSpeeds[rootPlayer.Name] = config.DEFAULT_SPEED or 1
 			end
 		end
 
+		-- Read once for the fallback only. The per-player work below is task.spawn'd, so a
+		-- captured value can land after a newer one; each closure re-reads the live value.
 		local leaderSpeed = activeSpeeds[leader.Name] or (opts :: any).speed or config.DEFAULT_SPEED or 1
+		local leaderName = leader.Name
+		local function currentLeaderSpeed(): number
+			return activeSpeeds[leaderName] or leaderSpeed
+		end
 
 		local syncedPlayers = findSyncedPlayers(rootPlayer)
 		for _, entry in ipairs(syncedPlayers) do
@@ -782,7 +796,7 @@ local function create(deps: {
 					pcall(function()
 						track:Stop(0)
 						track.TimePosition = 0
-						track:Play(fade, 1, leaderSpeed)
+						track:Play(fade, 1, currentLeaderSpeed())
 					end)
 					setDanceWalkSpeed(syncedPlayer)
 					if syncedPlayer ~= leader and syncedPlayer.Character then
@@ -840,7 +854,7 @@ local function create(deps: {
 				-- smoothly; AdjustSpeed alone left it stuck at low weight ("not smooth").
 				local function ensurePlayingWithFade(targetTrack: AnimationTrack)
 					if not targetTrack.IsPlaying then
-						targetTrack:Play(fade, 1, leaderSpeed)
+						targetTrack:Play(fade, 1, currentLeaderSpeed())
 						return
 					end
 					local weight = 1
@@ -852,7 +866,7 @@ local function create(deps: {
 							targetTrack:AdjustWeight(1, fade)
 						end)
 					end
-					targetTrack:AdjustSpeed(leaderSpeed)
+					targetTrack:AdjustSpeed(currentLeaderSpeed())
 				end
 
 				if type(forcedPhase) == "number" then
@@ -882,7 +896,7 @@ local function create(deps: {
 				-- Followers always run at leader's speed
 				if syncedPlayer ~= leader then
 					pcall(function()
-						track:AdjustSpeed(leaderSpeed)
+						track:AdjustSpeed(currentLeaderSpeed())
 					end)
 				end
 
@@ -969,9 +983,15 @@ local self = {} :: any
 				endProcessing(player)
 				return ResultModule.Err("not_active")
 			end
-			activeSpeeds[player.Name] = clampedSpeed
+			-- A restart replays the dance that is already running, so the server's own
+			-- speed is authoritative and the client's snapshot must NOT overwrite it.
+			-- This write is the one that raced the speed slider: wutwut fires on its own
+			-- cadence, each carrying whatever `currentSpeed` the client held at that
+			-- instant, and whichever landed last won. Seed only when nothing is recorded.
+			if activeSpeeds[player.Name] == nil then
+				activeSpeeds[player.Name] = clampedSpeed
+			end
 			replicateAnimation(player, animation, {
-				speed = clampedSpeed,
 				fade = config.WUTWUT_RESTART_FADE or 0,
 				stopFade = 0,
 				restart = true,

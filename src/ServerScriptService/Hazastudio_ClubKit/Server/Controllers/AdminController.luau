@@ -302,6 +302,14 @@ local function createAdminController(deps: {
 			return
 		end
 
+		-- Image titles are a paid add-on. The panel hides the tab behind its
+		-- LockedState, but that is decoration: the remote stays callable by any admin,
+		-- so this is the gate that actually holds.
+		local imageFlags = Config.FeatureFlags :: any
+		if not (imageFlags ~= nil and imageFlags.ImageCustomTitleEnabled == true) then
+			return
+		end
+
 		-- "" means remove; anything else must normalize to a usable asset id, so a
 		-- typo is rejected here rather than stored and rendered as a broken image.
 		local rawImage = if type(data.imageId) == "string" then data.imageId else ""
@@ -360,6 +368,13 @@ local function createAdminController(deps: {
 	local TitleImageListRemote = getOrCreateRemote(Config.Admin.REMOTE_TITLE_IMAGE_LIST)
 	TitleImageListRemote.OnServerEvent:Connect(function(player: Player)
 		if not isAdmin(player) then
+			return
+		end
+		-- Same add-on gate as SetTitleImage: without it a locked tab could still
+		-- enumerate the registry.
+		local listFlags = Config.FeatureFlags :: any
+		if not (listFlags ~= nil and listFlags.ImageCustomTitleEnabled == true) then
+			TitleImageListRemote:FireClient(player, {})
 			return
 		end
 		if not checkRate(player) then

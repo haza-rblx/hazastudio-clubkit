@@ -55,4 +55,26 @@ screens would fight over PlayerGui / CoreGui). It also skips itself on the kit's
 
 - This pack is **custom**; bugs in it are not universal kit bugs.
 - The graphics picker mutates `Lighting` / `MaterialService` / `CastShadow` on the client only.
-- CoreGui is restored per type to its pre-loading state (the kit hotbar keeps Backpack off).
+- CoreGui is restored per type to its pre-loading state, **except `Backpack` when
+  `Features.Hotbar` is on** — see below.
+
+## Fixed 2026-09-18 (HIERAPOLIS report: "double backpack", "berat banget")
+
+- **Double backpack.** The CoreGui snapshot is taken in `ReplicatedFirst`, which runs *before*
+  the kit's `HotbarController` reaches `PlayerScripts` and turns the Roblox backpack off — so it
+  recorded Roblox's default `true` and handed the stock backpack back at the end, on top of the
+  kit hotbar. The restore now skips `Enum.CoreGuiType.Backpack` while `Features.Hotbar ~= false`,
+  the same rule the kit's own `LoadingScreenUI.setCoreUiVisible` uses. Any snapshot taken this
+  early has the same hazard — treat other CoreGui types the same way if a buyer reports a twin.
+- **Potato preset froze the client.** It walked `Workspace:GetDescendants()` and wrote
+  `CastShadow = false` on every `BasePart` in one unyielded pass, right as the screen faded.
+  On HIERAPOLIS that is **24,422 instances / 8,094 parts (7,660 casting)**, and `GetDescendants`
+  alone measured **78 ms on desktop** before a single write. Now it runs in `task.spawn`, skips
+  parts already set, and yields every 500 writes. `Lighting.GlobalShadows = false` does the real
+  work; the per-part pass is only insurance for when the kit's graphics tier re-enables shadows.
+- **Camera lock** no longer rewrites `CameraType` every frame, only when it actually drifted.
+
+Not attributed: total boot measured **43.8 s** in a Studio playtest, most of it the pack waiting
+on the kit's `ClubKitBootSettled`. Studio boot numbers here are unreliable (a heavy place plus
+Studio overhead), so this was not chased. Owner-facing levers live in `SETTINGS`:
+`PresentedByDuration` (hard 5 s before the bar appears) and `MaxWait` (60 s give-up).

@@ -385,6 +385,9 @@ local repo = ServerMods.OverheadRepository
 local aboutRosterRepository = ServerMods.createAboutRosterRepository()
 local profileRepo = ServerMods.ProfileRepository.new({ logger = Logger.new("ProfileRepository") })
 local avatarLikeRepository = ServerMods.AvatarLikeRepository.new({ logger = Logger.new("AvatarLikeRepository") })
+-- Level + streak boards: fed by the overhead controller, read by the donation controller.
+local progressLeaderboardRepository =
+	ServerMods.ProgressLeaderboardRepository.new({ logger = Logger.new("ProgressLeaderboardRepository") })
 local donationLeaderboardRepository =
 	ServerMods.DonationLeaderboardRepository.new({ logger = Logger.new("DonationLeaderboardRepository") })
 local giftPendingRepository = ServerMods.GiftPendingRepository.create({
@@ -588,6 +591,7 @@ local overheadController = ServerMods.createOverheadController({
 	proximity = proximityService,   -- R1.3: shared ProximityInterestService
 	interest = interestManager,     -- R1.3: shared ServerMods.InterestManager
 	playerSnapshotService = playerSnapshotService,
+	progressLeaderboard = progressLeaderboardRepository,
 })
 local communityVipService = trackLifecycle(
 	"CommunityVipService",
@@ -603,7 +607,30 @@ local streakController = ServerMods.createStreakController({
 	streakService = streakService,
 	overheadController = overheadController,
 	remotes = Remotes,
+	-- Daily Quest addon: manual check-in replaces the join-time streak when enabled + installed.
+	dailyQuestService = ServerMods.createDailyQuestService({ repo = repo }),
+	notify = Notify,
 })
+-- Event board (ADR 0015): venue posts + venue quests from the customer dashboard. Registers its
+-- own players (current and joining) and pulls the board on onStart.
+local eventBoardController = trackLifecycle(
+	"EventBoardController",
+	ServerMods.createEventBoardController({
+		remotes = Remotes,
+		notify = Notify,
+		repo = repo,
+		overheadController = overheadController,
+		progressRepo = ServerMods.VenueQuestProgressRepository.new({ logger = Logger.new("VenueQuestProgressRepository") }),
+		levelService = levelService,
+		logger = Logger.new("EventBoardController"),
+	})
+)
+connectionCleaner:add(Players.PlayerAdded:Connect(function(player)
+	eventBoardController:onPlayerAdded(player)
+end))
+connectionCleaner:add(Players.PlayerRemoving:Connect(function(player)
+	eventBoardController:onPlayerRemoving(player)
+end))
 -- Join-time DataStore read serialization. All heavy per-player reads that run on
 -- PlayerAdded go through this single queue so a join storm does not fan out
 -- hundreds of concurrent DataStore requests and saturate the per-server budget.
@@ -757,6 +784,7 @@ if Config.FeatureFlags.CouplesEnabled ~= false then
 		remotes = Remotes,
 		profileRepository = profileRepo,
 		profileMenuSync = profileMenuSync,
+		progressLeaderboard = progressLeaderboardRepository,
 	})
 end
 -- DonationService is constructed before ShopController because ShopController
@@ -934,6 +962,10 @@ do
 				workspaceLeaderboardRefresh = workspaceLeaderboardRefresh,
 				paidBroadcastController = _paidBroadcastController,
 				leaderboardNetwork = donationLeaderboardNetwork,
+				-- Venue quests with a Robux donation goal (ADR 0015).
+				onRobuxDonated = function(userId: number, amount: number)
+					eventBoardController:onRobuxDonated(userId, amount)
+				end,
 			})
 		shopController:init()
 	end
@@ -1349,6 +1381,7 @@ ServerMods.createDonationController({
 	remotes = Remotes,
 	leaderboardRepository = donationLeaderboardRepository,
 	avatarLikeRepository = avatarLikeRepository,
+	progressLeaderboardRepository = progressLeaderboardRepository,
 	leaderboardsRemote = WorkspaceLeaderboardsRemote,
 	leaderboardsSnapshotRemote = WorkspaceLeaderboardsSnapshotRemote,
 	leaderboardsSnapshotResponseRemote = WorkspaceLeaderboardsSnapshotResponseRemote,

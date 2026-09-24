@@ -64,6 +64,8 @@ end
 			-- is constructed. When nil every broadcast is suppressed with an error log (R1.3).
 			proximity: ProximityInterestService?,
 			playerSnapshotService: any?,
+			-- Optional: level + streak boards; fed from the values synced to the player list.
+			progressLeaderboard: any?,
 		}
 	)
 		local service = deps.service
@@ -71,6 +73,7 @@ end
 		local eventBus = deps.eventBus
 		local proximity = deps.proximity
 		local playerSnapshotService = deps.playerSnapshotService
+		local progressLeaderboard = deps.progressLeaderboard
 	-- Remotes created inside factory, not when module is required
 	local function getOrCreateRemote(name: string): RemoteEvent
 		local existing = remotes:FindFirstChild(name)
@@ -1022,17 +1025,28 @@ end
 		if not roleKey then
 			return nil
 		end
-		local resolvedColorKey = normalizeColorKey(colorKey) or normalizeColorKey(roleKey) or roleKey
 		local teamName = getTeamDisplayName(roleKey)
+		-- The Team's color belongs to the team NAME, not to whoever happens to be
+		-- syncing: a buyer can put several ranks on one chat label and a Team holds
+		-- exactly one TeamColor. Painting it with the syncing role's color flips it on
+		-- every sync, and Roblox keys team membership by TeamColor -- each flip drops
+		-- that team's players to Neutral and the next sync re-adds them, spamming
+		-- "You are now on the <team> team".
+		local colorRoleKey = Config.PlayerList.TEAM_COLOR_ROLE[teamName]
+		local colorFallbackKey = colorRoleKey or roleKey
+		local resolvedColorKey = colorRoleKey
+			or normalizeColorKey(colorKey)
+			or normalizeColorKey(roleKey)
+			or roleKey
 		local existing = Teams:FindFirstChild(teamName)
 		if existing and existing:IsA("Team") then
-			applyTeamColor(existing, resolvedColorKey, roleKey)
+			applyTeamColor(existing, resolvedColorKey, colorFallbackKey)
 			return existing
 		end
 		local team = Instance.new("Team")
 		team.Name = teamName
 		team.AutoAssignable = false
-		applyTeamColor(team, resolvedColorKey, roleKey)
+		applyTeamColor(team, resolvedColorKey, colorFallbackKey)
 		team.Parent = Teams
 		return team
 	end
@@ -1074,6 +1088,24 @@ end
 		if Config.FeatureFlags.LevelSystemEnabled and payload.level ~= nil then
 			local levelValue = getOrCreateLevelStat(player)
 			levelValue.Value = payload.level
+		end
+		-- Level + streak boards (dedupes and throttles its own writes).
+		if progressLeaderboard then
+			progressLeaderboard:observe(
+				player.UserId,
+				if Config.FeatureFlags.LevelSystemEnabled then payload.level else nil,
+				payload.xp,
+				payload.streakDays
+			)
+			-- The payload only carries the partner's name; the id lives in the stored document.
+			if payload.isCoupled and progressLeaderboard:needsCouple(player.UserId) then
+				task.spawn(function()
+					local stored = service:getStored(player.UserId)
+					if stored.ok then
+						progressLeaderboard:observeCouple(player.UserId, stored.value.couplePartnerId)
+					end
+				end)
+			end
 		end
 		-- Likes
 		local likesValue = getOrCreateLikesStat(player)

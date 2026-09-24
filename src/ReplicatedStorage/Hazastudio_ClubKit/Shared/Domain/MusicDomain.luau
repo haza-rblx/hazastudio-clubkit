@@ -13,7 +13,9 @@ export type TrackInfo = {
 	name          : string,         -- track name
 	creator       : string,         -- nama creator/artist
 	playlistId    : string,         -- parent playlist ID
-	parts         : { string },     -- up to 9 Roblox audio asset IDs (minimal 1, max = Config.Music.MAX_TRACK_PARTS)
+	parts         : { string },     -- up to 26 Roblox audio asset IDs (minimal 1, max = Config.Music.MAX_TRACK_PARTS)
+	partDurations : { number }?,    -- raw seconds per part (before playback speed), one per part; sent by the web library
+	cover         : TrackCover?,    -- the kit-drawn cover (ADR 0014), fully resolved by brm-api
 	totalDuration : number,         -- seconds; 0 on first upload, filled after first play
 	playbackSpeed : number?,        -- per-track baseline speed; nil = use global Config.Music.PLAYBACK_SPEED
 	coverType     : string?,        -- optional override of parent playlist cover: "gradient" | "image"
@@ -32,6 +34,7 @@ export type PlaylistInfo = {
 	visibility : string?,        -- "public" | "private" (default "public")
 	coverType  : string?,        -- "gradient" | "image" (optional, default "gradient")
 	coverValue : any?,           -- gradient index (number) or image asset ID (string)
+	cover      : TrackCover?,    -- the card drawn in the playlist's template (ADR 0014); nil = gradient/image
 	fontFace   : string?,        -- font name from SelectFontFace (optional)
 	trackIds   : { string },     -- urutan track dalam playlist
 	syncUpdatedAt : string?,
@@ -215,11 +218,12 @@ function MusicDomain.validateTrack(data: { [string]: any }): (boolean, string)
 	if type(data.parts) ~= "table" or #data.parts < 1 then
 		return false, "parts must be an array with at least 1 element"
 	end
-	if #data.parts > 9 then
-		-- NOTE: must stay in sync with Config.Music.MAX_TRACK_PARTS.
+	if #data.parts > 26 then
+		-- NOTE: must stay in sync with Config.Music.MAX_TRACK_PARTS and brm-api's
+		-- MAX_TRACK_PARTS (a 3-hour set in 7-minute parts).
 		-- Validator uses literal here so MusicDomain stays free of
 		-- dependency on Config (avoid circular require).
-		return false, "parts must not have more than 9 elements"
+		return false, "parts must not have more than 26 elements"
 	end
 	for i, part in ipairs(data.parts) do
 		if type(part) ~= "string" or part == "" then
@@ -242,6 +246,91 @@ function MusicDomain.validatePlaylist(data: { [string]: any }): (boolean, string
 	return true, ""
 end
 
+-- A copy of `durations` when it holds one positive number per part, else nil.
+-- Optional data: a bad list is dropped (the client measures instead), never a
+-- reason to refuse the track.
+function MusicDomain.readPartDurations(durations: any, parts: any): { number }?
+	if type(durations) ~= "table" or type(parts) ~= "table" or #durations ~= #parts or #parts == 0 then
+		return nil
+	end
+	local copy = table.create(#durations)
+	for i, value in ipairs(durations) do
+		if type(value) ~= "number" or value ~= value or value <= 0 or value == math.huge then
+			return nil
+		end
+		copy[i] = value
+	end
+	return copy
+end
+
+-- The kit-drawn cover of a track (ADR 0014), decided entirely on the web: layout per playlist,
+-- lines per track, corner mark per venue. mark: "" = the experience's name, "-" = none.
+-- venueAlt replaces the subline when it equals the name printed in the corner.
+export type TrackCover = {
+	layout: string,
+	headline: string,
+	subline: string?,
+	venueAlt: { string },
+	kicker: string?,
+	mark: string,
+}
+
+MusicDomain.COVER_LAYOUTS = { "editorial", "sampul", "samping", "monogram", "piringan", "tiket", "swiss", "cd" }
+local COVER_TEXT_MAX = 80 -- characters; brm-api caps lines at 40, this only guards the DataStore
+
+local function readCoverString(value: any): string?
+	if type(value) ~= "string" or value == "" or utf8.len(value) == nil or (utf8.len(value) :: number) > COVER_TEXT_MAX then
+		return nil
+	end
+	return value
+end
+
+-- A copy of the web library's cover when it is well formed, else nil. Optional like
+-- partDurations: a bad value means the cover falls back to the track's own name, never that
+-- the track is refused. A layout this kit does not know (a newer web) draws as editorial.
+function MusicDomain.readCover(raw: any): TrackCover?
+	if type(raw) ~= "table" then
+		return nil
+	end
+	local headline = readCoverString(raw.headline)
+	if not headline then
+		return nil
+	end
+	for _, key in ipairs({ "subline", "kicker" }) do
+		if raw[key] ~= nil and readCoverString(raw[key]) == nil then
+			return nil
+		end
+	end
+	local mark = ""
+	if raw.mark ~= nil then
+		if type(raw.mark) ~= "string" or (utf8.len(raw.mark) or math.huge) > COVER_TEXT_MAX then
+			return nil
+		end
+		mark = raw.mark
+	end
+	local venueAlt = {}
+	if type(raw.venueAlt) == "table" then
+		for index, value in ipairs(raw.venueAlt) do
+			local line = readCoverString(value)
+			if not line or index > 4 then
+				return nil
+			end
+			venueAlt[index] = line
+		end
+	end
+	local layout = if type(raw.layout) == "string" and table.find(MusicDomain.COVER_LAYOUTS, raw.layout)
+		then raw.layout
+		else "editorial"
+	return {
+		layout = layout,
+		headline = headline,
+		subline = readCoverString(raw.subline),
+		venueAlt = venueAlt,
+		kicker = readCoverString(raw.kicker),
+		mark = mark,
+	}
+end
+
 -- Build TrackInfo from raw data (with default values)
 function MusicDomain.buildTrack(data: { [string]: any }): TrackInfo
 	return {
@@ -250,6 +339,8 @@ function MusicDomain.buildTrack(data: { [string]: any }): TrackInfo
 		creator       = tostring(data.creator or ""),
 		playlistId    = tostring(data.playlistId or ""),
 		parts         = data.parts or {},
+		partDurations = MusicDomain.readPartDurations(data.partDurations, data.parts),
+		cover         = MusicDomain.readCover(data.cover),
 		totalDuration = tonumber(data.totalDuration) or 0,
 		playbackSpeed = if tonumber(data.playbackSpeed) ~= nil and (tonumber(data.playbackSpeed) :: number) > 0
 			then tonumber(data.playbackSpeed)
@@ -290,6 +381,8 @@ function MusicDomain.buildPlaylist(data: { [string]: any }): PlaylistInfo
 		coverType  = coverType or "gradient",
 		coverValue = coverValue or 1,  -- default gradient index 1
 		fontFace   = type(data.fontFace) == "string" and data.fontFace or "Original",
+		-- Not the legacy { type, value } cover above: readCover needs a headline, which that never has.
+		cover      = MusicDomain.readCover(legacyCover),
 		trackIds   = type(data.trackIds) == "table" and data.trackIds or {},
 		syncUpdatedAt = type(data.syncUpdatedAt) == "string" and data.syncUpdatedAt or nil,
 		syncDeletedAt = type(data.syncDeletedAt) == "string" and data.syncDeletedAt or nil,

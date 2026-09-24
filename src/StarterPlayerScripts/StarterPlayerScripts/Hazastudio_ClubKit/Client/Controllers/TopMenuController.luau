@@ -16,6 +16,8 @@ local LeaderstatsVisibilityService = require(script.Parent.Parent.Services.Leade
 local PhoneLayout = require(script.Parent.Parent.Utils.PhoneLayout)
 local TopMenuGuiRefs = require(script.Parent.Parent.UI.TopMenuGuiRefs)
 local OverheadController = require(script.Parent.OverheadController)
+local NotifService = require(script.Parent.Parent.Services.NotifService)
+local EventBoardController = require(script.Parent.EventBoardController)
 
 local TopMenuController = {}
 local log = Logger.new("TopMenuController")
@@ -393,7 +395,7 @@ local function safeSelect(icon: any)
 	end
 end
 
-local function openSettingsTab(tabKey: "profile" | "settings")
+local function openSettingsTab(tabKey: "profile" | "settings" | "event")
 	local settingsUI = settingsUIRef
 	local icons = iconsRef
 	if not icons then
@@ -723,11 +725,14 @@ local function closeMenuThen(action: () -> ())
 	action()
 end
 
--- Section rows are UIListLayout children inside the sidebar's CanvasGroup, so UIMotion.canScale
--- refuses them (and everything under them): bindPress/bindHover hand back no connections on the
--- shipped GUI. The stand-ins are layout-neutral — a background tint under the pointer and a spin
--- on the row's icon when it fires; neither touches Size/Position, so no sibling ever moves.
-local function bindButton(button: GuiButton?, action: () -> ())
+-- Section rows are UIListLayout children, so the row button itself cannot scale without resizing
+-- what the layout reserves and shoving its siblings; UIMotion.canScale refuses it and scales the
+-- row's icon in place instead (hover up, press down, inside a fixed-size slot), which is the whole
+-- feel of a row. No background tint on top of that: the rows paint white, so a white film fading
+-- in under the pointer reads as a rendering glitch rather than as feedback.
+-- `action` is nil for a row that has nothing to open (the Community row with no invite
+-- configured): it still gets the same feel as its neighbours, just no click handler.
+local function bindButton(button: GuiButton?, action: (() -> ())?)
 	if not button then
 		return
 	end
@@ -741,56 +746,14 @@ local function bindButton(button: GuiButton?, action: () -> ())
 
 	local icon = row:FindFirstChildWhichIsA("ImageLabel", true)
 		or row:FindFirstChildWhichIsA("ImageButton", true)
-	local rest = row.BackgroundTransparency
-	-- Tint toward whichever side has headroom, so an opaque row and a see-through one both react.
-	local accent = if rest >= 0.5 then math.max(rest - 0.22, 0) else math.min(rest + 0.18, 1)
-	local hovering, pressed = false, false
-	local function refreshTint()
-		if not row.Parent then
-			return
-		end
-		local goal = rest
-		if pressed then
-			goal = accent
-		elseif hovering then
-			goal = (rest + accent) * 0.5
-		end
-		UIMotion.tween(row, if pressed then 0.08 else 0.18, { BackgroundTransparency = goal })
-	end
-	local function isPress(input: InputObject): boolean
-		return input.UserInputType == Enum.UserInputType.MouseButton1
-			or input.UserInputType == Enum.UserInputType.Touch
-	end
 
-	trackInitConnection(row.InputBegan:Connect(function(input: InputObject)
-		if isPress(input) then
-			pressed = true
-			refreshTint()
-		end
-	end))
-	trackInitConnection(row.InputEnded:Connect(function(input: InputObject)
-		if isPress(input) then
-			pressed = false
-			refreshTint()
-		end
-	end))
-	trackInitConnection(row.MouseLeave:Connect(function()
-		hovering, pressed = false, false
-		refreshTint()
-	end))
-	-- A finger never hovers, and on touch MouseEnter fires on tap and would fight the press tint.
-	if not (UserInputService.TouchEnabled and not UserInputService.MouseEnabled) then
-		trackInitConnection(row.MouseEnter:Connect(function()
-			hovering = true
-			refreshTint()
-		end))
+	if not action then
+		return
 	end
-
+	local onActivated = action
 	trackInitConnection(button.Activated:Connect(function()
-		pressed = false
-		refreshTint()
 		UIMotion.spin(icon :: GuiObject?, 1)
-		closeMenuThen(action)
+		closeMenuThen(onActivated)
 	end))
 end
 
@@ -871,6 +834,11 @@ local function applyDiscordInvite(menuRoot: Instance)
 					-- Hide invite chip only (Frame), keep row label.
 					if not gui:IsA("GuiButton") then
 						gui.Visible = false
+					else
+						-- wireButtons skips COMMUNITY because its action lives here; with no
+						-- invite configured this branch used to return without binding, which
+						-- left the one section row in the sidebar with no press or hover.
+						bindButton(gui :: GuiButton, nil)
 					end
 				else
 					gui.Visible = true
@@ -915,6 +883,27 @@ local function wireButtons(buttonMap: TopMenuGuiRefs.ButtonMap)
 	end)
 	bindButton(buttonMap[BUTTONS.PROFILE], function()
 		openSettingsTab("profile")
+	end)
+	-- Event board (ADR 0015): both rows open the menu's Event tab; Quests scrolls to its quests.
+	-- A menu without the EventTab design keeps the "coming soon" answer.
+	local function hasEventTab(): boolean
+		local settingsUI = settingsUIRef
+		return settingsUI ~= nil and type(settingsUI.hasTab) == "function" and settingsUI:hasTab("event")
+	end
+	bindButton(buttonMap[BUTTONS.QUESTS], function()
+		if not hasEventTab() then
+			NotifService.info(Config.TopbarMenu.QUESTS_SOON_MESSAGE)
+			return
+		end
+		openSettingsTab("event")
+		EventBoardController.focusQuests()
+	end)
+	bindButton(buttonMap[BUTTONS.EVENT], function()
+		if not hasEventTab() then
+			NotifService.info(Config.TopbarMenu.EVENT_SOON_MESSAGE)
+			return
+		end
+		openSettingsTab("event")
 	end)
 end
 

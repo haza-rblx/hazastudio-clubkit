@@ -1100,6 +1100,8 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 		if not currentViewport then
 			currentViewport = AvatarViewport3D.new(avatar3D)
 			currentViewport:setPrewarmPool(avatarPool)
+			-- Head tracks the cursor anywhere over the panel (v1 only; v2 has no 3D avatar).
+			currentViewport:setGazeFollow(true, mainWrapper)
 		else
 			currentViewport:cleanup()
 		end
@@ -1121,6 +1123,7 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 				if not currentViewport then
 					currentViewport = AvatarViewport3D.new(avatar3D)
 					currentViewport:setPrewarmPool(avatarPool)
+					currentViewport:setGazeFollow(true, mainWrapper)
 				else
 					currentViewport:cleanup()
 				end

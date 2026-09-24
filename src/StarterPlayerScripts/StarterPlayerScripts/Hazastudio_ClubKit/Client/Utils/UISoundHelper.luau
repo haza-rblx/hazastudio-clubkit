@@ -7,6 +7,7 @@ local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local AssetHealthReporter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.AssetHealthReporter)
+local InstanceState = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.InstanceState)
 
 local localPlayer = Players.LocalPlayer
 local log = Logger.new("UISoundHelper")
@@ -28,8 +29,10 @@ type Dependencies = {
 
 export type UISoundHelper = {
 	_config: SoundConfig,
-	_attachedButtons: { [GuiButton]: boolean },
-	_buttonConnections: { [GuiButton]: { RBXScriptConnection } },
+	-- The bind-once guard and the bind's connections, one STRONG record per button reclaimed on its
+	-- `Destroying` (InstanceState; ADR 0011 addendum, 2026-09-17). Weak keys dropped the guard while
+	-- the button lived, so a pooled row re-parented into PlayerGui was bound twice: two click sounds.
+	_buttonConnections: InstanceState.Store<{ RBXScriptConnection }>,
 	_connections: { RBXScriptConnection },
 	_hoverTemplate: Sound,
 	_clickTemplate: Sound,
@@ -71,12 +74,9 @@ function UISoundHelper.new(deps: Dependencies): UISoundHelper
 	local self: UISoundHelper = setmetatable({} :: any, UISoundHelper)
 
 	self._config = deps.config
-	self._attachedButtons = (
-		setmetatable({} :: { [GuiButton]: boolean }, { __mode = "k" }) :: any
-	) :: { [GuiButton]: boolean }
-	self._buttonConnections = (
-		setmetatable({} :: { [GuiButton]: { RBXScriptConnection } }, { __mode = "k" }) :: any
-	) :: { [GuiButton]: { RBXScriptConnection } }
+	self._buttonConnections = InstanceState.new(function(): { RBXScriptConnection }
+		return {}
+	end)
 	self._connections = {}
 	self._assetReporter = AssetHealthReporter.new(log)
 	self._hoverTemplate = createTemplate(
@@ -139,9 +139,8 @@ function UISoundHelper:_validateTemplate(template: Sound, sourcePath: string): (
 end
 
 function UISoundHelper:_disconnectButton(button: GuiButton): ()
-	local connections = self._buttonConnections[button]
+	local connections = self._buttonConnections.get(button)
 	if not connections then
-		self._attachedButtons[button] = nil
 		return
 	end
 
@@ -149,21 +148,18 @@ function UISoundHelper:_disconnectButton(button: GuiButton): ()
 		connection:Disconnect()
 	end
 
-	self._buttonConnections[button] = nil
-	self._attachedButtons[button] = nil
+	self._buttonConnections.drop(button)
 end
 
 function UISoundHelper:_bindButton(button: GuiButton): ()
 	if button:GetAttribute(DISABLE_ATTRIBUTE) == true then
 		return
 	end
-	if self._attachedButtons[button] then
+	if self._buttonConnections.get(button) then
 		return
 	end
 
-	self._attachedButtons[button] = true
-	local buttonConnections = {} :: { RBXScriptConnection }
-	self._buttonConnections[button] = buttonConnections
+	local buttonConnections = self._buttonConnections.of(button)
 
 	if HOVER_SOUNDS_ENABLED then
 		table.insert(
@@ -243,8 +239,16 @@ function UISoundHelper:destroy(): ()
 	end
 	self._connections = {}
 
-	for button in pairs(self._buttonConnections) do
-		self:_disconnectButton(button)
+	-- The store is not walkable; every button this helper bound was found in PlayerGui, so the tree
+	-- is walked instead. A bound button that is detached but alive keeps its connections until it is
+	-- destroyed, which its own Destroying listener (above) handles.
+	local playerGui = localPlayer:FindFirstChildOfClass("PlayerGui")
+	if playerGui then
+		for _, desc in ipairs(playerGui:GetDescendants()) do
+			if desc:IsA("GuiButton") then
+				self:_disconnectButton(desc)
+			end
+		end
 	end
 
 	if self._hoverTemplate then

@@ -49,6 +49,8 @@ local function createShopController(
 		workspaceLeaderboardRefresh: { refresh: (() -> ())? }?,
 		paidBroadcastController: any?,
 		leaderboardNetwork: any?,
+		-- Called once per completed (not replayed) Robux donation: (userId, Robux price).
+		onRobuxDonated: ((number, number) -> ())?,
 	}
 ): IShopController
 	local log = deps.logger
@@ -869,6 +871,9 @@ local function createShopController(
 
 
 
+			if not isDuplicateReceipt and deps.onRobuxDonated then
+				task.spawn(deps.onRobuxDonated, userId, price)
+			end
 			if not isDuplicateReceipt then
 				local description = if message ~= ""
 					then string.format("%s donated %d Robux: %s", donorName, price, message)

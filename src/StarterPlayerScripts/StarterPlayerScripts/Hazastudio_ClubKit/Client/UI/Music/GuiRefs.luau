@@ -119,6 +119,34 @@ export type Refs = {
 	backdropBlur: Frame,
 }
 
+-- FindFirstChild silently returns the first of two same-named children, so a duplicated template
+-- (a stray paste in the buyer's GUI) sits visible forever with no error. Warn once per
+-- (parent, name) and still return the first match, so behaviour does not change. Keyed by the
+-- parent's full-name string on purpose: weak Instance keys are unreliable in Roblox.
+local duplicateWarned: { [string]: boolean } = {}
+
+local function warnDuplicateOnce(parent: Instance, name: string, count: number)
+	local key = parent:GetFullName() .. "." .. name
+	if duplicateWarned[key] then
+		return
+	end
+	duplicateWarned[key] = true
+	local gui = if parent:IsA("ScreenGui") then parent else parent:FindFirstAncestorWhichIsA("ScreenGui")
+	local guiName = if gui then gui.Name else "(GUI not under a ScreenGui)"
+	warn(
+		string.format(
+			'[MusicGuiRefs] GUI "%s" has %d elements named "%s" inside "%s" but the kit expects exactly one.'
+				.. ' Open %s in Studio, keep the first "%s" and delete the extra one(s), or the copies stay visible on screen.',
+			guiName,
+			count,
+			name,
+			parent.Name,
+			parent:GetFullName(),
+			name
+		)
+	)
+end
+
 function GuiRefs.need(parent: Instance, name: string, className: string): any
 	local child = parent:FindFirstChild(name)
 	assert(child ~= nil, string.format("[MusicGuiRefs] missing %s.%s", parent:GetFullName(), name))
@@ -126,6 +154,15 @@ function GuiRefs.need(parent: Instance, name: string, className: string): any
 		child:IsA(className),
 		string.format("[MusicGuiRefs] %s is %s, expected %s", child:GetFullName(), child.ClassName, className)
 	)
+	local count = 0
+	for _, sibling in ipairs(parent:GetChildren()) do
+		if sibling.Name == name then
+			count += 1
+		end
+	end
+	if count > 1 then
+		warnDuplicateOnce(parent, name, count)
+	end
 	return child
 end
 

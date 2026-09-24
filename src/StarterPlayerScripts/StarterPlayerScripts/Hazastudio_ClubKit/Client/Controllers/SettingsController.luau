@@ -1510,7 +1510,18 @@ local function createSettingsController(deps: {
 		setAttr("SettingsHideDonationAura", currentPayload.hideDonationAura)
 		setAttr("SettingsHideDonatorHighlight", currentPayload.hideDonatorHighlight)
 		setAttr("SettingsHideSystemAnnounce", currentPayload.hideSystemAnnounce)
-		setAttr("SettingsMusicVolume", math.clamp((tonumber(currentPayload.musicVolume) or 100) / 100, 0, 1))
+		-- Stored musicVolume stays a 0-100 percentage; the attribute is the Sound.Volume the
+		-- music player applies. 100% = Config.Music.MAX_VOLUME (4.0 by default), so 25% = 1.0.
+		local musicConfig = (Config :: any).Music
+		local musicVolumeMax = math.clamp(
+			(if type(musicConfig) == "table" then tonumber(musicConfig.MAX_VOLUME) else nil) or 4,
+			0,
+			10
+		)
+		setAttr(
+			"SettingsMusicVolume",
+			math.clamp((tonumber(currentPayload.musicVolume) or 100) / 100 * musicVolumeMax, 0, musicVolumeMax)
+		)
 	end
 
 	local function applyHideAllGui()

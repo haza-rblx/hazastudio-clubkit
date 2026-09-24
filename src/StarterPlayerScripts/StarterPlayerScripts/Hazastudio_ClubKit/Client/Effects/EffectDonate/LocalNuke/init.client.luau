@@ -13,7 +13,7 @@ local PhysicsService = game:GetService("PhysicsService")
 local RunService = game:GetService("RunService")
 
 -- Camera shaker and constants
-local CameraShaker = require(script.CameraShaker)
+local CameraShaker = require(script.Parent.CameraShaker)
 local SoundAssetSanitizer = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.SoundAssetSanitizer)
 -- Fallback only — buyer sets ClubKitConfig.Donation.NukeWorldPosition → NUKE_WORLD_POSITION.
 local DEFAULT_SPAWN_POSITION = Vector3.new(-60.5, 1.5, -44.891)

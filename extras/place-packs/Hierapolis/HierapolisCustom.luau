@@ -22,6 +22,10 @@ local HierapolisCustom = {}
 -- has Member / Dev / Admin / Owner ranks). The four DPC roles share chatTag "DPC" (Rank row,
 -- chat tag, player list) while their unique name lives in the overhead chip
 -- (specialRank.chip = true, painted with roleColor.stops; hides that role's #N rank chips).
+-- Owner and CoOwner do NOT share a tag: since 2026-09-18 their chatTag carries the full
+-- name (THE PRESIDENT / THE ARCHON), so the rank row, chat tag and player list all show it
+-- and their chip repeats the same words. Set `chip = false` on either if that reads double.
+-- chatTag also feeds the tool folder when a role has no `toolFolder`, so Owner pins one.
 HierapolisCustom.RoleCategories = {
 	{
 		id = 1,
@@ -31,9 +35,9 @@ HierapolisCustom.RoleCategories = {
 		privileges = { canGift = true, canAnnounce = true, canTeleport = true, adminPanel = true, musicManage = true },
 		roles = {
 			{
-				key = "CoOwner", -- rank row / chat tag stay CO-OWNER; "THE ARCHON" lives in the chip
+				key = "CoOwner", -- owner call 2026-09-18: rank row / chat tag / player list say THE ARCHON
 				label = "Co-Owner",
-				chatTag = "CO-OWNER",
+				chatTag = "THE ARCHON",
 				toolFolder = "CO-OWNER",
 				teamColor = "Ghost grey",
 				enabled = true,
@@ -146,9 +150,12 @@ HierapolisCustom.RoleCategories = {
 } :: { any }
 
 HierapolisCustom.SystemRoles = {
-	Owner = { -- rank row / chat tag stay OWNER; "THE PRESIDENT" lives in the chip
+	Owner = { -- owner call 2026-09-18: rank row / chat tag / player list say THE PRESIDENT
 		label = "Owner",
-		chatTag = "OWNER",
+		chatTag = "THE PRESIDENT",
+		-- Pinned: with no toolFolder the engine falls back to chatTag, and renaming the tag
+		-- would point Owner at a "THE PRESIDENT" folder that does not exist (12 tools lost).
+		toolFolder = "OWNER",
 		priority = 15000,
 		groupRanks = { 255 },
 		specialRank = { text = "THE PRESIDENT", gradient = true, chip = true },

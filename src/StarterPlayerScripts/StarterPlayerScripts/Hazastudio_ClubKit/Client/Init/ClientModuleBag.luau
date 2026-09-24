@@ -9,6 +9,7 @@
 local Client = script.Parent.Parent
 
 return {
+	InstanceState = require(game:GetService("ReplicatedStorage").Hazastudio_ClubKit.Shared.Utils.InstanceState),
 	NotifController = require(Client.Controllers.NotifController),
 	ChatTagsController = require(Client.Controllers.ChatTagsController),
 	CoupleController = require(Client.Controllers.CoupleController),
@@ -18,6 +19,7 @@ return {
 	createCommandLibraryService = require(Client.Services.CommandLibraryService),
 	createDanceWarmupService = require(Client.Services.DanceWarmupService),
 	StreakController = require(Client.Controllers.StreakController),
+	EventBoardController = require(Client.Controllers.EventBoardController),
 	AfkGuardController = require(Client.Controllers.AfkGuardController),
 	GiftController = require(Client.Controllers.GiftController),
 	AdminController = require(Client.Controllers.AdminController),

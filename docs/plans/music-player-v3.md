@@ -1,6 +1,18 @@
 # Music Player v3 — rencana implementasi
 
-**Status:** disetujui owner 2026-09-13. **Stage A selesai 2026-09-13** (unreleased, terverifikasi di place template — detail di `UPGRADE_PROGRESS.md`). **Stage B (tarik library) — kode kit selesai + terverifikasi di place; rute VPS ditulis + dites lokal, belum di-deploy** (detail di `UPGRADE_PROGRESS.md`). **Update 2026-09-13:** B + B3 di-deploy dan lolos uji live (9 track), di-commit `71bdaee`. **Stage C selesai** di `music-v3` (belum di-commit). Stage D–F belum dimulai. Keputusan produk ada di `CONTEXT.md` (§ Music roles & tiers, § Music player GUI v3) dan ADR 0010.
+**Status (diperbarui 2026-09-15):** disetujui owner 2026-09-13.
+- **Di `main` (belum dirilis, `VERSION` masih 2.12.0):**
+  - Stage A: `5cf781c`.
+  - Stage B: `71bdaee`, rute VPS live sejak 2026-09-13.
+- **Di `music-v3`:**
+  - Stage C: `94383dc`.
+  - Stage D+E: `c7c0b2f`.
+  - Motion: `8cc1a10`.
+  - Stage F: `622d23e`, belum di-push.
+- **Di `ui-motion`:** ADR 0011, tiga commit, belum di-push. Branch ini dibangun di atas Stage F.
+- **Belum di-commit:** cover dan private/public playlist, serta cover per track (§ 4b).
+
+Sisa pekerjaan sebelum 3.0 dikumpulkan di `UPGRADE_PROGRESS.md` § "3.0 — what is left before release". Keputusan produk ada di `CONTEXT.md` (§ Music roles & tiers, § Music player GUI v3) dan ADR 0010.
 **Basis:** kit 2.12.0. Target: v3 menggantikan v2 di **3.0**.
 
 ## Prinsip yang tidak boleh dilanggar
@@ -161,8 +173,11 @@ Semua remote baru: payload divalidasi, `requestId` idempoten, rate limiter, gate
 - **Q11:** 2.13 tidak menambah isi. Isinya tetap Stage A, Stage B (flag mati), daily like reset, dan fix ikon Admin Panel v3.
 
 **Urutan eksekusi F:**
-1. Rilis 2.13 dari `main` (menunggu "okay this is update 2.13").
-2. Merge `music-v3` → `main`.
+1. Rilis 2.13 dari `main` (menunggu "okay this is update 2.13"). **Status 2026-09-15:**
+   - Belum dirilis.
+   - Urutan ini perlu dikonfirmasi ulang oleh owner, karena pekerjaan sudah berlanjut di `ui-motion` di atas Stage F.
+   - Lihat checklist 3.0 di `UPGRADE_PROGRESS.md`.
+2. Merge `music-v3` → `main`. **Status 2026-09-15:** belum. `ui-motion` sudah memuat `music-v3`.
 3. Kit:
    - Hapus kode Manage, binder v2, dan `MusicCatalogSeeder`. **Status 2026-09-14:** kode Manage + `MusicCatalogSeeder` terhapus (irisan 2–3); file binder v2 dihapus dari repo (owner, `git rm`); tiga ModuleScript-nya juga sudah dihapus dari place THE BASIC TEST lewat MCP. `MusicCatalog.luau` template dibiarkan (ADR 0010: pensiun, bukan dihapus).
    - Pensiunkan `MusicReadOnlyLibrary`/`MusicCatalogSeed` di schema.
@@ -171,6 +186,22 @@ Semua remote baru: payload divalidasi, `requestId` idempoten, rate limiter, gate
    - `count-locals`.
 4. clubkit-infra: halaman Musik terbuka per venue saat `kit_version_sort` ≥ 3.0; upload/YouTube tetap digate `music_enabled`.
 5. Place: rename GUI v3 → `06-MusicPlayerGUI`, hapus v2, `Enabled = false`, hitung ulang `MobileScale`, RBXM v2 untuk rollback. **Status 2026-09-14 (THE BASIC TEST):** selesai. RBXM v2 di `docs/releases/3.0.0/rollback/06-MusicPlayerGUI_v2.rbxm`, dicek lengkap sebelum v2 dihapus; `MUSIC_GUI` 0.56 (belum diukur di emulator HP). Ketemu dan dibetulkan: `get_state` tidak membawa `isPlayOnceAllowed`, jadi kotak Request From ID di v3 tersembunyi.
+4b. **clubkit-infra: cover + private/public playlist (owner 2026-09-15, belum di-deploy).** Temuan: warna dashboard (hex `playlists.color`) tidak pernah sampai ke game, karena playlist tanpa gambar selalu terkirim sebagai gradien 1. Preview gambar di dashboard juga rusak (`assetdelivery` sekarang 403). `visibility` tidak ada di brm-api, dan import sekali jalan membuangnya. Keputusan dan perubahan:
+   - Dashboard hanya menawarkan 8 gradien kit.
+   - Cover gambar tetap berupa asset ID, divalidasi lewat `GET /library/cover-assets` (endpoint publik Roblox, tanpa key). Decal ditolak.
+   - Cover hanya per playlist; override per track tidak dikerjakan.
+   - Kolom `playlists.visibility` (migration `0014`, `NULL` = belum diset web) diterima POST/PATCH, dikirim di pull, dan dibawa import/merge.
+   - Toggle Public/Private di dialog, gembok di kartu.
+   - Kit tidak diubah.
+   - Test brm-api 101 lulus / 1 skip; `tsc` brm-api + dashboard bersih.
+   - Q6: riwayat versi `MusicLibrary_v1/Playlists` THE BASIC sejak 2026-07-20 tidak pernah punya playlist private, jadi tidak ada yang hilang.
+   - **Deploy:** `bun src/db/migrate.ts` wajib dijalankan manual, karena unit systemd tidak menjalankan migration. **Live 2026-09-15** (brm-api + dashboard).
+   - **Q3 dibalik owner di hari yang sama: cover gambar per track.**
+     - brm-api menyimpan `payload_json.coverImageAssetId`. `PATCH /uploads/library/:id` menerimanya, dan nilai `""` mengosongkannya. Pull hanya mengirim `coverType = "image"` bila nilainya terisi. Import membawa override gambar dari game, sedangkan override gradien dibuang.
+     - Dashboard: Edit track → Cover → Ikut playlist / Gambar sendiri. Cek Decal memakai komponen yang sama dengan dialog playlist.
+     - Kit: `MusicRepository.cloneTrack` + `_serializeTracks` sebelumnya membuang cover track. Sudah dibetulkan, spec lune 9/9 (red dulu), dicatat di CHANGELOG `[Unreleased]`.
+     - Test brm-api 109 lulus / 1 skip.
+     - Belum di-deploy, dan fix kit belum di-sync ke place.
 6. Gerbang sebelum merge (step 2): uji 2 pemain oleh owner. Gerbang sebelum rilis 3.0: angka performa.
 7. `code-review` dua sumbu, dokumen rilis 3.0.0. Bump versi hanya setelah "okay this is update 3.0".
 

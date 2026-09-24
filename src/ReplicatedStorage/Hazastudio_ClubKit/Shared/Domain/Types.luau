@@ -131,6 +131,9 @@ export type OverheadStoredData = {
 	suppressCommunityBadge: boolean?, -- true = /clearcommun, do not use primary fallback
 	streakDays: number, -- default 0
 	lastLoginAt: number, -- os.time() terakhir login, 0 = not yet pernah
+	-- Daily Quest addon progress (DailyQuestDomain.State: id, progress, lastDay, completed).
+	-- nil = never checked in to a quest. Scoped by quest id, so a new quest ignores it.
+	dailyQuest: { id: string, progress: number, lastDay: number, completed: boolean }?,
 	level: number?, -- XP level (LevelSystemEnabled)
 	xp: number?, -- XP progress within current level
 	_version: number,

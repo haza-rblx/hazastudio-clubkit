@@ -5,7 +5,9 @@ local CharacterReady = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils
 
 local module = {}
 local DANCE_PRIORITY = Enum.AnimationPriority.Action4
--- Simple cache with weak keys (auto-cleanup by Lua GC)
+-- Simple cache with weak keys (auto-cleanup by Lua GC). Weak on purpose (ADR 0011 addendum,
+-- 2026-09-17): a pure cache. A lost per-animator entry only costs a LoadAnimation on the next dance;
+-- tracks already playing are still found through GetPlayingAnimationTracks, never lost.
 local trackCache = setmetatable({}, { __mode = "k" })
 -- Reference to AnimationPreloader (set by EmoteHandler)
 module.AnimationPreloader = nil
@@ -15,6 +17,8 @@ module.AnimationPreloader = nil
 local function animationSetFrom(loadedAnimations)
 	if not loadedAnimations then return nil end
 	if loadedAnimations.__asSet then return loadedAnimations.__asSet end
+	-- Weak on purpose: a lookup set over Animations the caller already holds in loadedAnimations; a
+	-- lost entry falls through to the AnimationId set and the name check in isDanceTrack.
 	local set = setmetatable({}, { __mode = "k" })
 	local ids = {}
 	for _, animObj in pairs(loadedAnimations) do
@@ -108,6 +112,7 @@ function module.getOrCreateTrack(animator, animation)
 	-- Fallback to cache system
 	local perAnimator = trackCache[animator]
 	if not perAnimator then
+		-- Weak on purpose: a lost track entry only costs a reload of that one animation.
 		perAnimator = setmetatable({}, { __mode = "k" })
 		trackCache[animator] = perAnimator
 	end

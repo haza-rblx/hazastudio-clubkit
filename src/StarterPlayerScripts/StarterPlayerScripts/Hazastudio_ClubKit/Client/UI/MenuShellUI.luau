@@ -28,7 +28,8 @@ local BLUR_OPTIONS = {
 	blurName = Config.Settings.BACKDROP_BLUR_NAME,
 }
 
-local TAB_KEYS = { "profile", "settings" }
+-- Event is a third tab only where the menu has the EventTab design (ADR 0015).
+local TAB_KEYS = { "profile", "settings", "event" }
 
 local function cancelTween(tween: Tween?)
 	if tween then
@@ -255,9 +256,11 @@ function MenuShellUI.new(gui: ScreenGui)
 	self._wrapperShownPosition = refs.outerWrapper.Position
 	self._anim = AnimationHelper.new()
 	self._backdropActive = false
-	-- Designed transparencies for the open cascade, captured once per element and keyed
-	-- weakly so a rebuilt settings section does not pin its old clones.
-	self._fadeBases = setmetatable({}, { __mode = "k" }) :: any
+	-- Designed transparencies for the open cascade, captured once per element. Strong keys on
+	-- purpose (ADR 0011 addendum, 2026-09-17): a weak entry is dropped while the element is alive,
+	-- and the next capture would then record a mid-cascade transparency as the design. A rebuilt
+	-- settings section keeps its old entries here until the shell goes — bytes per element.
+	self._fadeBases = {} :: { [GuiObject]: number }
 
 	local tabButtons = refs.tabButtons
 	self._tabIdleStyle = if tabButtons.profileIdle
@@ -274,9 +277,13 @@ function MenuShellUI.new(gui: ScreenGui)
 
 	hideTabStyleTemplate(tabButtons.profileActive, tabButtons.profileButton)
 	hideTabStyleTemplate(tabButtons.settingsIdle, tabButtons.settingsButton)
+	hideTabStyleTemplate(tabButtons.eventActive, tabButtons.eventButton)
 
 	refs.profileTab.Visible = true
 	refs.settingsTab.Visible = false
+	if refs.eventTab then
+		refs.eventTab.Visible = false
+	end
 	if refs.universalModal then
 		refs.universalModal.Visible = false
 	end
@@ -423,37 +430,52 @@ function MenuShellUI:_wireTabs()
 	wireButton(buttons.profileActive, "profile")
 	wireButton(buttons.settingsIdle, "settings")
 	wireButton(buttons.settingsActive, "settings")
+	if self._refs.eventTab then
+		wireButton(buttons.eventButton, "event")
+		wireButton(buttons.eventIdle, "event")
+		wireButton(buttons.eventActive, "event")
+	elseif buttons.eventButton then
+		buttons.eventButton.Visible = false
+	end
 
 	self:_applyTabButtonStyles()
 end
 
-function MenuShellUI:_applyTabButtonStyles()
+function MenuShellUI:_tabButton(tabKey: string): TextButton?
 	local buttons = self._refs.tabButtons
-	local isProfile = self._activeTabKey == "profile"
-	local profileBtn = buttons.profileButton
-	local settingsBtn = buttons.settingsButton
-
-	if profileBtn then
-		profileBtn.Visible = true
-		if isProfile and self._tabActiveStyle then
-			applyButtonVisual(profileBtn, self._tabActiveStyle)
-		elseif self._tabIdleStyle then
-			applyButtonVisual(profileBtn, self._tabIdleStyle)
-		end
+	if tabKey == "profile" then
+		return buttons.profileButton
+	elseif tabKey == "settings" then
+		return buttons.settingsButton
 	end
+	return if self._refs.eventTab then buttons.eventButton else nil
+end
 
-	if settingsBtn then
-		settingsBtn.Visible = true
-		if not isProfile and self._tabActiveStyle then
-			applyButtonVisual(settingsBtn, self._tabActiveStyle)
-		elseif self._tabIdleStyle then
-			applyButtonVisual(settingsBtn, self._tabIdleStyle)
+function MenuShellUI:_tabPage(tabKey: string): ScrollingFrame?
+	if tabKey == "profile" then
+		return self._refs.profileTab
+	elseif tabKey == "settings" then
+		return self._refs.settingsTab
+	end
+	return self._refs.eventTab
+end
+
+function MenuShellUI:_applyTabButtonStyles()
+	for _, tabKey in ipairs(TAB_KEYS) do
+		local button = self:_tabButton(tabKey)
+		if button then
+			button.Visible = true
+			if self._activeTabKey == tabKey and self._tabActiveStyle then
+				applyButtonVisual(button, self._tabActiveStyle)
+			elseif self._tabIdleStyle then
+				applyButtonVisual(button, self._tabIdleStyle)
+			end
 		end
 	end
 end
 
 function MenuShellUI:_selectTab(tabKey: string)
-	if tabKey ~= "profile" and tabKey ~= "settings" then
+	if not self:_tabPage(tabKey) then
 		return
 	end
 	self:_hideProfileFieldModal(nil, true)
@@ -461,12 +483,15 @@ function MenuShellUI:_selectTab(tabKey: string)
 	local nextIndex = table.find(TAB_KEYS, tabKey)
 	local switched = previousIndex ~= nil and nextIndex ~= nil and previousIndex ~= nextIndex
 	self._activeTabKey = tabKey
-	self._refs.profileTab.Visible = tabKey == "profile"
-	self._refs.settingsTab.Visible = tabKey == "settings"
+	for _, key in ipairs(TAB_KEYS) do
+		local page = self:_tabPage(key)
+		if page then
+			page.Visible = key == tabKey
+		end
+	end
 	self:_applyTabButtonStyles()
 	if switched then
-		local buttons = self._refs.tabButtons
-		self:_fadeTabButton(if tabKey == "profile" then buttons.profileButton else buttons.settingsButton)
+		self:_fadeTabButton(self:_tabButton(tabKey))
 	end
 
 	if tabKey == "settings" then
@@ -491,7 +516,7 @@ function MenuShellUI:_selectTab(tabKey: string)
 	-- instead — and only after the page has been built and patched, so the settings tab
 	-- owns its own UIPadding before UIMotion parks its slide padding beside it.
 	if switched and self._visible then
-		local page = if tabKey == "profile" then self._refs.profileTab else self._refs.settingsTab
+		local page = self:_tabPage(tabKey) :: ScrollingFrame
 		UIMotion.slideIn(page, if (nextIndex :: number) > (previousIndex :: number) then 1 else -1)
 	end
 end
@@ -502,7 +527,12 @@ function MenuShellUI:ensureTabBuilt(tabKey: string)
 	end
 end
 
-function MenuShellUI:selectTab(tabKey: "profile" | "settings")
+-- True when this menu has the tab (the event tab is optional GUI).
+function MenuShellUI:hasTab(tabKey: string): boolean
+	return self:_tabPage(tabKey) ~= nil
+end
+
+function MenuShellUI:selectTab(tabKey: "profile" | "settings" | "event")
 	self:_selectTab(tabKey)
 end
 
@@ -785,7 +815,7 @@ function MenuShellUI:show()
 	-- Cascade the page in behind the sidebar tween, but only on a real open: re-showing an
 	-- already-visible panel must not restart the fade under the player's cursor.
 	if not wasVisible then
-		self:_staggerTab(if self._activeTabKey == "profile" then self._refs.profileTab else self._refs.settingsTab)
+		self:_staggerTab(self:_tabPage(self._activeTabKey) :: ScrollingFrame)
 	end
 
 	-- Add click-outside detection
@@ -965,6 +995,9 @@ local function createDisabledUI()
 	function ui:show() end
 	function ui:hide() end
 	function ui:selectTab() end
+	function ui:hasTab(): boolean
+		return false
+	end
 	function ui:isVisible(): boolean
 		return false
 	end

@@ -249,7 +249,11 @@ local ActiveCamTween = nil
 RunService:BindToRenderStep("LoadingCameraLock", Enum.RenderPriority.Camera.Value + 1, function()
 	if CameraLocked then
 		local cam = Workspace.CurrentCamera
-		cam.CameraType = Enum.CameraType.Scriptable
+		-- Only write CameraType when it actually drifted: this runs every frame for the
+		-- whole loading screen, and a redundant enum write is not free.
+		if cam.CameraType ~= Enum.CameraType.Scriptable then
+			cam.CameraType = Enum.CameraType.Scriptable
+		end
 		cam.CFrame = CamTracker.Value
 	end
 end)
@@ -511,11 +515,23 @@ local function FinishLoadingWithPan(graphicSetting)
 		MaterialService:SetBaseMaterialOverride(Enum.Material.SmoothPlastic, "None")
 		Lighting.GlobalShadows = false
 		Lighting.ShadowSoftness = 0
-		for _, part in pairs(Workspace:GetDescendants()) do
-			if part:IsA("BasePart") then
-				part.CastShadow = false
+		-- Hierapolis Workspace is ~24k instances / ~8k parts. One unyielded pass over all of
+		-- them (GetDescendants alone measured 78 ms on desktop, far worse on a phone) froze the
+		-- client exactly as the screen was supposed to fade out. GlobalShadows = false already
+		-- kills the shadows; this pass is only belt-and-braces for when the kit's graphics tier
+		-- turns them back on, so it can happen off the critical path, in slices.
+		task.spawn(function()
+			local touched = 0
+			for _, part in ipairs(Workspace:GetDescendants()) do
+				if part:IsA("BasePart") and part.CastShadow then
+					part.CastShadow = false
+					touched += 1
+					if touched % 500 == 0 then
+						task.wait()
+					end
+				end
 			end
-		end
+		end)
 	end
 
 	local FadeOut = TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
@@ -560,10 +576,19 @@ local function FinishLoadingWithPan(graphicSetting)
 	for _, conn in pairs(guiConns) do
 		conn:Disconnect()
 	end
+	-- The snapshot was taken in ReplicatedFirst, BEFORE the kit's HotbarController runs in
+	-- PlayerScripts and turns the Roblox backpack off -- so it recorded Roblox's default
+	-- `true`. Restoring that put the stock backpack back on top of the kit hotbar: the
+	-- "double backpack" buyers see. Same rule the kit's own loading screen uses.
+	local hotbarOwnsBackpack = kitConfig ~= nil
+		and type(kitConfig.Features) == "table"
+		and kitConfig.Features.Hotbar ~= false
 	for coreGuiType, enabled in pairs(coreGuiBefore) do
-		pcall(function()
-			StarterGui:SetCoreGuiEnabled(coreGuiType, enabled)
-		end)
+		if not (hotbarOwnsBackpack and coreGuiType == Enum.CoreGuiType.Backpack) then
+			pcall(function()
+				StarterGui:SetCoreGuiEnabled(coreGuiType, enabled)
+			end)
+		end
 	end
 	for _, gui in ipairs(hiddenGuis) do
 		if gui and gui.Parent then

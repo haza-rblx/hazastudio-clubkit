@@ -13,6 +13,7 @@ local WorldEffectFlight = require(script.Parent.Parent.Parent.Utils.WorldEffectF
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local HttpApiCounter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.HttpApiCounter)
 local ClientHttpApi = require(script.Parent.Parent.Parent.Utils.ClientHttpApi)
+local AvatarGiant = require(script.Parent.Parent.Parent.Utils.AvatarGiant)
 
 -- Helper function to scale particle effects
 local function scaleParticleEffect(particleEmitter, scaleFactor)
@@ -37,7 +38,7 @@ local function scaleParticleEffect(particleEmitter, scaleFactor)
 end
 
 -- Camera shaker module
-local CameraShaker = require(script.CameraShaker)
+local CameraShaker = require(script.Parent.CameraShaker)
 
 -- Giant spawn: ClubKitConfig.Donation.NukeWorldPosition + aerial offset.
 local DEFAULT_GIANT_SPAWN = Vector3.new(17.124, 242.798, 44.581)
@@ -56,6 +57,10 @@ end
 
 local GIANT_SPAWN_POSITION = resolveGiantSpawnPosition()
 
+-- Matches the legacy giant's on-screen size; see GreenHammer for the measurement.
+local GIANT_SCALE = tonumber((Config.Donation :: any).GIANT_SCALE) or 50
+
+
 -- Function to apply giant appearance to character
 local function applyGiantAppearance(userId, character)
 	-- HTTP API telemetry counter (quota-efficiency-pass-2026-06, Phase 0).
@@ -63,7 +68,17 @@ local function applyGiantAppearance(userId, character)
 	if (not (Config.ClientHttpApi and Config.ClientHttpApi.ENABLED)) and Config.HttpApi and Config.HttpApi.COUNTERS_ENABLED then
 		HttpApiCounter.record("blossom_hd_total")
 	end
-	local humanoidDescription = ClientHttpApi.getHumanoidDescriptionFromUserIdAsync(userId)
+	-- Cloned: the cache hands back the same instance and the scale fields below mutate it.
+	local humanoidDescription = AvatarGiant.fetchDescription(userId)
+	if not humanoidDescription then
+		return nil
+	end
+
+	-- Same shape as GreenHammer: the donor's 3D clothing rides on a shell that mirrors
+	-- this rig's pose, because Humanoid scale values cannot carry layered clothing.
+	local shell = AvatarGiant.attachShell(character, humanoidDescription, GIANT_SCALE)
+
+	AvatarGiant.stripLayered(humanoidDescription)
 
 	-- Scale up the character massively
 	humanoidDescription.DepthScale = humanoidDescription.DepthScale * 53
@@ -79,6 +94,8 @@ local function applyGiantAppearance(userId, character)
 			part.Transparency = 1
 		end
 	end
+
+	return shell
 end
 
 -- Random rotation for effects
@@ -94,6 +111,8 @@ local function createDonationEffect(donorName, recipientName, donationAmount, do
 	local colorCorrection = nil
 	local bloomEffect = nil
 	local giantAnimation = nil
+	-- Clothing shell handle, torn down by cleanup() with everything else.
+	local giantShell = nil
 	local hammerFlameConnection = nil
 	local markerConnections = {}
 	local meteorShowerActive = true
@@ -111,6 +130,10 @@ local function createDonationEffect(donorName, recipientName, donationAmount, do
 		end
 		cleaned = true
 		meteorShowerActive = false
+		if giantShell then
+			giantShell:destroy()
+			giantShell = nil
+		end
 		for _, conn in ipairs(markerConnections) do
 			conn:Disconnect()
 		end
@@ -260,7 +283,7 @@ local function createDonationEffect(donorName, recipientName, donationAmount, do
 			end
 		end
 
-		applyGiantAppearance(userId, effectModel)
+		giantShell = applyGiantAppearance(userId, effectModel)
 		effectModel.Humanoid.BodyDepthScale.Value = 50
 		effectModel.Humanoid.HeadScale.Value = 50
 		effectModel.Humanoid.BodyHeightScale.Value = 50

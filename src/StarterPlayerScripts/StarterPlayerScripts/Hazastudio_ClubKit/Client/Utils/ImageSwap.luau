@@ -20,6 +20,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
+local InstanceState = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.InstanceState)
 local ImagePreloadService = require(script.Parent.Parent.Services.ImagePreloadService)
 
 export type Holder = ImageLabel | ImageButton
@@ -40,8 +41,14 @@ export type Options = {
 
 local ImageSwap = {}
 
--- Weak keys: a destroyed holder must not be kept alive by its token.
-local tokens: { [Instance]: number } = setmetatable({}, { __mode = "k" }) :: any
+-- Generation per holder: one STRONG record per Instance, reclaimed on its `Destroying`
+-- (InstanceState; ADR 0011 addendum, 2026-09-17), so a destroyed holder is still not kept alive by
+-- its token. A weak key dropped the token while the holder lived, and a superseded probe could then
+-- no longer tell it had been superseded and landed a stale image on a retargeted row.
+type Swap = { generation: number }
+local swaps = InstanceState.new(function(): Swap
+	return { generation = 0 }
+end)
 
 local function cfg(): any
 	return Config.ImagePreload or {}
@@ -92,8 +99,9 @@ function ImageSwap.set(holder: Holder?, contentId: any, options: Options?)
 	local timeout = numOr(opts.timeout, numOr(cfg().SWAP_TIMEOUT_SEC, 10))
 	local placeholder = opts.placeholder or cfg().PLACEHOLDER_IMAGE
 
-	local token = (tokens[holder] or 0) + 1
-	tokens[holder] = token
+	local swap = swaps.of(holder)
+	swap.generation += 1
+	local token = swap.generation
 
 	-- Clearing is explicit and immediate; there is nothing to wait for.
 	if not ImagePreloadService.isPreloadableId(contentId) then
@@ -137,7 +145,7 @@ function ImageSwap.set(holder: Holder?, contentId: any, options: Options?)
 		probe:Destroy()
 
 		-- Superseded, or the holder went away while we waited.
-		if tokens[holder] ~= token or not holder.Parent then
+		if swap.generation ~= token or not holder.Parent then
 			return
 		end
 		if not loaded then
@@ -157,7 +165,11 @@ function ImageSwap.cancel(holder: Holder?)
 	if holder == nil then
 		return
 	end
-	tokens[holder] = (tokens[holder] or 0) + 1
+	-- Read, not made: a holder with no record has no swap in flight to cancel.
+	local swap = swaps.get(holder)
+	if swap then
+		swap.generation += 1
+	end
 end
 
 return ImageSwap

@@ -14,6 +14,7 @@ local UIShadowHelper = require(script.Parent.Parent.Utils.UIShadowHelper)
 local GroupMotion = require(script.Parent.Parent.Utils.GroupMotion)
 local SpecialTitleRenderer = require(game.ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.SpecialTitleRenderer)
 local TitleFontUtil = require(game.ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.TitleFontUtil)
+local InstanceState = require(game.ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.InstanceState)
 local ChatBubbleAdornee = require(script.Parent.Parent.Services.ChatBubbleAdornee)
 local OverheadLayerPolicy = require(game.ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.OverheadLayerPolicy)
 
@@ -548,7 +549,13 @@ end
 -- sequence back when the row is reused for a role without stops. Keyed on the joined stop
 -- string so a full-state re-apply (server echoes, not deltas) is a no-op.
 local ROLE_STOPS_KEY_ATTR = "ClubKitRoleStopsKey"
-local roleStopsTemplateColors: { [UIGradient]: ColorSequence } = setmetatable({}, { __mode = "k" }) :: any
+-- The template ColorSequence per gradient, captured on first use: one STRONG record per instance,
+-- reclaimed on its `Destroying` (InstanceState; ADR 0011 addendum, 2026-09-17). A weak key dropped
+-- the template while the nametag lived, so a row reused for a role without stops kept the previous
+-- role's colours.
+local roleStopsTemplate = InstanceState.new(function(gradient): ColorSequence
+	return (gradient :: UIGradient).Color
+end)
 
 local function applyRoleStopsGradient(row: Instance?, roleKey: string?)
 	if not row then
@@ -566,16 +573,15 @@ local function applyRoleStopsGradient(row: Instance?, roleKey: string?)
 		return
 	end
 	if key == "" then
-		local template = roleStopsTemplateColors[textGrad]
+		local template = roleStopsTemplate.get(textGrad)
 		if template then
 			textGrad.Color = template
 		end
 		textGrad:SetAttribute(ROLE_STOPS_KEY_ATTR, nil)
 		return
 	end
-	if roleStopsTemplateColors[textGrad] == nil then
-		roleStopsTemplateColors[textGrad] = textGrad.Color
-	end
+	-- Captures the template the first time a role with stops overwrites it.
+	roleStopsTemplate.of(textGrad)
 	local keypoints = {}
 	for _, point in ipairs(RoleColorDomain.toKeypoints(stops :: { string })) do
 		table.insert(keypoints, ColorSequenceKeypoint.new(point.time, Color3.fromRGB(point.r, point.g, point.b)))
@@ -1039,7 +1045,10 @@ local DONATION_CHIP_ANIM: { [string]: { mode: string, speed: number } } = {
 -- Role chip (specialRank.chip = true): a clone of the Robux rank pill, first in the row,
 -- carrying the role text and the role's stops gradient. Created lazily per nametag.
 local ROLE_CHIP_NAME = "RoleChipWrapper"
-local roleChipTemplateColors: { [UIGradient]: ColorSequence } = setmetatable({}, { __mode = "k" }) :: any
+-- Same shape as `roleStopsTemplate`: the chip gradient's template colour, strong, per instance.
+local roleChipTemplate = InstanceState.new(function(gradient): ColorSequence
+	return (gradient :: UIGradient).Color
+end)
 
 local function ensureRoleChip(layers: Instance): GuiObject?
 	local existing = layers:FindFirstChild(ROLE_CHIP_NAME)
@@ -1069,9 +1078,8 @@ local function paintRoleChip(chip: GuiObject, roleKey: string?)
 	if grad:GetAttribute(ROLE_STOPS_KEY_ATTR) == key then
 		return
 	end
-	if roleChipTemplateColors[grad] == nil then
-		roleChipTemplateColors[grad] = grad.Color
-	end
+	-- Captures the template before anything below overwrites it.
+	local template = roleChipTemplate.of(grad)
 	if key == "" then
 		-- No stops: fall back to the role's chat pair so the chip still reads as the role.
 		local primary = if type(palette) == "table" and type(palette.primary) == "string" then palette.primary else nil
@@ -1079,7 +1087,7 @@ local function paintRoleChip(chip: GuiObject, roleKey: string?)
 		if primary and secondary then
 			grad.Color = ColorSequence.new(Color3.fromHex(primary), Color3.fromHex(secondary))
 		else
-			grad.Color = roleChipTemplateColors[grad]
+			grad.Color = template
 		end
 	else
 		local keypoints = {}

@@ -90,6 +90,16 @@ function PanelShell:_connect(connection: RBXScriptConnection)
 	table.insert(self._connections, connection)
 end
 
+-- Press squash + hover lift, the pairing every other kit panel uses (ADR 0011).
+function PanelShell:_bindMotion(button: GuiObject)
+	for _, connection in ipairs(UIMotion.bindPress(button)) do
+		self:_connect(connection)
+	end
+	for _, connection in ipairs(UIMotion.bindHover(button)) do
+		self:_connect(connection)
+	end
+end
+
 function PanelShell:_fire(key: string, ...: any): any
 	local callback = self._callbacks[key]
 	if callback then
@@ -194,9 +204,7 @@ function PanelShell:bindAll()
 	end))
 
 	for _, button in ipairs({ refs.closeButton, table.unpack(refs.tabButtonOrder) }) do
-		for _, connection in ipairs(UIMotion.bindPress(button)) do
-			self:_connect(connection)
-		end
+		self:_bindMotion(button)
 	end
 
 	self._nowPlaying:bind()

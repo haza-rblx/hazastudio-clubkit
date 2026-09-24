@@ -307,9 +307,11 @@ function AdminHubUI.new(gui: ScreenGui)
 	-- content dies on every openSheet, static chrome lives as long as the panel.
 	self._rowConnections = {} :: { RBXScriptConnection }
 	self._sheetConnections = {} :: { RBXScriptConnection }
-	-- Designed transparency of every element UIMotion fades here. Weak keys: rows and sheet
-	-- content are cloned and destroyed, never pooled.
-	self._fadeBases = (setmetatable({}, { __mode = "k" }) :: any) :: { [GuiObject]: number }
+	-- Designed transparency of every element UIMotion fades here. Strong keys on purpose (ADR 0011
+	-- addendum, 2026-09-17): a weak entry is dropped while the element is alive, and the next capture
+	-- would then record a mid-cascade transparency as the design. Rows and sheet content are cloned
+	-- and destroyed, so their entries stay with this panel until it is destroyed — bytes per row.
+	self._fadeBases = {} :: { [GuiObject]: number }
 	self._filterIndex = 0
 	self._galleryEmpty = false
 	self._playerListEmpty = false
@@ -376,6 +378,15 @@ function AdminHubUI:_bindPressFeedback()
 	self:_bindPress(self._closeButton)
 	self:_bindPress(self._popupClose)
 	self:_bindPress(self._sheetClose)
+	-- The two foot CTAs are place instances that outlive every sheet, so they are bound here
+	-- rather than in setSheetFoot: a sheet that supplies only a primary would otherwise leave
+	-- GhostButton unbound until some later sheet happened to fill both slots.
+	for _, name in ipairs({ "GhostButton", "PrimaryButton" }) do
+		local footButton = self._sheetFoot:FindFirstChild(name)
+		if footButton and footButton:IsA("GuiButton") then
+			self:_bindPress(footButton)
+		end
+	end
 	for _, child in ipairs(self._sidebar:GetChildren()) do
 		if child:IsA("TextButton") and child:GetAttribute("Filter") ~= nil then
 			self:_bindPress(child)
@@ -1027,7 +1038,8 @@ function AdminHubUI:openSheet(
 	self._overlay = "sheet"
 	self:_showDim()
 	self._anim:presentDialog(self._actionPopup)
-	-- The dialog travels first (dialogOpen snap + settle ≈ 0.25s); its freshly built content
+	-- The dialog travels first (dialogOpen snap + settle ≈ 0.39s since the 2026-09-16 feel pass;
+	-- the 0.14 delay below is still well inside it, so the ordering is unchanged); its content
 	-- drops in under that and fades up once the sheet has arrived. slideInVertical moves the
 	-- content through equal and opposite UIPadding, so the sheet itself never changes size.
 	UIMotion.fadeIn(collectFadeTargets(contentRoot, self._fadeBases), self._fadeBases, 0.14)
@@ -1169,8 +1181,6 @@ function AdminHubUI:setSheetFoot(buttons: { SheetFootButton })
 				self._footConnections,
 				ghostBtn.MouseButton1Click:Connect(secondaryDef.onClick)
 			)
-			-- Template foot buttons outlive every sheet, so their press/hover lives with the panel.
-			self:_bindPress(ghostBtn)
 		else
 			ghostBtn.Visible = false
 		end
@@ -1185,7 +1195,6 @@ function AdminHubUI:setSheetFoot(buttons: { SheetFootButton })
 					commit()
 				end)
 			)
-			self:_bindPress(primaryBtn)
 		end
 		return
 	end

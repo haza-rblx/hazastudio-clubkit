@@ -10,7 +10,6 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 
 local MusicDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicDomain)
-local Cover = require(script.Parent.Parent.MusicPlayerCoverHelpers)
 local GuiRefs = require(script.Parent.GuiRefs)
 local UIMotion = require(script.Parent.Parent.Parent.Utils.UIMotion)
 local Visuals = require(script.Parent.Visuals)
@@ -85,7 +84,7 @@ function NowPlayingView:bind()
 			self._fire("OnVoteSkip", "skip")
 		end)
 	)
-	self:_bindPress(refs.voteSkipButton)
+	self:_bindMotion(refs.voteSkipButton)
 	self._heroFade = { refs.trackTitle, refs.trackCreator, refs.cover, refs.requesterName, refs.playlistTitle }
 	self._heroBases = UIMotion.captureBases(self._heroFade)
 	self._djFade = { refs.djAvatar, refs.djName }
@@ -109,8 +108,13 @@ end
 -- Hero
 -- ============================================================
 
-function NowPlayingView:_bindPress(button: GuiObject)
+-- Press squash + hover lift, the pairing every other kit panel uses (ADR 0011). Queue rows call
+-- this from _row, which builds each pooled slot once, so a rebind cannot stack connections.
+function NowPlayingView:_bindMotion(button: GuiObject)
 	for _, connection in ipairs(UIMotion.bindPress(button)) do
+		table.insert(self._connections, connection)
+	end
+	for _, connection in ipairs(UIMotion.bindHover(button)) do
 		table.insert(self._connections, connection)
 	end
 end
@@ -164,7 +168,7 @@ function NowPlayingView:updateTrack(track: any?)
 		Visuals.setHeadshot(refs.requesterAvatar, tonumber(current.requesterUserId))
 	end
 
-	Visuals.applyCover(refs.cover, Cover.resolveCoverSourceForTrack(current, playlist), self._config)
+	Visuals.applyTrackCover(refs.cover, current, playlist, self._config)
 	Visuals.applyCover(refs.playlistCover, playlist, self._config)
 	self._totalDuration = tonumber(current.totalDuration) or 0
 	self:_renderProgress(true)
@@ -216,32 +220,36 @@ function NowPlayingView:_bindTransport()
 	local pauseImage = icon:GetAttribute("PauseImage")
 	self._pauseImage = if type(pauseImage) == "string" and pauseImage ~= "" then pauseImage else nil
 
+	-- Resolved before the binds below: the icon tier may move an icon into its UIMotionIconSlot,
+	-- where a direct lookup at press time no longer finds it.
 	local iconOf = function(button: GuiButton): GuiObject?
 		return button:FindFirstChildWhichIsA("ImageLabel")
 	end
+	local rewindIcon, seekIcon = iconOf(rewind), iconOf(seek)
+	local previousIcon, nextIcon = iconOf(previous), iconOf(nextButton)
 	connect(rewind, function()
-		UIMotion.spin(iconOf(rewind), -1)
+		UIMotion.spin(rewindIcon, -1)
 		self._fire("OnTransport", "seek", { delta = -SEEK_STEP_SECONDS })
 	end)
 	connect(seek, function()
-		UIMotion.spin(iconOf(seek), 1)
+		UIMotion.spin(seekIcon, 1)
 		self._fire("OnTransport", "seek", { delta = SEEK_STEP_SECONDS })
 	end)
 	connect(previous, function()
-		UIMotion.wiggle(iconOf(previous), 14)
+		UIMotion.wiggle(previousIcon, 14)
 		self._fire("OnTransport", "previous")
 	end)
 	connect(nextButton, function()
-		UIMotion.wiggle(iconOf(nextButton), 14)
+		UIMotion.wiggle(nextIcon, 14)
 		self._fire("OnAdminSkip")
 	end)
 	connect(playPause, function()
 		self._fire("OnTransport", if self:_isPaused() then "resume" else "pause")
 	end)
 	for _, button in ipairs(refs.transportButtons) do
-		self:_bindPress(button)
+		self:_bindMotion(button)
 	end
-	self:_bindPress(refs.clearQueueButton)
+	self:_bindMotion(refs.clearQueueButton)
 
 	-- No modal in v3: the first press arms, a second press within 3 s clears.
 	local clearLabel = GuiRefs.need(refs.clearQueueButton, "TextLabel", "TextLabel") :: TextLabel
@@ -431,20 +439,31 @@ function NowPlayingView:_row(index: number): QueueRow
 		entryId = nil,
 		key = nil,
 	}
+	-- Resolved before the bind below: the icon tier may move the icon into its UIMotionIconSlot.
+	local removeIcon = remove:FindFirstChildWhichIsA("ImageLabel")
 	table.insert(
 		self._connections,
 		remove.Activated:Connect(function()
 			if row.entryId then
-				UIMotion.wiggle(remove:FindFirstChildWhichIsA("ImageLabel"), 16)
+				UIMotion.wiggle(removeIcon, 16)
 				self._fire("OnTransport", "remove", { entryId = row.entryId })
 			end
 		end)
 	)
-	self:_bindPress(remove)
 	row.fade = { row.title, row.creator, row.length, row.requester, row.coverImage }
 	row.fadeBases = UIMotion.captureBases(row.fade)
 	instance.Parent = self._template.Parent
+	-- Register before anything else can throw: an unregistered clone would sit parented forever,
+	-- never hidden by renderQueue, showing the template's placeholder text.
 	self._rows[index] = row
+	-- After parenting: the squash target is chosen from the live ancestry (list layout, groups).
+	local ok, err = pcall(function()
+		self:_bindMotion(remove)
+		self:_bindMotion(instance)
+	end)
+	if not ok then
+		warn(string.format("[NowPlayingView] queue row %d: motion bind failed, row shown without motion: %s", index, tostring(err)))
+	end
 	return row
 end
 
@@ -460,9 +479,10 @@ function NowPlayingView:_bindRow(row: QueueRow, track: any, playlist: any?)
 		Visuals.setVisible(row.avatar, true)
 		Visuals.setHeadshot(row.avatar, tonumber(track.requesterUserId))
 	end
-	Visuals.applyCover(
+	Visuals.applyTrackCover(
 		row.coverImage,
-		Cover.resolveCoverSourceForTrack(track, playlist),
+		track,
+		playlist,
 		self._config,
 		{ gradientHost = row.coverHost, listThumb = true }
 	)

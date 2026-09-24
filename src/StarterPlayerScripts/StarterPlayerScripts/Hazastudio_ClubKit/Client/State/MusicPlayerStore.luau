@@ -2,6 +2,9 @@
 -- PATH: StarterPlayerScripts/Client/State/MusicPlayerStore.lua
 -- Reactive store for Music Player. Pattern: identik with SyncStore.
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
+
 local NONE = newproxy(false) -- sentinel: store:set({ key = NONE }) sets key to nil
 
 local function createStore(initialState: { [string]: any })
@@ -63,6 +66,15 @@ end
 -- INITIAL STATE
 -- ============================================================
 
+-- Full volume until SettingsController publishes the player's own SettingsMusicVolume. Must be
+-- the same number the 100% slider produces, otherwise a track that starts before settings arrive
+-- would play quiet and then jump when the attribute lands.
+local DEFAULT_VOLUME = math.clamp(
+	(if type((Config :: any).Music) == "table" then tonumber((Config :: any).Music.MAX_VOLUME) else nil) or 4,
+	0,
+	10
+)
+
 return createStore({
 	-- Panel visibility
 	isOpen    = false,
@@ -77,7 +89,7 @@ return createStore({
 	isPlaying       = false,
 	isDjMode        = false,
 	djOwnerUserId   = nil,     -- number? userId who enabled DJ mode
-	volume          = 1,       -- 0..1 (client-side only)
+	volume          = DEFAULT_VOLUME, -- Sound.Volume, 0..Config.Music.MAX_VOLUME (client-side only)
 	queue           = {},      -- { TrackInfo } user requests only (Next up)
 	prefetchBuffer  = {},      -- { TrackInfo } hidden server auto buffer (preload only)
 

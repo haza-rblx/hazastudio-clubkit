@@ -23,6 +23,7 @@ local function createCoupleController(deps: {
 	remotes            : Folder,   -- injected from Main.server.lua
 	profileRepository  : any?,
 	profileMenuSync    : { syncPlayer: ((Player) -> ())? }?,
+	progressLeaderboard: any?, -- couple board: a breakup removes the pair
 })
 	local coupleService      = deps.coupleService
 	local overheadController = deps.overheadController
@@ -31,6 +32,7 @@ local function createCoupleController(deps: {
 	local remotesFolder      = deps.remotes
 	local profileRepository  = deps.profileRepository
 	local profileMenuSync    = deps.profileMenuSync
+	local progressLeaderboard = deps.progressLeaderboard
 	local log                = Logger.new("CoupleController")
 	local sendLimiter        = RateLimiter.new(Config.Couple.RATE_MAX, Config.Couple.RATE_WINDOW)
 	local openLimiter        = RateLimiter.new(Config.Couple.RATE_MAX, Config.Couple.RATE_WINDOW)
@@ -350,6 +352,9 @@ local function createCoupleController(deps: {
 			if not result.ok then
 				notify.player(player, result.error, "ERROR")
 				return
+			end
+			if progressLeaderboard then
+				progressLeaderboard:removeCouple(player.UserId, partnerId)
 			end
 			notify.player(player, Config.Couple.MSG_BREAKUP_DONE:format(partnerName or "your partner"), "WARNING")
 			-- Initiator also gets NotifyResult so client can clear chat couple tag immediately.
