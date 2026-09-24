@@ -126,6 +126,8 @@ type GradientAnimData = {
 	animSpeed: number,
 	textRotation: number,
 	startTime: number,
+	-- P4 (H13): owning overhead, found once at registration, for the distance cull.
+	gui: BillboardGui?,
 }
 local animatedGradients: { [UIGradient]: GradientAnimData } = {}
 local sharedGradientConn: RBXScriptConnection? = nil
@@ -856,7 +858,8 @@ local function getOverheadMaxDistance(): number
 	if mode == "Near" then
 		return 28
 	elseif mode == "Far" then
-		return 0
+		-- P4 (H13): "Far" was unlimited (0) — 200 CanvasGroup textures on a full server.
+		return math.max(0, tonumber(Config.Overhead.PERF_FAR_MAX_DISTANCE) or 0)
 	end
 	return 48
 end
@@ -1115,6 +1118,7 @@ local function setChipGradientAnim(chip: GuiObject, wrapperName: string, active:
 			animSpeed = if preset then preset.speed else 0.85,
 			textRotation = grad.Rotation,
 			startTime = os.clock(),
+			gui = grad:FindFirstAncestorWhichIsA("BillboardGui"),
 		}
 		ensureSharedGradientLoop()
 	else
@@ -1324,16 +1328,34 @@ ensureSharedGradientLoop = function()
 	-- visually indistinguishable for sin-based gradient motion.
 	local gradientAccum = 0
 	local GRADIENT_INTERVAL = 0.033
+	-- P4 (H13): skip titles whose overhead is disabled (hidden / budget-culled) or beyond its
+	-- MaxDistance, as TitleColorPreset/SharedTick already does. Legacy: PERF_GRADIENT_CULL false.
+	local cullGradients = Config.Overhead.PERF_GRADIENT_CULL == true
 	sharedGradientConn = RunService.Heartbeat:Connect(function(dt)
 		gradientAccum += dt
 		if gradientAccum < GRADIENT_INTERVAL then
 			return
 		end
 		gradientAccum = 0
+		local camera = if cullGradients then workspace.CurrentCamera else nil
+		local cameraPos = if camera then camera.CFrame.Position else nil
 		for grad, data in pairs(animatedGradients) do
 			if not grad.Parent then
 				animatedGradients[grad] = nil
 				continue
+			end
+			local gui = data.gui
+			if cullGradients and gui then
+				if not gui.Enabled then
+					continue
+				end
+				local maxDistance = gui.MaxDistance
+				local adornee = gui.Adornee
+				if cameraPos and maxDistance > 0 and adornee and adornee:IsA("BasePart") then
+					if ((adornee :: BasePart).Position - cameraPos).Magnitude > maxDistance then
+						continue
+					end
+				end
 			end
 			animateTextGradient(grad, data.animMode, data.animSpeed, data.textRotation, os.clock() - data.startTime)
 		end
@@ -1357,6 +1379,7 @@ local function startGeneratedTextAnimation(self: OverheadUIImpl, textGrad: UIGra
 		animSpeed = style.animSpeed or 1,
 		textRotation = style.textRotation or 0,
 		startTime = os.clock(),
+		gui = self._gui,
 	}
 	ensureSharedGradientLoop()
 end
@@ -1525,6 +1548,15 @@ function OverheadUI:apply(payload: OverheadPayload)
 	if overheadSelf._loadingRetryThread then
 		pcall(task.cancel, overheadSelf._loadingRetryThread)
 		overheadSelf._loadingRetryThread = nil
+	end
+
+	-- P4 (H13): outside the nearest-overheads budget. Keep the payload, skip the layout work;
+	-- OverheadUI.setBudgetCulled(self, false) re-applies it.
+	if overheadSelf._budgetCulled then
+		self._gui.Enabled = false
+		overheadSelf._wasEnabled = false
+		ChatBubbleAdornee.scheduleSync(payload.userId, self._gui, wrapper, false)
+		return
 	end
 
 	local overheadVisible = getLocalBoolAttribute("SettingsOverheadVisible", true)
@@ -1886,6 +1918,34 @@ function OverheadUI:apply(payload: OverheadPayload)
 	end
 
 	ChatBubbleAdornee.scheduleSync(payload.userId, self._gui, wrapper, shouldBeEnabled == true)
+end
+
+-- P4 (H13): the client OverheadController ranks overheads by camera distance and culls all but
+-- the nearest Config.Overhead.PERF_MAX_ENABLED_OVERHEADS (OverheadCullBudget). A culled overhead
+-- is disabled at once (its CanvasGroup texture is released) and skips apply() work; un-culling
+-- re-applies the last payload, which plays the normal pop-in.
+function OverheadUI.setBudgetCulled(ui: any, culled: boolean)
+	if (ui._budgetCulled == true) == culled then
+		return
+	end
+	ui._budgetCulled = culled
+	if culled then
+		if ui._gui then
+			ui._gui.Enabled = false
+		end
+		ui._wasEnabled = false
+	elseif ui._lastPayload then
+		ui:apply(ui._lastPayload)
+	end
+end
+
+function OverheadUI.isBudgetCulled(ui: any): boolean
+	return ui._budgetCulled == true
+end
+
+--- Current overhead MaxDistance from the local distance setting (0 = unlimited).
+function OverheadUI.getMaxDistance(): number
+	return getOverheadMaxDistance()
 end
 
 -- Remove all animated gradients owned by this GUI from shared pool.

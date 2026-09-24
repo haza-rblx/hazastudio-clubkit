@@ -7,6 +7,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
+local NetworkCoalesce = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.NetworkCoalesce)
 
 type ChatTagEntry = Types.ChatTagEntry
 
@@ -151,8 +152,10 @@ function ChatTagStore.init()
 		return
 	end
 
+	-- P4 (H7): one frame's messages to this client may arrive packed.
+	local packKind = tostring((Config.NetworkPerf :: any).PACK_MESSAGE_KIND or "pack")
 	remote.OnClientEvent:Connect(function(payload: any)
-		applyMessage(payload)
+		NetworkCoalesce.forEachMessage(payload, packKind, applyMessage)
 	end)
 
 	-- Optimistic local clear if server remove is delayed/lost.

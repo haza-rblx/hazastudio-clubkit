@@ -1449,8 +1449,23 @@ local function init(_deps: {}?)
 
 	local overheadRemote = remotes:WaitForChild("OverheadUpdate", 15) :: RemoteEvent?
 	if overheadRemote then
-		track(overheadRemote.OnClientEvent:Connect(function(payload: any)
-			if type(payload) == "table" and payload.userId == player.UserId then
+		-- P4 (H7): one frame's messages may arrive packed ({ kind = PACK_MESSAGE_KIND, items }).
+		local packKind = tostring((Config.NetworkPerf :: any).PACK_MESSAGE_KIND or "pack")
+		track(overheadRemote.OnClientEvent:Connect(function(message: any)
+			local mine = false
+			local function check(payload: any)
+				if type(payload) == "table" and payload.userId == player.UserId then
+					mine = true
+				end
+			end
+			if type(message) == "table" and message.kind == packKind and type(message.items) == "table" then
+				for _, item in ipairs(message.items) do
+					check(item)
+				end
+			else
+				check(message)
+			end
+			if mine then
 				task.defer(refreshAccess)
 			end
 		end))

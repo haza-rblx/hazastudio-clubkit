@@ -10,6 +10,7 @@ local ShopDomain     = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domai
 local PermissionDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.PermissionDomain)
 local Logger         = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local DeltaCompressor = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DeltaCompressor)
+local NetworkCoalesce = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.NetworkCoalesce)
 local AdminPanelUI   = require(script.Parent.Parent.UI.AdminPanelUI)
 local MobileScaleService = require(script.Parent.Parent.Services.MobileScaleService)
 local createAdminService = require(script.Parent.Parent.Services.AdminService)
@@ -204,8 +205,15 @@ local function init(deps: {
 		applyResolvedPayload(merged)
 	end
 
+	local packKind = tostring((Config.NetworkPerf :: any).PACK_MESSAGE_KIND or "pack")
 	local function handleIncoming(payload: any)
 		if type(payload) ~= "table" then
+			return
+		end
+
+		-- P4 (H7): one frame's messages may arrive packed.
+		if payload.kind == packKind then
+			NetworkCoalesce.forEachMessage(payload, packKind, handleIncoming)
 			return
 		end
 

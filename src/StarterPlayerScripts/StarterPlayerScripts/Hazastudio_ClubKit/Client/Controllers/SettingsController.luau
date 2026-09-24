@@ -17,6 +17,7 @@ local SettingsDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domai
 local OverheadLayerPolicy = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.OverheadLayerPolicy)
 local DeltaCompressor = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DeltaCompressor)
 local GraphicsQuality = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.GraphicsQuality)
+local NetworkCoalesce = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.NetworkCoalesce)
 local NotifService = require(script.Parent.Parent.Services.NotifService)
 local WorldGraphicsService = require(script.Parent.Parent.Services.WorldGraphicsService)
 local OverheadController = require(script.Parent.OverheadController)
@@ -413,6 +414,13 @@ local function createSettingsController(deps: {
 
 	local function handleOverheadUpdate(payload: any)
 		if type(payload) ~= "table" then
+			return
+		end
+
+		-- P4 (H7): one frame's messages may arrive packed.
+		local packKind = tostring((Config.NetworkPerf :: any).PACK_MESSAGE_KIND or "pack")
+		if payload.kind == packKind then
+			NetworkCoalesce.forEachMessage(payload, packKind, handleOverheadUpdate)
 			return
 		end
 
