@@ -10,8 +10,8 @@ Owner requirement: "enterprise and production grade, 200 CCU in one game; no lea
 | Phase | Status | Where | Notes |
 |---|---|---|---|
 | P0 VPS safety | **Deployed 2026-09-24 07:26 UTC** | VPS | Steps + rollback: `hardening-2026-09-24/p0-deploy-steps.md`; rollback copies `/root/p0-rollback-20260924T072607Z`; Google Drive off-site **postponed by the owner** (backup log says `offsite: SKIPPED` until `rclone config` is done); 48 h gate started |
-| P1 Kit correctness + budget telemetry | not started | kit (THE BASIC TEST first) | may run in parallel with P2 |
-| P2 VPS routes for the kit | not started | VPS | may run in parallel with P1 |
+| P1 Kit correctness + budget telemetry | **in progress** (agent, 2026-09-24) | kit (THE BASIC TEST first) | may run in parallel with P2 |
+| P2 VPS routes for the kit | **deployed 2026-09-24 09:45 UTC** — migration 0027 applied, health/v1/v2/v3/event-board/`players/lookup`/social all 200, `has_commands` present, no journal errors; rollback copies `/root/p2-rollback-<ts>`, DB snapshot `backups/pre-p2-<ts>.sqlite` | VPS | Steps, file list, kit API contract: `hardening-2026-09-24/p2-deploy-steps.md`; migration `0027_p2_query_indexes` (indexes only); rate limits ship in log mode; `donor_totals` table / stored `total_after` / `donor_name` alias not built (per-game cache instead) |
 | P3 Write + HTTP discipline | not started | kit | needs P1 telemetry + P2 routes |
 | P4 Performance at 200 | not started | kit (+RBXM if P4b) | needs the P1 NetworkManager fix + the synthetic-crowd harness |
 | P5 Cut-overs | not started | VPS | after ≥95 % of active games run a P3 kit |
