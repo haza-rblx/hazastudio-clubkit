@@ -1,6 +1,6 @@
 # ADR 0018 — The trimmed overhead template ships as a new variant, never as an edit to V4
 
-Status: **Proposed**, 2026-09-24 — designed, not built (production hardening P4b, plan H14, owner decision 18:
+Status: **Accepted** (owner decisions 19–21, 2026-09-24) — designed, not built (production hardening P4b, plan H14, owner decision 18:
 "design now, ship later as its own template release"). Design and numbers:
 `docs/plans/hardening-2026-09-24/p4b-overhead-template.md`; inventory:
 `docs/plans/hardening-2026-09-24/p4b-template-inventory.md`.
@@ -24,7 +24,7 @@ Two ways to ship a smaller template:
 
 `V5` is already taken (V4 + the image-title row), so the new variant is **V6** = a trimmed V5.
 
-## Decision (proposed)
+## Decision
 
 1. **New variant, installed alongside.** `OverheadGUIMainTemplateV6` is inserted next to V4/V5 by a Packager
    plugin action that first backs up V4/V5 and never modifies or removes them. The switch is the buyer's own
