@@ -793,6 +793,31 @@ local function getRelationshipStatusLabel(row: Instance): TextLabel?
 	return nil
 end
 
+local function applyGradientSetByAttributes(
+	gradient: UIGradient,
+	activeName: string?,
+	previousName: string?
+): string?
+	if activeName == previousName then
+		return previousName
+	end
+	if type(activeName) ~= "string" or activeName == "" then
+		gradient.Enabled = false
+		return nil
+	end
+	local color = gradient:GetAttribute(activeName)
+	if typeof(color) ~= "ColorSequence" then
+		-- No attribute for this name: either a legacy place or an unknown name — let the
+		-- caller's legacy path handle it (we report the name as unpainted).
+		return nil
+	end
+	gradient.Color = color :: ColorSequence
+	local rotation = gradient:GetAttribute(activeName .. "_Rotation")
+	gradient.Rotation = if type(rotation) == "number" then rotation else 0
+	gradient.Enabled = true
+	return activeName
+end
+
 local function applyRelationshipGradients(root: Instance, activeGradient: string?)
 	-- R3 attribute path (V6): one gradient on the couple label, painted per mode from
 	-- attributes (`UIGradient` = Taken, `UIGradientFun`, `UIGradientSingle`). Same fallback
@@ -1558,32 +1583,28 @@ end
 -- it replaces (`UIGradientElite`, `UIGradientFun`, …) plus `<name>_Rotation`. The buyer still
 -- customises colours in the template's attribute editor; the payload never changes. Legacy
 -- places (one gradient instance per name, no attributes) behave exactly as before.
-local function applyGradientSetByAttributes(
-	gradient: UIGradient,
-	activeName: string?,
-	previousName: string?
-): string?
-	if activeName == previousName then
-		return previousName
-	end
-	if type(activeName) ~= "string" or activeName == "" then
-		gradient.Enabled = false
-		return nil
-	end
-	local color = gradient:GetAttribute(activeName)
-	if typeof(color) ~= "ColorSequence" then
-		-- No attribute for this name: either a legacy place or an unknown name — let the
-		-- caller's legacy path handle it (we report the name as unpainted).
-		return nil
-	end
-	gradient.Color = color :: ColorSequence
-	local rotation = gradient:GetAttribute(activeName .. "_Rotation")
-	gradient.Rotation = if type(rotation) == "number" then rotation else 0
-	gradient.Enabled = true
-	return activeName
-end
-
 local function applyMembershipGradients(root: Instance, activeGradient: string?)
+	-- Legacy hygiene (pre-existing V4 bug found by the P4b parity run): once an AfterTeam
+	-- payload created the UIGradientAfterTeam instance, it stayed enabled through every later
+	-- payload — the first enabled gradient won and a stale black hid the real tier colour.
+	local staleAfterTeam = root:FindFirstChild(AFTER_TEAM_GRADIENT_NAME)
+	if staleAfterTeam and staleAfterTeam:IsA("UIGradient") and activeGradient ~= AFTER_TEAM_GRADIENT_NAME then
+		(staleAfterTeam :: UIGradient).Enabled = false
+	end
+	-- Attribute path (V6): the label's one gradient carries the wanted name as a ColorSequence
+	-- attribute → paint and stop. AfterTeam has no attribute by design: on V6 the set gradient
+	-- IS painted solid black (the legacy path creates the UIGradientAfterTeam instance instead).
+	if activeGradient == AFTER_TEAM_GRADIENT_NAME then
+		local afterTeamLabel = if root:IsA("TextLabel") then root :: TextLabel else root:FindFirstChildWhichIsA("TextLabel", true)
+		local afterTeamGradient = afterTeamLabel and (afterTeamLabel :: TextLabel):FindFirstChildWhichIsA("UIGradient")
+		if afterTeamGradient and typeof(afterTeamGradient:GetAttribute(AFTER_TEAM_GRADIENT_NAME)) ~= "ColorSequence" then
+			afterTeamGradient.Color = ColorSequence.new(AFTER_TEAM_GRADIENT_COLOR)
+			afterTeamGradient.Rotation = 0
+			afterTeamGradient.Enabled = true
+			afterTeamGradient:SetAttribute("ClubKitGradientSet", AFTER_TEAM_GRADIENT_NAME)
+			return
+		end
+	end
 	-- Attribute path (V6): the label's one gradient carries the wanted name as a ColorSequence
 	-- attribute → paint and stop. Otherwise the legacy path below still runs.
 	local membershipLabel = if root:IsA("TextLabel") then root :: TextLabel else root:FindFirstChildWhichIsA("TextLabel", true)
