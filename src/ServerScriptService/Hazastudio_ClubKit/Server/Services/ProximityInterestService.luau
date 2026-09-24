@@ -471,18 +471,20 @@ function ProximityInterestService.create(deps: ProximityInterestDeps): Proximity
 		return dx * dx + dy * dy + dz * dz
 	end
 
-	-- Ids within sqrt(r2) of `centerId` (3D), excluding `centerId`; d2 written to `d2Out`.
-	local function queryNear(centerId: number, r2: number, out: { number }, d2Out: { [number]: number })
+	-- Ids within sqrt(r2) of `centerId` (3D), excluding `centerId` and ids in `skip` (current
+	-- members: in a full dense row most of the box is already subscribed); d2 into `d2Out`.
+	local function queryNear(centerId: number, r2: number, out: { number }, d2Out: { [number]: number }, skip: { [number]: any }?)
 		local r = math.sqrt(r2)
-		local cx, cz = px[centerId], pz[centerId]
+		local cx, cy, cz = px[centerId], py[centerId], pz[centerId]
 		for gx = math.floor((cx - r) / gridCellSize), math.floor((cx + r) / gridCellSize) do
 			for gz = math.floor((cz - r) / gridCellSize), math.floor((cz + r) / gridCellSize) do
 				local cell = grid[gridKey(gx, gz)]
 				if cell then
 					for _, id in cell do
-						if id ~= centerId then
+						if id ~= centerId and not (skip and skip[id]) then
 							candidatesThisPass += 1
-							local d2 = distance2(centerId, id)
+							local dx, dy, dz = px[id] - cx, py[id] - cy, pz[id] - cz
+							local d2 = dx * dx + dy * dy + dz * dz
 							if d2 <= r2 then
 								out[#out + 1] = id
 								d2Out[id] = d2
@@ -584,14 +586,17 @@ function ProximityInterestService.create(deps: ProximityInterestDeps): Proximity
 		local bySubject = members[subjectId]
 		local drop: { number }? = nil
 		local farD2 = -1
+		local sx, sy, sz = px[subjectId], py[subjectId], pz[subjectId]
 		if bySubject then
 			for viewerId in bySubject do
 				if viewerId ~= subjectId then
-					if px[viewerId] == nil then
+					local vx = px[viewerId]
+					if vx == nil then
 						drop = drop or {}
 						table.insert(drop :: { number }, viewerId)
 					else
-						local d2 = distance2(subjectId, viewerId)
+						local dx, dy, dz = vx - sx, py[viewerId] - sy, pz[viewerId] - sz
+						local d2 = dx * dx + dy * dy + dz * dz
 						if d2 > leave2 then
 							drop = drop or {}
 							table.insert(drop :: { number }, viewerId)
@@ -618,20 +623,14 @@ function ProximityInterestService.create(deps: ProximityInterestDeps): Proximity
 			end
 			searchR2 = math.min(radius2, reach * reach)
 		end
-		local candidates: { number } = {}
-		local candidateD2: { [number]: number } = {}
-		queryNear(subjectId, searchR2, candidates, candidateD2)
-		local current = members[subjectId]
 		local fresh: { number } = {}
-		for _, id in candidates do
-			if not (current and current[id]) then
-				table.insert(fresh, id)
-			end
-		end
+		local candidateD2: { [number]: number } = {}
+		queryNear(subjectId, searchR2, fresh, candidateD2, members[subjectId])
 		if #fresh == 0 then
 			return
 		end
-		if subscriberCap > 0 and #fresh > 1 then
+		-- Nearest-first only matters when not every candidate fits.
+		if subscriberCap > 0 and #fresh > math.max(1, subscriberCap - (memberCount[subjectId] or 0)) then
 			table.sort(fresh, function(a: number, b: number): boolean
 				return candidateD2[a] < candidateD2[b]
 			end)
@@ -650,7 +649,7 @@ function ProximityInterestService.create(deps: ProximityInterestDeps): Proximity
 		end
 		local near: { number } = {}
 		local nearD2: { [number]: number } = {}
-		queryNear(viewerId, radius2, near, nearD2)
+		queryNear(viewerId, radius2, near, nearD2, viewerIndex[viewerId])
 		table.sort(near, function(a: number, b: number): boolean
 			return nearD2[a] < nearD2[b]
 		end)
