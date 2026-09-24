@@ -73,6 +73,8 @@ notes.
 
 ## Standing constraints (from the owner)
 
+**No multi-client Studio playtests** (owner, 2026-09-24: too heavy on this machine — 3 clients never connected in 60 s). Multi-client behaviour is checked with solo playtest + server-side synthetic subjects, or at a live peak via telemetry. Ask before any `multiplayer_playtest`.
+
 Never paste `Secrets.luau` or any secret value (lengths only); never overwrite buyer-owned
 `ClubKitConfig.luau` / `Secrets.luau` (schema + template only); DataStore keys versioned + documented;
 never bump `VERSION` without the owner saying "this is update X.Y"; VPS deploys diff + backup first;
