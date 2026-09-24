@@ -40,7 +40,7 @@ The overhead system then had three costs that grow with n²:
    only; every kit listener of those remotes unpacks with `NetworkCoalesce.forEachMessage`.
    Switch: `Config.NetworkPerf.PACK_PER_VIEWER` (+ `PACK_MESSAGE_KIND`).
 4. **Bounded interest** (plan H3). `ProximityInterestService` "incremental" mode: 4 staggered
-   groups, squared distances, an 8-stud grid, at most the 30 nearest viewers per subject with an
+   groups, squared distances, an 8-stud grid, at most the 40 nearest viewers per subject with an
    8-stud swap margin, at most 20 new subscriptions per viewer per 0.5 s, per-player recompute on
    spawn. Switch: `Config.NetworkPerf.PROXIMITY_MODE`.
 
@@ -64,7 +64,7 @@ The overhead system then had three costs that grow with n²:
   Kit listeners: client `OverheadController`, `AdminController`, `SettingsController`,
   `CinematicDockController`, `ChatTagStore` — all unpack. A buyer's own listener must do the same
   (or the venue sets `PACK_PER_VIEWER = false`).
-- A viewer outside a subject's 30 nearest does not get that subject's overhead deltas (it keeps the
+- A viewer outside a subject's 40 nearest does not get that subject's overhead deltas (it keeps the
   last payload it had). The client shows at most 40 overheads anyway (H13). The `sync:` channel
   shares the set, but `SyncService` only asks whether a leader has *any* subscriber in range (it
   always has itself), so dance sync is unaffected.

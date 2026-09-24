@@ -4341,7 +4341,7 @@ Config.NetworkPerf.PROXIMITY_MODE = "incremental"
 Config.NetworkPerf.PROXIMITY_TICK_INTERVAL = 0.25
 Config.NetworkPerf.PROXIMITY_GROUPS = 4
 Config.NetworkPerf.PROXIMITY_CELL_SIZE = 8
-Config.NetworkPerf.PROXIMITY_MAX_SUBSCRIBERS = 30
+Config.NetworkPerf.PROXIMITY_MAX_SUBSCRIBERS = 40 -- owner decision 15 (2026-09-24): matches PERF_MAX_ENABLED_OVERHEADS
 Config.NetworkPerf.PROXIMITY_SWAP_MARGIN = 8
 Config.NetworkPerf.PROXIMITY_MAX_ENTERS_PER_VIEWER = 20
 -- H4 (ADR 0008 addendum, owner decision K8/9): above PERF_SPREAD_ABOVE_PLAYERS players each

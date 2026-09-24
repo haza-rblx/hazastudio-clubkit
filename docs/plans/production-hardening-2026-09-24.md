@@ -489,6 +489,10 @@ A new versioned DataStore key appears only if music sharding (B) is triggered. I
 | 12 | ReliabilityV2 on venues still on a Cloudflare Worker | **Set `Donation.ReliabilityV2 = false` in those buyer files only**, at their next update; everyone on the VPS keeps the new default |
 | 13 | Budget telemetry (`Telemetry.Enabled`) | **On by default** — one aggregate `POST /v3/telemetry` per server per 15 min, counts only |
 | 14 | Urgent (non-XP) write window | **Keep 3 s** — only XP waits up to 90 s (decision 1) |
+| 15 | Proximity viewer cap (P4, H3) | **40** — matches the client's 40-enabled-overhead cull (`Config.NetworkPerf.PROXIMITY_MAX_SUBSCRIBERS`, was 30) |
+| 16 | Other players' XP bars (P4, H1) | **Owner-only XP ticks accepted** — others get XP with the next full snapshot or another changed field (`PERF_XP_OWNER_ONLY = true`) |
+| 17 | Per-viewer packing (P4, H7) | **On by default** (`PACK_PER_VIEWER = true`); buyer scripts listening to `OverheadUpdate` must accept `{kind="pack", items}` — noted in the release UPGRADE guide |
+| 18 | P4b overhead template trim (H14) | **Design now, ship later as its own template release** (Packager step); measured 106 instances / 18 UIGradient per head |
 
 ### Original questions (kept for context)
 
