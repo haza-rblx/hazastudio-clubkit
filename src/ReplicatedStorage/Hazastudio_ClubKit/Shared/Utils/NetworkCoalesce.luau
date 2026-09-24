@@ -135,4 +135,101 @@ function NetworkCoalesce.coalesce(queue: { Entry }, mergeFields: { [string]: str
 	return compacted
 end
 
+-- ── Per-viewer packing (production hardening P4, plan H7; ADR 0016) ───────
+-- One FireClient per message cost ~n·k engine calls per frame in a crowd. With packing, every
+-- viewer's messages of one flush travel in ONE FireClient as { kind = packKind, items = {...} }.
+-- Rules: a viewer with a single message gets it unwrapped (old clients and third-party
+-- listeners see the pre-P4 wire); broadcasts ("all" / "allExcept" / "server") are ordering
+-- barriers: every per-viewer message queued before a broadcast is sent before it.
+
+--- "list" entries become one "player" entry per recipient (same data table), so coalescing
+--- keys per viewer instead of sorting + joining every recipient id. Same table when no lists.
+function NetworkCoalesce.expandLists(queue: { Entry }): { Entry }
+	local hasList = false
+	for _, entry in ipairs(queue) do
+		if entry.kind == "list" then
+			hasList = true
+			break
+		end
+	end
+	if not hasList then
+		return queue
+	end
+	local out: { Entry } = table.create(#queue)
+	for _, entry in ipairs(queue) do
+		if entry.kind == "list" then
+			for _, player in ipairs(entry.players or {}) do
+				table.insert(out, { kind = "player", player = player, data = entry.data })
+			end
+		else
+			table.insert(out, entry)
+		end
+	end
+	return out
+end
+
+--- Dispatch plan for one flush: per-viewer messages grouped into one entry per viewer between
+--- broadcast barriers, first-seen viewer order, queue order inside a pack.
+function NetworkCoalesce.pack(queue: { Entry }, packKind: string): { Entry }
+	local out: { Entry } = {}
+	local viewers: { any } = {}
+	local itemsByViewer: { [any]: { any } } = {}
+
+	local function flushViewers()
+		for _, player in ipairs(viewers) do
+			local items = itemsByViewer[player]
+			if #items == 1 then
+				table.insert(out, { kind = "player", player = player, data = items[1] })
+			else
+				table.insert(out, { kind = "player", player = player, data = { kind = packKind, items = items } })
+			end
+		end
+		table.clear(viewers)
+		table.clear(itemsByViewer)
+	end
+
+	for _, entry in ipairs(queue) do
+		if entry.kind == "player" and entry.player ~= nil then
+			local player = entry.player
+			local items = itemsByViewer[player]
+			if not items then
+				items = {}
+				itemsByViewer[player] = items
+				table.insert(viewers, player)
+			end
+			table.insert(items, entry.data)
+		elseif entry.kind == "list" then
+			for _, player in ipairs(entry.players or {}) do
+				local items = itemsByViewer[player]
+				if not items then
+					items = {}
+					itemsByViewer[player] = items
+					table.insert(viewers, player)
+				end
+				table.insert(items, entry.data)
+			end
+		else
+			flushViewers()
+			table.insert(out, entry)
+		end
+	end
+	flushViewers()
+	return out
+end
+
+--- Client side: call `handler` once per message, unpacking a pack in order.
+function NetworkCoalesce.forEachMessage(data: any, packKind: string, handler: (any) -> ())
+	if type(data) == "table" and data.kind == packKind then
+		local items = data.items
+		if type(items) ~= "table" then
+			return
+		end
+		for _, item in ipairs(items) do
+			handler(item)
+		end
+		return
+	end
+	handler(data)
+end
+
 return NetworkCoalesce
