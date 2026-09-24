@@ -197,3 +197,29 @@ Test-place-only overrides used for these runs (`SOUND_ENFORCE = "block"`, `EXEMP
 1b. **One week after that release (due 2026-09-06)** — review `runtime:movement_warn` / `runtime:movement_kick` beacons on the Fleet page; if no false positives, flip `Config.MovementGuard.ENFORCE` to `"kick"` and ship it.
 2. Enforcement + `/purgesounds` + `/lockdown` (release after the owner decides).
 3. Telemetry counters when ADR 0007 phase B lands.
+
+## Addendum 2026-09-24 — MovementGuard above 60 players (production hardening P4, plan H4)
+
+**Problem.** The guard sampled every player in one Heartbeat every 0.5 s, and each sample built a
+fresh exclude list of every character plus a new `RaycastParams` before its 2–3 raycasts: O(n²)
+work in one frame at 200 players.
+
+**Decision (owner decision 9, 2026-09-24: accept 2 s detection above 60 players).**
+- Above `Config.MovementGuard.PERF_SPREAD_ABOVE_PLAYERS` (60) players, each tick samples one slice
+  (`userId % slices`, slices = `PERF_SPREAD_WINDOW / SAMPLE_INTERVAL` = 4): every player once per
+  2 s, a quarter of the server per 0.5 s. The slice follows the `userId`, not the join-ordered
+  player list, so a join never skips or doubles anyone (`MovementPolicy.sampleSlices` / `inSlice`).
+- The slice due next tick gets a **lead sample** (position only, no raycast). The noclip chord runs
+  from the lead sample to the full sample — still 0.5 s long; a 2 s chord would cut through every
+  pillar an honest dancer walks around.
+- `StateChanged` stamps every mid-air jump; in spread mode the stamps go straight into the policy's
+  3-jumps-in-3-s window (a boolean per 2 s sample could never reach three).
+- Speed and teleport use the previous full sample (2 s apart); both rules are already `dt`-aware.
+- One `RaycastParams` for every sample (`PERF_SHARED_RAYCAST_PARAMS`), its exclude list rebuilt only
+  when a character is added or removed.
+
+**Consequences.** Above 60 players: fly needs `FLY_STREAK` (4) consecutive samples → about 8 s
+instead of 2 s; a speed streak of 3 → about 6 s; a single teleport is judged against a 2 s budget
+(`max(60, cap × 2 s × 3)` studs), so a short hop that the 0.5 s budget caught can pass once.
+Infinite jump and noclip keep their pre-P4 sensitivity. At or below 60 players nothing changes.
+Rollback: `PERF_SPREAD_ABOVE_PLAYERS = 0`, `PERF_SHARED_RAYCAST_PARAMS = false`.
