@@ -189,6 +189,13 @@ local function createSettingsController(deps: {
 	local menuPreviewVisible = false
 	local trackedEffectCharacterConns = {} :: { [Player]: RBXScriptConnection }
 	local trackedEffectDescendantConns = {} :: { [Player]: RBXScriptConnection }
+	-- P4 (H16, Config.NetworkPerf.SETTINGS_EFFECT_CACHE): managed effects per character, found once
+	-- at bind + appended by DescendantAdded, so a toggle / settings echo walks those instead of
+	-- every descendant of every character. Strong tables, cleared on rebind and on leave.
+	local effectCache = {
+		byCharacter = {} :: { [Model]: { Instance } },
+		boundCharacter = {} :: { [Player]: Model },
+	}
 	local renderSettingsGeneration = 0
 	local workspaceVfxGeneration = 0
 	local appliedTexturesEnabled: boolean? = nil
@@ -1158,6 +1165,22 @@ local function createSettingsController(deps: {
 
 	local function applyCharacterEffectVisibility(player: Player, character: Model)
 		local shouldShowEffects = shouldShowCharacterEffects(player)
+		local cached = effectCache.byCharacter[character]
+		if cached and (Config.NetworkPerf :: any).SETTINGS_EFFECT_CACHE == true then
+			-- Walk the cached effects only; drop the ones that left the character.
+			local kept = 0
+			for _, inst in ipairs(cached) do
+				if inst:IsDescendantOf(character) then
+					kept += 1
+					cached[kept] = inst
+					setManagedPlayerEffectEnabled(inst, shouldShowEffects)
+				end
+			end
+			for index = #cached, kept + 1, -1 do
+				cached[index] = nil
+			end
+			return
+		end
 		for _, desc in ipairs(character:GetDescendants()) do
 			setManagedPlayerEffectEnabled(desc, shouldShowEffects)
 		end
@@ -1182,6 +1205,31 @@ local function createSettingsController(deps: {
 				previous:Disconnect()
 			end
 
+			if (Config.NetworkPerf :: any).SETTINGS_EFFECT_CACHE == true then
+				-- One walk to build the cache (and apply), then DescendantAdded appends.
+				local previousCharacter = effectCache.boundCharacter[player]
+				if previousCharacter and previousCharacter ~= character then
+					effectCache.byCharacter[previousCharacter] = nil
+				end
+				local list: { Instance } = {}
+				local show = shouldShowCharacterEffects(player)
+				for _, desc in ipairs(character:GetDescendants()) do
+					if isManagedPlayerEffect(desc) then
+						table.insert(list, desc)
+						setManagedPlayerEffectEnabled(desc, show)
+					end
+				end
+				effectCache.byCharacter[character] = list
+				effectCache.boundCharacter[player] = character
+				trackedEffectDescendantConns[player] = character.DescendantAdded:Connect(function(desc)
+					if isManagedPlayerEffect(desc) then
+						table.insert(list, desc)
+						setManagedPlayerEffectEnabled(desc, shouldShowCharacterEffects(player))
+					end
+				end)
+				return
+			end
+
 			applyCharacterEffectVisibility(player, character)
 			trackedEffectDescendantConns[player] = character.DescendantAdded:Connect(function(desc)
 				setManagedPlayerEffectEnabled(desc, shouldShowCharacterEffects(player))
@@ -1202,8 +1250,17 @@ local function createSettingsController(deps: {
 	end
 
 	local function trackAllPlayerEffectCharacters()
+		local useCache = (Config.NetworkPerf :: any).SETTINGS_EFFECT_CACHE == true
 		for _, player in ipairs(Players:GetPlayers()) do
-			trackPlayerEffectCharacter(player)
+			local character = player.Character
+			if useCache and character and trackedEffectCharacterConns[player]
+				and effectCache.boundCharacter[player] == character
+			then
+				-- Already bound to this character: re-apply from the cache, no rebind + full walk.
+				applyCharacterEffectVisibility(player, character)
+			else
+				trackPlayerEffectCharacter(player)
+			end
 		end
 	end
 
@@ -2005,6 +2062,11 @@ local function createSettingsController(deps: {
 				descendantConn:Disconnect()
 				trackedEffectDescendantConns[player] = nil
 			end
+			local boundCharacter = effectCache.boundCharacter[player]
+			if boundCharacter then
+				effectCache.byCharacter[boundCharacter] = nil
+				effectCache.boundCharacter[player] = nil
+			end
 			overheadPayloadBaselines[player.UserId] = nil
 		end))
 
@@ -2224,6 +2286,8 @@ local function createSettingsController(deps: {
 			conn:Disconnect()
 			trackedEffectDescendantConns[player] = nil
 		end
+		table.clear(effectCache.byCharacter)
+		table.clear(effectCache.boundCharacter)
 		for _, conn in ipairs(controller._connections) do
 			conn:Disconnect()
 		end

@@ -473,12 +473,26 @@ local function init(deps: {
 			ui:hide()
 		end)
 	end
-	track(Players.PlayerAdded:Connect(function()
-		refreshPlayerList(false)
-	end))
-	track(Players.PlayerRemoving:Connect(function()
-		refreshPlayerList(false)
-	end))
+	-- P4 (H15): refreshPlayerList(false) already skips a closed panel; an open one rebuilds at
+	-- most once per ADMIN_LIST_DEBOUNCE_SEC during a join storm. 0 = legacy (every event).
+	local rosterRefreshPending = false
+	local function onRosterChanged()
+		local debounce = tonumber((Config.NetworkPerf :: any).ADMIN_LIST_DEBOUNCE_SEC) or 0
+		if debounce <= 0 then
+			refreshPlayerList(false)
+			return
+		end
+		if rosterRefreshPending then
+			return
+		end
+		rosterRefreshPending = true
+		task.delay(debounce, function()
+			rosterRefreshPending = false
+			refreshPlayerList(false)
+		end)
+	end
+	track(Players.PlayerAdded:Connect(onRosterChanged))
+	track(Players.PlayerRemoving:Connect(onRosterChanged))
 	if ui:isVisible() then
 		refreshPlayerList(true)
 	end

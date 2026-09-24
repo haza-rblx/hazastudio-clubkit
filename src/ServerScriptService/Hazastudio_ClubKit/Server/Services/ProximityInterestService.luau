@@ -192,7 +192,7 @@ function ProximityInterestService.create(deps: ProximityInterestDeps): Proximity
 	end
 	local tickInterval = math.clamp(perfNumber("PROXIMITY_TICK_INTERVAL", 0.25), MIN_RECOMPUTE_INTERVAL, MAX_RECOMPUTE_INTERVAL)
 	local groupCount = math.max(1, math.floor(perfNumber("PROXIMITY_GROUPS", 4)))
-	local cellSize = math.max(4, perfNumber("PROXIMITY_CELL_SIZE", 16))
+	local gridCellSize = math.max(4, perfNumber("PROXIMITY_CELL_SIZE", 16))
 	local subscriberCap = math.max(0, math.floor(perfNumber("PROXIMITY_MAX_SUBSCRIBERS", 0)))
 	local swapMargin = math.max(0, perfNumber("PROXIMITY_SWAP_MARGIN", 0))
 	local maxEnters = math.max(0, math.floor(perfNumber("PROXIMITY_MAX_ENTERS_PER_VIEWER", 0)))
@@ -455,7 +455,7 @@ function ProximityInterestService.create(deps: ProximityInterestDeps): Proximity
 				px[id] = x
 				py[id] = pos.Y
 				pz[id] = z
-				local key = gridKey(math.floor(x / cellSize), math.floor(z / cellSize))
+				local key = gridKey(math.floor(x / gridCellSize), math.floor(z / gridCellSize))
 				local cell = grid[key]
 				if not cell then
 					cell = {}
@@ -475,8 +475,8 @@ function ProximityInterestService.create(deps: ProximityInterestDeps): Proximity
 	local function queryNear(centerId: number, r2: number, out: { number }, d2Out: { [number]: number })
 		local r = math.sqrt(r2)
 		local cx, cz = px[centerId], pz[centerId]
-		for gx = math.floor((cx - r) / cellSize), math.floor((cx + r) / cellSize) do
-			for gz = math.floor((cz - r) / cellSize), math.floor((cz + r) / cellSize) do
+		for gx = math.floor((cx - r) / gridCellSize), math.floor((cx + r) / gridCellSize) do
+			for gz = math.floor((cz - r) / gridCellSize), math.floor((cz + r) / gridCellSize) do
 				local cell = grid[gridKey(gx, gz)]
 				if cell then
 					for _, id in cell do
@@ -887,7 +887,7 @@ function ProximityInterestService.create(deps: ProximityInterestDeps): Proximity
 			useLegacy = useLegacy,
 			recomputeInterval = if incremental then tickInterval else recomputeInterval,
 			algorithm = if incremental then "incremental_staggered" else "spatial_grid_partitioning",
-			cellSize = if incremental then cellSize else leaveRadius,
+			cellSize = if incremental then gridCellSize else leaveRadius,
 			groups = if incremental then groupCount else 1,
 			subscriberCap = if incremental then subscriberCap else 0,
 		})
