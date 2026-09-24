@@ -517,6 +517,11 @@ local function setRow(wrapper: GuiObject, rowName: string, visible: boolean, tex
 	end
 	(row :: Frame).Visible = visible
 	if text and visible then
+		-- P4b R4 (ADR 0018): the row may itself be the TextLabel (V6's status / couple rows).
+		if row:IsA("TextLabel") then
+			(row :: TextLabel).Text = text
+			return
+		end
 		local label = row:FindFirstChildWhichIsA("TextLabel")
 		if label then
 			(label :: TextLabel).Text = text
@@ -773,6 +778,10 @@ applyOverheadTextEffects = function(root: Instance?, effectCache: { Instance }?)
 end
 
 local function getRelationshipStatusLabel(row: Instance): TextLabel?
+	-- P4b R4: on V6 the row IS the label.
+	if row:IsA("TextLabel") then
+		return row :: TextLabel
+	end
 	local named = row:FindFirstChild("CoupleDisplayNameText", true)
 	if named and named:IsA("TextLabel") then
 		return named
@@ -785,10 +794,34 @@ local function getRelationshipStatusLabel(row: Instance): TextLabel?
 end
 
 local function applyRelationshipGradients(root: Instance, activeGradient: string?)
+	-- R3 attribute path (V6): one gradient on the couple label, painted per mode from
+	-- attributes (`UIGradient` = Taken, `UIGradientFun`, `UIGradientSingle`). Same fallback
+	-- rules as R2's membership set.
+	local labelGradient = if root:IsA("TextLabel")
+		then (root :: TextLabel):FindFirstChildWhichIsA("UIGradient")
+		else nil
+	if
+		labelGradient
+		and type(activeGradient) == "string"
+		and typeof(labelGradient:GetAttribute(activeGradient :: string)) == "ColorSequence"
+	then
+		local painted = applyGradientSetByAttributes(
+			labelGradient,
+			activeGradient :: string,
+			labelGradient:GetAttribute("ClubKitGradientSet") :: string?
+		)
+		if painted ~= nil then
+			labelGradient:SetAttribute("ClubKitGradientSet", painted)
+			return
+		end
+	end
 	for _, child in ipairs(root:GetChildren()) do
 		if child:IsA("UIGradient") then
 			(child :: UIGradient).Enabled = activeGradient ~= nil and child.Name == activeGradient
 		end
+	end
+	if labelGradient then
+		labelGradient:SetAttribute("ClubKitGradientSet", nil)
 	end
 end
 
@@ -971,8 +1004,10 @@ local function setLevelRow(levelRow: Frame, payload: OverheadPayload)
 		levelText = string.format(Config.Level.OVERHEAD_TEXT or "Lv.%d", levelValue)
 	end
 
-	local label = levelRow:FindFirstChild("LevelText", true)
-		or levelRow:FindFirstChildWhichIsA("TextLabel", true)
+	-- P4b R4: the level row may itself be the TextLabel (V6).
+	local label = if levelRow:IsA("TextLabel")
+		then levelRow :: TextLabel
+		else (levelRow:FindFirstChild("LevelText", true) or levelRow:FindFirstChildWhichIsA("TextLabel", true))
 	if label and label:IsA("TextLabel") then
 		(label :: TextLabel).Text = levelText
 	end
@@ -1197,8 +1232,11 @@ local function setDonationLayers(wrapper: GuiObject, payload: OverheadPayload)
 	end
 
 	-- Role chip replaces the rank chips for roles that opt in (specialRank.chip = true).
+	-- P4b R1 (ADR 0018): the chip is a 7-instance clone of RobuxRankWrapper; create it only
+	-- when this payload actually carries a roleChip, so a place without chip roles stops
+	-- paying +7 instances per head on every apply (V4 included).
 	local roleChipText = (payload :: any).roleChip
-	local roleChip = ensureRoleChip(layers)
+	local roleChip = if type(roleChipText) == "string" and roleChipText ~= "" then ensureRoleChip(layers) else nil
 	if type(roleChipText) == "string" and roleChipText ~= "" and roleChip then
 		local label = roleChip:FindFirstChildWhichIsA("TextLabel")
 		if label then
@@ -1515,19 +1553,88 @@ local function setNamedGuiVisible(root: Instance, name: string, visible: boolean
 	end
 end
 
+-- P4b R2/R3 (ADR 0018): the one-gradient sets. V6 keeps a single UIGradient per set and the
+-- template paints each variant as a ColorSequence attribute named exactly like the V4 gradient
+-- it replaces (`UIGradientElite`, `UIGradientFun`, …) plus `<name>_Rotation`. The buyer still
+-- customises colours in the template's attribute editor; the payload never changes. Legacy
+-- places (one gradient instance per name, no attributes) behave exactly as before.
+local function applyGradientSetByAttributes(
+	gradient: UIGradient,
+	activeName: string?,
+	previousName: string?
+): string?
+	if activeName == previousName then
+		return previousName
+	end
+	if type(activeName) ~= "string" or activeName == "" then
+		gradient.Enabled = false
+		return nil
+	end
+	local color = gradient:GetAttribute(activeName)
+	if typeof(color) ~= "ColorSequence" then
+		-- No attribute for this name: either a legacy place or an unknown name — let the
+		-- caller's legacy path handle it (we report the name as unpainted).
+		return nil
+	end
+	gradient.Color = color :: ColorSequence
+	local rotation = gradient:GetAttribute(activeName .. "_Rotation")
+	gradient.Rotation = if type(rotation) == "number" then rotation else 0
+	gradient.Enabled = true
+	return activeName
+end
+
 local function applyMembershipGradients(root: Instance, activeGradient: string?)
+	-- Attribute path (V6): the label's one gradient carries the wanted name as a ColorSequence
+	-- attribute → paint and stop. Otherwise the legacy path below still runs.
+	local membershipLabel = if root:IsA("TextLabel") then root :: TextLabel else root:FindFirstChildWhichIsA("TextLabel", true)
+	local labelGradient = membershipLabel and (membershipLabel :: TextLabel):FindFirstChildWhichIsA("UIGradient")
+	if
+		labelGradient
+		and type(activeGradient) == "string"
+		and typeof(labelGradient:GetAttribute(activeGradient :: string)) == "ColorSequence"
+	then
+		local painted = applyGradientSetByAttributes(
+			labelGradient,
+			activeGradient :: string,
+			labelGradient:GetAttribute("ClubKitGradientSet") :: string?
+		)
+		if painted ~= nil or activeGradient == nil then
+			if painted == nil then
+				labelGradient:SetAttribute("ClubKitGradientSet", nil)
+			else
+				labelGradient:SetAttribute("ClubKitGradientSet", painted)
+			end
+			return
+		end
+	end
 	for _, child in ipairs(root:GetChildren()) do
 		if child:IsA("UIGradient") then
 			(child :: UIGradient).Enabled = activeGradient ~= nil and child.Name == activeGradient
 		end
 	end
+	-- The legacy path repainted everything it owns; drop the stale previous-name so a later
+	-- return to the attribute path cannot "skip unchanged" while the gradient is actually off.
+	if labelGradient then
+		labelGradient:SetAttribute("ClubKitGradientSet", nil)
+	end
 end
 
 -- Auto-inject a solid black UIGradient for the AfterTeam role since the
 -- template has no gradient instance for it. Idempotent on subsequent calls.
+-- P4b R2 (ADR 0018): on a V6 template the single set gradient exists but has no
+-- AfterTeam attribute — paint it solid black in place instead of adding an instance.
 local function ensureAfterTeamGradient(root: Instance)
 	local existing = root:FindFirstChild(AFTER_TEAM_GRADIENT_NAME)
 	if existing and existing:IsA("UIGradient") then
+		return
+	end
+	local ownerLabel = if root:IsA("TextLabel") then root :: TextLabel else root:FindFirstChildWhichIsA("TextLabel", true)
+	local labelGradient = ownerLabel and (ownerLabel :: TextLabel):FindFirstChildWhichIsA("UIGradient")
+	if labelGradient and typeof(labelGradient:GetAttribute(AFTER_TEAM_GRADIENT_NAME)) ~= "ColorSequence" then
+		-- V6 path: the set gradient carries no AfterTeam attribute; it is the only gradient,
+		-- so painting it black IS the AfterTeam look (applyMembershipGradients handled enabled).
+		labelGradient.Color = ColorSequence.new(AFTER_TEAM_GRADIENT_COLOR)
+		labelGradient.Rotation = 0
 		return
 	end
 	local gradient = Instance.new("UIGradient")

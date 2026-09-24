@@ -842,6 +842,12 @@ end
 function AdminPanelUI:_getOriginalOverheadWrapper(): GuiObject?
 	local variant = Config.OverheadGuiVariants[Config.Overhead.GUI_TYPE] or Config.OverheadGuiVariants.V1
 	local wrapperName = if type(variant.wrapperName) == "string" then variant.wrapperName else "OverheadGUIMainWrapper"
+	-- P4b R0b: trust the server's resolved template name (fallback chain) when published.
+	local templateName = Config.Template.TEMPLATE_NAME
+	local published = ReplicatedStorage:GetAttribute("ClubKitOverheadTemplate")
+	if type(published) == "string" and published ~= "" then
+		templateName = published
+	end
 	local function findWrapper(gui: BillboardGui): GuiObject?
 		local wrapper = gui:FindFirstChild(wrapperName) or gui:FindFirstChild("OverheadGUIMainWrapper") or gui:FindFirstChild("Frame")
 		if wrapper and wrapper:IsA("GuiObject") then
@@ -859,12 +865,12 @@ function AdminPanelUI:_getOriginalOverheadWrapper(): GuiObject?
 		local player = Players:GetPlayerByUserId(selectedPlayer.userId)
 		local character = player and player.Character
 		local head = character and character:FindFirstChild("Head")
-		local liveGui = head and head:FindFirstChild(Config.Template.TEMPLATE_NAME)
+		local liveGui = head and head:FindFirstChild(templateName)
 		if liveGui and liveGui:IsA("BillboardGui") then
 			return findWrapper(liveGui)
 		end
 	end
-	local template = ReplicatedStorage:FindFirstChild(Config.Template.TEMPLATE_NAME)
+	local template = ReplicatedStorage:FindFirstChild(templateName)
 	if template and template:IsA("BillboardGui") then
 		return findWrapper(template)
 	end

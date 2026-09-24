@@ -58,9 +58,21 @@ local function destroyConnections()
 	table.clear(_membershipCache)
 end
 
+-- P4b R0b: the server resolves the real template down the fallback chain and publishes the
+-- chosen name; trust that attribute when present so a fallback place still binds its overheads.
+-- The attribute may not have replicated yet at require time — update the shared upvalue when it
+-- lands (every reader below reads `templateName` at call time).
 local activeVariant = Config.OverheadGuiVariants[Config.Overhead.GUI_TYPE] or Config.OverheadGuiVariants.V1
 local templateName = activeVariant.templateName or Config.Template.TEMPLATE_NAME
 local wrapperName = activeVariant.wrapperName or "OverheadGUIMainWrapper"
+local function syncPublishedTemplate()
+	local published = ReplicatedStorage:GetAttribute("ClubKitOverheadTemplate")
+	if type(published) == "string" and published ~= "" then
+		templateName = published
+	end
+end
+syncPublishedTemplate()
+ReplicatedStorage:GetAttributeChangedSignal("ClubKitOverheadTemplate"):Connect(syncPublishedTemplate)
 
 -- Module-level role cache: userId -> RoleKey
 -- Populated every time an overhead payload is received.

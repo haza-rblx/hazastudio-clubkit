@@ -892,6 +892,16 @@ Config.OverheadGuiVariants = {
 		wrapperName = "Frame",
 		preserveLayoutOrder = true,
 	},
+	-- Trimmed V5 (ADR 0018): the same 49-instance renderer contract with one gradient per
+	-- membership/couple set (attribute-painted, R2/R3) and the row-is-label shape (R4).
+	-- Same wrapper, same names, same payload — see Shared/Domain/OverheadTemplateResolver
+	-- for what happens when this template is missing from the place.
+	V6 = {
+		templateName = "OverheadGUIMainTemplateV6",
+		renderer = "V6",
+		wrapperName = "Frame",
+		preserveLayoutOrder = true,
+	},
 }
 -- Overhead image title (the V5-only `02-AddOnCustomImageBadge` row).
 Config.TitleImage = {

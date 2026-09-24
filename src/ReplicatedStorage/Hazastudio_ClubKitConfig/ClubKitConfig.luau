@@ -571,11 +571,16 @@ ClubKitConfig.Sync = {
 --   GuiType
 --     Which OverheadGUIMainTemplate* this place uses. The template itself lives
 --     in ReplicatedStorage (place data), so only set a version you have actually
---     installed — an unknown or missing one falls back to V1.
+--     installed — an unknown name keeps the engine default, and a known name
+--     whose template is missing falls back down the chain (V6 → V5 → V4 → V3 →
+--     V2 → V1) and warns in the server log (never blank nametags).
 --       "V4" (default) — the standard nametag.
 --       "V5"           — V4 plus the image-title row `02-AddOnCustomImageBadge`,
 --                        an extra banner under the text title. Needed for the
 --                        admin panel's image title to show up at all.
+--       "V6"           — the trimmed rebuild of V5 (49 instances per head instead
+--                        of 106, same look and features). Install it with the
+--                        Packager plugin (Nametag → Install V6) BEFORE switching.
 --
 --   DefaultLayers / DefaultBadges
 --     What each nametag layer and badge does in your venue. Three values per key:

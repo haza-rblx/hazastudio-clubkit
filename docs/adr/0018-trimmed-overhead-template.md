@@ -1,9 +1,12 @@
 # ADR 0018 — The trimmed overhead template ships as a new variant, never as an edit to V4
 
-Status: **Accepted** (owner decisions 19–21, 2026-09-24) — designed, not built (production hardening P4b, plan H14, owner decision 18:
-"design now, ship later as its own template release"). Design and numbers:
+Status: **Accepted + built (2026-09-24).** Engine half (R0a/R0b/R0c/R1/R2/R3/R4) is in the kit source;
+the Packager action (Stage 1, `OverheadV6Core`) ships in the plugin build. The V6 template itself is not
+installed in any place yet — that is the owner's Packager step. Design and numbers:
 `docs/plans/hardening-2026-09-24/p4b-overhead-template.md`; inventory:
-`docs/plans/hardening-2026-09-24/p4b-template-inventory.md`.
+`docs/plans/hardening-2026-09-24/p4b-template-inventory.md`. Static acceptance A passed in Studio
+(49 instances / 6 UIGradients / 12 TextLabels / 0 UIStroke / 0 CanvasGroup, all contract names).
+Owed before a buyer ships it: pixel parity (§8 B), 200-player numbers (§8 C), live peak (§8 D).
 
 ## Context
 

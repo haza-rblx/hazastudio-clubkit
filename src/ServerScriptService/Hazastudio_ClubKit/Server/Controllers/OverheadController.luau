@@ -11,6 +11,7 @@ local Teams = game:GetService("Teams")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local OverheadDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.OverheadDomain)
+local OverheadTemplateResolver = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.OverheadTemplateResolver)
 local PermissionDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.PermissionDomain)
 local RolesDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.RolesDomain)
 local RateLimiter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.RateLimiter)
@@ -515,6 +516,55 @@ end
 	local activeVariant = Config.OverheadGuiVariants[Config.Overhead.GUI_TYPE] or Config.OverheadGuiVariants.V1
 	local templateName = activeVariant.templateName or Config.Template.TEMPLATE_NAME
 	local wrapperName = activeVariant.wrapperName or "OverheadGUIMainWrapper"
+	-- P4b R0b (ADR 0018): a known GuiType whose BillboardGui is missing used to blank every
+	-- nametag. Resolve once down the documented chain (wanted → V6…V1, first one present),
+	-- warn once naming both, publish the chosen name for the client readers, and use it here.
+	local templatePresent: { [string]: boolean } = {}
+	for _, descendant in ipairs(ReplicatedStorage:GetDescendants()) do
+		if descendant:IsA("BillboardGui") and templatePresent[descendant.Name] ~= true then
+			-- Only direct ReplicatedStorage children and one folder deep count; deeper finds
+			-- still work through the recursive search below, they just do not feed the chain.
+			local parent = descendant.Parent
+			if parent == ReplicatedStorage or (parent and parent.Parent == ReplicatedStorage) then
+				templatePresent[descendant.Name] = true
+			end
+		end
+	end
+	local chosenKey, resolveReason =
+		OverheadTemplateResolver.resolve(Config.Overhead.GUI_TYPE, Config.OverheadGuiVariants, templatePresent)
+	if chosenKey and chosenKey ~= Config.Overhead.GUI_TYPE then
+		local chosenVariant = Config.OverheadGuiVariants[chosenKey]
+		if resolveReason == "unknown_type" then
+			log:warn(
+				("Overhead GuiType %q is unknown to this engine; falling back to %s"):format(
+					tostring(Config.Overhead.GUI_TYPE),
+					tostring(chosenKey)
+				),
+				{}
+			)
+		else
+			log:warn(
+				("Overhead template for GuiType %q is missing from this place; falling back to %s. Install the template or set GuiType = %q."):format(
+					tostring(Config.Overhead.GUI_TYPE),
+					tostring(chosenKey),
+					tostring(chosenKey)
+				),
+				{}
+			)
+		end
+		activeVariant = chosenVariant
+		templateName = chosenVariant.templateName or templateName
+		wrapperName = chosenVariant.wrapperName or wrapperName
+	elseif not chosenKey then
+		local noneMessage = ("No overhead template found in ReplicatedStorage at all (wanted %q); nametags will be blank until one is installed."):format(
+			tostring(Config.Overhead.GUI_TYPE)
+		)
+		log:error(noneMessage, {})
+	end
+	ReplicatedStorage:SetAttribute(
+		"ClubKitOverheadTemplate",
+		OverheadTemplateResolver.attributeValue(Config.Overhead.GUI_TYPE, Config.OverheadGuiVariants, templatePresent)
+	)
 	-- Try direct child first (normal path). If not found, fall back to
 	-- recursive search — templates are sometimes placed in subfolders
 	-- (e.g. ReplicatedStorage/Assets/...). Take only the BillboardGui instance.

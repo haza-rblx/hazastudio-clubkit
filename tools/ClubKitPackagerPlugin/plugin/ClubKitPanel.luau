@@ -23,6 +23,7 @@ local ConfigEditCore = require(script.Parent.ConfigEditCore)
 local SourceSyncCore = require(script.Parent.SourceSyncCore)
 local PluginSyncCore = require(script.Parent.PluginSyncCore)
 local PackagerCore = require(script.Parent.PackagerCore)
+local OverheadV6Core = require(script.Parent.OverheadV6Core)
 local CarryUploadCore = require(script.Parent.CarryUploadCore)
 local Manifest = require(script.Parent.ClubKitManifest)
 
@@ -994,6 +995,39 @@ local function buildToolsPage(ctx, page: Frame)
 			onClick = function()
 				print("[ClubKitPanel] RemakeSignAndGlowColor / SoftenDualGlowTrails — see tools/place-fixes/")
 				ctx.toast("Place-fix scripts live under tools/place-fixes — run from the command bar")
+			end,
+		}),
+	})
+
+	-- P4b (ADR 0018): build the trimmed V6 nametag template next to V4 and port
+	-- customisations by name. V4 is never touched; the switch itself is GuiType.
+	local _v6Card, v6Body = UI.card({ parent = page, order = 4 })
+	UI.cardTitle(v6Body, "Nametag", "Trimmed V6 template (49 instances per head, was 106). Installs next to V4 — never replaces it.", 1)
+	UI.row({
+		parent = v6Body,
+		label = "Install V6",
+		desc = "Builds OverheadGUIMainTemplateV6 and ports your V4/V5 badge art, fonts, chip colours and membership/couple gradients. Then set GuiType = \"V6\" in Config yourself.",
+		order = 2,
+		noBorder = true,
+		right = UI.button({
+			text = "Install V6",
+			variant = "primary",
+			small = true,
+			onClick = function()
+				local ok, result = pcall(function()
+					return OverheadV6Core.install()
+				end)
+				if not ok then
+					warn("[ClubKitV6] Install failed: " .. tostring(result))
+					ctx.toast("Install V6 failed — see Output")
+					return
+				end
+				if result.ok then
+					ctx.toast(result.message)
+				else
+					ctx.toast(result.message)
+					warn("[ClubKitV6] " .. result.message)
+				end
 			end,
 		}),
 	})

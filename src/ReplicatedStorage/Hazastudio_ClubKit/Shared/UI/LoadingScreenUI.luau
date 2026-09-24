@@ -2,6 +2,7 @@
 
 local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local StarterGui = game:GetService("StarterGui")
 local TweenService = game:GetService("TweenService")
@@ -147,10 +148,14 @@ end
 local function isProjectOverheadGui(gui: BillboardGui): boolean
 	local variant = Config.OverheadGuiVariants[Config.Overhead.GUI_TYPE] or Config.OverheadGuiVariants.V1
 	local variantName = if type(variant.templateName) == "string" then variant.templateName else OVERHEAD_GUI_NAME
+	-- P4b R0b: the server may have resolved a fallback template (missing-template guard) and
+	-- published its name; that name is a project overhead too.
+	local published = ReplicatedStorage:GetAttribute("ClubKitOverheadTemplate")
 	local wrapperName = if type(variant.wrapperName) == "string" then variant.wrapperName else "OverheadGUIMainWrapper"
 	local hasSpecificWrapper = wrapperName ~= "Frame" and gui:FindFirstChild(wrapperName, true) ~= nil
 	return gui.Name == OVERHEAD_GUI_NAME
 		or gui.Name == variantName
+		or (type(published) == "string" and published ~= "" and gui.Name == published)
 		or hasSpecificWrapper
 		or gui:FindFirstChild("OverheadGUIMainWrapper", true) ~= nil
 end
