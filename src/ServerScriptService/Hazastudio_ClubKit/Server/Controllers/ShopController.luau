@@ -79,6 +79,10 @@ local function createShopController(
 	-- Lazy-cached for remotes fetched via FindFirstChild after init.
 	local grantNetwork: any = nil
 	local donationResultNetwork: any = nil
+	-- H18 (Config.PerfDeferred.GAMEPASS_SESSION_CACHE): confirmed pass ownership per player for
+	-- the visit — { [userId]: { [gamePassId]: boolean } }. Refreshed on
+	-- PromptGamePassPurchaseFinished, dropped on leave. nil entries (failures) are re-asked.
+	local gamePassOwnedCache: { [number]: { [number]: boolean } } = {}
 	local function ensureGrantNetwork(): any?
 		if grantNetwork then
 			return grantNetwork
@@ -243,33 +247,93 @@ local function createShopController(
 		if type(shopTiers) ~= "table" then
 			return
 		end
+		local pd = Config.PerfDeferred
+		local sessionCache =
+			type(pd) == "table" and pd.GAMEPASS_SESSION_CACHE == true
+		local checkTimeout = if type(pd) == "table" and type(pd.GAMEPASS_CHECK_TIMEOUT_SEC) == "number"
+			then pd.GAMEPASS_CHECK_TIMEOUT_SEC
+			else 15
 		local grantedAny = false
+
+		-- H18: every tier's UserOwnsGamePassAsync at once (the sequential loop cost one HTTP
+		-- round trip per tier on the join path), and a confirmed answer is kept for the whole
+		-- visit — refreshed on PromptGamePassPurchaseFinished and dropped on leave.
+		local ownedCache = gamePassOwnedCache[player.UserId]
+		if sessionCache and ownedCache == nil then
+			ownedCache = {}
+			gamePassOwnedCache[player.UserId] = ownedCache
+		end
+
+		-- Collect the passes that still need a real MarketplaceService check this pass.
+		local checks: { tierKey: string, passId: number } = {}
 		for _, tierKey in ipairs(shopTiers) do
 			local product = Config.Shop.PRODUCTS[tierKey]
 			if type(product) == "table" then
 				local passId = tonumber(product.BUY_GAMEPASS_ID)
 				if passId and passId > 0 then
-					local ok, owns = pcall(function()
-						return MarketplaceService:UserOwnsGamePassAsync(player.UserId, passId)
-					end)
-					if ok and owns == true then
-						local parsed = ShopDomain.parseShopTier(tierKey)
-						if parsed then
-							local result = shopService:grantMembershipIfHigher(player.UserId, parsed)
-							if result.ok and result.value == true then
-								grantedAny = true
+					local cached = sessionCache and ownedCache and ownedCache[passId]
+					if cached ~= nil then
+						if cached == true then
+							local parsed = ShopDomain.parseShopTier(tierKey)
+							if parsed then
+								local result = shopService:grantMembershipIfHigher(player.UserId, parsed)
+								if result.ok and result.value == true then
+									grantedAny = true
+								end
 							end
 						end
-					elseif not ok then
-						log:warn("UserOwnsGamePassAsync failed", {
-							player = player.Name,
-							gamePassId = passId,
-							error = owns,
-						})
+					else
+						table.insert(checks, { tierKey = tierKey, passId = passId })
 					end
 				end
 			end
 		end
+
+		if #checks == 0 then
+			if grantedAny then
+				overheadController:refreshPlayer(player)
+				log:info("Game Pass membership synced", { userId = player.UserId })
+			end
+			return
+		end
+
+		local remaining = #checks
+		local done = Instance.new("BindableEvent")
+		for _, check in ipairs(checks) do
+			task.spawn(function()
+				local ok, owns = pcall(function()
+					return MarketplaceService:UserOwnsGamePassAsync(player.UserId, check.passId)
+				end)
+				if ok and owns == true then
+					if sessionCache and ownedCache then
+						ownedCache[check.passId] = true
+					end
+					local parsed = ShopDomain.parseShopTier(check.tierKey)
+					if parsed then
+						local result = shopService:grantMembershipIfHigher(player.UserId, parsed)
+						if result.ok and result.value == true then
+							grantedAny = true
+						end
+					end
+				elseif not ok then
+					log:warn("UserOwnsGamePassAsync failed", {
+						player = player.Name,
+						gamePassId = check.passId,
+						error = owns,
+					})
+				end
+				remaining -= 1
+				if remaining == 0 then
+					done:Fire()
+				end
+			end)
+		end
+		local waited = 0
+		while remaining > 0 and waited < checkTimeout do
+			done.Event:Wait()
+			waited += 1
+		end
+		done:Destroy()
 		if grantedAny then
 			overheadController:refreshPlayer(player)
 			log:info("Game Pass membership synced", { userId = player.UserId })
@@ -959,6 +1023,10 @@ local function createShopController(
 			end)
 		end
 		Players.PlayerAdded:Connect(onPlayerForGamePassSync)
+		-- H18: the visit's confirmed answers go with the player.
+		Players.PlayerRemoving:Connect(function(player: Player)
+			gamePassOwnedCache[player.UserId] = nil
+		end)
 		for _, player in ipairs(Players:GetPlayers()) do
 			onPlayerForGamePassSync(player)
 		end

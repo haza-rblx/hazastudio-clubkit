@@ -258,6 +258,37 @@ local function createOverheadService(deps: {
 		end)
 	end
 
+	-- H17 (Config.PerfDeferred.GROUP_RANK_SESSION_CACHE): the per-visit group caches. When on,
+	-- a successful groups fetch / rank resolution is cached for GROUP_SESSION_TTL_SEC (the whole
+	-- visit) instead of HttpApi.GET_GROUPS_TTL / Config.Group.RANK_CACHE_TTL, and every entry is
+	-- dropped on leave (onPlayerRemoving). Refresh triggers stay exactly the existing ones: join,
+	-- /re and admin refresh (OverheadController invalidateGroupCache), and the GiftService /
+	-- CommunityVipService invalidations. Failure negative caches keep their short TTLs, so a
+	-- transient failure still retries within the visit.
+	local groupSessionUserIds: { [number]: boolean } = {}
+	local function groupSessionEnabled(): boolean
+		local pd = Config.PerfDeferred
+		return type(pd) == "table" and pd.GROUP_RANK_SESSION_CACHE == true
+	end
+	local function sessionTtlSec(): number
+		local pd = Config.PerfDeferred
+		return if type(pd) == "table" and type(pd.GROUP_SESSION_TTL_SEC) == "number"
+			then pd.GROUP_SESSION_TTL_SEC
+			else 6 * 3600
+	end
+	local function cacheGroupsTtl(): number
+		if groupSessionEnabled() then
+			return sessionTtlSec()
+		end
+		return (Config.HttpApi and Config.HttpApi.GET_GROUPS_TTL) or 300
+	end
+	local function cacheRankTtl(): number
+		if groupSessionEnabled() then
+			return sessionTtlSec()
+		end
+		return Config.Group.RANK_CACHE_TTL
+	end
+
 	-- In-flight guard: prevent duplicate concurrent GroupService calls for same userId.
 	local inFlight: { [number]: boolean } = {}
 	local function getGroups(userId: number): ({ RobloxGroupEntry }?, boolean)
@@ -303,8 +334,11 @@ local function createOverheadService(deps: {
 		end
 		-- Self-cache even when Config.HttpApi.ENABLED=false (HttpApi only writes
 		-- this key when ENABLED). Keep key in sync with HttpApi.getGroupsAsync.
-		local groupsTtl = (Config.HttpApi and Config.HttpApi.GET_GROUPS_TTL) or 300
-		Cache.set(cacheKey, groupsResult, groupsTtl)
+		-- H17: TTL is the whole visit when the session cache is on.
+		if groupSessionEnabled() then
+			groupSessionUserIds[userId] = true
+		end
+		Cache.set(cacheKey, groupsResult, cacheGroupsTtl())
 		return groupsResult, true
 	end
 	local function getGroupRank(userId: number): (number, boolean)
@@ -324,7 +358,10 @@ local function createOverheadService(deps: {
 		-- PRIMARY: Try Worker endpoint (Open Cloud API, dedicated rate limit)
 		local workerRank = fetchRankFromWorker(userId)
 		if workerRank then
-			Cache.set(rankCacheKey, { rank = workerRank, ok = true }, Config.Group.RANK_CACHE_TTL)
+			if groupSessionEnabled() then
+				groupSessionUserIds[userId] = true
+			end
+			Cache.set(rankCacheKey, { rank = workerRank, ok = true }, cacheRankTtl())
 			return workerRank, true
 		end
 
@@ -358,7 +395,11 @@ local function createOverheadService(deps: {
 		end
 
 		-- Confirmed: groups loaded (member or not). Cache including confirmed 0.
-		Cache.set(rankCacheKey, { rank = rankId, ok = true }, Config.Group.RANK_CACHE_TTL)
+		-- H17: TTL is the whole visit when the session cache is on.
+		if groupSessionEnabled() then
+			groupSessionUserIds[userId] = true
+		end
+		Cache.set(rankCacheKey, { rank = rankId, ok = true }, cacheRankTtl())
 		return rankId, true
 	end
 	local function isHiddenDonationUser(userId: number): boolean
@@ -1275,6 +1316,13 @@ local function createOverheadService(deps: {
 		cashDonatedCache[userId] = nil
 		rankResolutionScheduled[userId] = nil
 		inFlight[userId] = nil
+		-- H17: the visit-scoped group entries (groups: / grouprank:) go with the player so a
+		-- returning player is re-resolved on their next join instead of keeping a stale rank.
+		if groupSessionUserIds[userId] then
+			groupSessionUserIds[userId] = nil
+			Cache.invalidate(GROUPS_PREFIX .. userId)
+			Cache.invalidate(GROUP_RANK_PREFIX .. userId)
+		end
 	end
 
 	return service

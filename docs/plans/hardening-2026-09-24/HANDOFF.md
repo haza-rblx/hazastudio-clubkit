@@ -4,7 +4,7 @@ Purpose: a fresh session (any agent) must be able to continue from here without 
 The **status board in `../production-hardening-2026-09-24.md` §0** is the source of truth for phase
 state; this file holds the operational context around it. Update both together.
 
-## Where things are (last updated 2026-09-24, after P3+P4 sync + harness)
+## Where things are (last updated 2026-09-24, after P4-deferred H10/H11/H17/H18)
 
 | Item | State |
 |---|---|
@@ -12,10 +12,11 @@ state; this file holds the operational context around it. Update both together.
 | P2 VPS routes | deployed 09:45 UTC (`p2-deploy-steps.md`); rate limits in log mode; prod migrations 0023/0025/0026/0027 — **never ship 0024 / `license-routes.js`** |
 | P1 kit | commit `55bdbf4`; synced to **THE BASIC TEST 1.3** (placeId 75916114543452), owner pressed Ctrl+S; solo playtest clean; 48 h soak running |
 | P3 kit (write + HTTP discipline) | committed `4a80b7b`; synced to TEST together with P4 (53 files, merge `d8c2ff9`); playtest clean; 48 h soak running. Owner answered the 4 P3 decisions (all recommended: 1 IncrementAsync per donation, ReliabilityV2=false only for Worker-era venues at their next update, telemetry on by default, 3 s urgent window). Open: kill-tests, Worker-venue list |
-| P4 kit (perf at 200) | merged into `ui-motion` (`d8c2ff9`, worktree branch can be deleted); P4 ADR renumbered 0017; synced + measured — `p4-crowd-harness-results.md`. Owner decisions 15–18 taken (cap **40** → `0ae0152`, synced to TEST — owner owes Ctrl+S; XP owner-only yes; packing on; P4b design now/ship later). **P4b design agent running** (read-only Studio; writes `p4b-template-inventory.md`, `p4b-overhead-template.md`, ADR 0018 Proposed). Client-side numbers still need multiplayer |
-| P3 kill-tests | **PASSED 2026-09-24** on TEST (`p3-kill-tests-results.md`): invalidate-while-dirty, leave failing twice, shutdown 200 docs @ 12/s, guard 3 callers. Found + fixed D1 (guard slot reservation) and D2 (negative userId parser) in `21c4e82`; both files synced to TEST — owner owes Ctrl+S. Harness lives only in `.tmp/` (README there) |
+| P4 kit (perf at 200) | merged into `ui-motion` (`d8c2ff9`); P4 ADR 0017; synced + measured — `p4-crowd-harness-results.md`. Owner decisions 15–18 taken (cap 40 → `0ae0152`, synced — **owner owes Ctrl+S**); P4b design done, not built |
+| P4-deferred (H10/H11/H17/H18) | **implemented 2026-09-24** behind `Config.PerfDeferred` (see `UPGRADE_PROGRESS.md` row for the full surface): H10 lb_rev (server + client fetch-on-visible), H11 GreetingPacer, H17 group session cache, H18 parallel gamepass session cache. Specs green (leaderboard-revision 34, greeting-pacer 37), compile 488/0, locals 138/125. **Not yet synced to TEST, no Studio playtest yet** — next step is the § "How to resume cold" sync + solo playtest |
+| P3 kill-tests | **PASSED 2026-09-24** on TEST (`p3-kill-tests-results.md`); fixes D1/D2 in `21c4e82`, synced — owner owes Ctrl+S. Harness lives only in `.tmp/` (README there) |
 | P5 | not started (after ≥ 95 % of games run a P3 kit) |
-| Owner-side open | Worker-era venues for decision 12 (`ReliabilityV2 = false` at their next update): after-hours, ruang-penat, vicenorth, haven, nuwa, altantis2, lantai-satu (list + rule in plan §4 row 12); Google Drive rclone auth (postponed by owner); secret rotation after P5; `GAME_RATE_LIMIT_MODE`/`IP_RATE_LIMIT_MODE`/`WEBHOOK_RATE_LIMIT_MODE` → `enforce` after ~7 days of clean journal |
+| Owner-side open | Worker-era venues for decision 12 (`ReliabilityV2 = false` at their next update): after-hours, ruang-penat, vicenorth, haven, nuwa, altantis2, lantai-satu (list + rule in plan §4 row 12); Google Drive rclone auth (postponed by owner); secret rotation after P5; `GAME_RATE_LIMIT_MODE`/`IP_RATE_LIMIT_MODE`/`WEBHOOK_RATE_LIMIT_MODE` → `enforce` after ~7 days of clean journal; Ctrl+S on TEST (P4 40-cap + kill-test files + this phase once synced) |
 
 ## How to resume cold
 

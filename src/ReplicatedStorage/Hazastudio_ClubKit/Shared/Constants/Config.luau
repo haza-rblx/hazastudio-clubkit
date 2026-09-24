@@ -4382,6 +4382,43 @@ Config.NetworkPerf.ADMIN_LIST_DEBOUNCE_SEC = 1
 -- H16: SettingsController keeps a per-character list of managed effects, so a graphics toggle
 -- walks those instead of every descendant of every character. Legacy: false.
 Config.NetworkPerf.SETTINGS_EFFECT_CACHE = true
+-- P4 items deferred to other owners' files (H10 leaderboards, H11 greetings, H17 group rank,
+-- H18 gamepasses). Engine constants, not buyer config. Each switch names its legacy value.
+Config.PerfDeferred = {
+	-- H10: on a board change the server fires { kind = "lb_rev", rev } (< 64 B) to every client on
+	-- WorkspaceLeaderboardsUpdated instead of the full payload, and a joiner gets the revision only.
+	-- The server keeps painting the SurfaceGuis; a client fetches the payload over
+	-- WorkspaceLeaderboardsSnapshot only while a board it draws itself (daily showcases; every
+	-- board when Leaderboards.CLIENT_PAINT_DATA) is within its SurfaceGui MaxDistance
+	-- (LB_FETCH_DISTANCE studs when that is 0), checked every LB_VISIBILITY_POLL_SEC while stale,
+	-- one fetch in flight (retry after LB_FETCH_TIMEOUT_SEC), at most one per
+	-- LB_FETCH_MIN_INTERVAL_SEC (server limiter: Leaderboards.SNAPSHOT_RATE_MAX per window).
+	-- Legacy: LB_REVISION_BROADCAST = false (full payload to all on every change and join).
+	LB_REVISION_BROADCAST = true,
+	LB_FETCH_DISTANCE = 150,
+	LB_VISIBILITY_POLL_SEC = 1,
+	LB_FETCH_MIN_INTERVAL_SEC = 8,
+	LB_FETCH_TIMEOUT_SEC = 10,
+	-- H11: staff join greetings go out at most one per GREETING_WINDOW_SEC (FIFO, same wire shape;
+	-- the client shows one card at a time anyway). Kinds in GREETING_INDIVIDUAL_KINDS (VIP / donor)
+	-- stay immediate. A waiting greeting older than GREETING_MAX_AGE_SEC is dropped; over
+	-- GREETING_MAX_QUEUE the oldest waiting one is. Legacy: GREETING_WINDOW_SEC = 0.
+	GREETING_WINDOW_SEC = 3,
+	GREETING_INDIVIDUAL_KINDS = { Owner = true, SpenderRobux = true, SpenderCash = true },
+	GREETING_MAX_QUEUE = 20,
+	GREETING_MAX_AGE_SEC = 30,
+	-- H17: OverheadService keeps a player's GetGroupsAsync list and group rank for the whole visit
+	-- (GROUP_SESSION_TTL_SEC) instead of HttpApi.GET_GROUPS_TTL / Group.RANK_CACHE_TTL; refetched
+	-- only on join, /re (Avatar:Refreshed), admin refresh and the existing invalidateGroupCache
+	-- callers; dropped on leave. Failures keep the short negative cache. Legacy: false.
+	GROUP_RANK_SESSION_CACHE = true,
+	GROUP_SESSION_TTL_SEC = 6 * 3600,
+	-- H18: ShopController checks every shop tier's Game Pass in parallel on join, remembers the
+	-- answers for the visit, and marks a pass owned on PromptGamePassPurchaseFinished.
+	-- GAMEPASS_CHECK_TIMEOUT_SEC bounds the wait for all checks. Legacy: false (sequential, no cache).
+	GAMEPASS_SESSION_CACHE = true,
+	GAMEPASS_CHECK_TIMEOUT_SEC = 15,
+}
 -- ============================================================
 -- CONFIG VALIDATION
 -- ============================================================

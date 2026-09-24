@@ -19,6 +19,7 @@ local TTLSet         = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils
 local Validator      = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Validator)
 local DemoDataProvider = require(script.Parent.Parent.Services.DemoDataProvider)
 local LeaderboardIdentity = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.LeaderboardIdentity)
+local LeaderboardRevisionPolicy = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.LeaderboardRevisionPolicy)
 local WorkspaceLeaderboardRenderService = require(script.Parent.Parent.Services.WorkspaceLeaderboardRenderService)
 local WorkspaceLeaderboardRenderer = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Leaderboards.WorkspaceLeaderboardRenderer)
 local BrandLogoApplier = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.BrandLogoApplier)
@@ -315,6 +316,21 @@ local function createDonationController(deps: {
 		return result
 	end
 
+	-- P4 (H10, Config.PerfDeferred.LB_REVISION_BROADCAST): clients get { kind = "lb_rev", rev }
+	-- instead of the full payload and fetch it over the snapshot remote only while a board they
+	-- draw is visible. The server keeps painting the SurfaceGuis either way.
+	local function revisionBroadcastEnabled(): boolean
+		local pd = Config.PerfDeferred
+		return type(pd) == "table" and pd.LB_REVISION_BROADCAST == true
+	end
+	-- What a client receives on a board change / join: the revision, or (legacy) the payload.
+	local function workspaceBroadcastMessage(payload: any): any
+		if revisionBroadcastEnabled() then
+			return LeaderboardRevisionPolicy.message(leaderboardRevision)
+		end
+		return payload
+	end
+
 	local function stampLeaderboardRevision(payload: { [string]: any })
 		leaderboardRevision += 1
 		payload.leaderboardRevision = leaderboardRevision
@@ -566,14 +582,14 @@ local function createDonationController(deps: {
 					task.delay(WORKSPACE_BROADCAST_MIN_INTERVAL, function()
 						workspaceNetBroadcastPending = false
 						lastWorkspaceNetBroadcastAt = os.clock()
-						if leaderboardsNetwork and workspaceLeaderboardCache then
-							leaderboardsNetwork:fireAllClients(workspaceLeaderboardCache)
+						if leaderboardsNetwork and (workspaceLeaderboardCache or revisionBroadcastEnabled()) then
+							leaderboardsNetwork:fireAllClients(workspaceBroadcastMessage(workspaceLeaderboardCache))
 						end
 					end)
 				end
 			else
 				lastWorkspaceNetBroadcastAt = now
-				leaderboardsNetwork:fireAllClients(payload)
+				leaderboardsNetwork:fireAllClients(workspaceBroadcastMessage(payload))
 			end
 		end
 		local metrics = LeaderboardScaleAudit.metricsFromPayload(payload, buildMs, paintMs)
@@ -612,6 +628,15 @@ local function createDonationController(deps: {
 			broadcastWorkspaceLeaderboards(force)
 		end)
 	end
+	-- Snapshot answer. H10: the client asks after an "lb_rev", so serve the board the server
+	-- painted (the cache, whatever its age: the server rebuilds on its own schedule) instead of
+	-- rebuilding per request. Demo mode builds per call (its payload is never cached).
+	local function snapshotPayload(): any
+		if revisionBroadcastEnabled() and workspaceLeaderboardCache and not (Config.Demo and Config.Demo.ENABLED == true) then
+			return workspaceLeaderboardCache
+		end
+		return buildWorkspaceLeaderboardPayload()
+	end
 	if leaderboardsSnapshotRemote then
 		leaderboardsSnapshotRemote.OnServerEvent:Connect(function(player: Player, raw: any)
 			if not Validator.checkSize(raw) then
@@ -636,7 +661,8 @@ local function createDonationController(deps: {
 						type = "workspace_leaderboards_snapshot_response",
 						requestId = raw.requestId,
 						ok = true,
-						data = buildWorkspaceLeaderboardPayload(),
+						data = snapshotPayload(),
+						rev = leaderboardRevision,
 					})
 				end
 				return
@@ -649,7 +675,8 @@ local function createDonationController(deps: {
 						type = "workspace_leaderboards_snapshot_response",
 						requestId = raw.requestId,
 						ok = true,
-						data = buildWorkspaceLeaderboardPayload(),
+						data = snapshotPayload(),
+						rev = leaderboardRevision,
 					})
 				end
 			end)
@@ -711,7 +738,7 @@ local function createDonationController(deps: {
 		stampLeaderboardRevision(payloadOrErr)
 		paintWorkspaceLeaderboards(payloadOrErr)
 		if leaderboardsNetwork then
-			leaderboardsNetwork:fireAllClients(payloadOrErr)
+			leaderboardsNetwork:fireAllClients(workspaceBroadcastMessage(payloadOrErr))
 		end
 	end)
 
@@ -743,6 +770,12 @@ local function createDonationController(deps: {
 			end
 			invalidateWorkspaceLeaderboardCache()
 		end
+		-- H10: boards are painted on the server; the joiner gets the revision and fetches the
+		-- payload when it sees a board it draws. No per-joiner rebuild.
+		if revisionBroadcastEnabled() and not (Config.Demo and Config.Demo.ENABLED == true) then
+			leaderboardsNetwork:fireClient(player, LeaderboardRevisionPolicy.message(leaderboardRevision))
+			return
+		end
 		-- Prefer cache; only build when demo forced invalidate left it empty.
 		if workspaceLeaderboardCache and os.clock() < workspaceLeaderboardCacheExpiresAt then
 			leaderboardsNetwork:fireClient(player, workspaceLeaderboardCache)
@@ -756,12 +789,12 @@ local function createDonationController(deps: {
 			})
 			local fallback = emptyWorkspaceLeaderboardPayload()
 			stampLeaderboardRevision(fallback)
-			leaderboardsNetwork:fireClient(player, fallback)
+			leaderboardsNetwork:fireClient(player, workspaceBroadcastMessage(fallback))
 			return
 		end
 		stampLeaderboardRevision(payloadOrError)
 		paintWorkspaceLeaderboards(payloadOrError)
-		leaderboardsNetwork:fireClient(player, payloadOrError)
+		leaderboardsNetwork:fireClient(player, workspaceBroadcastMessage(payloadOrError))
 	end
 	Players.PlayerAdded:Connect(function(player)
 		task.spawn(pushLeaderboardTo, player)

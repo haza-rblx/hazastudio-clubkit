@@ -4,6 +4,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
@@ -13,6 +14,7 @@ local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local DonationAmountFormat = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DonationAmountFormat)
 local InstanceState = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.InstanceState)
 local WorkspaceLeaderboardRenderer = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Leaderboards.WorkspaceLeaderboardRenderer)
+local LeaderboardRevisionPolicy = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.LeaderboardRevisionPolicy)
 local BoardAmbience = require(script.Parent.Parent.UI.BoardAmbience)
 
 local log = Logger.new("Client.WorkspaceLeaderboards")
@@ -39,6 +41,11 @@ local resolveBoard = WorkspaceLeaderboardRenderer.resolveBoard
 
 local latestPayload: any = nil
 local lastLeaderboardRevisionSeen = -1
+-- P4 (H10, Config.PerfDeferred.LB_REVISION_BROADCAST): the server broadcasts
+-- { kind = "lb_rev", rev } instead of the payload; this is the fetch-on-visible state.
+local revisionState = LeaderboardRevisionPolicy.new()
+local lbRevMode = false
+local lbRevLoopStarted = false
 
 type DailySpec = {
 	rootPart: string,
@@ -1540,7 +1547,8 @@ local function init(_deps: {}?)
 		})
 	end)
 
-	track(updateRemote.OnClientEvent:Connect(render))
+	-- Remote wiring (legacy + revision mode) lives at the bottom of init, after the
+	-- H10 fetch helpers below.
 
 	track(workspace:GetAttributeChangedSignal(Config.Leaderboards.REVISION_ATTRIBUTE):Connect(function()
 		local revision = tonumber(workspace:GetAttribute(Config.Leaderboards.REVISION_ATTRIBUTE))
@@ -1560,8 +1568,128 @@ local function init(_deps: {}?)
 		playWorkspaceAnimations(payload)
 	end))
 
-	-- Snapshot fallback removed: server does not handle the remote, making it dead code.
-	-- Leaderboard data arrives via REMOTE_UPDATED broadcast from the server.
+	-- H10 fetch-on-visible (revision mode only). The server paints the SurfaceGuis; this client
+	-- needs the payload only for what it draws itself (daily showcase loops; every board when
+	-- Leaderboards.CLIENT_PAINT_DATA). It fetches while such a board is within range, at most
+	-- one in flight, throttled to Config.PerfDeferred.LB_FETCH_MIN_INTERVAL_SEC (the server's
+	-- snapshot limiter allows Leaderboards.SNAPSHOT_RATE_MAX per window). A response newer than
+	-- the broadcast revision settles that too (it carried the newer board).
+	local function lbRevisionCfg(): LeaderboardRevisionPolicy.Config
+		local pd = Config.PerfDeferred
+		return {
+			minIntervalSec = if type(pd) == "table" and type(pd.LB_FETCH_MIN_INTERVAL_SEC) == "number"
+				then pd.LB_FETCH_MIN_INTERVAL_SEC
+				else 8,
+			timeoutSec = if type(pd) == "table" and type(pd.LB_FETCH_TIMEOUT_SEC) == "number"
+				then pd.LB_FETCH_TIMEOUT_SEC
+				else 10,
+		}
+	end
+
+	local function guiWithinFetchDistance(gui: SurfaceGui?, fetchDistance: number): boolean
+		if gui == nil or not gui.Enabled then
+			return false
+		end
+		local adornee = gui.Adornee
+		if not (adornee and adornee:IsA("BasePart")) then
+			return false
+		end
+		local character = Players.LocalPlayer and Players.LocalPlayer.Character
+		local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+		if not (rootPart and rootPart:IsA("BasePart")) then
+			return false
+		end
+		local maxDistance = gui.MaxDistance
+		local limit = if maxDistance and maxDistance > 0 then maxDistance else fetchDistance
+		return (adornee.Position - rootPart.Position).Magnitude <= limit
+	end
+
+	local function lbVisibleBoard(): boolean
+		local pd = Config.PerfDeferred
+		local fetchDistance = if type(pd) == "table" and type(pd.LB_FETCH_DISTANCE) == "number"
+			then pd.LB_FETCH_DISTANCE
+			else 150
+		-- Boards this client draws: every renderer board when it paints data, otherwise just the
+		-- daily showcases it animates. A board counts when it sits within its SurfaceGui
+		-- MaxDistance (LB_FETCH_DISTANCE when that is 0).
+		if Config.Leaderboards.CLIENT_PAINT_DATA == true then
+			for _, spec in ipairs(BOARD_SPECS) do
+				if guiWithinFetchDistance(resolveBoard(spec), fetchDistance) then
+					return true
+				end
+			end
+			return false
+		end
+		for _, spec in ipairs(DAILY_SPECS) do
+			if guiWithinFetchDistance(resolveDailyDonationsGui(spec), fetchDistance) then
+				return true
+			end
+		end
+		return false
+	end
+
+	local function lbMaybeFetch(snapshotRemote: RemoteEvent?)
+		if snapshotRemote == nil then
+			return
+		end
+		-- Cheap staleness gate first so the visibility scan (workspace lookups) only runs
+		-- while the client is actually behind the broadcast revision.
+		if not LeaderboardRevisionPolicy.isStale(revisionState) then
+			return
+		end
+		local now = os.clock()
+		if not LeaderboardRevisionPolicy.shouldFetch(revisionState, now, lbVisibleBoard(), lbRevisionCfg()) then
+			return
+		end
+		LeaderboardRevisionPolicy.markFetchStarted(revisionState, now)
+		snapshotRemote:FireServer({ requestId = HttpService:GenerateGUID(false) })
+	end
+
+	local function startLbRevisionLoop(snapshotRemote: RemoteEvent?)
+		if lbRevLoopStarted then
+			return
+		end
+		lbRevLoopStarted = true
+		task.spawn(function()
+			while lbRevMode do
+				local pd = Config.PerfDeferred
+				local pollSec = if type(pd) == "table" and type(pd.LB_VISIBILITY_POLL_SEC) == "number"
+					then pd.LB_VISIBILITY_POLL_SEC
+					else 1
+				task.wait(math.max(0.25, pollSec))
+				lbMaybeFetch(snapshotRemote)
+			end
+			lbRevLoopStarted = false
+		end)
+	end
+
+	if snapshotResponseRemote and updateRemote then
+		-- One dispatcher on the update remote: an "lb_rev" message advances the revision state
+		-- machine; anything else is the legacy full payload (rolling upgrade / config flip).
+		track(updateRemote.OnClientEvent:Connect(function(raw: any)
+			local isRevision, rev = LeaderboardRevisionPolicy.parse(raw)
+			if not isRevision then
+				render(raw)
+				return
+			end
+			lbRevMode = true
+			LeaderboardRevisionPolicy.observe(revisionState, rev)
+			startLbRevisionLoop(snapshotRemote)
+		end))
+		track(snapshotResponseRemote.OnClientEvent:Connect(function(raw: any)
+			if type(raw) ~= "table" or raw.ok ~= true then
+				LeaderboardRevisionPolicy.applyFetched(revisionState, nil, os.clock())
+				return
+			end
+			LeaderboardRevisionPolicy.applyFetched(revisionState, tonumber(raw.rev), os.clock())
+			if type(raw.data) == "table" then
+				render(raw.data)
+			end
+		end))
+		-- The fetch loop arms only on the first lb_rev (the server sends one to every joiner),
+		-- never from the workspace attribute: that attribute is stamped in legacy mode too, and
+		-- fetching there would only add pointless snapshot requests behind the limiter.
+	end
 end
 
 return { init = init, destroy = destroy }

@@ -7,6 +7,7 @@ local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Con
 local RolesDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.RolesDomain)
 local CashCurrencyDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.CashCurrencyDomain)
 local DonationAmountFormat = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DonationAmountFormat)
+local GreetingPacer = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.GreetingPacer)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 
 export type CategoryKind = "Owner" | "Leadership" | "Content" | "SpenderRobux" | "SpenderCash"
@@ -308,6 +309,36 @@ local function isOwnerPlayer(player: Player, roleKey: string): boolean
 	return type(ownerUserId) == "number" and ownerUserId > 0 and player.UserId == ownerUserId
 end
 
+-- P4 (H11, Config.PerfDeferred.GREETING_WINDOW_SEC): paced staff greetings. VIP / donor
+-- (SpenderRobux / SpenderCash) greetings bypass the pacer (GREETING_INDIVIDUAL_KINDS); everything
+-- else waits in a FIFO and goes out one per window. windowSec <= 0 = legacy (immediate).
+local function perfDeferred(): any
+	return Config.PerfDeferred
+end
+
+local function greetingPacerCfg(): GreetingPacer.Config
+	local pd = perfDeferred()
+	return {
+		windowSec = if type(pd) == "table" and type(pd.GREETING_WINDOW_SEC) == "number"
+			then pd.GREETING_WINDOW_SEC
+			else 0,
+		maxQueue = if type(pd) == "table" and type(pd.GREETING_MAX_QUEUE) == "number"
+			then pd.GREETING_MAX_QUEUE
+			else 20,
+		maxAgeSec = if type(pd) == "table" and type(pd.GREETING_MAX_AGE_SEC) == "number"
+			then pd.GREETING_MAX_AGE_SEC
+			else 30,
+	}
+end
+
+local function greetingIndividualKinds(): { [string]: boolean }?
+	local pd = perfDeferred()
+	if type(pd) == "table" and type(pd.GREETING_INDIVIDUAL_KINDS) == "table" then
+		return pd.GREETING_INDIVIDUAL_KINDS :: { [string]: boolean }
+	end
+	return nil
+end
+
 local function evaluateMatch(player: Player, payload: any): Match?
 	if type(payload) ~= "table" then
 		return nil
@@ -394,6 +425,8 @@ local function createJoinGreetingService(deps: {
 	local evaluationComplete: { [number]: boolean } = {}
 
 	local service = {} :: Service
+	-- H11 shared pacer state: staff join greetings wait here and drain one per window.
+	local pacerState = GreetingPacer.new()
 
 	local function getPayload(player: Player): any?
 		if not overheadService then
@@ -412,6 +445,42 @@ local function createJoinGreetingService(deps: {
 			end
 		end
 		return nil
+	end
+
+	local function sendGreetingPayload(player: Player, payload: { [string]: any })
+		broadcastNetwork:fireAllClientsImmediate(payload)
+		log:info("Join greeting fired", {
+			userId = payload.userId,
+			categoryKind = payload.categoryKind,
+			roleKey = payload.roleKey,
+			rank = payload.rank,
+			amount = payload.amount,
+			paced = payload.paced == true,
+		})
+	end
+
+	local function drainGreetingQueue()
+		local cfg = greetingPacerCfg()
+		if cfg.windowSec <= 0 then
+			return
+		end
+		task.spawn(function()
+			while true do
+				local item, wakeAt = GreetingPacer.take(pacerState, os.clock(), cfg)
+				if wakeAt == nil then
+					break
+				end
+				if item ~= nil then
+					sendGreetingPayload(item.player, item.payload)
+				end
+				if wakeAt ~= nil then
+					local waitSec = wakeAt - os.clock()
+					if waitSec > 0 then
+						task.wait(waitSec)
+					end
+				end
+			end
+		end)
 	end
 
 	local function fireGreeting(player: Player, match: Match, overheadPayload: any?)
@@ -447,16 +516,29 @@ local function createJoinGreetingService(deps: {
 			enterDuration = tonumber(cfg.ENTER) or 0.28,
 			duration = showDuration,
 			sentAt = os.time(),
+			paced = false,
 		}
 
-		broadcastNetwork:fireAllClientsImmediate(payload)
-		log:info("Join greeting fired", {
-			userId = player.UserId,
-			categoryKind = match.categoryKind,
-			roleKey = match.roleKey,
-			rank = match.rank,
-			amount = amount,
-		})
+		local pacerCfg = greetingPacerCfg()
+		if
+			pacerCfg.windowSec > 0
+			and not GreetingPacer.isIndividual(match.categoryKind, greetingIndividualKinds())
+		then
+			payload.paced = true
+			-- Envelope: the greeting resolves against THIS player, so the queue carries the
+			-- player reference too (the joiner may have left by the time it is announced).
+			local handedOff =
+				GreetingPacer.submit(pacerState, { player = player, payload = payload }, os.clock(), pacerCfg)
+			if handedOff ~= nil then
+				-- Allowed immediately (window open): broadcast from here, and start a drain
+				-- pass in case something is already waiting behind it.
+				sendGreetingPayload(handedOff.player, handedOff.payload)
+			end
+			drainGreetingQueue()
+			return
+		end
+
+		sendGreetingPayload(player, payload)
 	end
 
 	local function tryEvaluate(player: Player, allowScheduleSettle: boolean)
@@ -545,6 +627,8 @@ local function createJoinGreetingService(deps: {
 		table.clear(evaluationInFlight)
 		table.clear(settleScheduled)
 		table.clear(evaluationComplete)
+		table.clear(pacerState.queue)
+		pacerState = GreetingPacer.new()
 	end
 
 	return service
