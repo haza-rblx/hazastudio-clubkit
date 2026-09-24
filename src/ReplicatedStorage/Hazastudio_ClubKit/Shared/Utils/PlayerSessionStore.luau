@@ -192,7 +192,9 @@ local function foldMutators(mutators: { Mutator }, base: any): any
 end
 
 local function splitKey(key: string): (string?, number?)
-	local ns, idStr = string.match(key, "^(.-)::(%d+)$")
+	-- Studio test players have NEGATIVE userIds; without the optional sign their sessions were
+	-- silently skipped by flushDue / flushAllPaced (kill-test defect D2, 2026-09-24).
+	local ns, idStr = string.match(key, "^(.-)::(%-?%d+)$")
 	return ns, tonumber(idStr)
 end
 

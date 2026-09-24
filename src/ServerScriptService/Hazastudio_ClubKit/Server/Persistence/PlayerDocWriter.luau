@@ -78,16 +78,20 @@ function PlayerDocWriter.guard<T>(docKey: string, write: () -> T): T
 		return write()
 	end
 	local minGap = tonumber(cfg().MIN_GAP_SEC) or 7
-	local wait = FlushPolicy.gapWait(lastDirectWrite[docKey] or -math.huge, os.clock(), minGap)
+	local now = os.clock()
+	local wait = FlushPolicy.gapWait(lastDirectWrite[docKey] or -math.huge, now, minGap)
+	-- The slot is RESERVED before sleeping, so a third (fourth, …) caller arriving during the
+	-- wait computes its gap from this reservation and lands MIN_GAP later still. Recording only
+	-- after the sleep let every waiter of one window sleep against the same old timestamp and
+	-- all run at last + MIN_GAP together (kill-test defect D1, 2026-09-24).
+	if lastDirectWrite[docKey] == nil then
+		lastDirectWriteCount += 1
+	end
+	lastDirectWrite[docKey] = now + wait
 	if wait > 0 then
 		BudgetMeter.recordEvent("samekey_gap_wait")
 		task.wait(wait)
 	end
-	-- Recorded before the write: two callers racing for one key still end up MIN_GAP apart.
-	if lastDirectWrite[docKey] == nil then
-		lastDirectWriteCount += 1
-	end
-	lastDirectWrite[docKey] = os.clock()
 	if lastDirectWriteCount > 1000 then
 		local cutoff = os.clock() - 60
 		for key, at in pairs(lastDirectWrite) do
