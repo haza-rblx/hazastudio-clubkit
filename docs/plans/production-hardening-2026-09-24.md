@@ -493,6 +493,9 @@ A new versioned DataStore key appears only if music sharding (B) is triggered. I
 | 16 | Other players' XP bars (P4, H1) | **Owner-only XP ticks accepted** — others get XP with the next full snapshot or another changed field (`PERF_XP_OWNER_ONLY = true`) |
 | 17 | Per-viewer packing (P4, H7) | **On by default** (`PACK_PER_VIEWER = true`); buyer scripts listening to `OverheadUpdate` must accept `{kind="pack", items}` — noted in the release UPGRADE guide |
 | 18 | P4b overhead template trim (H14) | **Design now, ship later as its own template release** (Packager step); measured 106 instances / 18 UIGradient per head |
+| 19 | P4b target (H14) | **49 instances / 6 UIGradient per head, no feature loss** (V6); the plan's 8,000-instances-per-client figure is restated to ~10,500 at 200 players (−52 % vs V4) |
+| 20 | P4b template shape | **One template, V6 = trimmed V5** (image-title row included, hidden by default); V4/V5 stay in the place ≥ 2 releases as the undo |
+| 21 | P4b Packager behaviour | **Copy buyer customisations (badge art, fonts, colours) by name automatically and report leftovers** |
 
 ### Original questions (kept for context)
 
