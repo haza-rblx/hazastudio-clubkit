@@ -4317,6 +4317,72 @@ Config.NetworkPerf = {
 	DEEP_DELTA_NESTED = true,
 }
 -- ============================================================
+-- Production hardening P4 (2026-09-24): performance at 200 players in one server.
+-- Plan: docs/plans/production-hardening-2026-09-24.md §2 H. ADR 0017. Engine constants, not
+-- buyer config. Each switch names its legacy value; setting it restores the pre-P4 behaviour.
+-- Measure with .tmp/crowd-harness-server.luau (Studio) and .tmp/perf-bench.luau (lune).
+-- ============================================================
+-- H1 (broadcast side): xp / xpProgress / xpNeeded reach other viewers only in full snapshots or
+-- riding along another changed field; an xp-only change goes to the owner alone. Legacy: false.
+Config.Overhead.PERF_XP_OWNER_ONLY = true
+-- H2: overhead delta baselines. "versions" = one baseline per subject + one version number per
+-- viewer-subject pair (DeltaCompressor.createVersioned). Legacy: "legacy" (deep copy per pair).
+Config.NetworkPerf.OVERHEAD_BASELINE = "versions"
+-- H7: one FireClient per viewer per flush on OverheadUpdate + ChatTagSync. Legacy: false.
+Config.NetworkPerf.PACK_PER_VIEWER = true
+Config.NetworkPerf.PACK_MESSAGE_KIND = "pack"
+-- H3: ProximityInterestService. "incremental" = subjects evaluated in PROXIMITY_GROUPS staggered
+-- groups (one group per PROXIMITY_TICK_INTERVAL), grid of PROXIMITY_CELL_SIZE studs, at most
+-- PROXIMITY_MAX_SUBSCRIBERS nearest viewers per subject (0 = no cap), a newcomer displaces the
+-- farthest member only when PROXIMITY_SWAP_MARGIN studs nearer, at most
+-- PROXIMITY_MAX_ENTERS_PER_VIEWER new subscriptions per viewer per 0.5 s (0 = no cap), and a
+-- spawn recomputes that player's row only. Legacy: "legacy" (full pass every RECOMPUTE_INTERVAL).
+Config.NetworkPerf.PROXIMITY_MODE = "incremental"
+Config.NetworkPerf.PROXIMITY_TICK_INTERVAL = 0.25
+Config.NetworkPerf.PROXIMITY_GROUPS = 4
+Config.NetworkPerf.PROXIMITY_CELL_SIZE = 8
+Config.NetworkPerf.PROXIMITY_MAX_SUBSCRIBERS = 30
+Config.NetworkPerf.PROXIMITY_SWAP_MARGIN = 8
+Config.NetworkPerf.PROXIMITY_MAX_ENTERS_PER_VIEWER = 20
+-- H4 (ADR 0008 addendum, owner decision K8/9): above PERF_SPREAD_ABOVE_PLAYERS players each
+-- player is sampled once per PERF_SPREAD_WINDOW seconds, a slice per SAMPLE_INTERVAL tick, with a
+-- position-only lead sample one tick earlier so speed/noclip still judge a SAMPLE_INTERVAL chord.
+-- One shared RaycastParams whose exclude list follows CharacterAdded/Removing.
+-- Legacy: PERF_SPREAD_ABOVE_PLAYERS = 0 (every player every tick), PERF_SHARED_RAYCAST_PARAMS = false.
+Config.MovementGuard.PERF_SPREAD_ABOVE_PLAYERS = 60
+Config.MovementGuard.PERF_SPREAD_WINDOW = 2
+Config.MovementGuard.PERF_SHARED_RAYCAST_PARAMS = true
+-- H8: the +5 s / +10 s join rebuilds run only when the join payload's group rank or data was
+-- unresolved (fallback). Legacy: false. A client roster catch-up request within
+-- PERF_ROSTER_REQUEST_DEDUPE_SEC of the join roster (or before it) is ignored. Legacy: 0.
+Config.Overhead.PERF_SETTLE_REBUILD_ONLY_UNRESOLVED = true
+Config.Overhead.PERF_ROSTER_REQUEST_DEDUPE_SEC = 10
+-- H9: the joiner's chat-tag roster goes out in chunks of this many entries, one chunk per frame.
+-- Legacy: 0 (one message with every entry).
+Config.Overhead.PERF_CHAT_TAG_BATCH_CHUNK = 50
+-- H12: client AvatarPrewarmPool. Legacy: PREWARM_ON_JOIN = true, PREWARM_RELOAD_POOLED_ONLY =
+-- false, PREWARM_QUEUE_MAX = 0 (unbounded), PREWARM_SCAN_MAX_PLAYERS = 0 (scan at any count).
+Config.NetworkPerf.PREWARM_ON_JOIN = false
+Config.NetworkPerf.PREWARM_RELOAD_POOLED_ONLY = true
+Config.NetworkPerf.PREWARM_QUEUE_MAX = 10
+Config.NetworkPerf.PREWARM_SCAN_MAX_PLAYERS = 60
+-- H13: overhead distance culling on the client. "Far" = PERF_FAR_MAX_DISTANCE studs (legacy 0 =
+-- unlimited); at most PERF_MAX_ENABLED_OVERHEADS other players' overheads enabled, nearest
+-- first (legacy 0 = no cap), re-ranked every PERF_CULL_INTERVAL s, a culled one replaces an
+-- enabled one only when PERF_CULL_SWAP_MARGIN studs nearer. PERF_GRADIENT_CULL skips animated
+-- title gradients whose overhead is disabled or out of range (legacy false).
+Config.Overhead.PERF_FAR_MAX_DISTANCE = 90
+Config.Overhead.PERF_MAX_ENABLED_OVERHEADS = 40
+Config.Overhead.PERF_CULL_INTERVAL = 0.5
+Config.Overhead.PERF_CULL_SWAP_MARGIN = 4
+Config.Overhead.PERF_GRADIENT_CULL = true
+-- H15: admin player lists rebuild on join/leave only while open, at most once per this many
+-- seconds (closed panels rebuild on open). Legacy: 0 (rebuild on every join/leave).
+Config.NetworkPerf.ADMIN_LIST_DEBOUNCE_SEC = 1
+-- H16: SettingsController keeps a per-character list of managed effects, so a graphics toggle
+-- walks those instead of every descendant of every character. Legacy: false.
+Config.NetworkPerf.SETTINGS_EFFECT_CACHE = true
+-- ============================================================
 -- CONFIG VALIDATION
 -- ============================================================
 local function validateConfig()

@@ -18,8 +18,22 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Cleaner = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Cleaner)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
+local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 
 local log = Logger.new("AvatarPrewarmPool")
+
+-- Production hardening P4 (plan H12): every client used to build a CreateHumanoidModelFromUserId
+-- model for EVERY joiner and rebuild on every other player's respawn, through an unbounded
+-- queue (~199 builds per client while a server fills). Switches in Config.NetworkPerf:
+--   PREWARM_ON_JOIN            false = joiners are not prewarmed (the 30-stud scan and on-demand
+--                              clicks still are); legacy true
+--   PREWARM_RELOAD_POOLED_ONLY true = a respawn reloads only a pooled / loading model; legacy false
+--   PREWARM_QUEUE_MAX          10 = queued background loads beyond this drop the oldest; 0 = legacy
+--   PREWARM_SCAN_MAX_PLAYERS   60 = no proximity scan above this many players; 0 = legacy
+local function prewarmSetting(key: string): any
+	local np = (Config :: any).NetworkPerf
+	return if type(np) == "table" then np[key] else nil
+end
 
 export type PoolEntry = {
 	userId: number,
@@ -163,18 +177,44 @@ function AvatarPrewarmPool.create(config: PoolConfig?): AvatarPrewarmPool
 	-- so we do not flood the CPU with many simultaneous API calls.
 	local MAX_CONCURRENT_LOADS = 2
 	local activeLoads = 0
-	local loadQueue: { () -> () } = {}
+	type QueuedLoad = { userId: number, gen: number, run: () -> (), urgent: boolean }
+	local loadQueue: { QueuedLoad } = {}
+	local queueMax = math.max(0, math.floor(tonumber(prewarmSetting("PREWARM_QUEUE_MAX")) or 0))
 
 	local function drainQueue()
 		while activeLoads < MAX_CONCURRENT_LOADS and #loadQueue > 0 do
-			local nextFn = table.remove(loadQueue, 1)
-			if nextFn then
-				nextFn()
+			local nextLoad = table.remove(loadQueue, 1)
+			if nextLoad then
+				nextLoad.run()
 			end
 		end
 	end
 
-	local function loadModel(userId: number, force: boolean?)
+	-- P4 (H12): keep the queue bounded; the oldest background load goes first (its player is
+	-- the likeliest to have walked away; a clicked one never is), and its `loading` flag is
+	-- released so a later scan or click can queue it again.
+	local function enqueueLoad(item: QueuedLoad)
+		if item.urgent then
+			table.insert(loadQueue, 1, item)
+		else
+			table.insert(loadQueue, item)
+		end
+		while queueMax > 0 and #loadQueue > queueMax do
+			local dropAt: number? = nil
+			for index, queued in loadQueue do
+				if not queued.urgent then
+					dropAt = index
+					break
+				end
+			end
+			local dropped = table.remove(loadQueue, dropAt or #loadQueue)
+			if dropped and loadGeneration[dropped.userId] == dropped.gen then
+				loading[dropped.userId] = nil
+			end
+		end
+	end
+
+	local function loadModel(userId: number, force: boolean?, urgent: boolean?)
 		if not force and (pool[userId] or loading[userId]) then
 			return
 		end
@@ -254,11 +294,11 @@ function AvatarPrewarmPool.create(config: PoolConfig?): AvatarPrewarmPool
 			end)
 		end
 
-		-- If slot available, run directly. Otherwise enqueue FIFO.
+		-- If slot available, run directly. Otherwise enqueue FIFO (urgent = front).
 		if activeLoads < MAX_CONCURRENT_LOADS then
 			executeLoad()
 		else
-			table.insert(loadQueue, executeLoad)
+			enqueueLoad({ userId = userId, gen = gen, run = executeLoad, urgent = urgent == true })
 		end
 	end
 
@@ -291,6 +331,12 @@ function AvatarPrewarmPool.create(config: PoolConfig?): AvatarPrewarmPool
 
 		local position = getLocalPosition()
 		if not position then
+			return
+		end
+
+		-- P4 (H12): in a full server only clicked players (prewarmOnDemand) get models.
+		local scanMax = math.max(0, math.floor(tonumber(prewarmSetting("PREWARM_SCAN_MAX_PLAYERS")) or 0))
+		if scanMax > 0 and #Players:GetPlayers() > scanMax then
 			return
 		end
 
@@ -330,7 +376,7 @@ function AvatarPrewarmPool.create(config: PoolConfig?): AvatarPrewarmPool
 			if pinnedUserIds[userId] then
 				task.defer(function()
 					if alive then
-						loadModel(userId)
+						loadModel(userId, nil, true)
 					end
 				end)
 			end
@@ -353,7 +399,7 @@ function AvatarPrewarmPool.create(config: PoolConfig?): AvatarPrewarmPool
 		if poolSize >= maxPoolSize and not pool[userId] then
 			evictLRU()
 		end
-		loadModel(userId)
+		loadModel(userId, nil, true) -- a click: front of the queue, never dropped for space
 		return true
 	end
 
@@ -474,6 +520,13 @@ function AvatarPrewarmPool.create(config: PoolConfig?): AvatarPrewarmPool
 				if not alive then return end
 				-- Check player still valid after delay
 				if not Players:GetPlayerByUserId(player.UserId) then return end
+				-- P4 (H12): nothing pooled or loading for this player -> nothing stale to rebuild.
+				if prewarmSetting("PREWARM_RELOAD_POOLED_ONLY") == true
+					and not pool[player.UserId]
+					and not loading[player.UserId]
+				then
+					return
+				end
 
 				-- Invalidate old model + bump generation so in-flight loads are stale.
 				bumpLoadGeneration(player.UserId)
@@ -498,6 +551,11 @@ function AvatarPrewarmPool.create(config: PoolConfig?): AvatarPrewarmPool
 		if not alive then return end
 		-- Setup listener for re-warm on respawn (tracked, disconnected on leave)
 		setupCharacterAddedListener(player)
+		-- P4 (H12): legacy prewarmed every joiner on every client; now the 30-stud scan and
+		-- clicks decide (Config.NetworkPerf.PREWARM_ON_JOIN).
+		if prewarmSetting("PREWARM_ON_JOIN") == false then
+			return
+		end
 		task.defer(function()
 			if alive then
 				loadModel(player.UserId)

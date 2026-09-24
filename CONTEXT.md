@@ -45,6 +45,18 @@ Domain glossary for agents. Terms only — no implementation details, no workflo
 - **Groups disabled (per server)** — the VPS said a venue has no group endpoint (403 "not enabled" / `groups_disabled`); the server stops asking for 30 min and takes ranks from GroupService.
 - **Delivery report queue** — ReliabilityV2 client acks and displays, deduped and sent in batches (one POST per kind per 3 s) instead of one POST per player per donation.
 
+## Performance at 200 players (production hardening P4, ADR 0017)
+
+- **Subject / viewer** — in the overhead system the *subject* is the player whose nametag it is, the *viewer* a player who sees it. A **pair** is one viewer–subject combination; per-pair state is what grows with n².
+- **Subscriber cap** — `ProximityInterestService` keeps at most the 30 **nearest** viewers per subject (plus the subject itself); a newcomer displaces the farthest only when the **swap margin** (8 studs) nearer. Drives both the `overhead:` and `sync:` channels (the latter only as "anyone in range?").
+- **Snapshot-on-enter** — the full payload a viewer gets when it enters a subject's range; capped at 20 per viewer per 0.5 s (the **enter budget**).
+- **Versioned baseline** — the overhead delta model since P4: one baseline and a version per field per subject; a pair stores only the version its viewer last received. Replaces the per-pair copy.
+- **Owner-only fields** — `xp`, `xpProgress`, `xpNeeded`: sent to other viewers only in full snapshots or together with another changed field.
+- **Pack** — `{ kind = "pack", items }`: one frame's messages to one viewer in a single `FireClient`. Every listener of a packed remote (`OverheadUpdate`, `ChatTagSync`) unpacks with `NetworkCoalesce.forEachMessage`.
+- **Overhead budget** — on the client, at most 40 other players' overheads enabled (one CanvasGroup texture each), nearest to the camera first; the rest are **budget-culled** (disabled, no layout work).
+- **Spread sampling** — MovementGuard above 60 players samples one `userId` slice per tick, each player every 2 s, with a position-only **lead sample** one tick earlier.
+- **Crowd harness** — `.tmp/crowd-harness-server.luau`: 200 synthetic subjects run through the kit's own modules in one `eval_server_runtime` call; `.tmp/perf-bench.luau` is its lune twin.
+
 ## UI motion
 
 - **Rasterized group** — a `CanvasGroup`: Roblox flattens its subtree into a GPU texture sized by its `AbsoluteSize`. Resizing re-creates the texture; exceeding the client's texture budget renders it blank (Roblox docs).

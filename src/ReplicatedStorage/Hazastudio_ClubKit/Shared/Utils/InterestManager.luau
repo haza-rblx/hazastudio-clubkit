@@ -36,12 +36,8 @@ local function create(deps: InterestManagerDeps)
             channels[channel] = {}
         end
         channels[channel][player] = true
-
-        log:info("Player subscribed", {
-            player = player.Name,
-            channel = channel,
-            subscriberCount = self:getCount(channel),
-        })
+        -- P4 (H3): no per-subscribe log. It ran twice per viewer-subject pair and counted the
+        -- whole channel each time (O(k) per subscribe, O(k²) per subject filling up).
 
         -- Return unsubscribe function
         return function()

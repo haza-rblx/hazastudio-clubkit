@@ -29,6 +29,9 @@ type OverheadPayload = Types.OverheadPayload
 -- the controller does not hard-depend on the Service module at require-time.
 type ProximityInterestService = {
 	getSubscribers: (self: ProximityInterestService, channelPrefix: string, subject: Player) -> { Player },
+	-- P4 (H8): O(1) membership test; optional so an older service still works.
+	isSubscriber: ((self: ProximityInterestService, subject: Player, viewer: Player) -> boolean)?,
+	recomputePlayer: ((self: ProximityInterestService, player: Player) -> ())?,
 	onSubscriberAdded: (
 		self: ProximityInterestService,
 		listener: (event: { subject: Player, viewer: Player, channelPrefix: string }) -> ()
@@ -94,10 +97,17 @@ end
 	-- NetworkManagers batch per-Heartbeat. Overhead deltas can fan out to all
 	-- 70+ players multiple times per second (donation tick, streak rollover,
 	-- like count); batching coalesces same-frame fires onto one wire flush.
+	-- P4 (H7): OverheadUpdate + ChatTagSync pack each viewer's messages of one frame into one
+	-- FireClient (Config.NetworkPerf.PACK_PER_VIEWER); every client listener unpacks them.
+	local perf = Config.NetworkPerf :: any
+	local packKind = if type(perf) == "table" and type(perf.PACK_MESSAGE_KIND) == "string"
+		then perf.PACK_MESSAGE_KIND
+		else "pack"
 	local overheadNetwork = NetworkManager.create({
 		reliable = RemoteOverheadUpdate,
 		logger = log,
 		isServer = true,
+		packKind = packKind,
 	})
 	local aboutRosterNetwork = NetworkManager.create({
 		reliable = RemoteAboutRosterSync,
@@ -108,6 +118,7 @@ end
 		reliable = RemoteChatTagSync,
 		logger = log,
 		isServer = true,
+		packKind = packKind,
 	})
 	-- Client -> Server: re-request live roster payload for late-init UI
 	local RemoteRosterRequest = getOrCreateRemote("OverheadRosterRequest")
@@ -178,6 +189,39 @@ end
 	local function deltaKey(subjectUserId: number, viewerUserId: number): string
 		return ("overhead:%d:%d"):format(subjectUserId, viewerUserId)
 	end
+	-- P4 (H2, ADR 0017): one baseline per subject + one version number per pair instead of a
+	-- deep copy per pair. H1 broadcast side: xp fields reach other viewers only riding along
+	-- another change (the owner gets every tick). Legacy: Config.NetworkPerf.OVERHEAD_BASELINE.
+	local baselineStore = if type(perf) == "table" and perf.OVERHEAD_BASELINE == "versions"
+		then DeltaCompressor.createVersioned({
+			selfOnlyFields = if Config.Overhead.PERF_XP_OWNER_ONLY == true
+				then { xp = true, xpProgress = true, xpNeeded = true }
+				else nil,
+		})
+		else nil
+	-- The delta `viewer` needs for `subject` (full after `reset`); nil when up to date.
+	local function pairDelta(subjectUserId: number, viewerUserId: number, payload: OverheadPayload, reset: boolean): any?
+		if baselineStore then
+			if reset then
+				baselineStore:resetPair(subjectUserId, viewerUserId)
+			end
+			return baselineStore:deltaFor(subjectUserId, viewerUserId)
+		end
+		local key = deltaKey(subjectUserId, viewerUserId)
+		if reset then
+			deltaCompressor:resetKey(key)
+		end
+		return deltaCompressor:computeDelta(key, payload :: any)
+	end
+	local function dropPairBaseline(subjectUserId: number, viewerUserId: number)
+		if baselineStore then
+			baselineStore:resetPair(subjectUserId, viewerUserId)
+		else
+			deltaCompressor:resetKey(deltaKey(subjectUserId, viewerUserId))
+		end
+	end
+	-- P4 (H8): when the join roster went out (os.clock), for the catch-up request dedupe.
+	local joinRosterSentAt: { [number]: number } = {}
 	local function appendFingerprintNumber(parts: { string }, value: number?)
 		table.insert(parts, if value ~= nil then tostring(value) else "")
 	end
@@ -369,6 +413,24 @@ end
 		local batch = {}
 		for _, entry in pairs(chatTagEntries) do
 			table.insert(batch, entry)
+		end
+		-- P4 (H9): the client upserts every batch additively, so a 200-entry roster can go out
+		-- in chunks, one per frame (a frame's messages to one viewer would be packed together).
+		local chunk = math.floor(tonumber(Config.Overhead.PERF_CHAT_TAG_BATCH_CHUNK) or 0)
+		if chunk > 0 and #batch > chunk then
+			for first = 1, #batch, chunk do
+				if first > 1 then
+					task.wait()
+					if not player.Parent then
+						return
+					end
+				end
+				chatTagNetwork:fireClient(player, {
+					kind = "chattag_batch",
+					batch = table.move(batch, first, math.min(first + chunk - 1, #batch), 1, {}),
+				})
+			end
+			return
 		end
 		chatTagNetwork:fireClient(player, {
 			kind = "chattag_batch",
@@ -1221,14 +1283,14 @@ end
 			recipients = withSelf
 		end
 		local subjectUserId = player.UserId
+		if baselineStore then
+			-- One diff per subject change, shared by every viewer (H2).
+			baselineStore:commit(subjectUserId, payload :: any)
+		end
 
 		for _, viewer in recipients do
-			local key = deltaKey(subjectUserId, viewer.UserId)
-			if resolvedMode == "recovery" then
-				-- R6.4: reset this recipient's baseline so computeDelta returns full state.
-				deltaCompressor:resetKey(key)
-			end
-			local delta = deltaCompressor:computeDelta(key, payload :: any)
+			-- R6.4: recovery resets this recipient's baseline so the send is the full state.
+			local delta = pairDelta(subjectUserId, viewer.UserId, payload, resolvedMode == "recovery")
 			if delta then
 				NetworkPerfCounters.record("overhead_update_delta")
 				overheadNetwork:fireClient(viewer, {
@@ -1265,12 +1327,20 @@ end
 		if viewer == subject then
 			return true
 		end
-		-- Prefer InterestManager membership when available.
+		-- Prefer InterestManager membership when available. P4 (H8): O(1) membership test
+		-- instead of building the subject's whole subscriber list per existing player.
 		if proximity then
-			local recipients = proximity:getSubscribers("overhead:", subject)
-			for _, recipient in ipairs(recipients) do
-				if recipient == viewer then
+			local isSubscriber = proximity.isSubscriber
+			if isSubscriber then
+				if isSubscriber(proximity, subject, viewer) then
 					return true
+				end
+			else
+				local recipients = proximity:getSubscribers("overhead:", subject)
+				for _, recipient in ipairs(recipients) do
+					if recipient == viewer then
+						return true
+					end
 				end
 			end
 		end
@@ -1289,7 +1359,9 @@ end
 		return delta.Magnitude <= radius
 	end
 
-	local function sendAllExistingTo(newPlayer: Player)
+	-- `skipAlreadySent` (join path, P4 H8): a subject whose full payload already reached this
+	-- viewer through Snapshot-on-enter is not sent a second time in the join batch.
+	local function sendAllExistingTo(newPlayer: Player, skipAlreadySent: boolean?)
 		local batchSize = math.max(1, Config.Overhead.EXISTING_PAYLOAD_BATCH_SIZE)
 		local batchDelay = math.max(0, Config.Overhead.EXISTING_PAYLOAD_BATCH_DELAY)
 		local batch = table.create(batchSize)
@@ -1312,6 +1384,9 @@ end
 		for _, existingPlayer in ipairs(Players:GetPlayers()) do
 			if existingPlayer.Character and dataReadyPlayers[existingPlayer.UserId] then
 				if proximityOnly and not isNearbyForJoin(newPlayer, existingPlayer) then
+					continue
+				end
+				if skipAlreadySent and baselineStore and baselineStore:hasPair(existingPlayer.UserId, newPlayer.UserId) then
 					continue
 				end
 				local payload: OverheadPayload? = cachedPayloads[existingPlayer.UserId]
@@ -1379,6 +1454,29 @@ end
 		tonumber(Config.Persistence and Config.Persistence.DEFER_SECONDS) or 8
 	)
 
+	-- P4 (H3): a spawn recomputes this player's proximity row only (O(n)), not every pair.
+	local function recomputeProximityFor(player: Player)
+		if not proximity then
+			return
+		end
+		local recomputePlayer = proximity.recomputePlayer
+		if recomputePlayer then
+			recomputePlayer(proximity, player)
+		elseif type((proximity :: any).recomputeNow) == "function" then
+			(proximity :: any):recomputeNow()
+		end
+	end
+
+	-- P4 (H8): the +5 s / +10 s rebuilds exist for a group rank or stored data that was not
+	-- resolved at join; a join payload that had both skips them.
+	local function needsSettleRebuild(player: Player): boolean
+		if Config.Overhead.PERF_SETTLE_REBUILD_ONLY_UNRESOLVED ~= true then
+			return true
+		end
+		local userId = player.UserId
+		return payloadRankLookupOk[userId] ~= true or payloadWasFallback[userId] == true
+	end
+
 	local function finishCharacterSetup(player: Player, isRespawn: boolean?)
 		-- Join-time DataStore reads are serialized; wait until this player's data is
 		-- ready before the first broadcast so we don't fan out unbudgeted reads.
@@ -1396,9 +1494,7 @@ end
 			end
 			-- HRP gap drops self+nearby until the next proximity tick. Force
 			-- membership restore before recovery so Snapshot reaches nearby viewers.
-			if proximity and type((proximity :: any).recomputeNow) == "function" then
-				(proximity :: any):recomputeNow()
-			end
+			recomputeProximityFor(player)
 			broadcastPayload(player, "recovery")
 			hasCompletedInitialSetup[player.UserId] = true
 			return
@@ -1412,9 +1508,7 @@ end
 		if not player.Parent then
 			return
 		end
-		if proximity and type((proximity :: any).recomputeNow) == "function" then
-			(proximity :: any):recomputeNow()
-		end
+		recomputeProximityFor(player)
 		-- 1. Broadcast this player's overhead to all subscribers (delta mode — R6.2).
 		--    The Snapshot-on-enter handler in ProximityInterestService (task 3.2) will
 		--    send a full Snapshot to each viewer when they enter View_Range; this call
@@ -1425,13 +1519,17 @@ end
 			if not waitForGameplayReady(player) then
 				return
 			end
-			sendAllExistingTo(player)
+			joinRosterSentAt[player.UserId] = os.clock()
+			sendAllExistingTo(player, true)
 			sendAboutRosterTo(player)
 			sendChatTagsTo(player)
 		end)
 		-- GroupService settle windows (not character readiness) — keep wall-clock.
 		task.delay(Config.Overhead.GROUP_RANK_SETTLE_DELAY, function()
 			if not player.Parent then
+				return
+			end
+			if not needsSettleRebuild(player) then
 				return
 			end
 			if not waitForGameplayReady(player) then
@@ -1441,6 +1539,9 @@ end
 		end)
 		task.delay(Config.Overhead.GROUP_RANK_SETTLE_DELAY * 2, function()
 			if not player.Parent then
+				return
+			end
+			if not needsSettleRebuild(player) then
 				return
 			end
 			if not waitForGameplayReady(player) then
@@ -1563,8 +1664,15 @@ end
 		-- (keys "overhead:<userId>:<viewerUserId>"). The per-viewer side of any
 		-- remaining pairs is cleaned up when the onSubscriberRemoved handler fires
 		-- (task 3.2), or by the viewer's own onPlayerRemoving when they disconnect.
-		local subjectPrefix = ("overhead:%d:"):format(player.UserId)
-		deltaCompressor:cleanup(subjectPrefix)
+		joinRosterSentAt[player.UserId] = nil
+		if baselineStore then
+			-- O(k): the subject's baseline + every pair where it was subject or viewer (H2).
+			baselineStore:removeSubject(player.UserId)
+			baselineStore:removeViewer(player.UserId)
+		else
+			local subjectPrefix = ("overhead:%d:"):format(player.UserId)
+			deltaCompressor:cleanup(subjectPrefix)
+		end
 		log:debug("Player cleanup", { player = player.Name })
 	end
 	-- ----------------------------------------------------------
@@ -1619,6 +1727,28 @@ end
 			return
 		end
 
+		-- P4 (H8): the client's catch-up request (ChatTagStore init) usually lands just before or
+		-- just after the join roster, which already carries all three. Ignore it inside the
+		-- window; if the join roster has not gone out yet, serve it only if it still has not
+		-- once the window passes.
+		local dedupe = tonumber(Config.Overhead.PERF_ROSTER_REQUEST_DEDUPE_SEC) or 0
+		if dedupe > 0 then
+			local sentAt = joinRosterSentAt[player.UserId]
+			if sentAt ~= nil and os.clock() - sentAt < dedupe then
+				return
+			end
+			if sentAt == nil then
+				task.delay(dedupe, function()
+					if player.Parent and joinRosterSentAt[player.UserId] == nil then
+						joinRosterSentAt[player.UserId] = os.clock()
+						sendAllExistingTo(player)
+						sendAboutRosterTo(player)
+						sendChatTagsTo(player)
+					end
+				end)
+				return
+			end
+		end
 		task.spawn(function()
 			sendAllExistingTo(player)
 			sendAboutRosterTo(player)
@@ -1728,13 +1858,15 @@ end
 
 			-- Reset the per-pair delta key to establish a fresh baseline for this
 			-- viewer, so the first computeDelta returns a full Snapshot (R1.4, R6.5).
-			local key = deltaKey(ev.subject.UserId, ev.viewer.UserId)
-			deltaCompressor:resetKey(key)
+			-- Versioned baselines (H2): record the payload being sent as the subject's current one.
+			if baselineStore then
+				baselineStore:commit(ev.subject.UserId, payload :: any)
+			end
 
 			-- Send the full Snapshot to the entering viewer only.
 			-- After resetKey, computeDelta returns the full state as a "Snapshot".
 			-- Use DELTA_MESSAGE_KIND — the client processes both full and delta the same way.
-			local snap = deltaCompressor:computeDelta(key, payload :: any)
+			local snap = pairDelta(ev.subject.UserId, ev.viewer.UserId, payload, true)
 			if snap then
 				overheadNetwork:fireClient(ev.viewer, {
 					kind = Config.Overhead.DELTA_MESSAGE_KIND,
@@ -1757,8 +1889,7 @@ end
 
 			-- Drop the per-pair delta baseline so that when the viewer re-enters
 			-- View_Range, the onSubscriberAdded handler sends a fresh Snapshot (R6.6).
-			local key = deltaKey(ev.subject.UserId, ev.viewer.UserId)
-			deltaCompressor:resetKey(key)
+			dropPairBaseline(ev.subject.UserId, ev.viewer.UserId)
 
 			log:debug("Delta baseline dropped on leave", {
 				subject = ev.subject.Name,

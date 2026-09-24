@@ -248,6 +248,28 @@ function MovementPolicy.evaluate(prev: Sample?, cur: Sample, flags: Flags, cfg: 
 	return violations
 end
 
+-- Spread schedule (production hardening P4, plan H4; ADR 0008 addendum). Above
+-- PERF_SPREAD_ABOVE_PLAYERS players the guard samples one slice of players per tick instead of
+-- all of them, so each player is sampled once per PERF_SPREAD_WINDOW seconds. 1 = every player
+-- every tick (legacy, and whenever the keys are missing or 0).
+function MovementPolicy.sampleSlices(playerCount: number, cfg: any, interval: number): number
+	local above = if type(cfg) == "table" then tonumber(cfg.PERF_SPREAD_ABOVE_PLAYERS) else nil
+	local window = if type(cfg) == "table" then tonumber(cfg.PERF_SPREAD_WINDOW) else nil
+	if not above or above <= 0 or not window or interval <= 0 or playerCount <= above then
+		return 1
+	end
+	return math.max(1, math.floor(window / interval + 0.5))
+end
+
+-- Stable slice membership: a player's slice follows its userId, not its position in the
+-- (join-order dependent) player list, so nobody is skipped or sampled twice when players join.
+function MovementPolicy.inSlice(userId: number, tick: number, slices: number): boolean
+	if slices <= 1 then
+		return true
+	end
+	return userId % slices == tick % slices
+end
+
 -- Strike ledger: whole strikes decay every STRIKE_DECAY_SEC; warn once per climb past
 -- WARN_AT; kick at KICK_AT. Returns the ledger and the action to take.
 function MovementPolicy.applyStrikes(ledger: Ledger, violations: { Violation }, now: number, cfg: any): (Ledger, string)

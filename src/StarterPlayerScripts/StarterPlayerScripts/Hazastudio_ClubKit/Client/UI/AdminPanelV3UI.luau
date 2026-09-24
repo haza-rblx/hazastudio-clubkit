@@ -1064,12 +1064,27 @@ function AdminPanelV3UI:_wire()
 			self:_applySearch(self._searchBox.Text)
 		end)
 	end
-	Players.PlayerAdded:Connect(function()
-		self:refreshPlayers()
-	end)
-	Players.PlayerRemoving:Connect(function()
-		self:refreshPlayers()
-	end)
+	-- P4 (H15): a closed panel does not rebuild on every join/leave (show() rebuilds it); an
+	-- open one rebuilds at most once per ADMIN_LIST_DEBOUNCE_SEC. 0 = legacy (every event).
+	local function onRosterChanged()
+		local debounce = tonumber((Config.NetworkPerf :: any).ADMIN_LIST_DEBOUNCE_SEC) or 0
+		if debounce <= 0 then
+			self:refreshPlayers()
+			return
+		end
+		if self._rosterRefreshPending or not self:isVisible() then
+			return
+		end
+		self._rosterRefreshPending = true
+		task.delay(debounce, function()
+			self._rosterRefreshPending = false
+			if self:isVisible() then
+				self:refreshPlayers()
+			end
+		end)
+	end
+	Players.PlayerAdded:Connect(onRosterChanged)
+	Players.PlayerRemoving:Connect(onRosterChanged)
 
 	bindButton(self._presetButton, function()
 		self:_openPresetPicker()

@@ -17,6 +17,11 @@
 -- order-sensitive multi-message streams that share a key — use distinct `data.kind`
 -- or Immediate. Immediate still goes through the queue then flushNow(); coalesce
 -- applies within that same flush.
+--
+-- Packing (P4 / H7, Config.NetworkPerf.PACK_PER_VIEWER): an instance created with `packKind`
+-- sends each viewer's reliable messages of one flush in ONE FireClient ({ kind = packKind,
+-- items }); a lone message goes unwrapped; broadcasts stay ordering barriers. Every client
+-- listener of such a remote must unpack via NetworkCoalesce.forEachMessage.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -45,10 +50,21 @@ type NetworkManagerDeps = {
 	unreliable: UnreliableRemoteEvent?,
 	logger: any,
 	isServer: boolean,
+	-- Production hardening P4 (H7): pack each viewer's reliable messages of one flush into ONE
+	-- FireClient ({ kind = packKind, items }). Only for remotes whose every client listener
+	-- unpacks with NetworkCoalesce.forEachMessage. Nil = one FireClient per message.
+	packKind: string?,
 }
 
 local function useFrameCoalesce(): boolean
 	return Config.Network.ENABLE_FRAME_COALESCE == true
+end
+
+-- Config.NetworkPerf.PACK_PER_VIEWER (P4, H7). false = legacy wire (one FireClient per message,
+-- "list" entries coalesced on their sorted recipient ids).
+local function usePerViewer(): boolean
+	local np = Config.NetworkPerf :: any
+	return type(np) == "table" and np.PACK_PER_VIEWER == true
 end
 
 --- One entry per coalesce key, first-seen order. Delta kinds (Config.Network.COALESCE_MERGE_FIELDS)
@@ -56,6 +72,10 @@ end
 local function coalesceQueue(queue: { OutboundEntry }): { OutboundEntry }
 	if #queue <= 1 or not useFrameCoalesce() then
 		return queue
+	end
+	if usePerViewer() then
+		-- Per-viewer keys: no sort + join of every recipient id per "list" message.
+		queue = NetworkCoalesce.expandLists(queue :: any) :: any
 	end
 	return NetworkCoalesce.coalesce(queue :: any, Config.Network.COALESCE_MERGE_FIELDS) :: any
 end
@@ -67,6 +87,7 @@ local function create(deps: NetworkManagerDeps)
 	local unreliable = deps.unreliable
 	local log = deps.logger
 	local isServer = deps.isServer
+	local packKind = deps.packKind
 
 	-- Generate a unique instance ID for scheduler registration (R9.3).
 	nextInstanceId += 1
@@ -105,6 +126,9 @@ local function create(deps: NetworkManagerDeps)
 		local toSend = coalesceQueue(queue)
 
 		if isServer then
+			if packKind and #toSend > 1 and remote == reliable and usePerViewer() then
+				toSend = NetworkCoalesce.pack(toSend :: any, packKind) :: any
+			end
 			for _, entry in toSend do
 				dispatchServer(entry, remote)
 			end

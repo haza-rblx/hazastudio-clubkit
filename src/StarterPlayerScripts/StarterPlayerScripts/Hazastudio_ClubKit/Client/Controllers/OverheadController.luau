@@ -13,6 +13,8 @@ local OverheadDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domai
 local Logger     = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local DeltaCompressor = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DeltaCompressor)
 local NetworkPerfCounters = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.NetworkPerfCounters)
+local NetworkCoalesce = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.NetworkCoalesce)
+local OverheadCullBudget = require(script.Parent.Parent.Utils.OverheadCullBudget)
 local CharacterReady = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.CharacterReady)
 
 type OverheadPayload = Types.OverheadPayload
@@ -151,6 +153,54 @@ local function waitForOverheadUpdateRemote(remotes: Instance): RemoteEvent?
 		end
 	end
 	return nil
+end
+
+-- P4 (H13): keep at most Config.Overhead.PERF_MAX_ENABLED_OVERHEADS other players' overheads
+-- enabled (one CanvasGroup texture each), nearest to the camera first, re-ranked every
+-- PERF_CULL_INTERVAL s. The local player's own overhead is never culled. 0 = legacy (no cap).
+local function startCullBudget(uiCache: { [number]: any })
+	local cap = math.floor(tonumber(Config.Overhead.PERF_MAX_ENABLED_OVERHEADS) or 0)
+	if cap <= 0 then
+		return
+	end
+	local interval = math.max(0.1, tonumber(Config.Overhead.PERF_CULL_INTERVAL) or 0.5)
+	local margin = math.max(0, tonumber(Config.Overhead.PERF_CULL_SWAP_MARGIN) or 0)
+	local localPlayer = Players.LocalPlayer
+	local accum = 0
+	local entries: { OverheadCullBudget.Entry } = {}
+	track(RunService.Heartbeat:Connect(function(dt: number)
+		accum += dt
+		if accum < interval then
+			return
+		end
+		accum = 0
+		local camera = workspace.CurrentCamera
+		if not camera then
+			return
+		end
+		local origin = camera.CFrame.Position
+		local localUserId = if localPlayer then localPlayer.UserId else nil
+		table.clear(entries)
+		for userId, ui in uiCache do
+			local gui = ui._gui
+			local adornee = if gui then (gui.Adornee or gui.Parent) else nil
+			if adornee and adornee:IsA("BasePart") then
+				table.insert(entries, {
+					key = userId,
+					distance = ((adornee :: BasePart).Position - origin).Magnitude,
+					enabled = not OverheadUI.isBudgetCulled(ui),
+					pinned = userId == localUserId,
+				})
+			end
+		end
+		local keep = OverheadCullBudget.select(entries, cap, margin, OverheadUI.getMaxDistance())
+		for _, entry in entries do
+			local ui = uiCache[entry.key]
+			if ui then
+				OverheadUI.setBudgetCulled(ui, keep[entry.key] ~= true)
+			end
+		end
+	end))
 end
 
 local function init(_deps: {}?): ()
@@ -484,8 +534,7 @@ local function init(_deps: {}?): ()
 	end
 	applyLocalPayloadPatchImpl = applyLocalPayloadPatch
 
-	track(RemoteOverheadUpdate.OnClientEvent:Connect(function(payload: any)
-		NetworkPerfCounters.record("overhead_update_recv")
+	local function handleMessage(payload: any)
 		if type(payload) == "table" and payload.kind == Config.Overhead.BATCH_MESSAGE_KIND then
 			local payloads = payload.payloads
 			if type(payloads) ~= "table" then
@@ -507,7 +556,16 @@ local function init(_deps: {}?): ()
 		end
 
 		applyPayload(payload)
+	end
+
+	-- P4 (H7): the server may pack one frame's messages into { kind = PACK_MESSAGE_KIND, items }.
+	local packKind = tostring((Config.NetworkPerf :: any).PACK_MESSAGE_KIND or "pack")
+	track(RemoteOverheadUpdate.OnClientEvent:Connect(function(payload: any)
+		NetworkPerfCounters.record("overhead_update_recv")
+		NetworkCoalesce.forEachMessage(payload, packKind, handleMessage)
 	end))
+
+	startCullBudget(uiCache)
 end
 
 return {

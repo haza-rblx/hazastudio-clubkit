@@ -10,6 +10,7 @@ local ShopDomain     = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domai
 local PermissionDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.PermissionDomain)
 local Logger         = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local DeltaCompressor = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DeltaCompressor)
+local NetworkCoalesce = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.NetworkCoalesce)
 local AdminPanelUI   = require(script.Parent.Parent.UI.AdminPanelUI)
 local MobileScaleService = require(script.Parent.Parent.Services.MobileScaleService)
 local createAdminService = require(script.Parent.Parent.Services.AdminService)
@@ -204,8 +205,15 @@ local function init(deps: {
 		applyResolvedPayload(merged)
 	end
 
+	local packKind = tostring((Config.NetworkPerf :: any).PACK_MESSAGE_KIND or "pack")
 	local function handleIncoming(payload: any)
 		if type(payload) ~= "table" then
+			return
+		end
+
+		-- P4 (H7): one frame's messages may arrive packed.
+		if payload.kind == packKind then
+			NetworkCoalesce.forEachMessage(payload, packKind, handleIncoming)
 			return
 		end
 
@@ -465,12 +473,26 @@ local function init(deps: {
 			ui:hide()
 		end)
 	end
-	track(Players.PlayerAdded:Connect(function()
-		refreshPlayerList(false)
-	end))
-	track(Players.PlayerRemoving:Connect(function()
-		refreshPlayerList(false)
-	end))
+	-- P4 (H15): refreshPlayerList(false) already skips a closed panel; an open one rebuilds at
+	-- most once per ADMIN_LIST_DEBOUNCE_SEC during a join storm. 0 = legacy (every event).
+	local rosterRefreshPending = false
+	local function onRosterChanged()
+		local debounce = tonumber((Config.NetworkPerf :: any).ADMIN_LIST_DEBOUNCE_SEC) or 0
+		if debounce <= 0 then
+			refreshPlayerList(false)
+			return
+		end
+		if rosterRefreshPending then
+			return
+		end
+		rosterRefreshPending = true
+		task.delay(debounce, function()
+			rosterRefreshPending = false
+			refreshPlayerList(false)
+		end)
+	end
+	track(Players.PlayerAdded:Connect(onRosterChanged))
+	track(Players.PlayerRemoving:Connect(onRosterChanged))
 	if ui:isVisible() then
 		refreshPlayerList(true)
 	end
