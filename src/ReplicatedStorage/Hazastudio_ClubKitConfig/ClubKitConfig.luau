@@ -523,7 +523,7 @@ ClubKitConfig.CommandAliases = {
 -- JOIN COMMUNITY (optional — real MemberCount proxy fallback)
 -- =============================================================================
 -- Preference: Secrets.GameDataApiSecret + GameDataApi → worker
---   GET {BASE_URL}/game/{GameKey}/community/{groupId}?secret=...
+--   GET {BASE_URL}/game/{GameKey}/community/{groupId}  (secret sent as Authorization: Bearer)
 -- Without secret (typical Studio), kit falls back to MEMBER_INFO_URL / MEMBER_USERS_URL
 -- (engine default roproxy). Leave MemberInfoUrl nil for kit default; "" = off;
 -- or set your own worker URL with {groupId} / %d (legacy override only).
@@ -860,6 +860,20 @@ ClubKitConfig.AntiTamper = {
 	ForeignGuiDetect = true,
 	ForeignGuiGraceSeconds = 20,
 	ForeignGuiAllowNames = { "Adonis", "Adonis_Loader", "Kohl's Admin", "HD Admin", "BasicAdmin", "Chat" },
+}
+
+-- =============================================================================
+-- TELEMETRY (budget health of your servers)
+-- =============================================================================
+--   Every 15 minutes each server sends ONE small summary to your ClubKit VPS: how
+--   many DataStore, HTTP and cross-server messages it used, and the lowest budget
+--   it saw. Counts only — no player names or ids. It lets Hazastudio spot a venue
+--   running out of Roblox budget before players notice.
+--
+--   Enabled   false turns it off completely.
+--
+ClubKitConfig.Telemetry = {
+	Enabled = true,
 }
 
 -- =============================================================================

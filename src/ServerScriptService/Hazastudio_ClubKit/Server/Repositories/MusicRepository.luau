@@ -13,6 +13,7 @@ local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local Result = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Result)
 local BudgetGate = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.BudgetGate)
 local MusicDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicDomain)
+local GlobalDocWriter = require(script.Parent.Parent.Persistence.GlobalDocWriter)
 
 type Result<T> = Types.Result<T>
 type ILogger = Types.ILogger
@@ -127,6 +128,10 @@ function MusicRepository.new(deps: { config: any, logger: ILogger })
 		_playlistTombstones = {} :: { [string]: PlaylistInfo },
 		_trackTombstones = {} :: { [string]: TrackInfo },
 		_loaded = false,
+		-- Web library mode (set by applyWebSnapshot). Durations reported by clients then live in
+		-- memory only (production hardening P3, B): trackId -> seconds, re-applied on each snapshot.
+		_webMode = false,
+		_durationOverlay = {} :: { [string]: number },
 	}, MusicRepository) :: any
 
 	return self
@@ -670,19 +675,37 @@ function MusicRepository:applyWebSnapshot(playlists: { [string]: PlaylistInfo },
 	end
 	local nextTracks = {} :: { [string]: TrackInfo }
 	for id, track in pairs(tracks) do
-		nextTracks[id] = cloneTrack(track)
+		local copy = cloneTrack(track)
+		local overlay = self._durationOverlay[id]
+		if overlay and overlay > (tonumber(copy.totalDuration) or 0) then
+			copy.totalDuration = overlay
+		end
+		nextTracks[id] = copy
+	end
+	for id in pairs(self._durationOverlay) do
+		if nextTracks[id] == nil then
+			self._durationOverlay[id] = nil
+		end
 	end
 	self._playlists = nextPlaylists
 	self._tracks = nextTracks
 	self._playlistTombstones = {}
 	self._trackTombstones = {}
 	self._loaded = true
+	self._webMode = true
 end
 
 -- Overwrites the DataStore cache with the in-memory library. Deliberately not _setAsync: that
 -- merges by revision, which would keep every entry the web has deleted alive in the cache.
 -- excludeTrackIds: in memory but not part of the web library (the carried track on air).
-function MusicRepository:writeWebCache(excludeTrackIds: { [string]: boolean }?): Result<nil>
+-- revision / fetchedAt (production hardening P3, B): with Config.GlobalDocWriter.ENABLED the write is
+-- revision-gated — one server per revision writes, the others' UpdateAsync cancels — and values
+-- over MAX_DOC_BYTES are refused. Without them (or with the switch off): the pre-P3 SetAsync.
+function MusicRepository:writeWebCache(
+	excludeTrackIds: { [string]: boolean }?,
+	revision: string?,
+	fetchedAt: number?
+): Result<nil>
 	local tracksToCache = self._tracks
 	if excludeTrackIds and next(excludeTrackIds) ~= nil then
 		tracksToCache = {} :: { [string]: TrackInfo }
@@ -704,6 +727,21 @@ function MusicRepository:writeWebCache(excludeTrackIds: { [string]: boolean }?):
 			self._logger:error("Web cache encode failed", { key = entry.key, error = tostring(encoded) })
 			return Result.Err("web_cache_encode_failed")
 		end
+		if type(revision) == "string" and revision ~= "" and GlobalDocWriter.isEnabled() then
+			local written, reason = GlobalDocWriter.writeIfNewer({
+				store = self._store,
+				key = entry.key,
+				value = encoded,
+				revision = revision,
+				fetchedAt = fetchedAt or os.time(),
+				label = "music_web_cache:" .. entry.key,
+			})
+			if not written then
+				self._logger:warn("Web cache write failed", { key = entry.key, error = reason })
+				return Result.Err("web_cache_write_failed")
+			end
+			continue
+		end
 		local saveResult = self._budgetGate:executeAsync(Enum.DataStoreRequestType.SetIncrementAsync, function()
 			return Result.withRetry(function()
 				self._store:SetAsync(entry.key, encoded)
@@ -722,6 +760,17 @@ function MusicRepository:updateTrackDuration(trackId: string, duration: number):
 	local track = self._tracks[trackId]
 	if not track then
 		return Result.Err("Track not found: " .. trackId)
+	end
+
+	-- Web library mode (production hardening P3, B): the web is the only writer of the library and
+	-- the duration also goes to the VPS (DurationReport); rewriting the whole Tracks document per
+	-- report is gone. Memory only, kept across snapshots by the overlay.
+	if self._webMode and GlobalDocWriter.isEnabled() then
+		local updated = cloneTrack(track)
+		updated.totalDuration = duration
+		self._tracks[trackId] = updated
+		self._durationOverlay[trackId] = duration
+		return Result.Ok(nil)
 	end
 
 	local updatedTrack = cloneTrack(track)

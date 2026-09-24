@@ -15,6 +15,7 @@ local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local Result = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Result)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local BudgetGate = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.BudgetGate)
+local PlayerDocWriter = require(script.Parent.Parent.Persistence.PlayerDocWriter)
 
 type Result<T> = Types.Result<T>
 type ProgressDoc = EventBoardDomain.ProgressDoc
@@ -43,17 +44,24 @@ local function createVenueQuestProgressRepository(deps: { logger: Types.ILogger?
 	end
 
 	-- Writes this server's copy merged onto the stored one; returns the merged document.
-	function repo:save(userId: number, doc: ProgressDoc): Result<ProgressDoc>
+	-- `prune` (production hardening P3, A8) runs on the merged document inside the transform, so
+	-- entries dropped here do not come back from the stored copy.
+	function repo:save(userId: number, doc: ProgressDoc, prune: ((ProgressDoc) -> ProgressDoc)?): Result<ProgressDoc>
 		local merged: ProgressDoc = doc
-		local write = budgetGate:executeAsync(Enum.DataStoreRequestType.UpdateAsync, function()
-			return Result.withRetry(function()
-				store:UpdateAsync(tostring(userId), function(old: any): any
-					merged = EventBoardDomain.mergeProgress(EventBoardDomain.sanitizeProgress(old), doc)
-					return merged
-				end)
-				return true
-			end, Config.DataStore.RETRY_ATTEMPTS)
-		end, mutex(userId))
+		local write = PlayerDocWriter.guard(mutex(userId), function()
+			return budgetGate:executeAsync(Enum.DataStoreRequestType.UpdateAsync, function()
+				return Result.withRetry(function()
+					store:UpdateAsync(tostring(userId), function(old: any): any
+						merged = EventBoardDomain.mergeProgress(EventBoardDomain.sanitizeProgress(old), doc)
+						if prune then
+							merged = prune(merged)
+						end
+						return merged
+					end)
+					return true
+				end, Config.DataStore.RETRY_ATTEMPTS)
+			end, mutex(userId))
+		end)
 		if not write.ok then
 			log:warn("Venue quest progress save failed", { userId = userId, err = write.error })
 			return Result.Err(write.error)
@@ -66,30 +74,32 @@ local function createVenueQuestProgressRepository(deps: { logger: Types.ILogger?
 	function repo:claim(userId: number, doc: ProgressDoc, questKey: string, now: number): (Result<boolean>, ProgressDoc?)
 		local claimedNow = false
 		local merged: ProgressDoc? = nil
-		local write = budgetGate:executeAsync(Enum.DataStoreRequestType.UpdateAsync, function()
-			return Result.withRetry(function()
-				store:UpdateAsync(tostring(userId), function(old: any): any
-					local stored = EventBoardDomain.sanitizeProgress(old)
-					local existing = stored.quests[questKey]
-					if existing and existing.claimedAt then
-						claimedNow = false
-						merged = EventBoardDomain.mergeProgress(stored, doc)
-						return nil -- keep the stored claim; nothing to write
-					end
-					local next = EventBoardDomain.mergeProgress(stored, doc)
-					local entry = next.quests[questKey]
-					if not entry then
-						entry = { progress = 0, lastDay = 0, completed = false, claimedAt = nil }
-						next.quests[questKey] = entry
-					end
-					entry.claimedAt = now
-					claimedNow = true
-					merged = next
-					return next
-				end)
-				return true
-			end, Config.DataStore.RETRY_ATTEMPTS)
-		end, mutex(userId))
+		local write = PlayerDocWriter.guard(mutex(userId), function()
+			return budgetGate:executeAsync(Enum.DataStoreRequestType.UpdateAsync, function()
+				return Result.withRetry(function()
+					store:UpdateAsync(tostring(userId), function(old: any): any
+						local stored = EventBoardDomain.sanitizeProgress(old)
+						local existing = stored.quests[questKey]
+						if existing and existing.claimedAt then
+							claimedNow = false
+							merged = EventBoardDomain.mergeProgress(stored, doc)
+							return nil -- keep the stored claim; nothing to write
+						end
+						local next = EventBoardDomain.mergeProgress(stored, doc)
+						local entry = next.quests[questKey]
+						if not entry then
+							entry = { progress = 0, lastDay = 0, completed = false, claimedAt = nil }
+							next.quests[questKey] = entry
+						end
+						entry.claimedAt = now
+						claimedNow = true
+						merged = next
+						return next
+					end)
+					return true
+				end, Config.DataStore.RETRY_ATTEMPTS)
+			end, mutex(userId))
+		end)
 		if not write.ok then
 			log:warn("Venue quest claim failed", { userId = userId, quest = questKey, err = write.error })
 			return Result.Err(write.error), nil

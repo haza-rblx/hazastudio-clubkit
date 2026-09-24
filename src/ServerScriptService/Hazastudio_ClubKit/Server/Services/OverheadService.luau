@@ -19,7 +19,7 @@ local Cache = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Cache)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local HttpApiCounter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.HttpApiCounter)
 local HttpApi = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.HttpApi)
-local HttpRequest = require(script.Parent.Parent.Net.HttpRequest)
+local BackendClient = require(script.Parent.Parent.Net.BackendClient)
 type Result<T> = Types.Result<T>
 type CommunityData = Types.CommunityData
 type CommunityLookupResult = Types.CommunityLookupResult
@@ -46,12 +46,49 @@ local ROBUX_TOP_DONATE_PREFIX = "robux-top-donate:"
 local SAWERIA_TOP_SPENDER_PREFIX = "saweria-top-spender:"
 local WORKER_RANK_PREFIX = "worker-rank:"
 
--- Worker-based rank resolution (primary source, replaces GroupService)
-local function fetchRankFromWorker(userId: number): number?
+-- Worker-based rank resolution (primary source, replaces GroupService).
+--
+-- Production hardening P3 (C2, found in the 2026-09-24 playtest): a venue whose VPS game has no
+-- group answers 403 {"error":"groups endpoint not enabled for this game"}, and the three payload
+-- builds of every join each asked again — 3 wasted requests per join. Now:
+--   * that answer (or groups_disabled / group_id_required from players/lookup) is remembered for
+--     the server (Config.BackendClient.GROUPS_DISABLED_TTL_SEC, 30 min): straight to GroupService;
+--   * concurrent asks for one player share one request; a failed ask is not repeated for 30 s;
+--   * the per-user /social route, secret as Authorization: Bearer (BackendClient). Not batched:
+--     the join's first payload waits for this rank.
+local groupsDisabledUntil = 0
+local workerInFlight: { [number]: boolean } = {}
+local WORKER_FAIL_PREFIX = "worker-rank-fail:"
+
+local function markGroupsDisabled(reason: string)
+	local ttl = (Config.BackendClient and tonumber(Config.BackendClient.GROUPS_DISABLED_TTL_SEC)) or 1800
+	groupsDisabledUntil = os.clock() + ttl
+	Logger.new("OverheadService"):info("VPS group lookup not enabled for this game; GroupService only for a while", {
+		reason = reason,
+		ttlSec = ttl,
+	})
+end
+
+local function isGroupsDisabledAnswer(errorText: any): boolean
+	if type(errorText) ~= "string" then
+		return false
+	end
+	local lowered = string.lower(errorText)
+	return string.find(lowered, "not enabled", 1, true) ~= nil
+		or lowered == "groups_disabled"
+		or lowered == "group_id_required"
+end
+
+local function fetchRankFromWorkerOnce(userId: number): number?
 	local apiCfg = Config.GameDataApi
 	if not apiCfg or apiCfg.GROUPS_ENDPOINT_ENABLED ~= true then
 		return nil
 	end
+
+	-- Not batched through players/lookup on purpose: the first overhead payload of a join waits
+	-- for this rank, and the batch window would delay it by up to 3 s. The rank is cached for
+	-- Config.Group.RANK_CACHE_TTL, so this stays ~1 request per player per 10 min.
+
 	local baseUrl = apiCfg.BASE_URL
 	local gameKey = apiCfg.GAME_KEY
 	if not baseUrl or baseUrl == "" or not gameKey or gameKey == "" then
@@ -62,37 +99,62 @@ local function fetchRankFromWorker(userId: number): number?
 		return nil
 	end
 
+	local ok, result = BackendClient.request({
+		endpoint = "gamedata:groups",
+		url = baseUrl .. "/game/" .. gameKey .. "/groups/" .. tostring(userId),
+		method = "GET",
+		auth = "gamedata",
+		headers = { ["Accept"] = "application/json" },
+		priority = "bulk",
+		timeoutSec = tonumber(apiCfg.HTTP_TIMEOUT) or 5,
+		legacyQuerySecret = true,
+	})
+	if not ok or type(result) ~= "table" then
+		return nil
+	end
+	local decodeOk, data = pcall(function()
+		return HttpService:JSONDecode(result.Body)
+	end)
+	if tonumber(result.StatusCode) == 403 and decodeOk and type(data) == "table" and isGroupsDisabledAnswer(data.error) then
+		markGroupsDisabled(tostring(data.error))
+		return nil
+	end
+	if not result.Success or not decodeOk or type(data) ~= "table" or data.ok ~= true then
+		return nil
+	end
+	return tonumber(data.rankId)
+end
+
+local function fetchRankFromWorker(userId: number): number?
+	if os.clock() < groupsDisabledUntil then
+		return nil
+	end
 	-- Check short-lived in-memory cache to avoid spamming worker
 	local workerCacheKey = WORKER_RANK_PREFIX .. userId
 	local cached = Cache.get(workerCacheKey)
 	if cached then
 		return cached :: number
 	end
-
-	local url = baseUrl .. "/game/" .. gameKey .. "/groups/" .. tostring(userId) .. "?secret=" .. secret
-	local ok, result = pcall(function()
-		return HttpRequest.requestAsync("gamedata:groups", {
-			Url = url,
-			Method = "GET",
-			Headers = { ["Accept"] = "application/json" },
-		})
-	end)
-
-	if not ok or not result or not result.Success then
+	if Cache.get(WORKER_FAIL_PREFIX .. userId) then
 		return nil
 	end
-
-	local decodeOk, data = pcall(function()
-		return HttpService:JSONDecode(result.Body)
-	end)
-	if not decodeOk or type(data) ~= "table" or data.ok ~= true then
-		return nil
+	if workerInFlight[userId] then
+		local waited = 0
+		while workerInFlight[userId] and waited < 10 do
+			task.wait(0.1)
+			waited += 0.1
+		end
+		return Cache.get(workerCacheKey)
 	end
-
-	local rankId = tonumber(data.rankId)
+	workerInFlight[userId] = true
+	local ok, rankIdOrError = pcall(fetchRankFromWorkerOnce, userId)
+	workerInFlight[userId] = nil
+	local rankId = if ok then rankIdOrError else nil
 	if rankId then
 		-- Cache worker result in-memory (shorter TTL than KV cache to stay fresh)
 		Cache.set(workerCacheKey, rankId, 30)
+	elseif os.clock() >= groupsDisabledUntil then
+		Cache.set(WORKER_FAIL_PREFIX .. userId, true, 30)
 	end
 	return rankId
 end
@@ -162,7 +224,7 @@ local function createOverheadService(deps: {
 				return
 			end
 			local ok, cashTotal = pcall(function()
-				return donationService:getPlayerCashStats(userId, username)
+				return donationService:getPlayerCashStats(userId, username, true)
 			end)
 			if ok and type(cashTotal) == "number" and cashTotal > 0 then
 				local newAmount = math.max(0, math.floor(cashTotal))
@@ -182,7 +244,7 @@ local function createOverheadService(deps: {
 						return
 					end
 					local ok2, cashTotal2 = pcall(function()
-						return donationService:getPlayerCashStats(userId, username)
+						return donationService:getPlayerCashStats(userId, username, true)
 					end)
 					if ok2 and type(cashTotal2) == "number" and cashTotal2 > 0 then
 						local newAmount2 = math.max(0, math.floor(cashTotal2))
@@ -570,7 +632,7 @@ local function createOverheadService(deps: {
 			-- caches in DonationService, and the join-time fetch usually already
 			-- warmed it), so any online donor gets a chip regardless of rank.
 			local okStats, statsTotal, statsRank = pcall(function()
-				return donationService:getPlayerCashStats(userId, playerName or "")
+				return donationService:getPlayerCashStats(userId, playerName or "", true)
 			end)
 			if okStats and type(statsTotal) == "number" and statsTotal > 0 then
 				normalizedRank = OverheadDomain.normalizeLeaderboardRank(statsRank, "CashSpender")

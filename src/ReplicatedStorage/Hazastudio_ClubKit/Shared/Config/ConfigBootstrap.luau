@@ -605,6 +605,12 @@ function ConfigBootstrap.apply(config: any)
 		end
 	end
 
+	-- Budget telemetry (ADR 0007 phase B, production hardening P3): the buyer's opt-out.
+	local telemetry = clubKit.Telemetry
+	if type(config.Telemetry) == "table" and type(telemetry) == "table" and type(telemetry.Enabled) == "boolean" then
+		config.Telemetry.ENABLED = telemetry.Enabled
+	end
+
 	local shop = clubKit.Shop
 	if type(config.Shop) == "table" and type(shop) == "table" and type(shop.Products) == "table" then
 		for tierKey, product in pairs(shop.Products) do

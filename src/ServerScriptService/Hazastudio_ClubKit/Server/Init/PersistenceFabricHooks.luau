@@ -13,6 +13,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local PlayerSessionStore = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.PlayerSessionStore)
 local DataStoreScheduler = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DataStoreScheduler)
 local CrossServerCache = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.CrossServerCache)
+local PlayerDocWriter = require(script.Parent.Parent.Persistence.PlayerDocWriter)
 
 local PersistenceFabricHooks = {}
 
@@ -30,10 +31,21 @@ function PersistenceFabricHooks.onPlayerRemoving(player: Player)
 	PlayerSessionStore.release("settings", userId, options)
 end
 
---- Flush all dirty session documents (autosave / BindToClose).
---- Returns count of entries that failed to flush.
-function PersistenceFabricHooks.flushAll(): number
-	return PlayerSessionStore.flushAll()
+--- Flush all dirty session documents (autosave / early restart / BindToClose).
+--- Returns count of entries that failed to flush. Under the v2 write policy (production hardening
+--- P3) the 60 s autosave (`reason == "autosave"`) writes nothing — PlayerDocWriter's 1 Hz
+--- scheduler owns periodic writes (90 s XP slot) — and the other callers get the paced
+--- shutdown flush (Overhead first, ≤ 12 writes/s).
+function PersistenceFabricHooks.flushAll(reason: string?): number
+	if reason == "autosave" and PlayerDocWriter.isV2() then
+		return 0
+	end
+	return PlayerDocWriter.flushForShutdown()
+end
+
+--- Starts PlayerDocWriter's 1 Hz scheduler (no-op under the legacy write policy).
+function PersistenceFabricHooks.startWriter()
+	PlayerDocWriter.start()
 end
 
 --- DEBUG snapshot for BackgroundJobScheduler (PersistenceFabric metrics).

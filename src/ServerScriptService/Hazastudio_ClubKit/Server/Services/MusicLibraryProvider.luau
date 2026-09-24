@@ -6,12 +6,12 @@
 
 local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local ServerScriptService = game:GetService("ServerScriptService")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local MusicDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicDomain)
 local MusicWebLibraryPolicy = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicWebLibraryPolicy)
-local HttpRequest = require(script.Parent.Parent.Net.HttpRequest)
+local BudgetMeter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.BudgetMeter)
+local BackendClient = require(script.Parent.Parent.Net.BackendClient)
 
 local LIBRARY_PATH = "/v3/music/library"
 -- One warning per reason per minute: a VPS outage must not turn into a log line every poll.
@@ -21,13 +21,7 @@ local MusicLibraryProvider = {}
 MusicLibraryProvider.__index = MusicLibraryProvider
 
 local function readSecret(): string
-	local ok, secrets = pcall(function()
-		return require(ServerScriptService.Hazastudio_ClubKitSecrets.Secrets) :: any
-	end)
-	if ok and type(secrets) == "table" and type(secrets.DonationApiSecret) == "string" then
-		return secrets.DonationApiSecret
-	end
-	return ""
+	return BackendClient.readSecret("donation")
 end
 
 local function countEntries(map: { [any]: any }?): number
@@ -76,15 +70,20 @@ function MusicLibraryProvider:_fetch(url: string, secret: string): (number, any?
 		return 0, nil
 	end
 	local headers: { [string]: string } = {
-		Authorization = "Bearer " .. secret,
 		Accept = "application/json",
 	}
 	if self._revision then
 		headers["If-None-Match"] = '"' .. self._revision .. '"'
 	end
-	local ok, response = pcall(function()
-		return HttpRequest.requestAsync("music:library", { Url = url, Method = "GET", Headers = headers })
-	end)
+	-- The secret travels as Authorization: Bearer (BackendClient); `secret` only proves it is set.
+	local ok, response = BackendClient.request({
+		endpoint = "music:library",
+		url = url,
+		method = "GET",
+		auth = "donation",
+		headers = headers,
+		priority = "normal",
+	})
 	if not ok or type(response) ~= "table" then
 		return 0, nil
 	end
@@ -133,18 +132,33 @@ function MusicLibraryProvider:_importLibrary(url: string, secret: string): boole
 		return false
 	end
 
-	local ok, response = pcall(function()
-		return HttpRequest.requestAsync("music:import", {
-			Url = url .. "/import",
-			Method = "POST",
-			Headers = {
-				Authorization = "Bearer " .. secret,
-				Accept = "application/json",
-				["Content-Type"] = "application/json",
-			},
-			Body = encoded,
+	-- Production hardening P3 (C5): the whole library in one body. Past IMPORT_MAX_BYTES the import
+	-- is refused (`import_oversize`) and the game keeps playing from its cache; a chunked import
+	-- gets built only if this event is ever seen.
+	local globalDoc = Config.GlobalDocWriter
+	local importMax = if type(globalDoc) == "table" then tonumber(globalDoc.IMPORT_MAX_BYTES) else nil
+	if importMax and #encoded > importMax then
+		BudgetMeter.recordEvent("import_oversize")
+		self._log:warn("Music web library import too large; not sent (the game keeps its cache)", {
+			bytes = #encoded,
+			maxBytes = importMax,
+			tracks = #payload.tracks,
 		})
-	end)
+		return false
+	end
+	local ok, response = BackendClient.request({
+		endpoint = "music:import",
+		url = url .. "/import",
+		method = "POST",
+		auth = "donation",
+		headers = {
+			Accept = "application/json",
+			["Content-Type"] = "application/json",
+		},
+		body = encoded,
+		priority = "bulk",
+		timeoutSec = 15,
+	})
 	if not ok or type(response) ~= "table" then
 		self:_warnThrottled("import_unavailable", { reason = "import_unavailable", status = 0 })
 		return false
@@ -222,6 +236,7 @@ function MusicLibraryProvider:refresh(afterImport: boolean?): string
 		end
 		self._repo:applyWebSnapshot(decision.playlists, decision.tracks)
 		self._revision = decision.revision
+		local fetchedAt = os.time()
 		self._failures = 0
 		self._log:info("Music web library applied", {
 			revision = decision.revision,
@@ -231,7 +246,8 @@ function MusicLibraryProvider:refresh(afterImport: boolean?): string
 		})
 		self._onLibraryApplied(removedTrackIds)
 		task.spawn(function()
-			self._repo:writeWebCache(carriedTrackIds)
+			-- Revision-gated (production hardening P3, B): one server per revision writes the cache.
+			self._repo:writeWebCache(carriedTrackIds, decision.revision, fetchedAt)
 		end)
 	elseif decision.action == "unchanged" then
 		self._failures = 0

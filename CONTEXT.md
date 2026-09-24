@@ -33,7 +33,17 @@ Domain glossary for agents. Terms only — no implementation details, no workflo
 - **Stale session** — a session with unsaved changes that another server wrote over (cross-server invalidate, or a newer stored `_version`). It is kept, never dropped; its next flush **replays** the session's unsaved mutators onto the stored document inside `UpdateAsync`.
 - **Departed session** — a leaver's document (or venue quest progress) whose final write has not succeeded yet. Kept and retried until written; a rejoin in the same server gets it back.
 - **Budget refusal** — `budget_low` / `budget_exhausted` from the DataStore admission gate. ProfileLoader requeues any kind refused this way; after the last delay it reports `load_gave_up`.
-- **BudgetMeter** — the per-server counter of DataStore / HTTP / MessagingService use and budget events; logged once a minute, shipped to the VPS from P3.
+- **BudgetMeter** — the per-server counter of DataStore / HTTP / MessagingService use and budget events; logged once a minute; since P3 folded into a 15-minute **budget aggregate** posted to `/v3/telemetry` (kind `budget`, no player ids; buyer opt-out `Telemetry.Enabled`).
+- **PlayerDocWriter** (P3) — the one write path for per-player documents. **Normal** changes (XP only) are written on the player's **slot** — a fixed phase `userId % 90` in every 90 s — **urgent** changes (anything identity-visible: level, title, membership, role…) after a 3 s debounce; never two writes of one key within the **per-key gap** (7 s). A 1 Hz scheduler paces it; shutdown uses a **paced flush** (Overhead first, ≤ 12/s). Switch `Config.PlayerDocWriter.WRITE_POLICY` (`"v2"` / `"legacy"`).
+- **Global document** — one DataStore value every server of an experience would write (event-board cache, web music cache). Written by `GlobalDocWriter` **once per revision**: the revision and fetch time sit in the key's DataStore metadata, and a server holding the same or an older revision cancels its `UpdateAsync`.
+- **Identity-visible change** — an Overhead change other servers need to hear about (everything except `xp` / `_version`). Only these are published on `OverheadInvalidate`; XP-only writes are not.
+
+## Backend calls (production hardening P3, ADR 0016)
+
+- **BackendClient** — `Server/Net/BackendClient`, the single entry for the kit's calls to the ClubKit VPS. Secret only in `Authorization: Bearer` (**header-only secrets**; `?secret=` is gone from the kit, the VPS rejects it after P5). Owns the per-server **token bucket** (400/min, burst 40) with **priority classes** — critical (notifications, commands, delivery registration) may drain it, normal stops at 25 % left, bulk (lookups, telemetry, imports, proxies) at 50 % and waits — the **429 pause** (`retry_after`) and a **circuit breaker** per endpoint group. Switch `Config.BackendClient.ENABLED` (off = the pre-P3 requests).
+- **Join lookup batch** — `PlayerLookupBatcher`: background cash / connections lookups asked within 3 s share one `GET /v2/players/lookup` (≤ 50 ids). Anything a player waits on (donor panel, profile opened, the group rank of the first overhead payload) stays direct. "lookup_unavailable" means: use the per-user route.
+- **Groups disabled (per server)** — the VPS said a venue has no group endpoint (403 "not enabled" / `groups_disabled`); the server stops asking for 30 min and takes ranks from GroupService.
+- **Delivery report queue** — ReliabilityV2 client acks and displays, deduped and sent in batches (one POST per kind per 3 s) instead of one POST per player per donation.
 
 ## UI motion
 

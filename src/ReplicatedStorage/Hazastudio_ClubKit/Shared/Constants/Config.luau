@@ -3043,7 +3043,9 @@ Config.Donation = {
 	REMOTE_NOTIF_DISPLAY = "DonationNotifDisplay",
 	-- Master switch (buyer override via ClubKitConfig.Donation.ReliabilityV2).
 	-- Off = legacy fire-and-forget; engine behaves exactly like before.
-	RELIABILITY_V2_ENABLED = false,
+	-- On by default since production hardening P3 (owner decision K7): acks/displays are now
+	-- batched (Config.BackendClient.DELIVERY_*). A buyer file that says `false` keeps it off.
+	RELIABILITY_V2_ENABLED = true,
 	-- Server-side retry: re-fire a notification to a client that has not acked
 	-- within this many seconds. The client dedups by donationId, so a retry to a
 	-- still-queued notification is a harmless no-op — retries only matter when the
@@ -4096,6 +4098,117 @@ Config.Persistence = {
 Config.BudgetMeter = {
 	LOG_ENABLED = true,
 	LOG_INTERVAL_SEC = 60,
+}
+-- ============================================================
+-- PRODUCTION HARDENING P3 (2026-09-24) — write + HTTP discipline, plan §2 A/B/C.
+-- Engine constants, not buyer config. Every block has a switch back to the pre-P3 behaviour:
+-- PlayerDocWriter.WRITE_POLICY = "legacy", BackendClient.ENABLED = false, InvalidateBus.V2 = false,
+-- LeaderboardCacheV2.ENABLED = false, GlobalDocWriter.ENABLED = false, VerifyCache.ENABLED = false.
+-- ============================================================
+-- A1 PlayerDocWriter (Server/Persistence/PlayerDocWriter + Shared/Domain/FlushPolicy): one write
+-- path for the per-player session documents (Overhead) and a per-key gap for direct writers
+-- (Settings, VenueQuestProgress).
+Config.PlayerDocWriter = {
+	-- "v2": XP-only changes wait for the player's slot in every FLUSH_INTERVAL_SEC (owner decision
+	-- K1: 90 s crash window), other changes go after URGENT_DEBOUNCE_SEC, never two writes to one
+	-- key within MIN_GAP_SEC, a 1 Hz scheduler paces them. "legacy": the P1 3 s debounce timer.
+	WRITE_POLICY = "v2",
+	FLUSH_INTERVAL_SEC = 90,
+	MIN_GAP_SEC = 7, -- Roblox: 1 write / 6 s per key
+	URGENT_DEBOUNCE_SEC = 3,
+	TICK_SEC = 1,
+	TICK_BASE = 2, -- writes per tick = ceil(dirty / TICK_DIVISOR) + TICK_BASE
+	TICK_DIVISOR = 60,
+	-- Overhead fields whose change alone is not urgent and is not published to other servers.
+	XP_ONLY_FIELDS = { "xp", "_version" },
+	-- BindToClose / restart: write dirty documents paced at this rate within this budget.
+	SHUTDOWN_WRITES_PER_SEC = 12,
+	SHUTDOWN_BUDGET_SEC = 22,
+	-- A8: venue quest progress is written in 4 staggered groups (one per playtime tick) instead
+	-- of every player in one tick every 120 s; progress documents are pruned (30 days / 50 posts).
+	VENUE_FLUSH_STAGGER = true,
+	VENUE_PRUNE_ENABLED = true,
+	VENUE_PRUNE_KEEP_DAYS = 30,
+	VENUE_PRUNE_MAX_SEEN_POSTS = 50,
+}
+-- A9 CrossServerCache ("InvalidateBus"): 5 s coalescing, ≤ 60 ids / ≤ 1 KB per message, one
+-- requeue after a failed publish, a local per-topic budget instead of the MemoryStore lease.
+Config.InvalidateBus = {
+	V2 = true,
+	COALESCE_SEC = 5,
+	MAX_IDS_PER_MESSAGE = 60,
+	MAX_MESSAGE_BYTES = 1000,
+	TOPIC_PUBLISHES_PER_MIN = 12,
+	TOPIC_BURST = 3,
+	REQUEUE_ON_FAILURE = 1,
+	-- XP-only Overhead writes are not published (a player is only ever in one server).
+	SKIP_XP_ONLY_PUBLISH = true,
+}
+-- A4 verify caches: leaderboard verify reads use online sessions first, then an LRU.
+Config.VerifyCache = {
+	ENABLED = true,
+	OVERHEAD_LRU = 256,
+	OVERHEAD_TTL_SEC = 600,
+	LIKES_METADATA_LRU = 500,
+	LIKES_METADATA_TTL_SEC = 1800,
+}
+-- A7 MemoryStore leaderboard cache v2 (Shared/Domain/LeaderboardCacheCodec): one compact item per
+-- board (ids + totals, ≤ 4 KB). A new map name, so v1 and v2 rows never mix.
+Config.LeaderboardCacheV2 = {
+	ENABLED = true,
+	STORE_NAME = "ClubKitLeaderboardCache_v2",
+	TTL_SEC = 60,
+	MAX_ITEM_BYTES = 4000,
+}
+-- B Global documents (Server/Persistence/GlobalDocWriter): event-board cache + web music cache are
+-- written once per revision per experience (revision in the key's metadata), size-guarded.
+Config.GlobalDocWriter = {
+	ENABLED = true,
+	MAX_DOC_BYTES = 1000000,
+	START_DELAY_MAX_SEC = 20,
+	RETRY_DELAYS = { 2, 5, 15 },
+	-- Music import body cap (the VPS/Bun limit is larger; above this the game keeps its cache).
+	IMPORT_MAX_BYTES = 900000,
+}
+-- C BackendClient (Server/Net/BackendClient + Shared/Domain/HttpBudgetPolicy): the one entry for
+-- VPS calls. Secrets only in `Authorization: Bearer` (never ?secret=), one per-server token bucket
+-- well under Roblox's 500/min, priorities, 429 retry_after, per-group circuit breaker.
+Config.BackendClient = {
+	ENABLED = true,
+	RATE_PER_MIN = 400,
+	BURST = 40,
+	FLOORS = { critical = 0, normal = 0.25, bulk = 0.5 },
+	MAX_WAIT_SEC = { critical = 10, normal = 15, bulk = 60 },
+	MAX_RETRY_AFTER_SEC = 300,
+	DEFAULT_TIMEOUT_SEC = 5,
+	BREAKER = { consecutive = 5, windowSec = 30, failRatio = 0.5, minSamples = 6, openSteps = { 30, 60, 120 } },
+	-- C2 join lookups batched through GET {ApiUrl}/v2/players/lookup (≤ 50 ids per request).
+	LOOKUP_BATCH_ENABLED = true,
+	LOOKUP_WINDOW_SEC = 3,
+	LOOKUP_MAX_IDS = 50,
+	LOOKUP_UNAVAILABLE_TTL_SEC = 1800, -- after a 404/405 (older VPS): per-user routes for 30 min
+	-- "groups endpoint not enabled for this game" (403) / groups_disabled: GroupService only.
+	GROUPS_DISABLED_TTL_SEC = 1800,
+	-- A player with no connections count on the VPS is not asked again for this long.
+	SOCIAL_NEGATIVE_TTL_SEC = 300,
+	-- C4 commands poll only when /v2/notifications says has_commands, plus a safety poll.
+	COMMANDS_PIGGYBACK = true,
+	COMMANDS_SAFETY_POLL_SEC = 60,
+	-- C3 ReliabilityV2 acks/displays batched (Shared/Domain/DeliveryReportQueue).
+	DELIVERY_BATCH = true,
+	DELIVERY_FLUSH_SEC = 3,
+	DELIVERY_FLUSH_MAX = 100,
+	DELIVERY_PLAYER_MAX_EVENTS = 4,
+	DELIVERY_PLAYER_WINDOW_SEC = 10,
+	DELIVERY_MAX_QUEUE = 2000,
+}
+-- F budget telemetry (ADR 0007 phase B, minimal): the BudgetMeter window aggregate goes to
+-- POST {ApiUrl}/v3/telemetry (kind "budget", no player ids) every INTERVAL_SEC at bulk priority.
+-- Buyer opt-out: ClubKitConfig.Telemetry.Enabled = false.
+Config.Telemetry = {
+	ENABLED = true,
+	BUDGET_INTERVAL_SEC = 900,
+	PATH = "/v3/telemetry",
 }
 -- HTTP API wrapper — dedup + cache for GroupService/Players at 100 CCU.
 Config.HttpApi = {

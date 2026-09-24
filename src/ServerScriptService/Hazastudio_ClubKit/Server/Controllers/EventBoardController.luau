@@ -183,6 +183,28 @@ local function createEventBoardController(deps: {
 
 	-- Returns true when nothing is left to write (saved now, or already clean). False while a
 	-- save is in flight or when the save failed (the session stays dirty for a retry).
+	-- Production hardening P3 (A8): documents are pruned inside the save transform (quests 30 days
+	-- past their due day, seenPosts capped). Only once a real board is known (revision set).
+	local function pruneFn(): ((EventBoardDomain.ProgressDoc) -> EventBoardDomain.ProgressDoc)?
+		local writer = Config.PlayerDocWriter
+		if type(writer) ~= "table" or writer.VENUE_PRUNE_ENABLED ~= true then
+			return nil
+		end
+		local current = board()
+		if current.revision == "" then
+			return nil
+		end
+		local day = today()
+		local nowUnix = os.time()
+		local pruneCfg = {
+			keepDays = tonumber(writer.VENUE_PRUNE_KEEP_DAYS) or 30,
+			maxSeenPosts = tonumber(writer.VENUE_PRUNE_MAX_SEEN_POSTS) or 50,
+		}
+		return function(doc: EventBoardDomain.ProgressDoc): EventBoardDomain.ProgressDoc
+			return EventBoardDomain.pruneProgress(doc, current, day, nowUnix, pruneCfg)
+		end
+	end
+
 	local function flush(session: Session): boolean
 		if not session.loaded then
 			return true
@@ -196,7 +218,7 @@ local function createEventBoardController(deps: {
 		session.dirty = false
 		session.saving = true
 		local ok, saved = pcall(function()
-			return progressRepo:save(session.player.UserId, session.doc)
+			return progressRepo:save(session.player.UserId, session.doc, pruneFn())
 		end)
 		session.saving = false
 		if ok and saved.ok then
@@ -662,6 +684,7 @@ local function createEventBoardController(deps: {
 		end
 		task.spawn(function()
 			local sinceFlush = 0
+			local tickIndex = 0
 			while not destroyed do
 				task.wait(cfg.PLAYTIME_TICK_SECONDS)
 				if destroyed then
@@ -678,7 +701,39 @@ local function createEventBoardController(deps: {
 					pushAll()
 				end
 				sinceFlush += cfg.PLAYTIME_TICK_SECONDS
-				if sinceFlush >= cfg.PROGRESS_SAVE_SECONDS then
+				local writer = Config.PlayerDocWriter
+				if type(writer) == "table" and writer.VENUE_FLUSH_STAGGER == true then
+					-- Production hardening P3 (A8): each player is still written every
+					-- PROGRESS_SAVE_SECONDS, but in groups (userId % groups) — one group per tick, spread
+					-- over the tick — instead of every player in one burst.
+					local groups = math.max(1, math.floor(cfg.PROGRESS_SAVE_SECONDS / cfg.PLAYTIME_TICK_SECONDS))
+					local group = tickIndex % groups
+					tickIndex += 1
+					local due: { number } = {}
+					for userId, session in pairs(sessions) do
+						if userId % groups == group and session.dirty then
+							table.insert(due, userId)
+						end
+					end
+					local spacing = if #due > 0 then (cfg.PLAYTIME_TICK_SECONDS * 0.8) / #due else 0
+					for index, userId in ipairs(due) do
+						task.delay((index - 1) * spacing, function()
+							local session = sessions[userId]
+							if session and not destroyed then
+								flush(session)
+							end
+						end)
+					end
+					if group == 0 then
+						for userId, session in pairs(departed) do
+							task.spawn(function()
+								if flush(session) then
+									forgetDeparted(userId, session)
+								end
+							end)
+						end
+					end
+				elseif sinceFlush >= cfg.PROGRESS_SAVE_SECONDS then
 					sinceFlush = 0
 					for _, session in pairs(sessions) do
 						task.spawn(flush, session)

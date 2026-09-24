@@ -8,12 +8,12 @@
 local DataStoreService = game:GetService("DataStoreService")
 local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local ServerScriptService = game:GetService("ServerScriptService")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local EventBoardDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.EventBoardDomain)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
-local HttpRequest = require(script.Parent.Parent.Net.HttpRequest)
+local BackendClient = require(script.Parent.Parent.Net.BackendClient)
+local GlobalDocWriter = require(script.Parent.Parent.Persistence.GlobalDocWriter)
 
 type Board = EventBoardDomain.Board
 
@@ -24,13 +24,7 @@ local EventBoardProvider = {}
 EventBoardProvider.__index = EventBoardProvider
 
 local function readSecret(): string
-	local ok, secrets = pcall(function()
-		return require(ServerScriptService.Hazastudio_ClubKitSecrets.Secrets) :: any
-	end)
-	if ok and type(secrets) == "table" and type(secrets.DonationApiSecret) == "string" then
-		return secrets.DonationApiSecret
-	end
-	return ""
+	return BackendClient.readSecret("donation")
 end
 
 function EventBoardProvider.new(deps: { logger: any?, onBoard: (board: Board) -> () })
@@ -84,13 +78,28 @@ function EventBoardProvider:_apply(raw: any, fromCache: boolean): boolean
 	self._raw = raw
 	self._onBoard(board)
 	if not fromCache then
+		local fetchedAt = os.time()
 		task.spawn(function()
 			local store = self:_cacheStore()
-			if store then
-				pcall(function()
-					(store :: DataStore):SetAsync(CACHE_DOC, raw)
-				end)
+			if not store then
+				return
 			end
+			if GlobalDocWriter.isEnabled() then
+				-- Production hardening P3 (B): the sanitized board in the VPS's raw shape, written once
+				-- per revision per experience (other servers' attempts cancel).
+				GlobalDocWriter.writeIfNewer({
+					store = store :: DataStore,
+					key = CACHE_DOC,
+					value = EventBoardDomain.serializeBoard(board),
+					revision = board.revision,
+					fetchedAt = fetchedAt,
+					label = "event_board",
+				})
+				return
+			end
+			pcall(function()
+				(store :: DataStore):SetAsync(CACHE_DOC, raw)
+			end)
 		end)
 	end
 	return true
@@ -126,13 +135,19 @@ function EventBoardProvider:refresh(): string
 		self:_warn("not_configured", { reason = "not_configured" })
 		return "kept"
 	end
-	local headers: { [string]: string } = { Authorization = "Bearer " .. secret, Accept = "application/json" }
+	local headers: { [string]: string } = { Accept = "application/json" }
 	if self._board.revision ~= "" then
 		headers["If-None-Match"] = '"' .. self._board.revision .. '"'
 	end
-	local ok, response = pcall(function()
-		return HttpRequest.requestAsync("eventboard:board", { Url = url, Method = "GET", Headers = headers })
-	end)
+	-- Secret as Authorization: Bearer (BackendClient adds it), normal priority.
+	local ok, response = BackendClient.request({
+		endpoint = "eventboard:board",
+		url = url,
+		method = "GET",
+		auth = "donation",
+		headers = headers,
+		priority = "normal",
+	})
 	if not ok or type(response) ~= "table" then
 		self._failures += 1
 		self:_warn("request_failed", { reason = "request_failed", error = tostring(response) })

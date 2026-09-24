@@ -11,7 +11,7 @@ state; this file holds the operational context around it. Update both together.
 | P0 VPS safety | deployed 07:26 UTC (`p0-deploy-steps.md`) |
 | P2 VPS routes | deployed 09:45 UTC (`p2-deploy-steps.md`); rate limits in log mode; prod migrations 0023/0025/0026/0027 — **never ship 0024 / `license-routes.js`** |
 | P1 kit | commit `55bdbf4`; synced to **THE BASIC TEST 1.3** (placeId 75916114543452), owner pressed Ctrl+S; solo playtest clean; 48 h soak running |
-| P3 kit (write + HTTP discipline) | agent working **in the main working tree** (uncommitted files under `Shared/Domain/*Policy*`, `Server/Net/BackendClient.luau`, `PlayerLookupBatcher.luau`, …). Scope + ownership: §"Agent briefs" below |
+| P3 kit (write + HTTP discipline) | **implemented + committed** (see `git log`, "P3 production hardening"); specs 13 new + all existing green (RED checks now pinned to pre-P1 commit `7990181`), compile 485/0, locals 125/138. **Not synced, not playtested** — waits for the P4 merge so TEST gets one build. Owner decisions from the P3 report still open (community increment aggregation, ReliabilityV2 for Worker-era venues, telemetry default on, 3 s urgent window); details in `UPGRADE_PROGRESS.md` P3 row + ADR 0016 |
 | P4 kit (perf at 200) | agent working in git worktree `.claude/worktrees/agent-*` on branch `worktree-agent-*` (see `git worktree list`); commits there; **to be merged into `ui-motion` by the orchestrator** |
 | P5 | not started (after ≥ 95 % of games run a P3 kit) |
 | Owner-side open | Google Drive rclone auth (postponed by owner); secret rotation after P5; `GAME_RATE_LIMIT_MODE`/`IP_RATE_LIMIT_MODE`/`WEBHOOK_RATE_LIMIT_MODE` → `enforce` after ~7 days of clean journal |

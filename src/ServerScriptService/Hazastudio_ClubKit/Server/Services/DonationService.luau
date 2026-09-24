@@ -31,6 +31,11 @@ local TextFilterUtil = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils
 local BoundedLru = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.BoundedLru)
 local BudgetMeter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.BudgetMeter)
 local HttpRequest = require(script.Parent.Parent.Net.HttpRequest)
+-- Production hardening P3 (workstream C): every VPS call goes through BackendClient (Bearer-only
+-- secrets, token bucket, 429 pause, breaker); cash lookups are batched; ReliabilityV2 reports queue.
+local BackendClient = require(script.Parent.Parent.Net.BackendClient)
+local PlayerLookupBatcher = require(script.Parent.Parent.Net.PlayerLookupBatcher)
+local DeliveryReportQueue = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.DeliveryReportQueue)
 -- Per-userId caches that must outlive a visit are bounded (production hardening P1, H5).
 local USER_KEYED_LRU_CAPACITY = 1000
 type DonationEntry = Types.DonationEntry
@@ -251,6 +256,30 @@ local function createDonationService(
 	-- Stage-2 display reports: the notification actually rendered on the
 	-- player's screen (vs ack = it reached the client queue).
 	local _displayFlushQueue: { { donation_id: number, roblox_user_id: number, displayed_at: string } } = {}
+	-- Production hardening P3 (C3): with Config.BackendClient.DELIVERY_BATCH the acks/displays go
+	-- through this queue (dedup, per-player limit, displays only for donations fired here) and are
+	-- flushed every DELIVERY_FLUSH_SEC or at DELIVERY_FLUSH_MAX by the reliability sweep loop.
+	local backendCfg: any = if type(Config.BackendClient) == "table" then Config.BackendClient else {}
+	-- One table (not five locals): this factory is close to Luau's per-function register limit.
+	--   hasCommands: /v2/notifications says a dashboard command waits (C4, P2 VPS); nil = older VPS.
+	local p3State = {
+		deliveryQueue = DeliveryReportQueue.new({
+			flushSec = tonumber(backendCfg.DELIVERY_FLUSH_SEC) or 3,
+			flushMax = tonumber(backendCfg.DELIVERY_FLUSH_MAX) or 100,
+			playerMaxEvents = tonumber(backendCfg.DELIVERY_PLAYER_MAX_EVENTS) or 4,
+			playerWindowSec = tonumber(backendCfg.DELIVERY_PLAYER_WINDOW_SEC) or 10,
+			maxQueue = tonumber(backendCfg.DELIVERY_MAX_QUEUE) or 2000,
+			recentTtlSec = 600,
+			knownTtlSec = 900,
+		}),
+		lastDeliveryFlushAt = 0,
+		lastDeliveryPruneAt = 0,
+		hasCommands = nil :: boolean?,
+		lastCommandsPollAt = 0,
+	}
+	local function deliveryBatchEnabled(): boolean
+		return backendCfg.DELIVERY_BATCH == true
+	end
 
 	-- Forward declarations: the bodies below reference helpers defined later in
 	-- this module (isReliabilityV2Enabled, flushAckQueue, reportDlq). Declaring
@@ -454,18 +483,28 @@ local function createDonationService(
 			return false, "DonationApiSecret not configured"
 		end
 		local timeout = Config.Donation.HTTP_TIMEOUT
-		local ok, response = pcall(function()
-			return HttpRequest.requestAsync(HttpRequest.classFromUrl("donation", url), {
-				Url = url,
-				Method = method,
-				Headers = {
-					Authorization = "Bearer " .. secret,
-					["Content-Type"] = "application/json",
-				},
-				Body = body,
-				Timeout = timeout,
-			})
-		end)
+		-- Priority (production hardening P3): polls, commands and delivery registration are
+		-- critical; per-player lookups bulk; the rest (leaderboards, acks, DLQ…) normal.
+		local priority = "normal"
+		if
+			string.find(url, "/v2/notifications", 1, true)
+			or string.find(url, "/v2/commands", 1, true)
+			or string.find(url, "/v3/deliveries", 1, true)
+		then
+			priority = "critical"
+		elseif string.find(url, "/v2/players/", 1, true) then
+			priority = "bulk"
+		end
+		local ok, response = BackendClient.request({
+			endpoint = HttpRequest.classFromUrl("donation", url),
+			url = url,
+			method = method,
+			auth = "donation",
+			headers = { ["Content-Type"] = "application/json" },
+			body = body,
+			priority = priority,
+			timeoutSec = timeout,
+		})
 		if not ok or type(response) ~= "table" then
 			return false, tostring(response)
 		end
@@ -718,12 +757,17 @@ local function createDonationService(
 				skipped = "other"
 			end
 		end
-		table.insert(_ackFlushQueue, {
+		local ackEntry = {
 			donation_id = donationId,
 			roblox_user_id = userId,
 			displayed_at = os.date("!%Y-%m-%dT%H:%M:%S.000Z"),
 			skipped = skipped,
-		})
+		}
+		if deliveryBatchEnabled() then
+			DeliveryReportQueue.push(p3State.deliveryQueue, "ack", donationId, userId, ackEntry, os.clock())
+			return
+		end
+		table.insert(_ackFlushQueue, ackEntry)
 		flushAckQueue()
 	end
 
@@ -739,12 +783,52 @@ local function createDonationService(
 		if donationId <= 0 then
 			return
 		end
-		table.insert(_displayFlushQueue, {
+		local displayEntry = {
 			donation_id = donationId,
 			roblox_user_id = player.UserId,
 			displayed_at = os.date("!%Y-%m-%dT%H:%M:%S.000Z"),
-		})
+		}
+		if deliveryBatchEnabled() then
+			-- Dropped when this server never fired that donation, or the player floods reports.
+			DeliveryReportQueue.push(p3State.deliveryQueue, "display", donationId, player.UserId, displayEntry, os.clock())
+			return
+		end
+		table.insert(_displayFlushQueue, displayEntry)
 		flushDisplayQueue()
+	end
+
+	-- Batched ReliabilityV2 reports (production hardening P3, C3): at most DELIVERY_FLUSH_MAX per
+	-- POST per kind. Called from the 1 s reliability sweep and when polling stops.
+	local function flushDeliveryReports(force: boolean?)
+		local now = os.clock()
+		local queue = p3State.deliveryQueue
+		if now - p3State.lastDeliveryPruneAt >= 60 then
+			p3State.lastDeliveryPruneAt = now
+			DeliveryReportQueue.prune(queue, now)
+		end
+		if not force and not DeliveryReportQueue.shouldFlush(queue, now, p3State.lastDeliveryFlushAt) then
+			return
+		end
+		p3State.lastDeliveryFlushAt = now
+		local maxPerPost = math.clamp(math.floor(tonumber(backendCfg.DELIVERY_FLUSH_MAX) or 100), 1, 200)
+		for _, spec in ipairs({
+			{ kind = "ack", path = "delivery-ack", field = "acks" },
+			{ kind = "display", path = "delivery-display", field = "displays" },
+		}) do
+			while DeliveryReportQueue.size(queue, spec.kind) > 0 do
+				local batch = DeliveryReportQueue.take(queue, spec.kind, maxPerPost)
+				task.spawn(function()
+					local ok, err = httpPost(buildV3Url(spec.path), { [spec.field] = batch })
+					if not ok then
+						log:warn("Delivery report flush failed (non-blocking)", {
+							kind = spec.kind,
+							reports = #batch,
+							error = tostring(err),
+						})
+					end
+				end)
+			end
+		end
 	end
 
 	-- Retry sweep: re-fire to players who haven't acked in time; after
@@ -1539,6 +1623,7 @@ local function createDonationService(
 						payload = payload,
 					}
 				end
+				DeliveryReportQueue.markKnown(p3State.deliveryQueue, donationId, now)
 				registerDeliveries(donationId, onlineUserIds)
 			end
 
@@ -1725,7 +1810,7 @@ local function createDonationService(
 	-- its definition below. Without the forward local, the earlier call site
 	-- resolves to a nil global at runtime ("attempt to call a nil value") for any
 	-- donor missing from the leaderboard cache (first-ever donation / test names).
-	local fetchDonorCashProfile: (userId: number, username: string) -> (number, number?)
+	local fetchDonorCashProfile: (userId: number, username: string, allowBatch: boolean?) -> (number, number?)
 
 	function service:_pollNotifications()
 		if not isCashDonationEnabled() then
@@ -1785,6 +1870,7 @@ local function createDonationService(
 			if type(json.next_cursor) == "string" and json.next_cursor ~= "" then
 				notificationCursor = json.next_cursor
 			end
+			p3State.hasCommands = if type(json.has_commands) == "boolean" then json.has_commands else nil
 			-- Phase 1: Filter valid items + do fast ops (no yield)
 			local validItems = {}
 			for _, item in ipairs(items) do
@@ -1980,7 +2066,12 @@ local function createDonationService(
 		-- let subsequent cursor pages replay historical donations as live notifs.
 		-- Pull any owner-dashboard commands (fake notif / manual adjust / retry) on
 		-- the same poll cycle — no separate connection needed.
-		do
+		-- Production hardening P3 (C4): when the VPS says has_commands=false, skip the commands GET
+		-- (plus a COMMANDS_SAFETY_POLL_SEC safety poll). An older VPS without the field: every cycle.
+		local skipCommands = backendCfg.COMMANDS_PIGGYBACK == true
+			and p3State.hasCommands == false
+			and (os.clock() - p3State.lastCommandsPollAt) < (tonumber(backendCfg.COMMANDS_SAFETY_POLL_SEC) or 60)
+		if not skipCommands then
 			local cmdOk, cmdErr = pcall(function()
 				service:_pollCommands()
 			end)
@@ -2035,7 +2126,10 @@ local function createDonationService(
 		return displayName
 	end
 
-	fetchDonorCashProfile = function(userId: number, username: string): (number, number?)
+	-- `allowBatch` (production hardening P3): background callers (join-time cash fetch, rank
+	-- resolution) share the players/lookup batch and may wait its 3 s window; interactive ones
+	-- (donation processing, the donor panel) keep the direct per-user GET.
+	fetchDonorCashProfile = function(userId: number, username: string, allowBatch: boolean?): (number, number?)
 		local now = os.clock()
 		-- Phase 1: Negative cache check — skip silently if Worker just failed for this userId.
 		local failEntry = donorFailureCache[userId]
@@ -2049,6 +2143,29 @@ local function createDonationService(
 		local cached = donorCashCache[userId]
 		if cached and cached.expiresAt > now then
 			return cached.total, cached.rank
+		end
+
+		-- Production hardening P3 (C2): joins within LOOKUP_WINDOW_SEC share one
+		-- GET /v2/players/lookup (≤ 50 ids). "lookup_unavailable" (switched off / older VPS) falls
+		-- through to the per-user route below.
+		if allowBatch == true and PlayerLookupBatcher.isAvailable() then
+			local lookupOk, recordOrError = PlayerLookupBatcher.lookup(userId, username, "cash")
+			if lookupOk and type(recordOrError) == "table" and recordOrError.cashKnown then
+				donorFailureCache[userId] = nil
+				local lookedUpTotal = recordOrError.cashTotal
+				writeDonorCashCache(
+					userId,
+					lookedUpTotal,
+					recordOrError.cashRank,
+					nil,
+					if lookedUpTotal <= 0 then (Config.Donation.DONOR_ZERO_CACHE_TTL or 300) else nil
+				)
+				return lookedUpTotal, recordOrError.cashRank
+			elseif recordOrError ~= "lookup_unavailable" then
+				recordDonorFailure(userId, os.clock())
+				log:warn("Donor profile lookup failed", { userId = userId, error = tostring(recordOrError) })
+				return 0, nil
+			end
 		end
 
 		local url = buildV2Url(string.format("players/%d/cash", userId), {
@@ -2216,7 +2333,8 @@ local function createDonationService(
 	end
 
 	-- Shared path for donation panel, overhead payload, and leaderstats Cash column.
-	function service:getPlayerCashStats(userId: number, username: string): (number, number?)
+	-- `allowBatch`: see fetchDonorCashProfile (only background callers pass true).
+	function service:getPlayerCashStats(userId: number, username: string, allowBatch: boolean?): (number, number?)
 		local cached = donorCashCache[userId]
 		-- Do not use rank-only cache with total 0: that makes panel/leaderstats
 		-- stuck at #1 / 0 while overhead chip rank still shows.
@@ -2255,7 +2373,7 @@ local function createDonationService(
 			return 0, nil
 		end
 		if cashTotal <= 0 then
-			local apiTotal, apiRank = fetchDonorCashProfile(userId, username)
+			local apiTotal, apiRank = fetchDonorCashProfile(userId, username, allowBatch)
 			cashTotal = apiTotal
 			if not cashRank then
 				cashRank = apiRank
@@ -2629,6 +2747,7 @@ local function createDonationService(
 		if url == "" then
 			return
 		end
+		p3State.lastCommandsPollAt = os.clock()
 		local ok, res = httpGet(url)
 		if not ok then
 			return -- poll loop already logs donation HTTP failures; stay quiet here
@@ -3430,6 +3549,10 @@ local function createDonationService(
 	-- No inline threads exist, so there is nothing to cancel here.
 	function service:stopPolling()
 		_pollingStarted = false
+		-- Shutdown: send the batched ReliabilityV2 reports still waiting (production hardening P3).
+		if deliveryBatchEnabled() then
+			flushDeliveryReports(true)
+		end
 		log:info("DonationService polling stopped")
 	end
 
@@ -3455,6 +3578,9 @@ local function createDonationService(
 		task.spawn(function()
 			while _reliabilityWired do
 				sweepPendingDeliveries()
+				if deliveryBatchEnabled() then
+					flushDeliveryReports(false)
+				end
 				task.wait(1)
 			end
 		end)

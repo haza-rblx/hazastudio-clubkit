@@ -15,6 +15,14 @@
 --   release — player left: flush, then drop the slot; a failed flush keeps the dirty entry and
 --     retries (Config.Persistence.LEAVE_FLUSH_RETRY_DELAYS); autosave/BindToClose still see it.
 --
+-- Write policy (Config.PlayerDocWriter.WRITE_POLICY, production hardening P3):
+--   "legacy" — scheduleFlush arms a SESSION_FLUSH_DEBOUNCE timer (the P1 behaviour).
+--   "v2"     — scheduleFlush(ns, id, "normal" | "urgent") only sets a due time
+--              (Shared/Domain/FlushPolicy): XP-only changes wait for the player's slot in every
+--              90 s, anything else goes after a short debounce; no two writes of one document
+--              within MIN_GAP_SEC (every flush path waits out the gap). Server/Persistence/
+--              PlayerDocWriter calls flushDue once a second and flushAllPaced at shutdown.
+--
 -- Replay: every applyMutator that changes the document records its mutator until the next
 -- successful flush. The flush fn receives `context.replay(base)` which re-applies those mutators
 -- to `base` (the document currently stored); repositories use it inside the UpdateAsync transform
@@ -29,6 +37,7 @@ local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Con
 local Result = require(script.Parent.Result)
 local BudgetMeter = require(script.Parent.BudgetMeter)
 local Types = require(script.Parent.Parent.Domain.Types)
+local FlushPolicy = require(script.Parent.Parent.Domain.FlushPolicy)
 
 type Result<T> = Types.Result<T>
 
@@ -65,6 +74,12 @@ type SessionEntry = {
 	staleMarks: number,
 	releasing: boolean,
 	releaseStartedAt: number,
+	-- v2 write policy
+	dirtySince: number,
+	dueAt: number?,
+	urgent: boolean,
+	scheduleSeq: number,
+	failures: number,
 }
 
 local DEFAULT_MAX_PENDING_MUTATORS = 256
@@ -73,6 +88,10 @@ local DEFAULT_RELEASE_RETRY_DELAYS = { 2, 4, 8, 16, 30 }
 
 local sessions: { [string]: SessionEntry } = {}
 local flushFns: { [string]: FlushFn } = {}
+-- Last successful write per session key (v2). Outlives the session slot so a quick rejoin still
+-- keeps the per-key gap; pruned by flushDue.
+local lastWriteAt: { [string]: number } = {}
+local lastWriteCount = 0
 local metrics = {
 	skipNoOp = 0,
 	scheduled = 0,
@@ -83,6 +102,7 @@ local metrics = {
 	releaseRetries = 0,
 	releaseGaveUp = 0,
 	departedDropped = 0,
+	gapWaits = 0,
 }
 
 local function persistenceConfig()
@@ -98,6 +118,37 @@ end
 
 local function sessionKey(namespace: string, userId: number): string
 	return namespace .. "::" .. tostring(userId)
+end
+
+local function writerConfig(): any
+	local w = Config.PlayerDocWriter
+	return if type(w) == "table" then w else {}
+end
+
+local function isV2(): boolean
+	return writerConfig().WRITE_POLICY == "v2"
+end
+
+local function flushPolicyConfig(): FlushPolicy.Config
+	local w = writerConfig()
+	return {
+		intervalSec = tonumber(w.FLUSH_INTERVAL_SEC) or 90,
+		minGapSec = tonumber(w.MIN_GAP_SEC) or 7,
+		urgentDebounceSec = tonumber(w.URGENT_DEBOUNCE_SEC) or 3,
+		tickBase = tonumber(w.TICK_BASE) or 2,
+		tickDivisor = tonumber(w.TICK_DIVISOR) or 60,
+	}
+end
+
+local function lastWriteOf(key: string): number
+	return lastWriteAt[key] or -math.huge
+end
+
+local function noteWrite(key: string)
+	if lastWriteAt[key] == nil then
+		lastWriteCount += 1
+	end
+	lastWriteAt[key] = os.clock()
 end
 
 local function fingerprintOf(data: any): string
@@ -124,6 +175,11 @@ local function newEntry(data: any): SessionEntry
 		staleMarks = 0,
 		releasing = false,
 		releaseStartedAt = 0,
+		dirtySince = 0,
+		dueAt = nil,
+		urgent = false,
+		scheduleSeq = 0,
+		failures = 0,
 	}
 end
 
@@ -258,6 +314,9 @@ function PlayerSessionStore.applyMutator(
 		return entry.data, false
 	end
 	entry.data = nextData
+	if not entry.dirty then
+		entry.dirtySince = os.clock()
+	end
 	entry.dirty = true
 	entry.generation += 1
 	if entry.replayable then
@@ -291,6 +350,11 @@ function PlayerSessionStore.markClean(namespace: string, userId: number, data: a
 	entry.stale = false
 	table.clear(entry.pending)
 	entry.replayable = true
+	-- markClean follows a direct durable write (repo:save): it counts for the per-key gap.
+	noteWrite(key)
+	entry.dueAt = nil
+	entry.urgent = false
+	entry.failures = 0
 end
 
 function PlayerSessionStore.isDirty(namespace: string, userId: number): boolean
@@ -312,8 +376,18 @@ local function flushOne(namespace: string, userId: number): Result<nil>
 		return Result.Err("no_flush_fn")
 	end
 	entry.flushing = true
+	if isV2() then
+		-- Never two writes of one document within MIN_GAP_SEC (Roblox: 1 write / 6 s per key).
+		local wait = FlushPolicy.gapWait(lastWriteOf(key), os.clock(), flushPolicyConfig().minGapSec)
+		if wait > 0 then
+			metrics.gapWaits += 1
+			BudgetMeter.recordEvent("samekey_gap_wait")
+			task.wait(wait)
+		end
+	end
 	local flushGeneration = entry.generation
 	local staleMarksAtStart = entry.staleMarks
+	local scheduleSeqAtStart = entry.scheduleSeq
 	local pendingCount = #entry.pending
 	local snapshot = entry.data
 	local replay: ((base: any) -> any)? = nil
@@ -329,8 +403,16 @@ local function flushOne(namespace: string, userId: number): Result<nil>
 	local result: Result<any> = if called then resultOrError else Result.Err(tostring(resultOrError))
 	if not result.ok then
 		metrics.flushFailed += 1
+		if isV2() then
+			-- The 1 Hz scheduler retries: 7, 14, 28, 56, 60 s after the failure.
+			entry.failures += 1
+			local gap = flushPolicyConfig().minGapSec
+			entry.dueAt = os.clock() + math.min(60, gap * 2 ^ (entry.failures - 1))
+		end
 		return result
 	end
+	noteWrite(key)
+	entry.failures = 0
 
 	local written = if result.value ~= nil then result.value else snapshot
 	if result.value ~= nil then
@@ -349,9 +431,19 @@ local function flushOne(namespace: string, userId: number): Result<nil>
 		entry.data = written
 		entry.dirty = false
 		entry.replayable = true
-	elseif result.value ~= nil and entry.replayable then
-		-- Rebase the newer in-memory steps on what was actually written.
-		entry.data = foldMutators(remaining, written)
+		entry.dueAt = nil
+		entry.urgent = false
+	else
+		if result.value ~= nil and entry.replayable then
+			-- Rebase the newer in-memory steps on what was actually written.
+			entry.data = foldMutators(remaining, written)
+		end
+		entry.dirtySince = os.clock()
+		if isV2() and entry.scheduleSeq == scheduleSeqAtStart then
+			-- Changed during the write but never scheduled: the next normal slot takes it.
+			entry.dueAt = nil
+			entry.urgent = false
+		end
 	end
 	metrics.flushed += 1
 	-- Newer mutations during yield keep dirty=true for a follow-up flush.
@@ -365,10 +457,28 @@ function PlayerSessionStore.flushNow(namespace: string, userId: number): Result<
 	return flushOne(namespace, userId)
 end
 
-function PlayerSessionStore.scheduleFlush(namespace: string, userId: number)
+--- `urgency` ("normal" | "urgent", default "urgent") only matters under the v2 write policy.
+function PlayerSessionStore.scheduleFlush(namespace: string, userId: number, urgency: string?)
 	local key = sessionKey(namespace, userId)
 	local entry = sessions[key]
 	if not entry or not entry.dirty then
+		return
+	end
+	if isV2() then
+		local now = os.clock()
+		local fcfg = flushPolicyConfig()
+		local isUrgent = urgency ~= "normal"
+		local due = if isUrgent
+			then FlushPolicy.urgentDueAt(now, lastWriteOf(key), fcfg)
+			else FlushPolicy.normalDueAt(userId, entry.dirtySince, lastWriteOf(key), fcfg)
+		if entry.dueAt == nil then
+			metrics.scheduled += 1
+		end
+		if entry.dueAt == nil or due < (entry.dueAt :: number) then
+			entry.dueAt = due
+		end
+		entry.urgent = entry.urgent or isUrgent
+		entry.scheduleSeq += 1
 		return
 	end
 	if entry.flushScheduled then
@@ -520,6 +630,108 @@ function PlayerSessionStore.flushAll(): number
 		end
 	end
 	return failed
+end
+
+--- v2 scheduler tick (PlayerDocWriter, once a second): starts the writes that are due, urgent
+--- first, at most FlushPolicy.tickBudget(dirty) of them. Leaving players are skipped (their
+--- release retries own them). Returns how many were started.
+function PlayerSessionStore.flushDue(now: number): number
+	if not isV2() then
+		return 0
+	end
+	local fcfg = flushPolicyConfig()
+	local items: { FlushPolicy.DueItem } = {}
+	local dirtyCount = 0
+	for key, entry in pairs(sessions) do
+		if entry.dirty then
+			dirtyCount += 1
+			if entry.dueAt == nil then
+				-- Dirty without a schedule (e.g. changed during a write): next normal slot.
+				local _, userId = splitKey(key)
+				entry.dueAt = FlushPolicy.normalDueAt(userId or 0, entry.dirtySince, lastWriteOf(key), fcfg)
+			end
+			if not entry.flushing and not entry.releasing then
+				table.insert(items, { key = key, dueAt = entry.dueAt :: number, urgent = entry.urgent })
+			end
+		end
+	end
+	local picked = FlushPolicy.selectDue(items, now, FlushPolicy.tickBudget(dirtyCount, fcfg))
+	for _, key in ipairs(picked) do
+		local ns, userId = splitKey(key)
+		if ns and userId then
+			task.spawn(flushOne, ns, userId)
+		end
+	end
+	if lastWriteCount > 1000 then
+		local cutoff = now - 60
+		for key, at in pairs(lastWriteAt) do
+			if at < cutoff then
+				lastWriteAt[key] = nil
+				lastWriteCount -= 1
+			end
+		end
+	end
+	return #picked
+end
+
+--- Shutdown / restart flush under v2: every dirty document (leaving players too), namespaces in
+--- `order` first, at most `perSec` writes started per second, until `budgetSec` runs out.
+--- Returns how many are still unsaved.
+function PlayerSessionStore.flushAllPaced(order: { string }, perSec: number, budgetSec: number): number
+	local rank: { [string]: number } = {}
+	for index, ns in ipairs(order) do
+		rank[ns] = index
+	end
+	local keys = dirtyKeys(nil)
+	table.sort(keys, function(a, b)
+		local na = splitKey(a) or ""
+		local nb = splitKey(b) or ""
+		local ra, rb = rank[na] or (#order + 1), rank[nb] or (#order + 1)
+		if ra ~= rb then
+			return ra < rb
+		end
+		return a < b
+	end)
+	local deadline = os.clock() + budgetSec
+	local rate = math.max(1, math.floor(perSec))
+	local running = 0
+	local failed = 0
+	for index, key in ipairs(keys) do
+		if os.clock() >= deadline then
+			failed += #keys - index + 1
+			break
+		end
+		local ns, userId = splitKey(key)
+		if ns and userId then
+			running += 1
+			task.spawn(function()
+				local ok, result = pcall(flushOne, ns, userId)
+				-- The 1 Hz writer may be writing this one right now: wait for it, then re-check.
+				while ok and not (result :: any).ok and (result :: any).error == "flush_in_flight" and os.clock() < deadline do
+					task.wait(0.2)
+					ok, result = pcall(flushOne, ns, userId)
+				end
+				if not ok or not (result :: any).ok then
+					local entry = sessions[key]
+					if entry and entry.dirty then
+						failed += 1
+					end
+				end
+				running -= 1
+			end)
+		end
+		if index % rate == 0 then
+			task.wait(1)
+		end
+	end
+	while running > 0 and os.clock() < deadline do
+		task.wait(0.1)
+	end
+	return failed + running
+end
+
+function PlayerSessionStore.isV2(): boolean
+	return isV2()
 end
 
 function PlayerSessionStore.openSessionCount(): number

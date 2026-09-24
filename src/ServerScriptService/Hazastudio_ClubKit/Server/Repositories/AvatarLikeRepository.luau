@@ -57,6 +57,12 @@ local function createAvatarLikeRepository(deps: { logger: Types.ILogger? }?)
 	-- so plain tables grew with every user ever liked. An evicted user costs one extra write.
 	local lastLeaderboardScore = BoundedLru.new(1000)
 	local lastMetadataFingerprint = BoundedLru.new(1000)
+	-- Metadata read by getTopLeaderboard (production hardening P3, A4, Config.VerifyCache): every
+	-- rebuild read the top 20 rows' metadata again; now an LRU (500 × 30 min), refreshed on write.
+	local verifyCfg = Config.VerifyCache
+	local metadataCacheEnabled = type(verifyCfg) == "table" and verifyCfg.ENABLED == true
+	local metadataCache = BoundedLru.new(if metadataCacheEnabled then (tonumber(verifyCfg.LIKES_METADATA_LRU) or 500) else 1)
+	local metadataCacheTtl = if metadataCacheEnabled then (tonumber(verifyCfg.LIKES_METADATA_TTL_SEC) or 1800) else 0
 
 	-- Server-side TTL cache for top leaderboard.
 	-- Without this cache, getTopLeaderboard triggers syncOnlineLeaderboard
@@ -171,6 +177,18 @@ local function createAvatarLikeRepository(deps: { logger: Types.ILogger? }?)
 			return Result.Err(result.error)
 		end
 		lastMetadataFingerprint:set(userId, fp)
+		if metadataCacheEnabled then
+			metadataCache:set(userId, {
+				value = {
+					userId = userId,
+					username = sanitizedUsername,
+					displayName = sanitizedDisplay,
+					thumbnail = sanitizedThumb,
+					displayNameVerified = true,
+				},
+				exp = os.clock() + metadataCacheTtl,
+			})
+		end
 		return Result.Ok(nil)
 	end
 
@@ -705,7 +723,10 @@ local function createAvatarLikeRepository(deps: { logger: Types.ILogger? }?)
 		for index, item in ipairs(page) do
 			local userId = tonumber(item.key) or 0
 			local metadata: any = nil
-			if index <= METADATA_READ_LIMIT then
+			local cachedMeta = if metadataCacheEnabled then metadataCache:get(userId) else nil
+			if cachedMeta and os.clock() < cachedMeta.exp then
+				metadata = cachedMeta.value
+			elseif index <= METADATA_READ_LIMIT then
 				local metadataResult = budgetGate:executeAsync(Enum.DataStoreRequestType.GetAsync, function()
 					return Result.withRetry(function()
 						return metadataStore:GetAsync(getUserMetadataStoreKey(userId))
@@ -713,6 +734,10 @@ local function createAvatarLikeRepository(deps: { logger: Types.ILogger? }?)
 				end)
 				if metadataResult.ok and type(metadataResult.value) == "table" then
 					metadata = metadataResult.value
+				end
+				if metadataCacheEnabled and metadataResult.ok then
+					-- A missing document is cached too (nil value), so it is not re-read every rebuild.
+					metadataCache:set(userId, { value = metadata, exp = os.clock() + metadataCacheTtl })
 				end
 			end
 

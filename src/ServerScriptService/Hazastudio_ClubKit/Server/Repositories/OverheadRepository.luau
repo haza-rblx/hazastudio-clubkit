@@ -14,6 +14,9 @@ local Logger         = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils
 local BudgetGate     = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.BudgetGate)
 local CrossServerCache = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.CrossServerCache)
 local PlayerSessionStore = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.PlayerSessionStore)
+local BoundedLru     = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.BoundedLru)
+local BudgetMeter    = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.BudgetMeter)
+local FlushPolicy    = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.FlushPolicy)
 
 local OVERHEAD_INVALIDATE_TOPIC = "OverheadInvalidate"
 local SESSION_NS = "overhead"
@@ -21,6 +24,32 @@ local SESSION_NS = "overhead"
 type Result<T> = Types.Result<T>
 type OverheadStoredData = Types.OverheadStoredData
 type IOverheadRepository = Types.IOverheadRepository
+
+local DEFAULT_XP_ONLY_FIELDS = { "xp", "_version" }
+
+local function xpOnlyFields(): { string }
+	local w = Config.PlayerDocWriter
+	if type(w) == "table" and type(w.XP_ONLY_FIELDS) == "table" then
+		return w.XP_ONLY_FIELDS
+	end
+	return DEFAULT_XP_ONLY_FIELDS
+end
+
+local function skipXpOnlyPublish(): boolean
+	local bus = Config.InvalidateBus
+	return type(bus) == "table" and bus.SKIP_XP_ONLY_PUBLISH == true
+end
+
+local function deepCopy(value: any): any
+	if type(value) ~= "table" then
+		return value
+	end
+	local out = {}
+	for k, v in pairs(value) do
+		out[k] = deepCopy(v)
+	end
+	return out
+end
 
 local function createOverheadRepository(datastoreKey: string?): IOverheadRepository
 	local key   = datastoreKey or Config.DataStore.OVERHEAD_KEY
@@ -50,6 +79,44 @@ local function createOverheadRepository(datastoreKey: string?): IOverheadReposit
 		CrossServerCache.publish(OVERHEAD_INVALIDATE_TOPIC, userId)
 	end
 
+	-- Identity-visible changes not yet told to other servers (production hardening P3, A9): an
+	-- XP-only write is not published — a player is only ever in one server, and other servers'
+	-- copies of an offline doc expire with the cache TTL. seq counts identity changes; published is
+	-- the seq the last successful write covered. Evicted/unknown users publish (safe default).
+	local identityState = BoundedLru.new(2000)
+	-- Every session update registers the player (XP-only: seq unchanged), so "no state" at write
+	-- time really means evicted/unknown → publish.
+	local function noteUpdate(userId: number, identityChanged: boolean)
+		local state = identityState:get(userId)
+		if not state then
+			state = { seq = 0, published = 0 }
+			identityState:set(userId, state)
+		end
+		if identityChanged then
+			state.seq += 1
+		end
+	end
+	local function identitySeq(userId: number): number?
+		local state = identityState:peek(userId)
+		return if state then state.seq else nil
+	end
+	local function shouldPublish(userId: number, seqAtStart: number?): boolean
+		if not skipXpOnlyPublish() then
+			return true
+		end
+		local state = identityState:peek(userId)
+		if not state or seqAtStart == nil then
+			return true
+		end
+		return seqAtStart ~= state.published
+	end
+	local function markPublished(userId: number, seqAtStart: number?)
+		local state = identityState:peek(userId)
+		if state and seqAtStart ~= nil and seqAtStart > state.published then
+			state.published = seqAtStart
+		end
+	end
+
 	-- `context` comes from PlayerSessionStore flushes. When the session is stale or the stored
 	-- `_version` is newer than ours, the session's unsaved mutators are replayed onto the stored
 	-- document inside the transform (no lost writes on either side). Returns Ok(replayedDoc)
@@ -61,6 +128,7 @@ local function createOverheadRepository(datastoreKey: string?): IOverheadReposit
 	): Result<OverheadStoredData?>
 		local versionConflict = false
 		local replayed: OverheadStoredData? = nil
+		local seqAtStart = identitySeq(userId)
 		local result = budgetGate:executeAsync(Enum.DataStoreRequestType.UpdateAsync, function()
 			return ResultUtil.withRetry(function(): boolean
 				versionConflict = false
@@ -93,7 +161,13 @@ local function createOverheadRepository(datastoreKey: string?): IOverheadReposit
 			return ResultUtil.Err(result.error or "write_failed")
 		end
 		Cache.set(KEY_PREFIX .. userId, replayed or data, Config.DataStore.CACHE_TTL)
-		publishInvalidation(userId)
+		-- A direct save (no context) or a replayed write always publishes.
+		if context == nil or replayed ~= nil or shouldPublish(userId, seqAtStart) then
+			publishInvalidation(userId)
+		else
+			BudgetMeter.recordEvent("invalidate_xp_skipped")
+		end
+		markPublished(userId, seqAtStart)
 		return ResultUtil.Ok(replayed)
 	end
 
@@ -159,7 +233,10 @@ local function createOverheadRepository(datastoreKey: string?): IOverheadReposit
 					return loaded
 				end
 			end
+			local before: any = nil
 			local nextData, changed = PlayerSessionStore.applyMutator(SESSION_NS, userId, function(current)
+				-- Copied first: a mutator may edit `current` in place.
+				before = deepCopy(current)
 				return OverheadDomain.sanitize(mutator(current :: OverheadStoredData))
 			end)
 			if nextData == nil then
@@ -171,7 +248,11 @@ local function createOverheadRepository(datastoreKey: string?): IOverheadReposit
 				log:debug("Update no-op (session fingerprint)", { userId = userId })
 				return ResultUtil.Ok(finalData)
 			end
-			PlayerSessionStore.scheduleFlush(SESSION_NS, userId)
+			-- XP ticks wait for the player's 90 s slot; anything else is urgent and is published to
+			-- other servers after the write (Config.PlayerDocWriter, production hardening P3).
+			local xpOnly = FlushPolicy.isOnlyFields(before, finalData, xpOnlyFields())
+			noteUpdate(userId, not xpOnly)
+			PlayerSessionStore.scheduleFlush(SESSION_NS, userId, if xpOnly then "normal" else "urgent")
 			log:debug("Update deferred to session flush", { userId = userId })
 			return ResultUtil.Ok(finalData)
 		end

@@ -15,6 +15,18 @@ local LeaderboardIdentity = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.
 local HttpApiCounter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.HttpApiCounter)
 local HttpApi = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.HttpApi)
 local MemoryStoreCache = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.MemoryStoreCache)
+local LeaderboardCacheCodec = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.LeaderboardCacheCodec)
+
+-- MemoryStore leaderboard cache v2 (production hardening P3, A7): one compact item per board
+-- (ids + totals, ≤ 4 KB) in a new map, instead of v1's full rows per limit. Names are resolved
+-- through this server's metadata cache. Config.LeaderboardCacheV2.ENABLED = false → v1.
+local function cacheV2(): any?
+	local v2 = Config.LeaderboardCacheV2
+	if type(v2) == "table" and v2.ENABLED == true then
+		return v2
+	end
+	return nil
+end
 local CrossServerCache = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.CrossServerCache)
 
 local LEADERBOARD_INVALIDATE_TOPIC = "DonationLeaderboardInvalidate"
@@ -383,6 +395,12 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 
 	local function invalidateMemoryStoreLeaderboards()
 		if cfg.MEMORY_STORE_CACHE_ENABLED ~= true then
+			return
+		end
+		local v2 = cacheV2()
+		if v2 then
+			MemoryStoreCache.remove(v2.STORE_NAME, "robux")
+			MemoryStoreCache.remove(v2.STORE_NAME, "community")
 			return
 		end
 		local storeName = cfg.MEMORY_STORE_STORE_NAME
@@ -974,70 +992,17 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 		return Result.Ok(nil)
 	end
 
-	function repo:getRobuxLeaderboard(limit: number?): Result<{ PlayerLeaderboardEntry }>
-		local resolvedLimit = sanitizeLimit(limit)
-		local cacheKey = "robux:" .. tostring(resolvedLimit)
-		local cached = cacheGet(cacheKey)
-		if cached ~= nil then
-			return Result.Ok(cached)
-		end
-
-		-- P1.1: MemoryStore cross-server cache. Hit => skip DataStore GetSortedAsync
-		-- entirely (largest DS quota drop). Miss => fallback to DS path.
-		local memoryStoreName = cfg.MEMORY_STORE_STORE_NAME
-		local memoryStoreKey = cacheKey
-		local msCached = MemoryStoreCache.get(memoryStoreName, memoryStoreKey)
-		if type(msCached) == "table" then
-			cacheSet(cacheKey, msCached, LEADERBOARD_CACHE_TTL)
-			return Result.Ok(msCached :: { PlayerLeaderboardEntry })
-		end
-
-		-- P0-a: cache/last-good before lockout — warm data must not be refused.
-		if DataStoreThrottleLockout.isLocked() then
-			local lastGood: Result<{ PlayerLeaderboardEntry }>? = tryReturnLastGood(cacheKey)
-			if lastGood then
-				return lastGood
-			end
-			return Result.Err("ds_throttled")
-		end
-
-		local fetchLimit = cfg.MAX_LIMIT
-		-- Patch #2 R4: Wrap read with defer/retry on budget_exhausted.
-		local result = executeWithDeferRetryRead(function()
-			return budgetGate:executeAsync(Enum.DataStoreRequestType.GetSortedAsync, function()
-				return Result.withRetry(function()
-					return robuxStore:GetSortedAsync(false, fetchLimit)
-				end, lbReadRetryAttempts())
-			end)
-		end, "getRobuxLeaderboard")
-		if not result.ok then
-			maybeMarkThrottledFromError(result.error)
-			local lastGood: Result<{ PlayerLeaderboardEntry }>? = tryReturnLastGood(cacheKey)
-			if lastGood then
-				return lastGood
-			end
-			return Result.Err(result.error)
-		end
-
-		local page = result.value:GetCurrentPage()
-		-- P1.2: Collect userIds first, then batch read metadata (parallel).
-		-- Cache hidden-user filtering here; survivors get metadata.
-		local pageIds: { number } = {}
-		local pageItems: { any } = {}
-		for _, item in ipairs(page) do
-			local userId = tonumber(item.key) or 0
-			if userId > 0 and not isHiddenRobuxUser(userId) then
-				table.insert(pageIds, userId)
-				table.insert(pageItems, item)
-				if #pageIds >= resolvedLimit then
-					break
-				end
-			end
+	-- Rows (userId + total, already without hidden users) → board entries with names. Shared by the
+	-- DataStore path and the MemoryStore v2 hit (production hardening P3, A7).
+	local function buildRobuxEntries(rows: { LeaderboardCacheCodec.Row }): { PlayerLeaderboardEntry }
+		local pageIds: { number } = table.create(#rows)
+		for i, row in ipairs(rows) do
+			pageIds[i] = row.id
 		end
 		local metadataList = batchReadMetadata("user", pageIds)
 		local entries = {} :: { PlayerLeaderboardEntry }
-		for i, item in ipairs(pageItems) do
-			local userId = pageIds[i]
+		for i, row in ipairs(rows) do
+			local userId = row.id
 			local metadata = metadataList[i]
 			local username = type(metadata) == "table" and type(metadata.username) == "string" and metadata.username
 				or nil
@@ -1101,13 +1066,103 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 				displayName = displayName,
 				thumbnail = thumbnail,
 				displayNameVerified = displayNameVerified,
-				total = tonumber(item.value) or 0,
+				total = row.total,
 			})
 		end
+		return entries
+	end
+
+	function repo:getRobuxLeaderboard(limit: number?): Result<{ PlayerLeaderboardEntry }>
+		local resolvedLimit = sanitizeLimit(limit)
+		local cacheKey = "robux:" .. tostring(resolvedLimit)
+		local cached = cacheGet(cacheKey)
+		if cached ~= nil then
+			return Result.Ok(cached)
+		end
+
+		-- P1.1: MemoryStore cross-server cache. Hit => skip DataStore GetSortedAsync
+		-- entirely (largest DS quota drop). Miss => fallback to DS path.
+		local v2 = cacheV2()
+		local memoryStoreName = if v2 then v2.STORE_NAME else cfg.MEMORY_STORE_STORE_NAME
+		local memoryStoreKey = if v2 then "robux" else cacheKey
+		local msCached = MemoryStoreCache.get(memoryStoreName, memoryStoreKey)
+		if v2 then
+			local rows = LeaderboardCacheCodec.decode(msCached, resolvedLimit)
+			if rows then
+				local fromRows = buildRobuxEntries(rows)
+				cacheSet(cacheKey, fromRows, LEADERBOARD_CACHE_TTL)
+				return Result.Ok(fromRows)
+			end
+		elseif type(msCached) == "table" then
+			cacheSet(cacheKey, msCached, LEADERBOARD_CACHE_TTL)
+			return Result.Ok(msCached :: { PlayerLeaderboardEntry })
+		end
+
+		-- P0-a: cache/last-good before lockout — warm data must not be refused.
+		if DataStoreThrottleLockout.isLocked() then
+			local lastGood: Result<{ PlayerLeaderboardEntry }>? = tryReturnLastGood(cacheKey)
+			if lastGood then
+				return lastGood
+			end
+			return Result.Err("ds_throttled")
+		end
+
+		local fetchLimit = cfg.MAX_LIMIT
+		-- Patch #2 R4: Wrap read with defer/retry on budget_exhausted.
+		local result = executeWithDeferRetryRead(function()
+			return budgetGate:executeAsync(Enum.DataStoreRequestType.GetSortedAsync, function()
+				return Result.withRetry(function()
+					return robuxStore:GetSortedAsync(false, fetchLimit)
+				end, lbReadRetryAttempts())
+			end)
+		end, "getRobuxLeaderboard")
+		if not result.ok then
+			maybeMarkThrottledFromError(result.error)
+			local lastGood: Result<{ PlayerLeaderboardEntry }>? = tryReturnLastGood(cacheKey)
+			if lastGood then
+				return lastGood
+			end
+			return Result.Err(result.error)
+		end
+
+		local page = result.value:GetCurrentPage()
+		-- P1.2: Collect userIds first, then batch read metadata (parallel).
+		-- Cache hidden-user filtering here; survivors get metadata.
+		local pageIds: { number } = {}
+		local pageItems: { any } = {}
+		for _, item in ipairs(page) do
+			local userId = tonumber(item.key) or 0
+			if userId > 0 and not isHiddenRobuxUser(userId) then
+				table.insert(pageIds, userId)
+				table.insert(pageItems, item)
+				if #pageIds >= resolvedLimit then
+					break
+				end
+			end
+		end
+		local pageRows: { LeaderboardCacheCodec.Row } = table.create(#pageItems)
+		for i, item in ipairs(pageItems) do
+			pageRows[i] = { id = pageIds[i], total = tonumber(item.value) or 0 }
+		end
+		local entries = buildRobuxEntries(pageRows)
 		cacheSet(cacheKey, entries, LEADERBOARD_CACHE_TTL)
 		-- P1.1: Populate MemoryStore (cross-server cache). Best-effort — if
 		-- MemoryStore error/disabled, DS result still used as local cache.
-		MemoryStoreCache.set(memoryStoreName, memoryStoreKey, entries, cfg.MEMORY_STORE_LEADERBOARD_TTL)
+		if v2 then
+			-- The whole fetched page (fetchLimit rows, hidden users dropped) so one item serves every
+			-- smaller limit; names are only built for the rows this caller asked for.
+			local cacheRows: { LeaderboardCacheCodec.Row } = {}
+			for _, item in ipairs(page) do
+				local rowId = tonumber(item.key) or 0
+				if rowId > 0 and not isHiddenRobuxUser(rowId) then
+					table.insert(cacheRows, { id = rowId, total = tonumber(item.value) or 0 })
+				end
+			end
+			local encoded = LeaderboardCacheCodec.encode(cacheRows, fetchLimit, tonumber(v2.MAX_ITEM_BYTES) or 4000)
+			MemoryStoreCache.set(memoryStoreName, memoryStoreKey, encoded, tonumber(v2.TTL_SEC) or 60)
+		else
+			MemoryStoreCache.set(memoryStoreName, memoryStoreKey, entries, cfg.MEMORY_STORE_LEADERBOARD_TTL)
+		end
 		return Result.Ok(entries)
 	end
 
@@ -1198,6 +1253,53 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 		return Result.Ok(estimatedRank)
 	end
 
+	-- Rows (communityId + total) → board entries with names (DataStore path and MemoryStore v2 hit).
+	local function buildCommunityEntries(rows: { LeaderboardCacheCodec.Row }): { CommunityLeaderboardEntry }
+		local pageIds: { number } = table.create(#rows)
+		for i, row in ipairs(rows) do
+			pageIds[i] = row.id
+		end
+		local metadataList = batchReadMetadata("community", pageIds)
+		local entries = {} :: { CommunityLeaderboardEntry }
+		for i, row in ipairs(rows) do
+			local communityId = row.id
+			local metadata = metadataList[i]
+			local storedName = if type(metadata) == "table" and type(metadata.communityName) == "string"
+				then metadata.communityName
+				else nil
+			-- Self-heal: names stored while the old pre-filter write path was
+			-- active can be hashFallback ("#####"). Community names are Roblox
+			-- group names (platform-moderated), so re-resolve once from
+			-- GroupService and persist the clean value; next builds read it back.
+			if storedName and storedName:match("^#+$") then
+				local freshName = resolveCommunityGroupName(communityId)
+				if freshName then
+					storedName = freshName
+					writeMetadata("community", communityId, {
+						communityId = communityId,
+						communityName = freshName,
+						communityLogo = if type(metadata) == "table" and type(metadata.communityLogo) == "string"
+							then metadata.communityLogo
+							else "",
+						updatedAt = os.time(),
+					})
+				end
+			end
+			table.insert(entries, {
+				rank = #entries + 1,
+				communityId = communityId,
+				communityName = storedName
+					or ("Community " .. tostring(communityId)),
+				communityLogo = type(metadata) == "table"
+						and type(metadata.communityLogo) == "string"
+						and metadata.communityLogo
+					or "",
+				total = row.total,
+			})
+		end
+		return entries
+	end
+
 	function repo:getCommunityLeaderboard(limit: number?): Result<{ CommunityLeaderboardEntry }>
 		local resolvedLimit = sanitizeLimit(limit)
 		local cacheKey = "community:" .. tostring(resolvedLimit)
@@ -1206,11 +1308,19 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 			return Result.Ok(cached)
 		end
 
-		-- P1.1: MemoryStore cross-server cache.
-		local memoryStoreName = cfg.MEMORY_STORE_STORE_NAME
-		local memoryStoreKey = cacheKey
+		-- P1.1: MemoryStore cross-server cache (v2: compact rows, production hardening P3).
+		local v2 = cacheV2()
+		local memoryStoreName = if v2 then v2.STORE_NAME else cfg.MEMORY_STORE_STORE_NAME
+		local memoryStoreKey = if v2 then "community" else cacheKey
 		local msCached = MemoryStoreCache.get(memoryStoreName, memoryStoreKey)
-		if type(msCached) == "table" then
+		if v2 then
+			local rows = LeaderboardCacheCodec.decode(msCached, resolvedLimit)
+			if rows then
+				local fromRows = buildCommunityEntries(rows)
+				cacheSet(cacheKey, fromRows, LEADERBOARD_CACHE_TTL)
+				return Result.Ok(fromRows)
+			end
+		elseif type(msCached) == "table" then
 			cacheSet(cacheKey, msCached, LEADERBOARD_CACHE_TTL)
 			return Result.Ok(msCached :: { CommunityLeaderboardEntry })
 		end
@@ -1254,47 +1364,19 @@ local function createRepository(deps: { logger: Types.ILogger? }?)
 				end
 			end
 		end
-		local metadataList = batchReadMetadata("community", pageIds)
-		local entries = {} :: { CommunityLeaderboardEntry }
+		local pageRows: { LeaderboardCacheCodec.Row } = table.create(#pageItems)
 		for i, item in ipairs(pageItems) do
-			local communityId = pageIds[i]
-			local metadata = metadataList[i]
-			local storedName = if type(metadata) == "table" and type(metadata.communityName) == "string"
-				then metadata.communityName
-				else nil
-			-- Self-heal: names stored while the old pre-filter write path was
-			-- active can be hashFallback ("#####"). Community names are Roblox
-			-- group names (platform-moderated), so re-resolve once from
-			-- GroupService and persist the clean value; next builds read it back.
-			if storedName and storedName:match("^#+$") then
-				local freshName = resolveCommunityGroupName(communityId)
-				if freshName then
-					storedName = freshName
-					writeMetadata("community", communityId, {
-						communityId = communityId,
-						communityName = freshName,
-						communityLogo = if type(metadata) == "table" and type(metadata.communityLogo) == "string"
-							then metadata.communityLogo
-							else "",
-						updatedAt = os.time(),
-					})
-				end
-			end
-			table.insert(entries, {
-				rank = #entries + 1,
-				communityId = communityId,
-				communityName = storedName
-					or ("Community " .. tostring(communityId)),
-				communityLogo = type(metadata) == "table"
-						and type(metadata.communityLogo) == "string"
-						and metadata.communityLogo
-					or "",
-				total = tonumber(item.value) or 0,
-			})
+			pageRows[i] = { id = pageIds[i], total = tonumber(item.value) or 0 }
 		end
+		local entries = buildCommunityEntries(pageRows)
 		cacheSet(cacheKey, entries, LEADERBOARD_CACHE_TTL)
 		-- P1.1: Populate MemoryStore.
-		MemoryStoreCache.set(memoryStoreName, memoryStoreKey, entries, cfg.MEMORY_STORE_LEADERBOARD_TTL)
+		if v2 then
+			local item = LeaderboardCacheCodec.encode(pageRows, resolvedLimit, tonumber(v2.MAX_ITEM_BYTES) or 4000)
+			MemoryStoreCache.set(memoryStoreName, memoryStoreKey, item, tonumber(v2.TTL_SEC) or 60)
+		else
+			MemoryStoreCache.set(memoryStoreName, memoryStoreKey, entries, cfg.MEMORY_STORE_LEADERBOARD_TTL)
+		end
 		return Result.Ok(entries)
 	end
 

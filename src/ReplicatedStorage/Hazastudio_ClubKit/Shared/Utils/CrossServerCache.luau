@@ -13,6 +13,11 @@
 --   - Local token bucket soft-caps publish rate
 --
 -- Kill switch: Config.Persistence.USE_LEGACY_CROSS_SERVER_CACHE = true
+--
+-- Production hardening P3 (A9, Config.InvalidateBus.V2 = true): 5 s coalescing, messages split at
+-- ≤ 60 ids / ≤ 1 KB (Shared/Domain/InvalidateBatch; `userId` kept for older servers), a failed
+-- publish is requeued once, and a local per-topic budget (12/min) replaces the MemoryStore lease
+-- (a non-atomic Get+Set on every publish). V2 = false → the P1 behaviour below.
 
 local MessagingService = game:GetService("MessagingService")
 local MemoryStoreService = game:GetService("MemoryStoreService")
@@ -21,6 +26,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local BudgetMeter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.BudgetMeter)
+local InvalidateBatch = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.InvalidateBatch)
+local HttpBudgetPolicy = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.HttpBudgetPolicy)
 
 local CrossServerCache = {}
 
@@ -60,6 +67,33 @@ end
 
 local function useLegacy(): boolean
 	return persistenceConfig().USE_LEGACY_CROSS_SERVER_CACHE == true
+end
+
+local function busConfig(): any
+	local bus = Config.InvalidateBus
+	return if type(bus) == "table" then bus else {}
+end
+
+local function useV2(): boolean
+	return busConfig().V2 == true
+end
+
+-- v2: one local token bucket per topic (Shared/Domain/HttpBudgetPolicy's bucket, no floors).
+local topicBuckets: { [string]: HttpBudgetPolicy.Bucket } = {}
+-- v2: how often an id was requeued after a failed publish (cleared on success / give-up).
+local retryCounts: { [string]: { [number]: number } } = {}
+local function takeTopicToken(topic: string): (boolean, number)
+	local bucket = topicBuckets[topic]
+	if not bucket then
+		local cfg = busConfig()
+		bucket = HttpBudgetPolicy.newBucket({
+			ratePerMin = tonumber(cfg.TOPIC_PUBLISHES_PER_MIN) or 12,
+			burst = tonumber(cfg.TOPIC_BURST) or 3,
+			floors = { normal = 0 },
+		}, os.clock())
+		topicBuckets[topic] = bucket
+	end
+	return HttpBudgetPolicy.tryTake(bucket :: HttpBudgetPolicy.Bucket, "normal", os.clock())
 end
 
 local function refillTokens()
@@ -161,11 +195,106 @@ local function publishRaw(topic: string, payload: { [string]: any })
 	end)
 end
 
-function CrossServerCache._scheduleFlush(topic: string)
+local function requeue(topic: string, userIds: { number })
+	local pending = pendingByTopic[topic]
+	if not pending then
+		pending = {}
+		pendingByTopic[topic] = pending
+	end
+	for _, id in ipairs(userIds) do
+		pending[id] = true
+	end
+end
+
+-- v2 flush: split into ≤ 60 id / ≤ 1 KB messages, each spending one per-topic token; what does
+-- not fit the budget waits for the next window; a failed message is requeued once.
+local function flushV2(topic: string)
+	local pending = pendingByTopic[topic]
+	pendingByTopic[topic] = nil
+	if not pending then
+		return
+	end
+	local userIds = {}
+	for userId in pairs(pending) do
+		table.insert(userIds, userId)
+	end
+	if #userIds == 0 then
+		return
+	end
+	table.sort(userIds)
+	metrics.coalesced += #userIds
+	local cfg = busConfig()
+	local messages = InvalidateBatch.buildMessages(userIds, {
+		maxIds = tonumber(cfg.MAX_IDS_PER_MESSAGE) or 60,
+		maxBytes = tonumber(cfg.MAX_MESSAGE_BYTES) or 1000,
+		originJobId = game.JobId,
+		t = os.time(),
+	})
+	local requeueLimit = tonumber(cfg.REQUEUE_ON_FAILURE) or 1
+	for index, message in ipairs(messages) do
+		local ok, wait = takeTopicToken(topic)
+		if not ok then
+			metrics.throttled += 1
+			for rest = index, #messages do
+				requeue(topic, messages[rest].userIds)
+			end
+			CrossServerCache._scheduleFlush(topic, wait)
+			return
+		end
+		task.spawn(function()
+			local published, err = pcall(function()
+				MessagingService:PublishAsync(topic, message)
+			end)
+			BudgetMeter.recordMessagingPublish(topic, published)
+			local counts = retryCounts[topic]
+			if published then
+				metrics.published += 1
+				if counts then
+					for _, id in ipairs(message.userIds) do
+						counts[id] = nil
+					end
+				end
+				return
+			end
+			metrics.throttled += 1
+			if not counts then
+				counts = {}
+				retryCounts[topic] = counts
+			end
+			-- Requeue each id at most `requeueLimit` times, into the next coalesced message.
+			local again: { number } = {}
+			for _, id in ipairs(message.userIds) do
+				local used = (counts[id] or 0) + 1
+				if used <= requeueLimit then
+					counts[id] = used
+					table.insert(again, id)
+				else
+					counts[id] = nil
+				end
+			end
+			if #again > 0 then
+				requeue(topic, again)
+				CrossServerCache._scheduleFlush(topic)
+			else
+				warn(string.format("[CrossServerCache] publish failed topic=%s ids=%d err=%s", topic, #message.userIds, tostring(err)))
+			end
+		end)
+	end
+end
+
+function CrossServerCache._scheduleFlush(topic: string, delaySec: number?)
 	if flushScheduled[topic] then
 		return
 	end
 	flushScheduled[topic] = true
+	if useV2() then
+		local coalesceV2 = math.max(tonumber(busConfig().COALESCE_SEC) or 5, delaySec or 0)
+		task.delay(coalesceV2, function()
+			flushScheduled[topic] = nil
+			flushV2(topic)
+		end)
+		return
+	end
 	local coalesce = persistenceConfig().INVALIDATE_COALESCE_SEC or 0.75
 	task.delay(coalesce, function()
 		flushScheduled[topic] = nil

@@ -13,6 +13,7 @@ local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local BudgetGate = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.BudgetGate)
 local CrossServerCache = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.CrossServerCache)
 local PlayerSessionStore = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.PlayerSessionStore)
+local PlayerDocWriter = require(script.Parent.Parent.Persistence.PlayerDocWriter)
 
 local SETTINGS_INVALIDATE_TOPIC = "SettingsInvalidate"
 local SESSION_NS = "settings"
@@ -48,14 +49,17 @@ local function createSettingsRepository(datastoreKey: string?): any
 	end)
 
 	local function durableWrite(userId: number, data: SettingsStoredData): Result<nil>
-		local result = budgetGate:executeAsync(Enum.DataStoreRequestType.UpdateAsync, function()
-			return Result.withRetry(function(): boolean
-				store:UpdateAsync(tostring(userId), function(_current)
-					return SettingsDomain.sanitizeStored(data)
-				end)
-				return true
-			end, Config.DataStore.RETRY_ATTEMPTS)
-		end, mutexFor(userId))
+		-- Per-key gap (production hardening P3): never two writes of one settings doc within 7 s.
+		local result = PlayerDocWriter.guard(mutexFor(userId), function()
+			return budgetGate:executeAsync(Enum.DataStoreRequestType.UpdateAsync, function()
+				return Result.withRetry(function(): boolean
+					store:UpdateAsync(tostring(userId), function(_current)
+						return SettingsDomain.sanitizeStored(data)
+					end)
+					return true
+				end, Config.DataStore.RETRY_ATTEMPTS)
+			end, mutexFor(userId))
+		end)
 
 		if result.ok then
 			Cache.set(KEY_PREFIX .. userId, SettingsDomain.sanitizeStored(data), Config.DataStore.CACHE_TTL)

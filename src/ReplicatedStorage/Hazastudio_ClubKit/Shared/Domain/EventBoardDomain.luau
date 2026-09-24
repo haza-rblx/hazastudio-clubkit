@@ -64,6 +64,9 @@ export type QuestProgress = {
 	lastDay: number,
 	completed: boolean,
 	claimedAt: number?,
+	-- The quest's due day, stamped when the entry is created (production hardening P3), so the
+	-- entry can be pruned 30 days later even after the quest left the board. Additive field.
+	dueDay: number?,
 }
 
 export type ProgressDoc = {
@@ -205,6 +208,38 @@ function EventBoardDomain.emptyBoard(): Board
 	return { revision = "", posts = {}, quests = {} }
 end
 
+-- A sanitized board back in the raw shape the VPS sends (readBoard(serializeBoard(b)) == b), for
+-- the DataStore copy (production hardening P3, B): only checked fields are stored, and kits that
+-- still store/read the raw body read this unchanged.
+function EventBoardDomain.serializeBoard(board: Board): { [string]: any }
+	local posts = table.create(#board.posts)
+	for i, post in ipairs(board.posts) do
+		posts[i] = {
+			id = post.id,
+			category = post.category,
+			title = post.title,
+			body = post.body,
+			imageAssetId = post.imageAssetId,
+			showOnJoin = post.showOnJoin,
+			publishedAt = post.publishedAt,
+		}
+	end
+	local quests = table.create(#board.quests)
+	for i, quest in ipairs(board.quests) do
+		quests[i] = {
+			id = quest.id,
+			category = quest.category,
+			title = quest.title,
+			description = quest.description,
+			goal = { type = quest.goalType, value = quest.goalValue },
+			reward = { type = quest.rewardType, value = quest.rewardValue },
+			startDate = quest.startDate,
+			dueDate = quest.dueDate,
+		}
+	end
+	return { revision = board.revision, posts = posts, quests = quests }
+end
+
 -- The one post that opens on join, if any.
 function EventBoardDomain.joinPost(board: Board): Post?
 	for _, post in ipairs(board.posts) do
@@ -250,7 +285,14 @@ local function readQuestProgress(raw: any): QuestProgress?
 		else 0
 	local lastDay = if type(raw.lastDay) == "number" and raw.lastDay >= 0 then math.floor(raw.lastDay) else 0
 	local claimedAt = if type(raw.claimedAt) == "number" and raw.claimedAt > 0 then raw.claimedAt else nil
-	return { progress = progress, lastDay = lastDay, completed = raw.completed == true, claimedAt = claimedAt }
+	local dueDay = if type(raw.dueDay) == "number" and raw.dueDay > 0 then math.floor(raw.dueDay) else nil
+	return {
+		progress = progress,
+		lastDay = lastDay,
+		completed = raw.completed == true,
+		claimedAt = claimedAt,
+		dueDay = dueDay,
+	}
 end
 
 function EventBoardDomain.sanitizeProgress(raw: any): ProgressDoc
@@ -296,6 +338,9 @@ function EventBoardDomain.mergeProgress(a: ProgressDoc, b: ProgressDoc): Progres
 				if entry.claimedAt and (not current.claimedAt or entry.claimedAt < current.claimedAt) then
 					current.claimedAt = entry.claimedAt
 				end
+				if current.dueDay == nil then
+					current.dueDay = entry.dueDay
+				end
 			end
 		end
 		for key in pairs(doc.seenPosts) do
@@ -309,8 +354,10 @@ local function entryFor(doc: ProgressDoc, quest: Quest): QuestProgress
 	local key = tostring(quest.id)
 	local entry = doc.quests[key]
 	if not entry then
-		entry = { progress = 0, lastDay = 0, completed = false, claimedAt = nil }
+		entry = { progress = 0, lastDay = 0, completed = false, claimedAt = nil, dueDay = quest.dueDay }
 		doc.quests[key] = entry
+	elseif entry.dueDay == nil then
+		entry.dueDay = quest.dueDay
 	end
 	return entry
 end
@@ -443,6 +490,64 @@ end
 function EventBoardDomain.secondsUntilNextDay(unixSeconds: number): number
 	local wib = unixSeconds + 7 * 3600
 	return 86400 - (wib % 86400)
+end
+
+-- Keeps a venue progress document bounded (production hardening P3, A8). Returns a pruned copy:
+--   * a quest entry goes 30 (keepDays) days after its due day — the entry's stamped dueDay, or
+--     the board's for older entries of quests still on it;
+--   * an entry with no known due day goes only when its claim is older than keepDays (a server
+--     with a stale board must never drop progress another server is counting);
+--   * seenPosts keeps the posts on the board plus the newest ids, maxSeenPosts in total.
+-- Claims are safe: a quest past its due day can no longer be claimed (canClaim → not_active).
+function EventBoardDomain.pruneProgress(
+	doc: ProgressDoc,
+	board: Board,
+	today: number,
+	nowUnix: number,
+	cfg: { keepDays: number, maxSeenPosts: number }
+): ProgressDoc
+	local boardDue: { [string]: number } = {}
+	for _, quest in ipairs(board.quests) do
+		boardDue[tostring(quest.id)] = quest.dueDay
+	end
+	local out = EventBoardDomain.emptyProgress()
+	for key, entry in pairs(doc.quests) do
+		local dueDay = entry.dueDay or boardDue[key]
+		local keep = true
+		if dueDay then
+			keep = today <= dueDay + cfg.keepDays
+		elseif entry.claimedAt then
+			keep = nowUnix - entry.claimedAt <= cfg.keepDays * 86400
+		end
+		if keep then
+			out.quests[key] = table.clone(entry)
+		end
+	end
+	local onBoard: { [string]: boolean } = {}
+	for _, post in ipairs(board.posts) do
+		onBoard[tostring(post.id)] = true
+	end
+	local others: { number } = {}
+	local count = 0
+	for key in pairs(doc.seenPosts) do
+		if onBoard[key] then
+			out.seenPosts[key] = true
+			count += 1
+		else
+			table.insert(others, tonumber(key) or 0)
+		end
+	end
+	table.sort(others, function(a, b)
+		return a > b
+	end)
+	for _, id in ipairs(others) do
+		if count >= cfg.maxSeenPosts then
+			break
+		end
+		out.seenPosts[tostring(id)] = true
+		count += 1
+	end
+	return out
 end
 
 return EventBoardDomain

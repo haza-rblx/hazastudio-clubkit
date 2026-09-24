@@ -29,6 +29,7 @@ local KitProduct = require(ReplicatedStorage.Hazastudio_ClubKit.KitProduct)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local RateLimiter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.RateLimiter)
 local HttpRequest = require(script.Parent.Parent.Net.HttpRequest)
+local BackendClient = require(script.Parent.Parent.Net.BackendClient)
 local Secrets = require(ServerScriptService.Hazastudio_ClubKitSecrets.Secrets)
 
 export type MemberSample = {
@@ -610,26 +611,24 @@ local function createJoinCommunityMembersService(deps: {
 			}
 		end
 
-		local url = string.format(
-			"%s/game/%s/community/%d?secret=%s",
-			baseUrl,
-			gameKey,
-			groupId,
-			secret
-		)
+		-- Secret as Authorization: Bearer via BackendClient (production hardening P3; the legacy
+		-- switch puts ?secret= back). `secret` here only proves it is configured.
+		local url = string.format("%s/game/%s/community/%d", baseUrl, gameKey, groupId)
 		local timeout = 5
 		if type(Config.GameDataApi) == "table" and type(Config.GameDataApi.HTTP_TIMEOUT) == "number" then
 			timeout = Config.GameDataApi.HTTP_TIMEOUT
 		end
 
-		local okHttp, responseOrErr = pcall(function()
-			return HttpRequest.requestAsync("gamedata:community", {
-				Url = url,
-				Method = "GET",
-				Headers = { Accept = "application/json" },
-				Timeout = timeout,
-			})
-		end)
+		local okHttp, responseOrErr = BackendClient.request({
+			endpoint = "gamedata:community",
+			url = url,
+			method = "GET",
+			auth = "gamedata",
+			headers = { Accept = "application/json" },
+			priority = "bulk",
+			timeoutSec = timeout,
+			legacyQuerySecret = true,
+		})
 		if not okHttp or type(responseOrErr) ~= "table" or responseOrErr.Success ~= true then
 			if not warnedCommunityWorkerFail then
 				warnedCommunityWorkerFail = true
@@ -813,15 +812,18 @@ local function createJoinCommunityMembersService(deps: {
 
 	-- GET JSON via RequestAsync. User-Agent is locked by Roblox HttpService (cannot set).
 	local function httpGetJson(url: string): (boolean, number?, string, any?)
-		local okHttp, responseOrErr = pcall(function()
-			return HttpRequest.requestAsync("proxy:groups_json", {
-				Url = url,
-				Method = "GET",
-				Headers = {
-					Accept = "application/json",
-				},
-			})
-		end)
+		-- Roblox proxy (not the VPS): no secret, but it spends the same 500/min server budget, so it
+		-- takes a bulk token from BackendClient's bucket (production hardening P3).
+		local okHttp, responseOrErr = BackendClient.request({
+			endpoint = "proxy:groups_json",
+			url = url,
+			method = "GET",
+			auth = "none",
+			headers = {
+				Accept = "application/json",
+			},
+			priority = "bulk",
+		})
 		if not okHttp then
 			return false, nil, tostring(responseOrErr), nil
 		end

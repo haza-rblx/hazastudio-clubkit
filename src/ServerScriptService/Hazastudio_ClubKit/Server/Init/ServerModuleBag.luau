@@ -97,6 +97,8 @@ return {
 	-- Shared helpers used by Main wiring
 	HttpApiCounter = require(Kit.Shared.Utils.HttpApiCounter),
 	BudgetMeter = require(Kit.Shared.Utils.BudgetMeter),
+	-- Production hardening P3: budget aggregate to POST /v3/telemetry (ADR 0007 phase B).
+	BudgetTelemetry = require(Server.Net.BudgetTelemetry),
 	Result = require(Kit.Shared.Utils.Result),
 	Validator = require(Kit.Shared.Utils.Validator),
 	RateLimiter = require(Kit.Shared.Utils.RateLimiter),

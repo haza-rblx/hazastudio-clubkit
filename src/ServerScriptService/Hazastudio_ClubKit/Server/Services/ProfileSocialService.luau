@@ -17,7 +17,8 @@ local Result = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Result)
 local Cache = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Cache)
 local HttpApiCounter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.HttpApiCounter)
 local HttpApi = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.HttpApi)
-local HttpRequest = require(script.Parent.Parent.Net.HttpRequest)
+local BackendClient = require(script.Parent.Parent.Net.BackendClient)
+local PlayerLookupBatcher = require(script.Parent.Parent.Net.PlayerLookupBatcher)
 
 type Result<T> = Types.Result<T>
 type SocialProofData = Types.SocialProofData
@@ -37,7 +38,21 @@ local function createProfileSocialService(deps: { logger: ILogger })
 		return Config.GameDataApi
 	end
 
-	local function tryWorkerFetch(userId: number): (boolean, number?)
+	local function tryWorkerFetch(userId: number, allowBatch: boolean): (boolean, number?)
+		-- Production hardening P3 (C2): the join warm is batched through GET /v2/players/lookup
+		-- (want=connections) when the donation API is configured; an explicit fetch (profile
+		-- opened) keeps the direct route. "lookup_unavailable" → the per-user route below.
+		if allowBatch and PlayerLookupBatcher.isAvailable() then
+			local player = Players:GetPlayerByUserId(userId)
+			local lookupOk, record = PlayerLookupBatcher.lookup(userId, if player then player.Name else nil, "connections")
+			if lookupOk and type(record) == "table" and record.connectionsKnown then
+				return true, record.connectionsCount
+			end
+			if record ~= "lookup_unavailable" then
+				return false, nil
+			end
+		end
+
 		local apiConfig = getApiConfig()
 		local secret = Secrets.GameDataApiSecret
 		if not apiConfig or not apiConfig.BASE_URL or apiConfig.BASE_URL == ""
@@ -46,20 +61,18 @@ local function createProfileSocialService(deps: { logger: ILogger })
 			return false, nil
 		end
 
-		local url = ("%s/game/%s/social/%d?secret=%s"):format(
-			apiConfig.BASE_URL,
-			apiConfig.GAME_KEY,
-			userId,
-			secret
-		)
+		-- Secret as Authorization: Bearer (legacy switch: ?secret= as before).
+		local url = ("%s/game/%s/social/%d"):format(apiConfig.BASE_URL, apiConfig.GAME_KEY, userId)
 		local timeout = tonumber(apiConfig.HTTP_TIMEOUT) or 5
-		local ok, response = pcall(function()
-			return HttpRequest.requestAsync("gamedata:social_get", {
-				Url = url,
-				Method = "GET",
-				Timeout = timeout,
-			})
-		end)
+		local ok, response = BackendClient.request({
+			endpoint = "gamedata:social_get",
+			url = url,
+			method = "GET",
+			auth = "gamedata",
+			priority = "bulk",
+			timeoutSec = timeout,
+			legacyQuerySecret = true,
+		})
 		if not ok or type(response) ~= "table" or response.Success ~= true or type(response.Body) ~= "string" then
 			return false, nil
 		end
@@ -111,23 +124,20 @@ local function createProfileSocialService(deps: { logger: ILogger })
 			return
 		end
 
-		local url = ("%s/game/%s/social/%d?secret=%s"):format(
-			apiConfig.BASE_URL,
-			apiConfig.GAME_KEY,
-			userId,
-			secret
-		)
+		local url = ("%s/game/%s/social/%d"):format(apiConfig.BASE_URL, apiConfig.GAME_KEY, userId)
 		local timeout = tonumber(apiConfig.HTTP_TIMEOUT) or 5
 		task.spawn(function()
-			local ok, response = pcall(function()
-				return HttpRequest.requestAsync("gamedata:social_push", {
-					Url = url,
-					Method = "POST",
-					Headers = { ["Content-Type"] = "application/json" },
-					Body = HttpService:JSONEncode({ connectionsCount = connectionsCount }),
-					Timeout = timeout,
-				})
-			end)
+			local ok, response = BackendClient.request({
+				endpoint = "gamedata:social_push",
+				url = url,
+				method = "POST",
+				auth = "gamedata",
+				headers = { ["Content-Type"] = "application/json" },
+				body = HttpService:JSONEncode({ connectionsCount = connectionsCount }),
+				priority = "bulk",
+				timeoutSec = timeout,
+				legacyQuerySecret = true,
+			})
 			if ok and response and response.Success then
 				log:debug("ProfileSocialService: Pushed to Worker KV", {
 					userId = userId,
@@ -141,15 +151,21 @@ local function createProfileSocialService(deps: { logger: ILogger })
 		end)
 	end
 
-	local function resolveConnectionsCount(userId: number): (SocialProofData, string)
+	local function resolveConnectionsCount(userId: number, allowBatch: boolean): (SocialProofData, string)
 		local workerCount: number? = nil
 		local workerOk = false
-		for attempt = 1, 3 do
-			workerOk, workerCount = tryWorkerFetch(userId)
+		-- Pre-P3: 3 attempts per fetch, even when the VPS answered "no count yet". With BackendClient:
+		-- a retry only after a transport failure, and one fewer (production hardening P3).
+		local attempts = if BackendClient.isEnabled() then 2 else 3
+		for attempt = 1, attempts do
+			workerOk, workerCount = tryWorkerFetch(userId, allowBatch and attempt == 1)
 			if workerOk and workerCount ~= nil then
 				break
 			end
-			if attempt < 3 then
+			if BackendClient.isEnabled() and workerOk then
+				break -- an answer without a count is not fixed by asking again
+			end
+			if attempt < attempts then
 				task.wait(0.35 * attempt)
 			end
 		end
@@ -197,11 +213,16 @@ local function createProfileSocialService(deps: { logger: ILogger })
 		return table.clone(EMPTY_SOCIAL), if workerOk then "worker_null" else "none"
 	end
 
-	function service:fetch(userId: number): Result<SocialProofData>
+	local function fetchSocial(userId: number, allowBatch: boolean): Result<SocialProofData>
 		local key = "social_" .. tostring(userId)
 		local cached = Cache.get(key)
 		if cached then
 			return Result.Ok(cached)
+		end
+		-- Negative cache (production hardening P3): no count anywhere a moment ago → do not ask
+		-- again for SOCIAL_NEGATIVE_TTL_SEC (Main's join warm retries twice 10 s apart).
+		if BackendClient.isEnabled() and Cache.get("social_neg_" .. tostring(userId)) then
+			return Result.Ok(table.clone(EMPTY_SOCIAL))
 		end
 
 		local existingBarrier = inFlight[userId]
@@ -217,10 +238,13 @@ local function createProfileSocialService(deps: { logger: ILogger })
 		local barrier = Instance.new("BindableEvent")
 		inFlight[userId] = barrier
 
-		local data, source = resolveConnectionsCount(userId)
+		local data, source = resolveConnectionsCount(userId, allowBatch)
 		-- Do not cache empty/null — transient Worker/Roblox failures should retry.
 		if data.connectionsCount ~= nil then
 			Cache.set(key, data, Config.AvatarContext.SOCIAL_PROOF_CACHE_TTL)
+		elseif BackendClient.isEnabled() then
+			local negativeTtl = (Config.BackendClient and tonumber(Config.BackendClient.SOCIAL_NEGATIVE_TTL_SEC)) or 300
+			Cache.set("social_neg_" .. tostring(userId), true, negativeTtl)
 		end
 		log:debug("ProfileSocialService: fetch complete", {
 			userId = userId,
@@ -234,9 +258,13 @@ local function createProfileSocialService(deps: { logger: ILogger })
 		return Result.Ok(data)
 	end
 
-	-- Background warm: Worker + cache only, safe for PlayerAdded.
+	function service:fetch(userId: number): Result<SocialProofData>
+		return fetchSocial(userId, false)
+	end
+
+	-- Background warm: Worker + cache only, safe for PlayerAdded. Batched (production hardening P3).
 	function service:warm(userId: number): Result<SocialProofData>
-		return service:fetch(userId)
+		return fetchSocial(userId, true)
 	end
 
 	function service:getCached(userId: number): SocialProofData?

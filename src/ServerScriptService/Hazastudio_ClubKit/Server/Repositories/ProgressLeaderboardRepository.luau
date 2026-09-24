@@ -20,6 +20,8 @@ local StreakDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.
 local Result = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Result)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local BudgetGate = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.BudgetGate)
+local BoundedLru = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.BoundedLru)
+local PlayerSessionStore = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.PlayerSessionStore)
 
 type Result<T> = Types.Result<T>
 export type Kind = "level" | "streak" | "couple"
@@ -92,12 +94,16 @@ local function createProgressLeaderboardRepository(deps: { logger: Types.ILogger
 	end
 
 	-- A departed player's dedupe state is dropped so a rejoin writes their current values again.
+	-- Called on PlayerRemoving (below; until P3 nothing called it, so these maps only grew).
 	function repo:forget(userId: number)
 		lastWritten.level[userId] = nil
 		lastWritten.streak[userId] = nil
 		lastLevelWriteAt[userId] = nil
 		couplePairOf[userId] = nil
 	end
+	Players.PlayerRemoving:Connect(function(player: Player)
+		repo:forget(player.UserId)
+	end)
 
 	local function pairKey(a: number, b: number): string
 		return if a < b then (tostring(a) .. "_" .. tostring(b)) else (tostring(b) .. "_" .. tostring(a))
@@ -194,13 +200,35 @@ local function createProgressLeaderboardRepository(deps: { logger: Types.ILogger
 		return Result.Ok(entries)
 	end
 
+	-- Verify reads (production hardening P3, A4, Config.VerifyCache): a player online here is read
+	-- from the session store (the freshest copy, no request); offline documents are cached in an
+	-- LRU (256 × 600 s) — the boards refresh every 120 s, so the old 60 s cache always missed.
+	local verifyCfg = Config.VerifyCache
+	local verifyEnabled = type(verifyCfg) == "table" and verifyCfg.ENABLED == true
+	local offlineDocs = BoundedLru.new(if verifyEnabled then (tonumber(verifyCfg.OVERHEAD_LRU) or 256) else 1)
+	local offlineTtl = if verifyEnabled then (tonumber(verifyCfg.OVERHEAD_TTL_SEC) or 600) else 0
+
 	local function readOverhead(userId: number): any?
+		if verifyEnabled then
+			local live = PlayerSessionStore.get("overhead", userId)
+			if type(live) == "table" then
+				return live
+			end
+			local cached = offlineDocs:get(userId)
+			if cached and os.clock() < cached.exp then
+				return cached.doc
+			end
+		end
 		local doc = budgetGate:executeAsync(Enum.DataStoreRequestType.GetAsync, function()
 			return Result.withRetry(function()
 				return overheadStore:GetAsync(tostring(userId))
 			end, 1)
 		end)
-		return if doc.ok and type(doc.value) == "table" then doc.value else nil
+		local value = if doc.ok and type(doc.value) == "table" then doc.value else nil
+		if verifyEnabled and doc.ok then
+			offlineDocs:set(userId, { doc = value, exp = os.clock() + offlineTtl })
+		end
+		return value
 	end
 
 	-- A pair stays only while both documents still name each other; one that broke up (an online

@@ -922,6 +922,8 @@ if backgroundJobScheduler then
 	-- Persistence Fabric metrics (DEBUG). Interval 0 disables.
 	local metricsInterval = (Config.Persistence and Config.Persistence.METRICS_LOG_INTERVAL) or 60
 	PersistenceFabricHooks.registerMetricsJob(backgroundJobScheduler, log, metricsInterval)
+	-- Production hardening P3: PlayerDocWriter's 1 Hz write scheduler (no-op under WRITE_POLICY "legacy").
+	PersistenceFabricHooks.startWriter()
 	-- Start the scheduler
 	backgroundJobScheduler:start()
 	log:info("BackgroundJobScheduler started with registered jobs")
@@ -948,14 +950,16 @@ if backgroundJobScheduler then
 		})
 	end
 	-- Budget telemetry (production hardening P1 / F): one line per window with DataStore requests
-	-- by type, HTTP by endpoint class, MessagingService publishes and budget events.
-	-- TODO(P3): also ship the rolled window through BackendClient (ADR 0007 phase B).
+	-- by type, HTTP by endpoint class, MessagingService publishes and budget events. P3: the windows
+	-- are also folded into a 15-min aggregate for POST /v3/telemetry (Net/BudgetTelemetry).
 	if Config.BudgetMeter and Config.BudgetMeter.LOG_ENABLED ~= false then
 		local budgetInterval = tonumber(Config.BudgetMeter.LOG_INTERVAL_SEC) or 60
 		backgroundJobScheduler:register({
 			name = "budget_meter_summary",
 			callback = function()
-				log:info(ServerMods.BudgetMeter.formatSummary(ServerMods.BudgetMeter.rollWindow()))
+				local budgetWindow = ServerMods.BudgetMeter.rollWindow()
+				log:info(ServerMods.BudgetMeter.formatSummary(budgetWindow))
+				ServerMods.BudgetTelemetry.absorb(budgetWindow)
 			end,
 			intervalMin = budgetInterval,
 			intervalMax = budgetInterval,
@@ -1445,7 +1449,9 @@ log:info(
 -- settings / favorites. Same path runs early when Creator Hub schedules a
 -- delayed restart (before BindToClose's 30s window).
 -- ============================================================
-local function flushSessionBuffersEarly()
+-- `reason` "autosave" = the 60 s loop below; under PlayerDocWriter v2 (production hardening P3)
+-- the session documents are then left to the 1 Hz writer (90 s XP slot) instead of written here.
+local function flushSessionBuffersEarly(reason: string?)
 	-- flushAllPending covers every userId with unsaved XP (online or already
 	-- left), so a departed player's failed on-leave flush gets retried here
 	-- instead of only online players.
@@ -1477,7 +1483,7 @@ local function flushSessionBuffersEarly()
 		end)
 	end
 	pcall(function()
-		PersistenceFabricHooks.flushAll()
+		PersistenceFabricHooks.flushAll(reason)
 	end)
 end
 
@@ -1488,7 +1494,7 @@ task.spawn(function()
 		if not autosaveActive then
 			break
 		end
-		pcall(flushSessionBuffersEarly)
+		pcall(flushSessionBuffersEarly, "autosave")
 	end
 end)
 

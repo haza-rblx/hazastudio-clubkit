@@ -65,9 +65,9 @@ ClubKitConfigSchema.defaults = {
 		ProviderLink = "",
 		ApiUrl = "",
 		-- Enterprise-grade notification reliability (delivery ledger + client ack +
-		-- server retry + DLQ audit). Requires donation-api Worker >= v3. Default off
-		-- so existing buyers keep legacy fire-and-forget until they opt in.
-		ReliabilityV2 = false,
+		-- server retry + DLQ audit). Requires the clubkit VPS (v3 routes). On by default
+		-- since production hardening P3 (acks/displays are batched); false turns it off.
+		ReliabilityV2 = true,
 		-- Cash display currency ("IDR" | "PHP" | "CASH"). Saweria supports IDR/PHP natively;
 		-- Bagi-Bagi is IDR-only; SociaBuzz settles per creator country. "CASH" = neutral
 		-- "Cash" labels (no currency name). Display-only — amounts are not converted;
@@ -557,6 +557,12 @@ ClubKitConfigSchema.defaults = {
 		ForeignGuiDetect = true,
 		ForeignGuiGraceSeconds = 20,
 		ForeignGuiAllowNames = { "Adonis", "Adonis_Loader", "Kohl's Admin", "HD Admin", "BasicAdmin", "Chat" },
+	},
+	-- Budget telemetry (ADR 0007 phase B, production hardening P3): every 15 minutes each server
+	-- sends one aggregate of its DataStore / HTTP / Messaging use to the ClubKit VPS. Counts only,
+	-- never player ids. false turns it off.
+	Telemetry = {
+		Enabled = true,
 	},
 	Features = {
 		MusicPlayer = true,

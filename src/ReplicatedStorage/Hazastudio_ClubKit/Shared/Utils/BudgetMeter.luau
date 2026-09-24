@@ -9,8 +9,8 @@
 -- Hooks: BudgetGate (DataStore), DataStoreScheduler (lowest budget seen), Server/Net/HttpRequest
 -- (HTTP), CrossServerCache + DonationService (Messaging), ProfileLoader / PersistenceFabricHooks
 -- (events). Main.server logs `formatSummary(rollWindow())` every Config.BudgetMeter.LOG_INTERVAL_SEC.
--- TODO(P3): ship the rolled window to the VPS through BackendClient (kind "budget", 15 min
--- aggregate, bulk priority) once that client exists; the kit has no telemetry sender yet.
+-- P3: Server/Net/BudgetTelemetry folds the rolled windows into an Aggregate (below) and posts it
+-- to {ApiUrl}/v3/telemetry (kind "budget", every 15 min, bulk priority) through BackendClient.
 --
 -- Counters come in two scopes: `window` (since the last rollWindow) and `total` (since boot).
 
@@ -174,6 +174,73 @@ local function sumCounts(counts: Counts): number
 		n += value
 	end
 	return n
+end
+
+-- ── Telemetry aggregate (production hardening P3, workstream F / ADR 0007 phase B) ──────────
+-- The rolled 60 s windows are folded into one aggregate that Server/Net/BudgetTelemetry posts to
+-- {ApiUrl}/v3/telemetry (kind "budget") every Config.Telemetry.BUDGET_INTERVAL_SEC. Counts,
+-- lowest budgets and per-window peaks only — never a player id.
+
+export type Aggregate = {
+	windows: number,
+	seconds: number,
+	scope: Scope,
+	peak: { ds: number, http: number, msg: number, players: number },
+}
+
+function BudgetMeter.newAggregate(): Aggregate
+	return { windows = 0, seconds = 0, scope = newScope(), peak = { ds = 0, http = 0, msg = 0, players = 0 } }
+end
+
+local function addCounts(into: Counts, from: Counts)
+	for key, value in pairs(from) do
+		into[key] = (into[key] or 0) + value
+	end
+end
+
+--- Folds one rolled window (`BudgetMeter.rollWindow()`) into `agg`; `players` = players online now.
+function BudgetMeter.absorb(agg: Aggregate, snap: Snapshot, players: number?)
+	local w = snap.window
+	local s = agg.scope
+	agg.windows += 1
+	agg.seconds += snap.windowSec
+	addCounts(s.dataStore, w.dataStore)
+	addCounts(s.dataStoreRefused, w.dataStoreRefused)
+	addCounts(s.http, w.http)
+	addCounts(s.httpFailed, w.httpFailed)
+	addCounts(s.messaging, w.messaging)
+	addCounts(s.events, w.events)
+	s.http429 += w.http429
+	s.messagingFailed += w.messagingFailed
+	for key, value in pairs(w.minBudget) do
+		local current = s.minBudget[key]
+		if current == nil or value < current then
+			s.minBudget[key] = value
+		end
+	end
+	agg.peak.ds = math.max(agg.peak.ds, sumCounts(w.dataStore))
+	agg.peak.http = math.max(agg.peak.http, sumCounts(w.http))
+	agg.peak.msg = math.max(agg.peak.msg, sumCounts(w.messaging))
+	agg.peak.players = math.max(agg.peak.players, math.floor(tonumber(players) or 0))
+end
+
+--- JSON-ready payload of an aggregate (the `payload` of POST /v3/telemetry, kind "budget").
+function BudgetMeter.aggregatePayload(agg: Aggregate): { [string]: any }
+	local s = agg.scope
+	return {
+		windows = agg.windows,
+		seconds = math.floor(agg.seconds + 0.5),
+		ds = copyCounts(s.dataStore),
+		ds_refused = copyCounts(s.dataStoreRefused),
+		min_budget = copyCounts(s.minBudget),
+		http = copyCounts(s.http),
+		http_failed = copyCounts(s.httpFailed),
+		http_429 = s.http429,
+		messaging = copyCounts(s.messaging),
+		messaging_failed = s.messagingFailed,
+		events = copyCounts(s.events),
+		peak = table.clone(agg.peak),
+	}
 end
 
 local function formatCounts(counts: Counts): string
