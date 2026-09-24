@@ -53,3 +53,6 @@ tools/ClubKitPackagerPlugin/debug-plugin.rbxmx
 
 # Logs
 *.log
+
+# agent worktrees (local only)
+.claude/worktrees/

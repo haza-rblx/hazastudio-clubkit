@@ -23,6 +23,8 @@ Owner requirement: "enterprise and production grade, 200 CCU in one game; no lea
 modules. Both touch `Shared/Constants/Config.luau` and `Main.server.luau`: merge those hunks sequentially at
 the end. One THE BASIC TEST build can soak P1+P3+P4 together.
 
+**Resuming a lost session:** read `hardening-2026-09-24/HANDOFF.md` first (agent briefs, worktree, merge protocol, sync recipe `tools/SyncFromDevServe.editmode.luau`).
+
 **Supporting files:** `hardening-2026-09-24/audit-findings.md` (DataStore / HTTP / VPS audit),
 `hardening-2026-09-24/perf-audit-200-players.md` (server + client hotspots), `hardening-2026-09-24/p0-deploy-steps.md`.
 
