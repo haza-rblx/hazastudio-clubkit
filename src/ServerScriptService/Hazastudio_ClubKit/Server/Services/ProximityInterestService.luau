@@ -25,6 +25,19 @@
 --   - Pure spatial coordinator. No DataStore, no remote fires.
 --   - Calls InterestManager API only; emits events for consumers.
 --   - Owns connections + per-pair membership state, cleans up via Cleaner.
+--
+-- Production hardening P4 (plan H3), Config.NetworkPerf.PROXIMITY_MODE = "incremental":
+--   - subjects are evaluated in PROXIMITY_GROUPS staggered groups (userId % groups), one group
+--     per PROXIMITY_TICK_INTERVAL, so each subject is re-evaluated every groups x interval;
+--   - squared distances on plain numbers; a PROXIMITY_CELL_SIZE grid queried by bounding box;
+--   - at most PROXIMITY_MAX_SUBSCRIBERS nearest viewers per subject (self not counted); once a
+--     subject is full, only candidates nearer than (farthest member - PROXIMITY_SWAP_MARGIN)
+--     are even looked at, and one displaces the farthest member only past that margin;
+--   - at most PROXIMITY_MAX_ENTERS_PER_VIEWER new subscriptions per viewer per 0.5 s (each is a
+--     full Snapshot-on-enter), nearest first per subject;
+--   - recomputePlayer(player) (spawn) re-evaluates that player's row only, as subject and as
+--     viewer, deduped per player within 0.1 s.
+-- "legacy" keeps the pre-P4 full pass every RECOMPUTE_INTERVAL.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -34,6 +47,7 @@ local Cleaner = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Cleane
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local CharacterReady = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.CharacterReady)
+local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 
 type ILogger = Types.ILogger
 
@@ -57,6 +71,24 @@ export type ProximityInterestDeps = {
 	interest: InterestManager,
 	config: any?, -- Config.Interest { VIEW_RANGE_RADIUS, HYSTERESIS_BUFFER, RECOMPUTE_INTERVAL }
 	logger: ILogger?,
+	-- P4 seams (crowd harness / specs): who is in the server, where they stand, and the clock.
+	-- Defaults: Players:GetPlayers(), HumanoidRootPart.Position, os.clock. `perf` overrides
+	-- Config.NetworkPerf. Positions only need .X / .Y / .Z in incremental mode.
+	getPlayers: (() -> { Player })?,
+	getPosition: ((player: Player) -> any?)?,
+	clock: (() -> number)?,
+	perf: any?,
+}
+
+export type ProximityStats = {
+	mode: string,
+	subjects: number,
+	pairs: number,
+	lastTickMs: number,
+	lastTickEvaluations: number,
+	lastTickCandidates: number,
+	adds: number,
+	removes: number,
 }
 
 export type ProximityInterestService = {
@@ -69,6 +101,13 @@ export type ProximityInterestService = {
 	--- Force an immediate membership pass (respawn / PartsReady). No-op-cheap when
 	--- positions unchanged; restores self+nearby that the HRP gap pruned.
 	recomputeNow: (self: ProximityInterestService) -> (),
+	--- P4: O(1) — is `viewer` subscribed to `subject`'s channels?
+	isSubscriber: (self: ProximityInterestService, subject: Player, viewer: Player) -> boolean,
+	--- P4: re-evaluate one player's row (spawn). Falls back to recomputeNow in legacy mode.
+	recomputePlayer: (self: ProximityInterestService, player: Player) -> (),
+	--- P4: advance the recompute clock by `dt` (the Heartbeat handler; harness/spec driver).
+	step: (self: ProximityInterestService, dt: number) -> (),
+	stats: (self: ProximityInterestService) -> ProximityStats,
 }
 
 -- A single membership entry: holds the player refs (for events) and the
@@ -108,6 +147,11 @@ function ProximityInterestService.create(deps: ProximityInterestDeps): Proximity
 	assert(deps and deps.interest, "ProximityInterestService requires deps.interest")
 	local interest = deps.interest
 	local log: ILogger = deps.logger or Logger.new("ProximityInterestService")
+	local getPlayers: () -> { Player } = deps.getPlayers or function()
+		return Players:GetPlayers()
+	end
+	local getPosition: (Player) -> any? = deps.getPosition or getPlayerPosition
+	local clock: () -> number = deps.clock or os.clock
 
 	local cfg = deps.config or {}
 	local useLegacy = cfg.USE_LEGACY_VIEW_RANGE == true
@@ -139,10 +183,34 @@ function ProximityInterestService.create(deps: ProximityInterestDeps): Proximity
 		})
 	end
 
+	-- P4 (H3) incremental mode settings (Config.NetworkPerf, overridable via deps.perf).
+	local perf = deps.perf or (Config :: any).NetworkPerf
+	local incremental = type(perf) == "table" and perf.PROXIMITY_MODE == "incremental"
+	local function perfNumber(key: string, default: number): number
+		local value = if type(perf) == "table" then tonumber(perf[key]) else nil
+		return if value ~= nil then value else default
+	end
+	local tickInterval = math.clamp(perfNumber("PROXIMITY_TICK_INTERVAL", 0.25), MIN_RECOMPUTE_INTERVAL, MAX_RECOMPUTE_INTERVAL)
+	local groupCount = math.max(1, math.floor(perfNumber("PROXIMITY_GROUPS", 4)))
+	local cellSize = math.max(4, perfNumber("PROXIMITY_CELL_SIZE", 16))
+	local subscriberCap = math.max(0, math.floor(perfNumber("PROXIMITY_MAX_SUBSCRIBERS", 0)))
+	local swapMargin = math.max(0, perfNumber("PROXIMITY_SWAP_MARGIN", 0))
+	local maxEnters = math.max(0, math.floor(perfNumber("PROXIMITY_MAX_ENTERS_PER_VIEWER", 0)))
+	local ENTER_WINDOW = 0.5
+	local RECOMPUTE_PLAYER_DEDUPE = 0.1
+	local radius2 = radius * radius
+	local leave2 = leaveRadius * leaveRadius
+
 	local cleaner = Cleaner.new()
 
 	-- subjectUserId -> viewerUserId -> PairEntry
 	local members: { [number]: { [number]: PairEntry } } = {}
+	-- P4: viewerUserId -> set of subjectUserIds (O(k) leave), non-self member count per subject.
+	local viewerIndex: { [number]: { [number]: boolean } } = {}
+	local memberCount: { [number]: number } = {}
+	local pairTotal = 0
+	local addTotal = 0
+	local removeTotal = 0
 
 	local addedListeners: { SubscriberListener } = {}
 	local removedListeners: { SubscriberListener } = {}
@@ -191,6 +259,17 @@ function ProximityInterestService.create(deps: ProximityInterestDeps): Proximity
 			table.insert(unsubs, interest:subscribe(viewer, prefix .. tostring(subjectId)))
 		end
 		bySubject[viewerId] = { subject = subject, viewer = viewer, unsubs = unsubs }
+		local subjects = viewerIndex[viewerId]
+		if not subjects then
+			subjects = {}
+			viewerIndex[viewerId] = subjects
+		end
+		subjects[subjectId] = true
+		if viewerId ~= subjectId then
+			memberCount[subjectId] = (memberCount[subjectId] or 0) + 1
+		end
+		pairTotal += 1
+		addTotal += 1
 
 		emit(addedListeners, subject, viewer)
 	end
@@ -209,6 +288,19 @@ function ProximityInterestService.create(deps: ProximityInterestDeps): Proximity
 		if not next(bySubject) then
 			members[subjectId] = nil
 		end
+		local subjects = viewerIndex[viewerId]
+		if subjects then
+			subjects[subjectId] = nil
+			if not next(subjects) then
+				viewerIndex[viewerId] = nil
+			end
+		end
+		if viewerId ~= subjectId then
+			local count = (memberCount[subjectId] or 1) - 1
+			memberCount[subjectId] = if count > 0 then count else nil
+		end
+		pairTotal -= 1
+		removeTotal += 1
 
 		for _, unsub in entry.unsubs do
 			pcall(unsub)
@@ -254,8 +346,8 @@ function ProximityInterestService.create(deps: ProximityInterestDeps): Proximity
 		-- pruned below and never (re)added (R1.11).
 		local positions: { [number]: Vector3 } = {}
 		local playerById: { [number]: Player } = {}
-		for _, player in Players:GetPlayers() do
-			local pos = getPlayerPosition(player)
+		for _, player in getPlayers() do
+			local pos = getPosition(player)
 			if pos then
 				positions[player.UserId] = pos
 				playerById[player.UserId] = player
@@ -328,9 +420,343 @@ function ProximityInterestService.create(deps: ProximityInterestDeps): Proximity
 		end
 	end
 
+	-- ── Incremental recompute (P4, plan H3) ───────────────────
+	-- Snapshot of live positions (plain numbers) + a bounding-box-queried grid, rebuilt per tick.
+	local snapPlayers: { [number]: Player } = {}
+	local px: { [number]: number } = {}
+	local py: { [number]: number } = {}
+	local pz: { [number]: number } = {}
+	local grid: { [number]: { number } } = {}
+	local enterWindowStart = -math.huge
+	local entersByViewer: { [number]: number } = {}
+	local lastRecomputeAt: { [number]: number } = {}
+	local tickIndex = 0
+	local lastTickMs = 0
+	local lastTickEvaluations = 0
+	local lastTickCandidates = 0
+	local candidatesThisPass = 0
+
+	local function gridKey(cx: number, cz: number): number
+		return cx * 1048576 + cz
+	end
+
+	local function snapshotPositions()
+		table.clear(snapPlayers)
+		table.clear(px)
+		table.clear(py)
+		table.clear(pz)
+		table.clear(grid)
+		for _, player in getPlayers() do
+			local pos = getPosition(player)
+			if pos then
+				local id = player.UserId
+				local x, z = pos.X, pos.Z
+				snapPlayers[id] = player
+				px[id] = x
+				py[id] = pos.Y
+				pz[id] = z
+				local key = gridKey(math.floor(x / cellSize), math.floor(z / cellSize))
+				local cell = grid[key]
+				if not cell then
+					cell = {}
+					grid[key] = cell
+				end
+				cell[#cell + 1] = id
+			end
+		end
+	end
+
+	local function distance2(a: number, b: number): number
+		local dx, dy, dz = px[a] - px[b], py[a] - py[b], pz[a] - pz[b]
+		return dx * dx + dy * dy + dz * dz
+	end
+
+	-- Ids within sqrt(r2) of `centerId` (3D), excluding `centerId`; d2 written to `d2Out`.
+	local function queryNear(centerId: number, r2: number, out: { number }, d2Out: { [number]: number })
+		local r = math.sqrt(r2)
+		local cx, cz = px[centerId], pz[centerId]
+		for gx = math.floor((cx - r) / cellSize), math.floor((cx + r) / cellSize) do
+			for gz = math.floor((cz - r) / cellSize), math.floor((cz + r) / cellSize) do
+				local cell = grid[gridKey(gx, gz)]
+				if cell then
+					for _, id in cell do
+						if id ~= centerId then
+							candidatesThisPass += 1
+							local d2 = distance2(centerId, id)
+							if d2 <= r2 then
+								out[#out + 1] = id
+								d2Out[id] = d2
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+
+	local function enterAllowed(viewerId: number): boolean
+		if maxEnters <= 0 then
+			return true
+		end
+		local now = clock()
+		if now - enterWindowStart >= ENTER_WINDOW then
+			enterWindowStart = now
+			table.clear(entersByViewer)
+		end
+		return (entersByViewer[viewerId] or 0) < maxEnters
+	end
+
+	local function noteEnter(viewerId: number)
+		if maxEnters > 0 then
+			entersByViewer[viewerId] = (entersByViewer[viewerId] or 0) + 1
+		end
+	end
+
+	-- Farthest non-self member of a subject (members all have snapshot positions after pruning).
+	local function subjectCapFull(subjectId: number): boolean
+		return subscriberCap > 0 and (memberCount[subjectId] or 0) >= subscriberCap
+	end
+
+	local function findFarthest(subjectId: number): (number?, number)
+		local bySubject = members[subjectId]
+		local farId: number? = nil
+		local farD2 = -1
+		if bySubject then
+			for viewerId in bySubject do
+				if viewerId ~= subjectId and px[viewerId] ~= nil then
+					local d2 = distance2(subjectId, viewerId)
+					if d2 > farD2 then
+						farD2 = d2
+						farId = viewerId
+					end
+				end
+			end
+		end
+		return farId, farD2
+	end
+
+	local function dropSubject(subjectId: number)
+		local bySubject = members[subjectId]
+		if not bySubject then
+			return
+		end
+		local viewerIds: { number } = {}
+		for viewerId in bySubject do
+			table.insert(viewerIds, viewerId)
+		end
+		for _, viewerId in viewerIds do
+			removeMember(subjectId, viewerId)
+		end
+	end
+
+	-- `viewerId` wants in to `subjectId` (distance² d2): add under the cap, or displace the
+	-- farthest member when clearly nearer. Returns false once the subject is full and this
+	-- candidate does not beat the farthest (callers iterating nearest-first can stop).
+	local function tryAdd(subjectId: number, viewerId: number, d2: number): boolean
+		if not enterAllowed(viewerId) then
+			return true
+		end
+		local subject = snapPlayers[subjectId]
+		local viewer = snapPlayers[viewerId]
+		if subjectCapFull(subjectId) then
+			local farId, farD2 = findFarthest(subjectId)
+			if farId == nil or math.sqrt(d2) + swapMargin >= math.sqrt(farD2) then
+				return false
+			end
+			removeMember(subjectId, farId)
+		end
+		addMember(subject, viewer)
+		noteEnter(viewerId)
+		return true
+	end
+
+	-- One subject's row: self, prune past the leave radius / lost characters, then admit the
+	-- nearest candidates (only those that could beat the farthest member once full).
+	local function evaluateSubject(subjectId: number)
+		if px[subjectId] == nil then
+			dropSubject(subjectId)
+			return
+		end
+		local subject = snapPlayers[subjectId]
+		if not isMember(subjectId, subjectId) then
+			addMember(subject, subject)
+		end
+		local bySubject = members[subjectId]
+		local drop: { number }? = nil
+		local farD2 = -1
+		if bySubject then
+			for viewerId in bySubject do
+				if viewerId ~= subjectId then
+					if px[viewerId] == nil then
+						drop = drop or {}
+						table.insert(drop :: { number }, viewerId)
+					else
+						local d2 = distance2(subjectId, viewerId)
+						if d2 > leave2 then
+							drop = drop or {}
+							table.insert(drop :: { number }, viewerId)
+						elseif d2 > farD2 then
+							farD2 = d2
+						end
+					end
+				end
+			end
+		end
+		if drop then
+			for _, viewerId in drop do
+				removeMember(subjectId, viewerId)
+			end
+		end
+		local searchR2 = radius2
+		if subjectCapFull(subjectId) then
+			if farD2 < 0 then
+				return
+			end
+			local reach = math.sqrt(farD2) - swapMargin
+			if reach <= 0 then
+				return
+			end
+			searchR2 = math.min(radius2, reach * reach)
+		end
+		local candidates: { number } = {}
+		local candidateD2: { [number]: number } = {}
+		queryNear(subjectId, searchR2, candidates, candidateD2)
+		local current = members[subjectId]
+		local fresh: { number } = {}
+		for _, id in candidates do
+			if not (current and current[id]) then
+				table.insert(fresh, id)
+			end
+		end
+		if #fresh == 0 then
+			return
+		end
+		if subscriberCap > 0 and #fresh > 1 then
+			table.sort(fresh, function(a: number, b: number): boolean
+				return candidateD2[a] < candidateD2[b]
+			end)
+		end
+		for _, viewerId in fresh do
+			if not tryAdd(subjectId, viewerId, candidateD2[viewerId]) then
+				break
+			end
+		end
+	end
+
+	-- A spawned player as VIEWER: offer it to every subject within the enter radius.
+	local function evaluateAsViewer(viewerId: number)
+		if px[viewerId] == nil then
+			return
+		end
+		local near: { number } = {}
+		local nearD2: { [number]: number } = {}
+		queryNear(viewerId, radius2, near, nearD2)
+		table.sort(near, function(a: number, b: number): boolean
+			return nearD2[a] < nearD2[b]
+		end)
+		for _, subjectId in near do
+			if not isMember(subjectId, viewerId) then
+				tryAdd(subjectId, viewerId, nearD2[subjectId])
+			end
+		end
+	end
+
+	-- Subjects of one group (userId % groupCount), plus that group's subjects that lost their
+	-- character (no snapshot position) so their pairs are pruned.
+	local function evaluateGroup(group: number?)
+		local evaluations = 0
+		for subjectId in snapPlayers do
+			if group == nil or subjectId % groupCount == group then
+				evaluateSubject(subjectId)
+				evaluations += 1
+			end
+		end
+		local gone: { number }? = nil
+		for subjectId in members do
+			if px[subjectId] == nil and (group == nil or subjectId % groupCount == group) then
+				gone = gone or {}
+				table.insert(gone :: { number }, subjectId)
+			end
+		end
+		if gone then
+			for _, subjectId in gone do
+				dropSubject(subjectId)
+			end
+		end
+		return evaluations
+	end
+
+	local function incrementalPass(group: number?)
+		local t0 = os.clock()
+		candidatesThisPass = 0
+		snapshotPositions()
+		lastTickEvaluations = evaluateGroup(group)
+		lastTickCandidates = candidatesThisPass
+		lastTickMs = (os.clock() - t0) * 1000
+	end
+
 	-- ── Public API ────────────────────────────────────────────
 	function self:getSubscribers(channelPrefix: string, subject: Player): { Player }
 		return interest:getSubscribers(channelPrefix .. tostring(subject.UserId))
+	end
+
+	function self:isSubscriber(subject: Player, viewer: Player): boolean
+		return isMember(subject.UserId, viewer.UserId)
+	end
+
+	function self:recomputePlayer(player: Player)
+		if not incremental then
+			self:recomputeNow()
+			return
+		end
+		local userId = player.UserId
+		local now = clock()
+		local last = lastRecomputeAt[userId]
+		if last and now - last < RECOMPUTE_PLAYER_DEDUPE then
+			return
+		end
+		lastRecomputeAt[userId] = now
+		local t0 = os.clock()
+		candidatesThisPass = 0
+		snapshotPositions()
+		evaluateSubject(userId)
+		evaluateAsViewer(userId)
+		lastTickEvaluations = 1
+		lastTickCandidates = candidatesThisPass
+		lastTickMs = (os.clock() - t0) * 1000
+	end
+
+	function self:step(dt: number)
+		tickAccumulator += dt
+		local interval = if incremental then tickInterval else recomputeInterval
+		if tickAccumulator + 1e-9 < interval then
+			return
+		end
+		tickAccumulator = 0
+		if incremental then
+			local group = tickIndex % groupCount
+			tickIndex += 1
+			incrementalPass(group)
+		else
+			recompute()
+		end
+	end
+
+	function self:stats(): ProximityStats
+		local subjects = 0
+		for _ in members do
+			subjects += 1
+		end
+		return {
+			mode = if incremental then "incremental" else "legacy",
+			subjects = subjects,
+			pairs = pairTotal,
+			lastTickMs = lastTickMs,
+			lastTickEvaluations = lastTickEvaluations,
+			lastTickCandidates = lastTickCandidates,
+			adds = addTotal,
+			removes = removeTotal,
+		}
 	end
 
 	function self:onSubscriberAdded(listener: SubscriberListener): () -> ()
@@ -378,16 +804,17 @@ function ProximityInterestService.create(deps: ProximityInterestDeps): Proximity
 			end
 		end
 
-		-- Remove as viewer: drop this viewer from every subject's channels.
+		-- Remove as viewer: drop this viewer from every subject's channels (P4: O(k) via the
+		-- viewer index instead of a scan over every subject).
 		local subjectIds: { number } = {}
-		for subjectId, subs in members do
-			if subs[userId] then
-				table.insert(subjectIds, subjectId)
-			end
+		for subjectId in viewerIndex[userId] or {} do
+			table.insert(subjectIds, subjectId)
 		end
 		for _, subjectId in subjectIds do
 			removeMember(subjectId, userId)
 		end
+		lastRecomputeAt[userId] = nil
+		entersByViewer[userId] = nil
 
 		-- Safety net (R1.7): clear any residual channel membership the manager
 		-- still holds for this player as a subscriber.
@@ -396,6 +823,10 @@ function ProximityInterestService.create(deps: ProximityInterestDeps): Proximity
 
 	function self:recomputeNow()
 		tickAccumulator = 0
+		if incremental then
+			incrementalPass(nil) -- every group at once
+			return
+		end
 		recompute()
 	end
 
@@ -412,7 +843,8 @@ function ProximityInterestService.create(deps: ProximityInterestDeps): Proximity
 			end
 			-- Immediate self+nearby restore after HRP gap (respawn / LoadCharacter).
 			-- Heartbeat alone can leave a ≤RECOMPUTE_INTERVAL blank-tag window.
-			self:recomputeNow()
+			-- P4 (H3): this player's row only (legacy mode: full pass).
+			self:recomputePlayer(player)
 		end)
 	end
 
@@ -434,12 +866,7 @@ function ProximityInterestService.create(deps: ProximityInterestDeps): Proximity
 
 	function self:onStart()
 		cleaner:add(RunService.Heartbeat:Connect(function(dt)
-			tickAccumulator += dt
-			if tickAccumulator < recomputeInterval then
-				return
-			end
-			tickAccumulator = 0
-			recompute()
+			self:step(dt)
 		end))
 
 		cleaner:add(Players.PlayerRemoving:Connect(function(player)
@@ -458,9 +885,11 @@ function ProximityInterestService.create(deps: ProximityInterestDeps): Proximity
 			buffer = buffer,
 			leaveRadius = leaveRadius,
 			useLegacy = useLegacy,
-			recomputeInterval = recomputeInterval,
-			algorithm = "spatial_grid_partitioning",
-			cellSize = leaveRadius,
+			recomputeInterval = if incremental then tickInterval else recomputeInterval,
+			algorithm = if incremental then "incremental_staggered" else "spatial_grid_partitioning",
+			cellSize = if incremental then cellSize else leaveRadius,
+			groups = if incremental then groupCount else 1,
+			subscriberCap = if incremental then subscriberCap else 0,
 		})
 	end
 
@@ -480,6 +909,11 @@ function ProximityInterestService.create(deps: ProximityInterestDeps): Proximity
 			end
 			members[subjectId] = nil
 		end
+		table.clear(viewerIndex)
+		table.clear(memberCount)
+		table.clear(lastRecomputeAt)
+		table.clear(entersByViewer)
+		pairTotal = 0
 		table.clear(addedListeners)
 		table.clear(removedListeners)
 	end
