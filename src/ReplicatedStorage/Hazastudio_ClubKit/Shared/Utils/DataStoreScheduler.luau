@@ -9,9 +9,9 @@
 -- concurrent updates to the same store key.
 --
 -- Contract:
---   executeAsync(requestType, fn, opts?) waits until
+--   executeAsync(requestType, fn, opts?) first takes the optional key mutex, then waits until
 --     budget - reserved >= minBudget + HEADROOM and inflight < MAX,
---   then reserves cost, optionally waits for key mutex, runs fn, releases.
+--   then reserves cost, runs fn, releases (mutex released on refusal too).
 --   Returns Result (pass-through if fn already returned Result).
 
 local DataStoreService = game:GetService("DataStoreService")
@@ -19,6 +19,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Result = require(script.Parent.Result)
+local BudgetMeter = require(script.Parent.BudgetMeter)
 local Types = require(script.Parent.Parent.Domain.Types)
 
 type Result<T> = Types.Result<T>
@@ -91,6 +92,12 @@ end
 
 local function typeKey(requestType: Enum.DataStoreRequestType): string
 	return tostring(requestType)
+end
+
+-- Short name ("GetAsync") for BudgetMeter keys.
+local function requestTypeName(requestType: Enum.DataStoreRequestType): string
+	local name = (requestType :: any).Name
+	return if type(name) == "string" then name else tostring(requestType)
 end
 
 local function isResultShape(value: any): boolean
@@ -197,11 +204,22 @@ function DataStoreScheduler.executeAsync<T>(
 	local log = options.logger
 	local gateName = options.name or "DataStoreScheduler"
 
+	-- Key mutex FIRST, then the in-flight slot (production hardening P1, 2026-09-24). The old
+	-- order reserved a slot and then waited on the key, so a burst of writes to one hot key
+	-- (e.g. the same player's Overhead doc) sat on in-flight slots doing nothing and blocked
+	-- every other key behind them (head-of-line blocking).
+	local releaseKey = function() end
+	if type(options.keyMutex) == "string" and options.keyMutex ~= "" then
+		releaseKey = acquireKeyMutex(options.keyMutex)
+	end
+
 	local startedAt = os.clock()
 	local deferred = false
+	local typeName = requestTypeName(requestType)
 
 	while true do
 		local budget = getBudgetSafe(requestType)
+		BudgetMeter.observeBudget(typeName, budget)
 		local reserved = reservedByType[requestType] or 0
 		local inflight = inflightByType[requestType] or 0
 		local available = budget - reserved
@@ -243,6 +261,7 @@ function DataStoreScheduler.executeAsync<T>(
 					deferredMs = math.floor(elapsed * 1000),
 				})
 			end
+			releaseKey()
 			return Result.Err(refuseReason)
 		end
 
@@ -266,11 +285,6 @@ function DataStoreScheduler.executeAsync<T>(
 			})
 		end
 		task.wait(pollInterval)
-	end
-
-	local releaseKey = function() end
-	if type(options.keyMutex) == "string" and options.keyMutex ~= "" then
-		releaseKey = acquireKeyMutex(options.keyMutex)
 	end
 
 	local opStartedAt = os.clock()

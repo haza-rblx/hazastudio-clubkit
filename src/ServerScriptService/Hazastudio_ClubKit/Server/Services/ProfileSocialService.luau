@@ -17,6 +17,7 @@ local Result = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Result)
 local Cache = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Cache)
 local HttpApiCounter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.HttpApiCounter)
 local HttpApi = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.HttpApi)
+local HttpRequest = require(script.Parent.Parent.Net.HttpRequest)
 
 type Result<T> = Types.Result<T>
 type SocialProofData = Types.SocialProofData
@@ -53,7 +54,7 @@ local function createProfileSocialService(deps: { logger: ILogger })
 		)
 		local timeout = tonumber(apiConfig.HTTP_TIMEOUT) or 5
 		local ok, response = pcall(function()
-			return HttpService:RequestAsync({
+			return HttpRequest.requestAsync("gamedata:social_get", {
 				Url = url,
 				Method = "GET",
 				Timeout = timeout,
@@ -119,7 +120,7 @@ local function createProfileSocialService(deps: { logger: ILogger })
 		local timeout = tonumber(apiConfig.HTTP_TIMEOUT) or 5
 		task.spawn(function()
 			local ok, response = pcall(function()
-				return HttpService:RequestAsync({
+				return HttpRequest.requestAsync("gamedata:social_push", {
 					Url = url,
 					Method = "POST",
 					Headers = { ["Content-Type"] = "application/json" },

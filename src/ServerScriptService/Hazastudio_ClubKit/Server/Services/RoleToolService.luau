@@ -121,6 +121,9 @@ function RoleToolService.new(deps: {
 	self._eventUnsubscribe = nil :: (() -> ())?
 	self._latestPayloads = {} :: { [number]: OverheadPayload }
 	self._lastSyncedRole = {} :: { [number]: string }
+	-- Per-player CharacterAdded connection, disconnected on leave (it used to join the
+	-- module-lifetime _connections list: one dead connection per visit, production hardening P1).
+	self._characterConnections = {} :: { [number]: RBXScriptConnection }
 	return self
 end
 
@@ -398,16 +401,17 @@ function RoleToolService:onStart()
 	end
 
 	local function bindPlayer(player: Player)
-		table.insert(
-			self._connections,
-			player.CharacterAdded:Connect(function()
-				-- Reset so tools are re-granted on respawn (new character has no tools)
-				self._lastSyncedRole[player.UserId] = nil
-				task.defer(function()
-					self:syncPlayer(player)
-				end)
+		local previous = self._characterConnections[player.UserId]
+		if previous then
+			previous:Disconnect()
+		end
+		self._characterConnections[player.UserId] = player.CharacterAdded:Connect(function()
+			-- Reset so tools are re-granted on respawn (new character has no tools)
+			self._lastSyncedRole[player.UserId] = nil
+			task.defer(function()
+				self:syncPlayer(player)
 			end)
-		)
+		end)
 	end
 
 	table.insert(self._connections, Players.PlayerAdded:Connect(bindPlayer))
@@ -415,8 +419,15 @@ function RoleToolService:onStart()
 	table.insert(
 		self._connections,
 		Players.PlayerRemoving:Connect(function(player: Player)
-			self._latestPayloads[player.UserId] = nil
-			self._lastSyncedRole[player.UserId] = nil
+			local userId = player.UserId
+			self._latestPayloads[userId] = nil
+			self._lastSyncedRole[userId] = nil
+			syncCooldownByUserId[userId] = nil
+			local characterConnection = self._characterConnections[userId]
+			if characterConnection then
+				characterConnection:Disconnect()
+				self._characterConnections[userId] = nil
+			end
 		end)
 	)
 
@@ -439,6 +450,10 @@ function RoleToolService:destroy()
 		connection:Disconnect()
 	end
 	table.clear(self._connections)
+	for _, connection in pairs(self._characterConnections) do
+		connection:Disconnect()
+	end
+	table.clear(self._characterConnections)
 	table.clear(self._latestPayloads)
 	table.clear(self._lastSyncedRole)
 end

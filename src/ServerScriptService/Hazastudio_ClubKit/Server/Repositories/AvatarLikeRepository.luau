@@ -14,6 +14,7 @@ local HttpApiCounter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils
 local HttpApi = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.HttpApi)
 local AvatarLikePolicy = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.AvatarLikePolicy)
 local StreakDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.StreakDomain)
+local BoundedLru = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.BoundedLru)
 
 type Result<T> = Types.Result<T>
 type AvatarContextLikeAction = Types.AvatarContextLikeAction
@@ -52,8 +53,10 @@ local function createAvatarLikeRepository(deps: { logger: Types.ILogger? }?)
 	local lastBackfillAt = 0
 	local budgetGate = BudgetGate.create({ logger = log, name = "AvatarLikeRepository" })
 	-- Skip unchanged OrderedDataStore / metadata writes (Persistence Fabric Phase 4).
-	local lastLeaderboardScore: { [number]: number } = {}
-	local lastMetadataFingerprint: { [number]: string } = {}
+	-- Bounded LRUs (production hardening P1, H5): the likes backfill touches every summary key,
+	-- so plain tables grew with every user ever liked. An evicted user costs one extra write.
+	local lastLeaderboardScore = BoundedLru.new(1000)
+	local lastMetadataFingerprint = BoundedLru.new(1000)
 
 	-- Server-side TTL cache for top leaderboard.
 	-- Without this cache, getTopLeaderboard triggers syncOnlineLeaderboard
@@ -134,7 +137,7 @@ local function createAvatarLikeRepository(deps: { logger: Types.ILogger? }?)
 		local sanitizedDisplay = sanitizeText(displayName, 64)
 		local sanitizedThumb = sanitizeText(thumbnail, 512)
 		local fp = sanitizedUsername .. "\0" .. sanitizedDisplay .. "\0" .. sanitizedThumb
-		if lastMetadataFingerprint[userId] == fp then
+		if lastMetadataFingerprint:get(userId) == fp then
 			return Result.Ok(nil)
 		end
 
@@ -167,13 +170,13 @@ local function createAvatarLikeRepository(deps: { logger: Types.ILogger? }?)
 			})
 			return Result.Err(result.error)
 		end
-		lastMetadataFingerprint[userId] = fp
+		lastMetadataFingerprint:set(userId, fp)
 		return Result.Ok(nil)
 	end
 
 	local function writeLikesLeaderboardScore(userId: number, totalLikes: number): Result<nil>
 		local score = math.max(0, math.floor(totalLikes))
-		if lastLeaderboardScore[userId] == score then
+		if lastLeaderboardScore:get(userId) == score then
 			return Result.Ok(nil)
 		end
 		-- OrderedDataStore: SetIncrementSortedAsync budget covers SetAsync calls.
@@ -191,7 +194,7 @@ local function createAvatarLikeRepository(deps: { logger: Types.ILogger? }?)
 			})
 			return Result.Err(result.error)
 		end
-		lastLeaderboardScore[userId] = score
+		lastLeaderboardScore:set(userId, score)
 		return Result.Ok(nil)
 	end
 

@@ -353,8 +353,17 @@ function ProximityInterestService.create(deps: ProximityInterestDeps): Proximity
 		end
 	end
 
+	-- One CharacterAdded connection per player, disconnected on leave. It used to go into the
+	-- module-lifetime cleaner: one dead connection per visit (production hardening P1, H5).
+	local characterConnections: { [number]: RBXScriptConnection } = {}
+
 	function self:removePlayer(player: Player)
 		local userId = player.UserId
+		local characterConnection = characterConnections[userId]
+		if characterConnection then
+			characterConnection:Disconnect()
+			characterConnections[userId] = nil
+		end
 
 		-- Remove as subject: drop every viewer of this subject's channels.
 		local bySubject = members[userId]
@@ -408,11 +417,15 @@ function ProximityInterestService.create(deps: ProximityInterestDeps): Proximity
 	end
 
 	local function watchPlayerCharacter(player: Player)
-		cleaner:add(player.CharacterAdded:Connect(function(character)
+		local previous = characterConnections[player.UserId]
+		if previous then
+			previous:Disconnect()
+		end
+		characterConnections[player.UserId] = player.CharacterAdded:Connect(function(character)
 			if character:IsA("Model") then
 				schedulePartsReadyRecompute(player, character)
 			end
-		end))
+		end)
 		local existing = player.Character
 		if existing and existing:IsA("Model") then
 			schedulePartsReadyRecompute(player, existing)
@@ -453,6 +466,10 @@ function ProximityInterestService.create(deps: ProximityInterestDeps): Proximity
 
 	function self:onDestroy()
 		cleaner:clean()
+		for _, connection in characterConnections do
+			connection:Disconnect()
+		end
+		table.clear(characterConnections)
 		-- Release every outstanding InterestManager subscription.
 		for subjectId, bySubject in members do
 			for viewerId, entry in bySubject do

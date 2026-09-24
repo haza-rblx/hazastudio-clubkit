@@ -208,6 +208,9 @@ local function createAvatarContextController(deps: {
 
 	function controller:_setupTargetLeaveDetection()
 		trackConnection(Players.PlayerRemoving:Connect(function(player: Player)
+			-- Per-target caches must not outlive the target's visit (production hardening P1, H5).
+			lastRequestAt[player.UserId] = nil
+			friendCheckCache[player.UserId] = nil
 			if currentTargetUserId == player.UserId then
 				log:debug("Target left, closing panel", { userId = player.UserId })
 				controller:closePanel()

@@ -9,13 +9,14 @@
 -- with the shared NetworkFlushScheduler instead of opening a per-instance Heartbeat
 -- connection. See: _non_rojo/Guidelines_v3/refs/REF_NETWORK.md
 --
--- Frame coalesce (Config.Network.ENABLE_FRAME_COALESCE): for the same coalesce key
--- within one flush window, keep the *last* OutboundEntry only. Key =
--- (TargetKind, player UserId(s), optional data.kind when data is a table).
--- Safe for rate-limited cosmetics (overhead delta, music timing, LB). Do NOT
--- rely on coalesce for order-sensitive multi-message streams that share a key —
--- use distinct `data.kind` or Immediate. Immediate still goes through the queue
--- then flushNow(); coalesce applies within that same flush.
+-- Frame coalesce (Config.Network.ENABLE_FRAME_COALESCE): same-key entries within one
+-- flush window collapse to one. Key = (TargetKind, player UserId(s), data.kind,
+-- data.userId). Delta kinds listed in Config.Network.COALESCE_MERGE_FIELDS (overhead
+-- delta) are MERGED field by field (later wins); every other kind keeps the *last*
+-- entry. Rules + spec: Shared/Utils/NetworkCoalesce. Do NOT rely on coalesce for
+-- order-sensitive multi-message streams that share a key — use distinct `data.kind`
+-- or Immediate. Immediate still goes through the queue then flushNow(); coalesce
+-- applies within that same flush.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -23,6 +24,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local NetworkFlushScheduler = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.NetworkFlushScheduler)
+local NetworkCoalesce = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.NetworkCoalesce)
 
 -- Global counter for unique instance IDs (R9.3–R9.5).
 local nextInstanceId = 0
@@ -45,74 +47,17 @@ type NetworkManagerDeps = {
 	isServer: boolean,
 }
 
-local function messageKindFromData(data: any): string
-	if type(data) ~= "table" then
-		return "_"
-	end
-	-- Include subject userId when present so Overhead (and similar) per-player
-	-- deltas to the same viewer do not collapse across subjects.
-	local kind = if type(data.kind) == "string" and data.kind ~= "" then data.kind else "_"
-	local userId = data.userId
-	if type(userId) == "number" then
-		return string.format("%s:u%d", kind, userId)
-	end
-	return kind
-end
-
-local function listIdentity(players: { Player }?): string
-	if not players or #players == 0 then
-		return "list:"
-	end
-	local ids = table.create(#players)
-	for i, player in ipairs(players) do
-		ids[i] = player.UserId
-	end
-	table.sort(ids)
-	return "list:" .. table.concat(ids, ",")
-end
-
-local function coalesceKey(entry: OutboundEntry): string
-	local msgKind = messageKindFromData(entry.data)
-	if entry.kind == "player" and entry.player then
-		return string.format("player:%d:%s", entry.player.UserId, msgKind)
-	elseif entry.kind == "all" then
-		return "all:" .. msgKind
-	elseif entry.kind == "allExcept" and entry.player then
-		return string.format("allExcept:%d:%s", entry.player.UserId, msgKind)
-	elseif entry.kind == "list" then
-		return listIdentity(entry.players) .. ":" .. msgKind
-	elseif entry.kind == "server" then
-		return "server:" .. msgKind
-	end
-	return entry.kind .. ":" .. msgKind
-end
-
 local function useFrameCoalesce(): boolean
 	return Config.Network.ENABLE_FRAME_COALESCE == true
 end
 
---- Keep last entry per coalesce key; preserve first-seen order of unique keys.
+--- One entry per coalesce key, first-seen order. Delta kinds (Config.Network.COALESCE_MERGE_FIELDS)
+--- are merged field by field; everything else keeps the last entry. Rules: NetworkCoalesce.
 local function coalesceQueue(queue: { OutboundEntry }): { OutboundEntry }
 	if #queue <= 1 or not useFrameCoalesce() then
 		return queue
 	end
-	local byKey: { [string]: OutboundEntry } = {}
-	local order: { string } = {}
-	for _, entry in queue do
-		local key = coalesceKey(entry)
-		if byKey[key] == nil then
-			table.insert(order, key)
-		end
-		byKey[key] = entry
-	end
-	if #order == #queue then
-		return queue
-	end
-	local compacted = table.create(#order)
-	for i, key in ipairs(order) do
-		compacted[i] = byKey[key]
-	end
-	return compacted
+	return NetworkCoalesce.coalesce(queue :: any, Config.Network.COALESCE_MERGE_FIELDS) :: any
 end
 
 -- ── Factory ───────────────────────────────────────────────────

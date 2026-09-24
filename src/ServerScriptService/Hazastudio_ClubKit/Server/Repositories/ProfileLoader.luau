@@ -1,5 +1,5 @@
 --!strict
--- Server/Repositories/ProfileLoader.lua
+-- Server/Repositories/ProfileLoader.luau
 --
 -- Serialize per-player DataStore loads triggered by PlayerAdded.
 --
@@ -11,15 +11,17 @@
 -- "DataStore request was added to queue" warnings flood the log.
 --
 -- Capacity (perf-scaling R3.7 / R3.8 / R10.1): bound concurrent join-time reads
--- to Config.ProfileLoader.MAX_CONCURRENCY = 4 (global cap), with
--- PER_PLAYER_CONCURRENCY = 1 so each player's reads run sequentially, keeping
--- aggregate join-time reads within the ~80 reads/min budget at 100 CCU.
+-- to Config.ProfileLoader.MAX_CONCURRENCY (global cap; 8 since Persistence Fabric), with
+-- PER_PLAYER_CONCURRENCY = 1 so each player's reads run sequentially.
 --
 -- ProfileLoader fixes this by:
 --   1. Accepting per-kind loader functions registered up front.
 --   2. Enqueueing one job per (player, kind) on PlayerAdded.
---   3. Draining the queue serially (or with bounded concurrency).
---   4. Firing a "loaded" event so downstream services react without polling.
+--   3. Draining the queue with bounded concurrency (sliding window: a slot is refilled as
+--      soon as it frees; Config.ProfileLoader.SLIDING_WINDOW = false restores fixed batches).
+--   4. Requeueing a job refused for DataStore budget after the negative-cache TTL (every kind,
+--      Config.ProfileLoader.BUDGET_REQUEUE_DELAYS), then reporting `load_gave_up`.
+--   5. Firing a "loaded" event so downstream services react without polling.
 --
 -- Pattern:
 --   local loader = ProfileLoader.create({ logger = log, concurrency = 1 })
@@ -42,6 +44,7 @@ local Cleaner = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Cleane
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local Result = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Result)
+local BudgetMeter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.BudgetMeter)
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 
 type Result<T> = Types.Result<T>
@@ -82,13 +85,43 @@ type Job = {
 	kind: string,
 	loadFn: LoadFn,
 	enqueuedAt: number,
+	requeues: number, -- budget requeues so far (production hardening P1)
 }
 
 local DEFAULT_CONCURRENCY = 1
 local DEFAULT_POLL_INTERVAL = 0.05
+local DEFAULT_BUDGET_REQUEUE_DELAYS = { 10, 20, 40, 80 }
 
 local ProfileLoader = {}
 ProfileLoader.__index = ProfileLoader
+
+local function decrementPending(self: any, userId: number)
+	local left = (self._pending[userId] or 1) - 1
+	-- nil at zero: a 0 left behind per departed player grew the table for the server's life.
+	self._pending[userId] = if left > 0 then left else nil
+end
+
+local function isBudgetRefusal(result: any): boolean
+	return type(result) == "table"
+		and result.ok == false
+		and (result.error == "budget_low" or result.error == "budget_exhausted")
+end
+
+-- Delay before budget requeue `n` (1-based): never shorter than the negative-cache TTL (the
+-- repositories answer budget_low from that cache until it expires), ± REQUEUE_JITTER so a join
+-- storm's requeues do not land in the same second.
+local function budgetRequeueDelay(n: number): number?
+	local cfg = Config.ProfileLoader
+	local delays = if type(cfg.BUDGET_REQUEUE_DELAYS) == "table" then cfg.BUDGET_REQUEUE_DELAYS else DEFAULT_BUDGET_REQUEUE_DELAYS
+	local base = delays[n]
+	if type(base) ~= "number" then
+		return nil
+	end
+	local ttl = (Config.Budget and Config.Budget.NEGATIVE_CACHE_TTL) or 10
+	local jitter = tonumber(cfg.REQUEUE_JITTER) or 0.2
+	local delay = math.max(base, ttl) * (1 + (math.random() * 2 - 1) * jitter)
+	return math.max(ttl, delay)
+end
 
 local function notifyListeners(self: any, event: LoadEvent)
 	-- Snapshot listeners so an unsubscribe inside a listener does not corrupt
@@ -125,10 +158,12 @@ local function isRetryableResultError(err: string?): boolean
 	return isTransientError(err)
 end
 
+local startWorker: (self: any) -> ()
+
 local function processJob(self: any, job: Job)
 	-- Drop jobs for players that left while queued.
 	if job.player.Parent == nil then
-		self._pending[job.userId] = (self._pending[job.userId] or 1) - 1
+		decrementPending(self, job.userId)
 		return
 	end
 
@@ -164,8 +199,8 @@ local function processJob(self: any, job: Job)
 			result = valueOrError :: any
 			if not result.ok and isRetryableResultError(result.error) and attempt < maxRetries then
 				-- budget_low / legacy budget_exhausted is negative-cached; do not hold a
-				-- concurrency slot for 10s+. Caller (Main) requeues overhead after TTL.
-				-- inflight_saturated is NOT negative-cached — keep retrying.
+				-- concurrency slot for 10s+. The job is requeued below (every kind) after the
+				-- negative-cache TTL. inflight_saturated is NOT negative-cached — keep retrying.
 				if result.error == "budget_exhausted" or result.error == "budget_low" then
 					break
 				end
@@ -191,6 +226,51 @@ local function processJob(self: any, job: Job)
 		result = Result.Err("loader_exhausted_retries")
 	end
 
+	-- Budget refusal: put the job back after the negative-cache TTL instead of abandoning it
+	-- (until 2026-09-24 only Main's overhead listener requeued; settings / stickers / favorites /
+	-- likes / venue quests stayed unloaded after a join storm). Listeners hear nothing until the
+	-- job finally loads or gives up.
+	if isBudgetRefusal(result) and Config.ProfileLoader.REQUEUE_ALL_ON_BUDGET ~= false and self._alive then
+		local delay = budgetRequeueDelay(job.requeues + 1)
+		if delay then
+			job.requeues += 1
+			BudgetMeter.recordEvent("load_requeued")
+			if self._logger then
+				self._logger:info("ProfileLoader requeue after budget refusal", {
+					kind = job.kind,
+					userId = job.userId,
+					requeue = job.requeues,
+					delaySec = math.floor(delay * 10) / 10,
+				})
+			end
+			task.delay(delay, function()
+				if not self._alive or job.player.Parent == nil then
+					decrementPending(self, job.userId)
+					return
+				end
+				for _, queued in self._queue do
+					if queued.userId == job.userId and queued.kind == job.kind then
+						decrementPending(self, job.userId) -- an identical job is already queued
+						return
+					end
+				end
+				job.enqueuedAt = os.clock()
+				table.insert(self._queue, job)
+				startWorker(self)
+			end)
+			return
+		end
+		BudgetMeter.recordEvent("load_gave_up")
+		if self._logger then
+			self._logger:warn("ProfileLoader load_gave_up", {
+				kind = job.kind,
+				userId = job.userId,
+				requeues = job.requeues,
+				error = result.error,
+			})
+		end
+	end
+
 	if self._logger then
 		self._logger:info("ProfileLoader load complete", {
 			kind = job.kind,
@@ -201,10 +281,7 @@ local function processJob(self: any, job: Job)
 		})
 	end
 
-	self._pending[job.userId] = (self._pending[job.userId] or 1) - 1
-	if (self._pending[job.userId] or 0) <= 0 then
-		self._pending[job.userId] = nil
-	end
+	decrementPending(self, job.userId)
 
 	notifyListeners(self, {
 		player = job.player,
@@ -214,11 +291,55 @@ local function processJob(self: any, job: Job)
 	})
 end
 
-local function startWorker(self: any)
+-- Sliding window (production hardening P1 / H19): a new job starts as soon as any slot frees,
+-- so one slow read no longer holds up a whole batch. Per-player limit unchanged.
+local function runSlidingWindow(self: any)
+	local perPlayerLimit = math.max(1, self._perPlayerConcurrency or 1)
+	while self._alive and #self._queue > 0 do
+		while self._inFlight < self._concurrency do
+			local pickIndex: number? = nil
+			for index, job in self._queue do
+				if (self._inFlightByUser[job.userId] or 0) < perPlayerLimit then
+					pickIndex = index
+					break
+				end
+			end
+			if not pickIndex then
+				break
+			end
+			local job: Job = table.remove(self._queue, pickIndex) :: Job
+			self._inFlight += 1
+			self._inFlightByUser[job.userId] = (self._inFlightByUser[job.userId] or 0) + 1
+			task.spawn(function()
+				local ok, err = pcall(processJob, self, job)
+				if not ok and self._logger then
+					self._logger:warn("ProfileLoader job errored", { kind = job.kind, userId = job.userId, error = tostring(err) })
+				end
+				self._inFlight -= 1
+				local left = (self._inFlightByUser[job.userId] or 1) - 1
+				self._inFlightByUser[job.userId] = if left > 0 then left else nil
+			end)
+		end
+		if #self._queue == 0 then
+			break
+		end
+		task.wait(self._pollInterval)
+	end
+end
+
+startWorker = function(self: any)
 	if self._workerActive then
 		return
 	end
 	self._workerActive = true
+
+	if Config.ProfileLoader.SLIDING_WINDOW ~= false then
+		task.spawn(function()
+			runSlidingWindow(self)
+			self._workerActive = false
+		end)
+		return
+	end
 
 	task.spawn(function()
 		while self._alive and #self._queue > 0 do
@@ -278,6 +399,8 @@ function ProfileLoader.create(options: ProfileLoaderOptions?): ProfileLoader
 		_cleaner = Cleaner.new(),
 		_alive = true,
 		_workerActive = false,
+		_inFlight = 0,
+		_inFlightByUser = {} :: { [number]: number },
 	}, ProfileLoader)
 
 	self._cleaner:add(Players.PlayerRemoving:Connect(function(player)
@@ -330,6 +453,7 @@ function ProfileLoader:enqueueKind(player: Player, kind: string)
 		kind = kind,
 		loadFn = loadFn,
 		enqueuedAt = os.clock(),
+		requeues = 0,
 	})
 	self._pending[userId] = (self._pending[userId] or 0) + 1
 	startWorker(self)

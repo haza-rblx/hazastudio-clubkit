@@ -7,6 +7,7 @@
 --
 -- Main should `require` ONLY this module (one local), then call the API below.
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local PlayerSessionStore = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.PlayerSessionStore)
@@ -15,13 +16,18 @@ local CrossServerCache = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Uti
 
 local PersistenceFabricHooks = {}
 
---- Flush dirty Overhead/Settings session docs, then drop session slots.
+--- Flush dirty Overhead/Settings session docs, then drop session slots. A failed flush no
+--- longer drops the unsaved document (it did until 2026-09-24): the slot is kept and retried
+--- (Config.Persistence.LEAVE_FLUSH_RETRY_DELAYS), and autosave / BindToClose flushAll see it too.
 function PersistenceFabricHooks.onPlayerRemoving(player: Player)
 	local userId = player.UserId
-	PlayerSessionStore.flushNow("overhead", userId)
-	PlayerSessionStore.flushNow("settings", userId)
-	PlayerSessionStore.clear("overhead", userId)
-	PlayerSessionStore.clear("settings", userId)
+	local options = {
+		isPresent = function(): boolean
+			return Players:GetPlayerByUserId(userId) ~= nil
+		end,
+	}
+	PlayerSessionStore.release("overhead", userId, options)
+	PlayerSessionStore.release("settings", userId, options)
 end
 
 --- Flush all dirty session documents (autosave / BindToClose).

@@ -1,6 +1,7 @@
 --!strict
--- Server/Services/DonationService.lua
--- Poll Donation API v2 (Cloudflare Worker) -> match donors -> update DataStore -> broadcast events.
+-- Server/Services/DonationService.luau
+-- Poll the donation API v2 (the clubkit VPS; a Cloudflare Worker before the 2026 migration)
+-- -> match donors -> update DataStore -> broadcast events.
 -- Supports dual leaderboard: daily + all-time.
 --
 -- API v2: REST under {ApiUrl}/v2/* with Authorization: Bearer secret.
@@ -27,6 +28,11 @@ local OverheadDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domai
 local StreakDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.StreakDomain)
 local DonationEffectTierResolver = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DonationEffectTierResolver)
 local TextFilterUtil = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.TextFilterUtil)
+local BoundedLru = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.BoundedLru)
+local BudgetMeter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.BudgetMeter)
+local HttpRequest = require(script.Parent.Parent.Net.HttpRequest)
+-- Per-userId caches that must outlive a visit are bounded (production hardening P1, H5).
+local USER_KEYED_LRU_CAPACITY = 1000
 type DonationEntry = Types.DonationEntry
 type DonationNotifPayload = Types.DonationNotifPayload
 type DonationLeaderboardPayload = Types.DonationLeaderboardPayload
@@ -106,11 +112,13 @@ local function createDonationService(
 	-- from an in-flight HTTP/leaderboard result that was issued BEFORE the event
 	-- landed — for a short window the max of the two wins (monotonic).
 	local DONOR_EVENT_GUARD_WINDOW = 10
+	-- `ttlSec` overrides DONOR_PROFILE_CACHE_TTL (a confirmed zero uses DONOR_ZERO_CACHE_TTL).
 	local function writeDonorCashCache(
 		userId: number,
 		total: number,
 		rank: number?,
-		source: string?
+		source: string?,
+		ttlSec: number?
 	): DonorCashCacheEntry
 		local now = os.clock()
 		local existing = donorCashCache[userId]
@@ -128,7 +136,7 @@ local function createDonationService(
 		local entry: DonorCashCacheEntry = {
 			total = total,
 			rank = rank,
-			expiresAt = now + (Config.Donation.DONOR_PROFILE_CACHE_TTL or 45),
+			expiresAt = now + (ttlSec or Config.Donation.DONOR_PROFILE_CACHE_TTL or 45),
 			source = source,
 			writtenAt = now,
 		}
@@ -270,14 +278,13 @@ local function createDonationService(
 	local sheetsBroadcastRevision = 0
 	local lastSheetsBroadcastFingerprint: string? = nil
 	-- Phase 3: Track userIds that have donated (from notif, manual adjustment, or cash stats > 0).
-	-- Skip donor_profile API call for players who never donated — most players
-	-- on overhead leaderboard not donor, so API call always returns cash_total=0.
-	-- knownDonors sticky: sekali marked, still dikenal sampai module reload. Hot-reload safe
-	-- because state reset = back to conservative "unknown" (just an extra API call).
-	local knownDonors: { [number]: true } = {}
+	-- Nothing reads it any more (the "skip the API for unknown donors" gate was removed, see
+	-- getPlayerCashStats); kept as a bounded LRU so it cannot grow for the server's life
+	-- (production hardening P1, H5). Candidate for removal in the naming/cleanup pass.
+	local knownDonors = BoundedLru.new(USER_KEYED_LRU_CAPACITY)
 	local function markKnownDonor(userId: number)
 		if userId and userId > 0 then
-			knownDonors[userId] = true
+			knownDonors:set(userId, true)
 		end
 	end
 
@@ -335,7 +342,8 @@ local function createDonationService(
 	-- Daily Robux tracking (in-memory). Reset tiap tengah malam WIB; window 00:01-23:59:59.
 	-- { [userId]: { userId, username, displayName, thumbnail, total } }
 	local cachedDailyRobux: { [number]: any } = {}
-	local sessionRobuxTotals: { [number]: number } = {}
+	-- Hidden Robux donors' totals this server session (bounded LRU, production hardening P1).
+	local sessionRobuxTotals = BoundedLru.new(USER_KEYED_LRU_CAPACITY)
 	local currentRobuxDayBucket: number = -1
 	local function getWibDayBucket(): number
 		return StreakDomain.toDayNumber(os.time())
@@ -447,7 +455,7 @@ local function createDonationService(
 		end
 		local timeout = Config.Donation.HTTP_TIMEOUT
 		local ok, response = pcall(function()
-			return HttpService:RequestAsync({
+			return HttpRequest.requestAsync(HttpRequest.classFromUrl("donation", url), {
 				Url = url,
 				Method = method,
 				Headers = {
@@ -893,7 +901,9 @@ local function createDonationService(
 		return result
 	end
 	local userIdCache: { [string]: UserIdCacheEntry } = {}
-	local userInfoCache: { [number]: UserInfoCacheEntry } = {}
+	-- Bounded LRU (production hardening P1, H5): donors named in notifications are rarely online,
+	-- so a plain table grew with every distinct donor for the server's life.
+	local userInfoCache = BoundedLru.new(USER_KEYED_LRU_CAPACITY)
 
 	local function pruneUserIdCache(nowClock: number)
 		local entries = {} :: { { key: string, lastUsedAt: number } }
@@ -958,7 +968,7 @@ local function createDonationService(
 			return nil, nil
 		end
 		local nowClock = os.clock()
-		local cached = userInfoCache[userId]
+		local cached: UserInfoCacheEntry? = userInfoCache:get(userId)
 		if cached and (nowClock - cached.lastUsedAt) <= USER_ID_CACHE_TTL then
 			cached.lastUsedAt = nowClock
 			return cached.username, cached.displayName
@@ -966,11 +976,11 @@ local function createDonationService(
 
 		local player = Players:GetPlayerByUserId(userId)
 		if player then
-			userInfoCache[userId] = {
+			userInfoCache:set(userId, {
 				username = player.Name,
 				displayName = player.DisplayName,
 				lastUsedAt = nowClock,
-			}
+			})
 			return player.Name, player.DisplayName
 		end
 
@@ -980,11 +990,11 @@ local function createDonationService(
 			local username = if type(info.Username) == "string" and info.Username ~= "" then info.Username else nil
 			local displayName = if type(info.DisplayName) == "string" and info.DisplayName ~= "" then info.DisplayName else username
 			if username or displayName then
-				userInfoCache[userId] = {
+				userInfoCache:set(userId, {
 					username = username or "",
 					displayName = displayName or username or "",
 					lastUsedAt = nowClock,
-				}
+				})
 				return username, displayName
 			end
 		end
@@ -1667,6 +1677,7 @@ local function createDonationService(
 					j = game.JobId,
 				})
 			end)
+			BudgetMeter.recordMessagingPublish("DonorCashSync", ok)
 			if not ok then
 				log:debug("Cross-server cash publish failed (non-critical)", { error = tostring(err) })
 			end
@@ -1685,6 +1696,8 @@ local function createDonationService(
 		-- would blank the chip rank until the next leaderboard poll.
 		local priorRank = if donorCashCache[userId] then donorCashCache[userId].rank else nil
 		writeDonorCashCache(userId, total, priorRank, "event")
+		-- The overhead cash-rank chip may hold a 300 s "no rank" for this (former non-)donor.
+		invalidateOverheadRankCaches(userId)
 		markKnownDonor(userId)
 		if overheadService and type(overheadService.setCashDonated) == "function" then
 			overheadService:setCashDonated(userId, total)
@@ -1847,6 +1860,16 @@ local function createDonationService(
 						local robloxUserId = info.providerRobloxUserId
 							or (info.matchedEntry and info.matchedEntry.robloxUserId)
 							or resolveRobloxUserId(robloxUsername)
+						-- This donation names the donor: a cached "confirmed zero" (non-donor,
+						-- DONOR_ZERO_CACHE_TTL) is now wrong for them. Drop it + the chip's
+						-- "no rank" so the next lookup reads the new total.
+						if type(robloxUserId) == "number" then
+							local zeroEntry = donorCashCache[robloxUserId]
+							if zeroEntry and zeroEntry.total <= 0 then
+								donorCashCache[robloxUserId] = nil
+							end
+							invalidateOverheadRankCaches(robloxUserId)
+						end
 						local totalDonationAmount = info.matchedEntry and info.matchedEntry.totalAmount or nil
 						-- Backend total_after (window sum including THIS donation) is the
 						-- authoritative total — the cached leaderboard and the 45s donor
@@ -2058,7 +2081,16 @@ local function createDonationService(
 		local total = math.max(0, math.floor(tonumber(decoded.cash_total) or 0))
 		local rankValue = tonumber(decoded.cash_rank)
 		local rank = if rankValue and rankValue >= 1 then math.floor(rankValue) else nil
-		writeDonorCashCache(userId, total, rank, nil)
+		-- A confirmed zero (non-donor) is honoured for DONOR_ZERO_CACHE_TTL (300 s), not 45 s:
+		-- the overhead rank chip asks every ~30 s, so 45 s meant ~1 GET per non-donor per 45 s
+		-- (~260/min at 200 players). Cleared by a donation / cash sync naming the player.
+		writeDonorCashCache(
+			userId,
+			total,
+			rank,
+			nil,
+			if total <= 0 then (Config.Donation.DONOR_ZERO_CACHE_TTL or 300) else nil
+		)
 		return total, rank
 	end
 
@@ -2212,10 +2244,13 @@ local function createDonationService(
 		-- A player who donated while this server was offline (or in a previous session)
 		-- is in the backend but unknown here → the old early-return kept them at Cash=0
 		-- forever (leaderstat/chip never updated; validated live on Atlantis).
-		-- Hidden users still never hit HTTP, and the failure cache inside
-		-- fetchDonorCashProfile already negative-caches true non-donors for 120s,
-		-- so bulk non-donor joins cannot spam the API. We always fall through to the
-		-- API attempt; the caches keep it cheap.
+		-- Hidden users still never hit HTTP. A cached total of 0 is skipped by the
+		-- early return above (a rank-only zero entry must not win), but it is still
+		-- honoured: fetchDonorCashProfile answers a confirmed zero from its cache for
+		-- DONOR_ZERO_CACHE_TTL (300 s) and failures back off per
+		-- DONOR_FAILURE_BACKOFF_STEPS, so bulk non-donor joins cannot spam the API.
+		-- The local sources above (cached / workspace leaderboard, manual) are
+		-- checked every time and cost no request.
 		if cashTotal <= 0 and isHiddenDonationUser(userId) then
 			return 0, nil
 		end
@@ -2952,6 +2987,12 @@ local function createDonationService(
 	function service:invalidateDonorProfileCache(userId: number?)
 		invalidateDonorCashCache(userId)
 	end
+	--- True while the backend's answer "total 0" (a successful lookup, not a failure) is cached
+	--- for this player (DONOR_ZERO_CACHE_TTL). OverheadService keys its long "no rank" on it.
+	function service:isConfirmedNonDonor(userId: number): boolean
+		local entry = donorCashCache[userId]
+		return entry ~= nil and entry.total <= 0 and entry.expiresAt > os.clock() and donorFailureCache[userId] == nil
+	end
 	function service:onLeaderboardUpdated(callback: () -> ())
 		table.insert(leaderboardUpdatedCallbacks, callback)
 	end
@@ -3079,7 +3120,7 @@ local function createDonationService(
 		if isHiddenRobuxUser(userId) then
 			local hiddenAmount = tonumber(record.amount) or 0
 			if hiddenAmount > 0 then
-				sessionRobuxTotals[userId] = (sessionRobuxTotals[userId] or 0) + hiddenAmount
+				sessionRobuxTotals:set(userId, (tonumber(sessionRobuxTotals:get(userId)) or 0) + hiddenAmount)
 			end
 			return
 		end
@@ -3115,7 +3156,7 @@ local function createDonationService(
 		if not isHiddenRobuxUser(userId) then
 			return 0
 		end
-		return math.max(0, math.floor(tonumber(sessionRobuxTotals[userId]) or 0))
+		return math.max(0, math.floor(tonumber(sessionRobuxTotals:get(userId)) or 0))
 	end
 
 	function service:getWorkspaceDailyRobuxLeaderboard(limit: number?): { any }
@@ -3318,7 +3359,24 @@ local function createDonationService(
 		end
 	end
 	Players.PlayerRemoving:Connect(function(player: Player)
-		claimCooldowns[player.UserId] = nil
+		local userId = player.UserId
+		claimCooldowns[userId] = nil
+		-- Donor cash caches (production hardening P1, H5): drop the leaver's entries and sweep
+		-- expired ones, so donors named by notifications (rarely online) do not accumulate for
+		-- the server's life. A rejoin costs at most one cash lookup.
+		donorCashCache[userId] = nil
+		donorFailureCache[userId] = nil
+		local nowClock = os.clock()
+		for cachedUserId, entry in pairs(donorCashCache) do
+			if entry.expiresAt <= nowClock then
+				donorCashCache[cachedUserId] = nil
+			end
+		end
+		for failedUserId, entry in pairs(donorFailureCache) do
+			if entry.expiresAt <= nowClock then
+				donorFailureCache[failedUserId] = nil
+			end
+		end
 	end)
 
 	-- ── Public wrappers ───────────────────────────────────────────────────────

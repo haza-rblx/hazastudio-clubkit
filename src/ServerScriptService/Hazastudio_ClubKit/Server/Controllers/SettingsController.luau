@@ -355,6 +355,9 @@ local function createSettingsController(deps: {
 			end
 			settingsService:onPlayerRemoving(player)
 			cancelPublicOverheadSync(player.UserId)
+			-- nil still cancels a pending delayed sync (token mismatch) and stops the per-userId
+			-- counter from growing for the server's life (production hardening P1, H5).
+			publicSyncTokenByUserId[player.UserId] = nil
 		end))
 
 		-- Fold join-time settings GetAsync into SharedProfileLoader instead of

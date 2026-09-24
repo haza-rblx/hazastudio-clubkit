@@ -1,5 +1,5 @@
 --!strict
--- Server/Repositories/OverheadRepository.lua
+-- Server/Repositories/OverheadRepository.luau
 -- ONLY accessible from Service layer. Zero business logic here.
 -- Persistence Fabric: PlayerSessionStore write-behind when enabled.
 local DataStoreService = game:GetService("DataStoreService")
@@ -40,22 +40,41 @@ local function createOverheadRepository(datastoreKey: string?): IOverheadReposit
 
 	CrossServerCache.subscribe(OVERHEAD_INVALIDATE_TOPIC, function(userId)
 		Cache.invalidate(KEY_PREFIX .. userId)
-		PlayerSessionStore.clear(SESSION_NS, userId)
-		log:debug("Cross-server cache invalidated", { userId = userId })
+		-- A dirty session is kept (marked stale) instead of dropped: its unsaved changes are
+		-- replayed onto the stored document at the next flush (production hardening P1).
+		local outcome = PlayerSessionStore.invalidate(SESSION_NS, userId)
+		log:debug("Cross-server cache invalidated", { userId = userId, session = outcome })
 	end)
 
 	local function publishInvalidation(userId: number)
 		CrossServerCache.publish(OVERHEAD_INVALIDATE_TOPIC, userId)
 	end
 
-	local function durableWrite(userId: number, data: OverheadStoredData): Result<nil>
+	-- `context` comes from PlayerSessionStore flushes. When the session is stale or the stored
+	-- `_version` is newer than ours, the session's unsaved mutators are replayed onto the stored
+	-- document inside the transform (no lost writes on either side). Returns Ok(replayedDoc)
+	-- when it wrote a replay, Ok(nil) when it wrote `data`.
+	local function durableWrite(
+		userId: number,
+		data: OverheadStoredData,
+		context: PlayerSessionStore.FlushContext?
+	): Result<OverheadStoredData?>
 		local versionConflict = false
+		local replayed: OverheadStoredData? = nil
 		local result = budgetGate:executeAsync(Enum.DataStoreRequestType.UpdateAsync, function()
 			return ResultUtil.withRetry(function(): boolean
 				versionConflict = false
+				replayed = nil
 				Store:UpdateAsync(tostring(userId), function(oldData: any): any
 					local base = oldData or {}
-					if base._version and data._version and base._version > data._version then
+					local storedIsNewer = base._version and data._version and base._version > data._version
+					local replay = if context then context.replay else nil
+					if oldData ~= nil and replay and (storedIsNewer or (context :: any).stale) then
+						local merged = OverheadDomain.sanitize(replay(OverheadDomain.sanitize(oldData)))
+						replayed = merged
+						return merged
+					end
+					if storedIsNewer then
 						versionConflict = true
 						return nil
 					end
@@ -65,6 +84,7 @@ local function createOverheadRepository(datastoreKey: string?): IOverheadReposit
 			end, Config.DataStore.RETRY_ATTEMPTS)
 		end, mutexFor(userId))
 		if versionConflict then
+			-- No replay available (legacy save or too many unsaved steps): the stored copy wins.
 			Cache.invalidate(KEY_PREFIX .. userId)
 			PlayerSessionStore.clear(SESSION_NS, userId)
 			return ResultUtil.Err("version_conflict")
@@ -72,13 +92,13 @@ local function createOverheadRepository(datastoreKey: string?): IOverheadReposit
 		if not result.ok then
 			return ResultUtil.Err(result.error or "write_failed")
 		end
-		Cache.set(KEY_PREFIX .. userId, data, Config.DataStore.CACHE_TTL)
+		Cache.set(KEY_PREFIX .. userId, replayed or data, Config.DataStore.CACHE_TTL)
 		publishInvalidation(userId)
-		return ResultUtil.Ok(nil)
+		return ResultUtil.Ok(replayed)
 	end
 
-	PlayerSessionStore.registerFlush(SESSION_NS, function(userId: number, data: any)
-		return durableWrite(userId, data :: OverheadStoredData)
+	PlayerSessionStore.registerFlush(SESSION_NS, function(userId: number, data: any, context)
+		return durableWrite(userId, data :: OverheadStoredData, context)
 	end)
 
 	function repo:loadStrict(userId: number): Result<OverheadStoredData>
@@ -184,14 +204,14 @@ local function createOverheadRepository(datastoreKey: string?): IOverheadReposit
 
 	function repo:save(userId: number, data: OverheadStoredData): Result<nil>
 		local sanitized = OverheadDomain.sanitize(data)
-		if useSession() then
-			local writeResult = durableWrite(userId, sanitized)
-			if writeResult.ok then
-				PlayerSessionStore.markClean(SESSION_NS, userId, sanitized)
-			end
-			return writeResult
+		local writeResult = durableWrite(userId, sanitized, nil)
+		if not writeResult.ok then
+			return ResultUtil.Err(writeResult.error)
 		end
-		return durableWrite(userId, sanitized)
+		if useSession() then
+			PlayerSessionStore.markClean(SESSION_NS, userId, sanitized)
+		end
+		return ResultUtil.Ok(nil)
 	end
 
 	function repo:flushSession(userId: number): Result<nil>
@@ -203,7 +223,8 @@ local function createOverheadRepository(datastoreKey: string?): IOverheadReposit
 
 	function repo:invalidateCache(userId: number)
 		Cache.invalidate(KEY_PREFIX .. userId)
-		PlayerSessionStore.clear(SESSION_NS, userId)
+		-- Keeps a dirty session: it is the newest copy and still has to be written.
+		PlayerSessionStore.dropIfClean(SESSION_NS, userId)
 	end
 
 	return repo

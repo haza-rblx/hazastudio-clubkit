@@ -11,6 +11,7 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local MusicDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicDomain)
 local MusicWebLibraryPolicy = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicWebLibraryPolicy)
+local HttpRequest = require(script.Parent.Parent.Net.HttpRequest)
 
 local LIBRARY_PATH = "/v3/music/library"
 -- One warning per reason per minute: a VPS outage must not turn into a log line every poll.
@@ -82,7 +83,7 @@ function MusicLibraryProvider:_fetch(url: string, secret: string): (number, any?
 		headers["If-None-Match"] = '"' .. self._revision .. '"'
 	end
 	local ok, response = pcall(function()
-		return HttpService:RequestAsync({ Url = url, Method = "GET", Headers = headers })
+		return HttpRequest.requestAsync("music:library", { Url = url, Method = "GET", Headers = headers })
 	end)
 	if not ok or type(response) ~= "table" then
 		return 0, nil
@@ -133,7 +134,7 @@ function MusicLibraryProvider:_importLibrary(url: string, secret: string): boole
 	end
 
 	local ok, response = pcall(function()
-		return HttpService:RequestAsync({
+		return HttpRequest.requestAsync("music:import", {
 			Url = url .. "/import",
 			Method = "POST",
 			Headers = {

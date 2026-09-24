@@ -13,6 +13,7 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local EventBoardDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.EventBoardDomain)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
+local HttpRequest = require(script.Parent.Parent.Net.HttpRequest)
 
 type Board = EventBoardDomain.Board
 
@@ -130,7 +131,7 @@ function EventBoardProvider:refresh(): string
 		headers["If-None-Match"] = '"' .. self._board.revision .. '"'
 	end
 	local ok, response = pcall(function()
-		return HttpService:RequestAsync({ Url = url, Method = "GET", Headers = headers })
+		return HttpRequest.requestAsync("eventboard:board", { Url = url, Method = "GET", Headers = headers })
 	end)
 	if not ok or type(response) ~= "table" then
 		self._failures += 1

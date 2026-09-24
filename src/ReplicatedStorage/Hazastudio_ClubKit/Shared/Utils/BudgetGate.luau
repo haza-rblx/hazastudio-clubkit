@@ -21,6 +21,7 @@ local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Con
 local Result = require(script.Parent.Result)
 local Types = require(script.Parent.Parent.Domain.Types)
 local DataStoreScheduler = require(script.Parent.DataStoreScheduler)
+local BudgetMeter = require(script.Parent.BudgetMeter)
 
 type Result<T> = Types.Result<T>
 type ILogger = Types.ILogger
@@ -111,13 +112,35 @@ function BudgetGate:canProceed(requestType: Enum.DataStoreRequestType): (boolean
 	return budget >= self:_minBudget(requestType), budget
 end
 
+-- BudgetMeter accounting (production hardening P1): one count per executeAsync that ran, or one
+-- refusal (budget_low / inflight_saturated) when admission gave up. Retries inside `fn`
+-- (Result.withRetry) are not visible here, so the count is a floor.
+local ADMISSION_REFUSALS = {
+	budget_low = true,
+	budget_exhausted = true,
+	inflight_saturated = true,
+}
+
+local function requestTypeName(requestType: Enum.DataStoreRequestType): string
+	local name = (requestType :: any).Name
+	return if type(name) == "string" then name else tostring(requestType)
+end
+
+local function meter(requestType: Enum.DataStoreRequestType, result: any)
+	if type(result) == "table" and result.ok == false and ADMISSION_REFUSALS[result.error] then
+		BudgetMeter.recordDataStoreRefused(requestTypeName(requestType), result.error)
+	else
+		BudgetMeter.recordDataStore(requestTypeName(requestType))
+	end
+end
+
 function BudgetGate:executeAsync<T>(
 	requestType: Enum.DataStoreRequestType,
 	fn: () -> T,
 	keyMutex: string?
 ): Result<T>
 	if not useLegacyGate() then
-		return DataStoreScheduler.executeAsync(requestType, fn, {
+		local scheduled = DataStoreScheduler.executeAsync(requestType, fn, {
 			minBudget = self:_minBudget(requestType),
 			deferSeconds = self._deferSeconds,
 			pollInterval = self._pollInterval,
@@ -125,9 +148,16 @@ function BudgetGate:executeAsync<T>(
 			name = self._name,
 			keyMutex = keyMutex,
 		})
+		meter(requestType, scheduled)
+		return scheduled
 	end
+	local legacy = self:_executeLegacy(requestType, fn)
+	meter(requestType, legacy)
+	return legacy
+end
 
-	-- Legacy per-instance snapshot loop (kill-switch path).
+-- Legacy per-instance snapshot loop (kill-switch path).
+function BudgetGate:_executeLegacy<T>(requestType: Enum.DataStoreRequestType, fn: () -> T): Result<T>
 	local minBudget = self:_minBudget(requestType)
 	local startedAt = os.clock()
 	local deferred = false

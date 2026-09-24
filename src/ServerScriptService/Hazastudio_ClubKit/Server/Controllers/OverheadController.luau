@@ -1556,6 +1556,8 @@ end
 		dataReadyPlayers[player.UserId] = nil
 		hasCompletedInitialSetup[player.UserId] = nil
 		gameplayReadyPlayers[player.UserId] = nil
+		-- About-roster dedupe fingerprint (production hardening P1, H5); a rejoin re-syncs once.
+		aboutRosterEntryFingerprints[player.UserId] = nil
 		removeChatTag(player.UserId)
 		-- Free all per-recipient delta baselines where this player was the subject
 		-- (keys "overhead:<userId>:<viewerUserId>"). The per-viewer side of any

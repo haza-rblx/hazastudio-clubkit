@@ -2937,6 +2937,11 @@ Config.Donation = {
 	REMOTE_DONOR_PROFILE = "DonationDonorProfile",
 	REMOTE_DONOR_PROFILE_RESPONSE = "DonationDonorProfileResponse",
 	DONOR_PROFILE_CACHE_TTL = 45,
+	-- A confirmed zero total (players/:id/cash answered 0, i.e. a non-donor) is honoured this long
+	-- (seconds) by getPlayerCashStats and the overhead cash-rank chip. It is cleared when a
+	-- donation / cross-server cash sync names that player. Was 45 s (DONOR_PROFILE_CACHE_TTL),
+	-- about 1 GET per non-donor per 45 s: ~260/min at 200 players (production hardening P1).
+	DONOR_ZERO_CACHE_TTL = 300,
 	DONOR_PROFILE_RANK_LOOKUP_LIMIT = 100,
 	-- Min seconds between donation-triggered burst leaderboard refreshes.
 	-- 4s is the floor that matters: the downstream rebuild coalesce (5s) +
@@ -2955,9 +2960,9 @@ Config.Donation = {
 	CROSS_SERVER_CASH_TOPIC = scopedDataStoreKey("DonorCashSync_v1"),
 	-- Donor-profile API is no longer gated on "known donor" status: donors who gave
 	-- while this server was offline are unknown locally but exist in the backend.
-	-- True non-donors are already negative-cached (failure cache, 120s) inside
-	-- fetchDonorCashProfile, so bulk joins cannot spam the API. Kept only as a
-	-- legacy no-op for older configs that still set it.
+	-- True non-donors are cached as a confirmed zero for DONOR_ZERO_CACHE_TTL inside
+	-- fetchDonorCashProfile (failures back off per DONOR_FAILURE_BACKOFF_STEPS), so bulk
+	-- joins cannot spam the API. Kept only as a legacy no-op for older configs that still set it.
 	SKIP_API_FOR_UNKNOWN_DONORS = true,
 	-- 30s: matches Leaderboards timeout. Donation Robux init and products
 	-- response also yields through external HTTP + DataStore on cold start.
@@ -4076,6 +4081,21 @@ Config.Persistence = {
 	INVALIDATE_TOKEN_BUCKET_BURST = 12,
 	INVALIDATE_SKIP_ORIGIN = true,
 	METRICS_LOG_INTERVAL = 60, -- server DEBUG summary interval (0 = off)
+	-- Production hardening P1 (2026-09-24): a player's session document is never dropped unsaved.
+	-- Leave flush that fails is retried at these delays (seconds); the entry stays for autosave /
+	-- BindToClose until a write succeeds. At most MAX_DEPARTED_SESSIONS such entries are kept.
+	LEAVE_FLUSH_RETRY_DELAYS = { 2, 4, 8, 16, 30 },
+	MAX_DEPARTED_SESSIONS = 400,
+	-- Unsaved mutators kept per session so a stale session can be replayed onto the stored doc;
+	-- past this, the session falls back to a whole-document write until it flushes.
+	MAX_PENDING_MUTATORS = 256,
+}
+-- Budget telemetry (production hardening P1, workstream F): BudgetMeter counts DataStore /
+-- HTTP / MessagingService use; Main.server logs a one-line summary every LOG_INTERVAL_SEC at info.
+-- Engine constants (not buyer config). Shipping it to the VPS is P3 (BackendClient).
+Config.BudgetMeter = {
+	LOG_ENABLED = true,
+	LOG_INTERVAL_SEC = 60,
 }
 -- HTTP API wrapper — dedup + cache for GroupService/Players at 100 CCU.
 Config.HttpApi = {
@@ -4115,6 +4135,14 @@ Config.ProfileLoader = {
 	SECONDARY_JOIN_DELAY_SEC = 4,
 	-- Retries outside the DS scheduler slot; first delay >= Budget.NEGATIVE_CACHE_TTL.
 	RETRY_DELAYS = { 10, 15, 25 },
+	-- Production hardening P1: a job refused for budget (budget_low / budget_exhausted) is put back
+	-- in the queue after these delays (± REQUEUE_JITTER), for EVERY kind, instead of being
+	-- abandoned; after the last one listeners get the error (`load_gave_up`). false = old behaviour.
+	REQUEUE_ALL_ON_BUDGET = true,
+	BUDGET_REQUEUE_DELAYS = { 10, 20, 40, 80 },
+	REQUEUE_JITTER = 0.2,
+	-- true = a new job starts as soon as any slot frees (sliding window); false = fixed batches.
+	SLIDING_WINDOW = true,
 }
 -- TitleColorPreset animation tick (Phase 3): shared ~30Hz loop for Gradient/Stroke/Dropshadow.
 -- Kill switch: USE_LEGACY_PER_INSTANCE_HEARTBEAT = true → one Heartbeat per effect instance (pre-2.4.24).
@@ -4145,6 +4173,12 @@ Config.Network = {
 	-- Per-frame coalesce: same (target, optional data.kind) keep last payload before flush.
 	-- Immediate paths still flushNow(); coalesce only merges duplicate keys within that flush.
 	ENABLE_FRAME_COALESCE = true,
+	-- Message kinds whose named table field is a DELTA: two in one frame for the same key are
+	-- merged field by field (later fields win) instead of the first being dropped (H6, 2026-09-24).
+	-- Every other kind keeps last-wins. Keep in sync with Config.Overhead.DELTA_MESSAGE_KIND.
+	COALESCE_MERGE_FIELDS = {
+		overhead_delta = "delta",
+	} :: { [string]: string },
 }
 
 -- Network + client FPS stabilization (Recv/ping/FPS). Kill switches for A/B; real fixes default ON.

@@ -20,6 +20,7 @@ local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
+local BudgetMeter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.BudgetMeter)
 
 local CrossServerCache = {}
 
@@ -146,6 +147,7 @@ local function publishRaw(topic: string, payload: { [string]: any })
 		local ok, err = pcall(function()
 			MessagingService:PublishAsync(topic, payload)
 		end)
+		BudgetMeter.recordMessagingPublish(topic, ok)
 		if ok then
 			metrics.published += 1
 		else
@@ -235,6 +237,7 @@ function CrossServerCache.publish(topic: string, userId: number)
 			local ok, err = pcall(function()
 				MessagingService:PublishAsync(topic, { userId = userId, t = os.time() })
 			end)
+			BudgetMeter.recordMessagingPublish(topic, ok)
 			if not ok then
 				warn(string.format(
 					"[CrossServerCache] publish failed topic=%s userId=%d err=%s",

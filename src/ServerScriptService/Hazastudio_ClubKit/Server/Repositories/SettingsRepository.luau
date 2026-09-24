@@ -43,7 +43,8 @@ local function createSettingsRepository(datastoreKey: string?): any
 
 	CrossServerCache.subscribe(SETTINGS_INVALIDATE_TOPIC, function(userId)
 		Cache.invalidate(KEY_PREFIX .. userId)
-		PlayerSessionStore.clear(SESSION_NS, userId)
+		-- Never drop unsaved changes on another server's write (production hardening P1).
+		PlayerSessionStore.invalidate(SESSION_NS, userId)
 	end)
 
 	local function durableWrite(userId: number, data: SettingsStoredData): Result<nil>
@@ -154,7 +155,7 @@ local function createSettingsRepository(datastoreKey: string?): any
 
 	function repo:invalidateCache(userId: number)
 		Cache.invalidate(KEY_PREFIX .. userId)
-		PlayerSessionStore.clear(SESSION_NS, userId)
+		PlayerSessionStore.dropIfClean(SESSION_NS, userId)
 	end
 
 	return repo

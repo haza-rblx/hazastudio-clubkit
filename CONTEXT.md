@@ -27,6 +27,14 @@ Domain glossary for agents. Terms only — no implementation details, no workflo
 - **Register budget** — Luau's ~200 local-registers-per-chunk limit; the structural pressure behind Init bags (see `docs/adr/0002`). Frozen at ≥170 top-level locals in a file, blocker at ≥185.
 - **Versioned DataStore keys** — player-data keys carry a version; bumping one is a breaking migration for existing buyers' live data.
 
+## Persistence (production hardening, 2026-09-24)
+
+- **Session document** — a player's Overhead (or Settings) document held in `PlayerSessionStore` while they are in the server; changes are written behind (debounced flush), not per change.
+- **Stale session** — a session with unsaved changes that another server wrote over (cross-server invalidate, or a newer stored `_version`). It is kept, never dropped; its next flush **replays** the session's unsaved mutators onto the stored document inside `UpdateAsync`.
+- **Departed session** — a leaver's document (or venue quest progress) whose final write has not succeeded yet. Kept and retried until written; a rejoin in the same server gets it back.
+- **Budget refusal** — `budget_low` / `budget_exhausted` from the DataStore admission gate. ProfileLoader requeues any kind refused this way; after the last delay it reports `load_gave_up`.
+- **BudgetMeter** — the per-server counter of DataStore / HTTP / MessagingService use and budget events; logged once a minute, shipped to the VPS from P3.
+
 ## UI motion
 
 - **Rasterized group** — a `CanvasGroup`: Roblox flattens its subtree into a GPU texture sized by its `AbsoluteSize`. Resizing re-creates the texture; exceeding the client's texture budget renders it blank (Roblox docs).

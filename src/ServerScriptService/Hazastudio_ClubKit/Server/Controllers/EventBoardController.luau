@@ -31,9 +31,18 @@ type Session = {
 	player: Player,
 	doc: ProgressDoc,
 	loaded: boolean,
+	loadQueued: boolean,
 	dirty: boolean,
+	saving: boolean,
 	busy: boolean,
+	leftAt: number,
 }
+
+-- ProfileLoader kind for the progress document (production hardening P1): join loads share the
+-- loader's concurrency cap and budget requeue instead of a direct GetAsync per joiner.
+local VENUE_QUEST_KIND = "venue_quest"
+local DEFAULT_LEAVE_RETRY_DELAYS = { 2, 4, 8, 16, 30 }
+local MAX_DEPARTED = 400
 
 local function createEventBoardController(deps: {
 	remotes: Folder,
@@ -62,9 +71,13 @@ local function createEventBoardController(deps: {
 
 	local limiter = RateLimiter.new(cfg.RATE_MAX, cfg.RATE_WINDOW)
 	local sessions: { [number]: Session } = {}
+	-- Players who left with progress not yet written. Kept (and retried) until a save succeeds,
+	-- flushed by the periodic loop and by flushAll (BindToClose), handed back on a rejoin.
+	local departed: { [number]: Session } = {}
 	local connections: { RBXScriptConnection } = {}
 	local destroyed = false
 	local lastDay = StreakDomain.toDayNumber(os.time())
+	local profileLoader: any = nil
 
 	local provider: any
 
@@ -168,17 +181,67 @@ local function createEventBoardController(deps: {
 		end
 	end
 
-	local function flush(session: Session)
-		if not session.loaded or not session.dirty then
-			return
+	-- Returns true when nothing is left to write (saved now, or already clean). False while a
+	-- save is in flight or when the save failed (the session stays dirty for a retry).
+	local function flush(session: Session): boolean
+		if not session.loaded then
+			return true
+		end
+		if session.saving then
+			return false
+		end
+		if not session.dirty then
+			return true
 		end
 		session.dirty = false
-		local saved = progressRepo:save(session.player.UserId, session.doc)
-		if saved.ok then
+		session.saving = true
+		local ok, saved = pcall(function()
+			return progressRepo:save(session.player.UserId, session.doc)
+		end)
+		session.saving = false
+		if ok and saved.ok then
 			-- Keep what another server may have added meanwhile.
 			session.doc = EventBoardDomain.mergeProgress(session.doc, saved.value)
-		else
-			session.dirty = true
+			return not session.dirty
+		end
+		session.dirty = true
+		return false
+	end
+
+	-- Retries `flush` until it reports done or `deadline` (os.clock) passes; waits out an
+	-- in-flight save instead of counting it as a failure.
+	local function flushUntil(session: Session, deadline: number): boolean
+		while true do
+			if flush(session) then
+				return true
+			end
+			if os.clock() >= deadline then
+				return false
+			end
+			task.wait(if session.saving then 0.2 else 1)
+		end
+	end
+
+	local function forgetDeparted(userId: number, session: Session)
+		if departed[userId] == session then
+			departed[userId] = nil
+		end
+	end
+
+	local function capDeparted()
+		local list = {}
+		for userId, session in pairs(departed) do
+			table.insert(list, { userId = userId, at = session.leftAt })
+		end
+		if #list <= MAX_DEPARTED then
+			return
+		end
+		table.sort(list, function(a, b)
+			return a.at < b.at
+		end)
+		for index = 1, #list - MAX_DEPARTED do
+			departed[list[index].userId] = nil
+			log:warn("Venue quest progress dropped: too many unsaved departed players", { userId = list[index].userId })
 		end
 	end
 
@@ -425,41 +488,164 @@ local function createEventBoardController(deps: {
 	end
 
 	-- ── players ──────────────────────────────────────────────────────────────────────────
+	local function applyLoaded(session: Session, loaded: any)
+		if session.loaded or sessions[session.player.UserId] ~= session then
+			return
+		end
+		if type(loaded) == "table" and loaded.ok then
+			session.doc = loaded.value
+		else
+			-- Start empty; the first save merges with whatever the store really holds.
+			log:warn("Venue quest progress load failed", {
+				userId = session.player.UserId,
+				err = if type(loaded) == "table" then loaded.error else tostring(loaded),
+			})
+		end
+		session.loaded = true
+		push(session)
+	end
+
+	-- Through the shared ProfileLoader once attached (Main wires it right after creating the
+	-- loader); a direct load only if no loader was ever attached (see onStart).
+	local function startLoad(session: Session)
+		if session.loaded or session.loadQueued then
+			return
+		end
+		session.loadQueued = true
+		if profileLoader then
+			profileLoader:enqueueKindDeferred(session.player, VENUE_QUEST_KIND)
+			return
+		end
+		task.spawn(function()
+			applyLoaded(session, progressRepo:load(session.player.UserId))
+		end)
+	end
+
 	function controller:onPlayerAdded(player: Player)
-		if sessions[player.UserId] then
+		local userId = player.UserId
+		if sessions[userId] then
+			return
+		end
+		-- Back before the previous visit's progress was written: that copy is the newest one.
+		local previous = departed[userId]
+		if previous then
+			departed[userId] = nil
+			previous.player = player
+			previous.busy = false
+			sessions[userId] = previous
+			push(previous)
 			return
 		end
 		local session: Session = {
 			player = player,
 			doc = EventBoardDomain.emptyProgress(),
 			loaded = false,
+			loadQueued = false,
 			dirty = false,
+			saving = false,
 			busy = false,
+			leftAt = 0,
 		}
-		sessions[player.UserId] = session
-		task.spawn(function()
-			local loaded = progressRepo:load(player.UserId)
-			if sessions[player.UserId] ~= session then
-				return
-			end
-			if loaded.ok then
-				session.doc = loaded.value
-			else
-				-- Start empty; the first save merges with whatever the store really holds.
-				log:warn("Venue quest progress load failed", { userId = player.UserId, err = loaded.error })
-			end
-			session.loaded = true
-			push(session)
-		end)
+		sessions[userId] = session
+		if profileLoader then
+			startLoad(session)
+		end
 	end
 
+	function controller:attachProfileLoader(loader: any)
+		if profileLoader or type(loader) ~= "table" then
+			return
+		end
+		profileLoader = loader
+		loader:register(VENUE_QUEST_KIND, function(player: Player)
+			return progressRepo:load(player.UserId)
+		end)
+		loader:onLoaded(function(event)
+			if event.kind ~= VENUE_QUEST_KIND then
+				return
+			end
+			local session = sessions[event.player.UserId]
+			if session and session.player == event.player then
+				applyLoaded(session, event.result)
+			end
+		end)
+		for _, session in pairs(sessions) do
+			startLoad(session)
+		end
+	end
+
+	-- Leave: keep the session until its progress is written (retries at LEAVE_FLUSH_RETRY_DELAYS);
+	-- until 2026-09-24 a failed leave save was dropped with the session.
 	function controller:onPlayerRemoving(player: Player)
-		local session = sessions[player.UserId]
+		local userId = player.UserId
+		local session = sessions[userId]
 		if not session then
 			return
 		end
-		sessions[player.UserId] = nil
-		task.spawn(flush, session)
+		sessions[userId] = nil
+		if not session.loaded then
+			return
+		end
+		session.leftAt = os.clock()
+		departed[userId] = session
+		capDeparted()
+		task.spawn(function()
+			local persistence = Config.Persistence
+			local delays = if type(persistence) == "table" and type(persistence.LEAVE_FLUSH_RETRY_DELAYS) == "table"
+				then persistence.LEAVE_FLUSH_RETRY_DELAYS
+				else DEFAULT_LEAVE_RETRY_DELAYS
+			for attempt = 0, #delays do
+				if attempt > 0 then
+					task.wait(delays[attempt])
+				end
+				if departed[userId] ~= session then
+					return -- rejoined, or written by the periodic / shutdown flush
+				end
+				if flush(session) then
+					forgetDeparted(userId, session)
+					return
+				end
+			end
+			log:warn("Venue quest progress still unsaved after leave retries; kept for the next flush", {
+				userId = userId,
+			})
+		end)
+	end
+
+	--- BindToClose flush phase (Main launches it next to the other repo flushes): writes every
+	--- dirty session and every departed one in parallel, waits out in-flight saves, retries
+	--- failures until `budgetSec` runs out. Returns how many are still unsaved.
+	function controller:flushAll(budgetSec: number?): number
+		local deadline = os.clock() + (budgetSec or 20)
+		local work: { { userId: number, session: Session } } = {}
+		for userId, session in pairs(sessions) do
+			if session.loaded and (session.dirty or session.saving) then
+				table.insert(work, { userId = userId, session = session })
+			end
+		end
+		for userId, session in pairs(departed) do
+			table.insert(work, { userId = userId, session = session })
+		end
+		local remaining = #work
+		local unsaved = 0
+		for _, item in ipairs(work) do
+			task.spawn(function()
+				local ok, done = pcall(flushUntil, item.session, deadline)
+				if ok and done then
+					forgetDeparted(item.userId, item.session)
+				else
+					unsaved += 1
+				end
+				remaining -= 1
+			end)
+		end
+		while remaining > 0 and os.clock() < deadline + 1 do
+			task.wait(0.1)
+		end
+		if unsaved > 0 or remaining > 0 then
+			log:warn("Venue quest progress flush incomplete", { unsaved = unsaved, pending = remaining })
+		end
+		return unsaved + remaining
 	end
 
 	function controller:onStart()
@@ -470,6 +656,10 @@ local function createEventBoardController(deps: {
 			end,
 		})
 		provider:start()
+		-- Sessions created before a ProfileLoader was attached (none, when Main wired it).
+		for _, session in pairs(sessions) do
+			startLoad(session)
+		end
 		task.spawn(function()
 			local sinceFlush = 0
 			while not destroyed do
@@ -493,6 +683,13 @@ local function createEventBoardController(deps: {
 					for _, session in pairs(sessions) do
 						task.spawn(flush, session)
 					end
+					for userId, session in pairs(departed) do
+						task.spawn(function()
+							if flush(session) then
+								forgetDeparted(userId, session)
+							end
+						end)
+					end
 				end
 			end
 		end)
@@ -507,7 +704,12 @@ local function createEventBoardController(deps: {
 			connection:Disconnect()
 		end
 		table.clear(connections)
+		-- Last chance only: BindToClose already ran flushAll inside its flush phase, so these are
+		-- normally clean no-ops (this runs after the 25 s shutdown wait).
 		for _, session in pairs(sessions) do
+			flush(session)
+		end
+		for _, session in pairs(departed) do
 			flush(session)
 		end
 		limiter:destroy()

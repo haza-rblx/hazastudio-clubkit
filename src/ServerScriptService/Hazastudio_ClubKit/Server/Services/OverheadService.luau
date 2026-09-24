@@ -1,5 +1,5 @@
 --!strict
--- Server/Services/OverheadService.lua
+-- Server/Services/OverheadService.luau
 -- Business logic: fetch Group rank + DataStore, merge, build payload.
 -- Zero direct DataStore access; only via repo.
 -- Zero UI logic.
@@ -19,6 +19,7 @@ local Cache = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Cache)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local HttpApiCounter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.HttpApiCounter)
 local HttpApi = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.HttpApi)
+local HttpRequest = require(script.Parent.Parent.Net.HttpRequest)
 type Result<T> = Types.Result<T>
 type CommunityData = Types.CommunityData
 type CommunityLookupResult = Types.CommunityLookupResult
@@ -70,7 +71,7 @@ local function fetchRankFromWorker(userId: number): number?
 
 	local url = baseUrl .. "/game/" .. gameKey .. "/groups/" .. tostring(userId) .. "?secret=" .. secret
 	local ok, result = pcall(function()
-		return HttpService:RequestAsync({
+		return HttpRequest.requestAsync("gamedata:groups", {
 			Url = url,
 			Method = "GET",
 			Headers = { ["Accept"] = "application/json" },
@@ -576,6 +577,16 @@ local function createOverheadService(deps: {
 			end
 			if normalizedRank then
 				Cache.set(cacheKey, normalizedRank, Config.Leaderboards.WORKSPACE_CACHE_TTL)
+			elseif
+				okStats
+				and statsTotal == 0
+				and type(donationService.isConfirmedNonDonor) == "function"
+				and donationService:isConfirmedNonDonor(userId)
+			then
+				-- Confirmed non-donor: remember "no rank" as long as the zero total is honoured
+				-- (Config.Donation.DONOR_ZERO_CACHE_TTL). With the 5 s TTL every ~30 s rank pass
+				-- re-asked; DonationService clears this key when a donation names the player.
+				Cache.set(cacheKey, false, Config.Donation.DONOR_ZERO_CACHE_TTL or 300)
 			else
 				Cache.set(cacheKey, false, NEGATIVE_RANK_CACHE_TTL)
 			end

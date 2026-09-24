@@ -22,6 +22,11 @@ type StoredGiftPending = {
 	storedAt: number,
 }
 
+-- Tombstone written by consume(): { state = "consumed", toUserId = 0, consumedToUserId,
+-- storedAt, consumedAt }. Additive shape on the same key; toUserId = 0 makes older kits (which
+-- only check toUserId > 0) read it as "no pending gift" too. The next store() overwrites it.
+local CONSUMED_STATE = "consumed"
+
 local function createRepository(deps: { logger: any? }?): GiftPendingRepository
 	local log = if deps and deps.logger then deps.logger else Logger.new("GiftPendingRepository")
 	local store = DataStoreService:GetDataStore(Config.Shop.GIFT_PENDING_DATASTORE_KEY)
@@ -38,6 +43,10 @@ local function createRepository(deps: { logger: any? }?): GiftPendingRepository
 
 	local function parseEntry(old: any): StoredGiftPending?
 		if type(old) ~= "table" then
+			return nil
+		end
+		-- A consumed intent stays behind as a tombstone (see consume); it is never a live gift.
+		if old.state == CONSUMED_STATE then
 			return nil
 		end
 		local entry: StoredGiftPending = {
@@ -102,33 +111,42 @@ local function createRepository(deps: { logger: any? }?): GiftPendingRepository
 		if fromUserId <= 0 then
 			return Result.Ok(nil)
 		end
-		-- Atomic consume via a single UpdateAsync. The callback reads the
-		-- current entry, captures toUserId, and returns nil to delete the key —
-		-- all within one DataStore operation. This closes the TOCTOU race where
-		-- two concurrent consume calls (e.g. ProcessReceipt retries) both
-		-- GetAsync'd a valid entry, both saw it as valid, and both returned
-		-- toUserId (double gift delivery).
+		-- Atomic consume via a single UpdateAsync: the transform reads the
+		-- current entry, captures toUserId and replaces the entry with a
+		-- tombstone that parseEntry treats as absent — all in one DataStore
+		-- operation. This closes the TOCTOU race where two concurrent consume
+		-- calls (e.g. ProcessReceipt retries) both saw a valid entry and both
+		-- returned toUserId (double gift delivery): the second one now reads
+		-- the tombstone and reports no-consume.
 		--
-		-- Correctness under UpdateAsync retries: the transform callback may run
-		-- more than once on contention. We capture toUserId on EVERY invocation
-		-- (set when old is a valid entry, clear when old is nil). The LAST
-		-- invocation is the one whose return value commits, so the final value
-		-- of consumedToUserId reflects whether THIS call actually performed the
-		-- delete. If another server deleted the key between our retries, our
-		-- last invocation sees old=nil and we correctly report no-consume.
+		-- Returning nil from an UpdateAsync transform CANCELS the write (it
+		-- does not delete the key). Until 2026-09-24 this function returned nil
+		-- here, so the entry was never removed and a re-delivered receipt could
+		-- re-grant within the persist timeout. RemoveAsync is not an option:
+		-- it cannot read-and-clear atomically.
+		--
+		-- Correctness under UpdateAsync retries: the transform may run more
+		-- than once on contention. consumedToUserId is set on EVERY invocation,
+		-- and only the LAST invocation's return value commits, so it reflects
+		-- whether THIS call wrote the tombstone. No live entry → return nil
+		-- (cancel; nothing to write).
 		local consumedToUserId: number? = nil
 		local updateResult = budgetGate:executeAsync(Enum.DataStoreRequestType.UpdateAsync, function()
 			return Result.withRetry(function()
 				store:UpdateAsync(keyFor(fromUserId), function(old)
 					local entry = parseEntry(old)
-					if entry then
-						consumedToUserId = entry.toUserId
-					else
+					if not entry then
 						consumedToUserId = nil
+						return nil
 					end
-					-- Always delete (consume) the entry on every invocation so
-					-- the key is cleared regardless of callback retries.
-					return nil
+					consumedToUserId = entry.toUserId
+					return {
+						state = CONSUMED_STATE,
+						toUserId = 0,
+						consumedToUserId = entry.toUserId,
+						storedAt = entry.storedAt,
+						consumedAt = os.time(),
+					}
 				end)
 				return nil
 			end, Config.DataStore.RETRY_ATTEMPTS)

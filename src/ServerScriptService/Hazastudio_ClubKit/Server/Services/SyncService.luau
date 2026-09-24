@@ -502,10 +502,13 @@ local function create(deps: {
 		return selected
 	end
 
+	-- One server-wide counter (not per user) so a generation is never reused after the entry is
+	-- dropped on leave: an in-flight prewarm from a previous visit can never match a rejoin's.
+	local lastPrewarmGeneration = 0
 	local function bumpPrewarmGeneration(userId: number): number
-		local nextGen = (prewarmGeneration[userId] or 0) + 1
-		prewarmGeneration[userId] = nextGen
-		return nextGen
+		lastPrewarmGeneration += 1
+		prewarmGeneration[userId] = lastPrewarmGeneration
+		return lastPrewarmGeneration
 	end
 
 	local function acquirePrewarmSlot(userId: number, generation: number): boolean
@@ -1409,7 +1412,9 @@ local self = {} :: any
 		originalWalkSpeeds[player.UserId] = nil
 		pendingRefreshRestore[player.UserId] = nil
 		prewarmSets[player.UserId] = nil
-		bumpPrewarmGeneration(player.UserId)
+		-- nil (not a bump) cancels any in-flight prewarm (generation mismatch) and frees the
+		-- per-userId entry (production hardening P1, H5).
+		prewarmGeneration[player.UserId] = nil
 
 		if characterConnections[player.UserId] then
 			characterConnections[player.UserId]:Disconnect()

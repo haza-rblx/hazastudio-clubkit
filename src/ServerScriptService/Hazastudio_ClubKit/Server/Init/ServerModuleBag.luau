@@ -96,6 +96,7 @@ return {
 
 	-- Shared helpers used by Main wiring
 	HttpApiCounter = require(Kit.Shared.Utils.HttpApiCounter),
+	BudgetMeter = require(Kit.Shared.Utils.BudgetMeter),
 	Result = require(Kit.Shared.Utils.Result),
 	Validator = require(Kit.Shared.Utils.Validator),
 	RateLimiter = require(Kit.Shared.Utils.RateLimiter),

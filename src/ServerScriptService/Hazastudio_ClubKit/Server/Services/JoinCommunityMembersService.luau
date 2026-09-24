@@ -28,6 +28,7 @@ local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Con
 local KitProduct = require(ReplicatedStorage.Hazastudio_ClubKit.KitProduct)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local RateLimiter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.RateLimiter)
+local HttpRequest = require(script.Parent.Parent.Net.HttpRequest)
 local Secrets = require(ServerScriptService.Hazastudio_ClubKitSecrets.Secrets)
 
 export type MemberSample = {
@@ -622,7 +623,7 @@ local function createJoinCommunityMembersService(deps: {
 		end
 
 		local okHttp, responseOrErr = pcall(function()
-			return HttpService:RequestAsync({
+			return HttpRequest.requestAsync("gamedata:community", {
 				Url = url,
 				Method = "GET",
 				Headers = { Accept = "application/json" },
@@ -764,7 +765,7 @@ local function createJoinCommunityMembersService(deps: {
 			return nil, nil, nil
 		end
 		local okHttp, bodyOrErr = pcall(function()
-			return HttpService:GetAsync(url)
+			return HttpRequest.getAsync("proxy:member_info", url)
 		end)
 		if not okHttp then
 			local errStr = tostring(bodyOrErr)
@@ -813,7 +814,7 @@ local function createJoinCommunityMembersService(deps: {
 	-- GET JSON via RequestAsync. User-Agent is locked by Roblox HttpService (cannot set).
 	local function httpGetJson(url: string): (boolean, number?, string, any?)
 		local okHttp, responseOrErr = pcall(function()
-			return HttpService:RequestAsync({
+			return HttpRequest.requestAsync("proxy:groups_json", {
 				Url = url,
 				Method = "GET",
 				Headers = {

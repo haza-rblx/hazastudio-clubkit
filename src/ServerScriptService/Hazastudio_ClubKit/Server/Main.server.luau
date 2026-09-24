@@ -660,6 +660,9 @@ if clubKitOwnedSyncDance then
 		return ServerMods.Result.Ok(true)
 	end)
 end
+-- Venue quest progress loads through the shared loader too (kind "venue_quest", deferred like the
+-- other secondary kinds; budget refusals are requeued by the loader). Production hardening P1.
+eventBoardController:attachProfileLoader(sharedProfileLoader)
 -- Overhead join recovery: re-enqueue through ProfileLoader only (no parallel
 -- repo:loadStrict). ProfileLoader already retries transient errors with delays
 -- >= NEGATIVE_CACHE_TTL; this path covers a final deferred requeue after those
@@ -942,6 +945,20 @@ if backgroundJobScheduler then
 			intervalMin = 60,
 			intervalMax = 60,
 			enabled = Config.HttpApi.COUNTERS_ENABLED,
+		})
+	end
+	-- Budget telemetry (production hardening P1 / F): one line per window with DataStore requests
+	-- by type, HTTP by endpoint class, MessagingService publishes and budget events.
+	-- TODO(P3): also ship the rolled window through BackendClient (ADR 0007 phase B).
+	if Config.BudgetMeter and Config.BudgetMeter.LOG_ENABLED ~= false then
+		local budgetInterval = tonumber(Config.BudgetMeter.LOG_INTERVAL_SEC) or 60
+		backgroundJobScheduler:register({
+			name = "budget_meter_summary",
+			callback = function()
+				log:info(ServerMods.BudgetMeter.formatSummary(ServerMods.BudgetMeter.rollWindow()))
+			end,
+			intervalMin = budgetInterval,
+			intervalMax = budgetInterval,
 		})
 	end
 end
@@ -1626,6 +1643,13 @@ game:BindToClose(function()
 		launchRepo(function()
 			remaining += PersistenceFabricHooks.flushAll()
 		end)
+		-- Venue quest progress (ADR 0015) belongs in this flush phase: its onDestroy flush only
+		-- runs after the 25 s wait below, too late for a full server (production hardening P1).
+		if eventBoardController and type(eventBoardController.flushAll) == "function" then
+			launchRepo(function()
+				remaining += eventBoardController:flushAll(22)
+			end)
+		end
 		if syncFavoritesRepo then
 			launchRepo(function()
 				remaining += syncFavoritesRepo:flushAll()
