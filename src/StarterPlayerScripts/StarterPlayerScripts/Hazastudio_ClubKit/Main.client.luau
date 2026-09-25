@@ -1821,6 +1821,12 @@ if clubKitOwnedSyncDance then
 		emotePanel:bindSpeedChanged(function(speed)
 			syncDanceController:onSpeedChanged(speed)
 		end)
+		-- Auto Dance lives in its own controller; the v3 panel toggle rides the same state.
+		emotePanel:bindAutoDanceToggled(function()
+			local nextOn = autoDanceController:toggle()
+			emotePanel:setAutoDanceState(nextOn)
+		end)
+		emotePanel:setAutoDanceState(autoDanceController:isEnabled())
 		emotePanel:setEmotes(
 			AnimationLoader.getAnimationsByCategory("Dance"),
 			AnimationLoader.getAnimationsByCategory("Pose")

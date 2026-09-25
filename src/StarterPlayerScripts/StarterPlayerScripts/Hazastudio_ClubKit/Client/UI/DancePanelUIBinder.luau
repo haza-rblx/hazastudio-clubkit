@@ -269,6 +269,7 @@ function DancePanelUIBinder.new(deps: {
 	self._favoriteToggled = nil :: FavoriteToggledCallback?
 	self._speedChanged = nil :: SpeedChangedCallback?
 	self._unsyncRequested = nil :: UnsyncRequestedCallback?
+	self._autoDanceToggled = nil :: (() -> ())?
 	self._danceAnims = {}
 	self._poseAnims = {}
 	self._favoritedAnims = {}
@@ -915,6 +916,42 @@ function DancePanelUIBinder:_bindCustomSpeed()
 			UIMotion.spin(resetIcon, -1)
 			self:setCurrentSpeed(self.config.DEFAULT_SPEED)
 		end)
+	end
+
+	-- Auto Dance toggle (v3's `04-CustomSpeed.AutoWrapper.AutoDanceButton`). It calls the
+	-- owner-provided toggle and is repainted through setAutoDanceState.
+	local autoDanceButton = self.refs.autoDanceButton
+	if autoDanceButton then
+		self:_bindButtonMotion(autoDanceButton)
+		self._autoDanceConn = autoDanceButton.Activated:Connect(function()
+			if self._autoDanceToggled then
+				self._autoDanceToggled()
+			end
+		end)
+	end
+end
+
+-- Auto Dance callbacks + state paint (see _bindCustomSpeed for the button itself).
+function DancePanelUIBinder:bindAutoDanceToggled(callback: () -> ())
+	self._autoDanceToggled = callback
+end
+
+function DancePanelUIBinder:setAutoDanceState(isOn: boolean)
+	local button = self.refs.autoDanceButton
+	if not button then
+		return
+	end
+	local label = button:FindFirstChildWhichIsA("TextLabel", true)
+	if label and label:IsA("TextLabel") then
+		local activeText = if self.config.AUTO_DANCE_PANEL_LABEL_ACTIVE then self.config.AUTO_DANCE_PANEL_LABEL_ACTIVE else "Auto ON"
+		local idleText = if self.config.AUTO_DANCE_PANEL_LABEL then self.config.AUTO_DANCE_PANEL_LABEL else "Auto"
+		label.Text = if isOn then activeText else idleText
+	end
+	-- Selected tint: the design's `UIGradient` on the wrapper, enabled while on.
+	local wrapper = button.Parent
+	local grad = wrapper and wrapper:FindFirstChildWhichIsA("UIGradient")
+	if grad then
+		grad.Enabled = isOn == true
 	end
 end
 
@@ -1915,6 +1952,11 @@ function DancePanelUIBinder:destroy()
 		self._resetSpeedConn:Disconnect()
 		self._resetSpeedConn = nil
 	end
+	if self._autoDanceConn then
+		self._autoDanceConn:Disconnect()
+		self._autoDanceConn = nil
+	end
+	self._autoDanceToggled = nil
 	if self._wutwutPressEndConn then
 		self._wutwutPressEndConn:Disconnect()
 		self._wutwutPressEndConn = nil

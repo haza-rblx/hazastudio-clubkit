@@ -36,6 +36,7 @@ export type Refs = {
 	customSpeedWrapper: GuiObject?,
 	customSpeedField: TextBox?,
 	resetSpeedButton: GuiButton?,
+	autoDanceButton: GuiButton?,
 	syncOverlay: GuiButton,
 	syncLeaderLabel: TextLabel?,
 	syncTapLabel: TextLabel?,
@@ -66,6 +67,9 @@ local function normalizeVersion(config: any?): string
 	if configuredVersion == "v2" then
 		return "v2"
 	end
+	if configuredVersion == "v3" then
+		return "v3"
+	end
 	return "v1"
 end
 
@@ -92,9 +96,10 @@ end
 
 local function getActivePanelRootName(config: any?, version: string): (string, string)
 	local syncConfig = if config then config.Sync else Config.Sync
-	local useMobileLayout = syncConfig.DANCE_PANEL_USE_MOBILE_LAYOUT ~= false
+	-- The mobile wrapper exists for v2 only; v1 and v3 have one layout.
+	local useMobileLayout = version == "v2" and syncConfig.DANCE_PANEL_USE_MOBILE_LAYOUT ~= false
 
-	if version ~= "v2" or not useMobileLayout then
+	if not useMobileLayout then
 		return getPanelRootName(config, version), "desktop"
 	end
 
@@ -365,7 +370,7 @@ function DancePanelGuiRefs.resolve(playerGui: PlayerGui, config: any?): Refs
 	local danceTabButton, poseTabButton, favoritesTabButton, backgroundPill, tabButtonOrder =
 		resolveHeaderTabs(headerWrapper, layoutKind)
 
-	local mainContentWrapper = expectChild(contentRoot, "03-MainContentWrapper", "CanvasGroup") :: CanvasGroup
+	local mainContentWrapper = expectChild(contentRoot, "03-MainContentWrapper", "GuiObject") :: GuiObject
 	local searchBox = expectChild(mainContentWrapper, "SearchDanceorPose", "TextBox") :: TextBox
 	local mainContent = expectChild(mainContentWrapper, "MainContent", "ScrollingFrame") :: ScrollingFrame
 
@@ -397,17 +402,30 @@ function DancePanelGuiRefs.resolve(playerGui: PlayerGui, config: any?): Refs
 	local customSpeedWrapper = contentRoot:FindFirstChild("04-CustomSpeed")
 	local customSpeedField = nil :: TextBox?
 	local resetSpeedButton = nil :: GuiButton?
+	local autoDanceButton = nil :: GuiButton?
 	if customSpeedWrapper then
 		assert(customSpeedWrapper:IsA("GuiObject"), string.format("Expected %s to be GuiObject", customSpeedWrapper:GetFullName()))
 
-		local speedField = customSpeedWrapper:FindFirstChild("CustomSpeedField")
+		-- v3: the field and reset button live one level deeper, and AutoWrapper adds the
+		-- Auto Dance toggle next to them; v2 carries them directly on the wrapper.
+		local inner = customSpeedWrapper:FindFirstChild("04-CustomSpeed")
+		local speedHost = if inner and inner:IsA("GuiObject") then inner else customSpeedWrapper
+		local speedField = speedHost:FindFirstChild("CustomSpeedField")
 		if speedField and speedField:IsA("TextBox") then
 			customSpeedField = speedField
 		end
 
-		local resetButton = customSpeedWrapper:FindFirstChild("ResetSpeedButton")
+		local resetButton = speedHost:FindFirstChild("ResetSpeedButton")
 		if resetButton and resetButton:IsA("GuiButton") then
 			resetSpeedButton = resetButton
+		end
+
+		local autoWrapper = customSpeedWrapper:FindFirstChild("AutoWrapper")
+		if autoWrapper and autoWrapper:IsA("GuiObject") then
+			local candidate = autoWrapper:FindFirstChild("AutoDanceButton")
+			if candidate and candidate:IsA("GuiButton") then
+				autoDanceButton = candidate
+			end
 		end
 	end
 
@@ -446,6 +464,7 @@ function DancePanelGuiRefs.resolve(playerGui: PlayerGui, config: any?): Refs
 		customSpeedWrapper = customSpeedWrapper :: GuiObject?,
 		customSpeedField = customSpeedField,
 		resetSpeedButton = resetSpeedButton,
+		autoDanceButton = autoDanceButton,
 		syncOverlay = syncOverlay,
 		syncLeaderLabel = syncLeaderLabel :: TextLabel?,
 		syncTapLabel = syncTapLabel :: TextLabel?,

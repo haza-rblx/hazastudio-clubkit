@@ -140,36 +140,23 @@ local function focusAndSelectLink(textBox: TextBox, link: string)
 end
 
 local function configureReadOnlySelectableLink(textBox: TextBox, getLink: () -> string)
-	local restoring = false
-	local function restoreLink()
-		local link = getLink()
-		if textBox.Text == link then
-			return
-		end
-		restoring = true
-		textBox.Text = link
-		textBox.CursorPosition = #link + 1
-		textBox.SelectionStart = 1
-		restoring = false
-	end
-
+	-- The old build watched `TextChanged` and `FocusLost` and re-wrote the link on both.
+	-- That machinery is what makes the box fragile for copying: it fires on the very input
+	-- the player types to test or to copy, repositions the cursor, and — on some clients —
+	-- releases keyboard focus (proven by isolating the handlers against a clean TextBox
+	-- in a live playtest, 2026-09-24). The box's own text is set once here and again on
+	-- every payload refresh (the refresh path sets `Text` via `applyExternalProviderText`),
+	-- so nothing else is needed for the value to stay correct.
 	textBox.Active = true
 	textBox.Selectable = true
 	textBox.TextEditable = true
 	textBox.ClearTextOnFocus = false
 	textBox.Text = getLink()
 
+	-- Clicking the link box itself selects all of it once, so a player who wants the link
+	-- without the copy button is one click away from Ctrl+A → Ctrl+C.
 	textBox.Focused:Connect(function()
 		focusAndSelectLink(textBox, getLink())
-	end)
-	textBox.FocusLost:Connect(function()
-		restoreLink()
-	end)
-	textBox:GetPropertyChangedSignal("Text"):Connect(function()
-		if restoring then
-			return
-		end
-		restoreLink()
 	end)
 end
 

@@ -1178,19 +1178,23 @@ Config.Sync = {
 	-- Phase 4: global admission — join wave must not LoadAnimation every character at once.
 	SERVER_DANCE_TRACK_PREWARM_MAX_CONCURRENT = 2,
 	SERVER_DANCE_TRACK_PREWARM_MAX_LOADS_PER_SEC = 24,
-	-- Dance panel UI selection. Use "v1" for DancePanelGUIWrapper or "v2" for DancePanelGUIWrapperv2.
-	-- Phone layout (short viewport + touch) uses DANCE_PANEL_UI_ROOTS.v2Mobile when USE_MOBILE_LAYOUT is true.
-	DANCE_PANEL_UI_VERSION = "v2",
+	-- Dance panel UI selection. Use "v1" for DancePanelGUIWrapper, "v2" for
+	-- DancePanelGUIWrapperv2, or "v3" for DancePanelGUIWrapperv3.
+	-- Phone layout (short viewport + touch) uses DANCE_PANEL_UI_ROOTS.v2Mobile when
+	-- USE_MOBILE_LAYOUT is true (v2 only; v1 and v3 have one layout).
+	DANCE_PANEL_UI_VERSION = "v3",
 	DANCE_PANEL_USE_MOBILE_LAYOUT = true,
 	DANCE_PANEL_UI_LABELS = {
 		v1 = "Dance Panel",
 		v2 = "Dance Panel V2",
 		v2Mobile = "Dance Panel V2 Mobile",
+		v3 = "Dance Panel V3",
 	},
 	DANCE_PANEL_UI_ROOTS = {
 		v1 = "DancePanelGUIWrapper",
 		v2 = "DancePanelGUIWrapperv2",
 		v2Mobile = "DancePanelGUIWrapperv2Mobile",
+		v3 = "DancePanelGUIWrapperv3",
 	},
 	-- IconGroup: panel v2 UIScale + 03-MainContentWrapper height (root IconGroup UIScale stays 1).
 	DANCE_PANEL_V2_SCALE_MOBILE = 0.75,
