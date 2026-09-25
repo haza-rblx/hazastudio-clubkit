@@ -398,6 +398,7 @@ function OverheadV6Core.portCustomisations(gui: BillboardGui, sources: { [string
 			hit, fromName = firstNamed(PORT_BADGE_FROM_SUPREME)
 			wanted = PORT_BADGE_FROM_SUPREME
 		end
+		local target = gui:FindFirstChild(badgeName, true)
 		if hit and target then
 			-- The V4 badge is a Frame (art on the child `Badge` ImageLabel); the art source is
 			-- whichever ImageLabel actually carries an Image.
@@ -407,8 +408,7 @@ function OverheadV6Core.portCustomisations(gui: BillboardGui, sources: { [string
 			else
 				art = (hit :: Instance):FindFirstChild("Badge") or (hit :: Instance):FindFirstChildWhichIsA("ImageLabel", true)
 			end
-			local target = gui:FindFirstChild(badgeName, true)
-			if art and art:IsA("ImageLabel") and target and target:IsA("ImageLabel") then
+			if art and art:IsA("ImageLabel") and target:IsA("ImageLabel") then
 				(target :: ImageLabel).Image = (art :: ImageLabel).Image
 				;(target :: ImageLabel).ScaleType = (art :: ImageLabel).ScaleType
 				table.insert(report.ported, ("badge %s â† %s"):format(badgeName, fromName))
@@ -488,7 +488,8 @@ function OverheadV6Core.portCustomisations(gui: BillboardGui, sources: { [string
 			local bgGrad = (rankHit :: Instance):FindFirstChildWhichIsA("UIGradient", true)
 			if bgGrad and bgGrad.Enabled then
 				local kp = bgGrad.Color.Keypoints[1]
-				(rankTarget :: Frame).BackgroundColor3 = kp.Value
+				local rankFrame = rankTarget :: Frame
+				rankFrame.BackgroundColor3 = kp.Value
 				table.insert(report.ported, "rank row background colour")
 			end
 		end

@@ -467,17 +467,18 @@ local function createJoinGreetingService(deps: {
 		task.spawn(function()
 			while true do
 				local item, wakeAt = GreetingPacer.take(pacerState, os.clock(), cfg)
-				if wakeAt == nil then
-					break
-				end
+				-- take returns (item, nil) for the FINAL queued greeting (queue now empty) —
+				-- it must still be broadcast before breaking, or the last greeting in any
+				-- burst is silently dropped (found by the session audit).
 				if item ~= nil then
 					sendGreetingPayload(item.player, item.payload)
 				end
-				if wakeAt ~= nil then
-					local waitSec = wakeAt - os.clock()
-					if waitSec > 0 then
-						task.wait(waitSec)
-					end
+				if wakeAt == nil then
+					break
+				end
+				local waitSec = wakeAt - os.clock()
+				if waitSec > 0 then
+					task.wait(waitSec)
 				end
 			end
 		end)

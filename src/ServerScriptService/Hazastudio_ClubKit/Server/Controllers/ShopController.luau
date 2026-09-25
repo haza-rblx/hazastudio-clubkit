@@ -298,7 +298,6 @@ local function createShopController(
 		end
 
 		local remaining = #checks
-		local done = Instance.new("BindableEvent")
 		for _, check in ipairs(checks) do
 			task.spawn(function()
 				local ok, owns = pcall(function()
@@ -323,17 +322,20 @@ local function createShopController(
 					})
 				end
 				remaining -= 1
-				if remaining == 0 then
-					done:Fire()
-				end
 			end)
 		end
-		local waited = 0
-		while remaining > 0 and waited < checkTimeout do
-			done.Event:Wait()
-			waited += 1
+		-- Wall-clock bound (audit fix: the old BindableEvent loop counted Fires, not seconds —
+		-- a hung UserOwnsGamePassAsync would have blocked the join sync unbounded).
+		local deadline = os.clock() + checkTimeout
+		while remaining > 0 and os.clock() < deadline do
+			task.wait(0.1)
 		end
-		done:Destroy()
+		if remaining > 0 then
+			log:warn("Game Pass ownership checks timed out", {
+				player = player.Name,
+				outstanding = remaining,
+			})
+		end
 		if grantedAny then
 			overheadController:refreshPlayer(player)
 			log:info("Game Pass membership synced", { userId = player.UserId })
@@ -1007,6 +1009,14 @@ local function createShopController(
 			end
 			local result = shopService:grantMembershipIfHigher(player.UserId, tier)
 			if result.ok then
+				-- H18: mark the visit cache so the next join sync does not re-ask Marketplace
+				-- for a pass we just watched them buy (the Config contract's stated behaviour).
+				local owned = gamePassOwnedCache[player.UserId]
+				if owned == nil then
+					owned = {}
+					gamePassOwnedCache[player.UserId] = owned
+				end
+				owned[gamePassId] = true
 				notifyClient(player.UserId, tier, false, nil)
 				overheadController:refreshPlayer(player)
 				log:info("Game Pass buy processed", { userId = player.UserId, tier = tier, gamePassId = gamePassId })
