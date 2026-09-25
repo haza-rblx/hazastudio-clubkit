@@ -1013,7 +1013,11 @@ local function createDisabledUI()
 end
 
 return function(_deps: {}?)
-	local gui = MenuGuiRefs.waitForPlayerGui(10)
+	-- The 10 s wait lost a race with the loading screen: `07-MenuGUI` is known to land
+	-- ~30 s in on a cold boot (event-board fix, 2026-09-24), and a lost race here silently
+	-- disabled the whole menu — including the FreeTitleEvent card's wiring. Wait without a
+	-- deadline instead: the GUI is StarterGui-cloned place data, so it always arrives.
+	local gui = MenuGuiRefs.waitForPlayerGui()
 	if not gui then
 		warn("[MenuShellUI] GUI '07-MenuGUI' not found in PlayerGui")
 		return createDisabledUI()

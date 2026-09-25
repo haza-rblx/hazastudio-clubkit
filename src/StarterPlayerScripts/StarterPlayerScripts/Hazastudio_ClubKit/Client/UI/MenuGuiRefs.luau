@@ -312,7 +312,9 @@ end
 
 function MenuGuiRefsModule.waitForPlayerGui(timeout: number?): ScreenGui?
 	local playerGui = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
-	local gui = playerGui:WaitForChild(Config.Settings.GUI_NAME, timeout or 10)
+	-- nil timeout = wait without a deadline (the GUI is StarterGui place data — it always
+	-- arrives, just possibly ~30 s behind the loading screen on a cold boot).
+	local gui = if timeout ~= nil then playerGui:WaitForChild(Config.Settings.GUI_NAME, timeout) else playerGui:WaitForChild(Config.Settings.GUI_NAME)
 	if gui and gui:IsA("ScreenGui") then
 		return gui
 	end
