@@ -312,9 +312,11 @@ end
 
 function MenuGuiRefsModule.waitForPlayerGui(timeout: number?): ScreenGui?
 	local playerGui = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
-	-- nil timeout = wait without a deadline (the GUI is StarterGui place data — it always
-	-- arrives, just possibly ~30 s behind the loading screen on a cold boot).
-	local gui = if timeout ~= nil then playerGui:WaitForChild(Config.Settings.GUI_NAME, timeout) else playerGui:WaitForChild(Config.Settings.GUI_NAME)
+	-- nil timeout = wait up to the known slow-boot window (~30 s behind the loading screen)
+	-- and give the caller a nil it can warn about and re-poll. WaitForChild's own warn
+	-- fires inside this window too, so the absence is never fully silent.
+	local waitSeconds = timeout or 35
+	local gui = playerGui:WaitForChild(Config.Settings.GUI_NAME, waitSeconds)
 	if gui and gui:IsA("ScreenGui") then
 		return gui
 	end

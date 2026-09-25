@@ -1015,12 +1015,19 @@ end
 return function(_deps: {}?)
 	-- The 10 s wait lost a race with the loading screen: `07-MenuGUI` is known to land
 	-- ~30 s in on a cold boot (event-board fix, 2026-09-24), and a lost race here silently
-	-- disabled the whole menu — including the FreeTitleEvent card's wiring. Wait without a
-	-- deadline instead: the GUI is StarterGui-cloned place data, so it always arrives.
+	-- disabled the whole menu — including the FreeTitleEvent card's wiring. The GUI is
+	-- StarterGui-cloned place data, so it always arrives — but "always" must stay
+	-- observable: a buyer who deleted or renamed the GUI would otherwise hang this task
+	-- forever with no trace. So: wait past the boot window, then warn once if it is still
+	-- absent, then keep waiting. Slow boot = a late but working menu; missing GUI = a
+	-- diagnosed one.
 	local gui = MenuGuiRefs.waitForPlayerGui()
 	if not gui then
-		warn("[MenuShellUI] GUI '07-MenuGUI' not found in PlayerGui")
-		return createDisabledUI()
+		warn("[MenuShellUI] 07-MenuGUI has not arrived after the boot window — still waiting (deleting or renaming the GUI disables the menu entirely)")
+	end
+	while not gui do
+		task.wait(1)
+		gui = MenuGuiRefs.waitForPlayerGui()
 	end
 
 	local ok, shell = pcall(function()
