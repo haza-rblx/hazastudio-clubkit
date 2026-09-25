@@ -516,6 +516,9 @@ function DonationSystemUI.new(refs: Refs): DonationSystemUI
 	self._copyIdleText = nil :: string?
 	self._copyArmed = false
 	self._copyGeneration = 0
+	-- Sticky-selection window: true while the copy hint is up because the copy button was
+	-- pressed; a lost selection is then re-selected automatically (see _bindCopyFeedback).
+	self._copyKeepSelection = false
 
 	refs.root.Enabled = false
 	refs.mainWrapper.Visible = false
@@ -972,11 +975,44 @@ function DonationSystemUI:_bindCopyFeedback()
 			self:_armCopy()
 		end
 	end))
-	-- The key press still reaches InputBegan while the TextBox has focus (gameProcessed = true);
-	-- the TextBox has already copied its selection by then.
-	table.insert(connections, UserInputService.InputBegan:Connect(function(input: InputObject)
+	-- Sticky selection (production hardening of the copy flow): the player presses the copy
+	-- button, reads "press Ctrl+C", presses Ctrl — and the selection is gone. Something can
+	-- take the TextBox's keyboard focus straight back with no input event at all (a Studio
+	-- plugin does it here; a busy server could in-game), and losing focus clears the
+	-- selection. While the copy hint is armed, a lost selection is re-selected automatically
+	-- (bounded, and stopped by any real mouse press — the player clicking elsewhere means
+	-- they moved on).
+	self._copyKeepSelection = false
+	table.insert(connections, linkBox:GetPropertyChangedSignal("SelectionStart"):Connect(function()
+		if
+			self._copyKeepSelection
+			and self._copyArmed
+			and linkBox.SelectionStart < 0
+			and not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
+		then
+			task.defer(function()
+				if self._copyKeepSelection and self._copyArmed and linkBox.SelectionStart < 0 then
+					focusAndSelectLink(linkBox, getExternalProviderLink())
+				end
+			end)
+		end
+	end))
+	table.insert(connections, linkBox.Focused:Connect(function()
+		if not self._copyArmed then
+			self:_armCopy()
+		end
+	end))
+	-- A real mouse press anywhere ends the sticky-selection window.
+	table.insert(connections, UserInputService.InputBegan:Connect(function(input: InputObject, gameProcessed: boolean)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			self._copyKeepSelection = false
+		end
+
+		-- The key press still reaches InputBegan while the TextBox has focus
+		-- (gameProcessed = true); the TextBox has already copied its selection by then.
 		if self._copyArmed and input.KeyCode == Enum.KeyCode.C and copyModifierDown() and linkBox:IsFocused() then
 			self:_markCopied()
+			self._copyKeepSelection = false
 		end
 	end))
 	-- Leaving without copying puts the design's label back.
@@ -990,8 +1026,22 @@ end
 function DonationSystemUI:_handleCopySaweriaLink()
 	UIMotion.spin(iconOf(self._refs.copyLinkButton))
 	if self._refs.saweriaLink then
-		focusAndSelectLink(self._refs.saweriaLink, getExternalProviderLink())
-		self:_armCopy()
+		-- Deferred past the click (a CaptureFocus inside the button's own Activated handler
+		-- races the engine's focus handling). The sticky-selection watcher in
+		-- _bindCopyFeedback keeps the selection alive afterwards: something (a Studio
+		-- plugin; a busy client in-game) can take keyboard focus back with no input event
+		-- at all, and losing focus clears the selection — so while the hint is up, a lost
+		-- selection is re-selected automatically until the player clicks elsewhere or
+		-- copies.
+		task.defer(function()
+			local linkBox = self._refs.saweriaLink
+			if not linkBox then
+				return
+			end
+			focusAndSelectLink(linkBox, getExternalProviderLink())
+			self:_armCopy()
+			self._copyKeepSelection = true
+		end)
 	end
 end
 
