@@ -1325,6 +1325,25 @@ local function createOverheadService(deps: {
 		end
 	end
 
+	-- Memory-gate surface (plan H5): the count of every per-user table this service keeps.
+	-- Read-only; the gate harness diffs these around 200 join/leave cycles and requires
+	-- baseline ±1. Not a diagnostics API for gameplay code.
+	function service:gateCounts(): { [string]: number }
+		local function count(t): number
+			local n = 0
+			for _ in pairs(t) do
+				n += 1
+			end
+			return n
+		end
+		return {
+			cashDonatedCache = count(cashDonatedCache),
+			rankResolutionScheduled = count(rankResolutionScheduled),
+			inFlight = count(inFlight),
+			groupSessionUserIds = count(groupSessionUserIds),
+		}
+	end
+
 	return service
 end
 return createOverheadService

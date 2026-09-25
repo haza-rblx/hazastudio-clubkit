@@ -313,6 +313,25 @@ local function createProgressLeaderboardRepository(deps: { logger: Types.ILogger
 		return Result.Ok(entries)
 	end
 
+	-- Memory-gate surface (plan H5): per-user table counts. The gate harness diffs these
+	-- around join/leave cycles; `forget` is the documented leave path.
+	function repo:gateCounts(): { [string]: number }
+		local function count(t): number
+			local n = 0
+			for _ in pairs(t) do
+				n += 1
+			end
+			return n
+		end
+		return {
+			lastWrittenLevel = count(lastWritten.level),
+			lastWrittenStreak = count(lastWritten.streak),
+			lastLevelWriteAt = count(lastLevelWriteAt),
+			couplePairOf = count(couplePairOf),
+			cache = count(cache),
+		}
+	end
+
 	return repo
 end
 
