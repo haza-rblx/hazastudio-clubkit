@@ -2818,10 +2818,16 @@ function MusicPlayerController:initPanel()
 		-- Parent select only opens the horizontal setMenu — panel opens from Music Player child.
 		if type(self._topbarIcon.onOpenPlayer) == "function" then
 			self:_trackUnsubscriber(self._topbarIcon:onOpenPlayer(function()
-				self:_openPanel()
-				task.spawn(function()
-					self:_refreshStateFromServer()
-				end)
+				-- Dropdown item toggles the panel: click again while open = close.
+				-- The dropdown itself stays open (the parent icon is not deselected).
+				if self._isPanelOpen then
+					self:_closePanelOnly()
+				else
+					self:_openPanel()
+					task.spawn(function()
+						self:_refreshStateFromServer()
+					end)
+				end
 			end))
 		else
 			-- Legacy: parent select opened the panel before setMenu existed.
@@ -2929,6 +2935,18 @@ function MusicPlayerController:_closePanel()
 	end
 	if self._topbarIcon and type(self._topbarIcon.deselect) == "function" then
 		self._topbarIcon:deselect()
+	end
+end
+
+-- Close the panel WITHOUT touching the topbar icon, so the open dropdown
+-- survives (dropdown visibility is tied to the parent icon's selected state).
+function MusicPlayerController:_closePanelOnly()
+	local wasOpen = self._isPanelOpen
+	self._isPanelOpen = false
+	self._panelSessionId += 1
+	self._store:set({ isOpen = false })
+	if wasOpen then
+		self._binder:closePanel()
 	end
 end
 

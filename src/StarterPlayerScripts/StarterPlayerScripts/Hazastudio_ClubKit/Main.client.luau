@@ -1720,6 +1720,9 @@ end)
 if clubKitOwnedSyncDance then
 	trackBootTask("SyncDanceBootstrap", function()
 		local deferDanceWarmup = ClientBootConfig.DEFER_DANCE_WARMUP ~= false
+		-- Declared here so the panel's Auto Dance closure can see it; it is assigned
+		-- later in this task, inside the AutoDance branch.
+		local autoDanceController = nil
 		danceWarmupService = trackClientLifecycle(
 			"DanceWarmupService",
 			ClientMods.createDanceWarmupService.create({
@@ -1822,11 +1825,15 @@ if clubKitOwnedSyncDance then
 			syncDanceController:onSpeedChanged(speed)
 		end)
 		-- Auto Dance lives in its own controller; the v3 panel toggle rides the same state.
+		-- autoDanceController is created further down (inside the AutoDance branch), so the
+		-- closure must look it up lazily — referencing it here directly would be nil.
 		emotePanel:bindAutoDanceToggled(function()
+			if not autoDanceController then
+				return
+			end
 			local nextOn = autoDanceController:toggle()
 			emotePanel:setAutoDanceState(nextOn)
 		end)
-		emotePanel:setAutoDanceState(autoDanceController:isEnabled())
 		emotePanel:setEmotes(
 			AnimationLoader.getAnimationsByCategory("Dance"),
 			AnimationLoader.getAnimationsByCategory("Pose")
@@ -1886,7 +1893,7 @@ if clubKitOwnedSyncDance then
 			setTopbarHorizontalPadding(autoDanceIcon, 8)
 			styleTopbarPill(autoDanceIcon)
 			enlargeTopbarIcon(autoDanceIcon, 36, 10)
-			local autoDanceController = trackClientLifecycle(
+			autoDanceController = trackClientLifecycle(
 				"AutoDanceController",
 				ClientMods.createAutoDanceController({
 					syncController = syncDanceController,
@@ -1913,6 +1920,8 @@ if clubKitOwnedSyncDance then
 			autoDanceIcon.deselected:Connect(function()
 				autoDanceController:setEnabled(false)
 			end)
+			-- The panel was built before this controller existed; sync its toggle now.
+			emotePanel:setAutoDanceState(autoDanceController:isEnabled())
 		end
 	end)
 end

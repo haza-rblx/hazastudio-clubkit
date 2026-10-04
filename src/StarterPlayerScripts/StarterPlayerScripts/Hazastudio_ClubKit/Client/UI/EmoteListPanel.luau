@@ -41,15 +41,16 @@ function EmoteListPanel.new(deps: {
 	self._currentSpeed = Config.Sync.DEFAULT_SPEED
 	self._searchQuery = ""
 	self._dragConn = nil
+	self._connections = {}
 	self._lastEmoteSelectionAt = 0
 	self._lastSelectedAnimationName = nil
 	self._defaultSearchPlaceholder = self.searchBox.PlaceholderText ~= "" and self.searchBox.PlaceholderText or "Search dance or pose..."
 	self._preparingSearchPlaceholder = "Preparing dances..."
 
-	self.searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+	table.insert(self._connections, self.searchBox:GetPropertyChangedSignal("Text"):Connect(function()
 		self._searchQuery = string.lower(self.searchBox.Text)
 		self:updateDisplay()
-	end)
+	end))
 
 	local function bindCategoryButton(button: GuiButton?, category: string)
 		if not button then
@@ -58,10 +59,10 @@ function EmoteListPanel.new(deps: {
 		local control = button :: GuiButton
 		UIMotion.bindPress(control)
 		UIMotion.bindHover(control)
-		control.Activated:Connect(function()
+		table.insert(self._connections, control.Activated:Connect(function()
 			UIMotion.pop(UIMotion.scaleTargetOf(control))
 			self:setCategory(category)
-		end)
+		end))
 	end
 
 	bindCategoryButton(self.controlBtns.dance, "Dance")
@@ -103,7 +104,7 @@ function EmoteListPanel:_setupSpeedSlider()
 		end
 	end
 
-	dragButton.InputBegan:Connect(function(input)
+	table.insert(self._connections, dragButton.InputBegan:Connect(function(input)
 		if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then
 			return
 		end
@@ -113,9 +114,9 @@ function EmoteListPanel:_setupSpeedSlider()
 		self._dragConn = RunService.RenderStepped:Connect(function()
 			apply(UserInputService:GetMouseLocation().X)
 		end)
-	end)
+	end))
 
-	dragButton.InputEnded:Connect(function(input)
+	table.insert(self._connections, dragButton.InputEnded:Connect(function(input)
 		if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then
 			return
 		end
@@ -124,7 +125,7 @@ function EmoteListPanel:_setupSpeedSlider()
 		local panelSelf = self :: any
 		panelSelf._dragConn = nil
 	end
-	end)
+	end))
 
 	local ratio = (self._currentSpeed - Config.Sync.MIN_SPEED) / (Config.Sync.MAX_SPEED - Config.Sync.MIN_SPEED)
 	apply(speedBarGui.AbsolutePosition.X + speedBarGui.AbsoluteSize.X * ratio)
@@ -263,6 +264,33 @@ end
 
 function EmoteListPanel:bindSpeedChanged(callback: (number) -> ())
 	self._speedChanged = callback
+end
+
+function EmoteListPanel:destroy()
+	-- Stop the drag RenderStepped loop in case the panel is destroyed mid-drag.
+	if self._dragConn then
+		(self._dragConn :: RBXScriptConnection):Disconnect()
+		self._dragConn = nil
+	end
+	-- Disconnect all tracked connections: searchBox, category buttons, slider inputs.
+	for _, conn in ipairs(self._connections) do
+		conn:Disconnect()
+	end
+	table.clear(self._connections)
+	-- Disconnect per-row UIMotion connections.
+	for _, conn in ipairs(self._rowMotionConns) do
+		conn:Disconnect()
+	end
+	table.clear(self._rowMotionConns)
+	-- Destroy all cloned rows.
+	for _, row in ipairs(self._activeRows) do
+		row:Destroy()
+	end
+	table.clear(self._activeRows)
+	-- Clear callbacks to avoid holding references after destroy.
+	self._emoteSelected = nil
+	self._favoriteToggled = nil
+	self._speedChanged = nil
 end
 
 return EmoteListPanel

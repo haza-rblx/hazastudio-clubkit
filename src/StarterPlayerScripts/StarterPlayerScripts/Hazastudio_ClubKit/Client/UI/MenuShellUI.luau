@@ -251,6 +251,7 @@ function MenuShellUI.new(gui: ScreenGui)
 	self._resetCallback = nil
 	self._closeCallback = nil
 	self._visibilityChangedCallback = nil
+	self._backToMainMenuCallback = nil
 	self._activeModalField = nil :: string?
 	self._wrapperTween = nil
 	self._wrapperShownPosition = refs.outerWrapper.Position
@@ -299,6 +300,7 @@ function MenuShellUI.new(gui: ScreenGui)
 	self:_wireModal()
 	self:_wireProfile()
 	self:_wireFreeTitleEvent()
+	self:_wireBackButtons()
 
 	return self
 end
@@ -307,6 +309,10 @@ end
 -- it already holds that panel and the payload the panel opens with. Resolved at
 -- boot rather than lazily, because the card is meant to be on screen.
 function MenuShellUI:_wireFreeTitleEvent()
+-- Floating card replaced by topbar icon (wired in Main.client).
+	if true then
+		return
+	end
 	if Config.FeatureFlags.FreeTitleEventEnabled ~= true then
 		return
 	end
@@ -346,6 +352,16 @@ function MenuShellUI:openCustomTitlePanel(): boolean
 		canEdit = payload.canEditSpecialTitle == true,
 	} :: any)
 	return true
+end
+-- Topbar-icon click: close when open, open when closed. Returns false when the
+-- profile payload has not arrived yet (nothing to toggle against).
+function MenuShellUI:toggleCustomTitlePanel(): boolean
+	local panel = self._customTitle
+	if panel and panel.isOpen and panel:isOpen() then
+		panel:close()
+		return true
+	end
+	return self:openCustomTitlePanel()
 end
 
 -- UIMotion hands back its press/hover connections; PressFeedback used to own them and drop
@@ -758,6 +774,31 @@ function MenuShellUI:bindVisibilityChanged(callback: (boolean) -> ())
 	self._visibilityChangedCallback = callback
 end
 
+-- The tab-level Back button hands control back to the top menu (15-TopMenuGUI).
+-- The callback belongs to the shell's owner (TopMenuController): it re-opens
+-- the top menu; MenuShellUI:hide() already closes this panel.
+function MenuShellUI:bindBackToMainMenu(callback: () -> ())
+	self._backToMainMenuCallback = callback
+end
+
+-- Optional GUI (empty refs on places without the design): every lookup is
+-- guarded, an unbound button still gets the standard press/hover feel.
+function MenuShellUI:_wireBackButtons()
+	for _, button in ipairs(self._refs.backButtons or {}) do
+		disableAutoButtonColor(button)
+		self:_bindButtonMotion(button)
+		button.Activated:Connect(function()
+			if self._backToMainMenuCallback then
+				self._backToMainMenuCallback()
+			else
+				-- No top-menu owner attached: closing still leaves the menu
+				-- reachable through its own topbar icon.
+				self:hide()
+			end
+		end)
+	end
+end
+
 function MenuShellUI:_cancelMotionTweens()
 	cancelTween(self._wrapperTween)
 	self._wrapperTween = nil
@@ -976,6 +1017,7 @@ local function createDisabledUI()
 	function ui:bindReset() end
 	function ui:bindClose() end
 	function ui:bindVisibilityChanged() end
+	function ui:bindBackToMainMenu() end
 	function ui:setData() end
 	function ui:setLocalOverheadData() end
 	function ui:setProfileData() end

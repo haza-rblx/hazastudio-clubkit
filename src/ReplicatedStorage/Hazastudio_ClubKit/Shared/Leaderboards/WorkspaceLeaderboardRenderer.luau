@@ -21,6 +21,9 @@ export type BoardSpec = {
 	topCards: { string },
 	templateName: string,
 	kind: string,
+	-- Dynamic TotalDonoWrapper width: base width scale + the character count it was designed for.
+	donoBaseWidth: number?,
+	donoBaseCharCount: number?,
 }
 
 export type PosterFieldPaths = {
@@ -56,6 +59,8 @@ local BOARD_SPECS: { BoardSpec } = {
 		topCards = { "1stPlaceWrapper", "2rdPlaceWrapper", "3rdPlaceWrapper" },
 		templateName = "BasicCardTemplate",
 		kind = "playerRobux",
+		donoBaseWidth = 0.18,
+		donoBaseCharCount = 6, -- "99.999"
 	},
 	{
 		rootPart = "CommunityDonationBoard",
@@ -65,6 +70,8 @@ local BOARD_SPECS: { BoardSpec } = {
 		topCards = { "1stPlaceCommunityWrapper", "2ndPlaceCommunityWrapper", "3rdPlaceCommunityWrapper" },
 		templateName = "BasicCardTemplate",
 		kind = "community",
+		donoBaseWidth = 0.18,
+		donoBaseCharCount = 6, -- "99.999"
 	},
 	{
 		rootPart = "SaweriaDonationBoard",
@@ -74,6 +81,8 @@ local BOARD_SPECS: { BoardSpec } = {
 		topCards = { "1stPlaceCard", "2ndPlaceCard", "3rdPlaceCard" },
 		templateName = "BasicCardTemplate",
 		kind = "saweria",
+		donoBaseWidth = 0.21,
+		donoBaseCharCount = 9, -- "RP 99.999"
 	},
 	-- Level + streak boards (V3 design, 2026-09-23): same card names as the saweria board.
 	{
@@ -84,6 +93,8 @@ local BOARD_SPECS: { BoardSpec } = {
 		topCards = { "1stPlaceCard", "2ndPlaceCard", "3rdPlaceCard" },
 		templateName = "BasicCardTemplate",
 		kind = "level",
+		donoBaseWidth = 0.19,
+		donoBaseCharCount = 6, -- "Lv. 99"
 	},
 	{
 		rootPart = "StreakBoard",
@@ -93,6 +104,8 @@ local BOARD_SPECS: { BoardSpec } = {
 		topCards = { "1stPlaceCard", "2ndPlaceCard", "3rdPlaceCard" },
 		templateName = "BasicCardTemplate",
 		kind = "streak",
+		donoBaseWidth = 0.16,
+		donoBaseCharCount = 7, -- "99 DAYS"
 	},
 	{
 		rootPart = "CoupleBoard",
@@ -102,6 +115,8 @@ local BOARD_SPECS: { BoardSpec } = {
 		topCards = { "1stPlaceCard", "2ndPlaceCard", "3rdPlaceCard" },
 		templateName = "BasicCardTemplate",
 		kind = "couple",
+		donoBaseWidth = 0.16,
+		donoBaseCharCount = 7, -- "99 DAYS"
 	},
 	{
 		rootPart = "LikesLeaderboard",
@@ -111,6 +126,8 @@ local BOARD_SPECS: { BoardSpec } = {
 		topCards = { "1stPlaceWrapper", "2rdPlaceWrapper", "3rdPlaceWrapper" },
 		templateName = "BasicCardTemplate",
 		kind = "likes",
+		donoBaseWidth = 0.18,
+		donoBaseCharCount = 6, -- "99.999"
 	},
 }
 
@@ -232,7 +249,7 @@ local warnFn: ((key: string, message: string, payload: any?) -> ())? = nil
 -- (InstanceState; ADR 0011 addendum, 2026-09-17). These were three weak-keyed tables, and Roblox
 -- drops such an entry while the label is still on the board: a lost baseline was re-captured
 -- mid-fade (transparency 1 as the design) and a lost generation let a stopped loading loop carry
--- on. The baseline is captured the first time a label is touched — the same moment
+-- on. The baseline is captured the first time a label is touched â€” the same moment
 -- `ensureLabelFadeBaseline` used to capture it.
 type LabelFade = {
 	generation: number,
@@ -265,7 +282,7 @@ local function formatDonationValue(kind: string, value: number): string
 		return DonationAmountFormat.formatCashBoard(value)
 	end
 	if kind == "level" then
-		return "LV " .. tostring(math.floor(value))
+		return "Lv. " .. tostring(math.floor(value))
 	end
 	if kind == "streak" or kind == "couple" then
 		local days = math.floor(value)
@@ -487,6 +504,46 @@ local function setValueStatic(root: Instance, kind: string, value: number)
 		local normalizedValue = math.floor(math.max(value, 0))
 		label.Text = formatDonationValue(kind, normalizedValue)
 	end
+end
+
+-- Dynamic TotalDonoWrapper width: each board spec carries its own base width + base char count.
+-- Width adjusts +/-0.02 per extra/missing character from the formatted value text.
+-- All cards on the same board share the widest computed width so layout stays uniform.
+local DONO_WRAPPER_STEP = 0.02
+
+local function computeDonoWrapperWidthScale(spec: BoardSpec, maxCharCount: number): number
+	local baseWidth = spec.donoBaseWidth or 0.18
+	local baseCharCount = spec.donoBaseCharCount or 6
+	local delta = maxCharCount - baseCharCount
+	local scale = baseWidth + delta * DONO_WRAPPER_STEP
+	return math.max(scale, 0.04)
+end
+
+local function findDonoWrapperFrame(root: Instance): GuiObject?
+	local wrapper = findDescendant(root, { "TotalDonoWrapper" }, "Frame")
+	if wrapper and wrapper:IsA("GuiObject") then
+		return wrapper :: GuiObject
+	end
+	return nil
+end
+
+local function applyDonoWrapperWidth(root: Instance, widthScale: number)
+	local frame = findDonoWrapperFrame(root)
+	if frame then
+		frame.Size = UDim2.new(widthScale, 0, frame.Size.Y.Scale, frame.Size.Y.Offset)
+	end
+end
+
+local function applyDonoWrapperWidthToCards(cards: { GuiObject }, widthScale: number)
+	for _, card in ipairs(cards) do
+		applyDonoWrapperWidth(card, widthScale)
+	end
+end
+
+-- Compute the formatted text length for an entry on a given board kind.
+local function getFormattedValueCharCount(kind: string, value: number): number
+	local text = formatDonationValue(kind, value)
+	return #text
 end
 
 local function setRankText(root: Instance, rank: number)
@@ -1120,11 +1177,15 @@ local function renderBoardIdle(gui: SurfaceGui, spec: BoardSpec, payload: any)
 	local template = gui:FindFirstChild(spec.templateName, true)
 	if template and template:IsA("GuiObject") then
 		template.Visible = false
+		-- Reset TotalDonoWrapper width to base when idle.
+		local baseScale = computeDonoWrapperWidthScale(spec, spec.donoBaseCharCount or 6)
+		applyDonoWrapperWidth(template, baseScale)
 		local listParent = template.Parent
 		if listParent then
 			for _, child in ipairs(listParent:GetChildren()) do
 				if child:IsA("GuiObject") and child.Name:match("^GeneratedLeaderboardRow%d+$") then
 					child.Visible = false
+					applyDonoWrapperWidth(child, baseScale)
 				end
 			end
 		end
@@ -1157,6 +1218,25 @@ local function renderBoard(spec: BoardSpec, payload: any): boolean
 
 	setBoardContentVisible(gui, false)
 
+	-- Compute max formatted-value character count for dynamic TotalDonoWrapper width.
+	local maxCharCount = 0
+	for rank = 1, spec.limit do
+		local entry = entries[rank]
+		if entry then
+			local value = tonumber(entry.total) or 0
+			if spec.kind == "level" then
+				value = value / Config.Leaderboards.LEVEL_SCORE_SCALE
+			elseif spec.kind == "couple" then
+				value = math.floor(math.max(0, os.time() - value) / 86400) + 1
+			end
+			local charCount = getFormattedValueCharCount(spec.kind, math.floor(math.max(value, 0)))
+			if charCount > maxCharCount then
+				maxCharCount = charCount
+			end
+		end
+	end
+	local donoWrapperWidthScale = computeDonoWrapperWidthScale(spec, maxCharCount)
+
 	for rank = 1, 3 do
 		local card = gui:FindFirstChild(spec.topCards[rank], true)
 		if card and card:IsA("GuiObject") then
@@ -1181,6 +1261,32 @@ local function renderBoard(spec: BoardSpec, payload: any): boolean
 			end
 		end
 	end
+
+	-- Apply dynamic TotalDonoWrapper width to all rank-4+ cards.
+	local visibleCards: { GuiObject } = {}
+	local template2 = gui:FindFirstChild(spec.templateName, true)
+	if template2 and template2:IsA("GuiObject") then
+		-- Template itself is rank 4
+		if template2.Visible then
+			table.insert(visibleCards, template2)
+		end
+		local listParent = template2.Parent
+		if listParent then
+			-- Also update the Plain template so future clones inherit the correct width.
+			for _, suffix in ipairs({ "Plain", "6+" }) do
+				local plain = listParent:FindFirstChild(spec.templateName .. suffix)
+				if plain and plain:IsA("GuiObject") then
+					applyDonoWrapperWidth(plain, donoWrapperWidthScale)
+				end
+			end
+			for _, child in ipairs(listParent:GetChildren()) do
+				if child:IsA("GuiObject") and child.Name:match("^GeneratedLeaderboardRow%d+$") and child.Visible then
+					table.insert(visibleCards, child)
+				end
+			end
+		end
+	end
+	applyDonoWrapperWidthToCards(visibleCards, donoWrapperWidthScale)
 
 	updateTimestamp(gui, tonumber(payload.updatedAt) or os.time())
 	setBoardChrome(gui, false)
@@ -1253,7 +1359,7 @@ end
 
 function WorkspaceLeaderboardRenderer.bootstrapLoadingUntilRevision()
 	-- Default path: server paints SurfaceGui text (SERVER_PAINT_WORKSPACE).
-	-- Client must not start a second loading-text animation loop — dual writers
+	-- Client must not start a second loading-text animation loop â€” dual writers
 	-- stack/ghost overlay labels (two cycling messages on one TextLabel).
 	if RunService:IsClient() and Config.Leaderboards.CLIENT_PAINT_DATA ~= true then
 		return
@@ -1304,3 +1410,4 @@ function WorkspaceLeaderboardRenderer.renderPayload(payload: any): RenderResult
 end
 
 return WorkspaceLeaderboardRenderer
+

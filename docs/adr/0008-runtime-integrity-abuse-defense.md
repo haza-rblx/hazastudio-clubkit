@@ -149,6 +149,17 @@ Response: trimmed items are logged per player `{userId, assetId, reason, size}`;
 - Game Settings → **Avatar**: pin scale ranges (height 0.9–1.05, width 0.7–1.0, head 0.95–1.0, proportions 0–1) so "giant" cannot come from the website avatar editor at all.
 - Keep `StarterPlayer.LoadCharacterAppearance = true` (the guard needs the real description) — do not replace appearances with a scripted uniform unless the buyer wants that.
 
+#### Buyer-facing toggle (2026-10-04)
+
+Layer 2c's size bounds are venue fashion, not integrity: a club whose normal dress code is big
+wings was losing legitimate accessories to the 10-stud cap. `ClubKitConfig.AvatarGuard`
+(`Enabled`, `MaxAccessoryStuds`, `MaxCharacterHeight`, `MaxCharacterWidth`, `MaxAccessories`,
+`Effects`) now projects onto `Config.AvatarGuard` in `ConfigBootstrap` — same shape as the
+`AntiTamper` opt-outs. Only size bounds and the master switch project; effect/particle caps,
+`KICK_AFTER_TRIMS` and the message strings stay engine-side so a mistyped buyer value can never
+widen the anti-abuse side of the guard. `Enabled = false` turns the whole layer (trim, player
+notification, Discord beacon) off; a missing section keeps the original default (`true`).
+
 ### Layer 3 — Response tools for staff
 
 - `/purgesounds` (Staff+): stop and destroy every non-allowlisted `Sound` right now; `/soundlog` prints the last 20 rogue-sound events with the actor guess.

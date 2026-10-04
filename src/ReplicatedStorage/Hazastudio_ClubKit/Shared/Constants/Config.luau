@@ -274,6 +274,16 @@ Config.ExternalAdmin = {
 	SyncStaffRoles = true,
 	SyncContentRoles = false,
 	RankMap = {},
+	-- Bridge-side member perks (Kohl's fly/smite gating; consumed by the
+	-- place-pack addon). Keyed by membership tier; true = unlimited, number =
+	-- per ISO-week quota, false = explicitly denied at this tier.
+	-- Higher tier wins: { Tier2 = 1, Tier3 = 3 } gives Tier3 players 3.
+	Perks = {
+		Enabled = true, -- master switch (addon re-checks before granting anything)
+		Fly = { Tier2 = true }, -- VVIP+ can fly (self only via addon)
+		Smite = { Tier3 = 3 }, -- Exclusive: 3 free smites per week (resets Mon 00:00 UTC)
+		StaffBypass = true, -- staff roles keep native admin fly/smite on anyone
+	},
 }
 -- ============================================================
 -- JOIN GREETINGS (toast when Owner / Leadership / Content / top-10 spender joins)
@@ -665,6 +675,9 @@ Config.DataStore = {
 	-- config. New key as of the image-title work — nothing to migrate.
 	TITLE_IMAGE_REGISTRY_KEY = scopedDataStoreKey("TitleImageRegistry_v1"),
 	TITLE_IMAGE_REGISTRY_DOC = "images",
+	-- External-admin bridge perks (e.g. Kohl's smite weekly quota). Key embeds
+	-- the ISO week, so entries self-rotate weekly and never need migration.
+	PERK_QUOTA_KEY = scopedDataStoreKey("PerkQuota_v1"),
 	ABOUT_ROSTER_KEY = scopedDataStoreKey("AboutRoster_v1"),
 	ABOUT_ROSTER_ENTRY_KEY = "team",
 	CACHE_TTL = 120,  -- Scaling 100→200 CCU: extended from 60s to 120s to reduce DataStore GetAsync by 50%
@@ -2922,6 +2935,9 @@ Config.FreeTitleEvent = {
 	-- fill travelling reads bolder than a highlight passing over it.
 	SHINE_TIME = 1.1,
 	SHINE_DELAY = 1.7,
+	-- Topbar icon (replaces the floating card). Opens the same custom-title panel.
+	TOPBAR_ICON = "rbxassetid://115281405771061",
+	TOPBAR_ORDER = 8,
 }
 -- ============================================================
 -- DONATION / BAGI-BAGI INTEGRATION

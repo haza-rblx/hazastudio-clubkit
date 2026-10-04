@@ -56,6 +56,13 @@ ClubKitConfigSchema.defaults = {
 			Staff = { adonis = 200, kohls = "admin" },
 			Moderator = { adonis = 100, kohls = "mod" },
 		},
+		-- Member perks gated by the external-admin bridge addon (fly/smite).
+		Perks = {
+			Enabled = true,
+			Fly = { Tier2 = true }, -- VVIP+
+			Smite = { Tier3 = 3 }, -- Exclusive: 3/week (ISO week, resets Mon 00:00 UTC)
+			StaffBypass = true,
+		},
 	},
 	GameDataApi = {
 		GameKey = "the-basic",
@@ -557,6 +564,21 @@ ClubKitConfigSchema.defaults = {
 		ForeignGuiDetect = true,
 		ForeignGuiGraceSeconds = 20,
 		ForeignGuiAllowNames = { "Adonis", "Adonis_Loader", "Kohl's Admin", "HD Admin", "BasicAdmin", "Chat" },
+	},
+	-- AvatarGuard (ADR 0008 Layer 2c): oversized / effect-spamming accessories are
+	-- trimmed server-side (no kick). Off = the venue keeps every accessory as loaded.
+	AvatarGuard = {
+		Enabled = true,
+		-- Any Handle axis (× SpecialMesh.Scale) larger than this is removed (studs).
+		MaxAccessoryStuds = 10,
+		-- Whole-character bounds (studs): the largest accessories are dropped until
+		-- the character fits. Raise both for venues whose normal fashion is big wings.
+		MaxCharacterHeight = 14,
+		MaxCharacterWidth = 10,
+		MaxAccessories = 30,
+		-- "cap" = keep the effect but clamp Beam width / light range / particle values.
+		-- "strip" = destroy the effect instance, keep the mesh.
+		Effects = "cap",
 	},
 	-- Budget telemetry (ADR 0007 phase B, production hardening P3): every 15 minutes each server
 	-- sends one aggregate of its DataStore / HTTP / Messaging use to the ClubKit VPS. Counts only,

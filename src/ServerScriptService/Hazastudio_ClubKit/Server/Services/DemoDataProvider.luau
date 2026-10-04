@@ -346,6 +346,9 @@ function DemoDataProvider.create(config: DemoConfig?): DemoDataProvider
 	local refreshInterval = math.max(10, tonumber(cfg.REFRESH_INTERVAL) or 300)
 	local showcaseProfiles = cfg.SHOWCASE_PROFILES
 	local ownerUserId = math.max(0, tonumber(Config.Group.OWNER_USER_ID) or 0)
+	-- Demo place: Group.OWNER_USER_ID is often left 0 — fall back to the showcase source user
+	-- so the community board still shows the owner's own groups instead of an empty board.
+	local communitySourceUserId = if ownerUserId > 0 then ownerUserId else math.max(0, sourceUserId)
 	local customCommunities = if type(cfg.SHOWCASE_COMMUNITIES) == "table" and #cfg.SHOWCASE_COMMUNITIES > 0
 		then cfg.SHOWCASE_COMMUNITIES
 		else nil
@@ -388,12 +391,13 @@ function DemoDataProvider.create(config: DemoConfig?): DemoDataProvider
 		if customCommunities then
 			cachedCommunities = customCommunities
 		else
-			cachedCommunities = fetchOwnerCommunities(ownerUserId, limit)
+			cachedCommunities = fetchOwnerCommunities(communitySourceUserId, limit)
 		end
 		communitiesFetched = true
 		log:info("Showcase communities ready", {
 			count = #cachedCommunities,
 			ownerUserId = ownerUserId,
+			sourceUserId = communitySourceUserId,
 			source = if customCommunities then "config" else "owner_groups",
 		})
 	end
@@ -431,11 +435,17 @@ function DemoDataProvider.create(config: DemoConfig?): DemoDataProvider
 				dailyRobux = {},
 				dailyCombined = {},
 				likes = {},
+				level = {},
+				streak = {},
+				couple = {},
 				boardStates = {
 					robux = "empty",
 					community = "empty",
 					saweria = "empty",
 					likes = "empty",
+					level = "empty",
+					streak = "empty",
+					couple = "empty",
 				},
 			}
 		end
@@ -449,6 +459,80 @@ function DemoDataProvider.create(config: DemoConfig?): DemoDataProvider
 				or Config.Leaderboards.DAILY_COMBINED_ENABLED == true
 			then generateUserSorted(cachedProfiles, robuxMin, math.min(robuxMax, 2000), math.min(4, limit), false)
 			else {}
+
+		-- Progress boards ride the same friend pool so every board is populated in demo mode.
+		-- Level score uses the real encoder (level * LEVEL_SCORE_SCALE + xp) because the client
+		-- formatter decodes it back to a level; couple rows need a partnerId and rank by age.
+		-- username/displayName/thumbnail are filled here: the demo path returns before
+		-- DonationController's enrichEntryList, and rows carrying only a userId would paint
+		-- "Unknown" (enriched names are what the donor boards already show).
+		-- Entries are sorted by total desc and re-ranked like generateUserSorted does — the
+		-- renderer paints the podium by the rank field, so unsorted values look scrambled.
+		local progressEntries = {}
+		for _, kind in ipairs({ "level", "streak" }) do
+			local entries = {}
+			local poolSize = math.min(#cachedProfiles, limit)
+			for i = 1, poolSize do
+				local profile = cachedProfiles[i]
+				if kind == "level" then
+					local level = math.random(300, 30000)
+					local xp = math.random(0, Config.Leaderboards.LEVEL_SCORE_SCALE - 1)
+					table.insert(entries, {
+						rank = i,
+						userId = profile.userId,
+						username = profile.username,
+						displayName = profile.displayName,
+						thumbnail = getUserThumbnail(profile.userId),
+						total = level * Config.Leaderboards.LEVEL_SCORE_SCALE + xp,
+					})
+				else
+					table.insert(entries, {
+						rank = i,
+						userId = profile.userId,
+						username = profile.username,
+						displayName = profile.displayName,
+						thumbnail = getUserThumbnail(profile.userId),
+						total = math.random(2, 400),
+					})
+				end
+			end
+			table.sort(entries, function(x, y)
+				return x.total > y.total
+			end)
+			for rank, entry in ipairs(entries) do
+				entry.rank = rank
+			end
+			progressEntries[kind] = entries
+		end
+		local coupleEntries = {}
+		local couplePoolSize = math.min(math.floor(#cachedProfiles / 2), limit)
+		for i = 1, couplePoolSize do
+			local a = cachedProfiles[(i - 1) * 2 + 1]
+			local b = cachedProfiles[(i - 1) * 2 + 2]
+			if a and b then
+				table.insert(coupleEntries, {
+					rank = i,
+					userId = a.userId,
+					username = a.username,
+					displayName = a.displayName,
+					thumbnail = getUserThumbnail(a.userId),
+					partnerId = b.userId,
+					-- The demo path returns before DonationController's partner enrichment, so
+					-- carry the partner identity the same way the enriched real rows do.
+					partnerUsername = b.username,
+					partnerDisplayName = b.displayName,
+					partnerThumbnail = getUserThumbnail(b.userId),
+					-- Stored as "first recorded at"; the board shows days since.
+					total = os.time() - math.random(1, 400) * 86400,
+				})
+			end
+		end
+		table.sort(coupleEntries, function(x, y)
+			return x.total < y.total -- longest together first, matching the real board
+		end)
+		for rank, entry in ipairs(coupleEntries) do
+			entry.rank = rank
+		end
 
 		local dailyCombined = {}
 		if Config.Leaderboards.DAILY_COMBINED_ENABLED == true then
@@ -484,11 +568,17 @@ function DemoDataProvider.create(config: DemoConfig?): DemoDataProvider
 			dailyRobux = dailyRobux,
 			dailyCombined = dailyCombined,
 			likes = likesEntries,
+			level = progressEntries.level,
+			streak = progressEntries.streak,
+			couple = coupleEntries,
 			boardStates = {
 				robux = if #robuxEntries > 0 then "ready" else "empty",
 				community = if #communityEntries > 0 then "ready" else "empty",
 				saweria = if #saweriaEntries > 0 then "ready" else "empty",
 				likes = if #likesEntries > 0 then "ready" else "empty",
+				level = if #progressEntries.level > 0 then "ready" else "empty",
+				streak = if #progressEntries.streak > 0 then "ready" else "empty",
+				couple = if #coupleEntries > 0 then "ready" else "empty",
 			},
 		}
 		lastBuildAt = now
@@ -496,6 +586,9 @@ function DemoDataProvider.create(config: DemoConfig?): DemoDataProvider
 			robux = #robuxEntries,
 			community = #communityEntries,
 			saweria = #saweriaEntries,
+			level = #progressEntries.level,
+			streak = #progressEntries.streak,
+			couple = #coupleEntries,
 		})
 		return cachedPayload
 	end

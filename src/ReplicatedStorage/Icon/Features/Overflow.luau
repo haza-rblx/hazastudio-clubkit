@@ -335,7 +335,10 @@ function Overflow.updateBoundary(alignment)
 		local isOverflow = overflowIconUIDs[icon.UID]
 		if not isOverflow then
 			if joinOverflow and not icon.parentIconUID then
-				icon:joinMenu(overflowIcon)
+				-- Use joinDropdown (vertical, opens downward) instead of joinMenu
+				-- (horizontal strip) so the overflow "three dots" icon expands
+				-- downward on phones where horizontal space is scarce.
+				icon:joinDropdown(overflowIcon)
 			elseif not joinOverflow and icon.parentIconUID then
 				icon:leave()
 			end

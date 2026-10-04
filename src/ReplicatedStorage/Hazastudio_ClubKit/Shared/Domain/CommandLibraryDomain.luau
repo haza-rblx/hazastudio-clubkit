@@ -4,6 +4,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local CashCurrencyDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.CashCurrencyDomain)
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
+local ExternalAdminPerksDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.ExternalAdminPerksDomain)
+local OverheadDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.OverheadDomain)
 local PermissionDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.PermissionDomain)
 local RolesDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.RolesDomain)
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
@@ -39,7 +41,7 @@ local function buildVisibility(roles: {RoleKey}): CommandLibraryVisibilityMap
 	return map
 end
 
-type PermissionGate = "public" | "canTeleport" | "canAnnounce" | "admin" | "owner"
+type PermissionGate = "public" | "canTeleport" | "canAnnounce" | "admin" | "owner" | "perkFly" | "perkSmite"
 
 local ENTRY_GATES: { [string]: PermissionGate } = {
 	setbio = "public",
@@ -57,6 +59,8 @@ local ENTRY_GATES: { [string]: PermissionGate } = {
 	drone = "admin",
 	crowd = "admin",
 	announce = "canAnnounce",
+	fly = "perkFly",
+	smite = "perkSmite",
 	gift = "admin",
 	ungift = "admin",
 	setrole = "admin",
@@ -93,6 +97,28 @@ local function rolePassesGate(gate: PermissionGate, role: RoleKey, effectiveMemb
 	end
 	if gate == "canTeleport" then
 		return PermissionDomain.canTeleport(role, effectiveMembership)
+	end
+	if gate == "perkFly" or gate == "perkSmite" then
+		-- Mirror the ExternalAdminFacade.checkPerk gate client-side so the
+		-- library hides what the server would refuse (single source of truth:
+		-- Config.ExternalAdmin.Perks).
+		local externalAdmin = Config.ExternalAdmin
+		local perks = if type(externalAdmin) == "table" then externalAdmin.Perks else nil
+		if type(perks) ~= "table" or perks.Enabled == false then
+			return false
+		end
+		local perkConfig = perks[if gate == "perkFly" then "Fly" else "Smite"]
+		local gate_ = ExternalAdminPerksDomain.resolvePerk(perkConfig, {
+			isStaff = RolesDomain.isStaffPlus(role),
+			staffBypass = perks.StaffBypass ~= false,
+			hasAtLeast = function(tier: string)
+				return OverheadDomain.hasMembershipAtLeast(effectiveMembership, tier)
+			end,
+			tierValue = function(tier: string)
+				return OverheadDomain.getMembershipValue(tier)
+			end,
+		})
+		return gate_.allowed
 	end
 	return false
 end
@@ -208,6 +234,33 @@ local REGISTRY = table.freeze({
 		needsArguments = false,
 		iconKey = "session_rejoin",
 		visibleToRoles = PUBLIC_VISIBILITY,
+	}),
+	makeEntry({
+		id = "fly",
+		alias = "fly",
+		description = "Member perk: fly around the venue (VVIP+). Click again or /unfly to land.",
+		category = "Session",
+		needsArguments = false,
+		iconKey = "session_refresh",
+		visibleToRoles = buildGateVisibility("perkFly"),
+	}),
+	makeEntry({
+		id = "unfly",
+		alias = "unfly",
+		description = "Land from flight. Always available while flying.",
+		category = "Session",
+		needsArguments = false,
+		iconKey = "session_refresh",
+		visibleToRoles = PUBLIC_VISIBILITY,
+	}),
+	makeEntry({
+		id = "smite",
+		alias = "smite",
+		description = "Member perk: strike another player with lightning (top tier, free weekly uses). /smite <player>",
+		category = "Session",
+		needsArguments = true,
+		iconKey = "admin_announce",
+		visibleToRoles = buildGateVisibility("perkSmite"),
 	}),
 	makeEntry({
 		id = "bring",
@@ -485,7 +538,7 @@ function CommandLibraryDomain.canRoleSeeEntry(
 ): boolean
 	local gate = ENTRY_GATES[entry.id]
 	if gate then
-		return rolePassesGate(gate, role, effectiveMembership)
+		return rolePassesGate(gate :: PermissionGate, role, effectiveMembership)
 	end
 	return entry.visibleToRoles[role] == true
 end

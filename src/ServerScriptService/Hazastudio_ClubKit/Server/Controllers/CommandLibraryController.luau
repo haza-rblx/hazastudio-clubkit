@@ -17,6 +17,9 @@ type CommandLibraryExecuteResponse = Types.CommandLibraryExecuteResponse
 -- already gated inside their own handler by a membership/role tier that is
 -- narrower than admin (teleport, announce) or equal to it (gift/setrole –
 -- CommandExecutionService checks PermissionDomain.canGift there already).
+-- fly/unfly/smite are membership-perk commands: ExternalAdminPerkCommands
+-- gates them through ExternalAdminFacade.checkPerk (tier + weekly quota),
+-- exactly the same authority the Kohl's chat path uses.
 -- Anything NOT listed here falls back to the adminPanel-tier gate below, so a
 -- future command wired into CommandExecutionService without its own
 -- permission check does not become open to every player by default.
@@ -37,6 +40,9 @@ local OPEN_ALIASES: { [string]: boolean } = {
 	[Config.Gift.CMD_ALIAS_UNGIFT] = true,
 	[Config.SetRole.CMD_ALIAS_SET] = true,
 	[Config.SetRole.CMD_ALIAS_UNSET] = true,
+	fly = true,
+	unfly = true,
+	smite = true,
 }
 
 -- Mirrors CommandExecutionService's own splitCommandText just enough to read

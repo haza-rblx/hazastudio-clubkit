@@ -605,6 +605,30 @@ function ConfigBootstrap.apply(config: any)
 		end
 	end
 
+	-- AvatarGuard (ADR 0008 Layer 2c): the buyer's venue-tuning knobs. Only size
+	-- bounds and the master switch project; effect/particle caps and the kick /
+	-- message strings stay engine-side (a mistyped buyer value can never widen them).
+	local avatarGuard = clubKit.AvatarGuard
+	if type(config.AvatarGuard) == "table" and type(avatarGuard) == "table" then
+		if type(avatarGuard.Enabled) == "boolean" then
+			config.AvatarGuard.ENABLED = avatarGuard.Enabled
+		end
+		local function projectLimit(key: string, engineKey: string, min: number)
+			local v = tonumber((avatarGuard :: any)[key])
+			if v and v >= min then
+				(config.AvatarGuard :: any)[engineKey] = v
+			end
+		end
+		projectLimit("MaxAccessoryStuds", "MAX_ACCESSORY_STUDS", 1)
+		projectLimit("MaxCharacterHeight", "MAX_CHARACTER_HEIGHT", 1)
+		projectLimit("MaxCharacterWidth", "MAX_CHARACTER_WIDTH", 1)
+		projectLimit("MaxAccessories", "MAX_ACCESSORIES", 1)
+		local effects = avatarGuard.Effects
+		if effects == "cap" or effects == "strip" then
+			config.AvatarGuard.EFFECTS = effects
+		end
+	end
+
 	-- Budget telemetry (ADR 0007 phase B, production hardening P3): the buyer's opt-out.
 	local telemetry = clubKit.Telemetry
 	if type(config.Telemetry) == "table" and type(telemetry) == "table" and type(telemetry.Enabled) == "boolean" then

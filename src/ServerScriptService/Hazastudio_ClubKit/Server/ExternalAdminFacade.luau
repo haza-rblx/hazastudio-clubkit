@@ -23,7 +23,10 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local ExternalAdminDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.ExternalAdminDomain)
+local ExternalAdminPerksDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.ExternalAdminPerksDomain)
 local AnnouncementRateLimitDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.AnnouncementRateLimitDomain)
+local OverheadDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.OverheadDomain)
+local RolesDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.RolesDomain)
 local ResultUtil = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Result)
 local RateLimiter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.RateLimiter)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
@@ -59,6 +62,12 @@ local announceLimiters: { [string]: any } = {}
 -- Self-reported presence from place-pack bridge modules (most reliable signal:
 -- if our Adonis plugin / Kohl's addon ran, that admin is installed by definition).
 local reportedAdmins: { Adonis: boolean, Kohls: boolean } = { Adonis = false, Kohls = false }
+-- Perk quota store (injected via injectPerkQuotaRepository at boot; nil keeps
+-- checkPerk gating working while consume fails closed with a clear error).
+local perkQuotaRepository: any? = nil
+-- Subscribers for effective-membership changes (perk-role mirror in addons).
+local membershipChangedCallbacks: { (payload: any) -> () } = {}
+local membershipEventUnsubscribe: (() -> ())? = nil
 
 local ExternalAdminFacade = {}
 
@@ -91,6 +100,13 @@ local function relayRoleChanged(payload: any)
 	end
 end
 
+--- Called once by Main wiring before first use; idempotent.
+function ExternalAdminFacade.injectPerkQuotaRepository(repo: any)
+	if perkQuotaRepository == nil then
+		perkQuotaRepository = repo
+	end
+end
+
 function ExternalAdminFacade._init(newDeps: {
 	giftService: any,
 	membershipCommandService: any,
@@ -112,6 +128,25 @@ function ExternalAdminFacade._init(newDeps: {
 
 	if provider ~= "None" and newDeps.eventBus and type(newDeps.eventBus.on) == "function" then
 		eventBusUnsubscribe = newDeps.eventBus:on("Gift:RoleChanged", relayRoleChanged)
+		-- Perk mirror feed: Overhead:Payload fires per player whenever the
+		-- effective payload (incl. membership) changes. Bridge addons decide
+		-- what to mirror (Kohl's perk roles); kit stays provider-agnostic.
+		if provider == "Kohls" then
+			membershipEventUnsubscribe = newDeps.eventBus:on("Overhead:Payload", function(payload: any)
+				if type(payload) ~= "table" or type(payload.userId) ~= "number" then
+					return
+				end
+				local enriched = {
+					userId = payload.userId,
+					effectiveMembership = payload.effectiveMembership,
+					role = payload.role,
+				}
+				local callbacks = table.clone(membershipChangedCallbacks)
+				for _, callback in ipairs(callbacks) do
+					task.spawn(callback, enriched)
+				end
+			end)
+		end
 	end
 
 	log:info("Facade initialised", { provider = provider })
@@ -197,6 +232,11 @@ function ExternalAdminFacade.onDestroy()
 		eventBusUnsubscribe()
 		eventBusUnsubscribe = nil
 	end
+	if membershipEventUnsubscribe then
+		membershipEventUnsubscribe()
+		membershipEventUnsubscribe = nil
+	end
+	table.clear(membershipChangedCallbacks)
 	for group, limiter in pairs(announceLimiters) do
 		limiter:destroy()
 		announceLimiters[group] = nil
@@ -229,6 +269,27 @@ function ExternalAdminFacade.getRankMap(): { [string]: any }
 		return config.RankMap
 	end
 	return {}
+end
+
+--- Live view of the Perks section (bridge addons read this each run so buyer
+--- config edits apply without a reboot).
+function ExternalAdminFacade.getPerksConfig(): { [string]: any }?
+	local config = externalAdminConfig()
+	if config and type(config.Perks) == "table" then
+		return (config.Perks :: any)
+	end
+	return nil
+end
+
+--- Membership tier -> canonical TierN key used by perk gates (nil = none).
+--- Uses OverheadDomain normalization, so all buyer aliases (vip/vvip/supreme/
+--- elite/exclusive/...) resolve to their TierN key.
+function ExternalAdminFacade.tierForMembershipKey(membership: any): string?
+	local normalized = OverheadDomain.normalizeMembershipTier(membership)
+	if normalized == "Tier1" or normalized == "Tier2" or normalized == "Tier3" then
+		return normalized
+	end
+	return nil
 end
 
 -- Subscribe to rank-sync payloads (place-pack plugins/addons). Returns unsubscribe.
@@ -392,6 +453,132 @@ function ExternalAdminFacade.getEffectiveRole(userId: number): Result<any>
 		return ResultUtil.Ok(payloadResult.value.role)
 	end
 	return ResultUtil.Err("[ExternalAdmin] " .. tostring(payloadResult.error))
+end
+
+-- Effective membership tier ("Guest"/"VIP"/"VVIP"/"Supreme") for bridge-side
+-- perk gating (e.g. Kohl's fly/smite). Read-only: never mutates membership.
+function ExternalAdminFacade.getMembership(userId: number): Result<any>
+	local disabled = guardEnabled()
+	if disabled then
+		return disabled
+	end
+	local player, playerErr = resolvePlayer(userId, "Player")
+	if not player then
+		return playerErr :: Result<any>
+	end
+	local payloadResult = (deps :: any).overheadService:getEffectivePayload(player)
+	if payloadResult.ok then
+		return ResultUtil.Ok(payloadResult.value.effectiveMembership)
+	end
+	return ResultUtil.Err("[ExternalAdmin] " .. tostring(payloadResult.error))
+end
+
+-- ============================================================
+-- EXTERNAL-ADMIN PERKS (bridge-side gating: Kohl's fly/smite)
+-- ============================================================
+
+export type PerkGate = ExternalAdminPerksDomain.PerkGate
+
+local function resolveStaffBypass(): boolean
+	local config = externalAdminConfig()
+	if not (config and type(config.Perks) == "table") then
+		return true -- default: staff keep native admin power
+	end
+	local staffBypass = (config.Perks :: any).StaffBypass
+	if staffBypass == nil then
+		return true
+	end
+	return staffBypass == true
+end
+
+local function resolveRoleAndMembership(player: Player): (string?, string?)
+	local overhead = (deps :: any).overheadService
+	if not (overhead and type(overhead.getEffectivePayload) == "function") then
+		return nil, nil
+	end
+	local payloadResult = overhead:getEffectivePayload(player)
+	if not (payloadResult.ok and type(payloadResult.value) == "table") then
+		return nil, nil
+	end
+	return payloadResult.value.role, payloadResult.value.effectiveMembership
+end
+
+--- Can this player use the named perk right now? Pure read — consume separately.
+--- perkConfig nil (section absent) = perk disabled engine-side (addon must not grant it).
+function ExternalAdminFacade.checkPerk(userId: number, perk: string): Result<any>
+	local disabled = guardEnabled()
+	if disabled then
+		return disabled
+	end
+	local config = externalAdminConfig()
+	local perksSection = if config and type(config.Perks) == "table" then (config.Perks :: any) else nil
+	if perksSection == nil or perksSection.Enabled == false then
+		return ResultUtil.Err("perk_not_configured")
+	end
+	local perks = perksSection[perk]
+	if perks == nil then
+		return ResultUtil.Err("perk_not_configured")
+	end
+	local player, playerErr = resolvePlayer(userId, "Player")
+	if not player then
+		return playerErr :: Result<any>
+	end
+	local roleKey, effectiveMembership = resolveRoleAndMembership(player)
+	local gate = ExternalAdminPerksDomain.resolvePerk(perks, {
+		isStaff = RolesDomain.isStaffPlus(roleKey),
+		staffBypass = resolveStaffBypass(),
+		hasAtLeast = function(tier: string)
+			return OverheadDomain.hasMembershipAtLeast(effectiveMembership, tier)
+		end,
+		tierValue = function(tier: string)
+			return OverheadDomain.getMembershipValue(tier)
+		end,
+	})
+	return ResultUtil.Ok(gate)
+end
+
+--- Consume one unit of a capped perk (e.g. weekly smite quota). Unlimited
+--- perks (quota nil) pass straight through.
+function ExternalAdminFacade.consumePerkQuota(userId: number, perk: string, quota: number?): Result<any>
+	local disabled = guardEnabled()
+	if disabled then
+		return disabled
+	end
+	if not perkQuotaRepository then
+		return ResultUtil.Err("perk_quota_unavailable")
+	end
+	if quota == nil then
+		return ResultUtil.Ok(true) -- unlimited (fly-style): nothing to consume
+	end
+	return perkQuotaRepository:consume(perk, userId, quota)
+end
+
+--- Remaining uses this ISO week for a capped perk.
+function ExternalAdminFacade.peekPerkQuota(userId: number, perk: string, quota: number): Result<any>
+	local disabled = guardEnabled()
+	if disabled then
+		return disabled
+	end
+	if not perkQuotaRepository then
+		return ResultUtil.Err("perk_quota_unavailable")
+	end
+	return perkQuotaRepository:peek(perk, userId, quota)
+end
+
+--- Subscribe to effective-membership changes (join + live gift/revoke via
+--- Overhead:Payload). Returns unsubscribe. Fired ONLY when Provider matches —
+--- bridge addons use this to mirror perk roles.
+function ExternalAdminFacade.onMembershipChanged(callback: (payload: any) -> ()): () -> ()
+	if provider ~= "Kohls" then
+		-- Other providers have no perk mirror; keep the API shape stable.
+	end
+	table.insert(membershipChangedCallbacks, callback)
+	return function()
+		local index = table.find(membershipChangedCallbacks, callback)
+		if index then
+			table.remove(membershipChangedCallbacks, index)
+		end
+	end
 end
 
 return ExternalAdminFacade

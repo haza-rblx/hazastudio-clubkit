@@ -1,6 +1,5 @@
-local RunService = game:GetService("RunService");
-
 local TextEffects = require(script.Parent.Parent);
+local SharedTickConnection = require(script.Parent.Parent.SharedTickConnection);
 
 return function(uiInstance: GuiObject, speed: number, size: number, customColor: ColorSequence | Color3?, customTransparency: NumberSequence | number?, useScaledSize: boolean?)
     
@@ -12,14 +11,14 @@ return function(uiInstance: GuiObject, speed: number, size: number, customColor:
 
     local Rotation = 0;
     local Connection1;
-    Connection1 = RunService.Heartbeat:Connect(function(dt)
+	Connection1 = SharedTickConnection({}, function(dt)
         if (not mainGradient.Instance or mainGradient.Instance.Parent == nil) then
             Connection1:Disconnect();
             return;
         end;
         Rotation = Rotation + speed * dt * 50;
         mainGradient:SetRotation(-60 + math.sin(Rotation * 0.05) * 30, 0.15);
-    end);
+	    end, uiInstance);
 
     local mainStroke = TextEffects.Stroke.new(uiInstance, size, nil, nil, useScaledSize);
     local strokeGradient = TextEffects.Gradient.new(mainStroke.Instance, colorToUse, 0);
@@ -28,19 +27,19 @@ return function(uiInstance: GuiObject, speed: number, size: number, customColor:
 
     local StrokeRotation = 0;
     local Connection2;
-    Connection2 = RunService.Heartbeat:Connect(function(dt)
+	Connection2 = SharedTickConnection({}, function(dt)
         if (not strokeGradient.Instance or strokeGradient.Instance.Parent == nil) then
             Connection2:Disconnect();
             return;
         end;
         StrokeRotation = StrokeRotation + speed * dt * 45;
         strokeGradient:SetRotation(60 - math.sin(StrokeRotation * 0.05) * 30, 0.15);
-    end);
+	    end, uiInstance);
 
     local pulseSize = size;
     local pulseSpeed = speed * 3;
     local Connection3;
-    Connection3 = RunService.Heartbeat:Connect(function(dt)
+	Connection3 = SharedTickConnection({}, function(dt)
         if (not mainStroke.Instance or mainStroke.Instance.Parent == nil) then
             Connection3:Disconnect();
             return;
@@ -48,7 +47,7 @@ return function(uiInstance: GuiObject, speed: number, size: number, customColor:
         local t = tick() * pulseSpeed;
         local sizeMultiplier = 1 + 0.4 * (math.sin(t) * 0.5 + 0.5);
         mainStroke:SetSize(pulseSize * sizeMultiplier, 0.08);
-    end);
+	    end, uiInstance);
 
     return {
         Effects = { mainGradient, strokeGradient, mainStroke },

@@ -3,6 +3,20 @@
 Status: **reinstalled at 2.12.0 on 2026-09-23 — NOT saved yet** (see section H). The 2026-09-06
 install below was never saved, so the place came back without the kit.
 
+**2026-09-28 — ReliabilityV2 cherry-pick (no engine update).** The customer web showed "Menunggu
+server" then "Tidak ada server aktif" on every donation even though they displayed in game. Root
+cause: this 2.12.0 build is pre-P3, so `Shared/Constants/Config.RELIABILITY_V2_ENABLED = false` and
+the game never registered deliveries in `notification_deliveries` (VPS `deliveries=0` for all
+donations). Fixed WITHOUT a v3 engine update (owner's request): added `ReliabilityV2 = true` to
+`ClubKitConfig.Donation` (same pattern as rust/night-zone). The full ack/display pipeline
+(Main ensures `DonationNotifAck`/`DonationNotifDisplay` remotes, DonationService `/v3/deliveries`
+handlers, client ack/display fires) is already present in 2.12.0, so the single buyer key turns it
+on. **Requires: Ctrl+S in Studio + server restart** (new server boot) to take effect — the running
+server still reads the old cached config (`RELIABILITY_V2_ENABLED=false` at boot). New donations
+will then register as `sedang_dikirim` → `terkirim` → `sudah tampil`. Note: delivery reports are
+unbatched in this pre-P3 build (P3's `DeliveryReportQueue` batching is not in this engine) — fine
+for normal volume; a full engine update brings the batching later.
+
 ## H. Reinstall 2026-09-23 (2.12.0)
 
 Place now named `[🌈 A SAFE SPACE] ZENITH AQUATIC [ALPHA]` (same PlaceId/universe). Owner staged

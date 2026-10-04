@@ -550,16 +550,26 @@ function ProfileTabBinder:bindIfNeeded()
 		end
 	end
 
+	for _, modeDef in ipairs(COUPLE_MODES) do
+		local button = resolveCoupleModeButton(profileTab, modeDef.buttonNames)
+		if button then
+			button.AutoButtonColor = false
+			self:_bindButtonMotion(button)
+		end
+	end
+
+	-- Bind BEFORE capturing: UIMotion moves each icon into its UIMotionIconSlot, so the
+	-- relative paths a snapshot stores are only final once the buttons are bound. Capturing
+	-- first stores top-level paths ("ImageLabel") that apply() can no longer resolve, which
+	-- silently drops every icon/text recolour and leaves only the button background changing.
 	if not self._coupleModeStyles then
 		self._coupleModeStyles = captureCoupleModeStyles(profileTab)
 	end
 
 	for _, modeDef in ipairs(COUPLE_MODES) do
 		local styleRefs = self._coupleModeStyles[modeDef.key]
-		local button = if styleRefs then styleRefs.button else resolveCoupleModeButton(profileTab, modeDef.buttonNames)
+		local button = if styleRefs then styleRefs.button else nil
 		if button then
-			button.AutoButtonColor = false
-			self:_bindButtonMotion(button)
 			button.Activated:Connect(function()
 				UIMotion.pop(UIMotion.scaleTargetOf(button), 1.12)
 				setCoupleModeVisual(self._coupleModeStyles, profileTab, modeDef.key)

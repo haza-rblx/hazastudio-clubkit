@@ -64,6 +64,9 @@ export type MenuGuiRefs = {
 	settingsTabIdentity: GuiObject?,
 	settingsTabTitle: TextLabel?,
 	settingsTabSubtitle: TextLabel?,
+	-- Back-to-main-menu buttons (owner design, one per tab). Empty when the
+	-- place has none — every consumer treats them as optional.
+	backButtons: { TextButton },
 }
 
 local MenuGuiRefsModule = {}
@@ -245,6 +248,19 @@ function MenuGuiRefsModule.resolve(gui: ScreenGui): MenuGuiRefs?
 		then asTextLabel(settingsTabIdentity:FindFirstChild("TabSubtitle"))
 		else nil
 
+	-- One per tab, direct children (the design places them beside TabIdentity).
+	-- FindFirstChild(true) keeps the first on a duplicate-name place bug.
+	local eventTab = if contentWrapper then asScrollingFrame(contentWrapper:FindFirstChild("EventTab")) else nil
+	local backButtons: { TextButton } = {}
+	for _, tab in ipairs({ profileTab, settingsTab, eventTab }) do
+		if tab then
+			local button = asTextButton(tab:FindFirstChild("BacktoMainMenuButton", true))
+			if button then
+				table.insert(backButtons, button)
+			end
+		end
+	end
+
 	return {
 		root = gui,
 		outerWrapper = outerWrapper,
@@ -252,7 +268,7 @@ function MenuGuiRefsModule.resolve(gui: ScreenGui): MenuGuiRefs?
 		gradientOverlay = asFrame(outerWrapper:FindFirstChild("GradientOverlay")),
 		profileTab = profileTab,
 		settingsTab = settingsTab,
-		eventTab = if contentWrapper then asScrollingFrame(contentWrapper:FindFirstChild("EventTab")) else nil,
+		eventTab = eventTab,
 		tabWrapper = tabWrapper,
 		tabSwitcher = tabSwitcher,
 		tabButtons = resolveTabButtons(tabSwitcher),
@@ -307,6 +323,7 @@ function MenuGuiRefsModule.resolve(gui: ScreenGui): MenuGuiRefs?
 		settingsTabIdentity = settingsTabIdentity,
 		settingsTabTitle = settingsTabTitle,
 		settingsTabSubtitle = settingsTabSubtitle,
+		backButtons = backButtons,
 	}
 end
 

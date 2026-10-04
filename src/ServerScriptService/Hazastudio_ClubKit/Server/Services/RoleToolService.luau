@@ -332,7 +332,7 @@ function RoleToolService:syncPlayer(player: Player, payload: OverheadPayload?)
 		if not folder then
 			-- Downgrade to debug: folder mismatch adalah config issue, bukan runtime error.
 			-- Warning only sekali per session for mengurangi log spam.
-			local warnKey = "RoleToolsFolderMissing_" .. folderName
+			local warnKey = "RoleToolsFolderMissing_" .. folderName:gsub("[^%w]", "_")
 			if not player:GetAttribute(warnKey) then
 				player:SetAttribute(warnKey, true)
 				self._log:debug("Role tools folder not found (config mismatch)", {

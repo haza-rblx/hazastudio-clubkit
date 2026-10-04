@@ -26,6 +26,7 @@ local NotificationCenterGui = require(script.Parent.Parent.Utils.NotificationCen
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local OverheadController = require(script.Parent.OverheadController)
 local GenericBroadcastLayoutBridge = require(script.Parent.Parent.Services.GenericBroadcastLayoutBridge)
+local TextMeasurementCache = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.TextMeasurementCache)
 type DonationNotifPayload = Types.DonationNotifPayload
 type TemplateRefs = {
 	panel: CanvasGroup,
@@ -145,6 +146,8 @@ local LIVECHAT_STAGGER_FOOTER = 0.14
 local DEDUP_WINDOW_SECS = 2.5
 -- HELPERS
 local log = Logger.new("Client.DonationNotificationController")
+
+local textWidthCache = TextMeasurementCache.new(256)
 
 local _connections: { RBXScriptConnection } = {}
 
@@ -1467,6 +1470,17 @@ local function buildInitialRunningStripPositions(
 end
 
 local function measureTextWidth(label: TextLabel, text: string): number
+	local cacheKey = table.concat({
+		text,
+		tostring(label.FontFace),
+		tostring(label.TextSize),
+		tostring(label.TextWrapped),
+	}, "|")
+	local cachedWidth = textWidthCache:get(cacheKey)
+	if cachedWidth then
+		return cachedWidth
+	end
+
 	local params = Instance.new("GetTextBoundsParams")
 	params.Text = text
 	params.Font = label.FontFace
@@ -1477,6 +1491,7 @@ local function measureTextWidth(label: TextLabel, text: string): number
 		return TextService:GetTextBoundsAsync(params)
 	end)
 	if ok then
+		textWidthCache:set(cacheKey, result.X)
 		return result.X
 	end
 

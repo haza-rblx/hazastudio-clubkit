@@ -1,4 +1,4 @@
---!strict
+﻿--!strict
 -- Client motion for workspace SurfaceGui leaderboards (server paints static data).
 -- LiveChatDonations is intentionally not handled here yet.
 
@@ -125,8 +125,8 @@ local DAILY_CARD_STAGGER = 0.09 -- delay between card entries for the domino eff
 local DAILY_BATCH_HOLD = 5.2
 local DAILY_SEQUENCE_RESTART_DELAY = 0.6
 
--- Everything this controller remembers about a board element — designed values captured before the
--- first animation touched them, last-painted text, generation counters, loop guards — in one STRONG
+-- Everything this controller remembers about a board element â€” designed values captured before the
+-- first animation touched them, last-painted text, generation counters, loop guards â€” in one STRONG
 -- record per Instance, reclaimed on its `Destroying` (InstanceState; ADR 0011 addendum,
 -- 2026-09-17). These were 21 weak-keyed tables, and Roblox drops a weak entry while the label is
 -- still on the board: a lost "original" was re-captured mid-pulse (a grown TextSize or a
@@ -317,7 +317,7 @@ local function formatDonationValue(kind: string, value: number): string
 		return DonationAmountFormat.formatCashBoard(value)
 	end
 	if kind == "level" then
-		return "LV " .. tostring(math.floor(value))
+		return "Lv. " .. tostring(math.floor(value))
 	end
 	if kind == "streak" or kind == "couple" then
 		local days = math.floor(value)
@@ -1693,3 +1693,4 @@ local function init(_deps: {}?)
 end
 
 return { init = init, destroy = destroy }
+

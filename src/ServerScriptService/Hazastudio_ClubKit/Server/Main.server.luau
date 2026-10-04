@@ -393,6 +393,11 @@ local donationLeaderboardRepository =
 local giftPendingRepository = ServerMods.GiftPendingRepository.create({
 	logger = Logger.new("GiftPendingRepository"),
 })
+-- Weekly perk quotas for external-admin bridge perks (e.g. Kohl's smite 3x/week).
+local perkQuotaRepository = ServerMods.PerkQuotaRepository.create({
+	logger = Logger.new("PerkQuotaRepository"),
+})
+ServerMods.ExternalAdminFacade.injectPerkQuotaRepository(perkQuotaRepository)
 local manualBagibagiRepository = ServerMods.ManualBagibagiRepository.create({
 	logger = Logger.new("ManualBagibagiRepository"),
 })
@@ -1346,6 +1351,13 @@ commandExecutionService = ServerMods.createCommandExecutionService({
 	genericBroadcastService = genericBroadcastService,
 	grantNetwork = giftGrantNetwork,
 })
+-- /fly + /unfly + /smite for membership tiers via the ExternalAdminFacade gate
+-- (Command Library + chat); no-op until the Kohl's bridge pack is installed.
+ServerMods.createExternalAdminPerkCommands({
+	facade = ServerMods.ExternalAdminFacade,
+	playerLookupService = playerLookupService,
+	notify = Notify,
+}).register(commandExecutionService)
 if gravityService then
 	local gravityController = ServerMods.createGravityController({
 		service = gravityService,

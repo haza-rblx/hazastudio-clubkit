@@ -14,6 +14,7 @@ local RateLimiter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Ra
 local NetworkManager = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.NetworkManager)
 local Validator = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Validator)
 local TextFilterUtil = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.TextFilterUtil)
+local TTLSet = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.TTLSet)
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 type ILogger = Types.ILogger
 type INotify = {
@@ -121,6 +122,10 @@ local function createShopController(
 		RateLimiter.new(Config.Donation.ROBUX_PRODUCTS_RATE_MAX, Config.Donation.ROBUX_PRODUCTS_RATE_WINDOW)
 	local processedGiftReqs: { [string]: number } = {}
 	local processedDonationProductReqs: { [string]: number } = {}
+	local processedPendingDonationReqs = TTLSet.create({
+		ttl = Config.Security.REQUEST_DEDUPE_WINDOW,
+		maxSize = 2000,
+	})
 	local pendingDonations: { [number]: { productId: number, message: string, expiresAt: number } } = {}
 	local donationProducts: { DonationProduct } = {}
 	local donationProductsById: { [number]: DonationProduct } = {}
@@ -1184,6 +1189,16 @@ local function createShopController(
 				if not donationLimiter:check(player.UserId) then
 					log:warn("Donation pending rate limited", { player = player.Name })
 					return
+				end
+				-- New clients send a request ID. Keep accepting older clients without one,
+				-- but dedupe valid IDs per player so a replay cannot replace their pending donation.
+				local requestId = raw.requestId
+				if type(requestId) == "string" and #requestId > 0 and #requestId <= 128 then
+					local dedupeKey = tostring(player.UserId) .. ":" .. requestId
+					if processedPendingDonationReqs:contains(dedupeKey) then
+						return
+					end
+					processedPendingDonationReqs:add(dedupeKey)
 				end
 				local productId = tonumber(raw.productId)
 				if not productId or not getDonationProduct(productId) then

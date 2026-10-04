@@ -984,6 +984,28 @@ function TopMenuController.init(deps: InitDeps)
 		end))
 	end
 
+	-- The menu's tab-level Back buttons (07-MenuGUI) hand control back to this
+	-- top menu. `menuIcon:select()` fires this controller's own selected
+	-- handler → showMenu(), whose closeSettingsPanelIfOpen() closes the menu
+	-- panel first; the topbar icon label flips to its selected state and the
+	-- open cascade + backdrop play exactly like a normal open. Wired here in
+	-- init() (after every local function exists) rather than in setSettingsUI
+	-- (which runs earlier, at SettingsController.init).
+	local settingsUI = settingsUIRef
+	if settingsUI and type(settingsUI.bindBackToMainMenu) == "function" then
+		settingsUI:bindBackToMainMenu(function()
+			-- Closed here as well: showMenu would do it, but not when the top
+			-- menu is somehow already open and the selected handler
+			-- early-returns.
+			closeSettingsPanelIfOpen()
+			if menuIconRef and type(menuIconRef.select) == "function" then
+				pcall(function()
+					menuIconRef:select()
+				end)
+			end
+		end)
+	end
+
 	local camera = workspace.CurrentCamera
 	if camera and viewportConnection == nil then
 		viewportConnection = camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()

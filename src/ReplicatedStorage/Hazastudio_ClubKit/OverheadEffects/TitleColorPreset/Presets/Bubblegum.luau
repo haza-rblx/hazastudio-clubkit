@@ -1,6 +1,5 @@
-local RunService = game:GetService("RunService");
-
 local TextEffects = require(script.Parent.Parent);
+local SharedTickConnection = require(script.Parent.Parent.SharedTickConnection);
 
 return function(uiInstance: GuiObject, speed: number, size: number, customColor: ColorSequence | Color3?, customTransparency: NumberSequence | number?, useScaledSize: boolean?)
 
@@ -20,7 +19,7 @@ return function(uiInstance: GuiObject, speed: number, size: number, customColor:
 	local maxMultiplier = 3 + variationPercent;
 
 	local Connection;
-	Connection = RunService.Heartbeat:Connect(function()
+	Connection = SharedTickConnection({}, function()
 		if (not mainStroke.Instance or mainStroke.Instance.Parent == nil) then
 			Connection:Disconnect();
 			return;
@@ -30,7 +29,7 @@ return function(uiInstance: GuiObject, speed: number, size: number, customColor:
 		local normalizedWave = (math.sin(t) + 1) / 2;
 		local sizeMultiplier = minMultiplier + (maxMultiplier - minMultiplier) * normalizedWave;
 		mainStroke:SetSize(size * sizeMultiplier, 0.15);
-	end);
+	end, uiInstance);
 
 	return {
 		Effects = { mainGradient, strokeGradient, mainStroke },

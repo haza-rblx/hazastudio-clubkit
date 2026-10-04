@@ -67,6 +67,15 @@ ClubKitConfig.ExternalAdmin = {
 		Moderator = { adonis = 100, kohls = "mod" },
 		-- DJ = { adonis = 50, kohls = "content" }, -- opt-in low-power example (needs SyncContentRoles = true)
 	},
+	-- Member perks enforced by the Kohl's bridge addon (fly/smite).
+	-- true = unlimited, number = uses per ISO week (resets Mon 00:00 UTC),
+	-- false = denied at that tier. Highest configured tier the player holds wins.
+	Perks = {
+		Enabled = true,
+		Fly = { Tier2 = true }, -- VVIP and above can fly (self only)
+		Smite = { Tier3 = 3 }, -- Exclusive: 3 free smites per week
+		StaffBypass = true, -- staff roles keep native admin fly/smite on anyone
+	},
 }
 
 -- Temporary leaderboard warm-up (optional): [userId] = rank
@@ -193,9 +202,9 @@ ClubKitConfig.Loading = {
 -- =============================================================================
 ClubKitConfig.Shop = {
 	Products = {
-		Tier1 = { BuyGamePassId = 0, GiftId = 3608406587, BuyId = 3608406407, Price = 1 }, -- VIP
-		Tier2 = { BuyGamePassId = 0, GiftId = 3608406626, BuyId = 3608406452, Price = 1 }, -- VVIP
-		Tier3 = { BuyGamePassId = 0, GiftId = 3608406664, BuyId = 3608406486, Price = 1 }, -- Supreme
+		Tier1 = { BuyGamePassId = 1997972677, GiftId = 3608406587, BuyId = 3608406407, Price = 200 }, -- VIP
+		Tier2 = { BuyGamePassId = 1998650647, GiftId = 3608406626, BuyId = 3608406452, Price = 500 }, -- VVIP
+		Tier3 = { BuyGamePassId = 1998218693, GiftId = 3608406664, BuyId = 3608406486, Price = 1000 }, -- Exclusive
 	},
 }
 
@@ -223,7 +232,7 @@ ClubKitConfig.Announcement = {
 ClubKitConfig.Membership = {
 	Tier1 = { Label = "VIP", Enabled = true, Priority = 40 },
 	Tier2 = { Label = "VVIP", Enabled = true, Priority = 50 },
-	Tier3 = { Label = "Supreme", Enabled = true, Priority = 60 },
+	Tier3 = { Label = "Exclusive", Enabled = true, Priority = 60 },
 }
 
 -- =============================================================================
@@ -297,7 +306,7 @@ ClubKitConfig.RoleCategories = {
 				chatTag = "MODERATOR",
 				toolFolder = "MODERATOR",
 				teamColor = "Bright violet",
-				enabled = true,
+				enabled = false,
 				specialRank = { text = "MODERATOR", gradient = true },
 				roleColor = { primary = "#8B5CF6", secondary = "#C4B5FD" },
 			},
@@ -323,7 +332,7 @@ ClubKitConfig.RoleCategories = {
 				chatTag = "DJ",
 				toolFolder = "DJ",
 				teamColor = "Cyan",
-				enabled = true,
+				enabled = false,
 				specialRank = { text = "DJ", gradient = true },
 				showSpecialStatus = true,
 				roleColor = { primary = "#06B6D4", secondary = "#67E8F9" },
@@ -334,7 +343,7 @@ ClubKitConfig.RoleCategories = {
 				chatTag = "LEAD DANCE",
 				toolFolder = "LEAD DANCE",
 				teamColor = "Really red",
-				enabled = true,
+				enabled = false,
 				specialRank = { text = "LEAD DANCE", gradient = true },
 				showSpecialStatus = true,
 				roleColor = { primary = "#BE123C", secondary = "#FB7185" },
@@ -865,6 +874,26 @@ ClubKitConfig.AntiTamper = {
 	ForeignGuiDetect = true,
 	ForeignGuiGraceSeconds = 20,
 	ForeignGuiAllowNames = { "Adonis", "Adonis_Loader", "Kohl's Admin", "HD Admin", "BasicAdmin", "Chat" },
+}
+
+-- =============================================================================
+-- AVATAR GUARD — oversized / flashy accessories (server-side trim, no kick)
+-- =============================================================================
+-- Accessories bigger than MaxAccessoryStuds (any Handle axis × SpecialMesh.Scale),
+-- or a whole character over the bounds, are removed server-side so every player
+-- sees a normal avatar. Enabled = false keeps every accessory as loaded.
+ClubKitConfig.AvatarGuard = {
+	Enabled = true,
+	-- Any Handle axis (× SpecialMesh.Scale) larger than this is removed (studs).
+	MaxAccessoryStuds = 10,
+	-- Whole-character bounds (studs): largest accessories are dropped until the
+	-- character fits. Raise both for venues whose normal fashion is big wings.
+	MaxCharacterHeight = 14,
+	MaxCharacterWidth = 10,
+	MaxAccessories = 30,
+	-- "cap" = keep the effect but clamp Beam width / light range / particle values.
+	-- "strip" = destroy the effect instance, keep the mesh.
+	Effects = "cap",
 }
 
 -- =============================================================================

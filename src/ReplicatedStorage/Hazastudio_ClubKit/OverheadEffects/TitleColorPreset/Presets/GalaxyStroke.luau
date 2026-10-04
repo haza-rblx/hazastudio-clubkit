@@ -1,6 +1,5 @@
-local RunService = game:GetService("RunService");
-
 local TextEffects = require(script.Parent.Parent);
+local SharedTickConnection = require(script.Parent.Parent.SharedTickConnection);
 
 return function(uiInstance: GuiObject, speed: number, size: number, customColor: ColorSequence | Color3?, customTransparency: NumberSequence | number?, useScaledSize: boolean?)
     
@@ -17,7 +16,7 @@ return function(uiInstance: GuiObject, speed: number, size: number, customColor:
 
     local Rotation = 0;
     local Connection;
-    Connection = RunService.Heartbeat:Connect(function(dt)
+	Connection = SharedTickConnection({}, function(dt)
         if (not mainGradient.Instance or mainGradient.Instance.Parent == nil) then
             Connection:Disconnect();
             return;
@@ -25,7 +24,7 @@ return function(uiInstance: GuiObject, speed: number, size: number, customColor:
         Rotation = Rotation + speed * dt * 15;
         mainGradient:SetRotation(Rotation, 0.15);
         strokeGradient:SetRotation(-Rotation, 0.15);
-    end);
+	    end, uiInstance);
 
     return {
         Effects = { mainGradient, strokeGradient, mainStroke },

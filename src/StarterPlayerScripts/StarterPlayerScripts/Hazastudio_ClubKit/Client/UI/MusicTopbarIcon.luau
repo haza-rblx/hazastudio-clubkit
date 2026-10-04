@@ -12,9 +12,9 @@
 --   nil on hide, and on show always re-apply styling (align) so TopbarPlus
 --   reparents even if our cached parent was lost.
 --
--- Horizontal setMenu children (Music Player / Load Track) are created once and
--- kept for the icon lifetime. applyStyling re-runs on show but must not rebuild
--- the menu (would orphan listeners / thrash TopbarPlus).
+-- Dropdown children (Music Player / Load Track) are created once and kept for
+-- the icon lifetime. applyStyling re-runs on show but must not rebuild the menu
+-- (would orphan listeners / thrash TopbarPlus).
 
 local MusicTopbarIcon = {}
 MusicTopbarIcon.__index = MusicTopbarIcon
@@ -52,6 +52,8 @@ export type MusicTopbarIcon = typeof(setmetatable(
 		_openPlayerCallbacks: { SelectionCallback },
 		_loadTrackCallbacks: { SelectionCallback },
 		_destroyed: boolean,
+		_dropdownItems: { any }?,
+		_dropdownApplied: boolean,
 	},
 	MusicTopbarIcon
 ))
@@ -204,7 +206,9 @@ end
 
 local function setupMenu(self: MusicTopbarIcon, openPlayerLabel: string, loadTrackLabel: string)
 	local parent = self._instance
-	if parent == nil or type(parent.setMenu) ~= "function" then
+	-- Vertical dropdown (opens downward) instead of the horizontal side menu:
+	-- on phones the horizontal strip ran off-screen and was hard to tap.
+	if parent == nil or type(parent.setDropdown) ~= "function" then
 		return
 	end
 
@@ -224,9 +228,13 @@ local function setupMenu(self: MusicTopbarIcon, openPlayerLabel: string, loadTra
 		return
 	end
 
-	safePcall(function()
-		parent:setMenu(items)
-	end)
+	-- Defer setDropdown until the widget is parented (first show).
+	-- TopbarPlus' clipOutside — called inside getDropdown — needs the widget
+	-- to be parented so it can resolve the clipped container. Calling
+	-- setDropdown before the icon is shown silently leaves the Dropdown
+	-- element un-created, and the icon falls back to its default horizontal
+	-- Menu element. Store items and apply in assertVisible on first show.
+	self._dropdownItems = items
 end
 
 function MusicTopbarIcon.new(deps: Deps): MusicTopbarIcon
@@ -249,6 +257,8 @@ function MusicTopbarIcon.new(deps: Deps): MusicTopbarIcon
 		_openPlayerCallbacks = {} :: { SelectionCallback },
 		_loadTrackCallbacks = {} :: { SelectionCallback },
 		_destroyed = false,
+		_dropdownItems = nil :: { any }?,
+		_dropdownApplied = false,
 	}, MusicTopbarIcon)
 
 	local ok, instance = pcall(deps.iconFactory)
@@ -358,6 +368,16 @@ local function assertVisible(self: MusicTopbarIcon)
 		end
 		widget.Visible = true
 		widget.Active = true
+	end
+
+	-- Apply the vertical dropdown once the widget is parented.
+	-- TopbarPlus needs the widget in the DataModel to resolve the clipped
+	-- container; calling setDropdown before parenting silently fails.
+	if not self._dropdownApplied and self._dropdownItems then
+		self._dropdownApplied = true
+		safePcall(function()
+			(instance :: any):setDropdown(self._dropdownItems)
+		end)
 	end
 end
 

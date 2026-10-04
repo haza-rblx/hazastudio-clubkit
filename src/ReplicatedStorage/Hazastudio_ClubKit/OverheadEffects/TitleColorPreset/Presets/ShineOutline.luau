@@ -1,4 +1,4 @@
-local RunService = game:GetService("RunService");
+local SharedTickConnection = require(script.Parent.Parent.SharedTickConnection);
 local TextEffects = require(script.Parent.Parent);
 
 local function makeLighter(color: Color3, amount: number): Color3
@@ -46,14 +46,14 @@ return function(uiInstance: GuiObject, speed: number, size: number, customColor:
 	local Rotation = 0.75;
 	
 	local Connection
-	Connection = RunService.Heartbeat:Connect(function(dt)
+	Connection = SharedTickConnection({}, function(dt)
 		if (not mainStroke.Instance or mainStroke.Instance.Parent == nil) then
 			Connection:Disconnect();
 		end;
 		
 		Rotation = Rotation + speed * dt;
 		strokeGradient:SetRotation(Rotation, 1);
-	end);
+	end, uiInstance);
 
 	return {
 		Effects = { strokeGradient, mainStroke },
