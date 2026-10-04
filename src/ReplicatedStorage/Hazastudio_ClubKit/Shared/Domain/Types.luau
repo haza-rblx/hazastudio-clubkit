@@ -471,6 +471,7 @@ export type SettingsStoredData = {
 	_musicVolBase: number,
 	graphicsPreset: GraphicsPreset,
 	shadowQuality: ShadowQuality,
+	postEffects: boolean,
 	overheadDistance: OverheadDistanceMode,
 	overheadLayerVisible: { [string]: boolean },
 	overheadBadgeVisible: { [string]: boolean },

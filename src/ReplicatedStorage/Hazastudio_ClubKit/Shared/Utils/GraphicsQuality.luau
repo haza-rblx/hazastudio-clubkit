@@ -30,7 +30,9 @@ export type GraphicsBundle = {
 	-- value does change, so a census of it looks like success while the renderer keeps the
 	-- mesh it tessellated at load: nothing visible happens. Mesh detail is therefore place
 	-- data, authored in Studio and saved, like Lighting.Technology.
-	workspaceVfxMode: WorkspaceVfxMode,
+	-- Place-authored BloomEffect / SunRaysEffect on/off. The Bloom settings row
+	-- stores itself here; the preset owns it until the player overrides (Bloom toggle).
+	postEffects: boolean,
 	postProcessing: PostProcessingMode,
 	donationVfxScale: number,
 	cinematicExtras: boolean,
@@ -52,6 +54,7 @@ GraphicsQuality.OVERRIDE_FIELDS = {
 	"depthOfField",
 	"hideAllParticles",
 	"shadowQuality",
+	"postEffects",
 } :: { string }
 
 local BUNDLES: { [GraphicsPreset]: GraphicsBundle } = {
@@ -68,6 +71,7 @@ local BUNDLES: { [GraphicsPreset]: GraphicsBundle } = {
 		surfaceAppearance = true,
 		shadowSoftness = 0,
 		workspaceVfxMode = "Off",
+		postEffects = false,
 		postProcessing = "Minimal",
 		donationVfxScale = 0.25,
 		cinematicExtras = false,
@@ -83,7 +87,7 @@ local BUNDLES: { [GraphicsPreset]: GraphicsBundle } = {
 		partShadows = true,
 		surfaceAppearance = true,
 		shadowSoftness = 0.15,
-		workspaceVfxMode = "Reduced",
+		postEffects = true,
 		postProcessing = "Standard",
 		donationVfxScale = 0.7,
 		cinematicExtras = true,
@@ -101,7 +105,7 @@ local BUNDLES: { [GraphicsPreset]: GraphicsBundle } = {
 		partShadows = true,
 		surfaceAppearance = true,
 		shadowSoftness = 0.55,
-		workspaceVfxMode = "Full",
+		postEffects = true,
 		postProcessing = "Full",
 		donationVfxScale = 1,
 		cinematicExtras = true,
@@ -228,6 +232,7 @@ function GraphicsQuality.cascadePresetToStored(stored: {
 	depthOfField: number,
 	hideAllParticles: boolean,
 	shadowQuality: ShadowQuality,
+	postEffects: boolean,
 	graphicsOverrides: GraphicsOverrideMap?,
 }): ({ graphicsOverrides: GraphicsOverrideMap } & typeof(stored))
 	local bundle = GraphicsQuality.getBundle(stored.graphicsPreset)
@@ -236,6 +241,7 @@ function GraphicsQuality.cascadePresetToStored(stored: {
 	next.depthOfField = bundle.depthOfField
 	next.hideAllParticles = bundle.hideAllParticles
 	next.shadowQuality = bundle.shadowQuality
+	next.postEffects = bundle.postEffects
 	next.graphicsOverrides = GraphicsQuality.clearOverrides()
 	return next
 end
@@ -246,6 +252,7 @@ function GraphicsQuality.getEffective(stored: {
 	depthOfField: number,
 	hideAllParticles: boolean,
 	shadowQuality: ShadowQuality,
+	postEffects: boolean,
 	graphicsOverrides: GraphicsOverrideMap?,
 }): EffectiveGraphics
 	local preset = stored.graphicsPreset
@@ -263,6 +270,7 @@ function GraphicsQuality.getEffective(stored: {
 	local depthOfField = pick("depthOfField", bundle.depthOfField, stored.depthOfField)
 	local hideAllParticles = pick("hideAllParticles", bundle.hideAllParticles, stored.hideAllParticles)
 	local shadowQuality = pick("shadowQuality", bundle.shadowQuality, stored.shadowQuality)
+	local postEffects = pick("postEffects", bundle.postEffects, stored.postEffects)
 
 	local globalShadows = bundle.globalShadows
 	local lightShadows = bundle.lightShadows
@@ -304,6 +312,7 @@ function GraphicsQuality.getEffective(stored: {
 		depthOfField = depthOfField,
 		hideAllParticles = hideAllParticles,
 		shadowQuality = shadowQuality,
+		postEffects = postEffects,
 		globalShadows = globalShadows,
 		lightShadows = lightShadows,
 		partShadows = partShadows,

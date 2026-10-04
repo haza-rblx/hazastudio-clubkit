@@ -33,6 +33,7 @@ local DEFAULT_STORED: SettingsStoredData = {
 	-- (Config.Graphics.DEFAULT_PRESET) and cascades that preset's own fields.
 	graphicsPreset = "Low",
 	shadowQuality = "Off",
+	postEffects = false,
 	overheadDistance = "Medium",
 	overheadLayerVisible = {
 		["SpecialTitle"] = true,
@@ -182,7 +183,7 @@ function SettingsDomain.sanitizeStored(raw: any): SettingsStoredData
 		then "High"
 		else pickEnum(raw.graphicsPreset, { "Low", "Balanced", "High" }, base.graphicsPreset)
 	base.shadowQuality = pickEnum(raw.shadowQuality, { "Off", "Balanced", "High" }, base.shadowQuality)
-	base.overheadDistance = pickEnum(raw.overheadDistance, { "Near", "Medium", "Far" }, base.overheadDistance)
+	base.postEffects = pickBoolean(raw.postEffects, base.postEffects)
 	base.overheadLayerVisible = sanitizeMap(raw.overheadLayerVisible, base.overheadLayerVisible)
 	base.overheadBadgeVisible = sanitizeMap(raw.overheadBadgeVisible, base.overheadBadgeVisible)
 	base.chatBubbleVisibility =
@@ -245,6 +246,7 @@ function SettingsDomain.merge(stored: SettingsStoredData?, session: SettingsSess
 		_musicVolBase = storedData._musicVolBase,
 		graphicsPreset = storedData.graphicsPreset,
 		shadowQuality = storedData.shadowQuality,
+		postEffects = storedData.postEffects,
 		overheadDistance = storedData.overheadDistance,
 		overheadLayerVisible = storedData.overheadLayerVisible,
 		overheadBadgeVisible = storedData.overheadBadgeVisible,

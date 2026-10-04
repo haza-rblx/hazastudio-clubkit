@@ -209,6 +209,7 @@ local function createSettingsController(deps: {
 		depthOfField = 0,
 		hideAllParticles = provisionalPreset == "Low",
 		shadowQuality = if provisionalPreset == "Low" then "Off" else "Balanced",
+		postEffects = provisionalPreset ~= "Low",
 		graphicsOverrides = {},
 	})
 	local HOTBAR_STATE_B_BASE_SCALE = 1.12
@@ -562,6 +563,7 @@ local function createSettingsController(deps: {
 			_musicVolBase = payload._musicVolBase,
 			graphicsPreset = payload.graphicsPreset,
 			shadowQuality = payload.shadowQuality,
+			postEffects = (payload :: any).postEffects == true,
 			overheadDistance = payload.overheadDistance,
 			overheadLayerVisible = table.clone(payload.overheadLayerVisible),
 			overheadBadgeVisible = table.clone(payload.overheadBadgeVisible),
@@ -587,6 +589,7 @@ local function createSettingsController(deps: {
 			depthOfField = currentPayload.depthOfField,
 			hideAllParticles = currentPayload.hideAllParticles,
 			shadowQuality = currentPayload.shadowQuality,
+			postEffects = (currentPayload :: any).postEffects == true,
 			graphicsOverrides = currentPayload.graphicsOverrides or {},
 		}
 	end
@@ -928,8 +931,16 @@ local function createSettingsController(deps: {
 		end
 	end
 
-	local function applyPostProcessingSetting(instance: Instance, mode: GraphicsQuality.PostProcessingMode)
-		if instance.Name == SETTINGS_DEPTH_OF_FIELD_NAME
+	local function isBloomPostEffect(instance: Instance): boolean
+		for _, className in ipairs(POST_PROCESSING_CLASSES) do
+			if instance:IsA(className) then
+				return true
+			end
+		end
+		return false
+	end
+local function applyPostProcessingSetting(instance: Instance, mode: GraphicsQuality.PostProcessingMode)
+	if instance.Name == SETTINGS_DEPTH_OF_FIELD_NAME
 			or instance.Name == "RuntimeSettingsEyeComfort"
 			or instance.Name == SETTINGS_COLOR_TUNE_NAME
 			or instance.Name == "RuntimeSettingsMenuBackdrop"
@@ -969,8 +980,18 @@ local function createSettingsController(deps: {
 		local original = instance:GetAttribute(ORIGINAL_POSTFX_ENABLED_ATTRIBUTE)
 		local originalEnabled = type(original) == "boolean" and original or postEffect.Enabled
 
+		-- Minimal mode (Low preset) disables every post effect, bloom toggle included.
 		if mode == "Minimal" then
 			postEffect.Enabled = false
+			return
+		end
+
+		-- Bloom toggle (postEffects override): place-authored Bloom/SunRays effects
+		-- follow the player's stored choice instead of their authored Enabled state.
+		-- Runtime donation effects (SmiteBloom, NukeBloom, NatureBloom) manage their
+		-- own Enabled and never pass rememberPostFxEnabled, so they are untouched.
+		if isBloomPostEffect(instance) then
+			postEffect.Enabled = effectiveGraphics.postEffects and originalEnabled == true
 			return
 		end
 
@@ -978,10 +999,13 @@ local function createSettingsController(deps: {
 	end
 
 	local function applyPostProcessing(mode: GraphicsQuality.PostProcessingMode)
-		if appliedPostProcessing == mode then
+		-- The cache key folds in the Bloom row's state: postProcessing mode alone would
+		-- swallow the toggle (same mode, no re-apply), leaving bloom stuck on its old value.
+		local cacheKey = mode .. ":" .. tostring(effectiveGraphics.postEffects)
+		if appliedPostProcessing == cacheKey then
 			return
 		end
-		appliedPostProcessing = mode
+		appliedPostProcessing = cacheKey
 		for _, child in ipairs(Lighting:GetChildren()) do
 			applyPostProcessingSetting(child, mode)
 		end
@@ -1126,8 +1150,15 @@ local function createSettingsController(deps: {
 			or inst:IsA("Sparkles")
 	end
 
-	local function shouldShowCharacterEffects(_player: Player): boolean
-		return not effectiveGraphics.hideAllParticles
+	-- Player Particles row (playerEffects) gates OTHER players' character effects;
+	-- the local player's own character keeps rendering its effects either way
+	-- (the row is about not having to look at a crowded dance floor, not about
+	-- hiding what you broadcast). hideAllParticles (preset cascade) gates all.
+	local function shouldShowCharacterEffects(player: Player): boolean
+		if player == localPlayer then
+			return not effectiveGraphics.hideAllParticles
+		end
+		return not effectiveGraphics.hideAllParticles and currentPayload.playerEffects ~= false
 	end
 
 	local function getManagedEffectOriginalEnabled(inst: Instance): boolean
@@ -1264,46 +1295,6 @@ local function createSettingsController(deps: {
 		end
 	end
 
-	local function focusOffset(mode: string): Vector3
-		if mode == "Head" then
-			return Vector3.new(0, 2.4, 0.4)
-		elseif mode == "FullBody" then
-			return Vector3.new(0, 0.8, 2.6)
-		end
-		return Vector3.new(0, 1.5, 0.8)
-	end
-
-	local function getMenuPreviewOffset(): Vector3?
-		if not menuPreviewVisible then
-			return nil
-		end
-
-		local camera = getCurrentCamera()
-		if not camera then
-			return Vector3.new(0.75, 2.0, 1.8)
-		end
-
-		local panelLeftX = nil
-		if type(ui.getPanelLeftScreenX) == "function" then
-			panelLeftX = ui:getPanelLeftScreenX()
-		end
-
-		local viewportWidth = camera.ViewportSize.X
-		if not panelLeftX or viewportWidth <= 0 then
-			return Vector3.new(0.75, 2.0, 1.8)
-		end
-
-		local desiredCenterX = panelLeftX * 0.5
-		local screenCenterX = viewportWidth * 0.5
-		local shiftRatio = math.clamp((screenCenterX - desiredCenterX) / viewportWidth, 0, 0.25)
-		local horizontalOffset = 0.4 + (shiftRatio * 6.5)
-		return Vector3.new(horizontalOffset, 2.0, 1.8)
-	end
-
-	local function getSmoothFactor(): number
-		return 0.5
-	end
-
 	local function applyHotbarZoom(_percent: number?)
 		Config.Hotbar.STATE_A.SCALE = 1.0
 		if Config.Hotbar.DOCK_ZOOM_ENABLED ~= true then
@@ -1317,10 +1308,10 @@ local function createSettingsController(deps: {
 	end
 
 	local function applyCameraFocus()
-		-- DISABLED 2026-05-23: "Follow" (cameraFocus) reverted to Roblox default.
-		-- Reset CameraOffset to zero so if a previous session set offset
-		-- (Torso/Head/FullBody), the effect clears. FOV slider still applied here
-		-- because FOV is separate from follow offset.
+		-- DISABLED: "Focus Lock" (cameraFocus) stays at Roblox default camera (no offset).
+		-- A 2026-10-04 restore was reverted by the owner the same day; keep the zero reset
+		-- so any offset a previous build set (Torso/Head/FullBody) clears on next boot.
+		-- FOV slider still applies here because FOV is separate from follow offset.
 		if cameraTween then
 			cameraTween:Cancel()
 			cameraTween = nil
@@ -1750,7 +1741,7 @@ local function createSettingsController(deps: {
 			colorSaturation = currentPayload.colorSaturation,
 			depthOfField = currentPayload.depthOfField,
 			playerEffects = currentPayload.playerEffects,
-			hideAllParticles = currentPayload.hideAllParticles,
+			postEffects = (currentPayload :: any).postEffects == true,
 			textures = currentPayload.textures,
 			musicVolume = currentPayload.musicVolume,
 			_musicVolBase = math.max(
@@ -1759,6 +1750,7 @@ local function createSettingsController(deps: {
 			),
 			graphicsPreset = currentPayload.graphicsPreset,
 			shadowQuality = currentPayload.shadowQuality,
+			postEffects = (currentPayload :: any).postEffects == true,
 			overheadDistance = currentPayload.overheadDistance,
 			overheadLayerVisible = table.clone(currentPayload.overheadLayerVisible),
 			overheadBadgeVisible = table.clone(currentPayload.overheadBadgeVisible),
@@ -1897,12 +1889,14 @@ local function createSettingsController(deps: {
 				depthOfField = payloadAny.depthOfField,
 				hideAllParticles = payloadAny.hideAllParticles,
 				shadowQuality = payloadAny.shadowQuality,
+				postEffects = payloadAny.postEffects == true,
 				graphicsOverrides = payloadAny.graphicsOverrides or {},
 			})
 			payloadAny.textures = cascaded.textures
 			payloadAny.depthOfField = cascaded.depthOfField
 			payloadAny.hideAllParticles = cascaded.hideAllParticles
 			payloadAny.shadowQuality = cascaded.shadowQuality
+			payloadAny.postEffects = cascaded.postEffects
 			payloadAny.graphicsOverrides = cascaded.graphicsOverrides
 		else
 			payloadAny[field] = value

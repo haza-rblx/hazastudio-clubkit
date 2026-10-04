@@ -122,6 +122,8 @@ local SETTINGS_ICON_BY_FIELD: { [string]: string } = {
 	overheadDistance = SETTINGS_ICON.NameTag,
 	chatBubbleVisibility = SETTINGS_ICON.BubbleChat,
 	hideAllParticles = SETTINGS_ICON.Fun,
+	playerEffects = SETTINGS_ICON.Fun,
+	postEffects = SETTINGS_ICON.On,
 	overheadVisible = SETTINGS_ICON.NameTag,
 	relationshipMode = SETTINGS_ICON.Single,
 	showCoupleName = SETTINGS_ICON.Taken,
@@ -193,112 +195,23 @@ local MEMBERSHIP_TIER_STYLE = {
 	},
 }
 
+local function colorTuneFormat(v: number): string
+	local rounded = math.floor(v + 0.5)
+	if rounded == 50 then
+		return "Default"
+	end
+	local delta = rounded - 50
+	if delta > 0 then
+		return "+" .. tostring(delta) .. "%"
+	end
+	return tostring(delta) .. "%"
+end
+
 local SECTION_DEFS: { SettingsSectionDef } = {
 	{
-		key = "graphics",
-		title = "Graphics",
-		subtitle = "Low applies performance settings automatically. Visual Comfort below can override.",
-		items = {
-			{
-				kind = "segmented",
-				field = "graphicsPreset",
-				label = "Overall Quality",
-				options = {
-					{ label = "Low", value = "Low", iconImage = SETTINGS_ICON.GraphicsLow },
-					{ label = "Balance", value = "Balanced", iconImage = SETTINGS_ICON.GraphicsMed },
-					{ label = "High", value = "High", iconImage = SETTINGS_ICON.GraphicsHigh },
-				},
-			},
-		},
-	},
-	{
-		key = "visual",
-		title = "Visual Comfort",
-		subtitle = "Fine-tune effects. Changes here override your quality preset.",
-		items = {
-			{ kind = "toggle", field = "eyeComfortMode", label = "Warm Screen Tone" },
-			{
-				kind = "slider",
-				field = "colorSaturation",
-				label = "Saturation",
-				min = 0,
-				max = 100,
-				step = 5,
-				format = function(v)
-					local rounded = math.floor(v + 0.5)
-					if rounded == 50 then
-						return "Default"
-					end
-					local delta = rounded - 50
-					if delta > 0 then
-						return "+" .. tostring(delta) .. "%"
-					end
-					return tostring(delta) .. "%"
-				end,
-			},
-			{
-				kind = "slider",
-				field = "colorContrast",
-				label = "Contrast",
-				min = 0,
-				max = 100,
-				step = 5,
-				format = function(v)
-					local rounded = math.floor(v + 0.5)
-					if rounded == 50 then
-						return "Default"
-					end
-					local delta = rounded - 50
-					if delta > 0 then
-						return "+" .. tostring(delta) .. "%"
-					end
-					return tostring(delta) .. "%"
-				end,
-			},
-			{
-				kind = "slider",
-				field = "colorBrightness",
-				label = "Brightness",
-				min = 0,
-				max = 100,
-				step = 5,
-				format = function(v)
-					local rounded = math.floor(v + 0.5)
-					if rounded == 50 then
-						return "Default"
-					end
-					local delta = rounded - 50
-					if delta > 0 then
-						return "+" .. tostring(delta) .. "%"
-					end
-					return tostring(delta) .. "%"
-				end,
-			},
-			{
-				kind = "toggle",
-				field = "shadowQuality",
-				label = "Shadows",
-				valueMap = { on = "Balanced", off = "Off" },
-				-- The High preset stores "High" here; without this the row would show OFF
-				-- on the very preset with the best shadows. Switching the row on still
-				-- stores "Balanced", and the domain restores the preset's own fidelity.
-				onValues = { "Balanced", "High" },
-			},
-			{ kind = "toggle", field = "depthOfField", label = "Background Blur", valueMap = { on = 3, off = 0 } },
-			{ kind = "toggle", field = "hideAllParticles", label = "Hide All Particles" },
-			{
-				kind = "toggle",
-				field = "chatBubbleVisibility",
-				label = "Hide Chat Bubbles",
-				valueMap = { on = "Off", off = "All" },
-			},
-			{ kind = "toggle", field = "textures", label = "Textures", valueMap = { on = 2, off = 0 } },
-		},
-	},
-	{
-		key = "audio",
-		title = "Audio",
-		subtitle = "Adjust music playback volume.",
+		key = "music",
+		title = "Music",
+		subtitle = "Music playback preferences.",
 		items = {
 			{
 				kind = "slider",
@@ -316,7 +229,7 @@ local SECTION_DEFS: { SettingsSectionDef } = {
 	{
 		key = "camera",
 		title = "Camera",
-		subtitle = "Adjust how wide the camera feels.",
+		subtitle = "Camera view and focus.",
 		items = {
 			{
 				kind = "slider",
@@ -329,28 +242,69 @@ local SECTION_DEFS: { SettingsSectionDef } = {
 					return tostring(math.floor(v + 0.5))
 				end,
 			},
-			-- "Follow" (cameraFocus) row removed 2026-05-23: feature reverted to
-			-- Roblox default camera (no offset).
-			-- "Dock Zoom" slider removed 2026-05-23: locked to 35% on all devices.
-			-- Lihat applyHotbarZoom di SettingsController.luau.
+			-- "Focus Lock" (cameraFocus) row removed 2026-10-04: owner reverted the
+			-- restore minutes after seeing it; camera stays at Roblox default.
+			-- See applyCameraFocus in SettingsController.luau.
+		},
+	},
+	{
+		key = "graphics",
+		title = "Graphic",
+		subtitle = "Quality preset and screen tone. Visual Comfort below can override.",
+		items = {
+			{
+				kind = "segmented",
+				field = "graphicsPreset",
+				label = "Overall Quality",
+				options = {
+					{ label = "Low", value = "Low", iconImage = SETTINGS_ICON.GraphicsLow },
+					{ label = "Balance", value = "Balanced", iconImage = SETTINGS_ICON.GraphicsMed },
+					{ label = "High", value = "High", iconImage = SETTINGS_ICON.GraphicsHigh },
+				},
+			},
+			{ kind = "toggle", field = "eyeComfortMode", label = "Warm Screen Tone" },
+		},
+	},
+	{
+		key = "visual",
+		title = "Visual Comfort",
+		subtitle = "Fine-tune effects. Changes here override your quality preset.",
+		items = {
+			{
+				kind = "toggle",
+				field = "shadowQuality",
+				label = "Shadows",
+				valueMap = { on = "Balanced", off = "Off" },
+				-- The High preset stores "High" here; without this the row would show OFF
+				-- on the very preset with the best shadows. Switching the row on still
+				-- stores "Balanced", and the domain restores the preset's own fidelity.
+				onValues = { "Balanced", "High" },
+			},
+			{ kind = "toggle", field = "depthOfField", label = "Camera Background Blur", valueMap = { on = 3, off = 0 } },
+			{ kind = "toggle", field = "playerEffects", label = "Player Particles" },
+			{
+				kind = "toggle",
+				field = "chatBubbleVisibility",
+				label = "Chat Bubble",
+				valueMap = { on = "Off", off = "All" },
+			},
+			{ kind = "toggle", field = "textures", label = "Texture", valueMap = { on = 2, off = 0 } },
+			{ kind = "toggle", field = "postEffects", label = "Bloom" },
 		},
 	},
 	{
 		key = "overhead_master",
-		title = "Name Tags",
+		title = "Overhead GUI",
 		subtitle = "Show or hide custom player name tags above heads.",
 		items = {
-			-- "Show Name Tags At" (overheadDistance) removed 2026-05-23.
-			{ kind = "toggle", field = "overheadVisible", label = "Show Name Tags", localOnly = true },
-			{ kind = "toggle", field = "hideAllGui", label = "Hide All GUI", localOnly = true },
+			{ kind = "toggle", field = "overheadVisible", label = "Hide Overhead GUI (Local)", localOnly = true },
 		},
 	},
 	{
 		key = "overhead_layers",
-		title = "Name Tag Details",
-		subtitle = "Choose what others see on your name tag.",
+		title = "Overhead GUI Details",
+		subtitle = "Choose what others see on your overhead GUI.",
 		items = {
-			{ kind = "toggle", field = "overheadLayerVisible.SpecialTitle", label = "Custom Title" },
 			{ kind = "toggle", field = "overheadLayerVisible.BadgeGroup", label = "Badges" },
 			{ kind = "toggle", field = "overheadLayerVisible.Level", label = "Level" },
 			{
@@ -378,8 +332,8 @@ local SECTION_DEFS: { SettingsSectionDef } = {
 	},
 	{
 		key = "badge_visibility",
-		title = "Badge Types",
-		subtitle = "Choose which of your badges others can see on your name tag.",
+		title = "Badge",
+		subtitle = "Choose which of your badges others can see on your overhead GUI.",
 		items = {
 			{
 				kind = "toggle",
@@ -399,57 +353,85 @@ local SECTION_DEFS: { SettingsSectionDef } = {
 	},
 	{
 		key = "announcements",
-		title = "Announcements",
+		title = "Broadcast",
 		subtitle = "Choose which messages you want to see.",
 		items = {
 			{
 				kind = "toggle",
 				field = "hideAdminAnnounce",
-				label = "Admin Messages",
+				label = "Admin Broadcast",
 				valueMap = { on = false, off = true },
 			},
 			{
 				kind = "toggle",
 				field = "hideCoupleAnnounce",
-				label = "Couple Messages",
+				label = "Couple Notifications",
 				valueMap = { on = false, off = true },
 			},
 			{
 				kind = "toggle",
 				field = "hideSystemAnnounce",
-				label = "System Messages",
+				label = "Donation Message",
 				valueMap = { on = false, off = true },
 			},
 		},
 	},
 	{
 		key = "donation_experience",
-		title = "Donation Experience",
+		title = "Donation Effect",
 		subtitle = "Control donation visuals and announcements on your screen.",
 		items = {
 			{
 				kind = "toggle",
 				field = "hideDonationWorldEffect",
-				label = "World Effects",
+				label = "Nuke, Smite, and Blackhole",
 				valueMap = { on = false, off = true },
 			},
 			{
 				kind = "toggle",
 				field = "hideDonationAura",
-				label = "Donor Aura",
-				valueMap = { on = false, off = true },
-			},
-			{
-				kind = "toggle",
-				field = "hideDonationAnnounce",
-				label = "Announcements",
+				label = "Donator Aura",
 				valueMap = { on = false, off = true },
 			},
 			{
 				kind = "toggle",
 				field = "hideDonatorHighlight",
-				label = "Donor Highlight",
+				label = "Donator Camera Highlight",
 				valueMap = { on = false, off = true },
+			},
+		},
+	},
+	{
+		key = "advance_graphic",
+		title = "Advance Graphic",
+		subtitle = "Fine-tune the screen's colors.",
+		items = {
+			{
+				kind = "slider",
+				field = "colorSaturation",
+				label = "Saturation",
+				min = 0,
+				max = 100,
+				step = 5,
+				format = colorTuneFormat,
+			},
+			{
+				kind = "slider",
+				field = "colorContrast",
+				label = "Contrast",
+				min = 0,
+				max = 100,
+				step = 5,
+				format = colorTuneFormat,
+			},
+			{
+				kind = "slider",
+				field = "colorBrightness",
+				label = "Brightness",
+				min = 0,
+				max = 100,
+				step = 5,
+				format = colorTuneFormat,
 			},
 		},
 	},
