@@ -13,6 +13,7 @@
 --   -- later, to clean up:
 --   handle.destroy()
 local ContextActionService = game:GetService("ContextActionService")
+local HttpService = game:GetService("HttpService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -63,7 +64,8 @@ function SmoothScrollHelper.attach(frame: ScrollingFrame, options: Options?): Ha
 		end
 	end
 
-	local actionName = "SmoothScroll_" .. frame:GetDebugId()
+	-- Unique per attach; GetDebugId is Plugin-security so a GUID is used instead.
+	local actionName = "SmoothScroll_" .. HttpService:GenerateGUID(false)
 	local currentTween: Tween? = nil
 	local destroyed = false
 
