@@ -7,6 +7,7 @@ local GraphicsQuality = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Util
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local ScrollIndicatorHelper = require(script.Parent.Parent.Utils.ScrollIndicatorHelper)
 local SmoothScrollHelper = require(script.Parent.Parent.Utils.SmoothScrollHelper)
+local GroupedRowCornerUtil = require(script.Parent.Parent.Utils.GroupedRowCornerUtil)
 local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 local MenuGuiRefs = require(script.Parent.MenuGuiRefs)
 local MenuSettingsCore = require(script.Parent.MenuSettingsCore)
