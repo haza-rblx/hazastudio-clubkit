@@ -1880,48 +1880,30 @@ if clubKitOwnedSyncDance then
 			})
 		)
 		triggerController:init()
-		-- Auto Dance: temporary TopbarPlus toggle (ported from legacy AnimationsUI).
-		-- Client-only shuffle; the server only ever sees ordinary emote selections.
+		-- Auto Dance: client-only shuffle; the server only ever sees ordinary emote
+		-- selections. Driven by the dance panel's own AutoDanceButton (v3
+		-- 04-CustomSpeed.AutoWrapper) — the TopbarPlus pill was removed 2026-10-05 at the
+		-- owner's request, so the toggle lives with the rest of the dance controls.
 		if Config.AutoDance and Config.AutoDance.ENABLED ~= false then
-			local autoDanceIcon = Icon.new()
-			autoDanceIcon:setLabel(Config.AutoDance.TOPBAR_LABEL or "Auto")
-			if Config.AutoDance.TOPBAR_ICON and Config.AutoDance.TOPBAR_ICON ~= "" then
-				autoDanceIcon:setImage(Config.AutoDance.TOPBAR_ICON, "Deselected")
+			if refs.autoDanceButton then
+				autoDanceController = trackClientLifecycle(
+					"AutoDanceController",
+					ClientMods.createAutoDanceController({
+						syncController = syncDanceController,
+						animationLoader = AnimationLoader,
+						logger = Logger.new("Client.AutoDanceController"),
+						onStateChanged = function(isOn)
+							emotePanel:setAutoDanceState(isOn)
+						end,
+					})
+				)
+				-- The panel was built before this controller existed; sync its toggle now.
+				emotePanel:setAutoDanceState(autoDanceController:isEnabled())
+			else
+				studioWarn(
+					"[AutoDance] Dance panel has no AutoDanceButton (v3 only) — auto dance is unreachable"
+				)
 			end
-			placeTopbarIconLeft(autoDanceIcon, Config.AutoDance.TOPBAR_ORDER or 4)
-			setCompactTopbarWidth(autoDanceIcon, 96)
-			setTopbarHorizontalPadding(autoDanceIcon, 8)
-			styleTopbarPill(autoDanceIcon)
-			enlargeTopbarIcon(autoDanceIcon, 36, 10)
-			autoDanceController = trackClientLifecycle(
-				"AutoDanceController",
-				ClientMods.createAutoDanceController({
-					syncController = syncDanceController,
-					animationLoader = AnimationLoader,
-					logger = Logger.new("Client.AutoDanceController"),
-					onStateChanged = function(isOn)
-						autoDanceIcon:setLabel(
-							if isOn
-								then (Config.AutoDance.TOPBAR_LABEL_ACTIVE or "Auto ON")
-								else (Config.AutoDance.TOPBAR_LABEL or "Auto")
-						)
-						-- Keep the pill visual in step when the controller stops itself.
-						if not isOn then
-							pcall(function()
-								autoDanceIcon:deselect()
-							end)
-						end
-					end,
-				})
-			)
-			autoDanceIcon.selected:Connect(function()
-				autoDanceController:setEnabled(true)
-			end)
-			autoDanceIcon.deselected:Connect(function()
-				autoDanceController:setEnabled(false)
-			end)
-			-- The panel was built before this controller existed; sync its toggle now.
-			emotePanel:setAutoDanceState(autoDanceController:isEnabled())
 		end
 	end)
 end
