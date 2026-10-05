@@ -1101,13 +1101,6 @@ Config.AutoDance = {
 	UNSYNC_ON_ENABLE = true,
 	-- Stop the current emote when auto is switched off (legacy behaviour).
 	STOP_ON_DISABLE = true,
-	-- LEFT topbar strip, sitting just after "Lead Dance" (which is Music.TOPBAR_ORDER + 2 = 3).
-	TOPBAR_ORDER = 4,
-	TOPBAR_LABEL = "Auto",
-	TOPBAR_LABEL_ACTIVE = "Auto ON",
-	-- Same artwork as the in-GUI dance panel button (StarterGui.IconGroup.DancePanelButton),
-	-- so the pair reads as one dance cluster. Empty string = label-only pill.
-	TOPBAR_ICON = "rbxassetid://104629759158002",
 }
 Config.Sync = {
 	REMOTE_FOLDER = "SyncRemotes",
@@ -1222,6 +1215,10 @@ Config.Sync = {
 		"DancePanelButton",
 		"EmoteButton",
 	},
+	-- Labels for the dance panel's own AutoDanceButton (v3 04-CustomSpeed.AutoWrapper).
+	-- The TopbarPlus Auto pill was removed 2026-10-05, so this button is the only toggle.
+	AUTO_DANCE_PANEL_LABEL = "Auto",
+	AUTO_DANCE_PANEL_LABEL_ACTIVE = "Auto ON",
 }
 Config.Favorites = {
 	DATASTORE_NAME = scopedDataStoreKey("FavoritedAnimations_v2"),
