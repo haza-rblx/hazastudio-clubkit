@@ -4068,6 +4068,13 @@ Config.ScrollIndicator = {
 	VISIBLE_TRANSPARENCY = 0,
 }
 -- ============================================================
+-- SMOOTH SCROLL (wheel glide on kit ScrollingFrames)
+-- ============================================================
+Config.SmoothScroll = {
+	-- Seconds one wheel notch glides. 0 = native hard jump (feature off).
+	GLIDE_TIME = 0.22,
+}
+-- ============================================================
 -- PERFORMANCE SCALING — 100 CCU TARGET
 -- Capacity, interest-filtering, and feature flags for the
 -- performance-scaling-100ccu remediation program.

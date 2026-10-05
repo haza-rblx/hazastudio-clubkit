@@ -6,7 +6,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local GraphicsQuality = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.GraphicsQuality)
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local ScrollIndicatorHelper = require(script.Parent.Parent.Utils.ScrollIndicatorHelper)
-local GroupedRowCornerUtil = require(script.Parent.Parent.Utils.GroupedRowCornerUtil)
+local SmoothScrollHelper = require(script.Parent.Parent.Utils.SmoothScrollHelper)
 local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 local MenuGuiRefs = require(script.Parent.MenuGuiRefs)
 local MenuSettingsCore = require(script.Parent.MenuSettingsCore)
@@ -35,6 +35,7 @@ function SettingsTabBinder.new(refs: Refs)
 	self._settingsFieldRegistry = {} :: { [string]: FieldBinding }
 	self._sliderDragHandlers = {} :: { [string]: (boolean) -> () }
 	self._sectionInstances = {} :: { GuiObject }
+	self._smoothScrollHandle = nil
 	return self
 end
 
@@ -90,6 +91,10 @@ function SettingsTabBinder:_configureScrollable()
 		scrollLayout.Padding = UDim.new(0, SECTION_LIST_GAP)
 	end
 	ScrollIndicatorHelper.attach(scrollable)
+	if self._smoothScrollHandle then
+		self._smoothScrollHandle.destroy()
+	end
+	self._smoothScrollHandle = SmoothScrollHelper.attach(scrollable)
 end
 
 function SettingsTabBinder:_applyTabIdentity()

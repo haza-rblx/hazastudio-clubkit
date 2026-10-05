@@ -272,27 +272,6 @@ local SECTION_DEFS: { SettingsSectionDef } = {
 		},
 	},
 	{
-		key = "camera",
-		title = "Camera",
-		subtitle = "Camera view and focus.",
-		items = {
-			{
-				kind = "slider",
-				field = "fov",
-				label = "View Width",
-				min = 60,
-				max = 100,
-				step = 1,
-				format = function(v)
-					return tostring(math.floor(v + 0.5))
-				end,
-			},
-			-- "Focus Lock" (cameraFocus) row removed 2026-10-04: owner reverted the
-			-- restore minutes after seeing it; camera stays at Roblox default.
-			-- See applyCameraFocus in SettingsController.luau.
-		},
-	},
-	{
 		key = "overhead_master",
 		title = "Overhead GUI",
 		subtitle = "Show or hide custom player name tags above heads.",
@@ -399,6 +378,27 @@ local SECTION_DEFS: { SettingsSectionDef } = {
 				label = "Donator Camera Highlight",
 				valueMap = { on = false, off = true },
 			},
+		},
+	},
+	{
+		key = "camera",
+		title = "Camera",
+		subtitle = "Camera view and focus.",
+		items = {
+			{
+				kind = "slider",
+				field = "fov",
+				label = "View Width",
+				min = 60,
+				max = 100,
+				step = 1,
+				format = function(v)
+					return tostring(math.floor(v + 0.5))
+				end,
+			},
+			-- "Focus Lock" (cameraFocus) row removed 2026-10-04: owner reverted the
+			-- restore minutes after seeing it; camera stays at Roblox default.
+			-- See applyCameraFocus in SettingsController.luau.
 		},
 	},
 	{
