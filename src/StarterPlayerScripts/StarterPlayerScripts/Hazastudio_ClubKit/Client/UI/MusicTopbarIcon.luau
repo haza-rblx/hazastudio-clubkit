@@ -12,7 +12,7 @@
 --   nil on hide, and on show always re-apply styling (align) so TopbarPlus
 --   reparents even if our cached parent was lost.
 --
--- Dropdown children (Music Player / Load Track) are created once and kept for
+-- Dropdown children (Music Player / Reload Music) are created once and kept for
 -- the icon lifetime. applyStyling re-runs on show but must not rebuild the menu
 -- (would orphan listeners / thrash TopbarPlus).
 
@@ -280,7 +280,7 @@ function MusicTopbarIcon.new(deps: Deps): MusicTopbarIcon
 	setupMenu(
 		self,
 		tostring(deps.openPlayerLabel or "Music Player"),
-		tostring(deps.loadTrackLabel or "Load Track")
+		tostring(deps.loadTrackLabel or "Reload Music")
 	)
 
 	if instance.selected and type(instance.selected.Connect) == "function" then

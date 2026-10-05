@@ -3543,7 +3543,7 @@ Config.Music = {
 	TOPBAR_ICON = Config.Icons.Topbar.Music,
 	-- Horizontal setMenu children under the music topbar icon
 	TOPBAR_MENU_OPEN_PLAYER_LABEL = "Music Player",
-	TOPBAR_MENU_LOAD_TRACK_LABEL = "Load Track",
+	TOPBAR_MENU_LOAD_TRACK_LABEL = "Reload Music",
 	MSG_RELOAD_OK = "Track loaded.",
 	MSG_RELOAD_WAIT = "Still loading audio. Check music volume in Settings.",
 	MSG_RELOAD_VOLUME_MUTED = "Music volume is at 0 in Settings. Raise it to hear the track.",

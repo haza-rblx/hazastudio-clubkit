@@ -244,18 +244,10 @@ function SettingsTabBinder:updateConditionalRowVisibility()
 	end
 end
 
-function SettingsTabBinder:updateGraphicsOverrideLabels(payload: SettingsPayload)
-	if not self._settingsBuilt then
-		return
-	end
-	local overrides = payload.graphicsOverrides or {}
-	for fieldName, binding in pairs(self._settingsFieldRegistry) do
-		if binding.kind ~= "toggle" or not GraphicsQuality.isOverrideField(fieldName) then
-			continue
-		end
-		local suffix = if overrides[fieldName] == true then " (override)" else ""
-		MenuSettingsCore.setTextLabelText(binding.row, binding.item.label .. suffix)
-	end
+function SettingsTabBinder:updateGraphicsOverrideLabels(_payload: SettingsPayload)
+	-- Owner call 2026-10-05: no " (override)" suffix on Visual Comfort rows — the
+	-- labels read cleaner without it and the cascade note lives in the section
+	-- subtitle. Kept as a no-op so callers (patchFromPayload / patchField) stay wired.
 end
 
 function SettingsTabBinder:patchFromPayload(payload: SettingsPayload)

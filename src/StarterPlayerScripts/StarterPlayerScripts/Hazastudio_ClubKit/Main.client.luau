@@ -1243,7 +1243,7 @@ if Config.FeatureFlags.MusicPlayerEnabled then
 			end
 		end,
 		openPlayerLabel = Config.Music.TOPBAR_MENU_OPEN_PLAYER_LABEL or "Music Player",
-		loadTrackLabel = Config.Music.TOPBAR_MENU_LOAD_TRACK_LABEL or "Load Track",
+		loadTrackLabel = Config.Music.TOPBAR_MENU_LOAD_TRACK_LABEL or "Reload Music",
 		logger = Logger.new("MusicTopbarIcon"),
 	})
 end

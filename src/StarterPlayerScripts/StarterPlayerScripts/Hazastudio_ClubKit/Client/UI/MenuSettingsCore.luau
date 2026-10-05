@@ -211,7 +211,7 @@ local SECTION_DEFS: { SettingsSectionDef } = {
 	{
 		key = "graphics",
 		title = "Graphic",
-		subtitle = "Quality preset and screen tone. Visual Comfort below can override.",
+		subtitle = "Quality preset and screen tone.",
 		items = {
 			{
 				kind = "segmented",
@@ -229,7 +229,7 @@ local SECTION_DEFS: { SettingsSectionDef } = {
 	{
 		key = "visual",
 		title = "Visual Comfort",
-		subtitle = "Fine-tune effects. Changes here override your quality preset.",
+		subtitle = "Fine-tune effects to your liking.",
 		items = {
 			{
 				kind = "toggle",
@@ -247,7 +247,9 @@ local SECTION_DEFS: { SettingsSectionDef } = {
 				kind = "toggle",
 				field = "chatBubbleVisibility",
 				label = "Chat Bubble",
-				valueMap = { on = "Off", off = "All" },
+				-- ON = bubbles shown ("All"); OFF = hidden ("Off"). The field stores the
+				-- visibility mode, not a hide flag — the toggle must not invert it.
+				valueMap = { on = "All", off = "Off" },
 			},
 			{ kind = "toggle", field = "textures", label = "Texture", valueMap = { on = 2, off = 0 } },
 			{ kind = "toggle", field = "postEffects", label = "Bloom" },
@@ -274,9 +276,16 @@ local SECTION_DEFS: { SettingsSectionDef } = {
 	{
 		key = "overhead_master",
 		title = "Overhead GUI",
-		subtitle = "Show or hide custom player name tags above heads.",
 		items = {
-			{ kind = "toggle", field = "overheadVisible", label = "Hide Overhead GUI (Local)", localOnly = true },
+			-- ON = hide (label says Hide). overheadVisible stores show=true, so the
+			-- valueMap inverts it for the row: on=false (hidden), off=true (shown).
+			{
+				kind = "toggle",
+				field = "overheadVisible",
+				label = "Hide Overhead GUI (Local)",
+				localOnly = true,
+				valueMap = { on = false, off = true },
+			},
 		},
 	},
 	{
@@ -317,17 +326,17 @@ local SECTION_DEFS: { SettingsSectionDef } = {
 			{
 				kind = "toggle",
 				field = "overheadBadgeVisible.OwnerCoOwner",
-				label = "Owner / Co-Owner",
+				label = "Owner / Co-Owner Badge",
 			},
-			{ kind = "toggle", field = "overheadBadgeVisible.Developer", label = "Developer" },
-			{ kind = "toggle", field = "overheadBadgeVisible.Admin", label = "Admin" },
-			{ kind = "toggle", field = "overheadBadgeVisible.Member", label = "Membership" },
-			{ kind = "toggle", field = "overheadBadgeVisible.VIP", label = Config.Membership.Tiers.Tier1.label },
-			{ kind = "toggle", field = "overheadBadgeVisible.VVIP", label = Config.Membership.Tiers.Tier2.label },
-			{ kind = "toggle", field = "overheadBadgeVisible.Elite", label = Config.Membership.Tiers.Tier3.label },
-			{ kind = "toggle", field = "overheadBadgeVisible.Streak", label = "Streak" },
-			{ kind = "toggle", field = "overheadBadgeVisible.LikeCounter", label = "Likes" },
-			{ kind = "toggle", field = "overheadBadgeVisible.Community", label = "Community" },
+			{ kind = "toggle", field = "overheadBadgeVisible.Developer", label = "Developer Badge" },
+			{ kind = "toggle", field = "overheadBadgeVisible.Admin", label = "Admin Badge" },
+			{ kind = "toggle", field = "overheadBadgeVisible.Member", label = "Membership Badge" },
+			{ kind = "toggle", field = "overheadBadgeVisible.VIP", label = Config.Membership.Tiers.Tier1.label .. " Badge" },
+			{ kind = "toggle", field = "overheadBadgeVisible.VVIP", label = Config.Membership.Tiers.Tier2.label .. " Badge" },
+			{ kind = "toggle", field = "overheadBadgeVisible.Elite", label = Config.Membership.Tiers.Tier3.label .. " Badge" },
+			{ kind = "toggle", field = "overheadBadgeVisible.Streak", label = "Streak Badge" },
+			{ kind = "toggle", field = "overheadBadgeVisible.LikeCounter", label = "Likes Badge" },
+			{ kind = "toggle", field = "overheadBadgeVisible.Community", label = "Community Badge" },
 		},
 	},
 	{
@@ -350,7 +359,7 @@ local SECTION_DEFS: { SettingsSectionDef } = {
 			{
 				kind = "toggle",
 				field = "hideSystemAnnounce",
-				label = "Donation Message",
+				label = "Donation Message Broadcast",
 				valueMap = { on = false, off = true },
 			},
 		},
@@ -375,7 +384,7 @@ local SECTION_DEFS: { SettingsSectionDef } = {
 			{
 				kind = "toggle",
 				field = "hideDonatorHighlight",
-				label = "Donator Camera Highlight",
+				label = "Donator Cinematic Highlight",
 				valueMap = { on = false, off = true },
 			},
 		},
@@ -388,7 +397,7 @@ local SECTION_DEFS: { SettingsSectionDef } = {
 			{
 				kind = "slider",
 				field = "fov",
-				label = "View Width",
+				label = "Field of View (FOV)",
 				min = 60,
 				max = 100,
 				step = 1,
@@ -403,7 +412,7 @@ local SECTION_DEFS: { SettingsSectionDef } = {
 	},
 	{
 		key = "advance_graphic",
-		title = "Advance Graphic",
+		title = "Advance Graphic Settings",
 		subtitle = "Fine-tune the screen's colors.",
 		items = {
 			{
