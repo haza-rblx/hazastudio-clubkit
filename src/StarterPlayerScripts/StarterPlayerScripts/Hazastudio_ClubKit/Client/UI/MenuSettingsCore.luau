@@ -209,45 +209,6 @@ end
 
 local SECTION_DEFS: { SettingsSectionDef } = {
 	{
-		key = "music",
-		title = "Music",
-		subtitle = "Music playback preferences.",
-		items = {
-			{
-				kind = "slider",
-				field = "musicVolume",
-				label = "Music Volume",
-				min = 0,
-				max = 100,
-				step = 5,
-				format = function(v)
-					return tostring(math.floor(v + 0.5)) .. "%"
-				end,
-			},
-		},
-	},
-	{
-		key = "camera",
-		title = "Camera",
-		subtitle = "Camera view and focus.",
-		items = {
-			{
-				kind = "slider",
-				field = "fov",
-				label = "View Width",
-				min = 60,
-				max = 100,
-				step = 1,
-				format = function(v)
-					return tostring(math.floor(v + 0.5))
-				end,
-			},
-			-- "Focus Lock" (cameraFocus) row removed 2026-10-04: owner reverted the
-			-- restore minutes after seeing it; camera stays at Roblox default.
-			-- See applyCameraFocus in SettingsController.luau.
-		},
-	},
-	{
 		key = "graphics",
 		title = "Graphic",
 		subtitle = "Quality preset and screen tone. Visual Comfort below can override.",
@@ -290,6 +251,45 @@ local SECTION_DEFS: { SettingsSectionDef } = {
 			},
 			{ kind = "toggle", field = "textures", label = "Texture", valueMap = { on = 2, off = 0 } },
 			{ kind = "toggle", field = "postEffects", label = "Bloom" },
+		},
+	},
+	{
+		key = "music",
+		title = "Music",
+		subtitle = "Music playback preferences.",
+		items = {
+			{
+				kind = "slider",
+				field = "musicVolume",
+				label = "Music Volume",
+				min = 0,
+				max = 100,
+				step = 5,
+				format = function(v)
+					return tostring(math.floor(v + 0.5)) .. "%"
+				end,
+			},
+		},
+	},
+	{
+		key = "camera",
+		title = "Camera",
+		subtitle = "Camera view and focus.",
+		items = {
+			{
+				kind = "slider",
+				field = "fov",
+				label = "View Width",
+				min = 60,
+				max = 100,
+				step = 1,
+				format = function(v)
+					return tostring(math.floor(v + 0.5))
+				end,
+			},
+			-- "Focus Lock" (cameraFocus) row removed 2026-10-04: owner reverted the
+			-- restore minutes after seeing it; camera stays at Roblox default.
+			-- See applyCameraFocus in SettingsController.luau.
 		},
 	},
 	{
