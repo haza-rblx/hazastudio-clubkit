@@ -69,7 +69,7 @@ export type FieldBinding = {
 	setValue: (any) -> (),
 }
 
-local SECTION_LIST_GAP = 12
+local SECTION_LIST_GAP = 8
 local SECTION_TITLE_CONTENT_GAP = 14
 local SECTION_VERTICAL_PADDING = 14
 local SECTION_IDENTITY_TITLE_TEXT_SIZE = 18
