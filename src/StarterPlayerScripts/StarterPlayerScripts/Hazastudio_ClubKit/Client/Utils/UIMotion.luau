@@ -1350,6 +1350,20 @@ local function tintHold(element: GuiObject, property: string, darken: boolean, t
 	play(element, TINT_CHANNEL, info(time, Enum.EasingStyle.Quad), { [property] = tintGoal(property, rest, darken) })
 end
 
+-- Drops a held tint's rest capture without writing anything back. A row whose state repaint
+-- (played / favorited template swap) changed the element's colour while a hover/press tint was
+-- still holding must not have the OLD colour restored on release — that left the row half in each
+-- state (reverted background, repainted text). The caller repaints after calling this, so the new
+-- value becomes the design the next gesture captures.
+function UIMotion.forgetTint(element: GuiObject)
+	local record = state.get(element)
+	if record == nil or record.tintRest == nil then
+		return
+	end
+	record.tintRest = nil
+	cancelChannel(element, TINT_CHANNEL)
+end
+
 -- Always puts back exactly what was captured, and instantly when there is no time to tween
 -- (reduced motion, teardown, detached element): a press must never leave a colour changed.
 local function tintRelease(element: GuiObject, property: string, time: number?)

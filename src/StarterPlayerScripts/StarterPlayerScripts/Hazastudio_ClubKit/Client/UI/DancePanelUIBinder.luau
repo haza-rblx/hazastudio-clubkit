@@ -1408,6 +1408,20 @@ end
 function DancePanelUIBinder:_syncRowVisualState(row: GuiButton, animationName: string, animate: boolean?)
 	local sourceRef = self:_getStateReference(animationName)
 
+	-- A hover/press tint can still be holding a colour captured BEFORE this state change (the row
+	-- was hovered when the player clicked it). Drop those captures first: otherwise the tint's
+	-- release on MouseLeave writes the pre-click design back over the repaint, leaving one half of
+	-- the row in the old state (reverted background, repainted text).
+	UIMotion.forgetTint(row)
+	local cachedForTint = self._descendantsCache[row]
+	if cachedForTint then
+		for _, descendant in ipairs(cachedForTint) do
+			if descendant:IsA("GuiObject") then
+				UIMotion.forgetTint(descendant)
+			end
+		end
+	end
+
 	local sourceBackgroundTransparency = sourceRef.BackgroundTransparency
 	local sourceSelectable = row.Selectable
 	if animate then
