@@ -1,5 +1,5 @@
 --!strict
--- BackpackUIBinder (UI): backpack grid; pairs with HotbarUIBinder via InventoryDragController.
+-- BackpackUIBinder (UI): backpack grid; tapping a cell moves its tool onto the hotbar.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -7,7 +7,6 @@ local BackpackGuiRefs = require(script.Parent.BackpackGuiRefs)
 local MobilePanelManager = require(script.Parent.Parent.Services.MobilePanelManager)
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local InventoryStore = require(script.Parent.Parent.State.InventoryStore)
-local InventoryDragController = require(script.Parent.InventoryDragController)
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 
@@ -57,18 +56,16 @@ function BackpackUIBinder.new(deps: {
 	refs: Refs,
 	store: any,
 	logger: ILogger,
-	inventoryDrag: any?,
+	onTapTool: ((toolKey: string) -> ())?,
 }): any
 	local self = setmetatable({}, BackpackUIBinder)
 
 	self._refs = deps.refs
 	self._store = deps.store
 	self._log = deps.logger
-	self._inventoryDrag = deps.inventoryDrag
+	self._onTapTool = deps.onTapTool
 	self._cells = {} :: { CellEntry }
 	self._unsubscribers = {} :: { () -> () }
-	self._pendingSlots = nil :: { HotbarSlotViewModel }?
-	self._pendingOpen = nil :: boolean?
 	self._wasOpen = false
 
 	self._refs.itemTemplate.Visible = false
@@ -77,28 +74,11 @@ function BackpackUIBinder.new(deps: {
 
 	self:_subscribeStore()
 
-	if deps.inventoryDrag and type(deps.inventoryDrag.setDragEndedCallback) == "function" then
-		deps.inventoryDrag:setDragEndedCallback(function()
-			self:flushPendingRender()
-		end)
-	end
-
 	local initial = self._store:get()
 	MobilePanelManager.setBackpackOpen(initial.isBackpackOpen)
 	self:_render(initial.backpackSlots, initial.isBackpackOpen, initial.inventoryChromeHidden == true)
 
 	return self
-end
-
-function BackpackUIBinder:flushPendingRender(): ()
-	if not self._pendingSlots then
-		return
-	end
-	local slots = self._pendingSlots
-	local isOpen = self._pendingOpen == true
-	self._pendingSlots = nil
-	self._pendingOpen = nil
-	self:_renderNow(slots, isOpen)
 end
 
 function BackpackUIBinder:_trackUnsubscriber(unsubscribe: () -> ()): ()
@@ -143,36 +123,23 @@ function BackpackUIBinder:_render(slots: { HotbarSlotViewModel }, isOpen: boolea
 	else
 		self._refs.root.DisplayOrder = Config.Hotbar.DISPLAY_ORDER
 	end
-	if self._inventoryDrag and self._inventoryDrag:hasActiveDragSession() then
-		self._pendingSlots = slots
-		self._pendingOpen = isOpen
-		return
-	end
-
 	self:_renderNow(slots, isOpen)
 end
 
 function BackpackUIBinder:_renderNow(slots: { HotbarSlotViewModel }, isOpen: boolean): ()
-	-- Rows cascade in when the panel opens, never on the rebuilds that follow (drag flush,
-	-- inventory echo) — those repaint the same grid and must stay still.
+	-- Rows cascade in when the panel opens, never on the rebuilds that follow (inventory echo) —
+	-- those repaint the same grid and must stay still.
 	local animateRows = isOpen and self._wasOpen ~= true
 	self._wasOpen = isOpen
 
 	if not isOpen then
-		if self._inventoryDrag then
-			self._inventoryDrag:onBackpackGridRebuilding()
-		end
 		return
 	end
 
-	if self._inventoryDrag then
-		self._inventoryDrag:onBackpackGridRebuilding()
-	end
 	self:_clearCells()
 
 	local maxSlots = math.max(1, math.floor(tonumber(Config.Backpack.MAX_GRID_SLOTS) or 48))
 	local limit = math.min(#slots, maxSlots)
-	local dragCells = {} :: { any }
 	local rows = {} :: { GuiObject }
 	local bases = {} :: { [GuiObject]: number }
 	-- The template's own cell background is the equipped highlight's resting value; a fully
@@ -200,6 +167,15 @@ function BackpackUIBinder:_renderNow(slots: { HotbarSlotViewModel }, isOpen: boo
 		end
 
 		local connections = {} :: { RBXScriptConnection }
+		local toolKey = viewModel.toolKey
+		table.insert(
+			connections,
+			button.Activated:Connect(function()
+				if self._onTapTool then
+					self._onTapTool(toolKey)
+				end
+			end)
+		)
 		-- Layout safety is the module's call (ADR 0011): on the laid-out grid the squash lands
 		-- on the cell's icon, and a cell the module says is safe to scale takes it itself. The
 		-- canScale guard that used to sit here left exactly those safe cells with no press.
@@ -227,18 +203,6 @@ function BackpackUIBinder:_renderNow(slots: { HotbarSlotViewModel }, isOpen: boo
 			connections = connections,
 		})
 
-		table.insert(dragCells, {
-			refs = refs,
-			toolKey = viewModel.toolKey,
-		})
-
-		if self._inventoryDrag then
-			self._inventoryDrag:bindBackpackCell(dragCells[#dragCells], index)
-		end
-	end
-
-	if self._inventoryDrag then
-		self._inventoryDrag:setBackpackCells(dragCells)
 	end
 
 	if animateRows and #rows > 0 then

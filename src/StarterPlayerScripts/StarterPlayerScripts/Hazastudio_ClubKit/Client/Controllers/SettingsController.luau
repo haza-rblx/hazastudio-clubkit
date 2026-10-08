@@ -579,6 +579,7 @@ local function createSettingsController(deps: {
 			hideSystemAnnounce = payload.hideSystemAnnounce,
 			graphicsOverrides = table.clone(payload.graphicsOverrides or {}),
 			accent = (payload :: any).accent,
+			onboardingDismissed = (payload :: any).onboardingDismissed == true,
 			_version = payload._version,
 			overheadVisible = payload.overheadVisible,
 			hideAllGui = (payload :: any).hideAllGui == true,
@@ -1772,6 +1773,7 @@ local function applyPostProcessingSetting(instance: Instance, mode: GraphicsQual
 			hideSystemAnnounce = currentPayload.hideSystemAnnounce,
 			graphicsOverrides = table.clone(currentPayload.graphicsOverrides or {}),
 			accent = (currentPayload :: any).accent or "",
+			onboardingDismissed = (currentPayload :: any).onboardingDismissed == true,
 			_version = math.max(currentPayload._version, GraphicsQuality.STORED_VERSION),
 		}
 	end
@@ -1964,6 +1966,68 @@ local function applyPostProcessingSetting(instance: Instance, mode: GraphicsQual
 			applyCameraFocus()
 			applyPlayerEffects()
 		end)
+	end
+
+	-- Profile tab edits (relationship buttons, title/bio/status fields). Also the entry point of
+	-- `controller:applyProfileField` below.
+	local function handleProfileChange(field: string, value: any)
+		lastSettingsEditAt = os.clock()
+		profileEditSeq += 1
+		patchLocalOverheadFromProfileField(field, value)
+		if field == "relationshipMode" then
+			optimisticRelationshipMode = value
+			profilePendingByField[field] = value
+			profileDebounceToken += 1
+			local myToken = profileDebounceToken
+			task.delay(PROFILE_RELATIONSHIP_DEBOUNCE_SEC, function()
+				if myToken ~= profileDebounceToken then
+					return
+				end
+				local pendingValue = profilePendingByField[field]
+				profilePendingByField[field] = nil
+				if pendingValue == nil then
+					return
+				end
+				profileUpdateRemote:FireServer({
+					field = field,
+					value = pendingValue,
+				})
+			end)
+			return
+		end
+		profileUpdateRemote:FireServer({
+			field = field,
+			value = value,
+		})
+	end
+
+	-- Seams for UI that changes a setting without owning a Settings-tab row (Onboarding): the same
+	-- paths a Settings or Profile tab control takes, so apply, save debounce and echo behave alike.
+	function controller:applySetting(field: string, value: any)
+		setField(field, value)
+	end
+
+	function controller:applyProfileField(field: string, value: any)
+		handleProfileChange(field, value)
+		-- The Profile tab repaints itself when its own button is clicked; here the payload is the
+		-- only thing that tells it, and the server's ack of an optimistic edit does not repaint.
+		if currentProfilePayload and (currentProfilePayload :: any)[field] ~= value then
+			local patch = table.clone(currentProfilePayload :: any)
+			patch[field] = value
+			currentProfilePayload = patch :: ProfileMenuPayload
+			syncProfileUiFromPayload(false)
+		end
+	end
+
+	function controller:getSetting(field: string): any
+		return (currentPayload :: any)[field]
+	end
+
+	function controller:getProfileField(field: string): any
+		if currentProfilePayload then
+			return (currentProfilePayload :: any)[field]
+		end
+		return nil
 	end
 
 	function controller:init()
@@ -2167,36 +2231,7 @@ local function applyPostProcessingSetting(instance: Instance, mode: GraphicsQual
 			end)
 		end
 		if type(ui.bindProfileChange) == "function" then
-			ui:bindProfileChange(function(field, value)
-				lastSettingsEditAt = os.clock()
-				profileEditSeq += 1
-				patchLocalOverheadFromProfileField(field, value)
-				if field == "relationshipMode" then
-					optimisticRelationshipMode = value
-					profilePendingByField[field] = value
-					profileDebounceToken += 1
-					local myToken = profileDebounceToken
-					task.delay(PROFILE_RELATIONSHIP_DEBOUNCE_SEC, function()
-						if myToken ~= profileDebounceToken then
-							return
-						end
-						local pendingValue = profilePendingByField[field]
-						profilePendingByField[field] = nil
-						if pendingValue == nil then
-							return
-						end
-						profileUpdateRemote:FireServer({
-							field = field,
-							value = pendingValue,
-						})
-					end)
-					return
-				end
-				profileUpdateRemote:FireServer({
-					field = field,
-					value = value,
-				})
-			end)
+			ui:bindProfileChange(handleProfileChange)
 		end
 		ui:bindReset(function()
 			bumpSettingsEditSeq()

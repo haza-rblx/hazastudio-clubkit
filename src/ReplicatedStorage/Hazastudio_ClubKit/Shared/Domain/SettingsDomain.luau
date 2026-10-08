@@ -71,6 +71,7 @@ local DEFAULT_STORED: SettingsStoredData = {
 	graphicsOverrides = {},
 	-- "" = never picked: the venue default (Config.Branding.DEFAULT_ACCENT) applies.
 	accent = "",
+	onboardingDismissed = false,
 	_version = GraphicsQuality.STORED_VERSION,
 }
 
@@ -207,6 +208,7 @@ function SettingsDomain.sanitizeStored(raw: any): SettingsStoredData
 	base.hideDonatorHighlight = pickBoolean(raw.hideDonatorHighlight, base.hideDonatorHighlight)
 	base.hideSystemAnnounce = pickBoolean(raw.hideSystemAnnounce, base.hideSystemAnnounce)
 	base.accent = AccentDomain.normalize(raw.accent) or ""
+	base.onboardingDismissed = pickBoolean(raw.onboardingDismissed, base.onboardingDismissed)
 	base._version = math.max(base._version, pickNumber(raw._version, base._version, 1, 999))
 	return base
 end
@@ -264,6 +266,7 @@ function SettingsDomain.merge(stored: SettingsStoredData?, session: SettingsSess
 		hideSystemAnnounce = storedData.hideSystemAnnounce,
 		graphicsOverrides = table.clone(storedData.graphicsOverrides),
 		accent = storedData.accent,
+		onboardingDismissed = storedData.onboardingDismissed,
 		_version = storedData._version,
 		overheadVisible = sessionData.overheadVisible,
 		hideAllGui = sessionData.hideAllGui,

@@ -1,7 +1,6 @@
 --!strict
--- HotbarUIBinder (UI): renders InventoryStore hotbar slots; drag/tap-equip via InventoryDragController.
+-- HotbarUIBinder (UI): renders InventoryStore hotbar slots; a tap on a slot asks to equip it.
 
-local GuiService = game:GetService("GuiService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -13,6 +12,7 @@ local HotbarGuiRefs = require(script.Parent.HotbarGuiRefs)
 local InventoryStore = require(script.Parent.Parent.State.InventoryStore)
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
+local PointerSpace = require(script.Parent.Parent.Utils.PointerSpace)
 
 type HotbarSlotViewModel = InventoryStore.HotbarSlotViewModel
 type Refs = HotbarGuiRefs.Refs
@@ -39,27 +39,6 @@ type RenderSlot = {
 	viewModel: HotbarSlotViewModel?,
 }
 
-type DragLift = {
-	button: GuiButton,
-	parent: Instance,
-	placeholder: Frame,
-	originalAnchorPoint: Vector2,
-	originalAutomaticSize: Enum.AutomaticSize,
-	originalLayoutOrder: number,
-	originalPosition: UDim2,
-	originalSize: UDim2,
-	originalZIndex: number,
-}
-
-type DragState = {
-	slotIndex: number,
-	toolKey: string,
-	currentIndex: number,
-	startPosition: Vector2,
-	isDragging: boolean,
-	lift: DragLift?,
-}
-
 type DisabledDragDetector = {
 	detector: UIDragDetector,
 	enabled: boolean,
@@ -82,27 +61,6 @@ local function sampleState(raw: number, a: number, b: number, c: number): number
 	end
 
 	return lerp(b, c, (raw - 0.5) * 2)
-end
-
-local function getGuiMousePosition(root: ScreenGui): Vector2
-	local mouse = UserInputService:GetMouseLocation()
-	if root.IgnoreGuiInset then
-		return mouse
-	end
-
-	local inset = GuiService:GetGuiInset()
-	return mouse - inset
-end
-
-local function getInputPosition(input: InputObject): Vector2
-	return Vector2.new(input.Position.X, input.Position.Y)
-end
-
-local function isWithin(root: Instance, candidate: Instance): boolean
-	if candidate == root then
-		return true
-	end
-	return candidate:IsDescendantOf(root)
 end
 
 local function ensureScale(refs: SlotRefs): UIScale
@@ -177,58 +135,6 @@ local function buildRenderSlots(refSlots: { SlotRefs }): { RenderSlot }
 	return slots
 end
 
-local function liftDragButton(slot: RenderSlot, mousePosition: Vector2, dragParent: Instance): DragLift
-	local button = slot.refs.button
-	local parent = button.Parent
-	assert(parent, "Hotbar drag button must have a parent")
-	local absoluteSize = button.AbsoluteSize
-	local placeholder = Instance.new("Frame")
-	placeholder.Name = button.Name .. "InsertionPlaceholder"
-	placeholder.BackgroundColor3 = Config.Hotbar.DRAG_PLACEHOLDER_COLOR
-	placeholder.BackgroundTransparency = Config.Hotbar.DRAG_PLACEHOLDER_TRANSPARENCY
-	placeholder.Size = button.Size
-	placeholder.LayoutOrder = button.LayoutOrder
-
-	local placeholderCorner = Instance.new("UICorner")
-	placeholderCorner.CornerRadius = UDim.new(1, 0)
-	placeholderCorner.Parent = placeholder
-
-	placeholder.Parent = parent
-
-	local lift = {
-		button = button,
-		parent = parent,
-		placeholder = placeholder,
-		originalAnchorPoint = button.AnchorPoint,
-		originalAutomaticSize = button.AutomaticSize,
-		originalLayoutOrder = button.LayoutOrder,
-		originalPosition = button.Position,
-		originalSize = button.Size,
-		originalZIndex = button.ZIndex,
-	}
-
-	button.Parent = dragParent
-	button.AnchorPoint = Vector2.new(0.5, 0.5)
-	button.AutomaticSize = Enum.AutomaticSize.None
-	button.Size = UDim2.fromOffset(absoluteSize.X, absoluteSize.Y)
-	button.Position = UDim2.fromOffset(mousePosition.X, mousePosition.Y)
-	button.ZIndex = Config.Hotbar.DRAG_LIFT_ZINDEX
-	ensureScale(slot.refs).Scale = Config.Hotbar.DRAG_LIFT_SCALE
-
-	return lift
-end
-
-local function restoreDragButton(lift: DragLift): ()
-	lift.button.Parent = lift.parent
-	lift.button.AnchorPoint = lift.originalAnchorPoint
-	lift.button.AutomaticSize = lift.originalAutomaticSize
-	lift.button.LayoutOrder = lift.originalLayoutOrder
-	lift.button.Position = lift.originalPosition
-	lift.button.Size = lift.originalSize
-	lift.button.ZIndex = lift.originalZIndex
-	lift.placeholder:Destroy()
-end
-
 local function setButtonText(button: GuiButton, text: string): ()
 	if button:IsA("TextButton") then
 		(button :: TextButton).Text = ""
@@ -266,9 +172,8 @@ end
 
 local HOTBAR_TOOL_KEY_ATTRIBUTE = "InventoryToolKey"
 
--- `animate` is false for the drag lift and for every render made while a drag is live or
--- settling: the reorder preview re-points each slot at a different tool every frame, so an
--- unchanged repaint (equip echo, chrome show) must not read as a change either.
+-- `animate` lets an equip change glide; a repaint that changes nothing (equip echo, chrome show)
+-- must not read as a change.
 local function renderToolSlot(slot: RenderSlot, viewModel: HotbarSlotViewModel, animate: boolean?): ()
 	local refs = slot.refs
 	local previous = slot.viewModel
@@ -304,27 +209,19 @@ function HotbarUIBinder.new(deps: {
 	refs: Refs,
 	store: any,
 	logger: ILogger,
-	inventoryDrag: any?,
 }): any
 	local self = setmetatable({}, HotbarUIBinder)
 
 	self._refs = deps.refs
 	self._store = deps.store
 	self._log = deps.logger
-	self._inventoryDrag = deps.inventoryDrag
 	self._slots = buildRenderSlots(deps.refs.slots)
 	self._connections = {} :: { RBXScriptConnection }
 	self._unsubscribers = {} :: { () -> () }
 	self._disabledStickerDragDetectors = {} :: { DisabledDragDetector }
-	self._dragState = nil :: DragState?
-	self._dragOverlay = nil :: ScreenGui?
-	self._dragPreviewSlots = nil :: { HotbarSlotViewModel }?
-	self._reorderRequested = nil :: ((string, number) -> ())?
 	self._equipRequested = nil :: ((string) -> ())?
 	self._stickerRequested = nil :: (() -> ())?
 	self._lastStickerRequestClock = 0
-	self._lastDragToolKey = nil :: string?
-	self._dragRenderActive = false
 	self._mouseReady = false
 	self._pendingEquipKey = nil :: string?
 	self._backpackButton = deps.refs.backpackButton
@@ -343,34 +240,7 @@ function HotbarUIBinder.new(deps: {
 	self:_subscribeStore()
 	self:_render(deps.store:get().hotbarSlots, deps.store:get().hasTools)
 
-	if self._inventoryDrag then
-		self._inventoryDrag:setHotbarSlots(self:_slotRefsList())
-		for index, slot in ipairs(self._slots) do
-			self._inventoryDrag:bindHotbarSlot(slot.refs, index)
-		end
-		if type(self._inventoryDrag.setDragEndedCallback) == "function" then
-			self._inventoryDrag:setDragEndedCallback(function()
-				self:_clearDragLift()
-				self._dragState = nil
-				self._dragPreviewSlots = nil
-				if type(self._inventoryDrag.sweepArtifacts) == "function" then
-					self._inventoryDrag:sweepArtifacts()
-				end
-				self:_render(self._store:get().hotbarSlots, self._store:get().hasTools)
-				self:_popDroppedSlot()
-			end)
-		end
-	end
-
 	return self
-end
-
-function HotbarUIBinder:_slotRefsList(): { SlotRefs }
-	local refsList = {} :: { SlotRefs }
-	for _, slot in ipairs(self._slots) do
-		table.insert(refsList, slot.refs)
-	end
-	return refsList
 end
 
 function HotbarUIBinder:_trackConnection(connection: RBXScriptConnection): ()
@@ -404,23 +274,6 @@ function HotbarUIBinder:_disconnectStep(): ()
 		self._stepConn:Disconnect()
 		self._stepConn = nil
 	end
-end
-
-function HotbarUIBinder:_clearDragLift(): ()
-	if self._dragState and self._dragState.lift then
-		restoreDragButton(self._dragState.lift)
-		self._dragState.lift = nil
-	end
-end
-
-function HotbarUIBinder:_findSlotByToolKey(toolKey: string): RenderSlot?
-	for _, slot in ipairs(self._slots) do
-		if slot.viewModel and slot.viewModel.toolKey == toolKey then
-			return slot
-		end
-	end
-
-	return nil
 end
 
 -- Slot buttons live in the wrapper's UIListLayout and their own UIScale belongs to the dock
@@ -459,83 +312,6 @@ function HotbarUIBinder:_animateSlotChange(
 	end
 end
 
--- One pop on the slot the drag landed in; the settling render itself stays motionless.
-function HotbarUIBinder:_popDroppedSlot(): ()
-	local toolKey = self._lastDragToolKey
-	self._lastDragToolKey = nil
-	if toolKey == nil then
-		return
-	end
-
-	local landing = self:_findSlotByToolKey(toolKey)
-	if landing then
-		UIMotion.pop(self:_iconTargetOf(landing.refs), 1.16)
-	end
-end
-
-function HotbarUIBinder:_findViewModelByToolKey(slots: { HotbarSlotViewModel }, toolKey: string): HotbarSlotViewModel?
-	for _, viewModel in ipairs(slots) do
-		if viewModel.toolKey == toolKey then
-			return viewModel
-		end
-	end
-
-	return nil
-end
-
-function HotbarUIBinder:_movePreviewSlot(
-	slots: { HotbarSlotViewModel },
-	toolKey: string,
-	targetIndex: number
-): { HotbarSlotViewModel }
-	local nextSlots = table.clone(slots)
-	local fromIndex = nil :: number?
-	for index, viewModel in ipairs(nextSlots) do
-		if viewModel.toolKey == toolKey then
-			fromIndex = index
-			break
-		end
-	end
-
-	if not fromIndex then
-		return nextSlots
-	end
-
-	local clampedTarget = math.clamp(targetIndex, 1, #nextSlots)
-	if fromIndex == clampedTarget then
-		return nextSlots
-	end
-
-	local moved = table.remove(nextSlots, fromIndex)
-	table.insert(nextSlots, clampedTarget, moved)
-
-	for index, viewModel in ipairs(nextSlots) do
-		local clone = table.clone(viewModel)
-		clone.index = index
-		clone.slotId = tostring(index)
-		nextSlots[index] = clone
-	end
-
-	return nextSlots
-end
-
-function HotbarUIBinder:_getDragOverlay(): ScreenGui
-	if self._dragOverlay then
-		return self._dragOverlay
-	end
-
-	local overlay = Instance.new("ScreenGui")
-	overlay.Name = Config.Hotbar.DRAG_OVERLAY_NAME
-	overlay.DisplayOrder = self._refs.root.DisplayOrder + Config.Hotbar.DRAG_OVERLAY_DISPLAY_ORDER_OFFSET
-	overlay.IgnoreGuiInset = self._refs.root.IgnoreGuiInset
-	overlay.ResetOnSpawn = false
-	overlay.ZIndexBehavior = self._refs.root.ZIndexBehavior
-	overlay.Parent = self._refs.root.Parent
-	self._dragOverlay = overlay
-
-	return overlay
-end
-
 function HotbarUIBinder:_subscribeStore(): ()
 	self:_trackUnsubscriber(self._store:subscribe("hotbarSlots", function(slots: { HotbarSlotViewModel })
 		self:_render(slots, self._store:get().hasTools)
@@ -556,61 +332,9 @@ function HotbarUIBinder:_subscribeStore(): ()
 	end))
 end
 
-function HotbarUIBinder:_insertionIndexAtMouse(mousePosition: Vector2, excludedToolKey: string): number?
-	local candidates = {} :: { { centerX: number } }
-	for _, slot in ipairs(self._slots) do
-		if slot.viewModel and slot.viewModel.toolKey == excludedToolKey then
-			continue
-		end
-
-		local position = slot.refs.button.AbsolutePosition
-		local size = slot.refs.button.AbsoluteSize
-		table.insert(candidates, {
-			centerX = position.X + (size.X * 0.5),
-		})
-	end
-
-	table.sort(candidates, function(left: { centerX: number }, right: { centerX: number }): boolean
-		return left.centerX < right.centerX
-	end)
-
-	if #candidates == 0 then
-		return nil
-	end
-
-	for index, candidate in ipairs(candidates) do
-		if mousePosition.X < candidate.centerX then
-			return index
-		end
-	end
-
-	return math.min(#candidates + 1, #self._slots)
-end
-
-function HotbarUIBinder:_requestLiveReorder(dragState: DragState): ()
-	local targetIndex = self:_insertionIndexAtMouse(getGuiMousePosition(self._refs.root), dragState.toolKey)
-	if not targetIndex then
-		return
-	end
-	if targetIndex == dragState.currentIndex then
-		return
-	end
-
-	dragState.currentIndex = targetIndex
-	self._dragPreviewSlots =
-		self:_movePreviewSlot(self._dragPreviewSlots or self._store:get().hotbarSlots, dragState.toolKey, targetIndex)
-	self:_render(self._dragPreviewSlots, self._store:get().hasTools)
-
-	if self._reorderRequested then
-		self._reorderRequested(dragState.toolKey, targetIndex)
-	end
-end
-
 function HotbarUIBinder:_connectInput(): ()
-	local useExternalDrag = self._inventoryDrag ~= nil
-
-	-- Press/hover feedback is bound whichever drag path is active; these listeners only read
-	-- input, they never consume it, so tap-equip and InventoryDragController are untouched.
+	-- Press/hover feedback; these listeners only read input, they never consume it, so the
+	-- tap-equip below is untouched.
 	for _, slot in ipairs(self._slots) do
 		local button = slot.refs.button
 		-- A slot must never gain a second UIScale: its own belongs to the dock zoom loop.
@@ -642,13 +366,19 @@ function HotbarUIBinder:_connectInput(): ()
 		self:_trackConnections(UIMotion.bindHover(self._backpackButton))
 	end
 
-	for index, slot in ipairs(self._slots) do
-		local button = slot.refs.button
-
-		if useExternalDrag then
-			continue
+	-- The dock zoom loop reads the cursor, but only once it has moved at least once.
+	self:_trackConnection(UserInputService.InputChanged:Connect(function(input: InputObject)
+		if
+			input.UserInputType == Enum.UserInputType.MouseMovement
+			or input.UserInputType == Enum.UserInputType.Touch
+		then
+			self._mouseReady = true
 		end
+	end))
 
+	-- Tap-equip: press and release on the same slot.
+	for _, slot in ipairs(self._slots) do
+		local button = slot.refs.button
 		self:_trackConnection(button.InputBegan:Connect(function(input: InputObject)
 			if
 				input.UserInputType ~= Enum.UserInputType.MouseButton1
@@ -662,131 +392,27 @@ function HotbarUIBinder:_connectInput(): ()
 				return
 			end
 
-			self._dragState = {
-				slotIndex = index,
-				toolKey = viewModel.toolKey,
-				currentIndex = viewModel.index,
-				startPosition = getInputPosition(input),
-				isDragging = false,
-				lift = nil,
-			}
-			self._dragPreviewSlots = table.clone(self._store:get().hotbarSlots)
+			self._pendingEquipKey = viewModel.toolKey
 		end))
-	end
 
-	if useExternalDrag then
-		-- Drag + tap-equip handled by InventoryDragController.
-		self:_trackConnection(UserInputService.InputChanged:Connect(function(input: InputObject)
+		self:_trackConnection(button.InputEnded:Connect(function(input: InputObject)
 			if
-				input.UserInputType == Enum.UserInputType.MouseMovement
-				or input.UserInputType == Enum.UserInputType.Touch
+				input.UserInputType ~= Enum.UserInputType.MouseButton1
+				and input.UserInputType ~= Enum.UserInputType.Touch
 			then
-				self._mouseReady = true
+				return
 			end
+
+			local viewModel = slot.viewModel
+			if not viewModel or not viewModel.toolKey then
+				return
+			end
+
+			if self._pendingEquipKey == viewModel.toolKey and self._equipRequested then
+				self._equipRequested(viewModel.toolKey)
+			end
+			self._pendingEquipKey = nil
 		end))
-	elseif Config.Hotbar.INVENTORY_DRAG_ENABLED == true or Config.Hotbar.DRAG_REORDER_ENABLED == true then
-	self:_trackConnection(UserInputService.InputChanged:Connect(function(input: InputObject)
-		if
-			input.UserInputType == Enum.UserInputType.MouseMovement
-			or input.UserInputType == Enum.UserInputType.Touch
-		then
-			self._mouseReady = true
-		end
-
-		local dragState = self._dragState
-		if not dragState then
-			return
-		end
-		if
-			input.UserInputType ~= Enum.UserInputType.MouseMovement
-			and input.UserInputType ~= Enum.UserInputType.Touch
-		then
-			return
-		end
-
-		local distance = (getInputPosition(input) - dragState.startPosition).Magnitude
-		if distance >= Config.Hotbar.DRAG_START_THRESHOLD then
-			dragState.isDragging = true
-			if not dragState.lift then
-				local slot = self:_findSlotByToolKey(dragState.toolKey)
-				if not slot then
-					return
-				end
-				dragState.lift = liftDragButton(slot, getGuiMousePosition(self._refs.root), self:_getDragOverlay())
-			end
-		end
-
-		if dragState.lift then
-			local mousePosition = getGuiMousePosition(self._refs.root)
-			dragState.lift.button.Position = UDim2.fromOffset(mousePosition.X, mousePosition.Y)
-			self:_requestLiveReorder(dragState)
-		end
-	end))
-
-	self:_trackConnection(UserInputService.InputEnded:Connect(function(input: InputObject)
-		local dragState = self._dragState
-		if not dragState then
-			return
-		end
-		if
-			input.UserInputType ~= Enum.UserInputType.MouseButton1
-			and input.UserInputType ~= Enum.UserInputType.Touch
-		then
-			return
-		end
-
-		if not dragState.isDragging then
-			self._dragState = nil
-			if self._equipRequested then
-				self._equipRequested(dragState.toolKey)
-			end
-			return
-		end
-
-		self:_clearDragLift()
-		self._dragState = nil
-		self._dragPreviewSlots = nil
-		self:_render(self._store:get().hotbarSlots, self._store:get().hasTools)
-		self:_popDroppedSlot()
-	end))
-	else
-		for index, slot in ipairs(self._slots) do
-			local button = slot.refs.button
-			self:_trackConnection(button.InputBegan:Connect(function(input: InputObject)
-				if
-					input.UserInputType ~= Enum.UserInputType.MouseButton1
-					and input.UserInputType ~= Enum.UserInputType.Touch
-				then
-					return
-				end
-
-				local viewModel = slot.viewModel
-				if not viewModel or viewModel.isEmpty or not viewModel.toolKey then
-					return
-				end
-
-				self._pendingEquipKey = viewModel.toolKey
-			end))
-
-			self:_trackConnection(button.InputEnded:Connect(function(input: InputObject)
-				if
-					input.UserInputType ~= Enum.UserInputType.MouseButton1
-					and input.UserInputType ~= Enum.UserInputType.Touch
-				then
-					return
-				end
-
-				local viewModel = slot.viewModel
-				if not viewModel or not viewModel.toolKey then
-					return
-				end
-
-				if self._pendingEquipKey == viewModel.toolKey and self._equipRequested then
-					self._equipRequested(viewModel.toolKey)
-				end
-				self._pendingEquipKey = nil
-			end))
-		end
 	end
 
 	-- Only connect the render step loop if tools are already present at mount time
@@ -852,20 +478,6 @@ function HotbarUIBinder:_applyChromeFullyHidden(): ()
 end
 
 function HotbarUIBinder:_render(slots: { HotbarSlotViewModel }, hasTools: boolean): ()
-	if self._inventoryDrag then
-		local preview = self._inventoryDrag:getDragPreviewSlots()
-		if preview then
-			slots = preview
-		end
-	end
-
-	if self._dragState == nil then
-		self:_clearDragLift()
-	end
-	if self._dragState and self._dragPreviewSlots then
-		slots = self._dragPreviewSlots
-	end
-
 	self._refs.root.Enabled = not (Workspace.CurrentCamera and Workspace.CurrentCamera:GetAttribute("FreecamActive") == true)
 	self._refs.root.DisplayOrder = Config.Hotbar.DISPLAY_ORDER
 
@@ -897,85 +509,6 @@ function HotbarUIBinder:_render(slots: { HotbarSlotViewModel }, hasTools: boolea
 		self._backpackButton.Visible = true
 	end
 
-	local dragState = self._dragState
-	local externalDragKey = if self._inventoryDrag then self._inventoryDrag:getActiveDragToolKey() else nil
-	if externalDragKey then
-		self._lastDragToolKey = externalDragKey
-	elseif dragState and dragState.isDragging then
-		self._lastDragToolKey = dragState.toolKey
-	end
-
-	-- Motion is off while a drag is live and on the render that settles it: the reorder preview
-	-- hands each slot a different tool every frame, which would otherwise read as ten new items.
-	local dragging = dragState ~= nil
-		or externalDragKey ~= nil
-		or (self._inventoryDrag ~= nil and self._inventoryDrag:hasActiveDragSession() == true)
-	local animate = not dragging and self._dragRenderActive ~= true
-	self._dragRenderActive = dragging
-
-	if dragState and dragState.lift then
-		local draggedViewModel = self:_findViewModelByToolKey(slots, dragState.toolKey)
-		if draggedViewModel then
-			renderToolSlot({
-				refs = {
-					button = dragState.lift.button,
-					imageLabel = dragState.lift.button:FindFirstChildWhichIsA("ImageLabel", true) :: ImageLabel?,
-					textLabel = dragState.lift.button:FindFirstChildWhichIsA("TextLabel", true) :: TextLabel?,
-					stroke = dragState.lift.button:FindFirstChildWhichIsA("UIStroke"),
-					scale = dragState.lift.button:FindFirstChildWhichIsA("UIScale"),
-					dragDetector = nil,
-				},
-				originalBackgroundColor = dragState.lift.button.BackgroundColor3,
-				originalBackgroundTransparency = dragState.lift.button.BackgroundTransparency,
-				originalDragDetectorEnabled = nil,
-				originalLayoutOrder = dragState.lift.originalLayoutOrder,
-				originalText = "",
-				originalTextVisible = false,
-				originalTextTransparency = 1,
-				originalImage = "",
-				originalImageVisible = false,
-				originalStroke = 0,
-				originalScale = 1,
-				baseZIndex = dragState.lift.originalZIndex,
-				currentScale = 1,
-				currentStroke = 0,
-				currentTextTransparency = 1,
-				viewModel = draggedViewModel,
-			}, draggedViewModel)
-		end
-
-		local renderIndex = 1
-		local visualIndex = 1
-		dragState.lift.placeholder.LayoutOrder = dragState.currentIndex * 10
-		for _, renderSlot in ipairs(self._slots) do
-			if renderSlot.refs.button == dragState.lift.button then
-				continue
-			end
-
-			local viewModel = slots[renderIndex]
-			while viewModel and viewModel.toolKey == dragState.toolKey do
-				renderIndex += 1
-				viewModel = slots[renderIndex]
-			end
-
-			-- Hide slot chrome when no tool is bound at this visual index.
-			if not viewModel then
-				renderSlot.refs.button.Visible = false
-				renderIndex += 1
-				continue
-			end
-
-			renderToolSlot(renderSlot, viewModel)
-			if visualIndex == dragState.currentIndex then
-				visualIndex += 1
-			end
-			renderSlot.refs.button.LayoutOrder = visualIndex * 10
-			visualIndex += 1
-			renderIndex += 1
-		end
-		return
-	end
-
 	-- Normal render: show only slots that have a tool view model.
 	local visualIndex = 1
 	for index, renderSlot in ipairs(self._slots) do
@@ -985,16 +518,9 @@ function HotbarUIBinder:_render(slots: { HotbarSlotViewModel }, hasTools: boolea
 			continue
 		end
 
-		if externalDragKey and viewModel.toolKey == externalDragKey then
-			renderSlot.refs.button.Visible = false
-			continue
-		end
-
 		local previousModel = renderSlot.viewModel
-		renderToolSlot(renderSlot, viewModel, animate)
-		if animate then
-			self:_animateSlotChange(renderSlot, previousModel, viewModel)
-		end
+		renderToolSlot(renderSlot, viewModel, true)
+		self:_animateSlotChange(renderSlot, previousModel, viewModel)
 		renderSlot.refs.button.LayoutOrder = visualIndex * 10
 		visualIndex += 1
 	end
@@ -1013,7 +539,7 @@ function HotbarUIBinder:_step(dt: number): ()
 		return
 	end
 
-	local mousePosition = getGuiMousePosition(self._refs.root)
+	local mousePosition = PointerSpace.mouse()
 	local dtAlpha = clamp01(dt * Config.Hotbar.SMOOTHING)
 
 	for _, slot in ipairs(self._slots) do
@@ -1021,10 +547,6 @@ function HotbarUIBinder:_step(dt: number): ()
 		if not slot.viewModel then
 			continue
 		end
-		if self._dragState and self._dragState.lift and refs.button == self._dragState.lift.button then
-			continue
-		end
-
 		local absolutePosition = refs.button.AbsolutePosition
 		local absoluteSize = refs.button.AbsoluteSize
 		-- Distance from cursor to the nearest point on the button's bounding box.
@@ -1062,20 +584,10 @@ function HotbarUIBinder:_step(dt: number): ()
 		refs.button.ZIndex = slot.baseZIndex + math.round(rawInfluence * Config.Hotbar.ZINDEX_BUMP)
 
 		if refs.textLabel and slot.viewModel then
-			if (self._dragState and self._dragState.isDragging)
-				or (self._inventoryDrag and self._inventoryDrag:isDragging())
-			then
-				refs.textLabel.Visible = false
-				continue
-			end
 			refs.textLabel.Visible = false
 			refs.textLabel.TextTransparency = slot.currentTextTransparency
 		end
 	end
-end
-
-function HotbarUIBinder:bindReorderRequested(callback: (string, number) -> ()): ()
-	self._reorderRequested = callback
 end
 
 function HotbarUIBinder:bindEquipRequested(callback: (string) -> ()): ()
@@ -1091,7 +603,6 @@ function HotbarUIBinder:renderHotbarSlots(slots: { HotbarSlotViewModel }, hasToo
 end
 
 function HotbarUIBinder:destroy(): ()
-	self:_clearDragLift()
 	self:_disconnectStep()
 
 	for _, slot in ipairs(self._slots) do
@@ -1116,11 +627,6 @@ function HotbarUIBinder:destroy(): ()
 		connection:Disconnect()
 	end
 	table.clear(self._connections)
-
-	if self._dragOverlay then
-		self._dragOverlay:Destroy()
-		self._dragOverlay = nil
-	end
 end
 
 return HotbarUIBinder

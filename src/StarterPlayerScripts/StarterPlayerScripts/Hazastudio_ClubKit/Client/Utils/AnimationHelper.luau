@@ -447,12 +447,12 @@ function AnimationHelper:presentPanel(modal: Frame, onDone: (() -> ())?): ()
 	modal.Visible = true
 	local snapTween = TweenService:Create(
 		modal,
-		makeInfo(preset.snapTime, preset.snapStyle, Enum.EasingDirection.Out),
+		MotionPresets.transitionInfo(preset.snapTime, preset.snapStyle, Enum.EasingDirection.Out),
 		{ Position = settlePos }
 	)
 	local settleTween = TweenService:Create(
 		modal,
-		makeInfo(preset.settleTime, preset.settleStyle, Enum.EasingDirection.Out),
+		MotionPresets.transitionInfo(preset.settleTime, preset.settleStyle, Enum.EasingDirection.Out),
 		{ Position = restingPos }
 	)
 	registerTweens(modal, { snapTween, settleTween }, restingPos)
@@ -491,7 +491,7 @@ function AnimationHelper:dismissPanel(modal: Frame, onDone: (() -> ())?): ()
 	modal.Visible = true
 	local positionTween = TweenService:Create(
 		modal,
-		makeInfo(preset.time, preset.style, preset.direction),
+		MotionPresets.transitionInfo(preset.time, preset.style, preset.direction),
 		{ Position = targetPos }
 	)
 	registerTweens(modal, { positionTween }, restingPos)
@@ -715,7 +715,7 @@ function AnimationHelper:presentCenterPanel(modal: Frame, onDone: (() -> ())?, o
 	modal.Visible = true
 	local scaleTween = TweenService:Create(
 		uiScale,
-		MotionPresets.centerOpenInfo(),
+		MotionPresets.centerOpenTransitionInfo(),
 		{ Scale = 1 }
 	)
 	registerTweens(modal, { scaleTween }, modal.Position)
@@ -760,7 +760,7 @@ function AnimationHelper:dismissCenterPanel(modal: Frame, onDone: (() -> ())?, o
 	modal.Visible = true
 	local scaleTween = TweenService:Create(
 		uiScale,
-		MotionPresets.centerCloseInfo(),
+		MotionPresets.centerCloseTransitionInfo(),
 		{ Scale = closePreset.endScale }
 	)
 	registerTweens(modal, { scaleTween }, modal.Position)
@@ -798,12 +798,12 @@ function AnimationHelper:presentDialog(modal: Frame, onDone: (() -> ())?): ()
 	-- pass — a dialog and a panel must not arrive along different curves.
 	local snapTween = TweenService:Create(
 		modal,
-		makeInfo(preset.snapTime, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+		MotionPresets.transitionInfo(preset.snapTime, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
 		{ Position = settlePos }
 	)
 	local settleTween = TweenService:Create(
 		modal,
-		makeInfo(preset.settleTime, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+		MotionPresets.transitionInfo(preset.settleTime, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
 		{ Position = restingPos }
 	)
 	registerTweens(modal, { snapTween, settleTween }, restingPos)
@@ -842,7 +842,7 @@ function AnimationHelper:dismissDialog(modal: Frame, onDone: (() -> ())?): ()
 	modal.Visible = true
 	local positionTween = TweenService:Create(
 		modal,
-		makeInfo(preset.time, preset.style, preset.direction),
+		MotionPresets.transitionInfo(preset.time, preset.style, preset.direction),
 		{ Position = targetPos }
 	)
 	registerTweens(modal, { positionTween }, restingPos)

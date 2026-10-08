@@ -1355,24 +1355,13 @@ Config.Hotbar = {
 	SMOOTHING = 18,
 	ZINDEX_BUMP = 6,
 	LABEL_SHOW_THRESHOLD = 0.18,
-	-- true: drag-reorder hotbar and cross-drop with backpack; tap-to-equip unchanged.
-	INVENTORY_DRAG_ENABLED = true,
-	DRAG_REORDER_ENABLED = true,
 	BACKPACK_BUTTON_NAME = "BackpackButton",
 	REMOTE_TOOLS_SYNCED = "HotbarToolsSynced",
 	REMOTE_TOOLS_REQUEST_SYNC = "HotbarToolsRequestSync",
 	-- Client re-scan Backpack after spawn (role tools arrive after Overhead payload).
 	TOOL_SYNC_REFRESH_DELAYS = { 0, 0.35, 1, 2, 4, 8, 12, 16, 20 },
-	DRAG_START_THRESHOLD = 6,
-	DRAG_OVERLAY_NAME = "RuntimeHotbarDragOverlay",
-	DRAG_OVERLAY_DISPLAY_ORDER_OFFSET = 50,
-	DRAG_LIFT_ZINDEX = 100,
-	-- Lift scale during hotbar drag preview (HotbarUIBinder); not read by InventoryDragController.
-	DRAG_LIFT_SCALE = 1.16,
-	DRAG_PLACEHOLDER_TRANSPARENCY = 0.72,
 	EMPTY_IMAGE = "",
 	EQUIPPED_BACKGROUND_COLOR = Color3.fromRGB(255, 255, 255),
-	DRAG_PLACEHOLDER_COLOR = Color3.new(0, 0, 0),
 	STATE_A = {
 		SCALE = 1.0,
 		STROKE = 0.4,
@@ -1753,6 +1742,9 @@ Config.PanelZoom = {
 -- Thin UI motion knobs (calm panel language). Full presets live in Client MotionPresets.
 Config.UIMotion = {
 	MOTION_SCALE = 1, -- global duration multiplier (reduced-motion hook); 0.8 = brisker kit, 1.4 = slower
+	-- Transitions only (panel / modal / sidebar TRAVEL: slide, settle, scale-in), on top of
+	-- MOTION_SCALE. Fades and content motion (stagger, hover, press) never read it. 1 = as designed.
+	TRANSITION_SCALE = 1,
 	-- 2026-09-16 feel pass: the centre panel opens longer and softer, and always closes faster than
 	-- it opens. These shadow the same-named fallbacks in Client/Utils/MotionPresets — change both.
 	CENTER_OPEN_TIME = 0.40,
@@ -2923,6 +2915,29 @@ Config.EventBoard = {
 	MSG_REWARD_SKIPPED_TITLE = "Quest complete! You already have a title, so the title reward was skipped.",
 	MSG_SAVE_FAILED = "Could not save. Try again in a moment.",
 	ANNOUNCE_DELAY = 2,
+	-- Milestones (docs/plans/quest-milestones-2026-10-08.md): every claim is recorded by the VPS
+	-- first (quota + dashboard), daily check-ins are logged there for the dashboard.
+	QUOTA_PATH = "/v3/event-quota",
+	CLAIM_PATH = "/v3/event-claims",
+	CLAIM_RELEASE_PATH = "/v3/event-claims/release",
+	CHECKIN_LOG_PATH = "/v3/event-checkins",
+	QUOTA_POLL_SECONDS = 20, -- only while a running quest has a milestone with a quota
+	CHECKIN_LOG_FLUSH_SECONDS = 10,
+	CHECKIN_LOG_MAX_BATCH = 200,
+	CHECKIN_LOG_MAX_QUEUE = 2000, -- oldest dropped beyond this while the VPS is down
+	BUTTON_CLAIM_MILESTONE = "Claim %s", -- reward label, e.g. "Claim 50 Robux"
+	ROBUX_REWARD_TEXT = "%s Robux",
+	XP_REWARD_TEXT = "%s XP",
+	MILESTONE_SLOTS_TEXT = "%d/%d left",
+	MILESTONE_FULL_TEXT = "Full",
+	MILESTONE_CLAIMED_TEXT = "Claimed",
+	MILESTONE_ROBUX_TAKEN_TEXT = "Max 1x",
+	MILESTONE_UNIT = { streak = "%d days", level = "LV %d", robux = "%d Robux donated", playtime = "%d min" },
+	MILESTONE_UNIT_ONE = { streak = "%d day" }, -- a threshold of exactly 1
+	MSG_RECORDED = "%s recorded, slot #%d. The venue will send it to you.",
+	MSG_QUOTA_FULL = "All slots for this reward are taken.",
+	MSG_ROBUX_TAKEN = "You already claimed this quest's Robux reward.",
+	MSG_JOIN_GROUP = "Join the group to claim this reward.",
 }
 -- Free Title event card (FeatureFlags.FreeTitleEventEnabled). A promo card pinned
 -- to the screen edge that opens the self-service title panel — a shortcut only, it
@@ -4527,6 +4542,13 @@ Config.ClientFootprint = {
 	-- Panels build their generated rows on first open instead of at boot (Preferences, DJ sound
 	-- effects, donor profile, ...). -2,400 instances while closed. Legacy: false.
 	LAZY_PANEL_ROWS = true,
+}
+-- First-visit onboarding modal (CONTEXT.md "Onboarding", 2026-10-08): welcome tour, accent theme,
+-- relationship status and graphics quality, opened once per session after the loading screen.
+-- Needs the `17-OnboardingGUI` design sketch in the place (no sketch, no modal). Engine constant,
+-- not buyer config. Off until the owner releases it.
+Config.Onboarding = {
+	ENABLED = false,
 }
 -- ============================================================
 -- CONFIG VALIDATION

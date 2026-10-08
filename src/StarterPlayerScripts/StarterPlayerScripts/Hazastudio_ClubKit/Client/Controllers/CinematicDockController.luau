@@ -5,7 +5,6 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local PermissionDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.PermissionDomain)
@@ -16,6 +15,7 @@ local DonationExperiencePrefs = require(ReplicatedStorage.Hazastudio_ClubKit.Sha
 local OverheadController = require(script.Parent.OverheadController)
 local MobilePanelManager = require(script.Parent.Parent.Services.MobilePanelManager)
 local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
+local PointerSpace = require(script.Parent.Parent.Utils.PointerSpace)
 
 local log = Logger.new("Client.CinematicDockController")
 
@@ -856,7 +856,7 @@ local function startDockMagnifier(dock: GuiObject): () -> ()
 		if not alive or not dock.Visible then
 			return
 		end
-		local mouse = UserInputService:GetMouseLocation()
+		local mouse = PointerSpace.mouse()
 		local alpha = math.clamp(dt * 14, 0, 1)
 		for _, state in ipairs(states) do
 			if not state.button.Parent then

@@ -9,6 +9,7 @@
 -- are online. A post counts as seen once its reminder showed. Hidden while the menu is open.
 -- Notify me = Roblox's own RSVP prompt for the countdown's linked Experience Event.
 
+local GroupService = game:GetService("GroupService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SocialService = game:GetService("SocialService")
@@ -285,7 +286,7 @@ function EventBoardController._start(deps: { remotes: Folder })
 		autoOpenDecided = true
 		local waiting = nil
 		for _, quest in ipairs(state.quests) do
-			if quest.goalType == "streak" and not quest.checkedInToday and not quest.complete then
+			if quest.goalType == "streak" and ((not quest.checkedInToday and not quest.complete) or quest.claimableMilestoneId) then
 				waiting = quest.id
 				break
 			end
@@ -302,8 +303,34 @@ function EventBoardController._start(deps: { remotes: Folder })
 		end)
 	end
 
+	-- ── Robux milestone without the venue group: Roblox's join prompt, then the claim again ──
+	local joinPrompting = false
+	local function onNeedGroup(raw: any)
+		if joinPrompting or type(raw.groupId) ~= "number" or type(raw.questId) ~= "number" then
+			return
+		end
+		joinPrompting = true
+		task.spawn(function()
+			local ok, status = pcall(function()
+				return GroupService:PromptJoinAsync(raw.groupId)
+			end)
+			joinPrompting = false
+			if not ok then
+				log:warn("Group join prompt failed", { groupId = raw.groupId, err = status })
+				return
+			end
+			if status == Enum.GroupMembershipStatus.Joined or status == Enum.GroupMembershipStatus.AlreadyMember then
+				send({ action = "claim", questId = raw.questId, milestoneId = raw.milestoneId })
+			end
+		end)
+	end
+
 	-- ── snapshots ────────────────────────────────────────────────────────────────────────
 	local function onState(raw: any)
+		if type(raw) == "table" and raw.type == "needGroup" then
+			onNeedGroup(raw)
+			return
+		end
 		if type(raw) ~= "table" or raw.type ~= "state" or type(raw.posts) ~= "table" or type(raw.quests) ~= "table" then
 			return
 		end

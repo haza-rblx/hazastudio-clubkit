@@ -62,6 +62,11 @@ export type QuestState = {
 	claimed: boolean,
 	checkedInToday: boolean,
 	calendar: EventCardKit.Calendar?,
+	-- Milestones (2026-10-08): the first one claimable now, or one today's check-in reaches.
+	milestones: { any }?,
+	claimableMilestoneId: number?,
+	claimOnCheckIn: boolean?,
+	claimLabel: string?,
 }
 
 export type State = {
@@ -466,17 +471,22 @@ function EventTabUI:_paintCountdown(card: GuiObject, post: PostState)
 end
 
 function EventTabUI:_questButtonText(quest: QuestState): (string, boolean)
-	if quest.claimed then
-		return cfg.BUTTON_CLAIMED, false
-	end
 	if self._busy[quest.id] then
 		return cfg.BUTTON_BUSY, false
 	end
-	if quest.complete then
-		return cfg.BUTTON_CLAIM, true
+	-- A milestone to claim (a streak card opens the popup, where the claim happens).
+	if quest.claimableMilestoneId or (quest.claimOnCheckIn and not quest.checkedInToday) then
+		return quest.claimLabel or cfg.BUTTON_CLAIM, true
+	end
+	if quest.claimed then
+		return cfg.BUTTON_CLAIMED, false
 	end
 	if quest.goalType == "streak" then
 		return cfg.BUTTON_DETAIL, true
+	end
+	if quest.complete then
+		-- Reached, but what is left can no longer be claimed (slots full, Robux already held).
+		return cfg.BUTTON_CLAIMED, false
 	end
 	return cfg.BUTTON_INCOMPLETE, false
 end
@@ -509,7 +519,7 @@ function EventTabUI:_paintQuest(quest: QuestState, order: number)
 			if not current then
 				return
 			end
-			if current.complete and not current.claimed then
+			if current.goalType ~= "streak" and current.claimableMilestoneId then
 				self._busy[questId] = true
 				self:_paintQuestButton(card, current)
 				if self._onClaim then

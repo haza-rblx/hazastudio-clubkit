@@ -46,7 +46,6 @@ function HotbarController.new(deps: {
 	binder: any,
 	backpackBinder: any?,
 	backpackButton: GuiButton?,
-	inventoryDrag: any?,
 }): any
 	local self = setmetatable({}, HotbarController)
 
@@ -55,7 +54,6 @@ function HotbarController.new(deps: {
 	self._binder = deps.binder
 	self._backpackBinder = deps.backpackBinder
 	self._backpackButton = deps.backpackButton
-	self._inventoryDrag = deps.inventoryDrag
 	self._isDestroyed = false
 
 	return self
@@ -82,11 +80,14 @@ end
 
 function HotbarController:onStart(): ()
 	self:_applyBackpackCoreGuiState()
-	self._binder:bindReorderRequested(function(fromToolKey: string, toSlotIndex: number)
-		self._service:reorder(fromToolKey, toSlotIndex)
-	end)
 	self._binder:bindEquipRequested(function(toolKey: string)
-		self._service:equip(toolKey)
+		-- With the backpack open the hotbar is in "manage" mode: a tap sends the tool back to the
+		-- backpack instead of equipping it.
+		if self._service:isBackpackOpen() then
+			self._service:removeToolFromHotbar(toolKey)
+		else
+			self._service:equip(toolKey)
+		end
 	end)
 
 	if self._backpackButton then
@@ -152,9 +153,6 @@ function HotbarController:destroy(): ()
 	self._binder:destroy()
 	if self._backpackBinder then
 		self._backpackBinder:destroy()
-	end
-	if self._inventoryDrag then
-		self._inventoryDrag:destroy()
 	end
 	local ok, err = setBackpackCoreGuiEnabled(true)
 	if not ok then

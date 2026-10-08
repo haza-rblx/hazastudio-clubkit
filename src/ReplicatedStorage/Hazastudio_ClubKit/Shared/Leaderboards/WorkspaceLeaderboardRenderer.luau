@@ -249,7 +249,7 @@ local warnFn: ((key: string, message: string, payload: any?) -> ())? = nil
 -- (InstanceState; ADR 0011 addendum, 2026-09-17). These were three weak-keyed tables, and Roblox
 -- drops such an entry while the label is still on the board: a lost baseline was re-captured
 -- mid-fade (transparency 1 as the design) and a lost generation let a stopped loading loop carry
--- on. The baseline is captured the first time a label is touched â€” the same moment
+-- on. The baseline is captured the first time a label is touched — the same moment
 -- `ensureLabelFadeBaseline` used to capture it.
 type LabelFade = {
 	generation: number,
@@ -1359,7 +1359,7 @@ end
 
 function WorkspaceLeaderboardRenderer.bootstrapLoadingUntilRevision()
 	-- Default path: server paints SurfaceGui text (SERVER_PAINT_WORKSPACE).
-	-- Client must not start a second loading-text animation loop â€” dual writers
+	-- Client must not start a second loading-text animation loop — dual writers
 	-- stack/ghost overlay labels (two cycling messages on one TextLabel).
 	if RunService:IsClient() and Config.Leaderboards.CLIENT_PAINT_DATA ~= true then
 		return

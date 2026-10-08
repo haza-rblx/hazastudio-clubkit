@@ -2,7 +2,6 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local DonationProviderDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.DonationProviderDomain)
-local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 
 local DonationSystemGuiRefs = {}
 
@@ -12,11 +11,6 @@ export type Refs = {
 	mainWrapper: Frame,
 	inputModal: Frame,
 	messageBox: TextBox,
-	addEmojiButton: TextButton?,
-	emojiPicker: GuiObject?,
-	emojiList: ScrollingFrame?,
-	emojiTemplate: TextButton?,
-	emojiCloseButton: TextButton?,
 	cancelButton: TextButton,
 	continueButton: TextButton,
 	continueText: TextLabel?,
@@ -391,36 +385,6 @@ function DonationSystemGuiRefs.resolve(playerGui: PlayerGui, guiName: string): R
 	local mainWrapper = asFrame(expect(root, "MainWrapper"))
 	local inputModal = asFrame(expect(root, "InputCustomMessageModal"))
 	local messageBox = asTextBox(expect(inputModal, "TextBox"))
-	local addEmojiButton = findTextButton(messageBox, "AddEmojiButton")
-	local emojiPickerCandidate = root:FindFirstChild("EmojiPicker")
-	if not emojiPickerCandidate then
-		local adminGui: Instance? = nil
-		local adminCandidates = Config.Admin.GUI_NAME_CANDIDATES or { Config.Admin.GUI_NAME }
-		for _, guiName in ipairs(adminCandidates) do
-			adminGui = playerGui:FindFirstChild(guiName)
-			if adminGui then
-				break
-			end
-		end
-		local adminEmojiPicker = adminGui and adminGui:FindFirstChild("EmojiPicker")
-		if adminEmojiPicker and adminEmojiPicker:IsA("GuiObject") then
-			local clonedEmojiPicker = adminEmojiPicker:Clone()
-			clonedEmojiPicker.Name = "EmojiPicker"
-			clonedEmojiPicker.Parent = root
-			emojiPickerCandidate = clonedEmojiPicker
-		end
-	end
-	local emojiPicker = if emojiPickerCandidate and emojiPickerCandidate:IsA("GuiObject")
-		then emojiPickerCandidate :: GuiObject
-		else nil
-	local emojiListCandidate = emojiPicker and emojiPicker:FindFirstChild("EmojiList")
-	local emojiList = if emojiListCandidate and emojiListCandidate:IsA("ScrollingFrame")
-		then emojiListCandidate :: ScrollingFrame
-		else nil
-	local emojiTemplateCandidate = emojiList and emojiList:FindFirstChild("EmojiButtonTemplate")
-	local emojiTemplate = if emojiTemplateCandidate and emojiTemplateCandidate:IsA("TextButton")
-		then emojiTemplateCandidate :: TextButton
-		else nil
 	local cancelButton = asTextButton(expect(inputModal, "CancelButton"))
 	local continueButton = asTextButton(expect(inputModal, "ContinueDonateButton"))
 	local headerWrapper = asFrame(expect(mainWrapper, "01-HeaderWrapper"))
@@ -477,11 +441,6 @@ function DonationSystemGuiRefs.resolve(playerGui: PlayerGui, guiName: string): R
 		mainWrapper = mainWrapper,
 		inputModal = inputModal,
 		messageBox = messageBox,
-		addEmojiButton = addEmojiButton,
-		emojiPicker = emojiPicker,
-		emojiList = emojiList,
-		emojiTemplate = emojiTemplate,
-		emojiCloseButton = if emojiPicker then findTextButton(emojiPicker, "CloseModalButton") else nil,
 		cancelButton = cancelButton,
 		continueButton = continueButton,
 		continueText = findTextLabel(continueButton, "ContinueDonateText"),

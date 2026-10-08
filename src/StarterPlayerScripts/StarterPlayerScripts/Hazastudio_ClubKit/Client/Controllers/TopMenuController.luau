@@ -62,6 +62,8 @@ local BLUR_OPTIONS = {
 local menuIconRef: any = nil
 local iconsRef: IconsMap? = nil
 local settingsUIRef: any = nil
+-- Set by init(); binds the menu shell's Back button once both the shell and init() exist.
+local bindBackToMainMenuFn: (() -> ())? = nil
 local isCinematicVisibleFn: (() -> boolean)? = nil
 local getMusicIconFn: (() -> any)? = nil
 local adoptedTriggers: { [string]: AdoptedTrigger } = {}
@@ -236,6 +238,12 @@ end
 
 function TopMenuController.setSettingsUI(settingsUI: any)
 	settingsUIRef = settingsUI
+	-- init() and SettingsController.init run as separate boot tasks in either order; whichever
+	-- comes second binds the Back button (it used to be bound by init() alone, so a shell that
+	-- arrived later left Back as a plain close).
+	if bindBackToMainMenuFn then
+		bindBackToMainMenuFn()
+	end
 end
 
 local function isPointInsideGui(gui: GuiObject?, point: Vector2): boolean
@@ -825,32 +833,21 @@ local function accentHoverLift(rest: Color3): Color3?
 end
 
 -- Accent theme: the plain icon discs (white at high transparency, desktop menu) turn into a solid
--- disc of the accent — one hue in three shades, like the phone menu's gradient discs — with the
--- glyph in the accent's on-fill colour (white; black on yellow). Multicolor gives each disc the
--- colourful gradient its phone-menu twin has; Graphite keeps the design. Discs that already have
--- their own UIGradient (phone menu) are left to AccentSurfaceTint.
+-- disc of the accent — one flat colour, no gradient (owner 2026-10-08) — with the glyph in the
+-- accent's on-fill colour (white; black on yellow). Multicolor gives each disc the colourful
+-- gradient its phone-menu twin has; Graphite keeps the design. Discs that already have their own
+-- UIGradient (phone menu) are left to AccentSurfaceTint.
 local ICON_DISC_GRADIENT_NAME = "AccentDiscGradient"
 local ICON_DISC_GRADIENT_ROTATION = 106
 type IconDiscDesign = { color: Color3, transparency: number, gradient: UIGradient, twin: UIGradient? }
 local iconDiscDesigns: { [GuiObject]: IconDiscDesign } = {}
 local iconGlyphDesigns: { [ImageLabel]: Color3 } = {}
 
--- The deep end keeps the hue (more saturated, a little darker) instead of mixing in black, which
--- turned yellow olive and every other accent muddy.
-local function accentDiscSequence(fill: Color3): ColorSequence
-	local hue, saturation, value = fill:ToHSV()
-	return ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromHSV(hue, math.min(saturation * 1.1, 1), value * 0.85)),
-		ColorSequenceKeypoint.new(0.5, fill),
-		ColorSequenceKeypoint.new(1, fill:Lerp(Color3.new(1, 1, 1), 0.25)),
-	})
-end
-
 local function paintIconDiscs()
 	local accent = AccentService.get()
 	local design = AccentService.isDesign()
 	local multicolor = AccentService.isMulticolor()
-	local sequence = if design then nil else accentDiscSequence(accent.fill)
+	local solid = if design then nil else accent.fill
 	local glyphColor = if design then nil else accent.onFill
 	for disc, saved in pairs(iconDiscDesigns) do
 		local twin = saved.twin
@@ -858,13 +855,13 @@ local function paintIconDiscs()
 		local twinDesign = if multicolor and twin
 			then (twin:GetAttribute("AccentDesignColor") :: any) or twin.Color
 			else nil
-		local discSequence = twinDesign or sequence
-		saved.gradient.Enabled = discSequence ~= nil
-		if discSequence then
-			saved.gradient.Color = discSequence
+		-- A gradient only for Multicolor's twin colours; an accent is one flat fill.
+		saved.gradient.Enabled = twinDesign ~= nil
+		if twinDesign then
+			saved.gradient.Color = twinDesign
 		end
-		disc.BackgroundColor3 = if discSequence then Color3.new(1, 1, 1) else saved.color
-		disc.BackgroundTransparency = if discSequence then 0 else saved.transparency
+		disc.BackgroundColor3 = if twinDesign then Color3.new(1, 1, 1) else solid or saved.color
+		disc.BackgroundTransparency = if twinDesign or solid then 0 else saved.transparency
 		for _, glyph in ipairs(disc:GetChildren()) do
 			local glyphDesign = if glyph:IsA("ImageLabel") then iconGlyphDesigns[glyph] else nil
 			if glyphDesign then
@@ -1223,20 +1220,23 @@ function TopMenuController.init(deps: InitDeps)
 	-- open cascade + backdrop play exactly like a normal open. Wired here in
 	-- init() (after every local function exists) rather than in setSettingsUI
 	-- (which runs earlier, at SettingsController.init).
-	local settingsUI = settingsUIRef
-	if settingsUI and type(settingsUI.bindBackToMainMenu) == "function" then
-		settingsUI:bindBackToMainMenu(function()
-			-- Closed here as well: showMenu would do it, but not when the top
-			-- menu is somehow already open and the selected handler
-			-- early-returns.
-			closeSettingsPanelIfOpen()
-			if menuIconRef and type(menuIconRef.select) == "function" then
-				pcall(function()
-					menuIconRef:select()
-				end)
-			end
-		end)
+	bindBackToMainMenuFn = function()
+		local settingsUI = settingsUIRef
+		if settingsUI and type(settingsUI.bindBackToMainMenu) == "function" then
+			settingsUI:bindBackToMainMenu(function()
+				-- Closed here as well: showMenu would do it, but not when the top
+				-- menu is somehow already open and the selected handler
+				-- early-returns.
+				closeSettingsPanelIfOpen()
+				if menuIconRef and type(menuIconRef.select) == "function" then
+					pcall(function()
+						menuIconRef:select()
+					end)
+				end
+			end)
+		end
 	end
+	bindBackToMainMenuFn()
 
 	local camera = workspace.CurrentCamera
 	if camera and viewportConnection == nil then

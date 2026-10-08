@@ -83,6 +83,38 @@ function MotionPresets.getMotionScale(): number
 	return readMotionScale()
 end
 
+-- Transitions only: how long a panel, modal or sidebar takes to TRAVEL (slide, settle, scale-in).
+-- Fades and everything inside a panel (stagger, hover, press, pops) never read this, so the owner
+-- can stretch the arrivals ("butter") without slowing the content or the fades. Multiplies on top
+-- of MOTION_SCALE. 1 = the designed timings.
+local function readTransitionScale(): number
+	local uiMotion = (Config :: any).UIMotion
+	if type(uiMotion) ~= "table" then
+		return 1
+	end
+	local scale = tonumber(uiMotion.TRANSITION_SCALE)
+	if scale == nil then
+		return 1
+	end
+	return math.clamp(scale, 0.5, 4)
+end
+
+function MotionPresets.getTransitionScale(): number
+	return readTransitionScale()
+end
+
+function MotionPresets.transitionTime(seconds: number): number
+	return math.max(0.01, seconds * readMotionScale() * readTransitionScale())
+end
+
+function MotionPresets.transitionInfo(
+	time: number,
+	style: Enum.EasingStyle,
+	direction: Enum.EasingDirection
+): TweenInfo
+	return TweenInfo.new(MotionPresets.transitionTime(time), style, direction)
+end
+
 function MotionPresets.scaledTime(seconds: number): number
 	return math.max(0.01, seconds * readMotionScale())
 end
@@ -144,6 +176,18 @@ function MotionPresets.centerCloseInfo(): TweenInfo
 	return MotionPresets.makeInfo(p.time, p.style, p.direction)
 end
 
+-- The same timings for the scale-in/out of a centre modal (movement), as opposed to the
+-- GroupTransparency fade the two functions above also serve.
+function MotionPresets.centerOpenTransitionInfo(): TweenInfo
+	local p = MotionPresets.centerOpen()
+	return MotionPresets.transitionInfo(p.time, p.style, p.direction)
+end
+
+function MotionPresets.centerCloseTransitionInfo(): TweenInfo
+	local p = MotionPresets.centerClose()
+	return MotionPresets.transitionInfo(p.time, p.style, p.direction)
+end
+
 -- Travel (yOffset / settleYOffset) is deliberately unchanged: this pass retunes how long a panel
 -- takes and along which curve, never what moves (ADR 0005 / the slide mechanism depend on that).
 -- 0.32 + 0.20 = 0.52 s of arrival, Quint Out into a Sine Out landing that is meant to be noticed.
@@ -195,6 +239,15 @@ function MotionPresets.sidebarOutInfo(): TweenInfo
 	return MotionPresets.makeInfo(0.26, Enum.EasingStyle.Sine, Enum.EasingDirection.In)
 end
 
+-- The sidebar's slide on its own (the fade keeps sidebarInInfo / sidebarOutInfo).
+function MotionPresets.sidebarSlideInInfo(): TweenInfo
+	return MotionPresets.transitionInfo(0.38, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+end
+
+function MotionPresets.sidebarSlideOutInfo(): TweenInfo
+	return MotionPresets.transitionInfo(0.26, Enum.EasingStyle.Sine, Enum.EasingDirection.In)
+end
+
 -- Critically-damped spring freq (Hz-ish via Freecam formula). Lower = softer slide.
 -- TopMenu / sidebar chrome prefer this over Quart tweens for interruptible open/close.
 function MotionPresets.sidebarSpringFrequency(): number
@@ -206,13 +259,25 @@ function MotionPresets.sidebarSpringFrequency(): number
 			base = f
 		end
 	end
-	-- MOTION_SCALE > 1 slows motion by lowering frequency.
-	return math.clamp(base / readMotionScale(), 2.5, 14)
+	-- MOTION_SCALE > 1 slows motion by lowering frequency; TRANSITION_SCALE slows the slide alone
+	-- (and lowers the floor with it, or the clamp would swallow the slowdown).
+	local transition = readTransitionScale()
+	return math.clamp(base / readMotionScale() / transition, 2.5 / transition, 14)
 end
 
 function MotionPresets.sidebarFadeSpringFrequency(): number
-	-- Fade settles a touch faster than the slide so the panel doesn't linger ghosted.
-	return math.clamp(MotionPresets.sidebarSpringFrequency() * 1.15, 2.5, 16)
+	-- Fade settles a touch faster than the slide so the panel doesn't linger ghosted. It follows
+	-- MOTION_SCALE only: a slower slide must not drag the fade out with it.
+	local uiMotion = (Config :: any).UIMotion
+	local base = 5.0
+	if type(uiMotion) == "table" then
+		local f = tonumber(uiMotion.SIDEBAR_SPRING_FREQ)
+		if f ~= nil then
+			base = f
+		end
+	end
+	local slide = math.clamp(base / readMotionScale(), 2.5, 14)
+	return math.clamp(slide * 1.15, 2.5, 16)
 end
 
 function MotionPresets.toastInInfo(): TweenInfo

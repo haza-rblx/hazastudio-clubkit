@@ -45,19 +45,6 @@ local PREVIEW_SAMPLE_TEXT = "PREVIEW"
 local PRESET_CARD_SPEED = Config.Admin.TITLE_PRESET_CARD_SPEED or 0.55
 local PRESET_CARD_SIZE = Config.Admin.TITLE_PRESET_SIZE or 1.5
 
-local SAFE_EMOJIS = {
-	"😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "😊", "😇",
-	"🙂", "🙃", "😉", "😍", "😘", "😎", "🤩", "🥳", "😜", "😋",
-	"🤗", "🤔", "😴", "😈", "👑", "💎", "🔥", "✨", "🌟", "⭐",
-	"💫", "⚡", "💥", "💯", "🎉", "🎊", "🎀", "🎁", "🏆", "🥇",
-	"🥈", "🥉", "🎵", "🎶", "🎧", "🎤", "💃", "🕺", "❤️", "🧡",
-	"💛", "💚", "💙", "💜", "🤍", "🖤", "💕", "💞", "💓", "💗",
-	"💖", "💘", "💝", "💟", "🌹", "🌺", "🌸", "🌼", "🌻", "🍀",
-	"🌈", "☀️", "🌙", "☁️", "🌊", "🍓", "🍒", "🍑", "🍭", "🍬",
-	"🍼", "🧸", "🎮", "🕹️", "🚀", "🛸", "🏝️", "🏖️", "💼", "🛡️",
-	"⚔️", "🗡️", "🔮", "🪄", "📌", "✅",
-}
-
 local AdminPanelUI = {} :: any
 AdminPanelUI.__index = AdminPanelUI
 
@@ -162,11 +149,6 @@ local function findDescendant(root: Instance?, name: string, className: string?)
 	return nil
 end
 
-local function getPointerPosition(): Vector2
-	local mouse = UserInputService:GetMouseLocation()
-	return Vector2.new(mouse.X, mouse.Y)
-end
-
 local function inputPosition(input: InputObject): Vector2
 	return Vector2.new(input.Position.X, input.Position.Y)
 end
@@ -202,20 +184,6 @@ local function setButtonSelected(button: GuiButton?, selected: boolean)
 			UIMotion.tween(child, time, { ImageColor3 = contentColor })
 		end
 	end
-end
-
-local function placeNearPointer(panel: GuiObject, pointer: Vector2, screenGui: ScreenGui)
-	local screenSize = screenGui.AbsoluteSize
-	local panelSize = panel.AbsoluteSize
-	local scale = 1
-	local uiScale = screenGui:FindFirstChildWhichIsA("UIScale")
-	if uiScale then
-		scale = math.max(uiScale.Scale, 0.01)
-	end
-	local x = math.clamp((pointer.X + 14) / scale, 8, math.max(8, (screenSize.X - panelSize.X - 8) / scale))
-	local y = math.clamp((pointer.Y + 14) / scale, 8, math.max(8, (screenSize.Y - panelSize.Y - 8) / scale))
-	panel.AnchorPoint = Vector2.new(0, 0)
-	panel.Position = UDim2.fromOffset(x, y)
 end
 
 local function getScreenScale(screenGui: ScreenGui): number
@@ -376,7 +344,6 @@ function AdminPanelUI.new(gui: ScreenGui)
 
 	local inputTitleWrapper = inputScroll:WaitForChild("InputTitleWrapper") :: Frame
 	local titleInput = inputTitleWrapper:WaitForChild("02-InputCustomTitle") :: TextBox
-	local addEmojiButton = titleInput:WaitForChild("AddEmojiButton") :: TextButton
 
 	local selectSizeRoot = inputScroll:WaitForChild("SelectSize") :: Frame
 	local sizeFrame = selectSizeRoot:WaitForChild("02-SelectSizeInput") :: Frame
@@ -394,12 +361,6 @@ function AdminPanelUI.new(gui: ScreenGui)
 	local overlayWrapper = inputTitleFrame:WaitForChild("OverlayWrapper") :: CanvasGroup
 	local saveTitleButton = overlayWrapper:WaitForChild("SaveButton") :: ImageButton
 	local closeButton = headerWrapper:WaitForChild("3-CloseModalButton") :: TextButton
-
-	local emojiPicker = gui:WaitForChild("EmojiPicker") :: CanvasGroup
-	local emojiDragHandle = emojiPicker:FindFirstChild("DraggableIcon") :: GuiObject?
-	local emojiList = emojiPicker:WaitForChild("EmojiList") :: ScrollingFrame
-	local emojiTemplate = emojiList:WaitForChild("EmojiButtonTemplate") :: TextButton
-	local emojiCloseButton = emojiPicker:WaitForChild("CloseModalButton") :: TextButton
 
 	local avatarPreview = gui:WaitForChild("AvatarPreview") :: Frame
 	local illustrationSection = avatarPreview:FindFirstChild("IllustrationSection")
@@ -447,7 +408,6 @@ function AdminPanelUI.new(gui: ScreenGui)
 	self._buttonGroup = buttonGroup
 	self._deleteTitleButton = deleteTitleButton
 	self._titleInput = titleInput
-	self._addEmojiButton = addEmojiButton
 	self._sizeFrame = sizeFrame
 	self._sizeNormal = sizeNormal
 	self._sizeSelected = sizeSelected
@@ -462,10 +422,6 @@ function AdminPanelUI.new(gui: ScreenGui)
 	self._fontButtons = {} :: { [string]: TextButton }
 	self._saveTitleButton = saveTitleButton
 	self._closeButton = closeButton
-	self._emojiPicker = emojiPicker
-	self._emojiList = emojiList
-	self._emojiTemplate = emojiTemplate
-	self._emojiCloseButton = emojiCloseButton
 	self._avatarPreview = avatarPreview
 	self._overheadPreviewHost = overheadPreviewHost
 	self._viewport = if viewport and viewport:IsA("ViewportFrame") then viewport :: ViewportFrame else nil
@@ -486,15 +442,12 @@ function AdminPanelUI.new(gui: ScreenGui)
 	self._onPlayerSelected = nil :: ((PlayerData) -> ())?
 	self._onPlayerDeselected = nil :: (() -> ())?
 	self._previewConnections = {} :: { RBXScriptConnection }
-	self._emojiConnections = {} :: { RBXScriptConnection }
 	self._panelDragConnections = {} :: { RBXScriptConnection }
-	-- Press/hover connections on the buttons this panel builds once. Emoji tiles are rebuilt,
-	-- so theirs go into _emojiConnections, which _populateEmojiButtons already disconnects.
+	-- Press/hover connections on the buttons this panel builds once.
 	self._motionConnections = {} :: { RBXScriptConnection }
 	-- Designed transparency of every element UIMotion fades here, captured once per instance
 	-- before the first stagger touches it.
 	self._fadeBases = {} :: { [GuiObject]: number }
-	self._emojiButtons = {} :: { GuiObject }
 	-- Last animated visibility of the reveals below; nil until the first render decides.
 	self._buttonGroupVisible = nil :: boolean?
 	self._selectedInfoVisible = nil :: boolean?
@@ -502,9 +455,7 @@ function AdminPanelUI.new(gui: ScreenGui)
 
 	gui.Enabled = false
 	mainWrapper.Visible = false
-	emojiPicker.Visible = false
 	avatarPreview.Visible = false
-	makeFloatingPanelInputOpaque(emojiPicker)
 	makeFloatingPanelInputOpaque(avatarPreview)
 	playerTemplate.Visible = false
 	notFoundCard.Visible = false
@@ -523,7 +474,6 @@ function AdminPanelUI.new(gui: ScreenGui)
 		end)
 	end
 	presetTemplate.Visible = false
-	emojiTemplate.Visible = false
 
 	searchBox:GetPropertyChangedSignal("Text"):Connect(function()
 		self:_applyPlayerSearch()
@@ -531,15 +481,8 @@ function AdminPanelUI.new(gui: ScreenGui)
 	titleInput:GetPropertyChangedSignal("Text"):Connect(function()
 		self:_syncRealtimePreview()
 	end)
-	addEmojiButton.MouseButton1Click:Connect(function()
-		self:_openEmojiPicker(getPointerPosition())
-	end)
-	emojiCloseButton.MouseButton1Click:Connect(function()
-		emojiPicker.Visible = false
-	end)
 
 	self:_captureFadeBases(notFoundCard)
-	self:_populateEmojiButtons()
 	self:_renderSizeOptions()
 	self:_renderFontOptions()
 	self:_populatePresetCards()
@@ -551,8 +494,6 @@ function AdminPanelUI.new(gui: ScreenGui)
 	self:_bindButtonMotion(closeButton)
 	self:_bindButtonMotion(saveTitleButton)
 	self:_bindButtonMotion(deleteTitleButton)
-	self:_bindButtonMotion(addEmojiButton)
-	self:_bindButtonMotion(emojiCloseButton)
 	local tabButton = selector:FindFirstChild("GiveTitleTabButton")
 	if tabButton and tabButton:IsA("GuiObject") then
 		self:_bindButtonMotion(tabButton :: GuiObject)
@@ -560,12 +501,6 @@ function AdminPanelUI.new(gui: ScreenGui)
 
 	for _, connection in ipairs(bindDraggablePanel(mainWrapper, headerWrapper, gui, false)) do
 		table.insert(self._panelDragConnections, connection)
-	end
-	do
-		local emojiHandle: GuiObject = (emojiDragHandle or emojiPicker) :: GuiObject
-		for _, connection in ipairs(bindDraggablePanel(emojiPicker, emojiHandle, gui, true)) do
-			table.insert(self._panelDragConnections, connection)
-		end
 	end
 	for _, connection in ipairs(bindDraggablePanel(avatarPreview, avatarDragStrip, gui, true)) do
 		table.insert(self._panelDragConnections, connection)
@@ -748,68 +683,6 @@ function AdminPanelUI:_renderFontOptions()
 	if self._fontFrame and self._fontFrame:IsA("ScrollingFrame") then
 		syncScrollCanvas(self._fontFrame)
 	end
-end
-
-function AdminPanelUI:_populateEmojiButtons()
-	if not self._emojiConnections then
-		self._emojiConnections = {}
-	end
-	if not self._emojiList or not self._emojiTemplate then
-		return
-	end
-	for _, connection in ipairs(self._emojiConnections) do
-		connection:Disconnect()
-	end
-	table.clear(self._emojiConnections)
-	table.clear(self._emojiButtons)
-	for _, child in ipairs(self._emojiList:GetChildren()) do
-		if child:IsA("TextButton") and child ~= self._emojiTemplate then
-			child:Destroy()
-		end
-	end
-	for index, emoji in ipairs(SAFE_EMOJIS) do
-		local button = self._emojiTemplate:Clone() :: TextButton
-		button.Name = "EmojiButton" .. index
-		button.Visible = true
-		button.LayoutOrder = index
-		local label = button:FindFirstChildWhichIsA("TextLabel")
-		if label then
-			label.Text = emoji
-		else
-			button.Text = emoji
-		end
-		button.Parent = self._emojiList
-		table.insert(self._emojiButtons, button :: GuiObject)
-		self:_captureFadeBases(button)
-		self:_bindButtonMotion(button, self._emojiConnections)
-		table.insert(
-			self._emojiConnections,
-			button.MouseButton1Click:Connect(function()
-				self:_wrapTitleWithEmoji(emoji)
-			end)
-		)
-	end
-end
-
-function AdminPanelUI:_wrapTitleWithEmoji(emoji: string)
-	local title = trim(self._titleInput.Text)
-	if title == "" then
-		self._titleInput.Text = emoji .. " " .. emoji
-	else
-		self._titleInput.Text = emoji .. " " .. title .. " " .. emoji
-	end
-	self:_syncRealtimePreview()
-end
-
-function AdminPanelUI:_openEmojiPicker(pointer: Vector2)
-	placeNearPointer(self._emojiPicker, pointer, self._gui)
-	popOpen(self._anim, self._emojiPicker)
-	-- The shell pops (AnimationHelper); the grid drops in under it and the tiles fade up.
-	-- slideInVertical moves the list through equal and opposite UIPadding, so the picker's
-	-- CanvasGroup never changes AbsoluteSize (ADR 0005). The cascade is capped so a 96-tile
-	-- grid settles in a beat rather than seconds.
-	UIMotion.slideInVertical(self._emojiList, -1, 14)
-	UIMotion.stagger(self._emojiButtons, self._fadeBases, 0.012, 18)
 end
 
 function AdminPanelUI:_clearViewport()
@@ -1333,7 +1206,6 @@ function AdminPanelUI:bindClose(callback: () -> ())
 end
 
 function AdminPanelUI:show()
-	self._emojiPicker.Visible = false
 	self:_setAvatarPreviewInputCapture(false)
 	self._avatarPreview.Visible = false
 	self._gui.Enabled = true
@@ -1348,7 +1220,6 @@ function AdminPanelUI:show()
 end
 
 function AdminPanelUI:hide()
-	self._emojiPicker.Visible = false
 	self:_setAvatarPreviewInputCapture(false)
 	self._avatarPreview.Visible = false
 	-- Nothing loops on this panel, but a card highlight or the button-group reveal can be in
@@ -1380,21 +1251,11 @@ end
 
 function AdminPanelUI:generateTitleStyles(_seed: number) end
 
-function AdminPanelUI:showPackageList() end
-function AdminPanelUI:hidePackageList() end
 function AdminPanelUI:getSelectedPackage(): string? return nil end
-function AdminPanelUI:setPackageSelected(_tier: string) end
 function AdminPanelUI:showConfirmation(_playerData: PlayerData, _tier: string?) end
 function AdminPanelUI:hideConfirmation() end
-function AdminPanelUI:showConfirmDialog(_message: string, _onYes: () -> (), _onNo: () -> ()) end
-function AdminPanelUI:hideConfirmDialog() end
-function AdminPanelUI:showSuccessMessage(_message: string, _duration: number) end
-function AdminPanelUI:setLoadingState(_isLoading: boolean) end
 function AdminPanelUI:bindPackageSelected(_callback: (string) -> ()) end
-function AdminPanelUI:bindSendGift(_callback: (PlayerData, string) -> ()) end
 function AdminPanelUI:bindConfirmationSendGift(_callback: () -> ()) end
-function AdminPanelUI:bindConfirmDialog(_callback: (boolean) -> ()) end
-function AdminPanelUI:getFSMState(): string return "IDLE" end
 function AdminPanelUI:transitionToPlayerSelected(_playerData: PlayerData) end
 function AdminPanelUI:transitionToConfirmation(_playerData: PlayerData, _tier: string) end
 function AdminPanelUI:transitionToConfirmDialog(_message: string, _onYes: () -> (), _onNo: () -> ()) end

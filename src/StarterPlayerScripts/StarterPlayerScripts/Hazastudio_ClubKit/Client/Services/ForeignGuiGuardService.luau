@@ -44,6 +44,7 @@ local KIT_RUNTIME_GUI_NAMES: { [string]: boolean } = {
 	EmoteGui = true,
 	["99-NotificationCenter"] = true,
 	ClubKitIsland = true, -- NotificationIsland fallback host
+	ClubKitOnboarding = true, -- OnboardingUI modal (built from the 17-OnboardingGUI sketch)
 }
 
 -- An executor builds its window over several frames; sampling the instant it is
@@ -138,10 +139,6 @@ function ForeignGuiGuardService.start()
 				configAllow[name] = true
 			end
 		end
-	end
-	local dragOverlayName = Config.Hotbar and Config.Hotbar.DRAG_OVERLAY_NAME
-	if type(dragOverlayName) == "string" then
-		configAllow[dragOverlayName] = true
 	end
 
 	task.spawn(function()

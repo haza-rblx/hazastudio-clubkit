@@ -11,6 +11,27 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-10-09
+
+Major release: music player v3 (web library, play-once requests), event board + event cards + quest milestones, UI motion pass, accent theme, production hardening (persistence, HTTP budget, anti-abuse), client footprint work. Buyer guide: [`docs/releases/3.0.0/UPGRADE.md`](docs/releases/3.0.0/UPGRADE.md); file list: [`docs/releases/3.0.0/CHANGED_FILES.md`](docs/releases/3.0.0/CHANGED_FILES.md).
+
+### Added (quest milestones — 2026-10-08, PARKLAB "event absen")
+
+- **Venue quests carry 1–5 milestones** on one progress bar, each with its own reward and optional **quota** (first-come slots counted by the VPS). New reward types **Robux** and **manual** (free text): recorded on the dashboard and handed out by the venue; at most one Robux reward per player per quest; a Robux claim needs the venue group (`Group.GROUP_ID`) — non-members get Roblox's join prompt, then the claim. Plan + contract: `docs/plans/quest-milestones-2026-10-08.md`.
+- **One button**: when today's check-in reaches an open milestone, or one is claimable, the button reads "Claim <reward>" and one press checks in and claims. Every claim goes to the VPS first (`POST /v3/event-claims`), then the player's DataStore document, then the in-game grant (rolled back on failure). Daily check-ins are logged to the VPS (`POST /v3/event-checkins`, batched every 10 s) for the dashboard.
+- Quest popup: milestone list under the due date (threshold · reward, slots left / Claimed / Full / Max 1x) drawn from the design's own ProgressRow, and calendar badges (MarkerFinish look) on the day each open milestone lands if the streak holds. New server service `Server/Services/EventQuestBackend`.
+- `VenueQuestProgress_v1` entries gain an additive `claims` map (milestone id → time); the old `claimedAt` counts as the claim of the quest's last milestone. Same key, no migration.
+
+### Changed (quest streak — 2026-10-08)
+
+- **Quest check-in streaks are strict**: one skipped WIB day and the next check-in starts at 1 (was: one skipped day forgiven). Join streak (`streakDays`) unchanged.
+
+### Added (onboarding modal — 2026-10-08, flag off)
+
+- **Onboarding**: a 5-step first-visit modal (welcome / menu tour, accent theme, relationship status, graphics quality, done) with animated stage previews (cloned menu components, full-body 3D avatar scenes). Picks apply and save for real through the Settings accent row, the Settings Overall Quality row and the Profile Couple Status buttons. New `Client/UI/Onboarding/*` and `Client/Controllers/OnboardingController`; `SettingsController` gains `applySetting`, `applyProfileField`, `getSetting`, `getProfileField` (the profile-change handler is now one local function, no behaviour change).
+- **`Config.Onboarding.ENABLED = false`** (engine constant, not buyer config). On: opens once per session after the loading screen. It needs the `17-OnboardingGUI` design sketch in the place (GUI template, manual surface); without it the modal stays closed and logs once. Remembering "seen" across sessions is not built (would be a new stored field).
+- `ForeignGuiGuardService` knows the modal's ScreenGui (`ClubKitOnboarding`) as a kit runtime GUI.
+
 ### Changed (accent token ramp — 2026-10-08)
 
 - **Accent palette "Workshop muted", 12 colours.** Settings → Appearance now offers two full lines of 7: Multicolor, Graphite, Denim, Slate, Petrol, Sage, Army Olive / Mustard, Saddle, Rust, Brake Red, Wine, Dusty Rose, Plum — muted automotive / street shades instead of the Apple system colours. Existing ids (`blue`, `purple`, `pink`, `red`, `orange`, `yellow`, `green`) keep their slot with the new shade, so saved player picks and buyer `DefaultAccent` values stay valid; new ids `slate`, `teal`, `sage`, `saddle`, `wine`. Additive — no DataStore key change.
@@ -27,6 +48,29 @@ Active version: see [`VERSION`](VERSION).
 - **Social Buzz copy button labels:** idle reads "Click to copy" (was the design's "Type it manually in browser."), and the confirmation reads "Copied" without the check mark.
 - **ACM: black flash on open/close.** Close kept the card empty while it slid away (content hidden/reset up front) and re-open waited on the server reply before revealing the content. The content now hides/resets when the dismiss tween ends, and re-open reveals the instant paint immediately. On desktop `notifyAcmOpen` no longer hides the hotbar at all.
 - **Top menu Discord invite no longer closes the menu.** The Community row and invite chip keep their hover/press; clicking opens the invite and leaves the top menu open (`KeepMenuOpen` attribute set in `applyDiscordInvite`).
+- **Dance panel: rows in the bottom ~58px of the list (next to the speed slider) pressed but never played with a mouse.** `DancePanelUIBinder.getInputPosition` read `GetMouseLocation()` (raw viewport space, GuiInset included) and tested it against `AbsolutePosition` rects (GuiInset removed), so the "inside the visible scroll area" check failed for the last 58px. The geometry gate in `_isRowInputAllowed` (scroll area, search box, speed knob) is gone: rows are buttons the engine only hands visible input to, and it dates from the v1/v2 layouts. Row and favourite presses now check that the panel is open and that the press is not inside the speed slider (v1/v2 draw it over the bottom of the list, and its input shield does not stop the row underneath; the old coordinate bug had been hiding that). v3 never hits the slider check. `getInputPosition` now returns `InputObject.Position` for mouse and touch alike.
+
+### Changed (avatar context menu scroll arrow — 2026-10-08)
+
+- The bobbing "more below" chevron at the bottom of the avatar context menu (`ScrollAffordance`, ACM only) was two rotated bars; it is now the menu's Back arrow disc (`rbxassetid://113150974507253`, the one on `BacktoMainMenuButton`) turned -90° to face down, 24px, same bob and fade-out on scroll.
+
+### Changed (top menu icon discs are one flat colour — 2026-10-08)
+
+- Desktop top menu: under an accent the icon discs were a three-shade gradient (`AccentDiscGradient`); they are now a single flat `accent.fill` (glyph still on `onFill`). Multicolor keeps its colourful twin gradients, Graphite keeps the design. The phone menu was already flat under an accent (`AccentSurfaceTint` flattens gradients inside buttons). `TopMenuController`: `accentDiscSequence` removed.
+
+### Removed (emoji picker and inventory drag — 2026-10-08)
+
+- **Emoji picker** is gone from the donation message box (`DonationSystemUI`, `DonationSystemGuiRefs`) and from the legacy `AdminPanelUI`: the `AddEmojiButton`/`EmojiPicker` code, the emoji tables and the pointer-placement helpers. The `AddEmojiButton` was also deleted from `09-DonationSystemGUI` in the template place. **Manual surface:** a buyer GUI that still carries `AddEmojiButton` keeps a button that does nothing until they re-import the GUI.
+- **Inventory drag** is gone: `InventoryDragController` (deleted), the drag path inside `HotbarUIBinder` (lift, live reorder, preview, overlay) and the config keys `Hotbar.INVENTORY_DRAG_ENABLED`, `DRAG_REORDER_ENABLED`, `DRAG_START_THRESHOLD`, `DRAG_OVERLAY_NAME`, `DRAG_OVERLAY_DISPLAY_ORDER_OFFSET`, `DRAG_LIFT_ZINDEX`, `DRAG_LIFT_SCALE`, `DRAG_PLACEHOLDER_TRANSPARENCY`, `DRAG_PLACEHOLDER_COLOR`. Taps are unchanged: a hotbar slot equips on tap, and with the backpack open a tap sends it back to the backpack; a tap on a backpack cell moves it to the end of the hotbar (and warns "Hotbar holds at most N items" when full). Opening the backpack still unequips everything. `HotbarInventoryService.reorder/snapshotOrder/restoreOrder` stay (unused by the UI now).
+
+### Fixed (pointer position used the wrong coordinate space — 2026-10-08)
+
+- New `Client/Utils/PointerSpace`: `GetMouseLocation()` is raw viewport space (GuiInset, 58px, included) while `AbsolutePosition`, `GetGuiObjectsAtPosition` and `InputObject.Position` are not. `PointerSpace.mouse()` / `PointerSpace.ofInput(input)` return the latter space. Fixed where the raw mouse was tested against rects: `MenuShellUI.isPointerInsidePanel` (click-outside-to-close), `StickerController` (panel hit test), `CinematicDockController` (dock magnify centre), the `HotbarUIBinder` dock zoom, and the avatar context menu (`AvatarContextUI` placed the card 58px below the cursor on its `IgnoreGuiInset` ScreenGui; `AvatarContextController` now hit-tests GUI and casts the world ray in one space via `ScreenPointToRay`, which also corrects the touch ray that was off by the inset).
+
+### Removed (dead code sweep — 2026-10-08)
+
+- `HotbarInventoryService.reorder/snapshotOrder/restoreOrder` (no caller since the drag removal), `HotbarUIBinder.isWithin`, `DonationSystemUI._clipRotatingBackground_unused`, and ten `AdminPanelUI` interface stubs nothing in `Client/` calls (`showPackageList`, `hidePackageList`, `setPackageSelected`, `showConfirmDialog`, `hideConfirmDialog`, `showSuccessMessage`, `setLoadingState`, `bindSendGift`, `bindConfirmDialog`, `getFSMState`). The stubs `AdminController` still calls stay.
+- `SmoothScrollHelper` and `AvatarViewport3D` now use `PointerSpace.mouse()` instead of their own inset arithmetic; the misleading "AbsolutePosition already includes GuiInset" comment is gone.
 
 ### Performance (client footprint on a near-empty server — 2026-10-07)
 
@@ -170,7 +214,7 @@ All five are built in code at runtime on the existing GUIs (no RBXM needed); spe
 
 - **Settings → Appearance → Accent color**: baris titik ala macOS (Graphite, Blue, Purple, Pink, Red, Orange, Yellow, Green). Warna aksen hanya untuk *state*: toggle on, pill segmented terpilih, hover baris top menu, baris dance yang sedang diputar, pill tab Dance/Fav/Pose (dan gradient Auto Dance kalau desainnya punya). Permukaan abu di menu, top menu, dan dance ikut di-tint halus (8% warna aksen); lingkaran ikon top menu desktop jadi warna aksen solid bergradasi 3 tingkat dengan ikon putih (hitam di Yellow); abu yang sangat gelap (< 10) dan abu terang/putih (> 200) tetap netral. Teks dan identitas fitur (gradient Shop/Couple/Profile, modal khusus) tidak berubah.
 - **Graphite = tampilan sekarang**, piksel-identik (warna desain dipakai apa adanya). Pemain yang belum memilih melihat default venue.
-- **Buyer: `ClubKitConfig.Branding.DefaultAccent`** (default `"graphite"`) — masuk otomatis lewat fill-forward; isi salah satu id di atas untuk default venue.
+- **Buyer: `ClubKitConfig.Branding.DefaultAccent`** (default `"multicolor"`) — masuk otomatis lewat fill-forward; isi salah satu id di atas untuk default venue.
 - **Data: field baru `accent` di `Settings_v1`** (`""` = belum memilih). Aditif, key DataStore tidak berubah, data lama tetap valid.
 - Baru: `Shared/Domain/AccentDomain.luau` (palet + resolve pemain → venue → graphite; spec `.tmp/accent-spec.luau`), `Client/Services/AccentService.luau`, `Client/Services/AccentSurfaceTint.luau`. Diubah: `MenuShellUI`, `SettingsDomain`, `Types`, `SettingsController` (client), `MenuSettingsCore`, `TopMenuController`, `DancePanelUIBinder`, `UIMotion.bindHoverTint` (param `liftTo`), `Config`, `ConfigBootstrap`, `ClubKitConfigSchema`, template `ClubKitConfig`.
 
@@ -198,7 +242,7 @@ All five are built in code at runtime on the existing GUIs (no RBXM needed); spe
 - **Player Particles toggle (field `playerEffects` yang sudah ada di schema, kini punya row + apply logic).** Menyembunyikan particle/trail/beam/fire/smoke/sparkles di karakter pemain **lain** (karakter sendiri tetap render — row-nya tentang keramaian dance floor, bukan menyembunyikan efek sendiri dari orang lain). Sudah ada di `SettingsStoredData` sejak lama tapi belum pernah punya UI; pemain lama default `true` (semua tampil).
 
 - **AvatarGuard jadi bisa diatur dari buyer config (`ClubKitConfig.AvatarGuard`).** Sebelumnya oversized-accessory trim (ADR 0008 Layer 2c) hanya bisa dimatikan lewat edit engine `Config.luau`, yang tertimpa setiap Update Engine. Sekarang section buyer `ClubKitConfig.AvatarGuard` (`Enabled`, `MaxAccessoryStuds`, `MaxCharacterHeight`, `MaxCharacterWidth`, `MaxAccessories`, `Effects`) diproyeksikan `ConfigBootstrap` ke `Config.AvatarGuard` — `Enabled = false` mematikan trim + notifikasi player + beacon Discord sepenuhnya; limit yang dinaikkan membuat wings/aksesoris besar yang sah lolos tanpa mematikan proteksi lain. Effect/particle caps, `KICK_AFTER_TRIMS`, dan pesan tetap engine-side (nilai typo buyer tidak bisa melonggarkannya). Buyer lama tanpa section ini = default lama (`Enabled = true`). Code-only → source sync.
-### Fixed (performance hardening, upgrade 3.0 progress — belum rilis)
+### Fixed (performance hardening)
 
 Catatan progress yang sudah terverifikasi di Studio playtest; bukan daftar untuk rilis final. Rilis tetap keputusan owner.
 
@@ -217,7 +261,7 @@ Catatan progress yang sudah terverifikasi di Studio playtest; bukan daftar untuk
 - **UI cost:** `Music/LibraryView` + `ListPool` adalah referensi virtualization yang benar. Kandidat lanjutan (belum dikerjakan): Backpack cell pooling (48 cells re-clone per store change), EmoteListPanel search debounce, AdminHub player-list signature diff.
 - **200-CCU bot simulation (server-side, tanpa avatar):** 200 logical players — 200/200 overhead writes OK dalam ~1.2 s, DataStore scheduler 0 rejected/0 deferred, budget GetAsync 2963 / GetSortedAsync 168. Kit code tidak bottleneck; 31 FPS idle di Studio PC disebabkan plugin Fusion/Reclass (~70% capture) yang tidak berjalan di production. Validasi end-to-end 200 CCU nyata tetap perlu live production test bertahap.
 
-### Yang masih tersisa sebelum 3.0 bisa dirilis
+### Open at release (see UPGRADE.md "Known issues")
 
 - **Verifikasi `GlobalDocWriter.ENABLED`** di deploy config production.
 - **Live production test bertahap** (50 → 100 → 200 real players) untuk network/DataStore end-to-end; Studio PC tidak bisa substitusi.

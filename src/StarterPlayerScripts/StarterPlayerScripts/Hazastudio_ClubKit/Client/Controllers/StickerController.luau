@@ -9,6 +9,7 @@ local UserInputService = game:GetService("UserInputService")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
 local GroupMotion = require(script.Parent.Parent.Utils.GroupMotion)
+local PointerSpace = require(script.Parent.Parent.Utils.PointerSpace)
 local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 
@@ -545,9 +546,7 @@ function StickerController:_isPointerInsidePanel(input: InputObject): boolean
 		return false
 	end
 
-	local point = if input.UserInputType == Enum.UserInputType.Touch
-		then Vector2.new(input.Position.X, input.Position.Y)
-		else UserInputService:GetMouseLocation()
+	local point = PointerSpace.ofInput(input)
 	return isPointInside(refs.sidePanel, point) or isPointInside(refs.modal, point)
 end
 

@@ -4,7 +4,6 @@
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
-local GuiService = game:GetService("GuiService")
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
@@ -13,6 +12,7 @@ local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local AvatarViewport3D = require(script.Parent.Parent.Utils.AvatarViewport3D)
 local AvatarPrewarmShared = require(script.Parent.Parent.Utils.AvatarPrewarmShared)
+local PointerSpace = require(script.Parent.Parent.Utils.PointerSpace)
 local ScrollAffordance = require(script.Parent.ScrollAffordance)
 
 type AvatarContextPayload = Types.AvatarContextPayload
@@ -457,8 +457,9 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 		if screen.X <= 0 or size.X <= 0 then
 			return designRestingPosition
 		end
-		local inset = if screenGui.IgnoreGuiInset then Vector2.zero else GuiService:GetGuiInset()
-		local mouse = UserInputService:GetMouseLocation() - (screenGui.AbsolutePosition :: Vector2) - inset
+		-- Position inside the ScreenGui: the pointer in AbsolutePosition space minus the ScreenGui's
+		-- own origin (which is -inset for an IgnoreGuiInset ScreenGui, so this holds for both).
+		local mouse = PointerSpace.mouse() - (screenGui.AbsolutePosition :: Vector2)
 		-- Right of the cursor, a bit above it; flip left when it would leave the screen.
 		local x = mouse.X + CURSOR_GAP
 		if x + size.X > screen.X - SCREEN_MARGIN then

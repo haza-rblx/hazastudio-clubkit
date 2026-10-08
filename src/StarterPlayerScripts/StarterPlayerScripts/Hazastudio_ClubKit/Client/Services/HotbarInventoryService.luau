@@ -446,11 +446,6 @@ function HotbarInventoryService:_scheduleToolSyncPoll(): ()
 	end
 end
 
-function HotbarInventoryService:reorder(fromToolKey: string, toSlotIndex: number): ()
-	self._order = moveKeyToIndex(self._order, fromToolKey, toSlotIndex)
-	self:refresh()
-end
-
 function HotbarInventoryService:toggleBackpackOpen(): ()
 	self._isBackpackOpen = not self._isBackpackOpen
 	self._store:set({ isBackpackOpen = self._isBackpackOpen })
@@ -458,25 +453,6 @@ end
 
 function HotbarInventoryService:isBackpackOpen(): boolean
 	return self._isBackpackOpen
-end
-
-function HotbarInventoryService:snapshotOrder(): { string }
-	local snapshot = table.create(#self._order)
-	for _, key in ipairs(self._order) do
-		table.insert(snapshot, key)
-	end
-	return snapshot
-end
-
-function HotbarInventoryService:restoreOrder(snapshot: { string }): ()
-	local nextOrder = table.create(#snapshot)
-	for _, key in ipairs(snapshot) do
-		if self._entriesByKey[key] then
-			table.insert(nextOrder, key)
-		end
-	end
-	self._order = nextOrder
-	self:refresh()
 end
 
 function HotbarInventoryService:assignToolToHotbar(toolKey: string, toIndex: number): boolean

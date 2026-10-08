@@ -4,11 +4,11 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local GuiService = game:GetService("GuiService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local UIMotion = require(script.Parent.UIMotion)
 local UISpring = require(script.Parent.UISpring)
+local PointerSpace = require(script.Parent.PointerSpace)
 -- Import Logger for proper logging
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local AssetHealthReporter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.AssetHealthReporter)
@@ -356,8 +356,6 @@ function AvatarViewport3D:_gazeSupported(): boolean
 	return not UIMotion.reduced()
 end
 
---- Pointer in the same space GuiObject.AbsolutePosition is reported in: GetMouseLocation
---- measures from the top of the screen, AbsolutePosition from below the topbar inset.
 local function wrapAngle(angle: number): number
 	return (angle + math.pi) % (2 * math.pi) - math.pi
 end
@@ -378,10 +376,6 @@ local function isOnScreen(gui: GuiObject): boolean
 		node = node.Parent
 	end
 	return false
-end
-
-local function pointerInGuiSpace(): Vector2
-	return UserInputService:GetMouseLocation() - GuiService:GetGuiInset()
 end
 
 function AvatarViewport3D:_startGazeFollow()
@@ -455,7 +449,7 @@ function AvatarViewport3D:_startGazeFollow()
 		local hitArea = self._gazeHitArea
 		local viewport = self._viewport
 		if hitArea and isOnScreen(hitArea) and viewport.AbsoluteSize.X > 0 then
-			local pointer = pointerInGuiSpace()
+			local pointer = PointerSpace.mouse()
 			local areaPosition = hitArea.AbsolutePosition
 			local areaSize = hitArea.AbsoluteSize
 			inside = pointer.X >= areaPosition.X

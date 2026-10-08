@@ -486,6 +486,8 @@ export type SettingsStoredData = {
 	graphicsOverrides: { [string]: boolean },
 	-- AccentDomain id, or "" = never picked (the venue default applies).
 	accent: string,
+	-- Onboarding "don't show again" tick (CONTEXT.md "Onboarding"). Additive: older stores read false.
+	onboardingDismissed: boolean,
 	_version: number,
 }
 

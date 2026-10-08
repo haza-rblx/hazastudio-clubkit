@@ -14,6 +14,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local TextService = game:GetService("TextService")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local MotionPresets = require(script.Parent.Parent.Utils.MotionPresets)
@@ -23,6 +24,8 @@ local EventCardKit = require(script.Parent.EventCardKit)
 local cfg = Config.EventBoard
 local path, setText = EventCardKit.path, EventCardKit.setText
 local DIM_TRANSPARENCY = 0.35
+-- Status text widths (design px), measured once per text.
+local statusWidths: { [string]: number } = {}
 
 local EventQuestPopupUI = {}
 EventQuestPopupUI.__index = EventQuestPopupUI
@@ -96,13 +99,14 @@ function EventQuestPopupUI:_wire()
 			if not quest or self._busy or self._flying then
 				return
 			end
-			if quest.complete and not quest.claimed then
+			-- A claimable milestone: one press checks in (if not yet today) and claims it.
+			if quest.claimableMilestoneId and quest.checkedInToday then
 				self._busy = true
 				self:_paintButton()
 				if self._onClaim then
 					self._onClaim(quest.id)
 				end
-			elseif not quest.checkedInToday and not quest.complete then
+			elseif not quest.checkedInToday and (not quest.complete or quest.claimableMilestoneId) then
 				self._busy = true
 				self:_paintButton()
 				if self._onCheckIn then
@@ -151,10 +155,11 @@ function EventQuestPopupUI:_paintButton()
 	local left = self._secondsToNextDay - (os.clock() - self._stateAt)
 	if self._busy then
 		text = cfg.BUTTON_BUSY
-	elseif quest.claimed then
+	elseif quest.claimableMilestoneId or (quest.claimOnCheckIn and not quest.checkedInToday) then
+		text, active = quest.claimLabel or cfg.BUTTON_CLAIM, true
+	elseif quest.claimed or quest.complete then
+		-- Every milestone claimed, or the rest can no longer be (slots full, Robux already held).
 		text = cfg.BUTTON_CLAIMED
-	elseif quest.complete then
-		text, active = cfg.BUTTON_CLAIM, true
 	elseif quest.checkedInToday then
 		text = string.format(cfg.BUTTON_CHECKED_IN, EventCardKit.clock(left))
 	else
@@ -171,6 +176,197 @@ function EventQuestPopupUI:_paintButton()
 	if button:IsA("GuiButton") then
 		button.AutoButtonColor = false
 	end
+end
+
+-- ── milestones (2026-10-08) ─────────────────────────────────────────────────────────────────
+-- A list under the due date, one row per milestone: marker dot, "7 days · 50 Robux", status on
+-- the right (slots left / Claimed / Slots full / 1 Robux reward per player). Drawn from the
+-- design's own ProgressRow (font, colours), or from a `Milestones > MilestoneTemplate` row when
+-- the GUI ships one. A quest with one milestone shows no list.
+
+local function milestoneStatusText(row: any): string
+	if row.status == "claimed" then
+		return cfg.MILESTONE_CLAIMED_TEXT
+	elseif row.status == "full" then
+		return cfg.MILESTONE_FULL_TEXT
+	elseif row.status == "robux_taken" then
+		return cfg.MILESTONE_ROBUX_TAKEN_TEXT
+	elseif row.quota and row.remaining then
+		return string.format(cfg.MILESTONE_SLOTS_TEXT, row.remaining, row.quota)
+	end
+	return ""
+end
+
+function EventQuestPopupUI:_milestoneList(): Frame?
+	local left = self._left
+	local existing = left:FindFirstChild("Milestones")
+	if existing and existing:IsA("Frame") then
+		return existing
+	end
+	local progressRow = left:FindFirstChild("ProgressRow")
+	local label = path(progressRow, "Label")
+	local value = path(progressRow, "ValueSlot", "Value")
+	local fill = path(left, "Bar", "Fill")
+	local track = left:FindFirstChild("Bar")
+	if not (label and label:IsA("TextLabel") and value and value:IsA("TextLabel") and fill and fill:IsA("Frame") and track and track:IsA("Frame")) then
+		return nil
+	end
+	local list = Instance.new("Frame")
+	list.Name = "Milestones"
+	list.BackgroundTransparency = 1
+	list.Size = UDim2.new(1, 0, 0, 0)
+	list.AutomaticSize = Enum.AutomaticSize.Y
+	list.LayoutOrder = 45
+	local layout = Instance.new("UIListLayout")
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Padding = UDim.new(0, 6)
+	layout.Parent = list
+	local pad = Instance.new("UIPadding")
+	pad.PaddingTop = UDim.new(0, 12)
+	pad.Parent = list
+
+	local template = Instance.new("Frame")
+	template.Name = "MilestoneTemplate"
+	template.BackgroundTransparency = 1
+	template.Size = UDim2.new(1, 0, 0, progressRow and (progressRow :: Frame).Size.Y.Offset or 16)
+	template.Visible = false
+	local dot = Instance.new("Frame")
+	dot.Name = "Dot"
+	dot.AnchorPoint = Vector2.new(0, 0.5)
+	dot.Position = UDim2.fromScale(0, 0.5)
+	dot.Size = UDim2.fromOffset(6, 6)
+	dot.BorderSizePixel = 0
+	dot.BackgroundColor3 = track.BackgroundColor3
+	dot.BackgroundTransparency = track.BackgroundTransparency
+	dot:SetAttribute("OnColor", fill.BackgroundColor3)
+	dot:SetAttribute("OffColor", track.BackgroundColor3)
+	dot:SetAttribute("OffTransparency", track.BackgroundTransparency)
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(1, 0)
+	corner.Parent = dot
+	dot.Parent = template
+	local name = label:Clone()
+	name.Name = "Label"
+	name.AnchorPoint = Vector2.new(0, 0.5)
+	name.Position = UDim2.new(0, 12, 0.5, 0)
+	name.Parent = template
+	-- The label is truncated before the status, never drawn under it (sized per row on paint).
+	name.AutomaticSize = Enum.AutomaticSize.Y
+	name.TextTruncate = Enum.TextTruncate.AtEnd
+	name.Size = UDim2.new(1, -12, 0, 0)
+	local status = value:Clone()
+	status.Name = "Status"
+	status.AutomaticSize = Enum.AutomaticSize.X
+	status.Size = UDim2.fromScale(0, 1)
+	status.AnchorPoint = Vector2.new(1, 0.5)
+	status.Position = UDim2.fromScale(1, 0.5)
+	status.TextXAlignment = Enum.TextXAlignment.Right
+	status.Parent = template
+	template.Parent = list
+	list.Parent = left
+	return list
+end
+
+function EventQuestPopupUI:_paintMilestones()
+	local quest = self._quest
+	local milestones = quest and quest.milestones or {}
+	local list = self:_milestoneList()
+	if not list then
+		return
+	end
+	for _, child in ipairs(list:GetChildren()) do
+		if child.Name == "MilestoneRow" then
+			child:Destroy()
+		end
+	end
+	list.Visible = #milestones > 1
+	if #milestones <= 1 then
+		return
+	end
+	local template = list:FindFirstChild("MilestoneTemplate")
+	if not (template and template:IsA("GuiObject")) then
+		return
+	end
+	local accent = Color3.new(1, 1, 1)
+	local category = self._left:FindFirstChild("Category")
+	if category and category:IsA("TextLabel") then
+		accent = category.TextColor3
+	end
+	local unit = cfg.MILESTONE_UNIT[quest.goalType] or "%d"
+	for index, row in ipairs(milestones) do
+		local copy = template:Clone()
+		copy.Name = "MilestoneRow"
+		copy.LayoutOrder = index
+		copy.Visible = true
+		local rowUnit = if row.value == 1 and cfg.MILESTONE_UNIT_ONE then cfg.MILESTONE_UNIT_ONE[quest.goalType] or unit else unit
+		setText(copy, "Label", string.format(rowUnit, row.value) .. " · " .. row.rewardLabel)
+		local statusText = milestoneStatusText(row)
+		setText(copy, "Status", statusText)
+		local reached = quest.current >= row.value or row.status == "claimed"
+		local dot = copy:FindFirstChild("Dot")
+		if dot and dot:IsA("Frame") then
+			dot.BackgroundColor3 = if reached then dot:GetAttribute("OnColor") :: Color3 else dot:GetAttribute("OffColor") :: Color3
+			dot.BackgroundTransparency = if reached then 0 else dot:GetAttribute("OffTransparency") :: number
+		end
+		local status = copy:FindFirstChild("Status")
+		if status and status:IsA("TextLabel") then
+			if row.status == "claimable" then
+				status.TextColor3 = accent
+			end
+			if row.status == "full" or row.status == "robux_taken" or row.status == "claimed" then
+				status.TextTransparency = DIM_TRANSPARENCY
+			end
+		end
+		copy.Parent = list
+		local name = copy:FindFirstChild("Label")
+		if statusText ~= "" and name and name:IsA("TextLabel") and status and status:IsA("TextLabel") then
+			local function fit(width: number)
+				name.Size = UDim2.new(1, -(12 + math.ceil(width) + 6), 0, 0)
+			end
+			local known = statusWidths[statusText]
+			if known then
+				fit(known)
+			else
+				local fontFace, textSize = status.FontFace, status.TextSize
+				task.spawn(function()
+					local params = Instance.new("GetTextBoundsParams")
+					params.Text = statusText
+					params.Font = fontFace
+					params.Size = textSize
+					params.Width = 1000
+					local ok, bounds = pcall(TextService.GetTextBoundsAsync, TextService, params)
+					local width = if ok then bounds.X else #statusText * textSize * 0.6
+					statusWidths[statusText] = width
+					if name.Parent then
+						fit(width)
+					end
+				end)
+			end
+		end
+	end
+end
+
+-- Calendar badges: the day each open milestone lands if the streak holds from today.
+function EventQuestPopupUI:_badges(): { [number]: string }?
+	local quest = self._quest
+	local calendar = quest and quest.calendar
+	if not (calendar and calendar.todayIndex and quest.milestones and #quest.milestones > 1) then
+		return nil
+	end
+	local badges: { [number]: string } = {}
+	for _, row in ipairs(quest.milestones) do
+		if row.status ~= "claimed" and row.value > quest.current then
+			local offset = row.value - quest.current - (if quest.checkedInToday then 0 else 1)
+			local index = calendar.todayIndex + offset
+			if index >= 1 and index <= #calendar.cells then
+				badges[index] = if row.rewardType == "robux"
+					then "R$" .. row.rewardValue
+					elseif row.rewardType == "xp" then row.rewardValue .. " XP"
+					else "REWARD"
+			end
+		end
+	end
+	return badges
 end
 
 -- Both columns end on one bottom line: the left column's Spacer takes up the difference.
@@ -218,6 +414,7 @@ function EventQuestPopupUI:_paint(holdToday: boolean?)
 		EventCardKit.fitHeight(title)
 	end
 	setText(left, "Date", string.format(cfg.DUE_DATE_TEXT, EventCardKit.dateText(quest.dueDate)))
+	self:_paintMilestones()
 	local row = left:FindFirstChild("ProgressRow")
 	setText(row, "Label", string.format(cfg.PROGRESS_TEXT, ""))
 	local shown = quest.current
@@ -241,7 +438,7 @@ function EventQuestPopupUI:_paint(holdToday: boolean?)
 	local calendar = quest.calendar
 	if calendar then
 		setText(self._right, "Month", EventCardKit.monthText(calendar))
-		self._tiles = EventCardKit.paintCalendar(self._cal, calendar, { holdToday = holdToday })
+		self._tiles = EventCardKit.paintCalendar(self._cal, calendar, { holdToday = holdToday, badges = self:_badges() })
 	end
 	self:_paintButton()
 	self:_balance()

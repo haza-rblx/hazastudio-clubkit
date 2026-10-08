@@ -12,6 +12,7 @@ local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local LoadingScreenUI = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.UI.LoadingScreenUI)
 local AvatarPrewarmShared = require(script.Parent.Parent.Utils.AvatarPrewarmShared)
+local PointerSpace = require(script.Parent.Parent.Utils.PointerSpace)
 
 type AvatarContextRequest = Types.AvatarContextRequest
 type AvatarContextResponse = Types.AvatarContextResponse
@@ -352,11 +353,13 @@ local function createAvatarContextController(deps: {
 			end
 		end)
 
+		-- Pointer in the space GuiObject.AbsolutePosition / GetGuiObjectsAtPosition use (GuiInset
+		-- removed). The world ray below takes the same space through ScreenPointToRay.
 		local function getInputScreenPosition(input: InputObject?): Vector2
-			if input and input.UserInputType == Enum.UserInputType.Touch then
-				return Vector2.new(input.Position.X, input.Position.Y)
+			if input then
+				return PointerSpace.ofInput(input)
 			end
-			return UserInputService:GetMouseLocation()
+			return PointerSpace.mouse()
 		end
 
 		local function isGuiInteractionBlocker(object: GuiObject): boolean
@@ -436,7 +439,7 @@ local function createAvatarContextController(deps: {
 			if not camera then
 				return nil
 			end
-			local unitRay = camera:ViewportPointToRay(screenPosition.X, screenPosition.Y)
+			local unitRay = camera:ScreenPointToRay(screenPosition.X, screenPosition.Y)
 
 			if #nonLocalCharacterFilterList > 0 then
 				raycastParams.FilterDescendantsInstances = nonLocalCharacterFilterList

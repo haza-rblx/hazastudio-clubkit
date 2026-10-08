@@ -1561,8 +1561,16 @@ trackBootTask("SettingsController.init", function()
 		})
 	)
 	settingsCtrl:init()
+	-- Onboarding modal: registered always (manual open for tests), opened on its own only with
+	-- Config.Onboarding.ENABLED, once per session after the loading screen is done.
+	ClientMods.OnboardingController.register({
+		logger = Logger.new("Onboarding"),
+		settingsController = settingsCtrl,
+		menuUI = settingsUI,
+	})
+	trackPostGameplayBootTask("Onboarding.autoOpen", ClientMods.OnboardingController.autoOpen)
 end)
--- Hotbar + backpack: ClientMods.InventoryStore, ClientMods.HotbarInventoryService, ClientMods.InventoryDragController, binders.
+-- Hotbar + backpack: ClientMods.InventoryStore, ClientMods.HotbarInventoryService, binders.
 -- Slot cap from PhoneLayout.getHotbarMaxSlots() (Config.Hotbar.MAX_SLOTS_MOBILE on phone).
 trackBootTask("HotbarController.init", function()
 	if not Config.FeatureFlags.HotbarEnabled then
@@ -1615,83 +1623,44 @@ trackBootTask("HotbarController.init", function()
 	if backpackRefsResult.ok then
 		MobileScaleService.applyBackpackLayout(backpackRefsResult.value.root)
 	else
-		hotbarLog:warn("Backpack GUI resolve failed; hotbar drag only", {
+		hotbarLog:warn("Backpack GUI resolve failed; hotbar only", {
 			error = backpackRefsResult.error,
 		})
 	end
-
-	local inventoryDrag = ClientMods.InventoryDragController.new({
-		root = refsResult.value.root,
-		hotbarWrapper = refsResult.value.hotbarWrapper,
-		backpackScroll = if backpackRefsResult.ok then backpackRefsResult.value.scrollFrame else nil,
-		getHotbarSlots = function()
-			return ClientMods.InventoryStore:get().hotbarSlots
-		end,
-		getBackpackSlots = function()
-			return ClientMods.InventoryStore:get().backpackSlots
-		end,
-		onReorderHotbar = function(toolKey: string, toIndex: number)
-			service:reorder(toolKey, toIndex)
-		end,
-		onAssignToHotbar = function(toolKey: string, toIndex: number): boolean
-			return service:assignToolToHotbar(toolKey, toIndex)
-		end,
-		onSnapshotOrder = function(): { string }
-			return service:snapshotOrder()
-		end,
-		onRestoreOrder = function(snapshot: { string })
-			service:restoreOrder(snapshot)
-		end,
-		onRemoveFromHotbar = function(toolKey: string)
-			service:removeToolFromHotbar(toolKey)
-		end,
-		onEquip = function(toolKey: string)
-			service:equip(toolKey)
-		end,
-		onHotbarAssignRejected = function()
-			local maxSlots = PhoneLayout.getHotbarMaxSlots()
-			ClientMods.NotifService.warn(("Hotbar holds at most %d items"):format(maxSlots), {
-				dedupeKey = "hotbar-full",
-			})
-		end,
-		onUnequipAll = function()
-			local character = Players.LocalPlayer.Character
-			if character then
-				local humanoid = character:FindFirstChildOfClass("Humanoid")
-				if humanoid then
-					humanoid:UnequipTools()
-					service:refresh()
-				end
-			end
-		end,
-	})
 
 	local binder = ClientMods.HotbarUIBinder.new({
 		refs = refsResult.value,
 		store = ClientMods.InventoryStore,
 		logger = Logger.new("HotbarUIBinder"),
-		inventoryDrag = inventoryDrag,
 	})
 
-	if inventoryDrag then
-		inventoryDrag:setHotbarPreviewCallback(function(slots)
-			binder:renderHotbarSlots(slots, ClientMods.InventoryStore:get().hasTools)
-		end)
-	end
-
-	if inventoryDrag then
-		-- Track backpack open/close for reorder mode
-		ClientMods.InventoryStore:subscribe("isBackpackOpen", function(isOpen: boolean)
-			inventoryDrag:setBackpackOpen(isOpen)
-		end)
-	end
+	-- Opening the backpack puts the hotbar in manage mode: nothing stays equipped while it is open.
+	ClientMods.InventoryStore:subscribe("isBackpackOpen", function(isOpen: boolean)
+		if not isOpen then
+			return
+		end
+		local character = Players.LocalPlayer.Character
+		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+		if humanoid then
+			humanoid:UnequipTools()
+			service:refresh()
+		end
+	end)
 
 	if backpackRefsResult.ok then
 		backpackBinder = ClientMods.BackpackUIBinder.new({
 			refs = backpackRefsResult.value,
 			store = ClientMods.InventoryStore,
 			logger = Logger.new("BackpackUIBinder"),
-			inventoryDrag = inventoryDrag,
+			-- A tap on a backpack cell moves the tool to the end of the hotbar.
+			onTapTool = function(toolKey: string)
+				local targetIndex = #ClientMods.InventoryStore:get().hotbarSlots + 1
+				if not service:assignToolToHotbar(toolKey, targetIndex) then
+					ClientMods.NotifService.warn(("Hotbar holds at most %d items"):format(PhoneLayout.getHotbarMaxSlots()), {
+						dedupeKey = "hotbar-full",
+					})
+				end
+			end,
 		})
 	end
 	if Config.FeatureFlags.StickersEnabled == false and refsResult.value.stickerButtonWrapper then
@@ -1734,7 +1703,6 @@ trackBootTask("HotbarController.init", function()
 			binder = binder,
 			backpackBinder = backpackBinder,
 			backpackButton = refsResult.value.backpackButton,
-			inventoryDrag = inventoryDrag,
 		})
 	)
 	controller:onStart()

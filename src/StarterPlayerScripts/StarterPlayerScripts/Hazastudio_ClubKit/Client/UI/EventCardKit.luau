@@ -304,6 +304,9 @@ end
 export type PaintOptions = {
 	weekOnly: boolean?, -- only the row holding today (or the window's first row before it starts)
 	holdToday: boolean?, -- draw today as still open (a check-in flight is on its way)
+	-- Milestone badges (2026-10-08): cell index → short text, drawn with the MarkerFinish look on
+	-- the day a milestone lands if the streak holds. Replaces FINISH on that cell.
+	badges: { [number]: string }?,
 }
 
 -- Paints `calendar` into `cal`. Returns the tile per cell index and the row range drawn.
@@ -438,7 +441,21 @@ function EventCardKit.paintCalendar(cal: GuiObject, calendar: Calendar, options:
 			if index == 1 and not calendar.clippedStart then
 				marker("MarkerStart")
 			end
-			if index == #cells and not calendar.clippedEnd then
+			local badge = opts.badges and opts.badges[index]
+			if badge and t.MarkerFinish then
+				local copy = t.MarkerFinish:Clone()
+				copy.Name = "MarkerMilestone"
+				copy.Visible = true
+				for _, d in ipairs(copy:GetDescendants()) do
+					if d:IsA("TextLabel") then
+						d.Text = badge
+					end
+				end
+				if copy:IsA("TextLabel") then
+					copy.Text = badge
+				end
+				copy.Parent = tile
+			elseif index == #cells and not calendar.clippedEnd then
 				marker("MarkerFinish")
 			end
 			tile.Parent = layer

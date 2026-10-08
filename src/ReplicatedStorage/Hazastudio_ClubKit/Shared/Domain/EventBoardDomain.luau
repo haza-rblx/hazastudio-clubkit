@@ -9,13 +9,20 @@
 --   streak   — manual check-ins, the Daily Quest grace/reset rule (DailyQuestDomain);
 --   robux    — Robux donated while the quest is running;
 --   playtime — seconds online while the quest is running (the goal is in minutes).
--- A reward is claimed once per player per quest; `claimedAt` is the guard.
+-- Milestones (2026-10-08): a quest has 1–5 thresholds on that one progress, each with its own
+-- reward and optional quota (first-come slots, counted by the VPS). Each milestone is claimed
+-- once per player (`claims[milestoneId]`); a quest from before milestones is one milestone whose
+-- claim is the legacy `claimedAt`. Robux and manual rewards are only recorded (paid by the
+-- venue); a player gets at most one Robux reward per quest.
 local DailyQuestDomain = require(script.Parent.DailyQuestDomain)
 
 local EventBoardDomain = {}
 
 EventBoardDomain.GOAL_TYPES = { level = true, streak = true, robux = true, playtime = true }
-EventBoardDomain.REWARD_TYPES = { membership = true, title = true, xp = true }
+EventBoardDomain.REWARD_TYPES = { membership = true, title = true, xp = true, robux = true, manual = true }
+-- Rewards the kit grants itself; the others are recorded on the dashboard and handed out by hand.
+EventBoardDomain.IN_GAME_REWARDS = { membership = true, title = true, xp = true }
+EventBoardDomain.MAX_MILESTONES = 5
 -- Post kinds (2026-10-07). A countdown runs from `startsAt` to `endsAt` (unix seconds); the API
 -- fills a missing end with start + 2 h, the kit does the same for an end it cannot use.
 EventBoardDomain.POST_KINDS = { announcement = true, countdown = true }
@@ -33,6 +40,8 @@ local LIMITS = {
 }
 local GOAL_MAX = { level = 10000, streak = DailyQuestDomain.MAX_TARGET_DAYS, robux = 10000000, playtime = 100000 }
 local XP_MAX = 1000000
+local ROBUX_REWARD_MAX = 100000
+local QUOTA_MAX = 1000000
 local MEMBERSHIP = { Tier1 = true, Tier2 = true, Tier3 = true }
 
 export type Post = {
@@ -50,19 +59,29 @@ export type Post = {
 	robloxEventId: string, -- Creator Hub Experience Event id, digits; "" = none
 }
 
+export type Milestone = {
+	-- Stable VPS row id; 0 = the one milestone of a quest from before milestones.
+	id: number,
+	value: number, -- threshold in the goal's unit
+	rewardType: string,
+	rewardValue: string,
+	quota: number?, -- first-come slots; nil = unlimited
+}
+
 export type Quest = {
 	id: number,
 	category: string,
 	title: string,
 	description: string,
 	goalType: string,
-	goalValue: number,
-	rewardType: string,
+	goalValue: number, -- the last milestone's threshold
+	rewardType: string, -- the last milestone's reward
 	rewardValue: string,
 	startDate: string,
 	dueDate: string,
 	startDay: number,
 	dueDay: number,
+	milestones: { Milestone }, -- 1..MAX_MILESTONES, ascending by value
 }
 
 export type Board = { revision: string, posts: { Post }, quests: { Quest } }
@@ -79,6 +98,9 @@ export type QuestProgress = {
 	-- DailyQuestDomain.MAX_TARGET_DAYS (oldest dropped). A reset keeps earlier days. Absent on
 	-- entries from before 2026-10-07 — checkInDays reconstructs those. Additive field.
 	days: { number }?,
+	-- Milestone claims (2026-10-08): milestone id (string) → unix claim time. The legacy
+	-- `claimedAt` stays the claim of the quest's last milestone. Additive field.
+	claims: { [string]: number }?,
 }
 
 export type ProgressDoc = {
@@ -150,43 +172,91 @@ local function readPost(raw: any): Post?
 	}
 end
 
+-- A reward `{ type, value }` → its type and normalized value, or nil when unusable.
+local function readReward(raw: any): (string?, string?)
+	if type(raw) ~= "table" then
+		return nil, nil
+	end
+	local rewardType = raw.type
+	if type(rewardType) ~= "string" or not EventBoardDomain.REWARD_TYPES[rewardType] then
+		return nil, nil
+	end
+	local rewardValue = raw.value
+	if rewardType == "membership" then
+		if type(rewardValue) ~= "string" or not MEMBERSHIP[rewardValue] then
+			return nil, nil
+		end
+		return rewardType, rewardValue
+	elseif rewardType == "title" or rewardType == "manual" then
+		local label = text(rewardValue, LIMITS.rewardTitle)
+		if not label or label == "" then
+			return nil, nil
+		end
+		return rewardType, label
+	end
+	local amount = tonumber(rewardValue)
+	if not amount or not positiveInt(amount, if rewardType == "xp" then XP_MAX else ROBUX_REWARD_MAX) then
+		return nil, nil
+	end
+	return rewardType, tostring(amount)
+end
+
+-- The milestones of a quest: the sent list (broken rows dropped, kept only while strictly
+-- ascending), or — when none is usable — the quest's own goal and reward as milestone 0.
+local function readMilestones(raw: any, goalType: string): { Milestone }
+	local out: { Milestone } = {}
+	if type(raw.milestones) == "table" then
+		local seen: { [number]: boolean } = {}
+		for _, entry in ipairs(raw.milestones) do
+			if type(entry) == "table" and #out < EventBoardDomain.MAX_MILESTONES then
+				local id = if entry.id == 0 then 0 else positiveInt(entry.id, 2 ^ 52)
+				local value = positiveInt(entry.value, GOAL_MAX[goalType])
+				local rewardType, rewardValue = readReward(entry.reward)
+				local quota = if entry.quota == nil then nil else positiveInt(entry.quota, QUOTA_MAX)
+				local last = out[#out]
+				if id and not seen[id] and value and rewardType and (entry.quota == nil or quota)
+					and (not last or value > last.value)
+				then
+					seen[id] = true
+					table.insert(out, {
+						id = id,
+						value = value,
+						rewardType = rewardType,
+						rewardValue = rewardValue :: string,
+						quota = quota,
+					})
+				end
+			end
+		end
+	end
+	if #out > 0 then
+		return out
+	end
+	local goalValue = type(raw.goal) == "table" and positiveInt(raw.goal.value, GOAL_MAX[goalType])
+	local rewardType, rewardValue = readReward(raw.reward)
+	if goalValue and rewardType then
+		table.insert(out, { id = 0, value = goalValue, rewardType = rewardType, rewardValue = rewardValue :: string })
+	end
+	return out
+end
+
 local function readQuest(raw: any): Quest?
-	if type(raw) ~= "table" or type(raw.goal) ~= "table" or type(raw.reward) ~= "table" then
+	if type(raw) ~= "table" or type(raw.goal) ~= "table" then
 		return nil
 	end
 	local id = positiveInt(raw.id, 2 ^ 52)
 	local title = text(raw.title, LIMITS.questTitle)
 	local goalType = raw.goal.type
-	local rewardType = raw.reward.type
 	if not id or not title or title == "" then
 		return nil
 	end
 	if type(goalType) ~= "string" or not EventBoardDomain.GOAL_TYPES[goalType] then
 		return nil
 	end
-	local goalValue = positiveInt(raw.goal.value, GOAL_MAX[goalType])
-	if not goalValue then
+	local milestones = readMilestones(raw, goalType)
+	local final = milestones[#milestones]
+	if not final then
 		return nil
-	end
-	if type(rewardType) ~= "string" or not EventBoardDomain.REWARD_TYPES[rewardType] then
-		return nil
-	end
-	local rewardValue = raw.reward.value
-	if rewardType == "membership" then
-		if type(rewardValue) ~= "string" or not MEMBERSHIP[rewardValue] then
-			return nil
-		end
-	elseif rewardType == "title" then
-		rewardValue = text(rewardValue, LIMITS.rewardTitle)
-		if not rewardValue or rewardValue == "" then
-			return nil
-		end
-	else
-		local xp = tonumber(rewardValue)
-		if not xp or not positiveInt(xp, XP_MAX) then
-			return nil
-		end
-		rewardValue = tostring(xp)
 	end
 	local startDay = if type(raw.startDate) == "string" then DailyQuestDomain.parseWibDate(raw.startDate) else nil
 	local dueDay = if type(raw.dueDate) == "string" then DailyQuestDomain.parseWibDate(raw.dueDate) else nil
@@ -199,13 +269,14 @@ local function readQuest(raw: any): Quest?
 		title = title,
 		description = text(raw.description, LIMITS.description) or "",
 		goalType = goalType,
-		goalValue = goalValue,
-		rewardType = rewardType,
-		rewardValue = rewardValue :: string,
+		goalValue = final.value,
+		rewardType = final.rewardType,
+		rewardValue = final.rewardValue,
 		startDate = raw.startDate,
 		dueDate = raw.dueDate,
 		startDay = startDay,
 		dueDay = dueDay,
+		milestones = milestones,
 	}
 end
 
@@ -261,7 +332,17 @@ function EventBoardDomain.serializeBoard(board: Board): { [string]: any }
 	end
 	local quests = table.create(#board.quests)
 	for i, quest in ipairs(board.quests) do
+		local milestones = table.create(#quest.milestones)
+		for index, milestone in ipairs(quest.milestones) do
+			milestones[index] = {
+				id = milestone.id,
+				value = milestone.value,
+				reward = { type = milestone.rewardType, value = milestone.rewardValue },
+				quota = milestone.quota,
+			}
+		end
 		quests[i] = {
+			milestones = milestones,
 			id = quest.id,
 			category = quest.category,
 			title = quest.title,
@@ -383,7 +464,27 @@ local function copyEntry(entry: QuestProgress): QuestProgress
 	if entry.days then
 		copy.days = table.clone(entry.days)
 	end
+	if entry.claims then
+		copy.claims = table.clone(entry.claims)
+	end
 	return copy
+end
+
+local function readClaims(raw: any): { [string]: number }?
+	if type(raw) ~= "table" then
+		return nil
+	end
+	local out: { [string]: number } = {}
+	local count = 0
+	for key, at in pairs(raw) do
+		if type(key) == "string" and string.match(key, "^%d+$") and type(at) == "number" and at > 0
+			and count < EventBoardDomain.MAX_MILESTONES * 4
+		then
+			out[key] = at
+			count += 1
+		end
+	end
+	return if count > 0 then out else nil
 end
 
 local function readQuestProgress(raw: any): QuestProgress?
@@ -403,6 +504,7 @@ local function readQuestProgress(raw: any): QuestProgress?
 		claimedAt = claimedAt,
 		dueDay = dueDay,
 		days = if type(raw.days) == "table" then boundDays(raw.days) else nil,
+		claims = readClaims(raw.claims),
 	}
 end
 
@@ -455,6 +557,16 @@ function EventBoardDomain.mergeProgress(a: ProgressDoc, b: ProgressDoc): Progres
 				if current.days or entry.days then
 					current.days = boundDays(current.days, entry.days)
 				end
+				-- A claim is never lost; the earliest time wins.
+				if entry.claims then
+					local claims = current.claims or {}
+					for key, at in pairs(entry.claims) do
+						if not claims[key] or at < claims[key] then
+							claims[key] = at
+						end
+					end
+					current.claims = claims
+				end
 			end
 		end
 		for key in pairs(doc.seenPosts) do
@@ -487,8 +599,59 @@ local function dqState(quest: Quest, entry: QuestProgress?): DailyQuestDomain.St
 	return { id = tostring(quest.id), progress = entry.progress, lastDay = entry.lastDay, completed = entry.completed }
 end
 
+-- When the player claimed `milestone`, or nil. Before milestones a quest had one reward, so the
+-- legacy `claimedAt` is the claim of the last milestone.
+local function claimedAtOf(quest: Quest, entry: QuestProgress?, milestone: Milestone): number?
+	if not entry then
+		return nil
+	end
+	local at = entry.claims and entry.claims[tostring(milestone.id)]
+	if at then
+		return at
+	end
+	local final = quest.milestones[#quest.milestones]
+	if entry.claimedAt and final and final.id == milestone.id then
+		return entry.claimedAt
+	end
+	return nil
+end
+
+function EventBoardDomain.milestoneClaimedAt(quest: Quest, doc: ProgressDoc, milestone: Milestone): number?
+	return claimedAtOf(quest, doc.quests[tostring(quest.id)], milestone)
+end
+
+local function allClaimed(quest: Quest, entry: QuestProgress?): boolean
+	for _, milestone in ipairs(quest.milestones) do
+		if not claimedAtOf(quest, entry, milestone) then
+			return false
+		end
+	end
+	return true
+end
+
+-- Whether the player already holds this quest's (one allowed) Robux reward.
+function EventBoardDomain.robuxClaimed(quest: Quest, doc: ProgressDoc): boolean
+	local entry = doc.quests[tostring(quest.id)]
+	for _, milestone in ipairs(quest.milestones) do
+		if milestone.rewardType == "robux" and claimedAtOf(quest, entry, milestone) then
+			return true
+		end
+	end
+	return false
+end
+
+function EventBoardDomain.findMilestone(quest: Quest, milestoneId: any): Milestone?
+	for _, milestone in ipairs(quest.milestones) do
+		if milestone.id == milestoneId then
+			return milestone
+		end
+	end
+	return nil
+end
+
 -- Where a player stands on a quest: `current` against `target`, in the goal's own unit (level,
 -- days, Robux, minutes). `level` is the player's current level (only read by level quests).
+-- `target` is the last milestone; `claimed` = every milestone claimed.
 function EventBoardDomain.standing(quest: Quest, doc: ProgressDoc, level: number, today: number): {
 	current: number,
 	target: number,
@@ -497,7 +660,7 @@ function EventBoardDomain.standing(quest: Quest, doc: ProgressDoc, level: number
 	checkedInToday: boolean,
 }
 	local entry = doc.quests[tostring(quest.id)]
-	local claimed = entry ~= nil and entry.claimedAt ~= nil
+	local claimed = allClaimed(quest, entry)
 	local target = quest.goalValue
 	if quest.goalType == "streak" then
 		local view = DailyQuestDomain.view(dqState(quest, entry), dqQuest(quest), today)
@@ -554,10 +717,10 @@ function EventBoardDomain.addAmount(doc: ProgressDoc, quest: Quest, goalType: st
 		return false
 	end
 	local entry = entryFor(doc, quest)
-	if entry.claimedAt then
+	if allClaimed(quest, entry) then
 		return false
 	end
-	-- Counting stops at the goal: nothing past it changes what the card shows.
+	-- Counting stops at the last milestone: nothing past it changes what the card shows.
 	local cap = if goalType == "playtime" then quest.goalValue * 60 else quest.goalValue
 	if entry.progress >= cap then
 		return false
@@ -566,23 +729,68 @@ function EventBoardDomain.addAmount(doc: ProgressDoc, quest: Quest, goalType: st
 	return true
 end
 
--- "ok" or why not: "not_active" | "incomplete" | "claimed".
-function EventBoardDomain.canClaim(quest: Quest, doc: ProgressDoc, level: number, today: number): string
+-- "ok" or why not: "not_active" | "claimed" | "incomplete" | "robux_taken" | "quota_full".
+-- Claimable while the player's *current* progress is at or past the threshold (a streak reset
+-- takes back what was not claimed yet). `remaining` = slots left as last heard from the VPS; nil
+-- = unknown (the VPS decides at claim time).
+function EventBoardDomain.canClaimMilestone(
+	quest: Quest,
+	milestone: Milestone,
+	doc: ProgressDoc,
+	level: number,
+	today: number,
+	remaining: number?
+): string
 	if EventBoardDomain.phase(quest, today) ~= "active" then
 		return "not_active"
 	end
-	local standing = EventBoardDomain.standing(quest, doc, level, today)
-	if standing.claimed then
+	if EventBoardDomain.milestoneClaimedAt(quest, doc, milestone) then
 		return "claimed"
 	end
-	if not standing.complete then
+	if EventBoardDomain.standing(quest, doc, level, today).current < milestone.value then
 		return "incomplete"
+	end
+	if milestone.rewardType == "robux" and EventBoardDomain.robuxClaimed(quest, doc) then
+		return "robux_taken"
+	end
+	if milestone.quota and remaining ~= nil and remaining <= 0 then
+		return "quota_full"
 	end
 	return "ok"
 end
 
-function EventBoardDomain.markClaimed(doc: ProgressDoc, quest: Quest, now: number)
-	entryFor(doc, quest).claimedAt = now
+-- The milestones the player can claim now, lowest first. `remainingOf(milestoneId)` → slots left.
+function EventBoardDomain.claimableMilestones(
+	quest: Quest,
+	doc: ProgressDoc,
+	level: number,
+	today: number,
+	remainingOf: (number) -> number?
+): { Milestone }
+	local out = {}
+	for _, milestone in ipairs(quest.milestones) do
+		if EventBoardDomain.canClaimMilestone(quest, milestone, doc, level, today, remainingOf(milestone.id)) == "ok" then
+			table.insert(out, milestone)
+		end
+	end
+	return out
+end
+
+function EventBoardDomain.markMilestoneClaimed(doc: ProgressDoc, quest: Quest, milestoneId: number, now: number)
+	local entry = entryFor(doc, quest)
+	local claims = entry.claims or {}
+	claims[tostring(milestoneId)] = now
+	entry.claims = claims
+end
+
+function EventBoardDomain.unmarkMilestoneClaimed(doc: ProgressDoc, quest: Quest, milestoneId: number)
+	local entry = doc.quests[tostring(quest.id)]
+	if entry and entry.claims then
+		entry.claims[tostring(milestoneId)] = nil
+		if next(entry.claims) == nil then
+			entry.claims = nil
+		end
+	end
 end
 
 -- The WIB days a player checked in on a streak quest: the stored list, or for an entry from

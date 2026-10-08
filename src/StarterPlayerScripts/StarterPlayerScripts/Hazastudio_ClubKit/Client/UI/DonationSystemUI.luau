@@ -184,101 +184,6 @@ end
 local ACTIVE_GRADIENT = "UIGradient-Gold"
 local NORMAL_GRADIENT = "UIGradient-Normal"
 local TAB_INACTIVE_FADE = 0.3
-local SAFE_EMOJIS = {
-	"😀",
-	"😃",
-	"😄",
-	"😁",
-	"😆",
-	"😅",
-	"😂",
-	"🤣",
-	"😊",
-	"😇",
-	"🙂",
-	"🙃",
-	"😉",
-	"😍",
-	"😘",
-	"😎",
-	"🤩",
-	"🥳",
-	"😜",
-	"😋",
-	"🤗",
-	"🤔",
-	"😴",
-	"😈",
-	"👑",
-	"💎",
-	"🔥",
-	"✨",
-	"🌟",
-	"⭐",
-	"⚡",
-	"💯",
-	"🎉",
-	"🎁",
-	"🏆",
-	"🥇",
-	"🥈",
-	"🥉",
-	"🎵",
-	"🎶",
-	"🎧",
-	"🎤",
-	"💃",
-	"🕺",
-	"❤️",
-	"🧡",
-	"💛",
-	"💚",
-	"💙",
-	"💜",
-	"🤍",
-	"🖤",
-	"💕",
-	"💞",
-	"💓",
-	"💗",
-	"💖",
-	"💘",
-	"💝",
-	"💟",
-	"🌹",
-	"🌺",
-	"🌸",
-	"🌼",
-	"🌻",
-	"🍀",
-	"🌈",
-	"☀️",
-	"🌙",
-	"☁️",
-	"🌊",
-	"🍓",
-	"🍒",
-	"🍑",
-	"🍭",
-	"🍬",
-	"🍼",
-	"🧸",
-	"🎮",
-	"🕹️",
-	"🚀",
-	"🛸",
-	"🏝️",
-	"🏖️",
-	"💼",
-	"🛡️",
-	"⚔️",
-	"🗡️",
-	"🔮",
-	"🪄",
-	"📌",
-	"✅",
-}
-
 -- countTo hands the format function a mid-roll float; a rank below 1 is "no rank yet".
 local function rankDigits(value: number): string
 	return DonationAmountFormat.formatRank(if value >= 1 then math.floor(value) else nil)
@@ -316,27 +221,6 @@ local function truncateUtf8(text: string, maxChars: number): string
 		return text
 	end
 	return string.sub(text, 1, byteIndex - 1)
-end
-
-local function getPointerPosition(): Vector2
-	local mouse = UserInputService:GetMouseLocation()
-	return Vector2.new(mouse.X, mouse.Y)
-end
-
-local function placeNearPointer(panel: GuiObject, pointer: Vector2, screenGui: ScreenGui)
-	local screenSize = screenGui.AbsoluteSize
-	local panelSize = panel.AbsoluteSize
-	local scale = 1
-	local uiScale = screenGui:FindFirstChildWhichIsA("UIScale")
-	if uiScale then
-		scale = math.max(uiScale.Scale, 0.01)
-	end
-
-	local x = math.clamp((pointer.X + 14) / scale, 8, math.max(8, (screenSize.X - panelSize.X - 8) / scale))
-	local y = math.clamp((pointer.Y + 14) / scale, 8, math.max(8, (screenSize.Y - panelSize.Y - 8) / scale))
-
-	panel.AnchorPoint = Vector2.new(0, 0)
-	panel.Position = UDim2.fromOffset(x, y)
 end
 
 local function setTabButtonActive(button: TextButton, active: boolean)
@@ -403,42 +287,12 @@ local function animateSlidingPill(backgroundPill: GuiObject, selectedButton: Tex
 	)
 end
 
-local function popOpenFromTopCenter(anim: AnimationHelper.AnimationHelper, panel: GuiObject)
-	local position = panel.Position
-	local size = panel.Size
-	panel.AnchorPoint = Vector2.new(0.5, 0)
-	panel.Position = UDim2.new(
-		position.X.Scale + size.X.Scale * 0.5,
-		position.X.Offset + size.X.Offset * 0.5,
-		position.Y.Scale,
-		position.Y.Offset
-	)
-	-- Calm center open (no Back overshoot) for floating donation subpanels.
-	anim:presentCenterPanel((panel :: any) :: Frame)
-end
-
 local function findTextLabel(root: Instance, name: string): TextLabel?
 	local found = root:FindFirstChild(name, true)
 	if found and found:IsA("TextLabel") then
 		return found
 	end
 	return nil
-end
-
-local function isWithinGuiObject(gui: GuiObject, screenPosition: Vector2): boolean
-	local position = gui.AbsolutePosition
-	local size = gui.AbsoluteSize
-	return screenPosition.X >= position.X
-		and screenPosition.X <= position.X + size.X
-		and screenPosition.Y >= position.Y
-		and screenPosition.Y <= position.Y + size.Y
-end
-
-local function _clipRotatingBackground_unused(image: ImageLabel)
-	local parent = image.Parent
-	if parent and parent:IsA("GuiObject") then
-		parent.ClipsDescendants = true
-	end
 end
 
 local ROBUX_TEMPLATE_NAME = "ProductCardTemplate"
@@ -488,8 +342,6 @@ function DonationSystemUI.new(refs: Refs): DonationSystemUI
 	self._lastDonorProfile = nil :: DonorProfilePayload?
 	self._productRefreshToken = 0
 	self._productRefreshHandler = nil :: (() -> { Product })?
-	self._emojiPicker = nil :: GuiObject?
-	self._emojiConnections = {} :: { RBXScriptConnection }
 	self._cashDonationEnabled = isCashDonationEnabled()
 	self._motionConnections = {} :: { RBXScriptConnection }
 	-- Designed transparencies, captured once per instance so a re-open mid-fade cannot bake an
@@ -519,12 +371,6 @@ function DonationSystemUI.new(refs: Refs): DonationSystemUI
 	refs.robuxScroll.ClipsDescendants = true
 	refs.messageBox.ClearTextOnFocus = false
 	refs.messageBox.Text = ""
-	if refs.emojiPicker then
-		refs.emojiPicker.Visible = false
-	end
-	if refs.emojiTemplate then
-		refs.emojiTemplate.Visible = false
-	end
 	if refs.productTemplate then
 		refs.productTemplate.Visible = false
 	end
@@ -584,17 +430,12 @@ function DonationSystemUI.new(refs: Refs): DonationSystemUI
 		end)
 		self:_bindCopyFeedback()
 	end
-	if refs.addEmojiButton then
-		self:_setupEmojiPicker(refs.addEmojiButton)
-	end
-
 	self:_bindButtonMotion(refs.robuxTabButton)
 	self:_bindButtonMotion(refs.saweriaTabButton)
 	self:_bindButtonMotion(refs.cancelButton)
 	self:_bindButtonMotion(refs.continueButton)
 	self:_bindButtonMotion(refs.closeButton)
 	self:_bindButtonMotion(refs.copyLinkButton)
-	self:_bindButtonMotion(refs.addEmojiButton)
 
 	applyCashFeatureVisibility(refs, self._cashDonationEnabled)
 	if not self._cashDonationEnabled then
@@ -835,10 +676,6 @@ function DonationSystemUI:_showMessageModal(product: Product)
 		end)
 	end
 
-	if self._emojiPicker then
-		self._emojiPicker.Visible = false
-	end
-
 	local function showInputModal()
 		self._anim:presentCenterPanel(self._refs.inputModal, function()
 			self._refs.messageBox:CaptureFocus()
@@ -860,9 +697,6 @@ end
 function DonationSystemUI:_hideMessageModal(restoreMain: boolean?)
 	self._selectedProduct = nil
 	self:_stopCtaPulse()
-	if self._emojiPicker then
-		self._emojiPicker.Visible = false
-	end
 	self._anim:dismissCenterPanel(self._refs.inputModal, function()
 		self._refs.messageBox.Text = ""
 		if restoreMain == true and self._isMainVisible then
@@ -1162,111 +996,6 @@ function DonationSystemUI:refreshProducts(fetchProducts: (() -> { Product })?)
 	end)
 end
 
-function DonationSystemUI:_setupEmojiPicker(addEmojiButton: TextButton)
-	local picker = self._refs.emojiPicker
-	local emojiList = self._refs.emojiList
-	local emojiTemplate = self._refs.emojiTemplate
-	if not picker or not emojiList or not emojiTemplate then
-		return
-	end
-
-	picker.Visible = false
-	emojiTemplate.Visible = false
-
-	for _, child in ipairs(emojiList:GetChildren()) do
-		if child:IsA("TextButton") and child:GetAttribute("DonationEmojiRuntime") == true then
-			child:Destroy()
-		end
-	end
-
-	for index, emoji in ipairs(SAFE_EMOJIS) do
-		local button = emojiTemplate:Clone() :: TextButton
-		button.Name = "EmojiButton" .. index
-		button:SetAttribute("DonationEmojiRuntime", true)
-		button.Visible = true
-		button.LayoutOrder = index
-		local label = button:FindFirstChildWhichIsA("TextLabel")
-		if label then
-			label.Text = emoji
-		else
-			button.Text = emoji
-		end
-		button.Parent = emojiList
-
-		-- ~90 emoji cells: a pop on the picked glyph costs one tween, while bindPress/bindHover
-		-- here would mean hundreds of live connections (one of them on UserInputService) for a
-		-- grid child that UIMotion cannot scale anyway.
-		table.insert(
-			self._emojiConnections,
-			button.MouseButton1Click:Connect(function()
-				UIMotion.pop(if label then label :: GuiObject else button)
-				self:_appendMessageEmoji(emoji)
-				picker.Visible = false
-			end)
-		)
-	end
-
-	if self._refs.emojiCloseButton then
-		local closeButton = self._refs.emojiCloseButton
-		table.insert(
-			self._emojiConnections,
-			closeButton.Activated:Connect(function()
-				UIMotion.pop(iconOf(closeButton))
-				picker.Visible = false
-			end)
-		)
-		self:_bindButtonMotion(closeButton, self._emojiConnections)
-	end
-
-	table.insert(
-		self._emojiConnections,
-		addEmojiButton.Activated:Connect(function()
-			if picker.Visible then
-				picker.Visible = false
-				return
-			end
-
-			placeNearPointer(picker, getPointerPosition(), self._refs.root)
-			popOpenFromTopCenter(self._anim, picker)
-			self._refs.messageBox:CaptureFocus()
-		end)
-	)
-
-	table.insert(
-		self._emojiConnections,
-		UserInputService.InputBegan:Connect(function(input: InputObject, gameProcessed: boolean)
-			if gameProcessed or not picker.Visible then
-				return
-			end
-			if
-				input.UserInputType ~= Enum.UserInputType.MouseButton1
-				and input.UserInputType ~= Enum.UserInputType.Touch
-			then
-				return
-			end
-
-			local position = Vector2.new(input.Position.X, input.Position.Y)
-			if not isWithinGuiObject(picker, position) and not isWithinGuiObject(addEmojiButton, position) then
-				picker.Visible = false
-			end
-		end)
-	)
-
-	self._emojiPicker = picker
-end
-
-function DonationSystemUI:_appendMessageEmoji(emoji: string)
-	local current = trim(self._refs.messageBox.Text)
-	local nextText = if current == "" then emoji else current .. " " .. emoji
-	local accepted = truncateUtf8(nextText, Config.Donation.ROBUX_MESSAGE_MAX_LENGTH)
-	if accepted ~= nextText then
-		-- Message already at the limit: the emoji got cut, so refuse it visibly.
-		UIMotion.wiggle(self._refs.messageBox, 5)
-	end
-	self._refs.messageBox.Text = accepted
-	self._refs.messageBox.CursorPosition = -1
-end
-
 function DonationSystemUI:setDonationResult(ok: boolean, message: string?)
 	if not ok and self._refs.mainWrapper.Visible then
 		-- Rotation never touches layout, so the whole panel can shake safely (ADR 0011).
@@ -1454,9 +1183,6 @@ function DonationSystemUI:hide()
 	if self._refs.inputModal.Visible then
 		self._refs.inputModal.Visible = false
 	end
-	if self._emojiPicker then
-		self._emojiPicker.Visible = false
-	end
 
 	if not self._refs.mainWrapper.Visible then
 		self._isClosingMain = false
@@ -1486,9 +1212,6 @@ function DonationSystemUI:closeAll()
 	self._refs.mainWrapper.Visible = false
 	self._refs.inputModal.Visible = false
 	self._refs.messageBox.Text = ""
-	if self._emojiPicker then
-		self._emojiPicker.Visible = false
-	end
 	self._refs.root.Enabled = false
 	self:_stopRotatingBackgrounds()
 end
@@ -1502,7 +1225,6 @@ function DonationSystemUI:destroy()
 		ipairs({
 			self._motionConnections,
 			self._productConnections,
-			self._emojiConnections,
 			self._copyConnections,
 		} :: { { RBXScriptConnection } })
 	do

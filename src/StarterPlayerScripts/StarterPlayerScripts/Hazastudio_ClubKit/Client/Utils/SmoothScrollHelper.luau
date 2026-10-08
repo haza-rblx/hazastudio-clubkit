@@ -15,9 +15,9 @@
 local ContextActionService = game:GetService("ContextActionService")
 local HttpService = game:GetService("HttpService")
 local TweenService = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
+local PointerSpace = require(script.Parent.PointerSpace)
 
 local SmoothScrollHelper = {}
 
@@ -39,13 +39,10 @@ local DEFAULT_DIRECTION = Enum.EasingDirection.Out
 -- Is the cursor inside the frame right now? A wheel event anywhere else must
 -- fall through to default scrolling — we only smooth OUR frame.
 local function isMouseOver(frame: ScrollingFrame): boolean
-	local mouse = UserInputService:GetMouseLocation()
-	-- GetMouseLocation is viewport coords; AbsolutePosition already includes GuiInset.
+	local mouse = PointerSpace.mouse()
 	local pos = frame.AbsolutePosition
 	local size = frame.AbsoluteSize
-	local inset = game:GetService("GuiService"):GetGuiInset()
-	local y = mouse.Y - inset.Y
-	return mouse.X >= pos.X and mouse.X <= pos.X + size.X and y >= pos.Y and y <= pos.Y + size.Y
+	return mouse.X >= pos.X and mouse.X <= pos.X + size.X and mouse.Y >= pos.Y and mouse.Y <= pos.Y + size.Y
 end
 
 function SmoothScrollHelper.attach(frame: ScrollingFrame, options: Options?): Handle

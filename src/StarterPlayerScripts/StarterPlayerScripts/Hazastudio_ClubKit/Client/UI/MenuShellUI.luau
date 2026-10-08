@@ -11,6 +11,7 @@ local TitleEventDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Dom
 local NotifService = require(script.Parent.Parent.Services.NotifService)
 local LeaderstatsVisibilityService = require(script.Parent.Parent.Services.LeaderstatsVisibilityService)
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
+local PointerSpace = require(script.Parent.Parent.Utils.PointerSpace)
 local MotionPresets = require(script.Parent.Parent.Utils.MotionPresets)
 local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 local AccentSurfaceTint = require(script.Parent.Parent.Services.AccentSurfaceTint)
@@ -870,6 +871,8 @@ end
 function MenuShellUI:_cancelMotionTweens()
 	cancelTween(self._wrapperTween)
 	self._wrapperTween = nil
+	cancelTween(self._wrapperFadeTween)
+	self._wrapperFadeTween = nil
 end
 
 function MenuShellUI:show()
@@ -904,14 +907,14 @@ function MenuShellUI:show()
 	self._gui.Enabled = true
 	wrapper.Visible = true
 
-	local wrapperTweenGoal = {
-		Position = self._wrapperShownPosition,
-	} :: { [string]: any }
-	if wrapper:IsA("CanvasGroup") then
-		wrapperTweenGoal.GroupTransparency = 0
-	end
-	self._wrapperTween = TweenService:Create(wrapper, MotionPresets.sidebarInInfo(), wrapperTweenGoal)
+	-- The slide and the fade are separate tweens so TRANSITION_SCALE can slow the slide alone.
+	self._wrapperTween =
+		TweenService:Create(wrapper, MotionPresets.sidebarSlideInInfo(), { Position = self._wrapperShownPosition })
 	self._wrapperTween:Play()
+	if wrapper:IsA("CanvasGroup") then
+		self._wrapperFadeTween = TweenService:Create(wrapper, MotionPresets.sidebarInInfo(), { GroupTransparency = 0 })
+		self._wrapperFadeTween:Play()
+	end
 
 	if not wasVisible then
 		self._anim:presentBackdropEffects(BLUR_OPTIONS)
@@ -972,14 +975,14 @@ function MenuShellUI:hide()
 	end
 
 	local wrapper = self._refs.outerWrapper
-	local wrapperTweenGoal = {
+	local wrapperTween = TweenService:Create(wrapper, MotionPresets.sidebarSlideOutInfo(), {
 		Position = getSidebarHiddenPosition(wrapper, self._wrapperShownPosition),
-	} :: { [string]: any }
-	if wrapper:IsA("CanvasGroup") then
-		wrapperTweenGoal.GroupTransparency = 1
-	end
-	local wrapperTween = TweenService:Create(wrapper, MotionPresets.sidebarOutInfo(), wrapperTweenGoal)
+	})
 	self._wrapperTween = wrapperTween
+	if wrapper:IsA("CanvasGroup") then
+		self._wrapperFadeTween = TweenService:Create(wrapper, MotionPresets.sidebarOutInfo(), { GroupTransparency = 1 })
+		self._wrapperFadeTween:Play()
+	end
 	wrapperTween.Completed:Connect(function(playbackState)
 		if playbackState ~= Enum.PlaybackState.Completed or self._visible then
 			return
@@ -999,7 +1002,7 @@ function MenuShellUI:isVisible(): boolean
 end
 
 function MenuShellUI:isPointerInsidePanel(): boolean
-	return isPointInsideGui(self._refs.outerWrapper, UserInputService:GetMouseLocation())
+	return isPointInsideGui(self._refs.outerWrapper, PointerSpace.mouse())
 end
 
 function MenuShellUI:getPanelLeftScreenX(): number?

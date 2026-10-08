@@ -6,14 +6,15 @@
 -- Pure functions only. Zero Roblox service calls, zero Config — callers pass the quest in.
 --
 -- Days are WIB calendar day numbers, the same "today" StreakDomain.toDayNumber gives, so a
--- quest day and a streak day always turn over together. Progress follows the streak rule:
--- the next day or one skipped day adds one, two or more skipped days start over at 1.
+-- quest day and a streak day always turn over together. Progress is a strict streak (owner,
+-- 2026-10-08): the next day adds one, any skipped day starts over at 1.
 local DailyQuestDomain = {}
 
 -- A quest longer than this is a typo, and every day is one circle in the panel grid.
 DailyQuestDomain.MAX_TARGET_DAYS = 100
--- Gap (in days) at or above which progress starts over. Mirrors StreakDomain's reset rule.
-local RESET_GAP = 3
+-- Gap (in days) at or above which progress starts over. Was 3 (one skipped day forgiven, like
+-- StreakDomain); quests forgive nothing since 2026-10-08.
+local RESET_GAP = 2
 
 export type Quest = {
 	id: string,

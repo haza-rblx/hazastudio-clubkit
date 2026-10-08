@@ -186,11 +186,11 @@ local function bindPressDown(button: GuiButton, callback: (InputObject) -> ())
 	}
 end
 
+-- InputObject.Position is in the space GuiObject.AbsolutePosition is reported in (GuiInset already
+-- removed), mouse included. GetMouseLocation() is raw viewport space — 58px lower — so testing it
+-- against AbsolutePosition rects rejected presses on the bottom ~58px of the dance list.
 local function getInputPosition(input: InputObject): Vector2
-	if input.UserInputType == Enum.UserInputType.Touch then
-		return Vector2.new(input.Position.X, input.Position.Y)
-	end
-	return UserInputService:GetMouseLocation()
+	return Vector2.new(input.Position.X, input.Position.Y)
 end
 
 local function isPointInside(gui: GuiObject?, point: Vector2): boolean
@@ -1332,37 +1332,14 @@ function DancePanelUIBinder:_syncRowGradient(row: GuiButton, isSelected: boolean
 	end
 end
 
-function DancePanelUIBinder:_isRowInputAllowed(row: GuiButton, input: InputObject): boolean
+-- The scroll frame clips rows, so a press that reaches a row landed on it. The one exception is the
+-- speed slider: v1/v2 draw it over the bottom of the list, and its Active input shield does not stop
+-- the row underneath from getting the same press (measured). v3 keeps them apart, so this never fires.
+function DancePanelUIBinder:_isRowInputAllowed(input: InputObject): boolean
 	if not self._isOpen then
 		return false
 	end
-
-	-- InputBegan on `row` already guarantees the input started on the row itself.
-	-- Only verify the point is within the visible scroll area.
-	local point = getInputPosition(input)
-	if not isPointInside(self.refs.mainContent, point) then
-		return false
-	end
-	if isPointInside(self.refs.searchBox, point) then
-		return false
-	end
-	-- Only block the slider knob area (handle ± 10px padding), not the full speed track
-	local handle = self.refs.speedHandle
-	if handle and handle.Visible then
-		local pos = handle.AbsolutePosition
-		local size = handle.AbsoluteSize
-		local PAD = 10
-		if
-			point.X >= pos.X - PAD
-			and point.X <= pos.X + size.X + PAD
-			and point.Y >= pos.Y - PAD
-			and point.Y <= pos.Y + size.Y + PAD
-		then
-			return false
-		end
-	end
-
-	return true
+	return not isPointInside(self.refs.speedWrapper, getInputPosition(input))
 end
 
 function DancePanelUIBinder:_clearActiveRows()
@@ -1433,7 +1410,7 @@ function DancePanelUIBinder:_createRow(animation: AnimationEntry, layoutOrder: n
 	end
 
 	self._rowPressConnections[row] = bindPressDown(row, function(input)
-		if not self:_isRowInputAllowed(row, input) then
+		if not self:_isRowInputAllowed(input) then
 			return
 		end
 		-- Rows live inside a CanvasGroup and a UIListLayout, so no scale tier applies — not the
@@ -1456,7 +1433,7 @@ function DancePanelUIBinder:_createRow(animation: AnimationEntry, layoutOrder: n
 		if self.config.WUTWUT_ENABLED ~= true then
 			return
 		end
-		if not self:_isRowInputAllowed(row, input) then
+		if not self:_isRowInputAllowed(input) then
 			return
 		end
 		local favButton = getFavoriteButton(row)
@@ -1471,7 +1448,7 @@ function DancePanelUIBinder:_createRow(animation: AnimationEntry, layoutOrder: n
 	if favoriteButton then
 		favoriteButton.AutoButtonColor = false
 		self._favoritePressConnections[row] = bindPressDown(favoriteButton, function(input)
-			if not self:_isRowInputAllowed(row, input) then
+			if not self:_isRowInputAllowed(input) then
 				return
 			end
 			-- Star flips with a spin; the badge fade to its new state rides _syncRowVisualState.

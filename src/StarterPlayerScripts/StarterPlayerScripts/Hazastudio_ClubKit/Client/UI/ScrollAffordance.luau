@@ -2,7 +2,8 @@
 -- "There is more below" cues for a card whose content scrolls but looks finished (the avatar
 -- context menu, owner 2026-10-07). Each `reveal()` (content shown):
 --   * flashes the short pill scrollbar beside the card (OverlayScrollbar),
---   * fades the card's bottom edge with a small bobbing chevron, gone once the player scrolls,
+--   * fades the card's bottom edge with a small bobbing arrow (the menu's Back icon turned to face
+--     down), gone once the player scrolls,
 --   * nudges the content: a slow double bob (down 100px, back, down 60px, back) on the first
 --     few reveals of a session, and never again once the player has scrolled themselves.
 -- "Scrolled themselves" means real input on the list (wheel, touch, mouse button) — CanvasPosition
@@ -27,6 +28,11 @@ local OPEN_FLASH_SECONDS = 1.2
 local HINT_HEIGHT = 64
 local HINT_HIDE_AFTER = 40
 local CHEVRON_BOB = 2
+-- The same arrow disc the menu's Back button uses (07-MenuGUI BacktoMainMenuButton); it points left,
+-- so -90 degrees (counter-clockwise) turns it to face down.
+local ARROW_IMAGE = "rbxassetid://113150974507253"
+local ARROW_ROTATION = -90
+local ARROW_SIZE = 24
 
 -- Per-session memory, by key: how often we nudged and whether the player already scrolls.
 local sessions: { [string]: { nudges: number, scrolled: boolean } } = {}
@@ -39,7 +45,7 @@ local function canScroll(scroll: ScrollingFrame): boolean
 	return scroll.Visible and scroll.AbsoluteCanvasSize.Y > scroll.AbsoluteWindowSize.Y + 1
 end
 
-local function buildHint(card: GuiObject): (Frame, Frame)
+local function buildHint(card: GuiObject): (Frame, ImageLabel)
 	local hint = Instance.new("Frame")
 	hint.Name = "ScrollHint"
 	hint.BorderSizePixel = 0
@@ -59,28 +65,17 @@ local function buildHint(card: GuiObject): (Frame, Frame)
 	})
 	gradient.Parent = hint
 
-	local chevron = Instance.new("Frame")
+	local chevron = Instance.new("ImageLabel")
 	chevron.Name = "Chevron"
 	chevron.BackgroundTransparency = 1
+	chevron.BorderSizePixel = 0
+	chevron.Image = ARROW_IMAGE
+	chevron.ImageTransparency = 0.1
+	chevron.Rotation = ARROW_ROTATION
 	chevron.AnchorPoint = Vector2.new(0.5, 1)
 	chevron.Position = UDim2.new(0.5, 0, 1, -10)
-	chevron.Size = UDim2.fromOffset(16, 8)
+	chevron.Size = UDim2.fromOffset(ARROW_SIZE, ARROW_SIZE)
 	chevron.ZIndex = 51
-	for index, rotation in ipairs({ 35, -35 }) do
-		local bar = Instance.new("Frame")
-		bar.BorderSizePixel = 0
-		bar.BackgroundColor3 = Color3.new(1, 1, 1)
-		bar.BackgroundTransparency = 0.25
-		bar.ZIndex = 52
-		bar.AnchorPoint = Vector2.new(0.5, 0.5)
-		bar.Size = UDim2.fromOffset(10, 2)
-		bar.Rotation = rotation
-		bar.Position = UDim2.new(if index == 1 then 0.32 else 0.68, 0, 0.5, 0)
-		local corner = Instance.new("UICorner")
-		corner.CornerRadius = UDim.new(1, 0)
-		corner.Parent = bar
-		bar.Parent = chevron
-	end
 	chevron.Parent = hint
 	hint.Parent = card
 	return hint, chevron
