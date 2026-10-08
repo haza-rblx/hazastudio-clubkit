@@ -110,6 +110,32 @@ function TitleEventDomain.normalizeMode(raw: any): string
 	return MODE_DISABLED
 end
 
+-- Where the event's door lives: the floating card ("overlay"), a TopbarPlus icon
+-- ("topbar"), or both. Anything unrecognised is "overlay", the behaviour every
+-- place had before the choice existed, so a typo never makes the door vanish.
+local TRIGGER_OVERLAY = "overlay"
+local TRIGGER_TOPBAR = "topbar"
+local TRIGGER_BOTH = "both"
+
+function TitleEventDomain.normalizeTrigger(raw: any): string
+	if type(raw) ~= "string" then
+		return TRIGGER_OVERLAY
+	end
+	local trimmed = string.lower(raw:match("^%s*(.-)%s*$") or "")
+	if trimmed == TRIGGER_TOPBAR or trimmed == TRIGGER_BOTH then
+		return trimmed
+	end
+	return TRIGGER_OVERLAY
+end
+
+function TitleEventDomain.showsOverlay(raw: any): boolean
+	return TitleEventDomain.normalizeTrigger(raw) ~= TRIGGER_TOPBAR
+end
+
+function TitleEventDomain.showsTopbar(raw: any): boolean
+	return TitleEventDomain.normalizeTrigger(raw) ~= TRIGGER_OVERLAY
+end
+
 function TitleEventDomain.evaluate(config: EventConfig?, stats: PlayerStats?): EventState
 	local cfg: any = if type(config) == "table" then config else {}
 	local mode = TitleEventDomain.normalizeMode(cfg.Mode)

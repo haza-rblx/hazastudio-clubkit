@@ -38,6 +38,7 @@ ClubKitConfigSchema.defaults = {
 		Greeting = "Welcome to the club, %s",
 		LogoImage = "rbxassetid://79426970537296",
 		DiscordInvite = "",
+		DefaultAccent = "multicolor",
 	},
 	Group = {
 		GroupId = 0,
@@ -154,6 +155,8 @@ ClubKitConfigSchema.defaults = {
 	},
 	Loading = {
 		CinematicAnimationId = "rbxassetid://78416657618448",
+		ArtworkImage = "",
+		ArtworkVideo = "",
 	},
 	Shop = {
 		Products = {
@@ -526,18 +529,6 @@ ClubKitConfigSchema.defaults = {
 		-- admin grant never consumes it and removing the title never refunds it.
 		FreeFirstTitle = false,
 	},
-	-- Daily Quest addon. Only read when Features.DailyQuest is true and the
-	-- 1000-02-DQ-ADDON ScreenGui is installed. Dates are "YYYY-MM-DD" in WIB, DueDate
-	-- inclusive. An empty QuestId or unreadable dates = no quest (check-in still works).
-	-- Changing QuestId starts everyone's progress over. RewardTier is permanent.
-	DailyQuest = {
-		QuestId = "",
-		TargetDays = 30,
-		StartDate = "",
-		DueDate = "",
-		RewardTier = "Tier1",
-		Title = "Pertahankan streak selama {days} hari dan dapatkan {tier} gratis!",
-	},
 	-- Free Title event. A threshold above 0 switches its requirement on; Mode says
 	-- how the active ones combine: "Any" | "All" | "Disabled". A qualifying player
 	-- may create a title below CustomTitle.MinLevel; the quota still applies, and
@@ -547,6 +538,10 @@ ClubKitConfigSchema.defaults = {
 		RequiredLevel = 0,
 		MinDonationRobux = 0,
 		MinDonationCash = 0,
+		-- "Overlay" (floating card) | "Topbar" (TopbarPlus icon) | "Both".
+		Trigger = "Overlay",
+		-- Empty = the kit's default icon.
+		TopbarIcon = "",
 	},
 	-- Request From ID: a pasted Roblox audio ID plays once and is never saved to the library.
 	-- PlayOnceRequest: "everyone" | "control" (musicControl holders only) | "off".
@@ -602,17 +597,10 @@ ClubKitConfigSchema.defaults = {
 		LeadDanceTopbar = true,
 		-- WIP Admin Hub UI. Default false — classic 04-AdminPanelv2 until hub is ready.
 		AdminHub = false,
-		-- Avatar Context Menu v2 (redesign: static ProfilePicture + backdrop zoom/blur).
-		-- false (default) = legacy v1 GUI (3D ViewportFrame avatar). true = v2.
-		AvatarContextMenuV2 = false,
 		-- Self-service custom title panel (1000-01-CT-ADDON) on the profile Title row,
 		-- gated by CustomTitle.MinLevel + rolling quota. false (default) = old text-only
 		-- modal. Falls back to the old modal when the ScreenGui is not installed.
 		SelfCustomTitle = false,
-		-- Daily Quest addon (1000-02-DQ-ADDON): manual daily check-in button + streak quest
-		-- with a permanent membership reward. false (default) = streak advances on join.
-		-- Falls back to join-time streak when the ScreenGui is not installed.
-		DailyQuest = false,
 		-- Custom-title panel v3 (04-AdminPanelv3) takes the admin topbar icon from
 		-- the classic 04-AdminPanelv2. Needs that ScreenGui installed.
 		AdminPanelV3 = false,
@@ -680,7 +668,6 @@ ClubKitConfigSchema.FEATURE_MANIFEST = {
 			{ key = "AdminHub", label = "Admin Hub (04-AdminHub)" },
 			{ key = "AdminPanelV3", label = "Custom title panel v3 (04-AdminPanelv3)" },
 		{ key = "ImageCustomTitle", label = "Image custom titles (paid add-on)" },
-			{ key = "AvatarContextMenuV2", label = "Avatar context menu v2 (redesign)" },
 		},
 	},
 	{
@@ -691,7 +678,6 @@ ClubKitConfigSchema.FEATURE_MANIFEST = {
 			{ key = "Stickers", label = "Stickers" },
 			{ key = "LevelSystem", label = "Level & XP" },
 			{ key = "SelfCustomTitle", label = "Self-service custom title (1000-01-CT-ADDON)" },
-			{ key = "DailyQuest", label = "Daily streak quest (1000-02-DQ-ADDON)" },
 		},
 	},
 	{
@@ -826,6 +812,10 @@ ClubKitConfigSchema.RETIRED_KEYS = {
 	["Features.MusicCatalogSeed"] = "3.0: the music library is edited in the customer area; MusicCatalog.luau is no longer read",
 	["Features.MusicReadOnlyLibrary"] = "3.0: the web library is the only music library",
 	["Features.MusicWebLibrary"] = "3.0: the web library is always on",
+	["Features.AvatarContextMenuV2"] = "the avatar context menu v2 redesign was removed (owner, 2026-10-07); the kit always uses AvatarContextMenu",
+	-- Never released (owner, 2026-10-07); only places that ran an unreleased build carry these.
+	["Features.DailyQuest"] = "the Daily Quest addon was removed; use a streak quest on the event board (dashboard page Event)",
+	["DailyQuest"] = "the Daily Quest addon was removed; use a streak quest on the event board (dashboard page Event)",
 } :: { [string]: string }
 
 -- Dotted paths of retired keys present in a buyer config (any value, false included), sorted.

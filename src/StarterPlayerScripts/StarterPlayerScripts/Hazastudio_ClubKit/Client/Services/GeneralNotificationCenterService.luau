@@ -621,6 +621,28 @@ function GeneralNotificationCenterService.show(payload: Payload)
 		return
 	end
 
+	-- Toasts play as a notification island (card D -> pill A) unless the venue turned it off.
+	local island = (Config :: any).NotificationIsland
+	if type(island) == "table" and island.TOAST_ENABLED ~= false then
+		local nowClock = os.clock()
+		cleanupDedupe(nowClock)
+		local lastTimestamp = dedupeTimestamps[normalized.dedupeKey]
+		if lastTimestamp and (nowClock - lastTimestamp) <= DEDUPE_WINDOW_SECS then
+			return
+		end
+		dedupeTimestamps[normalized.dedupeKey] = nowClock
+		require(script.Parent.Parent.UI.ToastIsland).show({
+			notifType = normalized.notifType,
+			title = normalized.title,
+			description = normalized.description,
+			domain = normalized.domain,
+			domainLabel = getTitleFromDomain(normalized.domain, normalized.notifType),
+			duration = normalized.duration,
+			iconImage = normalized.iconImage,
+		})
+		return
+	end
+
 	enqueue(normalized)
 	processQueue()
 end

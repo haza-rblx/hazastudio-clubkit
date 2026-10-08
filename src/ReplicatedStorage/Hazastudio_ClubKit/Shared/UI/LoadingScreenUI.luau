@@ -10,6 +10,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local Config = require(script.Parent.Parent.Constants.Config)
 local LoadingCinematicCamera = require(script.Parent.Parent.Utils.LoadingCinematicCamera)
+local LoadingStoryCamera = require(script.Parent.Parent.Utils.LoadingStoryCamera)
 local CharacterReady = require(script.Parent.Parent.Utils.CharacterReady)
 
 local LoadingScreenUI = {}
@@ -119,6 +120,9 @@ type Options = {
 	greetings: { string }?,
 	tips: { string }?,
 	minimumDuration: number?,
+	-- "cinematic" style (CinematicLoadingView): part 1 = skippable artwork screen while booting,
+	-- part 2 = the character intro, played through without input, then gameplay.
+	view: any?,
 }
 
 local function clamp(value: number, minValue: number, maxValue: number): number
@@ -395,7 +399,10 @@ local function buildController(root: ScreenGui, options: Options?)
 	self._progressDisplay = 0
 	self._progressRenderConn = nil :: RBXScriptConnection?
 	self._playerGuiVisibilityState = nil :: GuiVisibilityState?
-	self._cinematicCamera = LoadingCinematicCamera.new()
+	self._view = if options then options.view else nil
+	self._readyAt = nil :: number?
+	self._skipRequested = false
+	self._cinematicCamera = if self._view then LoadingStoryCamera.new() else LoadingCinematicCamera.new()
 	self._cinematicStarted = false
 	self._introActive = false
 	self._introEnded = false
@@ -1212,7 +1219,8 @@ function LoadingScreenUI:_applyLoadingColor()
 		if self._colorCorrectionTween then
 			self._colorCorrectionTween:Cancel()
 		end
-		self._colorCorrectionTween = TweenService:Create(self._colorCorrection, COLOR_FADE_IN_TWEEN, LOADING_COLOR)
+		local grade = if self._view then LoadingConfig.STORY.GRADE else LOADING_COLOR
+		self._colorCorrectionTween = TweenService:Create(self._colorCorrection, COLOR_FADE_IN_TWEEN, grade)
 		self._colorCorrectionTween:Play()
 	end)
 end
@@ -1339,6 +1347,9 @@ function LoadingScreenUI:_finalizeDismissal()
 
 	self:_fireGameplayEntered()
 
+	if self._view then
+		self._view:stop()
+	end
 	self:_restoreColorCorrection()
 	self:_destroyIntroLayer()
 
@@ -1416,6 +1427,9 @@ function LoadingScreenUI:_doClickReveal()
 	if self._cinematicCamera then
 		self._cinematicCamera:playClickLift(LoadingConfig.CLICK_BLACKOUT_DURATION)
 	end
+	if self._view then
+		self._view:playReveal(LoadingConfig.CLICK_BLACKOUT_DURATION)
+	end
 
 	-- Step 1: Fade to pitch black before revealing gameplay.
 	if self._colorCorrectionTween then
@@ -1479,7 +1493,76 @@ function LoadingScreenUI:_completeFinish()
 	self._started = false
 	self._finishRequested = false
 	self._startClock = nil
+	if self._view then
+		self:_beginPart2()
+		return
+	end
 	self:_enterWaitForClick()
+end
+
+-- End of the character intro: the camera is orbiting onto the gameplay camera, so instead of the
+-- classic black dip + drop the letterbox opens and title + grade fade while it lands; control
+-- returns the moment the orbit ends (owner, 2026-10-08).
+function LoadingScreenUI:_storyHandoff()
+	self._waitingForClick = false
+	self._dismissing = true
+	local duration = LoadingConfig.STORY.CAMERA.HANDOFF
+	if self._view then
+		self._view:playReveal(duration)
+	end
+	if self._colorCorrection then
+		if self._colorCorrectionTween then
+			self._colorCorrectionTween:Cancel()
+		end
+		self._colorCorrectionTween = TweenService:Create(
+			self._colorCorrection,
+			TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			NEUTRAL_COLOR
+		)
+		self._colorCorrectionTween:Play()
+	end
+	task.delay(duration, function()
+		if self._available then
+			self:_finalizeDismissal()
+		end
+	end)
+end
+
+-- Cinematic part 2: dip to black, then the character intro with no input; it ends in the orbit
+-- handoff above. If the story never finishes (cap), the classic drop into gameplay runs instead.
+function LoadingScreenUI:_beginPart2()
+	self:_cancelTextCycles()
+	self:_cancelProgressAnimation()
+	self._cinematicStarted = true
+	self._view:enterPart2(function()
+		if not self._available or self._dismissed then
+			return
+		end
+		self:_applyLoadingColor()
+		self:_startCinematicCamera()
+	end)
+	task.spawn(function()
+		local startedAt = os.clock()
+		local cap = LoadingConfig.STORY.PART2_MAX
+		local storyDone = false
+		while self._available and not self._dismissed and not self._dismissing do
+			local camera = self._cinematicCamera
+			storyDone = camera ~= nil and camera:isStoryDone()
+			if storyDone or os.clock() - startedAt > cap then
+				break
+			end
+			-- per frame: the handoff window is timed against the orbit's last HANDOFF seconds
+			RunService.Heartbeat:Wait()
+		end
+		if self._available and not self._dismissed and not self._dismissing then
+			if storyDone then
+				self:_storyHandoff()
+			else
+				self._waitingForClick = true
+				self:_doClickReveal()
+			end
+		end
+	end)
 end
 
 function LoadingScreenUI:_scheduleFinish()
@@ -1493,6 +1576,13 @@ function LoadingScreenUI:_scheduleFinish()
 
 	local elapsed = os.clock() - startedAt
 	local remaining = math.max(self._minimumDuration - elapsed, FINAL_HOLD_DURATION)
+	if self._view then
+		-- Part 1 holds PART1_HOLD after the kit is ready, unless the player tapped to skip.
+		local readyAt = self._readyAt or os.clock()
+		remaining = if self._skipRequested
+			then 0
+			else math.max(readyAt + LoadingConfig.STORY.PART1_HOLD - os.clock(), 0)
+	end
 	if remaining <= 0 then
 		self:_completeFinish()
 		return
@@ -1519,6 +1609,14 @@ function LoadingScreenUI:_startTextCycles(displayName: string?)
 	local GREET_FADE_OUT =
 		TweenInfo.new(LoadingConfig.GREETING_FADE_OUT_DURATION, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 	self._greetingCycleThread = task.spawn(function()
+		if self._view then
+			-- Cinematic: one fixed title (setTitle), faded in once.
+			if self._refs then
+				self:setTitle(name)
+				TweenService:Create(self._refs.titleLabel, GREET_FADE_IN, { TextTransparency = 0 }):Play()
+			end
+			return
+		end
 		local greetings = self._greetings
 		local primaryGreeting = LoadingConfig.PRIMARY_GREETING
 		if type(primaryGreeting) == "string" and primaryGreeting ~= "" then
@@ -1572,8 +1670,12 @@ function LoadingScreenUI:setTitle(displayName: string?)
 		return
 	end
 
-	local greeting = pick(self._greetings, self._rng)
 	local name = displayName and displayName ~= "" and displayName or "Player"
+	if self._view then
+		self._refs.titleLabel.Text = string.format(LoadingConfig.STORY.TITLE_FORMAT, name)
+		return
+	end
+	local greeting = pick(self._greetings, self._rng)
 	self._refs.titleLabel.Text = string.format("%s, %s", greeting, name)
 end
 
@@ -1607,6 +1709,7 @@ function LoadingScreenUI:_bindSkipDuringLoadInput()
 			or t == Enum.UserInputType.Keyboard
 			or t == Enum.UserInputType.Gamepad1
 		then
+			self._skipRequested = true
 			self:finish()
 		end
 	end)
@@ -1623,7 +1726,13 @@ function LoadingScreenUI:setSkipAvailable(enabled: boolean)
 		return
 	end
 
-	self._refs.tipsLabel.Text = "Tap anywhere to skip"
+	self._readyAt = self._readyAt or os.clock()
+	if self._view and self._tipsCycleThread then
+		-- The skip line replaces the tips for good; the rotation would overwrite it.
+		pcall(task.cancel, self._tipsCycleThread)
+		self._tipsCycleThread = nil
+	end
+	self._refs.tipsLabel.Text = if self._view then LoadingConfig.STORY.HINT_SKIP else "Tap anywhere to skip"
 	self._refs.tipsLabel.TextTransparency = 0
 	self:_bindSkipDuringLoadInput()
 end
@@ -1691,7 +1800,21 @@ function LoadingScreenUI:start(displayName: string?, tipText: string?)
 	self:setTitle(displayName)
 	self:setTip(tipText)
 	self:_applyIntroBlackout()
-	self:_startIntroLayer()
+	if self._view then
+		-- Part 1 replaces the logo plate; the camera waits for part 2.
+		self._introEnded = true
+		self._view:startPart1()
+		self:_startTextCycles(displayName)
+		if self._refs then
+			TweenService:Create(
+				self._refs.tipsLabel,
+				TweenInfo.new(LoadingConfig.TIPS_FADE_DURATION, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+				{ TextTransparency = 0 }
+			):Play()
+		end
+	else
+		self:_startIntroLayer()
+	end
 	self:_suppressOverheads()
 	self:_hideOtherPlayersLocally()
 	self:setProgress(LoadingConfig.INITIAL_PROGRESS)
@@ -1717,6 +1840,11 @@ function LoadingScreenUI:finish()
 	end
 
 	self._finishRequested = true
+	if self._view then
+		self:setProgress(1)
+		self:_scheduleFinish()
+		return
+	end
 	-- Ensure cinematic/main phase exists before welcome dismiss if intro is still up.
 	if self._introActive and not self._introEnded then
 		self:setProgress(1)
@@ -1766,6 +1894,9 @@ function LoadingScreenUI:destroy()
 	self._waitingForClick = false
 
 	self:_finalizeDismissal()
+	if self._view then
+		self._view:destroy()
+	end
 
 	self._available = false
 	self._started = false

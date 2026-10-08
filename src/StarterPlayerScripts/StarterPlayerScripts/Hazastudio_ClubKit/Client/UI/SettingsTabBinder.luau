@@ -318,6 +318,11 @@ function SettingsTabBinder:setData(payload: SettingsPayload, options: { forceReb
 		return
 	end
 	if not self._settingsBuilt then
+		-- Client footprint: the rows (~970 instances) are built when the tab is first shown
+		-- (MenuShellUI:show / _setActiveTab call buildIfNeeded with the payload kept here).
+		if require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config).ClientFootprint.LAZY_PANEL_ROWS then
+			return
+		end
 		self:buildIfNeeded(payload)
 		return
 	end

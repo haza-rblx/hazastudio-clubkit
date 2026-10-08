@@ -1,6 +1,8 @@
 --!strict
 -- Shared/Domain/DailyQuestDomain.luau
--- Daily Quest addon (1000-02-DQ-ADDON): quest window, progress counter, completion.
+-- Streak check-in rule: quest window, progress counter, completion. Written for the Daily Quest
+-- addon (1000-02-DQ-ADDON, removed unreleased 2026-10-07); now used by the event board's streak
+-- venue quests (EventBoardDomain) and to read the legacy `Overhead_v1.dailyQuest` field.
 -- Pure functions only. Zero Roblox service calls, zero Config — callers pass the quest in.
 --
 -- Days are WIB calendar day numbers, the same "today" StreakDomain.toDayNumber gives, so a

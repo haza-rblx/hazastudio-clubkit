@@ -34,6 +34,10 @@ ClubKitConfig.Branding = {
 	-- Top Menu → Community row (15-TopMenuGUI). Empty = keep placeholder, link box hidden.
 	-- Accepts "discord.gg/invite", "https://discord.gg/invite", or invite code only.
 	DiscordInvite = "", -- example: "discord.gg/your-invite"
+	-- Theme for players who never picked one in Settings → Appearance. "multicolor" (default: every
+	-- GUI keeps its own colours), "graphite" (everything grey), or one colour for the whole kit UI:
+	-- "blue", "purple", "pink", "red", "orange", "yellow", "green".
+	DefaultAccent = "multicolor",
 }
 
 -- =============================================================================
@@ -193,6 +197,10 @@ ClubKitConfig.Carry = {
 -- =============================================================================
 ClubKitConfig.Loading = {
 	CinematicAnimationId = "rbxassetid://78416657618448", -- dance animation during cinematic loading
+	-- Cinematic loading only: background of the first (skippable) screen. Video wins when both
+	-- are set; both empty = the experience thumbnail. "rbxassetid://..." ids.
+	ArtworkImage = "",
+	ArtworkVideo = "",
 }
 
 -- =============================================================================
@@ -736,55 +744,26 @@ ClubKitConfig.CustomTitle = {
 }
 
 -- =============================================================================
--- DAILY QUEST (the 1000-02-DQ-ADDON panel)
+-- FREE TITLE EVENT (floating card and/or topbar icon)
 -- =============================================================================
---   Only used when Features.DailyQuest = true AND the 1000-02-DQ-ADDON ScreenGui
---   is installed in StarterGui. With both, the daily streak no longer goes up
---   by itself when a player joins: they press "Check in harian" in the panel.
---   The panel opens by itself after join if they have not checked in today, and
---   from its topbar icon any time.
---
---   QuestId
---     A name for this quest, e.g. "oktober-2026". Every player's quest progress
---     belongs to this id — change it to run a new quest and everyone starts at 0.
---     Empty = no quest: the check-in button still keeps the streak going.
---
---   TargetDays
---     Check-in days needed. Also how many day circles the panel shows. Skipping
---     one day is forgiven; skipping two or more starts the quest over at day 1.
---
---   StartDate / DueDate
---     "YYYY-MM-DD", Indonesian time (WIB). Both days count. Check-ins before
---     StartDate or after DueDate keep the streak but not quest progress.
---
---   RewardTier
---     Membership given FOREVER to whoever reaches TargetDays ("Tier1" = VIP,
---     or a tier label like "VIP"). Players who already have it or higher finish
---     the quest without a second copy. Everyone in the server sees who finished.
---
---   Title
---     The quest sentence. {days} = TargetDays, {tier} = the reward's name.
---
-ClubKitConfig.DailyQuest = {
-	QuestId = "",
-	TargetDays = 30,
-	StartDate = "",
-	DueDate = "",
-	RewardTier = "Tier1",
-	Title = "Pertahankan streak selama {days} hari dan dapatkan {tier} gratis!",
-}
-
--- =============================================================================
--- FREE TITLE EVENT (the ADDON-FreeTitleEventTrigger card)
--- =============================================================================
---   An event card that floats on screen and opens the custom title panel. It is
---   a second, easier door to the same panel: a player who meets the event
+--   A door that opens the custom title panel: a card floating on screen, a
+--   topbar icon, or both (see Trigger below). It is a second, easier door to
+--   the same panel: a player who meets the event
 --   requirement may create a title even if they have not reached
 --   CustomTitle.MinLevel. Nobody ever loses access they already had, and the
 --   change quota still applies.
 --
---   Needs Features.SelfCustomTitle = true and the ADDON-FreeTitleEventTrigger
---   frame installed inside your IconGroup. Without either, there is no card.
+--   Needs Features.SelfCustomTitle = true. The floating card also needs the
+--   ADDON-FreeTitleEventTrigger frame installed inside your IconGroup; the
+--   topbar icon needs nothing installed.
+--
+--   Trigger      where the door lives:
+--                  "Overlay"  the floating card (default)
+--                  "Topbar"   an icon in the topbar instead of the card
+--                  "Both"     card and icon together
+--   TopbarIcon   image for the topbar icon, e.g. "rbxassetid://123456" or just
+--                123456. Leave "" for the kit's icon. If the icon shows blank in
+--                your game, the image is not allowed there: upload your own.
 --
 --   There are three possible requirements. Set a number above 0 to switch one on,
 --   leave it 0 to ignore it:
@@ -808,7 +787,7 @@ ClubKitConfig.DailyQuest = {
 --     both required     Mode = "All",  RequiredLevel = 25, MinDonationRobux = 100
 --
 --   A player who does not qualify still sees the card, showing the first thing
---   they are missing. Anything Mode does not recognise counts as "Disabled", and
+--   they are missing (the topbar icon opens the panel, which says the same). Anything Mode does not recognise counts as "Disabled", and
 --   so does a Mode with every threshold left at 0.
 --
 ClubKitConfig.FreeTitleEvent = {
@@ -816,6 +795,8 @@ ClubKitConfig.FreeTitleEvent = {
 	RequiredLevel = 0,
 	MinDonationRobux = 0,
 	MinDonationCash = 0,
+	Trigger = "Overlay",
+	TopbarIcon = "",
 }
 
 -- =============================================================================
@@ -933,20 +914,12 @@ ClubKitConfig.Features = {
 	LegacySyncBhms = false,
 	-- WIP Admin Hub (04-AdminHub). false = classic Admin Panel owns topbar icon.
 	AdminHub = false,
-	-- Avatar Context Menu v2 (redesign: static profile picture + camera zoom/blur backdrop).
-	-- false (default) = legacy v1 (3D rotating avatar ViewportFrame). true = v2.
-	AvatarContextMenuV2 = false,
 	-- Self-service custom title: profile "Title" row opens the 1000-01-CT-ADDON panel
 	-- (text + size + color preset + typeface), gated by CustomTitle.MinLevel and a
 	-- rolling change quota. false (default) = old text-only modal, admin-granted titles
 	-- only. Needs the 1000-01-CT-ADDON ScreenGui installed in StarterGui; without it the
 	-- old modal is used even when this is true.
 	SelfCustomTitle = false,
-	-- Daily Quest: players press a daily check-in button in the 1000-02-DQ-ADDON panel
-	-- to keep their streak, and finishing the quest gives a membership forever (see
-	-- ClubKitConfig.DailyQuest). false (default) = streak goes up on join as before.
-	-- Needs the 1000-02-DQ-ADDON ScreenGui in StarterGui; without it this does nothing.
-	DailyQuest = false,
 	-- Custom-title panel v3 (04-AdminPanelv3) owns the admin topbar icon instead of
 	-- the classic 04-AdminPanelv2. Needs that ScreenGui installed in StarterGui.
 	AdminPanelV3 = false,

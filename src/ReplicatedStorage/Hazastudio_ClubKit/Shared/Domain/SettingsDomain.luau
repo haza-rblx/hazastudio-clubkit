@@ -8,6 +8,7 @@ type SettingsPayload = Types.SettingsPayload
 
 local GraphicsQuality = require(script.Parent.Parent.Utils.GraphicsQuality)
 local Config = require(script.Parent.Parent.Constants.Config)
+local AccentDomain = require(script.Parent.AccentDomain)
 
 local SettingsDomain = {}
 
@@ -68,6 +69,8 @@ local DEFAULT_STORED: SettingsStoredData = {
 	hideDonatorHighlight = false,
 	hideSystemAnnounce = false,
 	graphicsOverrides = {},
+	-- "" = never picked: the venue default (Config.Branding.DEFAULT_ACCENT) applies.
+	accent = "",
 	_version = GraphicsQuality.STORED_VERSION,
 }
 
@@ -203,6 +206,7 @@ function SettingsDomain.sanitizeStored(raw: any): SettingsStoredData
 	base.hideDonationAura = pickBoolean(raw.hideDonationAura, base.hideDonationAura)
 	base.hideDonatorHighlight = pickBoolean(raw.hideDonatorHighlight, base.hideDonatorHighlight)
 	base.hideSystemAnnounce = pickBoolean(raw.hideSystemAnnounce, base.hideSystemAnnounce)
+	base.accent = AccentDomain.normalize(raw.accent) or ""
 	base._version = math.max(base._version, pickNumber(raw._version, base._version, 1, 999))
 	return base
 end
@@ -259,6 +263,7 @@ function SettingsDomain.merge(stored: SettingsStoredData?, session: SettingsSess
 		hideDonatorHighlight = storedData.hideDonatorHighlight,
 		hideSystemAnnounce = storedData.hideSystemAnnounce,
 		graphicsOverrides = table.clone(storedData.graphicsOverrides),
+		accent = storedData.accent,
 		_version = storedData._version,
 		overheadVisible = sessionData.overheadVisible,
 		hideAllGui = sessionData.hideAllGui,

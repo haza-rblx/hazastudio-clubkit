@@ -118,7 +118,7 @@ local function createNukeEffect(nukeModel, donatorName, recipientName, donationA
 	local SPAWN_POSITION = resolveNukeWorldPosition()
 
 	nukeClone = nukeModel:Clone()
-	SoundAssetSanitizer.removeBlockedSounds(nukeClone)
+	SoundAssetSanitizer.sanitizeClone(nukeClone)
 	local nukeCFrame = nukeClone.NukeValues.NukeCFrame
 	local donationFrame = nukeClone.BillboardGuiAnimation.Frame
 

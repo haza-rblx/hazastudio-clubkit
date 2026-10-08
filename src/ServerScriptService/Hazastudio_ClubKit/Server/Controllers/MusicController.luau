@@ -159,6 +159,12 @@ local function notifyMusicRequestSuccess(notify: any?, player: Player, resultDat
 		return
 	end
 
+	-- Every client (the requester too) announces new queue entries with the notification island.
+	local island = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config).NotificationIsland
+	if type(island) == "table" and island.QUEUE_ENABLED ~= false then
+		return
+	end
+
 	local description = string.format('"%s" is now in the queue.', trackName)
 	if queuePosition and queuePosition > 0 then
 		description = string.format('"%s" slid into spot #%d.', trackName, queuePosition)

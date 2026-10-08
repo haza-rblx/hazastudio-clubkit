@@ -1782,6 +1782,7 @@ function MusicPlayerController:_applyServerState(data: any, options: { forcePlay
 		queue = newQueue,
 		prefetchBuffer = newBuffer,
 	})
+	require(script.Parent.Parent.UI.Music.QueueIsland).observe(newQueue, self._config, self._store:get().playlists)
 	self:_setMusicIconVisible(self:_computeIconVisible())
 	self._binder:setDjModeEnabled(self._store:get().isDjMode == true)
 	-- Skip full queue rebind when queue length + identity unchanged (DJ StateSync hitch).
@@ -2505,6 +2506,7 @@ function MusicPlayerController:initEngine()
 				queue = data.queue or {},
 				prefetchBuffer = data.prefetchBuffer or {},
 			})
+			require(script.Parent.Parent.UI.Music.QueueIsland).observe(store:get().queue, self._config, store:get().playlists)
 			if self._panelInitialized then
 				binder:renderQueue(store:get().queue)
 			end
@@ -2529,7 +2531,8 @@ function MusicPlayerController:initEngine()
 
 		local action = type(data.action) == "string" and data.action or ""
 		if action == "started" then
-			if self._isPanelOpen then
+			-- The old centred modal needed the panel out of the way; the island does not.
+			if self._isPanelOpen and not (type(Config.NotificationIsland) == "table" and Config.NotificationIsland.VOTE_ENABLED ~= false) then
 				self:_closePanel()
 			end
 			self:initPanel()
@@ -2539,7 +2542,7 @@ function MusicPlayerController:initEngine()
 			self._binder:openOrUpdateVoteModal(data)
 		elseif action == "ended" then
 			if self._panelInitialized then
-				self._binder:closeVoteModal()
+				self._binder:closeVoteModal(false, data)
 			end
 		end
 	end)

@@ -1,6 +1,6 @@
 # Buyer: RUST Warehouse
 
-Status: **migrated to clubkit-infra (VPS) + updated to 2.9.2, place not yet saved/published by owner at time of writing.** Last touched 2026-08-27.
+Status (2026-10-06): **the venue moved to a new universe.** The old place was content-restricted (banned) by Roblox. Live venue is now **NEW PLACE BACKHOME** (place `130748620444133`, universe `10768845395`). DataStore copied, VPS licence rebound. See the 2026-10-06 section at the bottom. The identity table in section A below is the old (banned) place.
 
 ## A. Place identity
 
@@ -321,3 +321,57 @@ is healthy.
 - [x] Duplicated old GUIs removed by the owner (`04-AdminPanel`, `99-NotificationCenter`).
 - [ ] Backups sit at `Desktop\RUST-backup-2026-09-19\` (engine + GUIs as `.rbxm`).
 - [ ] This is a mixed build. A future full update should take the 9 anti-abuse files as one step.
+
+## 2026-10-06: venue moved to a new universe (old one banned)
+
+**Why.** Roblox content-restricted the old universe `9962470719` (place `85501880339890`).
+`games.roblox.com` shows `[TITLE UNAVAILABLE]`, creator 0. The owner cloned the place into
+**NEW PLACE BACKHOME**: place `130748620444133`, universe `10768845395`, same group `763632944`.
+The new place's contents are identical to the old one, config included (`GameKey = rust`).
+
+### DataStore copied OLD → NEW: done, verified
+
+- **Method: Open Cloud** (`.tmp/mig/oc_copy.py dump|restore|verify`), parallel and resumable.
+  The working key is `.tmp/mig/key_user_raw.txt`; the other `apikey*.txt` files are dead (401).
+  The 2026-10-05 engine-path attempt was abandoned: ListKeysAsync paced at ~1 page/min had Overhead alone running for hours.
+- Took ~1.5 hours (17:00 → 18:50). Throughput is limited **per universe** (~350 req/min, lots of
+  429s), so restore into NEW ran in parallel with the dump from OLD.
+- **Result:** all 17 kit standard stores + 6 ordered stores have **equal key counts OLD == NEW**
+  (~26k entries). Biggest: AvatarLikes 10,189 · Overhead 4,918 · DonationLeaderboardMetadata
+  2,471 · AvatarLikesLeaderboard 2,026 · MusicFavorites 1,883 · FavoritedAnimations 1,337 ·
+  Settings 998 · DonationRobuxReceipts 943 · Profile 759 · Robux User/Community 616/113.
+  A sample of 41 random entries (owner's included) has identical values.
+- **Kohl's Admin** (`_KData`, scope `_K_0.1`): `Main` (rank/settings) and `Bans` copied. The four
+  `Logs_*` entries (admin command history) were rejected by Open Cloud (`400 value null`) and skipped. Not needed for gameplay.
+- Full backup of the old data: `.tmp/mig/ocdump/*.json`.
+- **Trap:** writing to a store that doesn't exist yet in the target universe → `403 missing scope
+  universe-datastores.control:create`. Workaround: from target Studio, `SetAsync` + `RemoveAsync`
+  one dummy key per store (`__mig_init`) to create it first.
+
+### VPS licence rebound to NEW: done
+
+The owner ran `PATCH /admin/games/rust/license` (`universe_id=10768845395`,
+`place_id=130748620444133`, `license_enforced=true`, `license_status=active`). The classifier
+blocked me from doing it, so the owner ran it with one `!` line.
+The key stays `rust`, so donation history, Saweria webhook, secret, music library and config all keep
+working without changes.
+
+### Playtest NEW (2026-10-06)
+
+| Check | Result |
+|---|---|
+| Licence on boot | `status=active` (before the rebind: `unlicensed / universe_mismatch`) |
+| Owner data (`hazatargz` 8842050215) | level 56, XP continues from the old value (159 → 199), role Staff |
+| Music library | 548 tracks, 5 playlists |
+| Donation leaderboard | broadcast, 50 all-time donors |
+| `Workspace leaderboard paint incomplete` | missing board = `community`; the place has no Community board model (same in OLD), not a migration effect |
+
+### Still open (NEW place)
+
+- [ ] **Owner: create new gamepasses / dev products** and enter their IDs in `ClubKitConfig`
+      (`Shop.Products.*.GiftId/BuyId`, `PaidBroadcast.ProductId`). Old IDs don't work in the new universe.
+- [ ] **Share assets with the new experience.** Seen being denied ("doesn't have access permission"): `137095705806436`,
+      `79366863686652`, `132600999999748`, `80396721891565`, plus some sounds failing to load.
+- [ ] Badges from the old universe don't carry over. Recreate them if they're used.
+- [ ] Owner: **Ctrl+S + publish** NEW PLACE BACKHOME.
+- [ ] Optional: copy the Kohl's Admin `Logs_*` entries manually if the command history is needed.

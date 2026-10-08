@@ -33,6 +33,10 @@ local function destroy()
 	table.clear(_connections)
 end
 
+-- Set once init has built the panel (avatar context menu entry points).
+local _proposeTo: ((number) -> ())? = nil
+local _hasPartner: (() -> boolean)? = nil
+
 local function coupleTagText(partnerDisplayName: string): string
 	local emoji = tostring(Config.Chat.COUPLE_TAG_EMOJI or "💕")
 	return emoji .. " " .. partnerDisplayName
@@ -972,6 +976,25 @@ local function init(deps: { icon: any? }?): ()
 		RemoteSendRequest:FireServer({ requestId = reqId, targetUserId = selectedUserId })
 		showNotif(waitingFrame)
 	end)
+	-- Avatar context menu "Propose Couple": same request + waiting notif, target picked there.
+	_proposeTo = function(targetUserId: number)
+		local target = Players:GetPlayerByUserId(targetUserId)
+		selectedUserId = targetUserId
+		selectedDisplayName = if target then target.DisplayName else "them"
+		local reqId = HttpService:GenerateGUID(false)
+		_currentRequestId = reqId
+		if waitingTargetPfp then
+			setThumbnailAsync(waitingTargetPfp, targetUserId)
+		end
+		if waitingTextLabel then
+			waitingTextLabel.Text = "Wait a moment to " .. selectedDisplayName .. " accept request..."
+		end
+		RemoteSendRequest:FireServer({ requestId = reqId, targetUserId = targetUserId })
+		showNotif(waitingFrame)
+	end
+	_hasPartner = function(): boolean
+		return partnerId ~= nil
+	end
 	-- ============================================================
 	-- Breakup
 	-- ============================================================
@@ -1125,4 +1148,18 @@ local function init(deps: { icon: any? }?): ()
 	-- Variable is actually used in sendButton.Activated handler
 	log:info("Client CoupleController initialized")
 end
-return { init = init, destroy = destroy }
+return {
+	init = init,
+	destroy = destroy,
+	proposeTo = function(targetUserId: number)
+		if _proposeTo then
+			_proposeTo(targetUserId)
+		end
+	end,
+	hasPartner = function(): boolean
+		return _hasPartner ~= nil and _hasPartner()
+	end,
+	isReady = function(): boolean
+		return _proposeTo ~= nil
+	end,
+}

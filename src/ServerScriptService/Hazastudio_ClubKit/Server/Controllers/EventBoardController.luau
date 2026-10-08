@@ -5,7 +5,8 @@
 --   * Per player: a progress document (VenueQuestProgressRepository) loaded on join, counters
 --     (Robux donated, seconds played) accumulated here and flushed periodically and on leave.
 --   * One RemoteEvent, both ways. Client → server: { action = "checkin" | "claim", questId }
---     or { action = "seen", postId }. Server → client: { type = "state", ... } (see buildState).
+--     or { action = "seen", postId } (a reminder shown / join post opened) or { action = "refresh" }.
+--     Server → client: { type = "state", ... } (see buildState).
 --   * Claims: checked here against the player's real standing, recorded atomically in the
 --     DataStore first (refused if another server already paid it), then the reward is granted;
 --     a failed grant rolls the claim back.
@@ -114,8 +115,12 @@ local function createEventBoardController(deps: {
 		local day = StreakDomain.toDayNumber(now)
 		local level = levelOf(session.player.UserId)
 		local current = board()
+		-- Ended countdowns are gone; a push lands at every countdown start/end (scheduleBoundaryPush).
+		local visible = EventBoardDomain.visiblePosts(current, now)
 		local posts = {}
-		for _, post in ipairs(current.posts) do
+		-- Posts this player has not been reminded of yet (once per player per post, seenPosts).
+		local unseenPostIds = {}
+		for _, post in ipairs(visible) do
 			table.insert(posts, {
 				id = post.id,
 				category = post.category,
@@ -123,7 +128,14 @@ local function createEventBoardController(deps: {
 				body = post.body,
 				imageAssetId = post.imageAssetId,
 				publishedAt = post.publishedAt,
+				kind = post.kind,
+				startsAt = post.startsAt,
+				endsAt = post.endsAt,
+				robloxEventId = post.robloxEventId,
 			})
+			if not session.doc.seenPosts[tostring(post.id)] then
+				table.insert(unseenPostIds, post.id)
+			end
 		end
 		local quests = {}
 		for _, quest in ipairs(EventBoardDomain.visibleQuests(current, day)) do
@@ -137,19 +149,20 @@ local function createEventBoardController(deps: {
 				goalValue = quest.goalValue,
 				rewardType = quest.rewardType,
 				rewardValue = quest.rewardValue,
+				startDate = quest.startDate,
 				dueDate = quest.dueDate,
 				current = standing.current,
 				target = standing.target,
 				complete = standing.complete,
 				claimed = standing.claimed,
 				checkedInToday = standing.checkedInToday,
-				strip = if quest.goalType == "streak" then EventBoardDomain.dayStrip(quest, session.doc, day) else nil,
+				calendar = if quest.goalType == "streak" then EventBoardDomain.calendar(quest, session.doc, day) else nil,
 			})
 		end
 		-- Sent until the player has seen it (the client reports "seen" when it opens); the client
 		-- opens it at most once per session, so a push that lands before it listens loses nothing.
 		local joinPost = nil
-		local post = EventBoardDomain.joinPost(current)
+		local post = EventBoardDomain.joinPost({ revision = current.revision, posts = visible, quests = current.quests })
 		if post and not session.doc.seenPosts[tostring(post.id)] then
 			joinPost = post.id
 		end
@@ -158,6 +171,7 @@ local function createEventBoardController(deps: {
 			serverTime = now,
 			secondsToNextDay = EventBoardDomain.secondsUntilNextDay(now),
 			posts = posts,
+			unseenPostIds = unseenPostIds,
 			quests = quests,
 			joinPostId = joinPost,
 		}
@@ -179,6 +193,27 @@ local function createEventBoardController(deps: {
 		for _, session in pairs(sessions) do
 			push(session)
 		end
+	end
+
+	-- A countdown starting (tiles → LIVE) or ending (card gone) changes every player's state:
+	-- one push at the next such moment, re-armed after each one and on every board change.
+	local boundaryToken = 0
+	local function scheduleBoundaryPush()
+		boundaryToken += 1
+		local token = boundaryToken
+		local now = os.time()
+		local nextAt = EventBoardDomain.nextPostBoundary(board(), now)
+		if not nextAt then
+			return
+		end
+		-- +1 s: os.time() is whole seconds, so land safely past the boundary second.
+		task.delay(nextAt - now + 1, function()
+			if destroyed or token ~= boundaryToken then
+				return
+			end
+			pushAll()
+			scheduleBoundaryPush()
+		end)
 	end
 
 	-- Returns true when nothing is left to write (saved now, or already clean). False while a
@@ -675,6 +710,7 @@ local function createEventBoardController(deps: {
 			logger = Logger.new("EventBoardProvider"),
 			onBoard = function()
 				pushAll()
+				scheduleBoundaryPush()
 			end,
 		})
 		provider:start()

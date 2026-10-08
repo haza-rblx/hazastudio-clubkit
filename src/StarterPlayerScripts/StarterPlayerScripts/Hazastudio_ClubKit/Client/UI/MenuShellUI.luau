@@ -7,11 +7,15 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
+local TitleEventDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.TitleEventDomain)
 local NotifService = require(script.Parent.Parent.Services.NotifService)
 local LeaderstatsVisibilityService = require(script.Parent.Parent.Services.LeaderstatsVisibilityService)
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
 local MotionPresets = require(script.Parent.Parent.Utils.MotionPresets)
 local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
+local AccentSurfaceTint = require(script.Parent.Parent.Services.AccentSurfaceTint)
+local AccentService = require(script.Parent.Parent.Services.AccentService)
+local OverlayScrollbar = require(script.Parent.OverlayScrollbar)
 local MenuGuiRefs = require(script.Parent.MenuGuiRefs)
 local ProfileTabBinder = require(script.Parent.ProfileTabBinder)
 local CustomTitleUI = require(script.Parent.CustomTitleUI)
@@ -239,6 +243,18 @@ function MenuShellUI.new(gui: ScreenGui)
 
 	local self = setmetatable({}, MenuShellUI) :: any
 	self._gui = gui
+	AccentSurfaceTint.attach(gui)
+	if gui.Parent then
+		AccentSurfaceTint.attachPlayerGui(gui.Parent)
+	end
+	-- The tabs scroll with the short pill bar outside the panel's left edge, not the native bar.
+	for _, tab in ipairs({ refs.settingsTab, refs.profileTab, refs.eventTab }) do
+		if tab then
+			tab.ScrollBarThickness = 0
+			tab.ScrollBarImageTransparency = 1
+			OverlayScrollbar.attach(tab, refs.outerWrapper, { side = "left", centerOn = refs.outerWrapper })
+		end
+	end
 	self._refs = refs
 	self._profile = ProfileTabBinder.new(refs)
 	self._settings = SettingsTabBinder.new(refs)
@@ -309,11 +325,11 @@ end
 -- it already holds that panel and the payload the panel opens with. Resolved at
 -- boot rather than lazily, because the card is meant to be on screen.
 function MenuShellUI:_wireFreeTitleEvent()
--- Floating card replaced by topbar icon (wired in Main.client).
-	if true then
+	if Config.FeatureFlags.FreeTitleEventEnabled ~= true then
 		return
 	end
-	if Config.FeatureFlags.FreeTitleEventEnabled ~= true then
+	-- "Topbar" puts the door in the topbar instead (Main.client); the card stays hidden.
+	if not TitleEventDomain.showsOverlay(Config.FreeTitleEvent.TRIGGER) then
 		return
 	end
 	if Config.FeatureFlags.SelfCustomTitleEnabled ~= true then
@@ -331,7 +347,7 @@ function MenuShellUI:_wireFreeTitleEvent()
 		return
 	end
 	card:bindOpen(function()
-		self:openCustomTitlePanel()
+		self:openCustomTitlePanelWhenReady()
 	end)
 	self._freeTitleCard = card
 	card:playEntrance()
@@ -353,6 +369,29 @@ function MenuShellUI:openCustomTitlePanel(): boolean
 	} :: any)
 	return true
 end
+
+-- The event doors (card, topbar icon) are on screen long before the profile payload
+-- lands on a cold join, so a click then would do nothing. Wait for it instead, and
+-- say so if it never comes. Repeated clicks while waiting share the one wait.
+function MenuShellUI:openCustomTitlePanelWhenReady()
+	if self:openCustomTitlePanel() or self._customTitleOpenPending then
+		return
+	end
+	self._customTitleOpenPending = true
+	task.spawn(function()
+		local deadline = os.clock() + (tonumber(Config.FreeTitleEvent.OPEN_WAIT_SECONDS) or 10)
+		while os.clock() < deadline do
+			task.wait(0.25)
+			if self:openCustomTitlePanel() then
+				self._customTitleOpenPending = false
+				return
+			end
+		end
+		self._customTitleOpenPending = false
+		NotifService.warn(Config.FreeTitleEvent.MSG_NOT_READY)
+	end)
+end
+
 -- Topbar-icon click: close when open, open when closed. Returns false when the
 -- profile payload has not arrived yet (nothing to toggle against).
 function MenuShellUI:toggleCustomTitlePanel(): boolean
@@ -565,6 +604,8 @@ end
 
 function MenuShellUI:_wireModal()
 	local refs = self._refs
+	-- 2026-10-07: check-in popup look (header + close, field name/hint, counter).
+	self._modalLook = require(script.Parent.ProfileFieldModalLook).apply(refs)
 	if refs.modalCancelButton then
 		disableAutoButtonColor(refs.modalCancelButton)
 		self:_bindButtonMotion(refs.modalCancelButton)
@@ -669,6 +710,9 @@ function MenuShellUI:_showProfileFieldModal(request: ProfileTabBinder.ProfileFie
 	end
 	if self._refs.modalCancelButton then
 		setTextButtonText(self._refs.modalCancelButton, "Cancel")
+	end
+	if self._modalLook then
+		self._modalLook.configure(request.field, request.title)
 	end
 
 	input.TextEditable = true
@@ -784,6 +828,25 @@ end
 -- Optional GUI (empty refs on places without the design): every lookup is
 -- guarded, an unbound button still gets the standard press/hover feel.
 function MenuShellUI:_wireBackButtons()
+	-- The back arrow's disc takes the theme's primary colour (white on Multicolor / Graphite);
+	-- the arrow drawn into the image stays dark.
+	local arrows: { ImageButton | ImageLabel } = {}
+	for _, button in ipairs(self._refs.backButtons or {}) do
+		for _, descendant in ipairs(button:GetDescendants()) do
+			if descendant:IsA("ImageButton") or descendant:IsA("ImageLabel") then
+				descendant:SetAttribute(AccentSurfaceTint.NO_TINT_ATTRIBUTE, true)
+				table.insert(arrows, descendant)
+			end
+		end
+	end
+	local function paintArrows()
+		local color = if AccentService.isDesign() then Color3.new(1, 1, 1) else AccentService.get().fill
+		for _, arrow in ipairs(arrows) do
+			arrow.ImageColor3 = color
+		end
+	end
+	paintArrows()
+	AccentService.subscribe(paintArrows)
 	for _, button in ipairs(self._refs.backButtons or {}) do
 		disableAutoButtonColor(button)
 		self:_bindButtonMotion(button)
@@ -1036,6 +1099,7 @@ local function createDisabledUI()
 	function ui:setPlayerListData() end
 	function ui:show() end
 	function ui:hide() end
+	function ui:openCustomTitlePanelWhenReady() end
 	function ui:selectTab() end
 	function ui:hasTab(): boolean
 		return false

@@ -474,6 +474,14 @@ function MusicTopbarIcon:onOpenPlayer(callback: SelectionCallback): () -> ()
 	return appendCallback(self._openPlayerCallbacks, callback)
 end
 
+-- Same as picking the dropdown's "Music Player" item; used by the top menu's MusicPlayerButton row.
+function MusicTopbarIcon:openPlayer()
+	if not self._shown or self._destroyed then
+		return
+	end
+	fireCallbacks(self._openPlayerCallbacks)
+end
+
 function MusicTopbarIcon:onLoadTrack(callback: SelectionCallback): () -> ()
 	return appendCallback(self._loadTrackCallbacks, callback)
 end

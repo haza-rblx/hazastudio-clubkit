@@ -1461,12 +1461,16 @@ local function playWorkspaceAnimations(payload: any)
 		lastAnimationRevision = revision
 	end
 
+	local boardGuis: { Instance } = {}
 	for _, spec in ipairs(BOARD_SPECS) do
 		local gui = resolveBoard(spec)
 		if gui then
 			ensurePodiumLoop(gui, spec)
+			table.insert(boardGuis, gui)
 		end
 	end
+	-- Client footprint: drop row decoration that draws nothing (rows the server added since are new).
+	require(script.Parent.Parent.UI.LeaderboardRowTrim).attach(boardGuis)
 end
 
 local function init(_deps: {}?)

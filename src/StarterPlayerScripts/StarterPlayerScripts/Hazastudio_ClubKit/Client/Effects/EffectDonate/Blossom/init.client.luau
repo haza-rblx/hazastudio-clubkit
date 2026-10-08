@@ -176,7 +176,7 @@ local function createDonationEffect(donorName, recipientName, donationAmount, do
 	local ok, err = pcall(function()
 	-- Clone the main effect model
 	effectModel = ReplicatedStorage.WorldEffects.Smite4:Clone()
-	SoundAssetSanitizer.removeBlockedSounds(effectModel)
+	SoundAssetSanitizer.sanitizeClone(effectModel)
 	local diamondHammer = effectModel.DiamondHammer
 
 	-- Make most parts transparent initially

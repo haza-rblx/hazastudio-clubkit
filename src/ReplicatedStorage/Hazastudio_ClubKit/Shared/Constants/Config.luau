@@ -52,6 +52,8 @@ Config.Branding = {
 	LOGO_IMAGE = "rbxassetid://79426970537296",
 	-- Top Menu Community Discord invite (ClubKitConfig.Branding.DiscordInvite).
 	DISCORD_INVITE = "",
+	-- Venue default accent (ClubKitConfig.Branding.DefaultAccent; AccentDomain ids).
+	DEFAULT_ACCENT = "multicolor",
 }
 -- ============================================================
 -- MEMBERSHIP TIERS (system-wide presentation config)
@@ -222,6 +224,16 @@ Config.NotificationCenter = {
 	-- Applied to a V2 GUI still at DisplayOrder 0: above panels, the mobile overlay (200/201)
 	-- and the cinematic dock (200), below full-screen cinematic fades (999+).
 	V2_DISPLAY_ORDER = 300,
+}
+-- Notification island (CONTEXT.md "Notification island"; 2026-10-07): the morphing top-centre
+-- shell for "someone queued a song" (to everyone, batched) and the vote-skip prompt.
+Config.NotificationIsland = {
+	-- Undoes the notification centre's UIScale 0.8 so the island renders at its designed size.
+	SCALE_BOOST = 1.25,
+	QUEUE_ENABLED = true, -- false = back to the "Added to queue" toast for the requester only
+	QUEUE_BATCH_SECONDS = 3, -- requests inside this window merge into one island
+	VOTE_ENABLED = true, -- false = the old centred VoteModal
+	TOAST_ENABLED = true, -- general toasts as islands (card D -> pill A); false = the GUI's own toast
 }
 Config.Announcement = {
 	REMOTE_BROADCAST = "GenericBroadcast",
@@ -1493,17 +1505,10 @@ Config.FeatureFlags = {
 	LegacySyncBhmsEnabled = false,
 	-- WIP Admin Hub (04-AdminHub). false = classic Admin Panel owns topbar.
 	AdminHubEnabled = false,
-	-- Avatar Context Menu v2 (redesign: static ProfilePicture + backdrop zoom/blur).
-	-- false (default) = legacy v1 GUI (3D ViewportFrame avatar). Buyer: Features.AvatarContextMenuV2.
-	AvatarContextMenuV2Enabled = false,
 	-- Self-service custom title panel (1000-01-CT-ADDON) on the profile Title row.
 	-- false (default) = old text-only modal, admin-granted titles only.
 	-- Buyer: Features.SelfCustomTitle. Also needs the ScreenGui installed.
 	SelfCustomTitleEnabled = false,
-	-- Daily Quest addon (1000-02-DQ-ADDON): manual daily check-in + streak quest with a
-	-- membership reward. false (default) = streak advances on join as always.
-	-- Buyer: Features.DailyQuest. Also needs the ScreenGui installed in StarterGui.
-	DailyQuestEnabled = false,
 	-- Custom-title panel v3 (04-AdminPanelv3) owns the admin topbar icon instead of
 	-- the classic panel. false (default) = classic 04-AdminPanelv2.
 	-- Buyer: Features.AdminPanelV3. Also needs the ScreenGui installed.
@@ -1612,6 +1617,51 @@ Config.Loading = {
 	CLICK_REVEAL_DURATION = 1.4,
 	WELCOME_DISMISS_FORMAT = "Welcome to the club, %s",
 	-- PRIMARY_GREETING: filled by ConfigBootstrap from ClubKitConfig.Branding.Greeting
+	-- "classic" = StarterGui.00-LoadingScreen template + six-shot avatar orbit.
+	-- "cinematic" = two parts (experiment, CONTEXT.md "Loading style"): a skippable artwork
+	-- screen while the kit boots, then the character intro, played through without input.
+	-- Engine constant, not a buyer key.
+	STYLE = "classic",
+	-- Part 1 background (ClubKitConfig.Loading.ArtworkImage / ArtworkVideo); "" = experience thumbnail.
+	ARTWORK_IMAGE = "",
+	ARTWORK_VIDEO = "",
+	STORY = {
+		LETTERBOX_SCALE = 0.085, -- each bar, fraction of screen height
+		LETTERBOX_TWEEN = 0.9,
+		TITLE_FORMAT = "Welcome, %s",
+		HINT_SKIP = "Tap anywhere to skip",
+		PART1_HOLD = 3, -- seconds part 1 stays after the kit is ready when nobody taps
+		PART1_FADE = 0.6, -- part 1 → part 2 crossfade
+		PART2_MAX = 40, -- safety cap on the cinematic before gameplay is forced
+		PART2_BOTTOM_GAP = 16, -- px between the part 2 logo/title and the bottom bar (template pads 80)
+		CARD_TEXT_LINES = 3,
+		-- Gentle grade instead of the classic greyscale.
+		GRADE = {
+			Brightness = -0.03,
+			Contrast = 0.12,
+			Saturation = -0.2,
+			TintColor = Color3.fromRGB(255, 246, 238),
+		},
+		CAMERA = {
+			-- Optional buyer markers: BaseParts (sorted by name); the first is the establishing shot.
+			MARKER_FOLDER = "ClubKitCameraShots",
+			ESTABLISH_MIN = 3.5, -- seconds, even when the avatar is already there
+			ESTABLISH_MAX = 12, -- then keep drifting on the venue until an avatar exists
+			FEET = 3,
+			HANDS = 3,
+			FACE = 3.4,
+			REVEAL = 4.2,
+			-- Outro (owner, 2026-10-08): the avatar stands still (no dance) and the camera orbits
+			-- front-left → front → right → behind, landing on the gameplay camera. Replaces the
+			-- hero side-to-side loop (HERO_SWING 9 / HERO_HOLD 2.5) and the black dip + drop.
+			ORBIT = 6.5, -- seconds for the whole orbit
+			HANDOFF = 0.8, -- the last seconds of the orbit: letterbox opens, title + grade fade
+			-- gameplay camera the orbit lands on: height above the feet / distance behind
+			ORBIT_END_HEIGHT = 4.2,
+			ORBIT_END_DISTANCE = 11,
+			FOLLOW_LERP = 10, -- root smoothing inside a shot (cuts snap)
+		},
+	},
 	CINEMATIC = {
 		BIND_NAME = "LoadingCinematicCamera",
 		BIND_PRIORITY_OFFSET = 100,
@@ -2659,6 +2709,11 @@ Config.TopbarMenu = {
 		COMMUNITY = "CommunityButton",
 		QUESTS = "QuestsButton",
 		EVENT = "EventButton",
+		-- 2026-10-06 rows. Admin: when BOTH menus (desktop + phone) have the row, the admin
+		-- topbar icon leaves the strip and opens from here. Music: a shortcut; the topbar icon
+		-- stays (it carries Reload Music).
+		ADMIN_PANEL = "AdminPanelButton",
+		MUSIC_PLAYER = "MusicPlayerButton",
 	},
 	-- Rows in the 2026-09-24 menu design whose feature is not built yet: shown, and a click answers
 	-- with a notification. Missing from an older GUI = nothing happens.
@@ -2776,55 +2831,6 @@ Config.CustomTitle = {
 	MSG_INVALID_FONT = "[Profile] That typeface is not available.",
 	MSG_INVALID_SIZE = "[Profile] That title size is not available.",
 }
--- Daily Quest addon (FeatureFlags.DailyQuestEnabled + the 1000-02-DQ-ADDON ScreenGui).
--- With both present the streak stops advancing on join and the panel's check-in button
--- advances it instead (CONTEXT.md "Daily Quest addon"). Buyer overrides the quest via
--- ClubKitConfig.DailyQuest; DailyQuestDomain rejects a quest it cannot run.
-Config.DailyQuest = {
-	GUI_NAME = "1000-02-DQ-ADDON",
-	REMOTE = "DailyQuest", -- RemoteEvent, both directions
-	-- Buyer quest. ID scopes everyone's progress: a new ID starts every player at 0.
-	QUEST_ID = "",
-	TARGET_DAYS = 30,
-	START_DATE = "", -- "YYYY-MM-DD", WIB
-	DUE_DATE = "", -- "YYYY-MM-DD", WIB, inclusive
-	REWARD_TIER = "Tier1", -- any paid membership tier or alias ("VIP", "VVIP", ...)
-	-- Panel copy. {days} = target days, {tier} = the reward tier's label.
-	CATEGORY_TEXT = "Q U E S T",
-	TITLE_TEXT = "Pertahankan streak selama {days} hari dan dapatkan {tier} gratis!",
-	DUE_DATE_TEXT = "Due date : %s.",
-	PROGRESS_TEXT = "Progress quest : %d/%d",
-	MONTH_NAMES = {
-		"January", "February", "March", "April", "May", "June",
-		"July", "August", "September", "October", "November", "December",
-	},
-	BUTTON_CHECK_IN = "Check in harian (%s)", -- %s = HH:MM left today (WIB)
-	BUTTON_WAIT = "Check in lagi dalam %s", -- %s = HH:MM:SS until WIB midnight
-	BUTTON_BUSY = "Menyimpan...",
-	BUTTON_COMPLETED = "Quest selesai!",
-	STATUS_UPCOMING = "Quest belum dimulai",
-	STATUS_ENDED = "Quest sudah berakhir",
-	STATUS_NONE = "Belum ada quest",
-	-- Server-wide announcement when someone completes the quest. %s = display name, %s = tier label.
-	MSG_COMPLETED_ALL = "%s menyelesaikan Daily Streak dan mendapatkan %s!",
-	ANNOUNCE_DELAY = 7, -- seconds, so the finisher's own celebration plays first
-	MSG_COMPLETED_ALREADY = "Quest selesai! Kamu sudah punya %s.",
-	MSG_SAVE_FAILED = "Check in gagal disimpan. Coba lagi sebentar.",
-	-- Check-in presses per player per window (the button is once a day; this only stops spam).
-	RATE_MAX = 6,
-	RATE_WINDOW = 30,
-	-- Client: seconds after gameplay is ready before the panel opens on its own.
-	AUTO_OPEN_DELAY = 4,
-	READY_TIMEOUT = 45,
-	TOPBAR_ICON = "rbxassetid://107879319900293",
-	TOPBAR_ORDER = 12,
-	-- Flame flight from the streak overlay to today's circle. HOLD replaces Streak.SHOW_DURATION
-	-- when a flight follows: the big flame lingers this long after its sparks, then leaves.
-	FLIGHT_HOLD = 1.1,
-	FLIGHT_TIME = 0.8,
-	FLIGHT_ARC = 90, -- px the path bows upward at its midpoint
-	LAND_SPARKS = 10,
-}
 
 -- Event board (ADR 0015): venue posts + venue quests authored in the customer dashboard, shown in
 -- the menu's EventTab (07-MenuGUI). The game pulls them from {Donation.ApiUrl}/v3/event-board.
@@ -2846,12 +2852,46 @@ Config.EventBoard = {
 	POSTS_SECTION = "PostsSection",
 	QUESTS_SECTION = "QuestsSection",
 	POPUP_NAME = "PopUpMenuTemplate",
+	-- Event cards (2026-10-07): every template is a Header row + Body row (CONTEXT.md "Event card").
 	TEMPLATES = {
 		BASIC = "BasicAnnouncement",
 		IMAGE = "ImageAnnouncement",
+		COUNTDOWN = "CountdownTemplate",
 		QUEST = "QuestTemplate",
 		STREAK = "StreakTemplate",
 	},
+	-- Streak quest detail (wide card, check-in + attendance calendar) and the bottom-right reminders.
+	-- Both are their own ScreenGuis in StarterGui; a place without them simply has neither.
+	QUEST_POPUP_GUI = "18-EventQuestPopup",
+	REMINDER_GUI = "19-EventReminders",
+	HEADER_LABELS = {
+		announcement = "Announcement",
+		countdown = "Countdown",
+		quest = "Quest",
+		streak = "Daily check-in",
+	},
+	WEEKDAYS = { "Su", "Mo", "Tu", "We", "Th", "Fr", "Sa" },
+	CALENDAR_GAP = 5, -- px between calendar tiles; the tile size comes from the design's templates
+	WEEK_TEXT = "This week · %d–%d %s", -- first day, last day, month
+	COUNTDOWN_UNITS = { "DAYS", "HOURS", "MIN", "SEC" },
+	COUNTDOWN_LIVE_TEXT = "Happening now · until %s WIB",
+	BUTTON_DETAIL = "View details",
+	BUTTON_NOTIFY = "Notify me",
+	BUTTON_NOTIFIED = "You'll be notified",
+	-- Quest popup: opens once per session on its own when a streak quest still waits for today.
+	POPUP_AUTO_OPEN_DELAY = 4,
+	READY_TIMEOUT = 45,
+	FLIGHT_TIME = 0.65,
+	FLIGHT_ARC = 70, -- px the flame's path bows upward
+	LAND_SPARKS = 12,
+	-- Reminders.
+	REMINDER_SECONDS = 8, -- each card's line timer; paused while hovered or spread out
+	REMINDER_MAX_VISIBLE = 3, -- more wait in a queue behind a "+N" pill
+	REMINDER_SCALE = 0.82, -- the cards are the Event tab's cards drawn smaller
+	REMINDER_PEEK = 12, -- px each card behind the front one shows above it
+	REMINDER_MORE_TEXT = "+%d more",
+	REMINDER_STREAK_TEXT = "You haven't checked in today.",
+	REMINDER_COUNTDOWN_TEXT = "Starts in %s",
 	SECTION_TITLES = {
 		posts = "Announcements",
 		quests = "Quests",
@@ -2932,9 +2972,18 @@ Config.FreeTitleEvent = {
 	-- fill travelling reads bolder than a highlight passing over it.
 	SHINE_TIME = 1.1,
 	SHINE_DELAY = 1.7,
-	-- Topbar icon (replaces the floating card). Opens the same custom-title panel.
+	-- Where the door lives (buyer: FreeTitleEvent.Trigger): "Overlay" = the floating
+	-- card above, "Topbar" = a TopbarPlus icon, "Both". TitleEventDomain.normalizeTrigger
+	-- reads anything else as "Overlay", the behaviour every place had before.
+	TRIGGER = "Overlay",
+	-- Topbar icon image (buyer: FreeTitleEvent.TopbarIcon). An image is usable only by
+	-- places allowed to load it, so a buyer whose icon shows blank sets their own.
 	TOPBAR_ICON = "rbxassetid://115281405771061",
 	TOPBAR_ORDER = 8,
+	-- A click before the profile payload has arrived waits for it this long, then
+	-- says so instead of doing nothing (the payload lands well after boot on a cold join).
+	OPEN_WAIT_SECONDS = 10,
+	MSG_NOT_READY = "Profile data belum siap, coba lagi sebentar.",
 }
 -- ============================================================
 -- DONATION / BAGI-BAGI INTEGRATION
@@ -4041,13 +4090,13 @@ Config.MobileScale = {
 	ADMIN_HUB_GUI = 0.5, -- 04-AdminHub root UIScale on phone layout
 	ADMIN_PANEL_V3_GUI = 0.45, -- 04-AdminPanelv3 root UIScale on phone layout
 	CUSTOM_TITLE_GUI = 0.55, -- 1000-01-CT-ADDON root UIScale on phone layout
-	DAILY_QUEST_GUI = 0.75, -- 1000-02-DQ-ADDON root UIScale on phone layout
 	FREE_TITLE_EVENT_CARD = 0.7, -- IconGroup.ADDON-FreeTitleEventTrigger resting UIScale on phone layout
 	JOIN_COMMUN_GUI = 0.48, -- 16-JoinCommunPrompt root UIScale on phone layout
 	STICKER_GUI = 0.8, -- 11-StickerSystemGUI
 	NOTIF_GUI = 0.75, -- 99-NotificationCenter
 	COMMAND_GUI = 0.8, -- CommandLibraryGUI
 	ACM_GUI = 0.68, -- AvatarContextMenu (+ remove Y offset on MainWrapper)
+	ACM_GUI_DESKTOP = 0.8, -- desktop ACM: 5px gaps x 0.8 = whole 4px (2026-10-07 polish)
 	ICON_GROUP = 0.6, -- DancePanelGUIWrapper (v1) inside IconGroup ScreenGui
 	ICON_GROUP_IGNORE_GUI_INSET = true, -- IconGroup ScreenGui full-bleed (no topbar inset gap)
 	DANCE_PANEL_V2_SCALE = 0.63, -- DancePanelGUIWrapperv2 on touch-only phones
@@ -4410,6 +4459,9 @@ Config.Overhead.PERF_MAX_ENABLED_OVERHEADS = 40
 Config.Overhead.PERF_CULL_INTERVAL = 0.5
 Config.Overhead.PERF_CULL_SWAP_MARGIN = 4
 Config.Overhead.PERF_GRADIENT_CULL = true
+-- Client: skip OverheadUI:apply when a network payload is identical to the one already applied
+-- to that nametag (proximity re-enter snapshots in a crowd; ~1.3 ms per apply). Legacy: false.
+Config.Overhead.PERF_SKIP_IDENTICAL_APPLY = true
 -- H15: admin player lists rebuild on join/leave only while open, at most once per this many
 -- seconds (closed panels rebuild on open). Legacy: 0 (rebuild on every join/leave).
 Config.NetworkPerf.ADMIN_LIST_DEBOUNCE_SEC = 1
@@ -4452,6 +4504,27 @@ Config.PerfDeferred = {
 	-- GAMEPASS_CHECK_TIMEOUT_SEC bounds the wait for all checks. Legacy: false (sequential, no cache).
 	GAMEPASS_SESSION_CACHE = true,
 	GAMEPASS_CHECK_TIMEOUT_SEC = 15,
+}
+-- Client footprint (2026-10-07): memory and instance count on a client of a near-empty server,
+-- measured in Experiment Area. Engine constants, not buyer config. Each switch names its legacy value.
+Config.ClientFootprint = {
+	-- Donation effect templates (ReplicatedStorage.WorldEffects) keep their audio unloaded; each
+	-- clone gets it back through SoundAssetSanitizer.sanitizeClone. -40 MB Sounds per client.
+	-- Legacy: false.
+	DEFER_EFFECT_SOUNDS = true,
+	-- After boot, empty the StarterGui templates that already have their PlayerGui copy
+	-- (StarterGuiTrimService). -4,200 instances. Legacy: false.
+	TRIM_STARTER_GUI = true,
+	-- Templates that stay whole besides Sticker / PaidBroadcast (cloned on demand).
+	STARTER_GUI_KEEP = { "00-LoadingScreen" },
+	-- The server leaderboard renderer drops row decoration that draws nothing (disabled UIStroke,
+	-- zero UIPadding, UICorner on a transparent Frame) and turns aspect-ratio constraints into
+	-- fixed sizes (rows are fixed height). Same pixels, about 5 fewer instances per row (-1,500
+	-- across the boards, on the server and on every client). Legacy: false.
+	TRIM_LEADERBOARD_ROWS = true,
+	-- Panels build their generated rows on first open instead of at boot (Preferences, DJ sound
+	-- effects, donor profile, ...). -2,400 instances while closed. Legacy: false.
+	LAZY_PANEL_ROWS = true,
 }
 -- ============================================================
 -- CONFIG VALIDATION

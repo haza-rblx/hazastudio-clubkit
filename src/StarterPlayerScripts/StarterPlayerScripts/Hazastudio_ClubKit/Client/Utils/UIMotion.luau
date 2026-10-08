@@ -105,8 +105,11 @@ type MotionState = {
 	owned: boolean?,
 	-- Rest value of a borrowed UIScale while a gesture holds it off rest (`restScaleOf`).
 	scaleRest: number?,
-	-- Designed colour/transparency while a fallback tint holds it off (`tintHold`).
+	-- Designed colour/transparency while a fallback tint holds it off (`tintHold`), kept until the
+	-- fade back to it lands.
 	tintRest: any,
+	-- The fade back to `tintRest` still in flight (`tintRelease`).
+	tintReleasing: Tween?,
 	-- What a frozen AutomaticSize label gets back on thaw (`freezeText`).
 	frozen: { size: UDim2, automatic: Enum.AutomaticSize }?,
 }
@@ -1331,8 +1334,11 @@ end
 
 -- Designed value of every element a fallback is currently holding off it (`record.tintRest`).
 -- Captured on the first tint instead of read back at release time, so a press landing mid-hover
--- (or mid-release) still restores the design; cleared on release, so a panel that recolours the
--- button between interactions is never reverted to a stale colour.
+-- (or mid-release) still restores the design; cleared once the release has landed, so a panel that
+-- recolours the button between interactions is never reverted to a stale colour. Not cleared when
+-- the release only starts: a re-entry during the fade-out then read the half-lit colour off the
+-- element as the design, and every quick in-out-in baked the button a little brighter for good
+-- (measured 2026-10-06: 0.1569 → 0.1629 after two sweeps).
 local function tintGoal(property: string, rest: any, darken: boolean): any
 	if property == "TextTransparency" then
 		return math.clamp((rest :: number) + (if darken then PRESS_TEXT_FADE else HOVER_TEXT_FADE), 0, 1)
@@ -1342,6 +1348,8 @@ end
 
 local function tintHold(element: GuiObject, property: string, darken: boolean, time: number)
 	local record = state.of(element)
+	-- Takes over a fade-out still running: its rest stays the design (see tintRelease).
+	record.tintReleasing = nil
 	local rest = record.tintRest
 	if rest == nil then
 		rest = (element :: any)[property]
@@ -1361,6 +1369,7 @@ function UIMotion.forgetTint(element: GuiObject)
 		return
 	end
 	record.tintRest = nil
+	record.tintReleasing = nil
 	cancelChannel(element, TINT_CHANNEL)
 end
 
@@ -1372,8 +1381,9 @@ local function tintRelease(element: GuiObject, property: string, time: number?)
 		return
 	end
 	local rest = record.tintRest
-	record.tintRest = nil
 	if time == nil or UIMotion.reduced() or not element.Parent then
+		record.tintRest = nil
+		record.tintReleasing = nil
 		cancelChannel(element, TINT_CHANNEL)
 		-- Written even while detached. Skipping it was the tint twin of the scale bug: the capture
 		-- is dropped either way, so a pooled row came back still holding the press darken or the
@@ -1382,7 +1392,16 @@ local function tintRelease(element: GuiObject, property: string, time: number?)
 		held[property] = rest
 		return
 	end
-	play(element, TINT_CHANNEL, info(time, Enum.EasingStyle.Quad), { [property] = rest })
+	local tween = play(element, TINT_CHANNEL, info(time, Enum.EasingStyle.Quad), { [property] = rest })
+	record.tintReleasing = tween
+	-- Landed, or cancelled by anything but a new hold (tintHold clears `tintReleasing` first, so a
+	-- hold taking over never gets here): the capture ends, as it used to at release time.
+	tween.Completed:Once(function()
+		if record.tintReleasing == tween then
+			record.tintReleasing = nil
+			record.tintRest = nil
+		end
+	end)
 end
 
 -- Runtime-only marker for the motion coverage audit (a scan lists GuiButtons without it). A
@@ -1646,6 +1665,65 @@ function UIMotion.bindHover(button: GuiObject, lift: number?): { RBXScriptConnec
 		return bindScaleHover(button, label, "text", ICON_HOVER)
 	end
 	return bindHoverFallback(button)
+end
+
+-- Designed fill of each bindHoverTint row, read once at bind time.
+local hoverTintRest: { [GuiObject]: Color3 } = {}
+
+-- Hover background lift ON TOP of the scale hover, for a row that paints its own fill (a dark card
+-- row: the icon lift alone reads too small). Same lift as the fallback (HOVER_LIGHTEN toward white,
+-- pointer devices only); a row with a transparent fill gets nothing.
+-- The rest is read at bind time, not at each hover like tintHold: a re-entry landing while the
+-- previous fade-out was still running captured that half-lit grey as the design, and the row then
+-- settled there for good (seen on the top menu with a fast cursor). So: only for rows nothing
+-- recolours at runtime.
+-- `liftTo` (optional) picks the hover colour from the rest at each hover — the accent theme's
+-- tinted lift; nil from it means the default lift.
+function UIMotion.bindHoverTint(button: GuiObject, liftTo: ((rest: Color3) -> Color3?)?): { RBXScriptConnection }
+	if UserInputService.TouchEnabled and not UserInputService.MouseEnabled then
+		return {}
+	end
+	if tintable(button) ~= "BackgroundColor3" or hoverTintRest[button] then
+		return {}
+	end
+	local rest = button.BackgroundColor3
+	hoverTintRest[button] = rest
+	local lifted = rest:Lerp(WHITE, HOVER_LIGHTEN)
+	local connections = {
+		button.MouseEnter:Connect(function()
+			if UIMotion.reduced() or not button.Parent then
+				return
+			end
+			local goal = if liftTo then liftTo(rest) or lifted else lifted
+			play(button, TINT_CHANNEL, info(HOVER_IN_TIME, Enum.EasingStyle.Quad), { BackgroundColor3 = goal })
+		end),
+		button.MouseLeave:Connect(function()
+			UIMotion.releaseHoverTint(button)
+		end),
+	}
+	table.insert(connections, button.Destroying:Once(function()
+		hoverTintRest[button] = nil
+	end))
+	return selfRelease(button, connections, function()
+		cancelChannel(button, TINT_CHANNEL)
+		button.BackgroundColor3 = rest
+	end)
+end
+
+-- Fades a bindHoverTint row back to its designed fill. Also called without a MouseLeave: a row
+-- clicked inside a closing menu keeps the pointer on it, so the lift would still be held when the
+-- menu opens again.
+function UIMotion.releaseHoverTint(button: GuiObject)
+	local rest = hoverTintRest[button]
+	if rest == nil then
+		return
+	end
+	if UIMotion.reduced() or not button.Parent then
+		cancelChannel(button, TINT_CHANNEL)
+		button.BackgroundColor3 = rest
+		return
+	end
+	play(button, TINT_CHANNEL, info(HOVER_OUT_TIME, Enum.EasingStyle.Quad), { BackgroundColor3 = rest })
 end
 
 -- Breathing loop on one numeric property (a glow's transparency, a badge's rotation) until the

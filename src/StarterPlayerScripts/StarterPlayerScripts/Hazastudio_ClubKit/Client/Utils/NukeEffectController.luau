@@ -116,6 +116,8 @@ local function playNuke(effectName: string, donorName: string, recipientName: st
 
 	local clone = template:Clone()
 	clone.Name = "HazastudioNukeEffect_" .. effectName
+	-- Template audio is unloaded at boot (Config.ClientFootprint.DEFER_EFFECT_SOUNDS).
+	require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.SoundAssetSanitizer).sanitizeClone(clone)
 
 	local duration = (Config.Donation :: any).NUKE_DEFAULT_DURATION or 20
 	local position = (Config.Donation :: any).NUKE_WORLD_POSITION :: Vector3? or Vector3.zero

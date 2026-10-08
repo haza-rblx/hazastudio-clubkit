@@ -436,6 +436,39 @@ local function init(_deps: {}?): ()
 	local pendingUiApplies: { [number]: OverheadPayload } = {}
 	local uiApplyFlushConn: RBXScriptConnection? = nil
 
+	-- A pair re-entering proximity gets a full snapshot that is usually identical to what this
+	-- client already shows. A full apply costs ~1.3 ms (Studio, 2026-10-07), so identical network
+	-- payloads are skipped per OverheadUI object. Settings refreshes call OverheadUI:apply
+	-- directly and a new head gets a new OverheadUI, so neither is affected.
+	-- Switch: Config.Overhead.PERF_SKIP_IDENTICAL_APPLY.
+	local skipIdenticalApply = Config.Overhead.PERF_SKIP_IDENTICAL_APPLY == true
+	local function fingerprint(value: any, out: { string })
+		local kind = type(value)
+		if kind ~= "table" then
+			table.insert(out, kind)
+			table.insert(out, tostring(value))
+			return
+		end
+		local keys = {}
+		for key in pairs(value) do
+			table.insert(keys, key)
+		end
+		table.sort(keys, function(a, b)
+			return tostring(a) < tostring(b)
+		end)
+		table.insert(out, "{")
+		for _, key in ipairs(keys) do
+			table.insert(out, tostring(key))
+			fingerprint(value[key], out)
+		end
+		table.insert(out, "}")
+	end
+	local function payloadFingerprint(payload: any): string
+		local out = {}
+		fingerprint(payload, out)
+		return table.concat(out, "\0")
+	end
+
 	local function flushPendingUiApplies()
 		uiApplyFlushConn = nil
 		local skipApply = type(Config.NetworkPerf) == "table" and Config.NetworkPerf.SKIP_OVERHEAD_UI_APPLY == true
@@ -451,6 +484,14 @@ local function init(_deps: {}?): ()
 				continue
 			end
 			pendingPayloads[userId] = nil
+			if skipIdenticalApply then
+				local stamp = payloadFingerprint(payload)
+				if (ui :: any)._appliedFingerprint == stamp then
+					NetworkPerfCounters.record("overhead_ui_apply_identical")
+					continue
+				end
+				(ui :: any)._appliedFingerprint = stamp
+			end
 			NetworkPerfCounters.record("overhead_ui_apply")
 			ui:apply(payload)
 		end

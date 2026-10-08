@@ -581,10 +581,7 @@ function InventoryChromeAnimator.setupAcmWatcher(): ()
 	if pg == nil then
 		return
 	end
-	-- Watch BOTH ACM GUI variants: v1 (AvatarContextMenu) and v2 (AvatarContextMenuV2).
-	-- Watching only v1 meant the hotbar never restored when the buyer used the v2
-	-- redesign — the watcher was observing a GUI that never opened, so
-	-- notifyShow("acm") never fired after the v2 panel closed.
+	-- The ACM (AvatarContextMenu; the v2 redesign was removed 2026-10-07).
 	local function watchGui(guiName: string)
 		task.spawn(function()
 			local acmGui = pg:WaitForChild(guiName, 30)
@@ -611,7 +608,6 @@ function InventoryChromeAnimator.setupAcmWatcher(): ()
 		end)
 	end
 	watchGui("AvatarContextMenu")
-	watchGui("AvatarContextMenuV2")
 end
 
 function InventoryChromeAnimator.setupDesktopIdle(): ()

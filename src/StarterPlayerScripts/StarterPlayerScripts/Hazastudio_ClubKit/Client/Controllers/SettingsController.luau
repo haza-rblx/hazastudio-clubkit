@@ -19,6 +19,8 @@ local DeltaCompressor = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Util
 local GraphicsQuality = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.GraphicsQuality)
 local NetworkCoalesce = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.NetworkCoalesce)
 local NotifService = require(script.Parent.Parent.Services.NotifService)
+local AccentService = require(script.Parent.Parent.Services.AccentService)
+local AccentDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.AccentDomain)
 local WorldGraphicsService = require(script.Parent.Parent.Services.WorldGraphicsService)
 local OverheadController = require(script.Parent.OverheadController)
 local PhoneLayout = require(script.Parent.Parent.Utils.PhoneLayout)
@@ -576,6 +578,7 @@ local function createSettingsController(deps: {
 			hideDonatorHighlight = payload.hideDonatorHighlight,
 			hideSystemAnnounce = payload.hideSystemAnnounce,
 			graphicsOverrides = table.clone(payload.graphicsOverrides or {}),
+			accent = (payload :: any).accent,
 			_version = payload._version,
 			overheadVisible = payload.overheadVisible,
 			hideAllGui = (payload :: any).hideAllGui == true,
@@ -1619,6 +1622,7 @@ local function applyPostProcessingSetting(instance: Instance, mode: GraphicsQual
 		applyChatBubbleVisibility()
 		applySessionAttrs()
 		applyHideAllGui()
+		AccentService.set(AccentDomain.resolve((currentPayload :: any).accent, Config.Branding.DEFAULT_ACCENT))
 	end
 
 	-- Lighter version of applyAllEffects that skips player effects scan.
@@ -1634,6 +1638,7 @@ local function applyPostProcessingSetting(instance: Instance, mode: GraphicsQual
 		applyChatBubbleVisibility()
 		applySessionAttrs()
 		applyHideAllGui()
+		AccentService.set(AccentDomain.resolve((currentPayload :: any).accent, Config.Branding.DEFAULT_ACCENT))
 	end
 
 	local function fieldNeedsSaveNotif(field: string): boolean
@@ -1763,6 +1768,7 @@ local function applyPostProcessingSetting(instance: Instance, mode: GraphicsQual
 			hideDonatorHighlight = currentPayload.hideDonatorHighlight,
 			hideSystemAnnounce = currentPayload.hideSystemAnnounce,
 			graphicsOverrides = table.clone(currentPayload.graphicsOverrides or {}),
+			accent = (currentPayload :: any).accent or "",
 			_version = math.max(currentPayload._version, GraphicsQuality.STORED_VERSION),
 		}
 	end

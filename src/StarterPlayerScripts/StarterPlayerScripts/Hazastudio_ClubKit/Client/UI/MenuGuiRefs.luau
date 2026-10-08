@@ -273,10 +273,11 @@ function MenuGuiRefsModule.resolve(gui: ScreenGui): MenuGuiRefs?
 		tabSwitcher = tabSwitcher,
 		tabButtons = resolveTabButtons(tabSwitcher),
 		universalModal = universalModal,
-		modalTitle = if universalModal then asTextLabel(universalModal:FindFirstChild("Title")) else nil,
-		modalInput = if universalModal then asTextBox(universalModal:FindFirstChild("InputValue")) else nil,
-		modalCancelButton = if universalModal then asTextButton(universalModal:FindFirstChild("CancelButton")) else nil,
-		modalUpdateButton = if universalModal then asTextButton(universalModal:FindFirstChild("UpdateButton")) else nil,
+		-- Searched deep: ProfileFieldModalLook moves them into Header / Body.
+		modalTitle = if universalModal then asTextLabel(universalModal:FindFirstChild("Title", true)) else nil,
+		modalInput = if universalModal then asTextBox(universalModal:FindFirstChild("InputValue", true)) else nil,
+		modalCancelButton = if universalModal then asTextButton(universalModal:FindFirstChild("CancelButton", true)) else nil,
+		modalUpdateButton = if universalModal then asTextButton(universalModal:FindFirstChild("UpdateButton", true)) else nil,
 		avatarViewport = if playerInfo
 			then asViewport(findDescendant(playerInfo :: Instance, "ViewportFrame", "3DTargetPlayerAvatar"))
 			else nil,

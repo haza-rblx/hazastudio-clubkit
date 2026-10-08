@@ -14,7 +14,6 @@ return {
 	createOverheadService = require(Server.Services.OverheadService),
 	createGiftService = require(Server.Services.GiftService),
 	createStreakService = require(Server.Services.StreakService),
-	createDailyQuestService = require(Server.Services.DailyQuestService),
 	createLevelService = require(Server.Services.LevelService),
 	createCoupleService = require(Server.Services.CoupleService),
 	createShopService = require(Server.Services.ShopService),

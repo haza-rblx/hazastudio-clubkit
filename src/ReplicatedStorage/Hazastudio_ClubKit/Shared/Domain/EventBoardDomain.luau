@@ -16,7 +16,10 @@ local EventBoardDomain = {}
 
 EventBoardDomain.GOAL_TYPES = { level = true, streak = true, robux = true, playtime = true }
 EventBoardDomain.REWARD_TYPES = { membership = true, title = true, xp = true }
-EventBoardDomain.STRIP_DAYS = 6
+-- Post kinds (2026-10-07). A countdown runs from `startsAt` to `endsAt` (unix seconds); the API
+-- fills a missing end with start + 2 h, the kit does the same for an end it cannot use.
+EventBoardDomain.POST_KINDS = { announcement = true, countdown = true }
+EventBoardDomain.COUNTDOWN_DEFAULT_SECONDS = 2 * 3600
 
 local LIMITS = {
 	category = 32,
@@ -40,6 +43,11 @@ export type Post = {
 	imageAssetId: string,
 	showOnJoin: boolean,
 	publishedAt: string,
+	-- "announcement" | "countdown". Posts from before kinds existed read as announcements.
+	kind: string,
+	startsAt: number?, -- countdown only
+	endsAt: number?, -- countdown only, always after startsAt
+	robloxEventId: string, -- Creator Hub Experience Event id, digits; "" = none
 }
 
 export type Quest = {
@@ -67,6 +75,10 @@ export type QuestProgress = {
 	-- The quest's due day, stamped when the entry is created (production hardening P3), so the
 	-- entry can be pruned 30 days later even after the quest left the board. Additive field.
 	dueDay: number?,
+	-- Streak quests: the WIB days the player checked in, ascending, unique, at most
+	-- DailyQuestDomain.MAX_TARGET_DAYS (oldest dropped). A reset keeps earlier days. Absent on
+	-- entries from before 2026-10-07 — checkInDays reconstructs those. Additive field.
+	days: { number }?,
 }
 
 export type ProgressDoc = {
@@ -108,6 +120,21 @@ local function readPost(raw: any): Post?
 	local asset = if type(raw.imageAssetId) == "string" and string.match(raw.imageAssetId, "^%d+$") and #raw.imageAssetId <= 19
 		then raw.imageAssetId
 		else ""
+	-- A countdown without a usable start cannot count down: it falls back to an announcement
+	-- rather than vanishing from the board.
+	local kind = "announcement"
+	local startsAt: number? = nil
+	local endsAt: number? = nil
+	if raw.kind == "countdown" and positiveInt(raw.startsAt, 2 ^ 40) then
+		kind = "countdown"
+		startsAt = raw.startsAt
+		endsAt = if positiveInt(raw.endsAt, 2 ^ 40) and raw.endsAt > raw.startsAt
+			then raw.endsAt
+			else raw.startsAt + EventBoardDomain.COUNTDOWN_DEFAULT_SECONDS
+	end
+	local eventId = if type(raw.robloxEventId) == "string" and string.match(raw.robloxEventId, "^%d+$") and #raw.robloxEventId <= 32
+		then raw.robloxEventId
+		else ""
 	return {
 		id = id,
 		category = text(raw.category, LIMITS.category) or "",
@@ -116,6 +143,10 @@ local function readPost(raw: any): Post?
 		imageAssetId = asset,
 		showOnJoin = raw.showOnJoin == true,
 		publishedAt = if type(raw.publishedAt) == "string" then raw.publishedAt else "",
+		kind = kind,
+		startsAt = startsAt,
+		endsAt = endsAt,
+		robloxEventId = eventId,
 	}
 end
 
@@ -222,6 +253,10 @@ function EventBoardDomain.serializeBoard(board: Board): { [string]: any }
 			imageAssetId = post.imageAssetId,
 			showOnJoin = post.showOnJoin,
 			publishedAt = post.publishedAt,
+			kind = post.kind,
+			startsAt = post.startsAt,
+			endsAt = post.endsAt,
+			robloxEventId = post.robloxEventId,
 		}
 	end
 	local quests = table.create(#board.quests)
@@ -250,6 +285,47 @@ function EventBoardDomain.joinPost(board: Board): Post?
 	return nil
 end
 
+-- Where a post stands at `nowUnix`: announcements have no phase; a countdown is upcoming before
+-- its start, live from start until its end, ended from its end on.
+function EventBoardDomain.postPhase(post: Post, nowUnix: number): "none" | "upcoming" | "live" | "ended"
+	if post.kind ~= "countdown" or not post.startsAt or not post.endsAt then
+		return "none"
+	end
+	if nowUnix < post.startsAt then
+		return "upcoming"
+	elseif nowUnix < post.endsAt then
+		return "live"
+	end
+	return "ended"
+end
+
+-- Posts a player sees: every post except countdowns that have ended. Board order is kept.
+function EventBoardDomain.visiblePosts(board: Board, nowUnix: number): { Post }
+	local out = {}
+	for _, post in ipairs(board.posts) do
+		if EventBoardDomain.postPhase(post, nowUnix) ~= "ended" then
+			table.insert(out, post)
+		end
+	end
+	return out
+end
+
+-- The next unix second at which a post's phase changes (a countdown starting or ending), or nil
+-- when no post on the board will change again after `nowUnix`.
+function EventBoardDomain.nextPostBoundary(board: Board, nowUnix: number): number?
+	local nextAt: number? = nil
+	for _, post in ipairs(board.posts) do
+		if post.kind == "countdown" then
+			for _, at in ipairs({ post.startsAt, post.endsAt }) do
+				if at and at > nowUnix and (nextAt == nil or at < nextAt) then
+					nextAt = at
+				end
+			end
+		end
+	end
+	return nextAt
+end
+
 function EventBoardDomain.phase(quest: Quest, today: number): "upcoming" | "active" | "ended"
 	if today < quest.startDay then
 		return "upcoming"
@@ -276,6 +352,40 @@ function EventBoardDomain.emptyProgress(): ProgressDoc
 	return { quests = {}, seenPosts = {} }
 end
 
+-- Sorted, unique, bounded copy of a day list (whole positive day numbers only).
+local function boundDays(...: { number }?): { number }
+	local seen: { [number]: boolean } = {}
+	local out: { number } = {}
+	for index = 1, select("#", ...) do
+		local source = select(index, ...)
+		if type(source) == "table" then
+			for _, day in ipairs(source) do
+				if type(day) == "number" and day >= 1 and day < 2 ^ 31 and day % 1 == 0 and not seen[day] then
+					seen[day] = true
+					table.insert(out, day)
+				end
+			end
+		end
+	end
+	table.sort(out)
+	local extra = #out - DailyQuestDomain.MAX_TARGET_DAYS
+	if extra > 0 then
+		table.move(out, extra + 1, #out, 1)
+		for index = #out, #out - extra + 1, -1 do
+			out[index] = nil
+		end
+	end
+	return out
+end
+
+local function copyEntry(entry: QuestProgress): QuestProgress
+	local copy = table.clone(entry)
+	if entry.days then
+		copy.days = table.clone(entry.days)
+	end
+	return copy
+end
+
 local function readQuestProgress(raw: any): QuestProgress?
 	if type(raw) ~= "table" then
 		return nil
@@ -292,6 +402,7 @@ local function readQuestProgress(raw: any): QuestProgress?
 		completed = raw.completed == true,
 		claimedAt = claimedAt,
 		dueDay = dueDay,
+		days = if type(raw.days) == "table" then boundDays(raw.days) else nil,
 	}
 end
 
@@ -328,7 +439,7 @@ function EventBoardDomain.mergeProgress(a: ProgressDoc, b: ProgressDoc): Progres
 		for key, entry in pairs(doc.quests) do
 			local current = out.quests[key]
 			if not current then
-				out.quests[key] = table.clone(entry)
+				out.quests[key] = copyEntry(entry)
 			else
 				if entry.progress > current.progress or (entry.progress == current.progress and entry.lastDay > current.lastDay) then
 					current.progress = entry.progress
@@ -340,6 +451,9 @@ function EventBoardDomain.mergeProgress(a: ProgressDoc, b: ProgressDoc): Progres
 				end
 				if current.dueDay == nil then
 					current.dueDay = entry.dueDay
+				end
+				if current.days or entry.days then
+					current.days = boundDays(current.days, entry.days)
 				end
 			end
 		end
@@ -424,9 +538,13 @@ function EventBoardDomain.checkIn(doc: ProgressDoc, quest: Quest, today: number)
 		return false, false
 	end
 	local entry = entryFor(doc, quest)
+	-- An entry from before check-in days were stored keeps its history: seed it first.
+	local days = EventBoardDomain.checkInDays(quest, entry)
 	entry.progress = result.state.progress
 	entry.lastDay = result.state.lastDay
 	entry.completed = result.state.completed
+	table.insert(days, today)
+	entry.days = boundDays(days)
 	return true, result.completedNow
 end
 
@@ -467,23 +585,98 @@ function EventBoardDomain.markClaimed(doc: ProgressDoc, quest: Quest, now: numbe
 	entryFor(doc, quest).claimedAt = now
 end
 
--- The streak card's six squares: today and the next five days (owner, 2026-09-24). Today is
--- "done" once checked in, otherwise "today"; the rest are "upcoming"; days past the due date are
--- "closed".
-function EventBoardDomain.dayStrip(quest: Quest, doc: ProgressDoc, today: number): { string }
-	local entry = doc.quests[tostring(quest.id)]
-	local out = {}
-	for offset = 0, EventBoardDomain.STRIP_DAYS - 1 do
-		local day = today + offset
-		if day > quest.dueDay then
-			out[offset + 1] = "closed"
-		elseif offset == 0 then
-			out[offset + 1] = if entry and entry.lastDay == today then "done" else "today"
-		else
-			out[offset + 1] = "upcoming"
-		end
+-- The WIB days a player checked in on a streak quest: the stored list, or for an entry from
+-- before that list existed, the run it implies — `progress` consecutive days ending on `lastDay`,
+-- never before the quest's start day. Always a fresh list the caller may change.
+function EventBoardDomain.checkInDays(quest: Quest, entry: QuestProgress?): { number }
+	if not entry then
+		return {}
+	end
+	if entry.days then
+		return table.clone(entry.days)
+	end
+	local out: { number } = {}
+	if entry.progress <= 0 or entry.lastDay <= 0 then
+		return out
+	end
+	for day = math.max(quest.startDay, entry.lastDay - entry.progress + 1), entry.lastDay do
+		table.insert(out, day)
 	end
 	return out
+end
+
+export type CalendarCell = {
+	day: number,
+	dom: number,
+	month: number,
+	year: number,
+	state: "done" | "today" | "missed" | "upcoming",
+}
+
+export type Calendar = {
+	leadBlanks: number,
+	cells: { CalendarCell },
+	todayIndex: number?,
+	-- True when the cells do not begin at the start day / end at the due day (a long window
+	-- clipped to CALENDAR_MAX_DAYS): that edge gets no START / FINISH marker.
+	clippedStart: boolean,
+	clippedEnd: boolean,
+}
+
+-- The calendar draws at most six Su–Sa weeks; a longer window shows the six around today.
+EventBoardDomain.CALENDAR_MAX_DAYS = 42
+-- Within a clipped window, today's week is this row (0-based) when the window allows: two weeks
+-- of history above it, three ahead.
+local CALENDAR_TODAY_ROW = 2
+
+-- Day 0 (1970-01-01) was a Thursday: weekday with Sunday = 0.
+local function weekday(day: number): number
+	return (day + 4) % 7
+end
+
+-- The attendance calendar of a streak quest: one cell per day from the start day to the due day,
+-- laid out Sunday-first (`leadBlanks` empty slots before the first cell).
+-- done = checked in; today = today, not yet checked in; missed = an earlier day without a
+-- check-in; upcoming = a later day. `todayIndex` is nil when today is not among the cells.
+-- A window longer than CALENDAR_MAX_DAYS draws six whole weeks containing today, kept inside the
+-- window: before the start the first six weeks, once the window has passed the last six.
+function EventBoardDomain.calendar(quest: Quest, doc: ProgressDoc, today: number): Calendar
+	local done: { [number]: boolean } = {}
+	for _, day in ipairs(EventBoardDomain.checkInDays(quest, doc.quests[tostring(quest.id)])) do
+		done[day] = true
+	end
+	local firstDay, lastDay = quest.startDay, quest.dueDay
+	if lastDay - firstDay + 1 > EventBoardDomain.CALENDAR_MAX_DAYS then
+		local firstRow = firstDay - weekday(firstDay)
+		local lastRow = lastDay - weekday(lastDay)
+		local anchor = math.clamp(today, firstDay, lastDay)
+		local spanStart = anchor - weekday(anchor) - CALENDAR_TODAY_ROW * 7
+		-- A window over 42 days covers at least seven rows, so this range is never empty.
+		spanStart = math.clamp(spanStart, firstRow, lastRow - (EventBoardDomain.CALENDAR_MAX_DAYS - 7))
+		firstDay = math.max(firstDay, spanStart)
+		lastDay = math.min(lastDay, spanStart + EventBoardDomain.CALENDAR_MAX_DAYS - 1)
+	end
+	local cells: { CalendarCell } = table.create(lastDay - firstDay + 1)
+	local todayIndex: number? = nil
+	for day = firstDay, lastDay do
+		local year, month, dom = DailyQuestDomain.toCivil(day)
+		local state: "done" | "today" | "missed" | "upcoming" = if done[day]
+			then "done"
+			elseif day == today then "today"
+			elseif day < today then "missed"
+			else "upcoming"
+		table.insert(cells, { day = day, dom = dom, month = month, year = year, state = state })
+		if day == today then
+			todayIndex = #cells
+		end
+	end
+	return {
+		leadBlanks = weekday(firstDay),
+		cells = cells,
+		todayIndex = todayIndex,
+		clippedStart = firstDay > quest.startDay,
+		clippedEnd = lastDay < quest.dueDay,
+	}
 end
 
 -- Seconds until the next WIB midnight, for the check-in countdown.
@@ -520,7 +713,7 @@ function EventBoardDomain.pruneProgress(
 			keep = nowUnix - entry.claimedAt <= cfg.keepDays * 86400
 		end
 		if keep then
-			out.quests[key] = table.clone(entry)
+			out.quests[key] = copyEntry(entry)
 		end
 	end
 	local onBoard: { [string]: boolean } = {}

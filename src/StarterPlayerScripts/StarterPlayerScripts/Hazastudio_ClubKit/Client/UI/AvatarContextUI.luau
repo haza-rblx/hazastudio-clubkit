@@ -3,15 +3,17 @@
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local GuiService = game:GetService("GuiService")
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local MotionPresets = require(script.Parent.Parent.Utils.MotionPresets)
 local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
-local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local AvatarViewport3D = require(script.Parent.Parent.Utils.AvatarViewport3D)
 local AvatarPrewarmShared = require(script.Parent.Parent.Utils.AvatarPrewarmShared)
+local ScrollAffordance = require(script.Parent.ScrollAffordance)
 
 type AvatarContextPayload = Types.AvatarContextPayload
 type ILogger = Types.ILogger
@@ -51,14 +53,6 @@ local function likedButtonText(): string
 end
 local LIKE_BUTTON_ACTIVE_COLOR = Color3.fromRGB(255, 82, 112)
 local LIKE_BUTTON_ACTIVE_TRANSPARENCY = 0.05
-
--- Backdrop (camera zoom-in + background blur) while the panel is open.
--- Matches TopMenu/Settings/Music panels via AnimationHelper.presentBackdropEffects.
-local BACKDROP_OPTIONS = {
-	enableBlur = true,
-	blurName = Config.AvatarContext.BACKDROP_BLUR_NAME,
-	enableZoom = true,
-}
 
 local function formatCompactCount(value: number?): string
 	local count = math.max(0, math.floor(value or 0))
@@ -194,6 +188,7 @@ local function createDisabledAvatarContextUI(): any
 	function ui:setSendFriendRequestCallback(_callback: (number) -> ()) end
 	function ui:setSendGiftCallback(_callback: (number) -> ()) end
 	function ui:setCarryCallback(_callback: (number) -> ()) end
+	function ui:setProposeCoupleCallback(_callback: (number) -> (), _isAvailable: (any) -> boolean) end
 	function ui:setBeforeOpenCallback(_callback: () -> number) end
 	function ui:setAfterOpenCallback(_callback: (() -> ())?) end
 	function ui:setSyncState(_isSyncing: boolean, _targetUserId: number?) end
@@ -217,34 +212,25 @@ end
 
 local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 	local log = deps.logger
-	-- Pick the GUI by buyer toggle: Features.AvatarContextMenuV2 (v2 = redesign,
-	-- static ProfilePicture + backdrop; v1 = legacy 3D ViewportFrame avatar).
-	local isV2 = Config.FeatureFlags.AvatarContextMenuV2Enabled == true
-	local selectedGuiName = if isV2 then "AvatarContextMenuV2" else "AvatarContextMenu"
-	local otherGuiName = if isV2 then "AvatarContextMenu" else "AvatarContextMenuV2"
+	-- One design: AvatarContextMenu (3D avatar). The v2 redesign (AvatarContextMenuV2, static
+	-- picture + backdrop) was removed 2026-10-07; a place that still has that GUI keeps it disabled.
+	local selectedGuiName = "AvatarContextMenu"
+	local otherGuiName = "AvatarContextMenuV2"
 
 	-- Wait for GUI
 	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
 	local gui = playerGui:WaitForChild(selectedGuiName, 10)
 	if not gui then
-		-- Fall back to whichever ACM GUI exists so the panel still works if the
-		-- buyer only kept one variant in their place.
-		local fallback = playerGui:FindFirstChild(otherGuiName)
-		if fallback then
-			gui = fallback
-			isV2 = fallback.Name == "AvatarContextMenuV2"
-			log:warn("Selected ACM GUI missing; falling back", { wanted = selectedGuiName, using = fallback.Name })
-		else
-			warn("[AvatarContextUI] no AvatarContextMenu GUI found in PlayerGui — panel disabled")
-			return createDisabledAvatarContextUI()
-		end
+		warn("[AvatarContextUI] no AvatarContextMenu GUI found in PlayerGui — panel disabled")
+		return createDisabledAvatarContextUI()
 	end
-	-- Disable the other variant so both never render at once.
+	-- A leftover v2 GUI is never used; drop the client copy.
 	local otherGui = playerGui:FindFirstChild(otherGuiName)
 	if otherGui and otherGui:IsA("ScreenGui") and otherGui ~= gui then
-		otherGui.Enabled = false
+		otherGui:Destroy()
 	end
-	local mainWrapper = gui:WaitForChild("MainWrapper") :: GuiObject
+	-- 2026-10-07 polish: the outer CanvasGroup becomes a Frame (it only clipped the shadow).
+	local mainWrapper = require(script.Parent.AvatarContextLook).prepareWrapper(gui:WaitForChild("MainWrapper") :: GuiObject)
 	local mainWrapperIsCanvasGroup = mainWrapper:IsA("CanvasGroup")
 
 	-- Draggable frame (for close button)
@@ -256,19 +242,17 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 	local loadingScreen = contentWrapper:WaitForChild("LoadingScreen") :: Frame
 	local loadingText = loadingScreen:WaitForChild("LoadingText") :: TextLabel
 	local mainContent = contentWrapper:WaitForChild("MainContent") :: ScrollingFrame
+	-- The card looks finished at Connections/Likes while bio and actions sit below: scrollbar
+	-- flash, bottom fade + chevron and a gentle nudge on reveal (ScrollAffordance).
+	mainContent.ScrollBarThickness = 0
+	mainContent.ScrollBarImageTransparency = 1
+	local scrollAffordance = ScrollAffordance.attach(mainContent, contentWrapper, "AvatarContextMenu")
 
 	-- Player Information Section
 	local playerInformation = mainContent:WaitForChild("PlayerInformation") :: Frame
 	local illustrationSection =
 		ensureFrame(playerInformation, { "IllustrationSection", "Illustrator" }, "IllustrationSection")
-	-- Avatar area differs per design: v1 = 3D ViewportFrame avatar, v2 = static ProfilePicture.
-	local profilePicture: ImageLabel? = nil
-	local avatar3D: ViewportFrame? = nil
-	if isV2 then
-		profilePicture = ensureImageLabel(illustrationSection, { "ProfilePicture" }, "ProfilePicture")
-	else
-		avatar3D = ensureViewportFrame(illustrationSection, { "3DTargetPlayerAvatar" }, "3DTargetPlayerAvatar")
-	end
+	local avatar3D: ViewportFrame? = ensureViewportFrame(illustrationSection, { "3DTargetPlayerAvatar" }, "3DTargetPlayerAvatar")
 	local communityCover = ensureImageLabel(illustrationSection, { "CommunityCoverorImage" }, "CommunityCoverorImage")
 	local statusPopUp = ensureFrame(illustrationSection, { "StatusPopUp" }, "StatusPopUp")
 	local statusPopUpLabel = ensureTextLabel(statusPopUp, { "TextLabel" }, "TextLabel")
@@ -328,6 +312,23 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 	end
 	local sendFriendRequestButton = mainContent:WaitForChild("SendFriendRequest") :: TextButton
 	local sendGiftButton = mainContent:WaitForChild("SendGiftButton") :: TextButton
+	-- 2026-10-07 polish (AvatarContextLook): black surfaces, no outlines, stats strip, grouped
+	-- actions + Propose Couple. Holds the propose callback/availability/connection as well, so this
+	-- function does not grow more locals.
+	local look = require(script.Parent.AvatarContextLook).decorate({
+		contentWrapper = contentWrapper,
+		mainContent = mainContent,
+		draggableIcon = draggableIcon,
+		loadingScreen = loadingScreen,
+		socialProofSection = socialProofSection,
+		connectionCard = connectionCard,
+		followersCard = followersCard,
+		buttonsGroup = buttonsGroup,
+		syncDanceButton = syncDanceButton,
+		sendGiftButton = sendGiftButton,
+		sendFriendRequestButton = sendFriendRequestButton,
+		investigateAvatarButton = investigateAvatarButton,
+	}) :: any
 	local actionSeparators = {} :: { { gui: GuiObject, visible: boolean } }
 	for _, descendant in ipairs(mainContent:GetDescendants()) do
 		if descendant:IsA("GuiObject") and string.find(string.lower(descendant.Name), "separator", 1, true) then
@@ -409,12 +410,11 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 	local likeButtonCallback: ((number) -> ())? = nil
 	local syncDanceCallback: ((number) -> ())? = nil
 	local visibilityToken = 0
-	local avatarThumbnailToken = 0
-	-- v1 3D avatar state (unused in v2)
+	-- 3D avatar state
 	local currentViewport: any = nil
 	local renderedAvatarUserId: number? = nil
 	local modelReadyUnsub: (() -> ())? = nil
-	local avatarPool = if not isV2 then AvatarPrewarmShared.getPool() else nil
+	local avatarPool = AvatarPrewarmShared.getPool()
 	local _syncDanceEnabled = false
 	local viewerIsSyncing = false
 	local viewerSyncTargetUserId: number? = nil
@@ -442,9 +442,33 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 	local panelAnimationToken = 0
 	local panelTween: Tween? = nil
 	local panelScaleTween: Tween? = nil
-	local panelRestingPosition = mainWrapper.Position
-	local anim = AnimationHelper.new()
-	local backdropActive = false
+	local designRestingPosition = mainWrapper.Position
+	-- Recomputed per open: next to the cursor on mouse devices, the designed spot on touch.
+	local panelRestingPosition = designRestingPosition
+	local CURSOR_GAP = 16
+	local SCREEN_MARGIN = 12
+	local function restingPositionForOpen(): UDim2
+		if UserInputService.TouchEnabled and not UserInputService.MouseEnabled then
+			return designRestingPosition
+		end
+		local screenGui = gui :: any
+		local screen: Vector2 = screenGui.AbsoluteSize
+		local size = mainWrapper.AbsoluteSize
+		if screen.X <= 0 or size.X <= 0 then
+			return designRestingPosition
+		end
+		local inset = if screenGui.IgnoreGuiInset then Vector2.zero else GuiService:GetGuiInset()
+		local mouse = UserInputService:GetMouseLocation() - (screenGui.AbsolutePosition :: Vector2) - inset
+		-- Right of the cursor, a bit above it; flip left when it would leave the screen.
+		local x = mouse.X + CURSOR_GAP
+		if x + size.X > screen.X - SCREEN_MARGIN then
+			x = mouse.X - CURSOR_GAP - size.X
+		end
+		x = math.max(SCREEN_MARGIN, x)
+		local y = math.clamp(mouse.Y - size.Y * 0.35, SCREEN_MARGIN, math.max(SCREEN_MARGIN, screen.Y - size.Y - SCREEN_MARGIN))
+		local anchor = mainWrapper.AnchorPoint
+		return UDim2.fromOffset(math.floor(x + anchor.X * size.X + 0.5), math.floor(y + anchor.Y * size.Y + 0.5))
+	end
 	likeButton.Text = ""
 	likeButton.TextTransparency = 1
 
@@ -478,6 +502,7 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 		panelAnimationToken += 1
 		local token = panelAnimationToken
 		cancelPanelTweens()
+		panelRestingPosition = restingPositionForOpen()
 
 		local center = MotionPresets.centerOpen()
 		local panel = MotionPresets.panelOpen()
@@ -489,13 +514,6 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 		mainWrapperScale.Scale = center.startScale
 		mainWrapper.Position = offsetPosition(panelRestingPosition, panel.yOffset)
 		mainWrapper.Visible = true
-
-		-- Camera zoom-in + background blur while the panel is open (v2 only —
-		-- legacy v1 keeps the classic flat backdrop).
-		if isV2 and not backdropActive then
-			backdropActive = true
-			anim:presentBackdropEffects(BACKDROP_OPTIONS)
-		end
 
 		local positionTween = TweenService:Create(mainWrapper, openInfo, {
 			Position = panelRestingPosition,
@@ -536,12 +554,6 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 		local targetPosition = offsetPosition(panelRestingPosition, panelClose.yOffset)
 		mainWrapper.Visible = true
 
-		-- Restore camera zoom + remove background blur as the panel closes (v2 only).
-		if isV2 and backdropActive then
-			backdropActive = false
-			anim:dismissBackdropEffects(BACKDROP_OPTIONS)
-		end
-
 		local positionTween = TweenService:Create(mainWrapper, closeInfo, {
 			Position = targetPosition,
 		})
@@ -578,12 +590,6 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 		currentStatusText = nil
 		likeCountValue = nil
 		likeButtonIsLiked = false
-		-- Backdrop flag must match the visual reset so a later close does not
-		-- double-dismiss (or leave the camera zoomed) after a re-load cycle.
-		if backdropActive then
-			backdropActive = false
-			anim:dismissBackdropEffects(BACKDROP_OPTIONS)
-		end
 		displayNameLabel.Text = "Loading..."
 		usernameLabel.Text = "@loading"
 		bioContent.Text = ""
@@ -594,23 +600,16 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 		statusPopUpLabel.Text = ""
 		communityCover.Visible = false
 		communityCover.Image = ""
-		if isV2 then
-			if profilePicture then
-				profilePicture.Image = ""
-				profilePicture.Visible = false
-			end
-		else
-			if modelReadyUnsub then
-				modelReadyUnsub()
-				modelReadyUnsub = nil
-			end
-			if currentViewport then
-				currentViewport:cleanup()
-			end
-			renderedAvatarUserId = nil
-			if avatar3D then
-				avatar3D.Visible = false
-			end
+		if modelReadyUnsub then
+			modelReadyUnsub()
+			modelReadyUnsub = nil
+		end
+		if currentViewport then
+			currentViewport:cleanup()
+		end
+		renderedAvatarUserId = nil
+		if avatar3D then
+			avatar3D.Visible = false
 		end
 
 		ownerBadge.Visible = false
@@ -793,6 +792,7 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 			investigateAvatarButton,
 			sendFriendRequestButton,
 			sendGiftButton,
+			look.proposeButton,
 		}
 		for _, button in ipairs(buttons) do
 			if not button then
@@ -963,6 +963,7 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 
 			-- Show main content immediately
 			mainContent.Visible = true
+			scrollAffordance.reveal()
 
 			-- Slide loading screen up and hide with spring-like animation. Position is safe to
 			-- tween here: LoadingScreen is a full-bleed overlay inside 02-MainContentWrapper, not a
@@ -1018,64 +1019,13 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 
 		-- Set social proof
 		ui:_setSocialProof(payload.likesCount, payload.connectionsCount)
+		look.setStats(payload.userId)
 
 		-- Set action buttons
 		ui:_setActionButtons(payload)
 	end
 
-	-- v2: static ProfilePicture thumbnail via GetUserThumbnailAsync.
-	local function showAvatarThumbnail(userId: number)
-		-- Use Players:GetUserThumbnailAsync rather than a hand-built rbxthumb://
-		-- URL: the literal rbxthumb://type=AvatarThumbnail/AvatarBust does NOT
-		-- resolve in an ImageLabel (IsLoaded stays false -> blank). Token guards
-		-- a stale async result overwriting a newer request.
-		avatarThumbnailToken += 1
-		local token = avatarThumbnailToken
-
-		-- Only 0 means "no target"; Studio multiplayer test players use negative
-		-- userIds (-1, -2, ...), which GetUserThumbnailAsync resolves fine.
-		if userId == 0 then
-			if profilePicture then
-				profilePicture.Image = ""
-				profilePicture.Visible = false
-			end
-			return
-		end
-
-		-- Instant placeholder while the real thumbnail resolves.
-		if profilePicture then
-			profilePicture.Image = ""
-			profilePicture.Visible = true
-		end
-
-		task.spawn(function()
-			local ok, content = pcall(function()
-				return Players:GetUserThumbnailAsync(
-					userId,
-					Enum.ThumbnailType.AvatarThumbnail,
-					Enum.ThumbnailSize.Size420x420
-				)
-			end)
-
-			-- Stale request (user opened a different profile meanwhile)?
-			if token ~= avatarThumbnailToken then
-				return
-			end
-			if not profilePicture then
-				return
-			end
-			if not ok or type(content) ~= "string" or content == "" then
-				profilePicture.Image = ""
-				profilePicture.Visible = false
-				return
-			end
-
-			profilePicture.Image = content
-			profilePicture.Visible = true
-		end)
-	end
-
-	-- v1: 3D rotating avatar in the ViewportFrame via AvatarViewport3D + prewarm pool.
+	-- 3D rotating avatar in the ViewportFrame via AvatarViewport3D + prewarm pool.
 	local function showAvatar3D(userId: number)
 		if not avatar3D then
 			return
@@ -1140,11 +1090,7 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 	end
 
 	function ui:showAvatar(userId: number)
-		if isV2 then
-			showAvatarThumbnail(userId)
-		else
-			showAvatar3D(userId)
-		end
+		showAvatar3D(userId)
 	end
 
 	function ui:_setBadges(visibleBadges: { string })
@@ -1250,16 +1196,21 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 	end
 
 	function ui:_setCommunity(communityId: number?, communityName: string?, communityLogoUrl: string?)
-		-- Community cover background is disabled by design (kept hidden even when a
-		-- community logo exists) — only the small community badge/logo is shown.
-		communityCover.Visible = false
-		if communityId and communityLogoUrl then
+		-- The community's logo also fills the illustration behind the avatar (owner 2026-10-06,
+		-- reversing the v2.0.0 "cover disabled by design"); the GUI's cover transparency and the
+		-- gradient overlay above it keep it in the background. No community (or an empty logo
+		-- URL, which is truthy in Luau) → no cover.
+		if communityId and communityLogoUrl and communityLogoUrl ~= "" then
 			communityBadge.Visible = true
 			if communityLogo then
 				communityLogo.Image = communityLogoUrl
 			end
+			communityCover.Image = communityLogoUrl
+			communityCover.Visible = true
 		else
 			communityBadge.Visible = false
+			communityCover.Image = ""
+			communityCover.Visible = false
 		end
 	end
 
@@ -1479,6 +1430,32 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 				end
 			end)
 		end
+
+		-- Propose Couple: hidden when either player already has a partner (Main.client decides).
+		local proposeButton = look.proposeButton
+		if proposeButton then
+			if look.proposeConnection then
+				look.proposeConnection:Disconnect()
+				look.proposeConnection = nil
+			end
+			local canPropose = look.proposeCallback ~= nil
+				and look.proposeAvailable ~= nil
+				and look.proposeAvailable(payload) == true
+			proposeButton.Visible = canPropose
+			if canPropose then
+				look.proposeConnection = proposeButton.Activated:Connect(function()
+					if currentTargetUserId then
+						UIMotion.pop(iconOf(proposeButton), 1.3)
+						look.proposeCallback(currentTargetUserId)
+					end
+				end)
+			end
+		end
+	end
+
+	function ui:setProposeCoupleCallback(callback: (number) -> (), isAvailable: (AvatarContextPayload) -> boolean)
+		look.proposeCallback = callback
+		look.proposeAvailable = isAvailable
 	end
 
 	function ui:setSyncDanceCallback(callback: (number) -> ())

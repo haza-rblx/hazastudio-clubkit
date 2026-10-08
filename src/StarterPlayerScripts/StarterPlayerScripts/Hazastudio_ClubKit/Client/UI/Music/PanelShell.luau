@@ -80,7 +80,11 @@ function PanelShell.new(deps: { refs: Refs, store: any, config: any })
 	end
 	local viewDeps = { refs = deps.refs, store = deps.store, config = deps.config, fire = fire }
 	self._nowPlaying = NowPlayingView.new(viewDeps)
-	self._vote = VoteModalView.new(viewDeps)
+	-- The vote-skip prompt is a notification island unless the buyer switched it off.
+	local island = (require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config) :: any).NotificationIsland
+	self._vote = if type(island) == "table" and island.VOTE_ENABLED ~= false
+		then require(script.Parent.VoteIslandView).new(viewDeps)
+		else VoteModalView.new(viewDeps)
 	self._library = LibraryView.new(viewDeps)
 	self._dj = DjView.new(viewDeps)
 	return self
@@ -102,6 +106,9 @@ end
 
 function PanelShell:_fire(key: string, ...: any): any
 	local callback = self._callbacks[key]
+	if key == "OnVoteSkip" and self._vote.noteLocalVote then
+		self._vote:noteLocalVote(...)
+	end
 	if callback then
 		return callback(...)
 	end
@@ -141,6 +148,9 @@ function PanelShell:_applyTab(tab: string)
 		UIMotion.slideIn((refs.tabFrames :: any)[tab], if nextIndex > previousIndex then 1 else -1)
 	end
 	self._shownTab = tab
+	if tab == "dj" then
+		self._dj:ensureEffectsBuilt()
+	end
 	for _, key in ipairs(TAB_KEYS) do
 		local selected = key == tab
 		local frame = (refs.tabFrames :: any)[key]
@@ -318,8 +328,8 @@ function PanelShell:openOrUpdateVoteModal(data: any)
 	self._nowPlaying:setVoteCounts(tonumber(data.skipVotes) or 0, tonumber(data.totalVotes) or 0)
 end
 
-function PanelShell:closeVoteModal(immediate: boolean?)
-	self._vote:close(immediate)
+function PanelShell:closeVoteModal(immediate: boolean?, data: any?)
+	self._vote:close(immediate, data)
 	self._nowPlaying:setVoteCounts(nil, nil)
 end
 

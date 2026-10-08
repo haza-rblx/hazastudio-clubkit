@@ -13,6 +13,39 @@ Folder ini menyimpan **snapshot source** dari file engine yang dipatch **langsun
 
 ## Log perubahan place (terbaru dulu)
 
+### 2026-10-06 — Port Free Title event + self custom title dari PARKLAB, trigger Topbar
+
+Konteks: owner buka PARKLAB + ATAS LANGIT berdampingan, minta fitur addon **Free Title event + ganti title sendiri** diporting dari PARKLAB ke ATAS LANGIT, "samain dulu" dengan PARKLAB. Di tengah jalan owner minta pintunya bisa dipilih (topbar vs overlay) → jadi fitur engine `FreeTitleEvent.Trigger` (lihat `CHANGELOG [Unreleased]` + `UPGRADE_PROGRESS` baris 2026-10-06).
+
+Kondisi awal: engine ATAS LANGIT (KitVersion 2.12.0) sudah punya semua modulnya (`FreeTitleEventUI`, `CustomTitleUI`, `TitleEventDomain` hash identik PARKLAB) — yang kurang cuma GUI + config. `Main.client` ATAS LANGIT lebih tua dari PARKLAB/repo (tidak punya menu titik-tiga HP).
+
+Perubahan di place:
+
+1. **GUI diimpor dari PARKLAB** (robloxstudio `export_rbxm` di PARKLAB → `import_rbxm` di ATAS LANGIT; dua Studio terbuka bersamaan):
+   - `StarterGui.1000-01-CT-ADDON` (panel Custom Title, 156 instance, tanpa script)
+   - `StarterGui.IconGroup.ADDON-FreeTitleEventTrigger` (kartu overlay, 18 instance, tanpa script)
+   - Diverifikasi: hash nama/kelas/posisi/ukuran/teks/gambar **identik** dengan PARKLAB.
+2. **Buyer config** `ClubKitConfig` (aditif, key lain tidak disentuh):
+   - `Features.SelfCustomTitle = true` (baris pertama di `Features`)
+   - Section baru `ClubKitConfig.CustomTitle = { MinLevel = 50, MaxChangesPerWindow = 5, WindowDays = 7, QuotaEnabled = false, FreeFirstTitle = true }`
+   - Section baru `ClubKitConfig.FreeTitleEvent = { Mode = "Any", RequiredLevel = 50, MinDonationRobux = 1000, MinDonationCash = 100000, Trigger = "Topbar", TopbarIcon = "" }`
+   - Nilai = PARKLAB, plus `Trigger = "Topbar"` (PARKLAB pakai ikon topbar).
+3. **6 script engine di-patch minimal** — hunk persis sama dengan repo working tree 2026-10-06 (bukan full sync; engine place masih di belakang repo):
+   - `Shared/Domain/TitleEventDomain` — `normalizeTrigger` / `showsOverlay` / `showsTopbar`
+   - `Shared/Constants/Config` — `FreeTitleEvent.TRIGGER`, `TOPBAR_ICON`, `TOPBAR_ORDER`, `OPEN_WAIT_SECONDS`, `MSG_NOT_READY`
+   - `Shared/Config/ClubKitConfigSchema` — `FreeTitleEvent.Trigger`, `.TopbarIcon`
+   - `Shared/Config/ConfigBootstrap` — proyeksi `Trigger` + `TopbarIcon`
+   - `Client/UI/MenuShellUI` — kartu di-gate `showsOverlay`; `openCustomTitlePanelWhenReady` (tunggu payload profil, toast kalau tidak datang); stub di `createDisabledUI`
+   - `Main` (client) — ikon topbar dibuat di task `SettingsController.init` kalau `showsTopbar`
+
+Verifikasi (solo playtest): Overlay (sebelum patch engine) → kartu muncul, klik membuka panel; Topbar → ikon ada, kartu tersembunyi, `select()` membuka panel; klik di detik 3,3 (payload belum ada) → panel terbuka sendiri +4,3 dtk; Both → kartu + ikon. Tombol **Update Title tidak ditekan** (menulis DataStore live, memakai jatah title gratis akun owner).
+
+⚠️ Belum / hutang:
+- **Ctrl+S + Publish** — Studio ATAS LANGIT tertutup setelah sesi; kalau belum di-save sebelum ditutup, **semua perubahan di atas hilang** dan harus di-apply ulang (GUI dari PARKLAB + hunk dari repo).
+- **Ikon topbar** `rbxassetid://115281405771061` (sama dengan gambar kartu) memunculkan "experience doesn't have access permission" di ATAS LANGIT → share izin aset ke place ini atau upload ikon sendiri dan isi `FreeTitleEvent.TopbarIcon`.
+- Snapshot file belum ditarik (Studio sudah tertutup) — konten patch engine = repo; config = daftar di atas.
+- Update Engine nanti aman: semua hunk engine sudah ada di repo, dan `Trigger`/`TopbarIcon` ada di buyer config.
+
 ### 2026-10-04 — AvatarGuard OFF + Logger verbose OFF (session "oversize accessories")
 
 Konteks: owner investigasi laporan "player dengan avatar gede kehilangan aksesoris 3D" + notifikasi Discord "detected oversize". Pelaku: **AvatarGuard** (`Server/Init/RuntimeGuard.luau`, ADR 0008 Layer 2c) — trim server-side aksesoris > 10 studs / karakter > 14×10 studs. Terbukti live: inject aksesoris 25-stud → destroyed < 2 s, log `Avatar trimmed | reason=oversized`.
@@ -35,7 +68,9 @@ Verifikasi (solo playtest, place tidak berubah): `Config.AvatarGuard.ENABLED=fal
 
 | File (path di place) | File snapshot | Apa yang diubah | Kenapa | Cara revert |
 |---|---|---|---|---|
-| `ReplicatedStorage.Hazastudio_ClubKitConfig.ClubKitConfig` (buyer config — bukan engine) | *(pending pull)* | Section `AvatarGuard` baru: `Enabled = false` (+ limits default), ditanam di atas `return ClubKitConfig`. | Avatar besar = dress code venue; trim AvatarGuard menghapus aksesoris sah. | Hapus section `AvatarGuard`, atau set `Enabled = true` untuk jalan tengah (mis. `MaxAccessoryStuds = 30`). |
+| `ReplicatedStorage.Hazastudio_ClubKitConfig.ClubKitConfig` (buyer config — bukan engine) | *(pending pull)* | Section `AvatarGuard` baru: `Enabled = false` (+ limits default), ditanam di atas `return ClubKitConfig`. **2026-10-06:** + `Features.SelfCustomTitle = true`, section `CustomTitle` + `FreeTitleEvent` (Trigger `"Topbar"`). | Avatar besar = dress code venue. Free Title event disamakan dengan PARKLAB. | AvatarGuard: hapus section / `Enabled = true`. Free Title: `FreeTitleEvent.Mode = "Disabled"` (mati) atau `Trigger = "Overlay"` (balik ke kartu). |
+| Engine Free Title (`TitleEventDomain`, `Config`, `ClubKitConfigSchema`, `ConfigBootstrap`, `MenuShellUI`, `Main` client) — 2026-10-06 | *(konten = repo 2026-10-06)* | Hunk Trigger Overlay/Topbar/Both + tunggu payload. | Fitur engine baru, dipasang lebih dulu di place ini. | Update Engine dari repo (hunk sudah di repo, tidak ada yang hilang). |
+| `StarterGui.1000-01-CT-ADDON`, `StarterGui.IconGroup.ADDON-FreeTitleEventTrigger` (GUI place data) — 2026-10-06 | — (salinan PARKLAB) | Diimpor dari PARKLAB via rbxm. | Addon Custom Title + kartu event. | Hapus kedua instance (dan set `Features.SelfCustomTitle = false`). |
 | `ReplicatedStorage.Hazastudio_ClubKit.Shared.Config.ClubKitConfigSchema` | *(pending pull)* | Patch minimal (blok `AvatarGuard` defaults saja; konten = repo). Place engine ±60–120 baris di belakang repo — jangan dianggap snapshot versi repo. | Dukung section buyer baru agar `Enabled=false` terbaca runtime. | Update Engine normal akan menimpa dengan versi repo penuh (aman — fitur sudah di repo). |
 | `ReplicatedStorage.Hazastudio_ClubKit.Shared.Config.ConfigBootstrap` | *(pending pull)* | Patch minimal (blok proyeksi `AvatarGuard` saja; konten = repo). Sama seperti di atas — versi place lebih tua dari repo. | Proyeksi buyer → engine `Config.AvatarGuard`. | Update Engine normal akan menimpa dengan versi repo penuh (aman — fitur sudah di repo). |
 

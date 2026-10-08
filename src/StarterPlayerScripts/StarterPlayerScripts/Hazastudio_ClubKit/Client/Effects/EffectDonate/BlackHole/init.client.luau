@@ -143,7 +143,7 @@ local function createBlackHoleEffect(donatorName, recipientName, donationAmount)
 	local ok, err = pcall(function()
 	-- Clone effect model
 	effectModel = ReplicatedStorage.WorldEffects.BlackHole:Clone()
-	SoundAssetSanitizer.removeBlockedSounds(effectModel)
+	SoundAssetSanitizer.sanitizeClone(effectModel)
 
 	-- Clone objects before destroying the Objects folder
 	local npcModel = effectModel.Objects.NPC:Clone()

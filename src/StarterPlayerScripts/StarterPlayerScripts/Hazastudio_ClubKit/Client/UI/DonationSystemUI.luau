@@ -541,10 +541,15 @@ function DonationSystemUI.new(refs: Refs): DonationSystemUI
 		-- init state above — by then self._avatarPool already set. Defer
 		-- showAvatar call to end of resumption cycle so self prewarm queue
 		-- runs first, improving pool hit on second open.
+		-- Client footprint: with LAZY_PANEL_ROWS the 3D model (~400 instances) loads on the
+		-- first show() instead, so a player who never opens the panel never holds it.
 		local localUserId = Players.LocalPlayer.UserId
-		task.defer(function()
-			self:_showDonationAvatar(localUserId)
-		end)
+		if require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config).ClientFootprint.LAZY_PANEL_ROWS ~= true then
+			self._donationAvatarRequested = true
+			task.defer(function()
+				self:_showDonationAvatar(localUserId)
+			end)
+		end
 	end
 
 	refs.robuxTabButton.Activated:Connect(function()
@@ -1385,6 +1390,10 @@ function DonationSystemUI:show()
 		enableZoom = true
 	})
 	DonationSystemGuiRefs.refreshStatLabelRefs(self._refs)
+	if self._refs.avatarViewport and not self._donationAvatarRequested then
+		self._donationAvatarRequested = true
+		self:_showDonationAvatar(Players.LocalPlayer.UserId)
+	end
 	self:_playEntrance()
 	if self._profileRefreshHandler then
 		self:refreshDonorProfile(self._profileRefreshHandler)

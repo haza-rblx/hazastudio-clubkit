@@ -37,7 +37,6 @@ local SCALE_MAP: { [string]: number } = {
 	[Config.CommandLibrary.GUI_NAME] = ms.COMMAND_GUI,
 	[Config.Admin.GUI_NAME_V3] = ms.ADMIN_PANEL_V3_GUI,
 	[Config.CustomTitle.GUI_NAME] = ms.CUSTOM_TITLE_GUI,
-	[Config.DailyQuest.GUI_NAME] = ms.DAILY_QUEST_GUI,
 	["AvatarContextMenu"] = ms.ACM_GUI,
 }
 
@@ -364,6 +363,10 @@ local function processPlayerGuiChild(child: Instance): ()
 	end
 	if child.Name == Config.Backpack.GUI_NAME then
 		applyBackpackLayout(child)
+	end
+	-- Desktop ACM: 0.8 so its 5px gaps land on whole screen pixels (4px). Phones keep ACM_GUI.
+	if child.Name == "AvatarContextMenu" and not isMobile() and type(ms.ACM_GUI_DESKTOP) == "number" then
+		getOrCreateRootScale(child).Scale = ms.ACM_GUI_DESKTOP
 	end
 	if isMobile() then
 		applyToGui(child)

@@ -11,6 +11,10 @@ local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local GraphicsQuality = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.GraphicsQuality)
 local OverheadLayerPolicy = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.OverheadLayerPolicy)
 local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
+local AccentService = require(script.Parent.Parent.Services.AccentService)
+local AccentSurfaceTint = require(script.Parent.Parent.Services.AccentSurfaceTint)
+local SegmentedSliderBar = require(script.Parent.SegmentedSliderBar)
+local AccentDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.AccentDomain)
 
 type SettingsPayload = Types.SettingsPayload
 
@@ -57,7 +61,9 @@ type InputDef = {
 	disabled: boolean?,
 }
 type InfoDef = { kind: "info", label: string }
-type SettingDef = SliderDef | SegmentedDef | ToggleDef | InputDef | InfoDef
+-- Accent picker (macOS-style dots); the ring follows AccentService, not a payload binding.
+type AccentDef = { kind: "accent", field: string, label: string }
+type SettingDef = SliderDef | SegmentedDef | ToggleDef | InputDef | InfoDef | AccentDef
 type SettingsSectionDef = { key: string, title: string, subtitle: string, items: { SettingDef } }
 type ChangeCallback = (field: string, value: any) -> ()
 
@@ -69,13 +75,17 @@ export type FieldBinding = {
 	setValue: (any) -> (),
 }
 
-local SECTION_LIST_GAP = 8
+-- 18px between a card and the next section title (owner 2026-10-07). Sections carry no vertical
+-- padding of their own: their height is measured from the content (bindHeightToLayout), so the gap
+-- is exactly SECTION_LIST_GAP.
+local SECTION_LIST_GAP = 18
 local SECTION_TITLE_CONTENT_GAP = 14
-local SECTION_VERTICAL_PADDING = 14
+local SECTION_VERTICAL_PADDING = 0
 local SECTION_IDENTITY_TITLE_TEXT_SIZE = 18
 local SECTION_IDENTITY_SUBTITLE_TEXT_SIZE = 14
 local SECTION_IDENTITY_LIST_PADDING = 6
-local SECTION_CONTENT_ROW_GAP = 1
+-- Grouped rows: 2px gaps, the card's colour moves onto the rows (GroupedRowCornerUtil).
+local SECTION_CONTENT_ROW_GAP = 2
 local SECTION_CONTENT_PADDING_TOP = 4
 local SETTINGS_ROW_LABEL_TEXT_SIZE = 14
 local SECTION_IDENTITY_TITLE_NAMES = { "SectionTitle" }
@@ -89,7 +99,8 @@ local SLIDER_ROW_HEIGHT = 88
 local SLIDER_ROW_PADDING_X = 14
 local SLIDER_ROW_PADDING_Y = 12
 local SLIDER_INNER_GAP = 10
-local ADJUST_WRAPPER_CORNER_RADIUS = UDim.new(1, 0)
+-- Segmented slider box (SegmentedSliderBar): 6px inset + 2px segment corners.
+local ADJUST_WRAPPER_CORNER_RADIUS = UDim.new(0, 8)
 local TOGGLE_ROW_HEIGHT = 38
 local _SEGMENTED_ROW_HEIGHT = 104
 local PROFILE_INPUT_ROW_HEIGHT = 116
@@ -208,6 +219,14 @@ local function colorTuneFormat(v: number): string
 end
 
 local SECTION_DEFS: { SettingsSectionDef } = {
+	{
+		key = "appearance",
+		title = "Appearance",
+		subtitle = "Colour theme for the whole interface.",
+		items = {
+			{ kind = "accent", field = "accent", label = "Theme" },
+		},
+	},
 	{
 		key = "graphics",
 		title = "Graphic",
@@ -1106,6 +1125,60 @@ local function bindRowMotion(button: GuiButton)
 	end)
 end
 
+-- Accent (CONTEXT.md "Accent theme"): the "on" look of toggles and selected segments. Graphite is
+-- the design's own white/black, so a player who never picks an accent sees exactly today's menu.
+local TOGGLE_ON_TRACK = Color3.fromRGB(223, 223, 223)
+local TOGGLE_ON_KNOB = Color3.fromRGB(0, 0, 0)
+local SEGMENT_ON_FILL = Color3.fromRGB(255, 255, 255)
+local SEGMENT_ON_TEXT = Color3.fromRGB(0, 0, 0)
+local GRAPHITE_DOT = Color3.fromRGB(152, 152, 157)
+
+local function accentPair(designFill: Color3, designOn: Color3): (Color3, Color3)
+	if AccentService.isDesign() then
+		return designFill, designOn
+	end
+	local accent = AccentService.get()
+	return accent.fill, accent.onFill
+end
+
+-- Everything painted with the accent, so a new pick repaints in place (rows keep their state
+-- attributes; their own setters return early when the state is unchanged). Strong table, cleared
+-- on Destroying — weak Instance keys are not a lifetime mechanism here.
+local accentPainted: { [GuiObject]: (GuiObject) -> () } = {}
+
+local function trackAccent(target: GuiObject, repaint: (GuiObject) -> ())
+	if accentPainted[target] == nil then
+		target.Destroying:Once(function()
+			accentPainted[target] = nil
+		end)
+	end
+	accentPainted[target] = repaint
+end
+
+AccentService.subscribe(function()
+	for target, repaint in pairs(accentPainted) do
+		repaint(target)
+	end
+end)
+
+local function paintToggleColors(row: GuiObject, enabled: boolean, time: number)
+	local toggle = row:FindFirstChild("Toggle")
+	local shell = if toggle then toggle:FindFirstChildWhichIsA("Frame") else nil
+	if not shell then
+		return
+	end
+	local onTrack, onKnob = accentPair(TOGGLE_ON_TRACK, TOGGLE_ON_KNOB)
+	UIMotion.tween(shell, time, {
+		BackgroundColor3 = if enabled then onTrack else Color3.fromRGB(62, 62, 62),
+	})
+	local inner = shell:FindFirstChildWhichIsA("Frame")
+	if inner then
+		UIMotion.tween(inner, time, {
+			BackgroundColor3 = if enabled then onKnob else Color3.fromRGB(255, 255, 255),
+		})
+	end
+end
+
 local function setToggleVisual(row: TextButton, enabled: boolean)
 	local toggle = row:FindFirstChild("Toggle")
 	if not toggle or not toggle:IsA("Frame") then
@@ -1118,17 +1191,15 @@ local function setToggleVisual(row: TextButton, enabled: boolean)
 		return
 	end
 	row:SetAttribute("MenuToggleOn", enabled)
+	trackAccent(row, function(target)
+		paintToggleColors(target, target:GetAttribute("MenuToggleOn") == true, 0.18)
+	end)
 	local animate = previous ~= nil
 	local shell = toggle:FindFirstChildWhichIsA("Frame")
 	if shell then
-		UIMotion.tween(shell, if animate then 0.18 else 0, {
-			BackgroundColor3 = enabled and Color3.fromRGB(223, 223, 223) or Color3.fromRGB(62, 62, 62),
-		})
+		paintToggleColors(row, enabled, if animate then 0.18 else 0)
 		local inner = shell:FindFirstChildWhichIsA("Frame")
 		if inner then
-			UIMotion.tween(inner, if animate then 0.18 else 0, {
-				BackgroundColor3 = enabled and Color3.fromRGB(0, 0, 0) or Color3.fromRGB(255, 255, 255),
-			})
 			local target = enabled and UDim2.new(1, 0, 0, 0) or UDim2.new(0, 0, 0, 0)
 			local travel = inner.AbsoluteSize.X
 			inner.AnchorPoint = Vector2.new(if enabled then 1 else 0, 0)
@@ -1284,6 +1355,11 @@ local function createSliderRow(
 	applySliderRowSpacing(row)
 	setSettingIcon(row, resolveSettingIcon(item))
 	applyAdjustWrapperLayout(row:FindFirstChild("AdjustWrapper"), templateRowHeight)
+	local adjustWrapper = row:FindFirstChild("AdjustWrapper")
+	local adjustFill = adjustWrapper and adjustWrapper:FindFirstChild("AdjustableFrameWidth")
+	if adjustWrapper and adjustWrapper:IsA("GuiObject") and adjustFill and adjustFill:IsA("GuiObject") then
+		SegmentedSliderBar.attach(adjustWrapper, adjustFill)
+	end
 
 	local currentValue = snapSliderValue(value, item.min, item.max, item.step or 1)
 	local labelFrame = row:FindFirstChild("SliderLabel")
@@ -1549,7 +1625,6 @@ end
 
 local function setSegmentedButtonVisual(button: TextButton, label: string, selected: boolean, iconImage: string?)
 	button.Text = ""
-	button.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 	-- The highlight fades between options instead of snapping; the first paint (previous ==
 	-- nil) and a repaint that changes nothing both land at once.
 	local previous = button:GetAttribute("MenuSegmentedOn")
@@ -1557,10 +1632,171 @@ local function setSegmentedButtonVisual(button: TextButton, label: string, selec
 	UIMotion.tween(button, if previous == nil or previous == selected then 0 else 0.18, {
 		BackgroundTransparency = if selected then 0 else 0.95,
 	})
-	local color = if selected then Color3.fromRGB(0, 0, 0) else Color3.fromRGB(255, 255, 255)
 	setSettingIcon(button, iconImage)
-	setTextAndIconColor(button, color)
 	setTextLabelText(button, label)
+	local function paint(target: GuiObject)
+		local on = target:GetAttribute("MenuSegmentedOn") == true
+		local fill, onText = accentPair(SEGMENT_ON_FILL, SEGMENT_ON_TEXT)
+		-- Unselected keeps the design's faint white wash (white at 0.95), never a tinted one.
+		target.BackgroundColor3 = if on then fill else SEGMENT_ON_FILL
+		setTextAndIconColor(target, if on then onText else Color3.fromRGB(255, 255, 255))
+	end
+	paint(button)
+	trackAccent(button, paint)
+end
+
+-- Settings → Appearance → Accent color: label on top, one dot per accent under it (macOS). The
+-- ring marks the accent in use (AccentService), so it also shows the venue default before the
+-- player has picked anything.
+-- Lines of seven 30px dots (big enough to hit on a phone); the last line is padded with blank
+-- cells so every line spreads the same and the columns line up. The pick is marked macOS-style
+-- with a small white dot in the middle.
+local ACCENT_DOT_SIZE = 30
+local ACCENT_DOTS_PER_LINE = 7
+local ACCENT_MARK_SIZE = 10
+local ACCENT_LINE_GAP = 12
+local ACCENT_ROW_HEIGHT = 122
+-- Same inset as the slider/segmented rows so the title and dots line up with them.
+local ACCENT_ROW_INSET = 12
+
+local function createAccentRow(
+	template: TextButton,
+	parent: Instance,
+	item: any,
+	layoutOrder: number,
+	onChange: (string) -> ()
+)
+	local row = template:Clone()
+	row.Name = item.field
+	row.LayoutOrder = layoutOrder
+	row.Visible = true
+	row.AutoButtonColor = false
+	row.Active = false
+	row.AutomaticSize = Enum.AutomaticSize.None
+	row.Size = UDim2.new(1, 0, 0, ACCENT_ROW_HEIGHT)
+	local toggle = row:FindFirstChild("Toggle")
+	if toggle then
+		toggle:Destroy()
+	end
+	local layout = row:FindFirstChildWhichIsA("UIListLayout")
+	if layout then
+		layout.FillDirection = Enum.FillDirection.Vertical
+		layout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+		layout.VerticalAlignment = Enum.VerticalAlignment.Center
+		layout.SortOrder = Enum.SortOrder.LayoutOrder
+		layout.Padding = UDim.new(0, 10)
+	end
+	local rowPadding = row:FindFirstChildWhichIsA("UIPadding")
+	if rowPadding then
+		rowPadding.PaddingLeft = UDim.new(0, ACCENT_ROW_INSET)
+		rowPadding.PaddingRight = UDim.new(0, ACCENT_ROW_INSET)
+	end
+	local title = row:FindFirstChildWhichIsA("TextLabel")
+	if title then
+		title.Size = UDim2.new(1, 0, 0, 14)
+		title.LayoutOrder = 1
+	end
+	setTextLabelText(row, item.label)
+	row.Parent = parent
+
+	local dots = Instance.new("Frame")
+	dots.Name = "AccentSwatches"
+	-- The dots are the palette itself; the surface tint must not touch them (Graphite's dot is grey).
+	dots:SetAttribute(AccentSurfaceTint.NO_TINT_ATTRIBUTE, true)
+	dots.BackgroundTransparency = 1
+	dots.LayoutOrder = 2
+	local lineCount = math.ceil(#AccentDomain.ORDER / ACCENT_DOTS_PER_LINE)
+	dots.Size = UDim2.new(1, 0, 0, lineCount * (ACCENT_DOT_SIZE + 4) + (lineCount - 1) * ACCENT_LINE_GAP)
+	local linesLayout = Instance.new("UIListLayout")
+	linesLayout.FillDirection = Enum.FillDirection.Vertical
+	linesLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	linesLayout.Padding = UDim.new(0, ACCENT_LINE_GAP)
+	linesLayout.Parent = dots
+	local lines: { Frame } = {}
+	for lineIndex = 1, lineCount do
+		local line = Instance.new("Frame")
+		line.Name = "Line" .. lineIndex
+		line.BackgroundTransparency = 1
+		line.LayoutOrder = lineIndex
+		line.Size = UDim2.new(1, 0, 0, ACCENT_DOT_SIZE + 4)
+		local lineLayout = Instance.new("UIListLayout")
+		lineLayout.FillDirection = Enum.FillDirection.Horizontal
+		lineLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+		lineLayout.SortOrder = Enum.SortOrder.LayoutOrder
+		lineLayout.HorizontalFlex = Enum.UIFlexAlignment.SpaceBetween
+		lineLayout.Parent = line
+		line.Parent = dots
+		lines[lineIndex] = line
+	end
+	for slot = #AccentDomain.ORDER + 1, lineCount * ACCENT_DOTS_PER_LINE do
+		local blank = Instance.new("Frame")
+		blank.Name = "Blank"
+		blank.BackgroundTransparency = 1
+		blank.LayoutOrder = slot
+		blank.Size = UDim2.fromOffset(ACCENT_DOT_SIZE, ACCENT_DOT_SIZE)
+		blank.Parent = lines[lineCount]
+	end
+
+	local marks: { [string]: Frame } = {}
+	for index, id in ipairs(AccentDomain.ORDER) do
+		local dot = Instance.new("TextButton")
+		dot.Name = id
+		dot.Text = ""
+		dot.AutoButtonColor = false
+		dot.LayoutOrder = index
+		dot.Size = UDim2.fromOffset(ACCENT_DOT_SIZE, ACCENT_DOT_SIZE)
+		dot.BackgroundColor3 = if id == "graphite"
+			then GRAPHITE_DOT
+			else Color3.fromHex(AccentDomain.swatch(id).fill)
+		if id == AccentDomain.DEFAULT then
+			-- Multicolor: the macOS colour wheel (linear here — UIGradient has no conic mode).
+			local wheel = Instance.new("UIGradient")
+			wheel.Rotation = -45
+			wheel.Color = ColorSequence.new({
+				ColorSequenceKeypoint.new(0, Color3.fromHex("FF375F")),
+				ColorSequenceKeypoint.new(0.17, Color3.fromHex("FF453A")),
+				ColorSequenceKeypoint.new(0.33, Color3.fromHex("FF9F0A")),
+				ColorSequenceKeypoint.new(0.5, Color3.fromHex("FFD60A")),
+				ColorSequenceKeypoint.new(0.67, Color3.fromHex("30D158")),
+				ColorSequenceKeypoint.new(0.83, Color3.fromHex("0A84FF")),
+				ColorSequenceKeypoint.new(1, Color3.fromHex("BF5AF2")),
+			})
+			wheel.Parent = dot
+		end
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(1, 0)
+		corner.Parent = dot
+		local mark = Instance.new("Frame")
+		mark.Name = "SelectedMark"
+		mark.AnchorPoint = Vector2.new(0.5, 0.5)
+		mark.Position = UDim2.fromScale(0.5, 0.5)
+		mark.Size = UDim2.fromOffset(ACCENT_MARK_SIZE, ACCENT_MARK_SIZE)
+		mark.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+		mark.BorderSizePixel = 0
+		local markCorner = Instance.new("UICorner")
+		markCorner.CornerRadius = UDim.new(1, 0)
+		markCorner.Parent = mark
+		mark.Parent = dot
+		marks[id] = mark
+		dot.Parent = lines[math.ceil(index / ACCENT_DOTS_PER_LINE)]
+		dot.Activated:Connect(function()
+			UIMotion.pop(dot)
+			onChange(id)
+		end)
+	end
+	dots.Parent = row
+
+	local function paintMarks()
+		local current = AccentService.get().id
+		for id, mark in pairs(marks) do
+			mark.Visible = id == current
+		end
+	end
+	paintMarks()
+	trackAccent(dots, function()
+		paintMarks()
+	end)
+	return row
 end
 
 local function createSegmentedRow(
@@ -1834,6 +2070,14 @@ local function createSection(
 				fieldRegistry
 			)
 			nextLayoutOrder += 1
+		elseif item.kind == "accent" then
+			local accentTemplate = templateToggleDisabled or templateToggle or templateToggleEnabled
+			if accentTemplate then
+				createAccentRow(accentTemplate, parentTarget, item, nextLayoutOrder, function(id)
+					onChange(item.field, id)
+				end)
+				nextLayoutOrder += 1
+			end
 		end
 	end
 

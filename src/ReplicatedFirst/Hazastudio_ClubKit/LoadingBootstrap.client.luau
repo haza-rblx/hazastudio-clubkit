@@ -103,9 +103,47 @@ local LoadingScreenUI = require(loadingScreenModule)
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
+local cinematicView = nil
+if LoadingConfig.STYLE == "cinematic" then
+	local viewModule = uiFolder:FindFirstChild("CinematicLoadingView")
+	if viewModule and viewModule:IsA("ModuleScript") then
+		local ok, result = pcall(function()
+			return require(viewModule).create()
+		end)
+		if ok and result then
+			cinematicView = result
+		elseif ok then
+			warn("[LoadingBootstrap] CinematicLoadingView: no 00-LoadingScreen template, using classic")
+		else
+			warn("[LoadingBootstrap] CinematicLoadingView failed, using classic: " .. tostring(result))
+		end
+	end
+end
+
 -- Clone template Studio sekarang so loading screen muncul before client bootstrap lain jalan.
 local runtimeRoot = playerGui:FindFirstChild("00-LoadingScreen")
-if not (runtimeRoot and runtimeRoot:IsA("ScreenGui")) then
+if cinematicView then
+	-- The view cloned the template; the original must not be auto-copied into PlayerGui on spawn.
+	if runtimeRoot then
+		runtimeRoot:Destroy()
+	end
+	local ownRoot = cinematicView.root
+	task.spawn(function()
+		local template = StarterGui:WaitForChild("00-LoadingScreen", LoadingConfig.TEMPLATE_WAIT_TIMEOUT)
+		if template then
+			pcall(function()
+				template.Parent = nil
+			end)
+		end
+	end)
+	playerGui.ChildAdded:Connect(function(child)
+		if child.Name == "00-LoadingScreen" and child ~= ownRoot then
+			child:Destroy()
+		end
+	end)
+	runtimeRoot = ownRoot
+	ownRoot.Parent = playerGui
+elseif not (runtimeRoot and runtimeRoot:IsA("ScreenGui")) then
 	local template = StarterGui:WaitForChild("00-LoadingScreen", LoadingConfig.TEMPLATE_WAIT_TIMEOUT)
 	if template and template:IsA("ScreenGui") then
 		runtimeRoot = template:Clone()
@@ -127,6 +165,7 @@ end
 local ui = LoadingScreenUI.attach(runtimeRoot :: ScreenGui, {
 	-- Keep the cinematic visible long enough for the intro shot.
 	minimumDuration = LoadingConfig.MINIMUM_DURATION,
+	view = cinematicView,
 })
 if not ui or not ui:isAvailable() then
 	if ui then

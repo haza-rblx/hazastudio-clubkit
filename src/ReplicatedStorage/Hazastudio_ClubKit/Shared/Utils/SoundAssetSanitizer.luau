@@ -48,8 +48,52 @@ function SoundAssetSanitizer.safeStop(sound: Instance?)
 	end)
 end
 
+-- Donation effect templates keep their audio unloaded (2026-10-07): a Sound with a SoundId holds
+-- its decoded audio in memory wherever it sits, so the four WorldEffects templates cost every
+-- client ~40 MB for effects that play a few times a session (measured: Sounds tag -40.4 MB).
+-- The id moves to this attribute on the template and comes back on each clone.
+SoundAssetSanitizer.DEFERRED_ATTRIBUTE = "DeferredSoundId"
+
+function SoundAssetSanitizer.deferSound(sound: Sound)
+	if sound.SoundId ~= "" then
+		sound:SetAttribute(SoundAssetSanitizer.DEFERRED_ATTRIBUTE, sound.SoundId)
+		sound.SoundId = ""
+	end
+end
+
+function SoundAssetSanitizer.deferSounds(root: Instance): number
+	local deferred = 0
+	for _, descendant in ipairs(root:GetDescendants()) do
+		if descendant:IsA("Sound") and descendant.SoundId ~= "" then
+			SoundAssetSanitizer.deferSound(descendant)
+			deferred += 1
+		end
+	end
+	return deferred
+end
+
+-- Call on every effect clone before it plays: drops blocked sounds, puts deferred ids back and
+-- starts loading them. Not awaited, so the effect timeline is unchanged; a sound played before its
+-- audio arrives starts when it loads (0.48 s for BlackHole's 26 sounds from the disk cache).
 function SoundAssetSanitizer.sanitizeClone(root: Instance)
 	SoundAssetSanitizer.removeBlockedSounds(root)
+	local restored: { Instance } = {}
+	for _, descendant in ipairs(root:GetDescendants()) do
+		if descendant:IsA("Sound") then
+			local id = descendant:GetAttribute(SoundAssetSanitizer.DEFERRED_ATTRIBUTE)
+			if type(id) == "string" and id ~= "" then
+				descendant.SoundId = id
+				table.insert(restored, descendant)
+			end
+		end
+	end
+	if #restored > 0 then
+		task.spawn(function()
+			pcall(function()
+				game:GetService("ContentProvider"):PreloadAsync(restored)
+			end)
+		end)
+	end
 end
 
 function SoundAssetSanitizer.removeBlockedSounds(root: Instance): number

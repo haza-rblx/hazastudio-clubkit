@@ -1745,7 +1745,22 @@ local function init(_deps: {}?)
 		end, function()
 			rebuildMovementRows(true)
 		end)
-		rebuildMovementRows()
+		-- Client footprint: ~250 instances of rows wait until the movement panel first shows
+		-- (target picks and filters rebuild it themselves once it is in use).
+		if Config.ClientFootprint.LAZY_PANEL_ROWS == true and not movementPanel.Visible then
+			local firstShow: RBXScriptConnection? = nil
+			firstShow = movementPanel:GetPropertyChangedSignal("Visible"):Connect(function()
+				if movementPanel.Visible and firstShow then
+					firstShow:Disconnect()
+					firstShow = nil
+					if lastMovementRowCount < 0 then
+						rebuildMovementRows()
+					end
+				end
+			end)
+		else
+			rebuildMovementRows()
+		end
 	elseif movementContent then
 		log:warn("Movement state templates incomplete in MainContent")
 	else

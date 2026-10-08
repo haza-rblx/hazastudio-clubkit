@@ -4,6 +4,7 @@ local Lighting = game:GetService("Lighting")
 local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local StarterGui = game:GetService("StarterGui")
 local UserInputService = game:GetService("UserInputService")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
@@ -17,6 +18,8 @@ local PhoneLayout = require(script.Parent.Parent.Utils.PhoneLayout)
 local TopMenuGuiRefs = require(script.Parent.Parent.UI.TopMenuGuiRefs)
 local OverheadController = require(script.Parent.OverheadController)
 local NotifService = require(script.Parent.Parent.Services.NotifService)
+local AccentService = require(script.Parent.Parent.Services.AccentService)
+local AccentSurfaceTint = require(script.Parent.Parent.Services.AccentSurfaceTint)
 local EventBoardController = require(script.Parent.EventBoardController)
 
 local TopMenuController = {}
@@ -38,6 +41,16 @@ type InitDeps = {
 	settingsUI: any,
 	-- When false, hide CinematicDockButton on desktop + phone top menus.
 	isCinematicVisible: (() -> boolean)?,
+	-- The MusicTopbarIcon wrapper, read at click/open time (it is created after this init is queued).
+	getMusicIcon: (() -> any)?,
+}
+
+-- A topbar icon whose row the menu carries (see adoptTopbarTrigger).
+type AdoptedTrigger = {
+	icon: any,
+	allowed: boolean,
+	routed: boolean,
+	realSetEnabled: (any, boolean) -> any,
 }
 
 local MENU_HIDDEN_MARGIN = 24
@@ -50,6 +63,8 @@ local menuIconRef: any = nil
 local iconsRef: IconsMap? = nil
 local settingsUIRef: any = nil
 local isCinematicVisibleFn: (() -> boolean)? = nil
+local getMusicIconFn: (() -> any)? = nil
+local adoptedTriggers: { [string]: AdoptedTrigger } = {}
 local refs: TopMenuGuiRefs.Refs? = nil
 local animHelper: AnimationHelper.AnimationHelper? = nil
 local desktopRestingPosition: UDim2? = nil
@@ -327,12 +342,73 @@ local function applyLayoutVisibility()
 		local ok, result = pcall(isCinematicVisibleFn)
 		cinematicVisible = ok and result == true
 	end
+	local musicIcon = if getMusicIconFn then getMusicIconFn() else nil
+	local musicVisible = musicIcon ~= nil and type(musicIcon.isShown) == "function" and musicIcon:isShown()
 	for _, buttonMap in ipairs({ refs.desktopButtons, refs.phoneButtons }) do
 		local cinematicButton = buttonMap[BUTTONS.CINEMATIC_DOCK]
 		if cinematicButton then
 			cinematicButton.Visible = cinematicVisible
 		end
+		local musicButton = buttonMap[BUTTONS.MUSIC_PLAYER]
+		if musicButton then
+			musicButton.Visible = musicVisible
+		end
+		for buttonName, trigger in pairs(adoptedTriggers) do
+			local button = buttonMap[buttonName]
+			if button then
+				button.Visible = trigger.allowed
+			end
+		end
 	end
+end
+
+local function applyAdoptedTrigger(trigger: AdoptedTrigger)
+	pcall(trigger.realSetEnabled, trigger.icon, trigger.allowed and not trigger.routed)
+end
+
+-- First guess from the StarterGui template so the icon does not flash on the strip during boot;
+-- init() settles it from the menus actually resolved in PlayerGui.
+local function templateHasRowInBothMenus(buttonName: string): boolean
+	local cfg = Config.TopbarMenu
+	local root = StarterGui:FindFirstChild(cfg.GUI_NAME)
+	if not root then
+		return false
+	end
+	for _, frameName in ipairs({ cfg.DESKTOP_FRAME_NAME, cfg.PHONE_FRAME_NAME }) do
+		local frame = root:FindFirstChild(frameName)
+		local row = if frame then frame:FindFirstChild(buttonName, true) else nil
+		if not (row and row:IsA("TextButton")) then
+			return false
+		end
+	end
+	return true
+end
+
+-- Moves a topbar icon into the menu row `buttonName` when both menus (desktop + phone) carry that
+-- row; a GUI without it keeps the icon on the strip exactly as before. The feature controllers keep
+-- calling icon:setEnabled(allowed) — that now decides the row's visibility, and the icon stays off
+-- the strip. The row opens it with icon:select(), which TopbarPlus honours on a disabled icon.
+function TopMenuController.adoptTopbarTrigger(icon: any, buttonName: string)
+	if not icon or type(icon.setEnabled) ~= "function" or adoptedTriggers[buttonName] then
+		return
+	end
+	local trigger: AdoptedTrigger = {
+		icon = icon,
+		allowed = icon.isEnabled ~= false,
+		routed = templateHasRowInBothMenus(buttonName),
+		realSetEnabled = icon.setEnabled,
+	}
+	adoptedTriggers[buttonName] = trigger
+	icon.setEnabled = function(self: any, enabled: boolean)
+		local allowed = enabled == true
+		if trigger.allowed ~= allowed then
+			trigger.allowed = allowed
+			applyLayoutVisibility()
+		end
+		applyAdoptedTrigger(trigger)
+		return self
+	end
+	applyAdoptedTrigger(trigger)
 end
 
 local function setMenuFrameHiddenState(frame: GuiObject, shownPosition: UDim2)
@@ -727,11 +803,117 @@ end
 
 -- Section rows are UIListLayout children, so the row button itself cannot scale without resizing
 -- what the layout reserves and shoving its siblings; UIMotion.canScale refuses it and scales the
--- row's icon in place instead (hover up, press down, inside a fixed-size slot), which is the whole
--- feel of a row. No background tint on top of that: the rows paint white, so a white film fading
--- in under the pointer reads as a rendering glitch rather than as feedback.
+-- row's icon in place instead (hover up, press down, inside a fixed-size slot). The dark card rows
+-- also lift their fill a touch toward grey on hover (UIMotion.bindHoverTint); a row with a
+-- transparent fill (the phone menu) keeps the icon lift only.
 -- `action` is nil for a row that has nothing to open (the Community row with no invite
 -- configured): it still gets the same feel as its neighbours, just no click handler.
+-- Accent theme: a picked accent tints the hover lift toward it; Graphite keeps the grey lift.
+local function accentHoverLift(rest: Color3): Color3?
+	if AccentService.isDesign() then
+		return nil
+	end
+	return rest:Lerp(AccentService.get().fill, 0.22)
+end
+
+-- Accent theme: the plain icon discs (white at high transparency, desktop menu) turn into a solid
+-- disc of the accent — one hue in three shades, like the phone menu's gradient discs — with the
+-- glyph in the accent's on-fill colour (white; black on yellow). Multicolor gives each disc the
+-- colourful gradient its phone-menu twin has; Graphite keeps the design. Discs that already have
+-- their own UIGradient (phone menu) are left to AccentSurfaceTint.
+local ICON_DISC_GRADIENT_NAME = "AccentDiscGradient"
+local ICON_DISC_GRADIENT_ROTATION = 106
+type IconDiscDesign = { color: Color3, transparency: number, gradient: UIGradient, twin: UIGradient? }
+local iconDiscDesigns: { [GuiObject]: IconDiscDesign } = {}
+local iconGlyphDesigns: { [ImageLabel]: Color3 } = {}
+
+-- The deep end keeps the hue (more saturated, a little darker) instead of mixing in black, which
+-- turned yellow olive and every other accent muddy.
+local function accentDiscSequence(fill: Color3): ColorSequence
+	local hue, saturation, value = fill:ToHSV()
+	return ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromHSV(hue, math.min(saturation * 1.1, 1), value * 0.85)),
+		ColorSequenceKeypoint.new(0.5, fill),
+		ColorSequenceKeypoint.new(1, fill:Lerp(Color3.new(1, 1, 1), 0.25)),
+	})
+end
+
+local function paintIconDiscs()
+	local accent = AccentService.get()
+	local design = AccentService.isDesign()
+	local multicolor = AccentService.isMulticolor()
+	local sequence = if design then nil else accentDiscSequence(accent.fill)
+	local glyphColor = if design then nil else accent.onFill
+	for disc, saved in pairs(iconDiscDesigns) do
+		local twin = saved.twin
+		-- The twin may already be recoloured; its design value rides on the attribute.
+		local twinDesign = if multicolor and twin
+			then (twin:GetAttribute("AccentDesignColor") :: any) or twin.Color
+			else nil
+		local discSequence = twinDesign or sequence
+		saved.gradient.Enabled = discSequence ~= nil
+		if discSequence then
+			saved.gradient.Color = discSequence
+		end
+		disc.BackgroundColor3 = if discSequence then Color3.new(1, 1, 1) else saved.color
+		disc.BackgroundTransparency = if discSequence then 0 else saved.transparency
+		for _, glyph in ipairs(disc:GetChildren()) do
+			local glyphDesign = if glyph:IsA("ImageLabel") then iconGlyphDesigns[glyph] else nil
+			if glyphDesign then
+				(glyph :: ImageLabel).ImageColor3 = if twinDesign then Color3.new(1, 1, 1) else glyphColor or glyphDesign
+			end
+		end
+	end
+end
+
+local function twinGradient(twins: { [string]: GuiButton }?, buttonName: string): UIGradient?
+	local twin = if twins then twins[buttonName] else nil
+	local slot = if twin then twin:FindFirstChild("UIMotionIconSlot") else nil
+	local disc = if slot then slot:FindFirstChildWhichIsA("ImageLabel") else nil
+	return if disc then disc:FindFirstChildWhichIsA("UIGradient") else nil
+end
+
+local function collectIconDiscs(rows: { GuiObject }, twins: { [string]: GuiButton }?)
+	for _, row in ipairs(rows) do
+		for _, slot in ipairs(row:GetDescendants()) do
+			if slot.Name == "UIMotionIconSlot" then
+				for _, disc in ipairs(slot:GetChildren()) do
+					if
+						disc:IsA("GuiObject")
+						and disc.BackgroundTransparency < 1
+						and not disc:FindFirstChildWhichIsA("UIGradient")
+						and iconDiscDesigns[disc] == nil
+					then
+						local gradient = Instance.new("UIGradient")
+						gradient.Name = ICON_DISC_GRADIENT_NAME
+						gradient.Rotation = ICON_DISC_GRADIENT_ROTATION
+						gradient.Enabled = false
+						gradient.Parent = disc
+						iconDiscDesigns[disc] = {
+							color = disc.BackgroundColor3,
+							transparency = disc.BackgroundTransparency,
+							gradient = gradient,
+							twin = twinGradient(twins, slot.Parent and slot.Parent.Name or ""),
+						}
+						disc.Destroying:Connect(function()
+							iconDiscDesigns[disc] = nil
+						end)
+						disc:SetAttribute(AccentSurfaceTint.NO_TINT_ATTRIBUTE, true)
+						for _, glyph in ipairs(disc:GetChildren()) do
+							if glyph:IsA("ImageLabel") and iconGlyphDesigns[glyph] == nil then
+								iconGlyphDesigns[glyph] = glyph.ImageColor3
+								glyph.Destroying:Connect(function()
+									iconGlyphDesigns[glyph] = nil
+								end)
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+end
+
 local function bindButton(button: GuiButton?, action: (() -> ())?)
 	if not button then
 		return
@@ -741,6 +923,9 @@ local function bindButton(button: GuiButton?, action: (() -> ())?)
 		trackInitConnection(connection)
 	end
 	for _, connection in ipairs(UIMotion.bindHover(row)) do
+		trackInitConnection(connection)
+	end
+	for _, connection in ipairs(UIMotion.bindHoverTint(row, accentHoverLift)) do
 		trackInitConnection(connection)
 	end
 
@@ -753,6 +938,7 @@ local function bindButton(button: GuiButton?, action: (() -> ())?)
 	local onActivated = action
 	trackInitConnection(button.Activated:Connect(function()
 		UIMotion.spin(icon :: GuiObject?, 1)
+		UIMotion.releaseHoverTint(row)
 		closeMenuThen(onActivated)
 	end))
 end
@@ -905,12 +1091,26 @@ local function wireButtons(buttonMap: TopMenuGuiRefs.ButtonMap)
 		end
 		openSettingsTab("event")
 	end)
+	bindButton(buttonMap[BUTTONS.ADMIN_PANEL], function()
+		local trigger = adoptedTriggers[BUTTONS.ADMIN_PANEL]
+		if trigger then
+			safeSelect(trigger.icon)
+		end
+	end)
+	-- Same as the topbar dropdown's "Music Player" item (toggles the panel).
+	bindButton(buttonMap[BUTTONS.MUSIC_PLAYER], function()
+		local musicIcon = if getMusicIconFn then getMusicIconFn() else nil
+		if musicIcon and type(musicIcon.openPlayer) == "function" then
+			musicIcon:openPlayer()
+		end
+	end)
 end
 
 function TopMenuController.init(deps: InitDeps)
 	menuIconRef = deps.menuIcon
 	iconsRef = deps.icons
 	isCinematicVisibleFn = deps.isCinematicVisible
+	getMusicIconFn = deps.getMusicIcon
 	if deps.settingsUI ~= nil then
 		settingsUIRef = deps.settingsUI
 	end
@@ -936,6 +1136,11 @@ function TopMenuController.init(deps: InitDeps)
 	end
 	if not resolved then
 		log:warn("Failed to resolve TopMenu GUI", { error = lastError })
+		-- No menu to open them from: adopted icons go back on the strip.
+		for _, trigger in pairs(adoptedTriggers) do
+			trigger.routed = false
+			applyAdoptedTrigger(trigger)
+		end
 		return
 	end
 	refs = resolved
@@ -951,6 +1156,10 @@ function TopMenuController.init(deps: InitDeps)
 
 	refs.desktopMenu.Visible = false
 	refs.phoneMenu.Visible = false
+	for buttonName, trigger in pairs(adoptedTriggers) do
+		trigger.routed = refs.desktopButtons[buttonName] ~= nil and refs.phoneButtons[buttonName] ~= nil
+		applyAdoptedTrigger(trigger)
+	end
 	applyLayoutVisibility()
 
 	wireButtons(refs.desktopButtons)
@@ -970,6 +1179,11 @@ function TopMenuController.init(deps: InitDeps)
 	end
 	applyDiscordInvite(refs.desktopMenu)
 	applyDiscordInvite(refs.phoneMenu)
+	collectIconDiscs(refs.desktopRows, refs.phoneButtons :: any)
+	collectIconDiscs(refs.phoneRows, nil)
+	paintIconDiscs()
+	trackInitUnsub(AccentService.subscribe(paintIconDiscs))
+	AccentSurfaceTint.attach(refs.root)
 
 	local menuIcon = deps.menuIcon
 	if menuIcon.selected and type(menuIcon.selected.Connect) == "function" then

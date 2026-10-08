@@ -148,14 +148,12 @@ function StreakUI:_spawnParticles(colorSet: { Color3 })
 	end
 end
 -- API utama
--- `handoff` (Daily Quest addon): called with the flame as the overlay leaves, after a shorter
--- hold, so a copy can fly on to the quest panel while the original vanishes in place.
 function StreakUI:play(payload: {
 	streakDays   : number,
 	didReset     : boolean,
 	didIncrement : boolean,
 	isMilestone  : boolean,
-}, handoff: ((image: ImageLabel) -> ())?)
+})
 	local days      = payload.streakDays
 	local isMile    = payload.isMilestone
 	local didReset  = payload.didReset
@@ -170,7 +168,6 @@ function StreakUI:play(payload: {
 	-- token then keeps the older sequence's steps from touching this one.
 	self:_stopGlow()
 	local playToken = self._playId
-	self._img.Visible      = true -- a handoff dismiss cut short by this play hid it
 	self._img.ImageColor3  = COLOR_DESATURATED
 	self._count.Text       = "0"
 	self._gui.Enabled      = true
@@ -220,30 +217,20 @@ function StreakUI:play(payload: {
 			self:_spawnParticles(PARTICLE_COLORS[colorKey])
 			-- 5. Milestone shake
 			if isMile then self:_shake() end
-			-- 6. Auto-dismiss after SHOW_DURATION (shorter when the flame flies on)
-			local hold = if handoff then Config.DailyQuest.FLIGHT_HOLD else Config.Streak.SHOW_DURATION
-			task.delay(hold, function()
+			-- 6. Auto-dismiss after SHOW_DURATION
+			task.delay(Config.Streak.SHOW_DURATION, function()
 				if self._playId ~= playToken then return end
-				self:dismiss(handoff)
+				self:dismiss()
 			end)
 		end)
 	end)
 end
-function StreakUI:dismiss(handoff: ((image: ImageLabel) -> ())?)
+function StreakUI:dismiss()
 	local playId = self._playId
 	-- Nothing may keep breathing behind a disabled ScreenGui.
 	self:_stopGlow()
 	UIShadowHelper.setTransparency(self._img, Config.UIShadow.STREAK_GLOW.Transparency)
-	if handoff then
-		-- The copy takes over from the flame's exact spot and size; the original is simply gone.
-		local ok, err = pcall(handoff, self._img)
-		if not ok then
-			warn("[StreakUI] handoff failed:", err)
-		end
-		self._img.Visible = false
-	else
-		self._anim:scaleOut(self._img :: Frame, nil)
-	end
+	self._anim:scaleOut(self._img :: Frame, nil)
 	UIMotion.tween(
 		self._overlay,
 		0.3,
@@ -260,7 +247,6 @@ function StreakUI:dismiss(handoff: ((image: ImageLabel) -> ())?)
 		end
 		self._gui.Enabled = false
 		self._overlay.Visible = false
-		self._img.Visible = true
 		-- Reset every UIScale for berikutnya: AnimationHelper's and the one UIMotion.pop adds.
 		for _, child in ipairs(self._img:GetChildren()) do
 			if child:IsA("UIScale") then

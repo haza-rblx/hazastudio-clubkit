@@ -517,6 +517,13 @@ local function trackDeferredBootTask(name: string, fn: () -> ())
 	trackPostGameplayBootTask(name, fn)
 end
 
+-- Client footprint (2026-10-07): empty the StarterGui templates that already have their PlayerGui
+-- copy, a few seconds into gameplay so the loading views are done reading them.
+trackPostGameplayBootTask("StarterGuiTrim", function()
+	task.wait(5)
+	require(script.Parent.Client.Services.StarterGuiTrimService).run()
+end)
+
 local function hardenScreenGui(instance: Instance?)
 	if instance and instance:IsA("ScreenGui") then
 		instance.ResetOnSpawn = false
@@ -1109,6 +1116,8 @@ setCompactTopbarWidth(adminIcon, 36)
 removeTopbarInnerPadding(adminIcon)
 styleTopbarPill(adminIcon)
 enlargeTopbarIcon(adminIcon, 36, 10)
+-- Leaves the strip for the top menu's AdminPanelButton row when both menus have it.
+pcall(ClientMods.TopMenuController.adoptTopbarTrigger, adminIcon, Config.TopbarMenu.BUTTONS.ADMIN_PANEL)
 local commandLibraryIcon = Icon.new()
 commandLibraryIcon:setImage(Config.Icons.Topbar.Command)
 commandLibraryIcon:setLabel(Config.CommandLibrary.TOPBAR_LABEL)
@@ -1187,6 +1196,9 @@ if not attachOk then
 	studioWarn("[Main] TopMenuController hidden menu triggers failed:", attachErr)
 end
 
+-- Declared before TopMenuController.init's closure (it reads this for the MusicPlayerButton row).
+local musicTopbarIcon: any = nil
+
 local function roleCanUseCinematicDock(): boolean
 	local player = Players.LocalPlayer
 	local role = OverheadController.getPlayerRole(player.UserId)
@@ -1207,11 +1219,13 @@ task.defer(function()
 		},
 		settingsUI = nil,
 		isCinematicVisible = roleCanUseCinematicDock,
+		getMusicIcon = function()
+			return musicTopbarIcon
+		end,
 	})
 end)
 -- Desktop freecam: Shift+P only (no topbar icon). Touch devices use MobileFreecam.
 local freecamIcon: any = nil
-local musicTopbarIcon: any = nil
 
 if Config.FeatureFlags.MusicPlayerEnabled then
 	-- Music topbar icon is owned by a dedicated wrapper that creates/destroys
@@ -1426,21 +1440,7 @@ trackBootTask("EventBoardController.init", function()
 	ClientMods.EventBoardController.init({ remotes = Remotes })
 end)
 trackBootTask("StreakController.init", function()
-	ClientMods.StreakController.init({
-		remotes = Remotes,
-		-- Daily Quest addon icon; only called when the addon is on and installed.
-		createTopbarIcon = function()
-			local icon = Icon.new()
-			icon:setImage(Config.DailyQuest.TOPBAR_ICON)
-			icon:setLabel("")
-			placeTopbarIcon(icon, Config.DailyQuest.TOPBAR_ORDER)
-			setCompactTopbarWidth(icon, 36)
-			removeTopbarInnerPadding(icon)
-			styleTopbarPill(icon)
-			enlargeTopbarIcon(icon, 36, 10)
-			return icon
-		end,
-	})
+	ClientMods.StreakController.init({ remotes = Remotes })
 end)
 trackBootTask("AfkGuardController.init", function()
 	if Config.FeatureFlags.AfkGuardEnabled ~= false and Config.AfkGuard.ENABLED == true then
@@ -1513,6 +1513,44 @@ trackBootTask("SettingsController.init", function()
 	end
 	local settingsUI = ClientMods.createSettingsMenuUI({})
 	ClientMods.TopMenuController.setSettingsUI(settingsUI)
+	-- Free Title event door in the topbar (FreeTitleEvent.Trigger "Topbar" | "Both").
+	-- Built here, not with the other icons, because the panel it opens lives in this
+	-- menu; the floating card is MenuShellUI's side of the same switch.
+	if
+		Config.FeatureFlags.FreeTitleEventEnabled == true
+		and Config.FeatureFlags.SelfCustomTitleEnabled == true
+		and require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.TitleEventDomain).showsTopbar(
+			Config.FreeTitleEvent.TRIGGER
+		)
+	then
+		local freeTitleIcon = Icon.new()
+		freeTitleIcon:setImage(Config.FreeTitleEvent.TOPBAR_ICON)
+		freeTitleIcon:setLabel("")
+		freeTitleIcon:setOrder(Config.FreeTitleEvent.TOPBAR_ORDER)
+		setCompactTopbarWidth(freeTitleIcon, 36)
+		removeTopbarInnerPadding(freeTitleIcon)
+		styleTopbarPill(freeTitleIcon)
+		enlargeTopbarIcon(freeTitleIcon, 36, 12)
+		freeTitleIcon.selected:Connect(function()
+			freeTitleIcon:deselect()
+			settingsUI:openCustomTitlePanelWhenReady()
+		end)
+		-- The topbar image defaults to Stretch, which distorts non-square artwork.
+		task.spawn(function()
+			local widget
+			for _ = 1, 40 do
+				widget = resolveTopbarWidget(freeTitleIcon)
+				if widget and widget.AbsoluteSize.X > 0 then
+					break
+				end
+				task.wait(0.1)
+			end
+			local image = widget and widget:FindFirstChildWhichIsA("ImageLabel", true)
+			if image then
+				image.ScaleType = Enum.ScaleType.Fit
+			end
+		end)
+	end
 	local settingsCtrl = trackClientLifecycle(
 		"SettingsController",
 		ClientMods.createSettingsController({
@@ -2029,6 +2067,17 @@ trackBootTask("AvatarContextController.init", function()
 		if giftController and type(giftController.openForTarget) == "function" then
 			giftController.openForTarget(targetUserId)
 		end
+	end)
+	-- Propose Couple (ACM): only when neither player already has a partner.
+	avatarContextUI:setProposeCoupleCallback(function(targetUserId: number)
+		ClientMods.CoupleController.proposeTo(targetUserId)
+	end, function(payload: any): boolean
+		local couple = ClientMods.CoupleController
+		local targetPartner = payload.couplePartner
+		return payload.userId ~= Players.LocalPlayer.UserId
+			and couple.isReady()
+			and not couple.hasPartner()
+			and not (type(targetPartner) == "string" and targetPartner ~= "")
 	end)
 	avatarContextUI:setCarryCallback(function(targetUserId: number)
 		avatarContextCtrl:closePanel()

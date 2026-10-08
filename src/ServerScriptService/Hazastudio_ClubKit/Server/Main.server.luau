@@ -612,9 +612,6 @@ local streakController = ServerMods.createStreakController({
 	streakService = streakService,
 	overheadController = overheadController,
 	remotes = Remotes,
-	-- Daily Quest addon: manual check-in replaces the join-time streak when enabled + installed.
-	dailyQuestService = ServerMods.createDailyQuestService({ repo = repo }),
-	notify = Notify,
 })
 -- Event board (ADR 0015): venue posts + venue quests from the customer dashboard. Registers its
 -- own players (current and joining) and pulls the board on onStart.

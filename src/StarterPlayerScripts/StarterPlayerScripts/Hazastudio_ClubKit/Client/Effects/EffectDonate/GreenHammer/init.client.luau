@@ -113,7 +113,7 @@ local function createNatureEffect(donatorName, recipientName, donationAmount, do
 	-- Clothing shell handle; destroyed with the effect model below.
 	local giantShell = nil
 	local effectModel = ReplicatedStorage.WorldEffects.Smite3:Clone()
-	SoundAssetSanitizer.removeBlockedSounds(effectModel)
+	SoundAssetSanitizer.sanitizeClone(effectModel)
 	local diamondHammer = effectModel.DiamondHammer
 
 	-- Make most parts transparent initially

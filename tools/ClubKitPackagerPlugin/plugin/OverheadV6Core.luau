@@ -94,6 +94,25 @@ local function listLayout(parent: Instance, props: { [string]: any }): UIListLay
 	return l
 end
 
+-- V4's black row backgrounds (00-SpecialStatus, 04-SpecialRank) are not solid: a black
+-- UIGradient with these transparency stops fades them out to both sides. The port copies
+-- the buyer's own gradient over these defaults.
+local STATUS_FADE = { { 0, 1 }, { 0.2, 0.4 }, { 0.51, 0.06 }, { 0.8, 0.39 }, { 1, 1 } }
+local RANK_FADE = { { 0, 1 }, { 0.09, 1 }, { 0.3, 0.49 }, { 0.51, 0.06 }, { 0.7, 0.51 }, { 0.9, 1 }, { 1, 1 } }
+
+local function fadeGradient(row: GuiObject, stops: { { number } }): UIGradient
+	local keypoints = {}
+	for _, stop in ipairs(stops) do
+		table.insert(keypoints, NumberSequenceKeypoint.new(stop[1], stop[2]))
+	end
+	local grad = Instance.new("UIGradient")
+	grad.Name = "UIGradient"
+	grad.Color = ColorSequence.new(Color3.fromRGB(0, 0, 0))
+	grad.Transparency = NumberSequence.new(keypoints)
+	grad.Parent = row
+	return grad
+end
+
 -- ----------------------------------------------------------------
 -- Template build (the Â§2 AFTER tree, 49 instances)
 -- ----------------------------------------------------------------
@@ -134,7 +153,9 @@ function OverheadV6Core.buildTemplate(): BillboardGui
 
 	local function chip(name: string, labelSize: UDim2, labelPos: UDim2): Frame
 		local c = frame(layers, name, {
-			Size = UDim2.fromScale(if name == "RobuxRankWrapper" then 0.33 else 0.8, 0.88),
+			-- Both chips are 0.33 wide in V4 (inventory #5/#9); the Rupiah chip's 0.8 is its
+			-- LABEL width (V4's 0.1 side padding), not the chip's.
+			Size = UDim2.fromScale(0.33, 0.88),
 			BackgroundColor3 = Color3.fromRGB(255, 255, 255),
 			BackgroundTransparency = 0,
 		})
@@ -151,7 +172,7 @@ function OverheadV6Core.buildTemplate(): BillboardGui
 			ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 128, 255)),
 		})
 		grad.Parent = c
-		textLabel(c, if name == "RobuxRankWrapper" then "RobuxRank" else "RupiahRank", {
+		local label = textLabel(c, if name == "RobuxRankWrapper" then "RobuxRank" else "RupiahRank", {
 			Size = labelSize,
 			Position = labelPos,
 			Font = Enum.Font.GothamBold, -- legacy Enum.Font.ExtraBold was removed; GothamBold is the closest shipped face
@@ -159,23 +180,34 @@ function OverheadV6Core.buildTemplate(): BillboardGui
 			Text = "",
 			TextColor3 = Color3.fromRGB(255, 255, 255),
 		})
+		-- V4's dark text outline: white text on the bright rainbow is unreadable without it.
+		local labelStroke = Instance.new("UIStroke")
+		labelStroke.Color = Color3.fromRGB(45, 45, 45)
+		labelStroke.Thickness = 1
+		labelStroke.Parent = label
 		return c
 	end
 	chip("RobuxRankWrapper", UDim2.fromScale(1, 0.64), UDim2.fromScale(0, 0.18))
 	chip("RupiahRankWrapper", UDim2.fromScale(0.8, 0.64), UDim2.fromScale(0.1, 0.18))
 
-	-- 00-SpecialStatus (#14): the row IS the label (R4). Black bg came from a solid gradient.
-	local statusRow = textLabel(wrapper, "00-SpecialStatus", {
+	-- 00-SpecialStatus (#14): Frame + label, NOT row-is-label. V4's black background fades out
+	-- to both sides through a transparency gradient; on a row-is-label that gradient would fade
+	-- the text too, and without it the row paints as a solid black bar.
+	local statusRow = frame(wrapper, "00-SpecialStatus", {
 		Size = UDim2.fromScale(1, 0.09),
-		BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
 		BackgroundTransparency = 0,
 		Visible = false,
+	})
+	statusRow.LayoutOrder = 4
+	fadeGradient(statusRow, STATUS_FADE)
+	textLabel(statusRow, "StatusValue", {
+		Size = UDim2.fromScale(1, 1),
 		Text = "",
 		Font = Enum.Font.GothamBold, -- legacy Enum.Font.ExtraBold was removed; GothamBold is the closest shipped face
 		TextScaled = true,
 		TextColor3 = Color3.fromRGB(217, 217, 217),
 	})
-	statusRow.LayoutOrder = 4
 
 	-- 01-SpecialTitle (#15â€“17).
 	local titleRow = frame(wrapper, "01-SpecialTitle", {
@@ -184,7 +216,7 @@ function OverheadV6Core.buildTemplate(): BillboardGui
 	})
 	textLabel(titleRow, "SpecialTitleText", {
 		Size = UDim2.fromScale(1, 1),
-		Font = Enum.Font.Bold,
+		Font = Enum.Font.GothamBold,
 		TextScaled = true,
 		Text = "",
 	})
@@ -251,7 +283,7 @@ function OverheadV6Core.buildTemplate(): BillboardGui
 	local levelRow = textLabel(wrapper, "03-Level", {
 		Size = UDim2.fromScale(1, 0.065),
 		Text = "",
-		Font = Enum.Font.Bold,
+		Font = Enum.Font.GothamBold,
 		TextScaled = true,
 		Visible = false,
 	})
@@ -260,11 +292,12 @@ function OverheadV6Core.buildTemplate(): BillboardGui
 	-- 04-SpecialRank (#39â€“41).
 	local rankRow = frame(wrapper, "04-SpecialRank", {
 		Size = UDim2.fromScale(1, 0.08),
-		BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
 		BackgroundTransparency = 0,
 		Visible = false,
 	})
 	rankRow.LayoutOrder = 11
+	fadeGradient(rankRow, RANK_FADE)
 	local rankLabel = textLabel(rankRow, "SpecialRoleName", {
 		Size = UDim2.fromScale(1, 0.8),
 		Position = UDim2.fromScale(0, 0.1),
@@ -287,30 +320,41 @@ function OverheadV6Core.buildTemplate(): BillboardGui
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Padding = UDim.new(0.005, 0),
 		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		-- V4 centres vertically; UIListLayout defaults to Top, which lifts the 0.6-scaled
+		-- separator bullet to the top of the row.
+		VerticalAlignment = Enum.VerticalAlignment.Center,
 	})
 	textLabel(nameRow, "PlayerDisplayName", {
 		LayoutOrder = 0,
 		AutomaticSize = Enum.AutomaticSize.X,
 		Size = UDim2.fromScale(0, 1),
-		Font = Enum.Font.Bold,
+		Font = Enum.Font.GothamBold,
 		TextScaled = true,
 		RichText = true,
 		Text = "",
 	})
-	textLabel(nameRow, "Separator", {
+	-- Exactly V4's shape: a full-height scaled label shrunk by a 0.6 UIScale. A 0.6-high label
+	-- without TextScaled renders the bullet at the default TextSize, as a speck near the top.
+	local separator = textLabel(nameRow, "Separator", {
 		LayoutOrder = 2,
 		AutomaticSize = Enum.AutomaticSize.X,
-		-- V4 was a 0.6 UIScale on a full-height label; 0.6 height is the same footprint.
-		Size = UDim2.fromScale(0, 0.6),
-		Font = Enum.Font.Bold,
+		Size = UDim2.fromScale(0, 1),
+		AnchorPoint = Vector2.new(0, 0.5),
+		Font = Enum.Font.GothamBold,
+		TextScaled = true,
+		TextSize = 42,
+		RichText = true,
 		Text = utf8.char(0x2022),
 		TextColor3 = Color3.fromRGB(255, 255, 255),
 	})
+	local separatorScale = Instance.new("UIScale")
+	separatorScale.Scale = 0.6
+	separatorScale.Parent = separator
 	local membership = textLabel(nameRow, "MembershipLevel", {
 		LayoutOrder = 3,
 		AutomaticSize = Enum.AutomaticSize.X,
 		Size = UDim2.fromScale(0, 1),
-		Font = Enum.Font.Bold,
+		Font = Enum.Font.GothamBold,
 		TextScaled = true,
 		RichText = true,
 		Text = "",
@@ -363,7 +407,7 @@ function OverheadV6Core.applyGradientAttributes(gui: BillboardGui, sources: { [s
 	if membershipGrad then
 		portSet(membershipGrad, MEMBERSHIP_GRADIENT_NAMES)
 	end
-	local coupleRow = gui:FindFirstChild("09-CoupleDisplayName")
+	local coupleRow = gui:FindFirstChild("09-CoupleDisplayName", true)
 	local coupleGrad = coupleRow and (coupleRow :: TextLabel):FindFirstChildWhichIsA("UIGradient")
 	if coupleGrad then
 		portSet(coupleGrad, COUPLE_GRADIENT_NAMES)
@@ -424,7 +468,7 @@ function OverheadV6Core.portCustomisations(gui: BillboardGui, sources: { [string
 	-- data, not code, and a literal written through a JSON transport can arrive mojibake'd.
 	for _, labelName in ipairs({
 		"RobuxRank", "RupiahRank", "SpecialTitleText", "SpecialRoleName",
-		"PlayerDisplayName", "MembershipLevel", "Separator", "TextLabel", "LikeCounts",
+		"PlayerDisplayName", "MembershipLevel", "Separator", "TextLabel", "LikeCounts", "StatusValue",
 	}) do
 		local hit = firstNamed(labelName)
 		local target = gui:FindFirstChild(labelName, true)
@@ -437,6 +481,19 @@ function OverheadV6Core.portCustomisations(gui: BillboardGui, sources: { [string
 				dst.Text = src.Text
 			end
 			table.insert(report.ported, ("label %s (font + colour)"):format(labelName))
+		end
+	end
+	-- Row-is-label rows (R4) take the font of the V4 label they replaced.
+	for rowName, sourceLabelName in pairs({
+		["03-Level"] = "LevelCounterText",
+		["09-CoupleDisplayName"] = "CoupleDisplayNameText",
+	}) do
+		local hit = firstNamed(sourceLabelName)
+		local target = gui:FindFirstChild(rowName, true)
+		if hit and hit:IsA("TextLabel") and target and target:IsA("TextLabel") then
+			(target :: TextLabel).FontFace = (hit :: TextLabel).FontFace
+			;(target :: TextLabel).TextColor3 = (hit :: TextLabel).TextColor3
+			table.insert(report.ported, ("label %s <- %s (font + colour)"):format(rowName, sourceLabelName))
 		end
 	end
 
@@ -470,28 +527,26 @@ function OverheadV6Core.portCustomisations(gui: BillboardGui, sources: { [string
 		end
 	end
 
-	-- Status / rank row background = the V4 row gradient's colour (it was a solid gradient).
-	do
-		local statusHit = firstNamed("00-SpecialStatus")
-		local statusTarget = gui:FindFirstChild("00-SpecialStatus")
-		if statusHit and statusTarget and statusTarget:IsA("TextLabel") then
-			local bgGrad = (statusHit :: Instance):FindFirstChildWhichIsA("UIGradient", true)
-			if bgGrad and bgGrad.Enabled then
-				local kp = bgGrad.Color.Keypoints[1]
-				statusTarget.BackgroundColor3 = kp.Value
-				table.insert(report.ported, "status row background colour")
+	-- Status / rank row backgrounds: the row's own colour + its whole gradient (colour AND the
+	-- transparency fade). Porting only the gradient's first colour paints a solid bar.
+	for _, rowName in ipairs({ "00-SpecialStatus", "04-SpecialRank" }) do
+		local hit = firstNamed(rowName)
+		local target = gui:FindFirstChild(rowName, true)
+		if hit and hit:IsA("GuiObject") and target and target:IsA("GuiObject") then
+			(target :: GuiObject).BackgroundColor3 = (hit :: GuiObject).BackgroundColor3
+			;(target :: GuiObject).BackgroundTransparency = (hit :: GuiObject).BackgroundTransparency
+			local srcGrad = (hit :: Instance):FindFirstChildWhichIsA("UIGradient")
+			local dstGrad = (target :: Instance):FindFirstChildWhichIsA("UIGradient")
+			if srcGrad and dstGrad then
+				dstGrad.Color = srcGrad.Color
+				dstGrad.Transparency = srcGrad.Transparency
+				dstGrad.Rotation = srcGrad.Rotation
+				dstGrad.Offset = srcGrad.Offset
+				dstGrad.Enabled = srcGrad.Enabled
+			elseif dstGrad then
+				dstGrad:Destroy()
 			end
-		end
-		local rankHit = firstNamed("04-SpecialRank")
-		local rankTarget = gui:FindFirstChild("04-SpecialRank")
-		if rankHit and rankTarget and rankTarget:IsA("Frame") then
-			local bgGrad = (rankHit :: Instance):FindFirstChildWhichIsA("UIGradient", true)
-			if bgGrad and bgGrad.Enabled then
-				local kp = bgGrad.Color.Keypoints[1]
-				local rankFrame = rankTarget :: Frame
-				rankFrame.BackgroundColor3 = kp.Value
-				table.insert(report.ported, "rank row background colour")
-			end
+			table.insert(report.ported, ("%s background (colour + fade)"):format(rowName))
 		end
 	end
 
@@ -584,7 +639,7 @@ function OverheadV6Core.install(): InstallReport
 
 	local count = #gui:GetDescendants() + 1
 	local lines = {
-		("[ClubKitV6] Installed %s (%d instances, target 49) next to V4."):format(TEMPLATE_V6_NAME, count),
+		("[ClubKitV6] Installed %s (%d instances, target 54) next to V4."):format(TEMPLATE_V6_NAME, count),
 		("[ClubKitV6] Ported %d, not portable %d (list below)."):format(#portReport.ported, #portReport.notPorted),
 		"[ClubKitV6] V4 was NOT modified. To switch: Config â†’ Overhead â†’ GuiType = \"V6\", save, publish. Undo = set GuiType back to \"V4\".",
 	}

@@ -7,37 +7,42 @@
 -- GUI contract (names in Config.EventBoard):
 --   EventTab (ScrollingFrame) > PostsSection / QuestsSection (Frame)
 --     > SectionIdentity > SectionTitle / SectionSubtitle
---     > SectionContentWrapper > BasicAnnouncement / ImageAnnouncement / QuestTemplate / StreakTemplate
---   Each card: Content > Category / Title / DatePublished | DueDate / Body / Banner / ProgressBar >
---   Fill / ProgressLabel / StreakDays > Day1..Day6 > Icon, and a SubmitButton > TextLabel.
+--     > SectionContentWrapper > BasicAnnouncement / ImageAnnouncement / CountdownTemplate /
+--       QuestTemplate / StreakTemplate
+--   Every card is an Event card (CONTEXT.md): Header > Icon / Label, and Body > Category / Title /
+--   Date, then its own block — Text, Banner, Tiles > Days|Hours|Minutes|Seconds > Num / Unit plus
+--   a Live label, ProgressRow > Label / Value and Bar > Fill, Week > WeekLabel / Weekdays / Cal —
+--   and ButtonSlot > SubmitButton > TextLabel.
 --   PopUpMenuTemplate (07-MenuGUI root) > Wrapper > Content > Category / Title / DatePublished /
 --   Body, and Wrapper > SubmitButton.
--- The templates stay in the tree hidden; cards are clones. A place with only one "Section" (the
--- design as delivered) gets both kinds of card in it.
+-- The templates stay in the tree hidden; cards are clones. A place with only one "Section" gets
+-- both kinds of card in it.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
-local DailyQuestDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.DailyQuestDomain)
 local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
+local EventCardKit = require(script.Parent.EventCardKit)
 
 local cfg = Config.EventBoard
+local path, setText, setVisible = EventCardKit.path, EventCardKit.setText, EventCardKit.setVisible
 local CARD_PREFIX = "EventCard_"
 local POPUP_GUI_NAME = "EventBoardPopupGui"
 local POPUP_DISPLAY_ORDER = 120
-local MONTHS = {
-	"January", "February", "March", "April", "May", "June",
-	"July", "August", "September", "October", "November", "December",
-}
 local DIM_TRANSPARENCY = 0.35
+local TILE_NAMES = { "Days", "Hours", "Minutes", "Seconds" }
 
 export type PostState = {
 	id: number,
+	kind: string,
 	category: string,
 	title: string,
 	body: string,
 	imageAssetId: string,
 	publishedAt: string,
+	startsAt: number?,
+	endsAt: number?,
+	robloxEventId: string,
 }
 
 export type QuestState = {
@@ -49,13 +54,14 @@ export type QuestState = {
 	goalValue: number,
 	rewardType: string,
 	rewardValue: string,
+	startDate: string?,
 	dueDate: string,
 	current: number,
 	target: number,
 	complete: boolean,
 	claimed: boolean,
 	checkedInToday: boolean,
-	strip: { string }?,
+	calendar: EventCardKit.Calendar?,
 }
 
 export type State = {
@@ -64,75 +70,11 @@ export type State = {
 	posts: { PostState },
 	quests: { QuestState },
 	joinPostId: number?,
+	unseenPostIds: { number }?,
 }
 
 local EventTabUI = {}
 EventTabUI.__index = EventTabUI
-
-local function path(root: Instance?, ...: string): Instance?
-	local node = root
-	for _, name in ipairs({ ... }) do
-		if not node then
-			return nil
-		end
-		node = node:FindFirstChild(name)
-	end
-	return node
-end
-
-local function setText(root: Instance?, name: string, text: string)
-	local label = root and root:FindFirstChild(name)
-	if label and (label:IsA("TextLabel") or label:IsA("TextButton")) then
-		(label :: TextLabel).Text = text
-	end
-end
-
-local function setVisible(root: Instance?, name: string, visible: boolean)
-	local node = root and root:FindFirstChild(name)
-	if node and node:IsA("GuiObject") then
-		node.Visible = visible
-	end
-end
-
--- "A N N O U N C E M E N T S", the design's letter-spaced category line.
-local function spaced(text: string): string
-	local upper = string.upper(text)
-	local letters = {}
-	for _, code in utf8.codes(upper) do
-		table.insert(letters, utf8.char(code))
-	end
-	return table.concat(letters, " ")
-end
-
-local function dateText(dateString: string): string
-	local day = DailyQuestDomain.parseWibDate(dateString)
-	if not day then
-		return dateString
-	end
-	local y, m, d = DailyQuestDomain.toCivil(day)
-	return string.format(cfg.DATE_FORMAT, MONTHS[m], d, y)
-end
-
--- ISO timestamp from the API → "September 24, 2026 | 18:30 WIB".
-local function publishedText(iso: string): string
-	local y, mo, d, h, mi = string.match(iso, "^(%d+)-(%d+)-(%d+)T(%d+):(%d+)")
-	if not y then
-		return ""
-	end
-	-- Plain arithmetic on the UTC parts: os.time/os.date read tables in the client's own
-	-- timezone, which is not the venue's.
-	local utcMinutes = (tonumber(h) :: number) * 60 + (tonumber(mi) :: number) + 7 * 60
-	local dayShift = utcMinutes // (24 * 60)
-	local minutes = utcMinutes % (24 * 60)
-	local dayNumber = (DailyQuestDomain.parseWibDate(string.format("%s-%s-%s", y, mo, d)) or 0) + dayShift
-	local cy, cm, cd = DailyQuestDomain.toCivil(dayNumber)
-	return string.format("%s %d, %d | %02d:%02d WIB", MONTHS[cm], cd, cy, minutes // 60, minutes % 60)
-end
-
-local function clock(seconds: number): string
-	seconds = math.max(0, math.floor(seconds))
-	return string.format("%02d:%02d:%02d", seconds // 3600, (seconds % 3600) // 60, seconds % 60)
-end
 
 -- "LV 5/5", "1/3 days", "40/100 Robux", "30/60 min".
 local function progressText(goalType: string, current: number, target: number): string
@@ -180,6 +122,7 @@ function EventTabUI.tryCreate(playerGui: PlayerGui): any?
 	self._templates = {
 		basic = template(cfg.TEMPLATES.BASIC),
 		image = template(cfg.TEMPLATES.IMAGE),
+		countdown = template(cfg.TEMPLATES.COUNTDOWN),
 		quest = template(cfg.TEMPLATES.QUEST),
 		streak = template(cfg.TEMPLATES.STREAK),
 	}
@@ -188,13 +131,14 @@ function EventTabUI.tryCreate(playerGui: PlayerGui): any?
 	self._state = nil :: State?
 	self._stateReceivedAt = 0
 	self._busy = {} :: { [number]: boolean }
+	self._notified = {} :: { [number]: boolean }
 	self._onClaim = nil :: ((number) -> ())?
-	self._onCheckIn = nil :: ((number) -> ())?
+	self._onOpenQuest = nil :: ((number) -> ())?
+	self._onNotify = nil :: ((number) -> ())?
 	self._onPostSeen = nil :: ((number) -> ())?
 	self._popup = nil :: GuiObject?
 	self._popupGui = nil :: ScreenGui?
 	self._popupPostId = nil :: number?
-	self._stripStyles = nil :: any
 
 	if postsSection ~= questsSection then
 		local identity = path(postsSection, "SectionIdentity")
@@ -213,8 +157,14 @@ function EventTabUI:onClaim(callback: (number) -> ())
 	self._onClaim = callback
 end
 
-function EventTabUI:onCheckIn(callback: (number) -> ())
-	self._onCheckIn = callback
+-- A streak card's "View details": the controller opens the quest popup.
+function EventTabUI:onOpenQuest(callback: (number) -> ())
+	self._onOpenQuest = callback
+end
+
+-- A countdown card's "Notify me" (only shown when the post links a Roblox Event).
+function EventTabUI:onNotify(callback: (number) -> ())
+	self._onNotify = callback
 end
 
 function EventTabUI:onPostSeen(callback: (number) -> ())
@@ -225,6 +175,29 @@ function EventTabUI:getTab(): GuiObject
 	return self._tab
 end
 
+function EventTabUI:getState(): State?
+	return self._state
+end
+
+-- Server time now, from the last snapshot.
+function EventTabUI:now(): number
+	local state = self._state
+	if not state then
+		return os.time()
+	end
+	return state.serverTime + (os.clock() - self._stateReceivedAt)
+end
+
+-- RSVP state for a countdown's linked Roblox Event, as Roblox reported it.
+function EventTabUI:setNotified(postId: number, going: boolean)
+	self._notified[postId] = going
+	local card = self._cards["post_" .. postId]
+	local post = self:postById(postId)
+	if card and post then
+		self:_paintCountdownButton(card, post)
+	end
+end
+
 -- ── popup ─────────────────────────────────────────────────────────────────────────────────
 
 function EventTabUI:_buildPopup(menuGui: Instance)
@@ -233,8 +206,7 @@ function EventTabUI:_buildPopup(menuGui: Instance)
 		return
 	end
 	source.Visible = false
-	-- Its own ScreenGui: the menu's is disabled while the menu is closed, and the join popup
-	-- shows without it.
+	-- Its own ScreenGui: the menu's is disabled while the menu is closed.
 	local playerGui = menuGui.Parent
 	local existing = playerGui and playerGui:FindFirstChild(POPUP_GUI_NAME)
 	if existing then
@@ -269,25 +241,29 @@ function EventTabUI:_buildPopup(menuGui: Instance)
 	end
 end
 
-function EventTabUI:openPost(postId: number)
+function EventTabUI:postById(postId: number): PostState?
 	local state = self._state
-	if not state or not self._popup or not self._popupGui then
-		return
+	if not state then
+		return nil
 	end
-	local post: PostState? = nil
-	for _, candidate in ipairs(state.posts) do
-		if candidate.id == postId then
-			post = candidate
+	for _, post in ipairs(state.posts) do
+		if post.id == postId then
+			return post
 		end
 	end
-	if not post then
+	return nil
+end
+
+function EventTabUI:openPost(postId: number)
+	local post = self:postById(postId)
+	if not post or not self._popup or not self._popupGui then
 		return
 	end
 	local content = path(self._popup, "Wrapper", "Content")
-	setText(content, "Category", if post.category ~= "" then spaced(post.category) else "")
+	setText(content, "Category", if post.category ~= "" then EventCardKit.spaced(post.category) else "")
 	setVisible(content, "Category", post.category ~= "")
 	setText(content, "Title", post.title)
-	setText(content, "DatePublished", publishedText(post.publishedAt))
+	setText(content, "DatePublished", self:_postDate(post))
 	setText(content, "Body", post.body)
 	setVisible(content, "Body", post.body ~= "")
 	self._popupPostId = post.id
@@ -308,8 +284,8 @@ end
 -- ── cards ─────────────────────────────────────────────────────────────────────────────────
 
 function EventTabUI:_bindButton(card: GuiObject, onPress: () -> ())
-	local button = card:FindFirstChild("SubmitButton", true)
-	if not (button and button:IsA("GuiButton")) then
+	local button = EventCardKit.button(card)
+	if not button then
 		return
 	end
 	for _, c in ipairs(UIMotion.bindPress(button)) do
@@ -318,7 +294,7 @@ function EventTabUI:_bindButton(card: GuiObject, onPress: () -> ())
 	for _, c in ipairs(UIMotion.bindHover(button)) do
 		table.insert(self._connections, c)
 	end
-	table.insert(self._connections, (button :: GuiButton).Activated:Connect(onPress))
+	table.insert(self._connections, button.Activated:Connect(onPress))
 end
 
 function EventTabUI:_card(key: string, templateName: string, parent: Instance, build: (GuiObject) -> ()): GuiObject?
@@ -343,11 +319,33 @@ function EventTabUI:_card(key: string, templateName: string, parent: Instance, b
 	return card
 end
 
+function EventTabUI:_postDate(post: PostState): string
+	if post.kind == "countdown" and post.startsAt then
+		return EventCardKit.momentText(post.startsAt)
+	end
+	return EventCardKit.publishedText(post.publishedAt)
+end
+
 function EventTabUI:_paintPost(post: PostState, order: number)
-	local templateName = if post.imageAssetId ~= "" and self._templates.image then "image" else "basic"
+	local templateName = "basic"
+	if post.kind == "countdown" and self._templates.countdown then
+		templateName = "countdown"
+	elseif post.imageAssetId ~= "" and self._templates.image then
+		templateName = "image"
+	end
 	local card = self:_card("post_" .. post.id, templateName, self._postsWrapper, function(card)
 		local postId = post.id
 		self:_bindButton(card, function()
+			local current = self:postById(postId)
+			if not current then
+				return
+			end
+			if current.kind == "countdown" and self:_countdownPhase(current) == "upcoming" then
+				if current.robloxEventId ~= "" and self._onNotify then
+					self._onNotify(postId)
+				end
+				return
+			end
 			self:openPost(postId)
 		end)
 	end)
@@ -355,18 +353,116 @@ function EventTabUI:_paintPost(post: PostState, order: number)
 		return
 	end
 	card.LayoutOrder = order
-	local content = card:FindFirstChild("Content")
-	setText(content, "Category", if post.category ~= "" then spaced(post.category) else "")
-	setVisible(content, "Category", post.category ~= "")
-	setText(content, "Title", post.title)
-	setText(content, "DatePublished", publishedText(post.publishedAt))
-	setText(content, "Body", post.body)
-	local banner = content and content:FindFirstChild("Banner")
+	EventCardKit.paintHeader(card, if post.kind == "countdown" then cfg.HEADER_LABELS.countdown else cfg.HEADER_LABELS.announcement)
+	local body = card:FindFirstChild("Body")
+	setText(body, "Category", if post.category ~= "" then EventCardKit.spaced(post.category) else "")
+	setVisible(body, "Category", post.category ~= "")
+	setText(body, "Title", post.title)
+	setText(body, "Date", self:_postDate(post))
+	setText(body, "Text", post.body)
+	setVisible(body, "Text", post.body ~= "" and post.kind ~= "countdown")
+	local banner = body and body:FindFirstChild("Banner")
 	if banner and banner:IsA("ImageLabel") then
 		banner.Image = if post.imageAssetId ~= "" then "rbxassetid://" .. post.imageAssetId else ""
 		banner.ScaleType = Enum.ScaleType.Crop
+		banner.Visible = post.imageAssetId ~= ""
 	end
-	setText(card:FindFirstChild("SubmitButton", true), "TextLabel", cfg.BUTTON_OPEN_POST)
+	if post.kind == "countdown" then
+		self:_paintCountdown(card, post)
+	else
+		setText(EventCardKit.button(card), "TextLabel", cfg.BUTTON_OPEN_POST)
+	end
+end
+
+function EventTabUI:_countdownPhase(post: PostState): string
+	local now = self:now()
+	if post.startsAt and now < post.startsAt then
+		return "upcoming"
+	elseif post.endsAt and now >= post.endsAt then
+		return "ended"
+	end
+	return "live"
+end
+
+function EventTabUI:_paintCountdownButton(card: GuiObject, post: PostState)
+	local phase = self:_countdownPhase(post)
+	local slot = path(card, "Body", "ButtonSlot")
+	local button = EventCardKit.button(card)
+	if phase == "upcoming" then
+		local linked = post.robloxEventId ~= ""
+		if slot and slot:IsA("GuiObject") then
+			slot.Visible = linked
+		end
+		if linked and button then
+			local going = self._notified[post.id] == true
+			setText(button, "TextLabel", if going then cfg.BUTTON_NOTIFIED else cfg.BUTTON_NOTIFY)
+			-- Going reads as done: the design's quiet look (Outline stroke on, fill off).
+			local outline = button:FindFirstChild("Outline")
+			if outline and outline:IsA("UIStroke") then
+				outline.Enabled = going
+			end
+			button.BackgroundTransparency = if going then 1 else 0
+			for _, g in ipairs(button:GetChildren()) do
+				if g:IsA("UIGradient") then
+					g.Enabled = not going
+				end
+			end
+		end
+	else
+		if slot and slot:IsA("GuiObject") then
+			slot.Visible = true
+		end
+		if button then
+			setText(button, "TextLabel", cfg.BUTTON_DETAIL)
+			button.BackgroundTransparency = 0
+			local outline = button:FindFirstChild("Outline")
+			if outline and outline:IsA("UIStroke") then
+				outline.Enabled = false
+			end
+			for _, g in ipairs(button:GetChildren()) do
+				if g:IsA("UIGradient") then
+					g.Enabled = true
+				end
+			end
+		end
+	end
+end
+
+-- Tiles count down to the start; after it, one LIVE line until the end.
+function EventTabUI:_paintCountdown(card: GuiObject, post: PostState)
+	local body = card:FindFirstChild("Body")
+	local tiles = body and body:FindFirstChild("Tiles")
+	local phase = self:_countdownPhase(post)
+	if tiles and tiles:IsA("GuiObject") then
+		tiles.Visible = phase == "upcoming"
+		if phase == "upcoming" and post.startsAt then
+			local parts = EventCardKit.countdownParts(post.startsAt - self:now())
+			for i, name in ipairs(TILE_NAMES) do
+				local tile = tiles:FindFirstChild(name)
+				local num = tile and tile:FindFirstChild("Num")
+				if num and num:IsA("TextLabel") then
+					local text = string.format("%02d", parts[i])
+					if num.Text ~= text then
+						local first = num.Text == "" or num:GetAttribute("EventPainted") ~= true
+						num.Text = text
+						num:SetAttribute("EventPainted", true)
+						if not first then
+							UIMotion.pop(num, 1.12, 0.14)
+						end
+					end
+				end
+				setText(tile, "Unit", cfg.COUNTDOWN_UNITS[i])
+			end
+		end
+	end
+	local live = body and body:FindFirstChild("Live")
+	if live and live:IsA("TextLabel") then
+		live.Visible = phase == "live"
+		if post.endsAt then
+			live.Text = string.format(cfg.COUNTDOWN_LIVE_TEXT, EventCardKit.clockText(post.endsAt))
+		end
+	end
+	self:_paintCountdownButton(card, post)
 end
 
 function EventTabUI:_questButtonText(quest: QuestState): (string, boolean)
@@ -380,20 +476,14 @@ function EventTabUI:_questButtonText(quest: QuestState): (string, boolean)
 		return cfg.BUTTON_CLAIM, true
 	end
 	if quest.goalType == "streak" then
-		local state = self._state :: State
-		local elapsed = os.clock() - self._stateReceivedAt
-		local left = clock(state.secondsToNextDay - elapsed)
-		if quest.checkedInToday then
-			return string.format(cfg.BUTTON_CHECKED_IN, left), false
-		end
-		return string.format(cfg.BUTTON_CHECK_IN, left), true
+		return cfg.BUTTON_DETAIL, true
 	end
 	return cfg.BUTTON_INCOMPLETE, false
 end
 
 function EventTabUI:_paintQuestButton(card: GuiObject, quest: QuestState)
-	local button = card:FindFirstChild("SubmitButton", true)
-	if not (button and button:IsA("GuiButton")) then
+	local button = EventCardKit.button(card)
+	if not button then
 		return
 	end
 	local text, active = self:_questButtonText(quest)
@@ -402,7 +492,7 @@ function EventTabUI:_paintQuestButton(card: GuiObject, quest: QuestState)
 	if label and label:IsA("TextLabel") then
 		label.TextTransparency = if active then 0 else DIM_TRANSPARENCY
 	end
-	(button :: GuiButton).AutoButtonColor = false
+	button.AutoButtonColor = false
 	button:SetAttribute("EventActionable", active)
 end
 
@@ -411,7 +501,7 @@ function EventTabUI:_paintQuest(quest: QuestState, order: number)
 	local card = self:_card("quest_" .. quest.id, templateName, self._questsWrapper, function(card)
 		local questId = quest.id
 		self:_bindButton(card, function()
-			local button = card:FindFirstChild("SubmitButton", true)
+			local button = EventCardKit.button(card)
 			if not button or button:GetAttribute("EventActionable") ~= true then
 				return
 			end
@@ -419,14 +509,14 @@ function EventTabUI:_paintQuest(quest: QuestState, order: number)
 			if not current then
 				return
 			end
-			self._busy[questId] = true
-			self:_paintQuestButton(card, current)
 			if current.complete and not current.claimed then
+				self._busy[questId] = true
+				self:_paintQuestButton(card, current)
 				if self._onClaim then
 					self._onClaim(questId)
 				end
-			elseif current.goalType == "streak" and self._onCheckIn then
-				self._onCheckIn(questId)
+			elseif current.goalType == "streak" and self._onOpenQuest then
+				self._onOpenQuest(questId)
 			end
 		end)
 	end)
@@ -434,65 +524,31 @@ function EventTabUI:_paintQuest(quest: QuestState, order: number)
 		return
 	end
 	card.LayoutOrder = (self._postsWrapper == self._questsWrapper and 1000 or 0) + order
-	local content = card:FindFirstChild("Content")
-	setText(content, "Category", spaced(if quest.category ~= "" then quest.category else "Quest"))
+	EventCardKit.paintHeader(card, if quest.goalType == "streak" then cfg.HEADER_LABELS.streak else cfg.HEADER_LABELS.quest)
+	local body = card:FindFirstChild("Body")
+	setText(body, "Category", EventCardKit.spaced(if quest.category ~= "" then quest.category else "Quest"))
 	-- The design's headline is the goal sentence; the dashboard fills it in automatically.
-	setText(content, "Title", if quest.description ~= "" then quest.description else quest.title)
-	setText(content, "DueDate", string.format(cfg.DUE_DATE_TEXT, dateText(quest.dueDate)))
-	setText(content, "ProgressLabel", string.format(cfg.PROGRESS_TEXT, progressText(quest.goalType, quest.current, quest.target)))
-	local fill = path(content, "ProgressBar", "Fill")
+	setText(body, "Title", if quest.description ~= "" then quest.description else quest.title)
+	setText(body, "Date", string.format(cfg.DUE_DATE_TEXT, EventCardKit.dateText(quest.dueDate)))
+	local row = body and body:FindFirstChild("ProgressRow")
+	setText(row, "Label", string.format(cfg.PROGRESS_TEXT, ""))
+	setText(row, "Value", progressText(quest.goalType, quest.current, quest.target))
+	local fill = path(body, "Bar", "Fill")
 	if fill and fill:IsA("GuiObject") then
 		local ratio = if quest.target > 0 then math.clamp(quest.current / quest.target, 0, 1) else 0
-		fill.Size = UDim2.new(ratio, 0, fill.Size.Y.Scale, fill.Size.Y.Offset)
+		UIMotion.tween(fill, 0.45, { Size = UDim2.new(ratio, 0, 1, 0) }, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
 		fill.Visible = ratio > 0
 	end
-	local strip = quest.strip
-	local days = content and content:FindFirstChild("StreakDays")
-	if strip and days then
-		self:_paintStrip(days, strip)
+	local week = body and body:FindFirstChild("Week")
+	local calendar = quest.calendar
+	if week and calendar then
+		setText(week, "WeekLabel", EventCardKit.weekText(calendar))
+		local cal = week:FindFirstChild("Cal")
+		if cal and cal:IsA("GuiObject") then
+			EventCardKit.paintCalendar(cal, calendar, { weekOnly = true })
+		end
 	end
 	self:_paintQuestButton(card, quest)
-end
-
--- Day1 in the design is the "done" look (dark square with the streak flame), Day2 the plain one.
-function EventTabUI:_paintStrip(days: Instance, strip: { string })
-	if not self._stripStyles then
-		local done = days:FindFirstChild("Day1")
-		local plain = days:FindFirstChild("Day2")
-		if not (done and plain and done:IsA("GuiObject") and plain:IsA("GuiObject")) then
-			return
-		end
-		local doneIcon = done:FindFirstChildWhichIsA("ImageLabel")
-		self._stripStyles = {
-			done = { color = done.BackgroundColor3, transparency = done.BackgroundTransparency, icon = if doneIcon then doneIcon.Image else "" },
-			plain = { color = plain.BackgroundColor3, transparency = plain.BackgroundTransparency },
-		}
-	end
-	local styles = self._stripStyles
-	for index, status in ipairs(strip) do
-		local day = days:FindFirstChild("Day" .. index)
-		if day and day:IsA("GuiObject") then
-			local icon = day:FindFirstChildWhichIsA("ImageLabel")
-			if status == "done" then
-				day.BackgroundColor3 = styles.done.color
-				day.BackgroundTransparency = styles.done.transparency
-				if icon then
-					icon.Image = styles.done.icon
-					icon.ImageTransparency = 0
-				end
-			else
-				day.BackgroundColor3 = styles.plain.color
-				day.BackgroundTransparency = if status == "closed"
-					then math.min(1, styles.plain.transparency + 0.06)
-					else styles.plain.transparency
-				if icon then
-					-- Today, still open: a faint flame says "this one is yours to fill".
-					icon.Image = if status == "today" then styles.done.icon else ""
-					icon.ImageTransparency = if status == "today" then 0.7 else 1
-				end
-			end
-		end
-	end
 end
 
 function EventTabUI:_questById(questId: number): QuestState?
@@ -525,7 +581,7 @@ function EventTabUI:_emptyLabel(wrapper: Instance, key: string, text: string, sh
 		created.TextColor3 = Color3.new(1, 1, 1)
 		created.TextTransparency = 0.45
 		created.TextSize = 15
-		created.FontFace = Font.new("rbxassetid://12187365364", Enum.FontWeight.Medium)
+		created.FontFace = Font.new("rbxassetid://12187365364", Enum.FontWeight.SemiBold)
 		created.TextXAlignment = Enum.TextXAlignment.Left
 		created.LayoutOrder = if key == "quests" and self._postsWrapper == self._questsWrapper then 999 else -1
 		created.Parent = wrapper
@@ -555,30 +611,22 @@ function EventTabUI:setState(state: State)
 	end
 	self:_emptyLabel(self._postsWrapper, "posts", cfg.EMPTY_POSTS, #state.posts == 0)
 	self:_emptyLabel(self._questsWrapper, "quests", cfg.EMPTY_QUESTS, #state.quests == 0)
-	if self._popupPostId then
-		local stillThere = false
-		for _, post in ipairs(state.posts) do
-			if post.id == self._popupPostId then
-				stillThere = true
-			end
-		end
-		if not stillThere then
-			self:closePopup()
-		end
+	if self._popupPostId and not self:postById(self._popupPostId) then
+		self:closePopup()
 	end
 end
 
--- Countdown on streak buttons; called about once a second while the tab is on screen.
+-- Countdown tiles; called about once a second while the tab is on screen.
 function EventTabUI:tick()
 	local state = self._state
 	if not state then
 		return
 	end
-	for _, quest in ipairs(state.quests) do
-		if quest.goalType == "streak" and not quest.complete then
-			local card = self._cards["quest_" .. quest.id]
+	for _, post in ipairs(state.posts) do
+		if post.kind == "countdown" then
+			local card = self._cards["post_" .. post.id]
 			if card then
-				self:_paintQuestButton(card, quest)
+				self:_paintCountdown(card, post)
 			end
 		end
 	end

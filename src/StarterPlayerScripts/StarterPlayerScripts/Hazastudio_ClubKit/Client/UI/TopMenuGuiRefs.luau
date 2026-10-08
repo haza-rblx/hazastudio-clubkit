@@ -32,6 +32,8 @@ local BUTTON_NAMES = {
 	Config.TopbarMenu.BUTTONS.COMMUNITY,
 	Config.TopbarMenu.BUTTONS.QUESTS,
 	Config.TopbarMenu.BUTTONS.EVENT,
+	Config.TopbarMenu.BUTTONS.ADMIN_PANEL,
+	Config.TopbarMenu.BUTTONS.MUSIC_PLAYER,
 }
 
 local function expect(parent: Instance, name: string, timeout: number?): Instance

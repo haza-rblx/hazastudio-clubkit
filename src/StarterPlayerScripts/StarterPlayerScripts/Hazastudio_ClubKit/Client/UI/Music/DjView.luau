@@ -88,6 +88,9 @@ function DjView.new(deps: { refs: GuiRefs.Refs, store: any, config: any, fire: (
 	self._sliders = {} :: { [string]: Slider }
 	self._effectToggles = {} :: { [string]: Toggle }
 	self._effectEnabled = {} :: { [string]: boolean }
+	-- Server state that arrives before the effect rows exist (built on first DJ tab open).
+	self._pendingEnabled = {} :: { [string]: boolean }
+	self._pendingValues = {} :: { [string]: number }
 	self._presets =
 		{} :: { { value: number, button: TextButton, stroke: UIStroke?, baseTransparency: number, active: boolean? } }
 	self._activeSlider = nil :: Slider?
@@ -331,11 +334,35 @@ function DjView:bind()
 		self:_bindMotion(button)
 	end
 
-	for index, effect in ipairs(djConfig.EFFECTS or {}) do
-		self:_buildEffect(effect, index)
+	-- Client footprint: the effect rows (~480 instances) wait for the first DJ tab open
+	-- (PanelShell:_applyTab), since only a DJ ever sees them.
+	local Config = require(game:GetService("ReplicatedStorage").Hazastudio_ClubKit.Shared.Constants.Config)
+	if Config.ClientFootprint.LAZY_PANEL_ROWS ~= true then
+		self:ensureEffectsBuilt()
 	end
 
 	self:setPlaybackSpeed(1)
+end
+
+function DjView:ensureEffectsBuilt()
+	if self._effectsBuilt or self._destroyed then
+		return
+	end
+	self._effectsBuilt = true
+	for index, effect in ipairs(self._djConfig.EFFECTS or {}) do
+		self:_buildEffect(effect, index)
+	end
+	for effectId, enabled in pairs(self._pendingEnabled) do
+		self:setEffectEnabled(effectId, enabled)
+	end
+	for key, value in pairs(self._pendingValues) do
+		local effectId, itemId = string.match(key, "^(.-)::(.*)$")
+		if effectId and itemId then
+			self:setEffectValue(effectId, itemId, value)
+		end
+	end
+	table.clear(self._pendingEnabled)
+	table.clear(self._pendingValues)
 end
 
 function DjView:_buildEffect(effect: any, index: number)
@@ -447,14 +474,19 @@ function DjView:setEffectEnabled(effectId: string, enabled: boolean)
 	local toggle = self._effectToggles[key]
 	if toggle then
 		self:_paintToggle(toggle, enabled == true)
+	elseif not self._effectsBuilt then
+		self._pendingEnabled[key] = enabled == true
 	end
 end
 
 function DjView:setEffectValue(effectId: string, itemId: string, value: number)
-	local slider = self._sliders[tostring(effectId) .. "::" .. tostring(itemId)]
+	local key = tostring(effectId) .. "::" .. tostring(itemId)
+	local slider = self._sliders[key]
 	if slider and self._activeSlider ~= slider then
 		slider.value = snap(tonumber(value) or 0, slider.min, slider.max, slider.step)
 		self:_paintSlider(slider, true)
+	elseif not slider and not self._effectsBuilt then
+		self._pendingValues[key] = tonumber(value) or 0
 	end
 end
 

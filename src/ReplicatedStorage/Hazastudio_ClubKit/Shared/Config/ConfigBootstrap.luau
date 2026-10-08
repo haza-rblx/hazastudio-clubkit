@@ -221,6 +221,10 @@ function ConfigBootstrap.apply(config: any)
 		config.Branding = config.Branding or {}
 		config.Branding.DISCORD_INVITE = branding.DiscordInvite
 	end
+	if type(branding.DefaultAccent) == "string" then
+		config.Branding = config.Branding or {}
+		config.Branding.DEFAULT_ACCENT = branding.DefaultAccent
+	end
 	if type(config.Branding) == "table" and type(config.Branding.DEFAULT_LOGO_IMAGE) ~= "string" then
 		config.Branding.DEFAULT_LOGO_IMAGE = "rbxassetid://79426970537296"
 	end
@@ -344,6 +348,12 @@ function ConfigBootstrap.apply(config: any)
 			if type(config.Loading.CINEMATIC) == "table" then
 				config.Loading.CINEMATIC.ANIMATION_ID = loading.CinematicAnimationId
 			end
+		end
+		if type(loading.ArtworkImage) == "string" then
+			config.Loading.ARTWORK_IMAGE = loading.ArtworkImage
+		end
+		if type(loading.ArtworkVideo) == "string" then
+			config.Loading.ARTWORK_VIDEO = loading.ArtworkVideo
 		end
 	end
 
@@ -513,27 +523,6 @@ function ConfigBootstrap.apply(config: any)
 		end
 	end
 
-	-- Daily Quest addon. Values are carried over as written; DailyQuestDomain.normalizeQuest
-	-- decides whether the quest can run (bad dates or an empty Id = no quest, not a crash).
-	local dailyQuest = clubKit.DailyQuest
-	if type(config.DailyQuest) == "table" and type(dailyQuest) == "table" then
-		for buyerKey, engineKey in pairs({
-			QuestId = "QUEST_ID",
-			StartDate = "START_DATE",
-			DueDate = "DUE_DATE",
-			RewardTier = "REWARD_TIER",
-			Title = "TITLE_TEXT",
-		}) do
-			if type(dailyQuest[buyerKey]) == "string" then
-				config.DailyQuest[engineKey] = dailyQuest[buyerKey]
-			end
-		end
-		local targetDays = tonumber(dailyQuest.TargetDays)
-		if targetDays and targetDays >= 1 then
-			config.DailyQuest.TARGET_DAYS = math.floor(targetDays)
-		end
-	end
-
 	-- Free Title event. `Mode` is the only switch; the engine's boolean flag is
 	-- derived from it, so a buyer never has to keep two settings in agreement.
 	-- TitleEventDomain owns what a mode string means — this only carries values over.
@@ -541,6 +530,17 @@ function ConfigBootstrap.apply(config: any)
 	if type(config.FreeTitleEvent) == "table" and type(freeTitle) == "table" then
 		if type(freeTitle.Mode) == "string" then
 			config.FreeTitleEvent.MODE = freeTitle.Mode
+		end
+		if type(freeTitle.Trigger) == "string" then
+			config.FreeTitleEvent.TRIGGER = freeTitle.Trigger
+		end
+		-- A bare number is accepted too, since that is what the asset page shows.
+		local icon = freeTitle.TopbarIcon
+		if type(icon) == "number" and icon > 0 then
+			config.FreeTitleEvent.TOPBAR_ICON = "rbxassetid://" .. tostring(math.floor(icon))
+		elseif type(icon) == "string" and icon:match("%S") then
+			local trimmed = icon:match("^%s*(.-)%s*$") :: string
+			config.FreeTitleEvent.TOPBAR_ICON = if trimmed:match("^%d+$") then "rbxassetid://" .. trimmed else trimmed
 		end
 		-- Carried straight over, including 0: a zero threshold is how a buyer turns
 		-- a requirement off, so it must not be filtered out as "invalid" here.
@@ -741,9 +741,7 @@ function ConfigBootstrap.apply(config: any)
 			SyncDance = "SyncDanceEnabled",
 			LegacySyncBhms = "LegacySyncBhmsEnabled",
 			AdminHub = "AdminHubEnabled",
-			AvatarContextMenuV2 = "AvatarContextMenuV2Enabled",
 			SelfCustomTitle = "SelfCustomTitleEnabled",
-			DailyQuest = "DailyQuestEnabled",
 			AdminPanelV3 = "AdminPanelV3Enabled",
 			ImageCustomTitle = "ImageCustomTitleEnabled",
 			Hotbar = "HotbarEnabled",

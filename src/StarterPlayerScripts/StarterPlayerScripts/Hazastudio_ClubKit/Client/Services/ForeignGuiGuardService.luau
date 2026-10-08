@@ -43,6 +43,7 @@ local KIT_RUNTIME_GUI_NAMES: { [string]: boolean } = {
 	ClubKitBootHalted = true,
 	EmoteGui = true,
 	["99-NotificationCenter"] = true,
+	ClubKitIsland = true, -- NotificationIsland fallback host
 }
 
 -- An executor builds its window over several frames; sampling the instant it is

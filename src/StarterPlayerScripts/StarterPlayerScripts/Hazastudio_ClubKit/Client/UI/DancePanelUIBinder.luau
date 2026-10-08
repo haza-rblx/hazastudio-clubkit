@@ -8,6 +8,13 @@ local ObjectPool = require(script.Parent.Parent.Utils.ObjectPool)
 local ScrollIndicatorHelper = require(script.Parent.Parent.Utils.ScrollIndicatorHelper)
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
 local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
+local AccentService = require(script.Parent.Parent.Services.AccentService)
+local AccentSurfaceTint = require(script.Parent.Parent.Services.AccentSurfaceTint)
+local OverlayScrollbar = require(script.Parent.OverlayScrollbar)
+
+-- Accent theme: how far a state gradient (tab pill, Auto Dance on) leans toward the accent. The
+-- design's pills are dark grey under white text; half-way keeps that text readable on every accent.
+local ACCENT_GRADIENT_BLEND = 0.55
 local SliderSelectorUtil = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.SliderSelectorUtil)
 
 local DancePanelUIBinder = {} :: any
@@ -293,6 +300,11 @@ function DancePanelUIBinder.new(deps: {
 	self._favoritePressConnections = {}
 	self._descendantsCache = {} -- Cache for row descendants (key = row instance)
 	self._rowGradientStops = {} -- UIMotion.pulse stop functions per played row
+	-- Accent theme: design ColorSequence per state gradient, and the AccentService unsubscribe.
+	self._accentGradientDesign = nil :: { [UIGradient]: ColorSequence }?
+	self._accentUnsub = nil :: (() -> ())?
+	-- Short pill scrollbar outside the list box (OverlayScrollbar); destroyed with the panel.
+	self._scrollbar = nil :: OverlayScrollbar.Handle?
 	self._motionConnections = {} :: { RBXScriptConnection }
 	-- Pooled rows are bound (and their fade bases captured) once per instance, not per render.
 	self._rowMotionBound = {}
@@ -331,6 +343,8 @@ function DancePanelUIBinder.new(deps: {
 	self:_ensureScrollInputCapture()
 	self._openPosition = self.refs.panelRoot.Position
 	self._openAnchorPoint = self.refs.panelRoot.AnchorPoint
+	-- v3 polish (speed row + chip, search glyphs, list/bar sizes); before the placeholder is cached.
+	self._v3Look = require(script.Parent.DancePanelV3Look).apply(self.refs)
 	self._defaultSearchPlaceholder = self.refs.searchBox.PlaceholderText ~= "" and self.refs.searchBox.PlaceholderText
 		or "Search dance or pose..."
 	self._preparingSearchPlaceholder = "Preparing dances..."
@@ -364,6 +378,17 @@ function DancePanelUIBinder.new(deps: {
 	self:_bindCustomSpeed()
 	self:_bindPanelButtons()
 	self:_applyTabVisuals()
+	self:_paintAccentGradients()
+	AccentSurfaceTint.attach(self.refs.panelRoot)
+	self._scrollbar = OverlayScrollbar.attach(self.refs.mainContent, self.refs.mainContentWrapper)
+	self._accentUnsub = AccentService.subscribe(function()
+		self:_paintAccentGradients()
+		for animationName, row in pairs(self._activeRowsByName) do
+			if row.Parent then
+				self:_syncRowVisualState(row, animationName, true)
+			end
+		end
+	end)
 	self:_updateSpeedKnobVisibility()
 	restoreMobileBakedPanelScale(self.refs.panelRoot, self.config)
 	self:setOpen(false, true)
@@ -489,9 +514,13 @@ function DancePanelUIBinder:_ensureScrollInputCapture()
 	pcall(function()
 		scroll.ElasticBehavior = Enum.ElasticBehavior.Always
 	end)
-	-- Reduce overscroll / momentum so scroll list does not "jump" on mobile.
+	-- A visible scrollbar gets at least 6px so it can be grabbed on mobile. A hidden one
+	-- (ImageTransparency 1) gets 0: Roblox still carves the bar's width out of the scroll
+	-- window, so a hidden 6px bar clipped the rows' right edge.
 	pcall(function()
-		(scroll :: any).ScrollBarThickness = math.max(scroll.ScrollBarThickness, 6)
+		(scroll :: any).ScrollBarThickness = if scroll.ScrollBarImageTransparency >= 1
+			then 0
+			else math.max(scroll.ScrollBarThickness, 6)
 	end)
 
 	-- While finger is on list area, temporarily disable default camera touch-look.
@@ -709,6 +738,14 @@ function DancePanelUIBinder:_updateSpeedLabels()
 	if self.refs.maxSpeedLabel then
 		self.refs.maxSpeedLabel.Text = string.format("%.2fx", self.config.MAX_SPEED)
 	end
+	-- Live value while dragging: the segmented bar has no labels, the field is the readout.
+	local field = self.refs.customSpeedField
+	if field and not field:IsFocused() then
+		field.Text = string.format("%.2fx", self._currentSpeed)
+	end
+	if self._v3Look then
+		self._v3Look.setSpeedText(string.format("%.2fx", self._currentSpeed))
+	end
 end
 
 function DancePanelUIBinder:_updateSpeedLabelContrast()
@@ -794,6 +831,18 @@ function DancePanelUIBinder:_setupSpeedSlider()
 	local speedWrapper = self.refs.speedWrapper
 	speedWrapper.Active = true
 	speedFill.Active = true
+	-- Settings slider look (owner, 2026-10-07): segmented bar like Preferences. The value already
+	-- reads in the custom speed field, so the labels inside the bar go (they sat on the segments).
+	-- Horizontal plain-Frame bars only: SegmentedSliderBar is horizontal and uneven in a CanvasGroup.
+	if not self.refs.speedSliderVertical and speedWrapper.ClassName == "Frame" and self.refs.customSpeedField then
+		require(script.Parent.SegmentedSliderBar).attach(speedWrapper, speedFill)
+		if self.refs.currentSpeedLabel then
+			self.refs.currentSpeedLabel.Visible = false
+		end
+		if self.refs.maxSpeedLabel then
+			self.refs.maxSpeedLabel.Visible = false
+		end
+	end
 
 	local speedInputShield = self:_ensureSpeedInputShield()
 	local dragTargets = {
@@ -979,6 +1028,42 @@ function DancePanelUIBinder:_bindPanelButtons()
 			and not isNestedOrSkipped(descendant, panelRoot, skipped)
 		then
 			self:_bindButtonMotion(descendant)
+		end
+	end
+end
+
+-- Accent theme on the panel's state gradients: the sliding tab pill and the Auto Dance "on" tint.
+-- The design's colours are read once, so Graphite (and every later pick) starts from them.
+function DancePanelUIBinder:_paintAccentGradients()
+	local gradients: { UIGradient } = {}
+	local pill = self.refs.backgroundPill
+	local pillGradient = if pill then pill:FindFirstChildWhichIsA("UIGradient") else nil
+	if pillGradient then
+		table.insert(gradients, pillGradient)
+	end
+	local autoButton = self.refs.autoDanceButton
+	local autoWrapper = if autoButton then autoButton.Parent else nil
+	local autoGradient = if autoWrapper then autoWrapper:FindFirstChildWhichIsA("UIGradient") else nil
+	if autoGradient then
+		table.insert(gradients, autoGradient)
+	end
+
+	self._accentGradientDesign = self._accentGradientDesign or {}
+	local design = self._accentGradientDesign
+	for _, gradient in ipairs(gradients) do
+		if design[gradient] == nil then
+			design[gradient] = gradient.Color
+		end
+		local original: ColorSequence = design[gradient]
+		if AccentService.isDesign() then
+			gradient.Color = original
+		else
+			local fill = AccentService.get().fill
+			local keypoints = {}
+			for _, keypoint in ipairs(original.Keypoints) do
+				table.insert(keypoints, ColorSequenceKeypoint.new(keypoint.Time, keypoint.Value:Lerp(fill, ACCENT_GRADIENT_BLEND)))
+			end
+			gradient.Color = ColorSequence.new(keypoints)
 		end
 	end
 end
@@ -1538,6 +1623,31 @@ function DancePanelUIBinder:_syncRowVisualState(row: GuiButton, animationName: s
 		label.Text = animationName
 	end
 
+	-- Accent theme: the design's played states are white with dark text; a picked accent fills
+	-- them instead. Graphite keeps the template's own colours copied above.
+	local rowRefs = self.refs.rowRefs
+	if (sourceRef == rowRefs.played or sourceRef == rowRefs.favoritedPlayed) and not AccentService.isDesign() then
+		local accent = AccentService.get()
+		local accentBadge = getFavoriteBadge(row)
+		if animate then
+			tweenProperties(row, { BackgroundColor3 = accent.fill })
+			if label then
+				tweenProperties(label, { TextColor3 = accent.onFill })
+			end
+			if accentBadge then
+				tweenProperties(accentBadge, { ImageColor3 = accent.onFill })
+			end
+		else
+			row.BackgroundColor3 = accent.fill
+			if label then
+				label.TextColor3 = accent.onFill
+			end
+			if accentBadge then
+				accentBadge.ImageColor3 = accent.onFill
+			end
+		end
+	end
+
 	local badge = getFavoriteBadge(row)
 	if badge then
 		local targetTransparency = self._favoritedAnims[animationName] and 0 or 0.8
@@ -1941,6 +2051,14 @@ end
 
 function DancePanelUIBinder:destroy()
 	self:_cancelIncrementalRebuild()
+	if self._scrollbar then
+		self._scrollbar.destroy()
+		self._scrollbar = nil
+	end
+	if self._accentUnsub then
+		self._accentUnsub()
+		self._accentUnsub = nil
+	end
 	-- Cleanup connections
 	if self._dragMoveConn then
 		self._dragMoveConn:Disconnect()

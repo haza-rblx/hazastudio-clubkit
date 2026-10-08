@@ -484,6 +484,8 @@ export type SettingsStoredData = {
 	hideDonatorHighlight: boolean,
 	hideSystemAnnounce: boolean,
 	graphicsOverrides: { [string]: boolean },
+	-- AccentDomain id, or "" = never picked (the venue default applies).
+	accent: string,
 	_version: number,
 }
 
