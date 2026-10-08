@@ -458,7 +458,10 @@ function DancePanelUIBinder:_ensurePanelScale(): UIScale
 	end
 
 	-- Mobile: keep baked UIScale (0.75) untouched; open anim uses a separate child only.
+	-- v3 on a phone keeps desktop layout but is scaled through the baked UIScale (MobileScaleService),
+	-- so the open animation must use its own child there as well.
 	local isMobileLayout = self.refs.panelRoot:GetAttribute("DancePanelLayout") == "mobile"
+		or self.refs.panelRoot:GetAttribute("DancePanelPhoneScale") == true
 	if not isMobileLayout then
 		local bakedScale = self.refs.panelRoot:FindFirstChildWhichIsA("UIScale")
 		if bakedScale and bakedScale.Name ~= "DancePanelRootScale" then

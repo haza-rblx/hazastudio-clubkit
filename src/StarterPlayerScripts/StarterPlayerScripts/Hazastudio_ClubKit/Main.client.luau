@@ -1100,6 +1100,16 @@ ClientMods.ChatTagsController.init({})
 -- Created BEFORE controller init so icons already exist
 -- when controller tries to bind .selected/.deselected
 local menuIcon = Icon.new()
+-- The Menu button never moves into the topbar overflow dropdown (Features/Overflow reads this flag).
+menuIcon.keepOutsideOverflow = true
+-- Row labels for icon-only buttons inside the overflow dropdown (Features/Overflow.styleRow).
+do
+	local iconModuleAny: any = Icon
+	iconModuleAny.overflowLabels = {
+		[Config.Icons.Topbar.Camera] = "Freecam",
+		[Config.Icons.Topbar.Command] = "Command Library",
+	}
+end
 menuIcon:setImage(Config.Icons.Topbar.Menu, "Deselected")
 menuIcon:setLabel(Config.TopbarMenu.LABEL or "Menu")
 placeTopbarIcon(menuIcon, Config.TopbarMenu.ORDER)
@@ -1524,6 +1534,7 @@ trackBootTask("SettingsController.init", function()
 		)
 	then
 		local freeTitleIcon = Icon.new()
+		freeTitleIcon.keepOutsideOverflow = true -- self custom title stays on the topbar
 		freeTitleIcon:setImage(Config.FreeTitleEvent.TOPBAR_ICON)
 		freeTitleIcon:setLabel("")
 		freeTitleIcon:setOrder(Config.FreeTitleEvent.TOPBAR_ORDER)

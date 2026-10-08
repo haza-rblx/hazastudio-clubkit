@@ -117,6 +117,13 @@ end
 
 -- Prefer TopbarPlus alignmentHolder; never treat nil as a valid restore parent.
 local function resolveRestoreParent(icon: any, widget: GuiObject?): Instance?
+	-- Inside a dropdown/menu (e.g. the topbar overflow) the widget lives in that frame, not the holder.
+	local okJoined, joinedFrame = pcall(function()
+		return (icon :: any).joinedFrame
+	end)
+	if okJoined and typeof(joinedFrame) == "Instance" then
+		return joinedFrame
+	end
 	local okHolder, holder = pcall(function()
 		return (icon :: any).alignmentHolder
 	end)
@@ -272,6 +279,14 @@ function MusicTopbarIcon.new(deps: Deps): MusicTopbarIcon
 	end
 
 	self._instance = instance
+	-- Inside the topbar overflow dropdown this icon is a single "Reload Music" row (opening the
+	-- player is already in the top menu), see Icon/Features/Overflow.
+	instance.overflowLabel = tostring(deps.loadTrackLabel or "Reload Music")
+	instance.overflowAction = function()
+		if self._shown and not self._destroyed then
+			fireCallbacks(self._loadTrackCallbacks)
+		end
+	end
 
 	safePcall(function()
 		deps.applyStyling(instance)

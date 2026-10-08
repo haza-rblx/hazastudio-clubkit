@@ -176,7 +176,18 @@ local function applyIconGroupLayout(iconGroupGui: Instance): ()
 		end
 		local panelGui = panel :: GuiObject
 
-		local isV2Mobile = panelName == v2MobileName
+		-- v3 has one layout. On phones it is scaled to fit the screen height and moved right of
+			-- DancePanelButton; on desktop it keeps its authored size and position.
+			if panelName == (if type(roots) == "table" then roots.v3 else "DancePanelGUIWrapperv3") then
+				panelGui:SetAttribute("DancePanelPhoneScale", mobile)
+				if mobile then
+					getOrCreateRootScale(panelGui).Scale = syncCfg.DANCE_PANEL_V3_SCALE_MOBILE
+					panelGui.Position = UDim2.new(0, syncCfg.DANCE_PANEL_V3_X_MOBILE, panelGui.Position.Y.Scale, syncCfg.DANCE_PANEL_V3_Y_OFFSET_MOBILE)
+				end
+				continue
+			end
+
+			local isV2Mobile = panelName == v2MobileName
 		local isV2Desktop = panelName == v2Name
 
 		if isV2Mobile then

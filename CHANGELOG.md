@@ -11,6 +11,18 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+### Changed (topbar overflow: three dots + dropdown — 2026-10-09)
+
+- When the topbar runs out of width (phones), each side collapses into a three-dots button that opens a dropdown below the topbar. Before, the overflow was a horizontal strip that opened by itself at boot and could not be closed (three dots hidden). `Icon/Features/Overflow.luau`: `joinDropdown` instead of `joinMenu`, no select at creation, no auto-select, three dots always shown, tapping a row closes the dropdown, icons keep their natural width when deciding whether they fit (`overflowRestWidth`).
+- The **Menu** button and the **self custom title** icon never move into the dropdown: `Main` sets `keepOutsideOverflow = true` on them, and any icon with that flag stays on the topbar. On the right the three dots sit left of the pinned icons, so Menu stays right-most.
+- Dropdown rows look like Roblox's own menu (`Overflow.styleRow`): 44 px rows, 200 px wide, 24 px icon + 16 px label in one left-aligned column, rounded 12 px card. Icon-only buttons get a row label from `icon.overflowLabel` or `Icon.overflowLabels[<image asset>]` (Main fills Music, Freecam, Command Library). Rows keep the topbar order. The music icon is a single **Reload Music** row there (`icon.overflowAction`; opening the player is already in the top menu). While open, the three dots turn into a close X (`InspectMenu/x.png`, 3/4 of the dots size). `MusicTopbarIcon` now restores its widget into the dropdown frame instead of the topbar holder after a hide/show.
+- Applied to both Icon copies (`ReplicatedStorage.Icon` and `ReplicatedStorage.Hazastudio_ClubKit.Icon`). Only the copy that loads first runs (`TopbarPlusReference`): a place that also ships its own TopbarPlus folder keeps the old strip unless that copy gets the same file.
+
+### Changed (phone layout — 2026-10-09)
+
+- **Dance panel v3 on phones** (`DancePanelGUIWrapperv3`): on a phone it is scaled to fit the screen height (`Config.Sync.DANCE_PANEL_V3_SCALE_MOBILE = 0.55`) and placed right of the dance button (`DANCE_PANEL_V3_X_MOBILE = 64`, `DANCE_PANEL_V3_Y_OFFSET_MOBILE = 43`). Before this the desktop panel (570 px tall) sat above a 389 px phone screen. Desktop is unchanged. `MobileScaleService` sets the scale and a `DancePanelPhoneScale` attribute, and `DancePanelUIBinder` keeps that scale through the open animation when the attribute is set.
+- The phone menu button rows in `15-TopMenuGUI` are GUI-only and live in the place, not in the repo: they now carry the same `UICorner` and `UIPadding` as the desktop rows.
+
 ## [3.0.0] - 2026-10-09
 
 Major release: music player v3 (web library, play-once requests), event board + event cards + quest milestones, UI motion pass, accent theme, production hardening (persistence, HTTP budget, anti-abuse), client footprint work. Buyer guide: [`docs/releases/3.0.0/UPGRADE.md`](docs/releases/3.0.0/UPGRADE.md); file list: [`docs/releases/3.0.0/CHANGED_FILES.md`](docs/releases/3.0.0/CHANGED_FILES.md).

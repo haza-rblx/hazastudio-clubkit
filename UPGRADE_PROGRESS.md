@@ -28,6 +28,8 @@ Internal scratch pad to track work **before** a version is released.
 | ADR 0020 for the VPS-owned quota and the one-Robux rule | agent | Offered, not answered. |
 | Creator live status (`🔴 LIVE`) | owner | Paused at round 3; feasibility spike first. |
 | Perf & Structure Lane B (template and place data, RBXM) | owner | Not started. This lane is what justified the major version. |
+| Phone checks: dance panel v3 and phone menu rows (2026-10-09) | owner | Panel geometry is verified in a playtest (iPhone 14 landscape: fits, clear of the hotbar). Open the panel and the phone menu by eye. Onboarding stays off in PARKLAB (no `17-OnboardingGUI` sketch). PARKLAB GUI and Config changes are unsaved: Ctrl+S. |
+| Topbar overflow = three dots + dropdown (2026-10-09) | owner | Engine fix: `Icon/Features/Overflow` (both Icon copies), `Main` (`keepOutsideOverflow` on Menu and self custom title, row labels), `MusicTopbarIcon` ("Reload Music" row). Only the TopbarPlus copy that loads first runs (`TopbarPlusReference`): a buyer place with its own `RS.TopbarPlus` folder needs the same `Overflow` file there (PARKLAB has two such folders, patched). Verified in PARKLAB on iPhone 7 only; check a real phone tap, then list it in the next release notes. |
 | Overhead cash-rank chip assigned to the wrong player (Atlantis) | agent | Backlog. Needs its own diagnosis. |
 | Packager `collect()` bundles installed admin loaders | agent | Backlog. |
 | RUST and NIGHT ZONE still on a 2.9.2-era build | owner | Plan the jump separately from the release. |

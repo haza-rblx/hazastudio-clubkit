@@ -1217,6 +1217,11 @@ Config.Sync = {
 	-- IconGroup: panel v2 UIScale + 03-MainContentWrapper height (root IconGroup UIScale stays 1).
 	DANCE_PANEL_V2_SCALE_MOBILE = 0.75,
 	DANCE_PANEL_V2_SCALE_DESKTOP = 0.9,
+		-- DancePanelGUIWrapperv3 on phone (touch + short viewport): the desktop panel is ~570 px tall,
+		-- taller than a phone screen. Scaled to fit the height, and placed right of DancePanelButton.
+		DANCE_PANEL_V3_SCALE_MOBILE = 0.55,
+		DANCE_PANEL_V3_X_MOBILE = 64,
+		DANCE_PANEL_V3_Y_OFFSET_MOBILE = 43,
 	DANCE_MAIN_CONTENT_WRAPPER_HEIGHT_MOBILE = 270,
 	DANCE_MAIN_CONTENT_WRAPPER_HEIGHT_DESKTOP = 330,
 	TRIGGER_ATTRIBUTE = "OpensDancePanel",
