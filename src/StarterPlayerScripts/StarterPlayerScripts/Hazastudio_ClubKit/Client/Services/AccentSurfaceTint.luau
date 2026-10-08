@@ -1,7 +1,7 @@
 --!strict
 -- Whole-GUI theme (CONTEXT.md "Accent theme"): every colour under an attached root follows the
--- accent through AccentDomain.recolor — saturated colours take the accent's hue (Graphite: their
--- grey), neutral grey backgrounds/strokes get the surface tint, Multicolor shows the design as is.
+-- accent through AccentDomain.recolor — saturated colours snap to the accent's token ramp
+-- (Graphite: their grey), neutral grey backgrounds get the surface tint, Multicolor shows the design.
 -- Covers BackgroundColor3, UIStroke.Color, TextColor3, ImageColor3 and UIGradient.Color.
 --
 -- Each (instance, property) remembers the value its GUI/code gave it (`design`) and the value
@@ -26,6 +26,11 @@ local AccentSurfaceTint = {}
 -- Set on a ScreenGui or any GuiObject to keep it and everything under it as designed (the accent
 -- picker dots, colour previews; buyers can opt a whole GUI out the same way).
 AccentSurfaceTint.NO_TINT_ATTRIBUTE = "AccentNoTint"
+
+-- Set on a GuiObject / UIGradient / UIStroke to name its step on the accent token ramp outright
+-- ("primary" | "secondary" | "tertiary" | "text" | "onPrimary"); it also pulls a designed grey onto
+-- the ramp (the VVIP silver tier), which Multicolor and Graphite keep as designed.
+AccentSurfaceTint.TOKEN_ATTRIBUTE = "AccentToken"
 
 -- The design value under a recolour, kept on the instance itself: Clone copies attributes, so a
 -- row cloned from an already-recoloured template still knows its design.
@@ -89,34 +94,154 @@ local function same(a: Value, b: Value): boolean
 end
 
 -- The colour under accent `id`, or nil when it stays as designed.
-local function recolorColor(color: Color3, id: string, surface: boolean, muted: boolean): Color3?
-	local r, g, b = AccentDomain.recolor(color.R * 255, color.G * 255, color.B * 255, id, surface, muted)
+local function recolorColor(
+	color: Color3,
+	id: string,
+	surface: boolean,
+	muted: boolean,
+	role: string?,
+	token: string?
+): Color3?
+	local r, g, b =
+		AccentDomain.recolor(color.R * 255, color.G * 255, color.B * 255, id, surface, muted, role, token)
 	if r == nil or g == nil or b == nil then
 		return nil
 	end
 	return Color3.new(r / 255, g / 255, b / 255)
 end
 
--- The value under accent `id`, plus whether any part of it is recoloured at all.
-local function recolorValue(value: Value, id: string, surface: boolean, muted: boolean): (Value, boolean)
+local function isColour(color: Color3): boolean
+	return recolorColor(color, "blue", false, false) ~= nil
+end
+
+-- The design an instance's colour was given, falling back to what it shows now.
+local function designOf(inst: Instance, prop: string): Value
+	local stored = inst:GetAttribute(DESIGN_ATTRIBUTE_PREFIX .. prop)
+	if typeof(stored) == "Color3" or typeof(stored) == "ColorSequence" then
+		return stored
+	end
+	return (inst :: any)[prop]
+end
+
+local function tokenOf(inst: Instance): string?
+	local token = inst:GetAttribute(AccentSurfaceTint.TOKEN_ATTRIBUTE)
+	return if type(token) == "string" then token else nil
+end
+
+-- The ramp step of a design's brightest colour (a gradient's top), or nil when it has no colour.
+local function brightestLevel(value: Value): string?
+	local best: Color3? = nil
+	local function consider(color: Color3)
+		if isColour(color) then
+			local _, _, v = color:ToHSV()
+			if best == nil or v > select(3, (best :: Color3):ToHSV()) then
+				best = color
+			end
+		end
+	end
 	if typeof(value) == "Color3" then
-		local color = recolorColor(value, id, surface, muted)
+		consider(value)
+	else
+		for _, point in ipairs((value :: ColorSequence).Keypoints) do
+			consider(point.Value)
+		end
+	end
+	if best == nil then
+		return nil
+	end
+	local color = best :: Color3
+	return AccentDomain.level(color.R * 255, color.G * 255, color.B * 255)
+end
+
+local function buttonOf(inst: Instance?): GuiButton?
+	if inst == nil then
+		return nil
+	end
+	if inst:IsA("GuiButton") then
+		return inst
+	end
+	return inst:FindFirstAncestorWhichIsA("GuiButton")
+end
+
+-- A button painted with the primary token: its fill (gradient over the background, else the
+-- background) is opaque and its brightest colour, or its AccentToken, is on the primary step.
+local function isPrimaryButton(button: GuiButton): boolean
+	if button.BackgroundTransparency > 0.5 then
+		return false
+	end
+	local gradient = button:FindFirstChildOfClass("UIGradient")
+	if gradient and gradient.Enabled then
+		return (tokenOf(gradient) or brightestLevel(designOf(gradient, "Color"))) == "primary"
+	end
+	return (tokenOf(button) or brightestLevel(designOf(button, "BackgroundColor3"))) == "primary"
+end
+
+-- How an entry sits on the token ramp:
+-- * role "fg" — text and icon colours, and a gradient that only colours text, take the text token.
+-- * token — the AccentToken attribute; text/icons on a primary button get "onPrimary".
+-- * flat — a gradient inside a button shows one token while tinted (owner 2026-10-08: no gradient
+--   on primary buttons under an accent).
+local function specOf(entry: Entry): (string?, string?, boolean)
+	local inst = entry.inst
+	local token = tokenOf(inst)
+	local fg = entry.prop == "TextColor3" or entry.prop == "ImageColor3"
+	local flat = false
+	local host: Instance? = inst
+	if inst:IsA("UIGradient") then
+		host = inst.Parent
+		if host and (host:IsA("TextLabel") or host:IsA("TextButton")) and host.BackgroundTransparency >= 0.99 then
+			fg = true
+		end
+		flat = buttonOf(host) ~= nil
+	end
+	if token == nil and fg then
+		-- A button's own image colour is its icon on whatever fill it has; its own text and anything
+		-- inside it sit on the fill.
+		local button = buttonOf(host)
+		if button and (button ~= host or entry.prop == "TextColor3") and isPrimaryButton(button) then
+			token = "onPrimary"
+		end
+	end
+	return if fg then "fg" else nil, token, flat
+end
+
+-- The value under accent `id`, plus whether any part of it is recoloured at all.
+local function recolorValue(value: Value, id: string, entry: Entry): (Value, boolean)
+	local role, token, flat = specOf(entry)
+	if typeof(value) == "Color3" then
+		local color = recolorColor(value, id, entry.surface, entry.muted, role, token)
 		return color or value, color ~= nil
 	end
 	local sequence = value :: ColorSequence
+	if flat and not AccentDomain.keepsDesign(id) then
+		-- One token for the whole gradient: the one its brightest colour lands on.
+		local best: Color3? = nil
+		local bestValue = -1
+		for _, point in ipairs(sequence.Keypoints) do
+			local color = recolorColor(point.Value, id, entry.surface, false, role, token)
+			local _, _, v = point.Value:ToHSV()
+			if color and v > bestValue then
+				best, bestValue = color, v
+			end
+		end
+		if best == nil then
+			return sequence, false
+		end
+		return ColorSequence.new(best :: Color3), true
+	end
 	local points = {}
 	local changed = false
 	for _, point in ipairs(sequence.Keypoints) do
-		local color = recolorColor(point.Value, id, surface, false)
+		local color = recolorColor(point.Value, id, entry.surface, false, role, token)
 		changed = changed or color ~= nil
 		table.insert(points, ColorSequenceKeypoint.new(point.Time, color or point.Value))
 	end
 	return if changed then ColorSequence.new(points) else sequence, changed
 end
 
-local function isRecolorable(value: Value, surface: boolean): boolean
+local function isRecolorable(entry: Entry, value: Value): boolean
 	-- Asked against a coloured accent so the answer does not depend on the one in use.
-	local _, changed = recolorValue(value, "blue", surface, false)
+	local _, changed = recolorValue(value, "blue", entry)
 	return changed
 end
 
@@ -125,13 +250,13 @@ local function current(entry: Entry): Value
 end
 
 local function themed(entry: Entry, design: Value): Value
-	return (recolorValue(design, AccentService.get().id, entry.surface, entry.muted))
+	return (recolorValue(design, AccentService.get().id, entry))
 end
 
 -- True when `value` is `design` under some accent (a stale rest, or a clone made before a switch).
 local function isSomeThemeOf(entry: Entry, value: Value, design: Value): boolean
 	for _, id in ipairs(AccentDomain.ORDER) do
-		if same(value, (recolorValue(design, id, entry.surface, entry.muted))) then
+		if same(value, (recolorValue(design, id, entry))) then
 			return true
 		end
 	end
@@ -156,7 +281,7 @@ local function settle(entry: Entry)
 		return
 	end
 	entry.written = nil
-	if isRecolorable(value, entry.surface) then
+	if isRecolorable(entry, value) then
 		entry.design = value
 		local attribute = DESIGN_ATTRIBUTE_PREFIX .. entry.prop
 		local stored = entry.inst:GetAttribute(attribute)

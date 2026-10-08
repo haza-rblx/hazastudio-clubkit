@@ -11,6 +11,12 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+### Changed (accent token ramp — 2026-10-08)
+
+- **Accent palette "Workshop muted", 12 colours.** Settings → Appearance now offers two full lines of 7: Multicolor, Graphite, Denim, Slate, Petrol, Sage, Army Olive / Mustard, Saddle, Rust, Brake Red, Wine, Dusty Rose, Plum — muted automotive / street shades instead of the Apple system colours. Existing ids (`blue`, `purple`, `pink`, `red`, `orange`, `yellow`, `green`) keep their slot with the new shade, so saved player picks and buyer `DefaultAccent` values stay valid; new ids `slate`, `teal`, `sage`, `saddle`, `wine`. Additive — no DataStore key change.
+- **Tinted accent = five tokens, not one purple per design.** Under a colour accent every GUI colour now snaps to the accent's token ramp (primary / secondary / tertiary / text / onPrimary) by its brightness, instead of keeping each design's own saturation and brightness (measured: 47 different purples → 5 tokens + surface tints). Text and icon colours use the text token; text on a primary button uses onPrimary; gradients inside buttons are flat while tinted. Multicolor is unchanged; Graphite unchanged. `Shared/Domain/AccentDomain.luau` (`token`, `level`, `recolor` role/token params, deep-colour gate), `Client/Services/AccentSurfaceTint.luau`; spec `.tmp/accent-spec.luau`.
+- **New `AccentToken` attribute** names an element's token outright and pulls a designed grey onto the ramp. `02-ShopGUI` (GUI template, manual surface): VVIP buy gradient, price gradients, benefit box (now opaque `#131313`, same look as white @ .95 over the card) and active carousel dot, plus the Supreme benefit box — so VIP / VVIP / Supreme look identical under an accent and keep gold / silver / red in Multicolor.
+
 ### Fixed (menu / hotbar / FOV polish — 2026-10-08)
 
 - **FOV applied only when Settings was first opened.** The loading cameras reset `FieldOfView` to the default on hand-over; they now land on the player's saved FOV (`HazaSettingsFov` player attribute, published by `SettingsController`).

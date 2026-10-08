@@ -36,7 +36,8 @@ ClubKitConfig.Branding = {
 	DiscordInvite = "", -- example: "discord.gg/your-invite"
 	-- Theme for players who never picked one in Settings → Appearance. "multicolor" (default: every
 	-- GUI keeps its own colours), "graphite" (everything grey), or one colour for the whole kit UI:
-	-- "blue", "purple", "pink", "red", "orange", "yellow", "green".
+	-- "blue" (denim), "slate", "teal" (petrol), "sage", "green" (army olive), "yellow" (mustard),
+	-- "saddle", "orange" (rust), "red" (brake red), "wine", "pink" (dusty rose), "purple" (plum).
 	DefaultAccent = "multicolor",
 }
 
