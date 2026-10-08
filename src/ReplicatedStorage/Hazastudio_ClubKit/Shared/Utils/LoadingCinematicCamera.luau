@@ -696,7 +696,8 @@ function LoadingCinematicCamera:stop()
 			-- Always force back to Custom — during loading the camera was already
 			-- Scriptable when we captured state, so restoring captured type would
 			-- just leave it Scriptable forever.
-				cam.FieldOfView = CinematicConfig.DEFAULT_FIELD_OF_VIEW
+				local savedFov = self._player and self._player:GetAttribute("HazaSettingsFov") -- SettingsController's FOV
+				cam.FieldOfView = if type(savedFov) == "number" then savedFov else CinematicConfig.DEFAULT_FIELD_OF_VIEW
 			cam.CameraType = Enum.CameraType.Custom
 			-- Restore Humanoid as CameraSubject so Roblox camera works normally
 			local char = self._player and self._player.Character

@@ -1329,6 +1329,9 @@ local function applyPostProcessingSetting(instance: Instance, mode: GraphicsQual
 		local camera = getCurrentCamera()
 		if camera then
 			local targetFov = math.clamp(currentPayload.fov, 60, 100)
+			if player and player:GetAttribute("HazaSettingsFov") ~= targetFov then
+				player:SetAttribute("HazaSettingsFov", targetFov)
+			end
 			if math.abs(camera.FieldOfView - targetFov) > 0.05 then
 				camera.FieldOfView = targetFov
 			end

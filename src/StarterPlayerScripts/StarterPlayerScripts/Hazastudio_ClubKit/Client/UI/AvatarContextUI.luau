@@ -908,16 +908,18 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 
 		stopStatusAnimation(true)
 		statusPopUp.Visible = false
-		resetVisualState()
 
 		loadingScreen.Visible = false
 		loadingScreen.Position = UDim2.fromScale(0, 0)
-		mainContent.Visible = false
 
+		-- The content stays on screen while the panel slides away; hiding/resetting it up front left
+		-- an empty dark card (a black flash) for the length of the dismiss tween.
 		dismissPanelToBottom(function()
 			if closeToken ~= visibilityToken then
 				return
 			end
+			resetVisualState()
+			mainContent.Visible = false
 			currentTargetUserId = nil
 		end)
 	end

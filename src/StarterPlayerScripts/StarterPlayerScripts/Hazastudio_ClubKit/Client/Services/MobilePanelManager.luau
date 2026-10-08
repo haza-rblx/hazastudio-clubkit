@@ -232,6 +232,10 @@ end
 
 function MobilePanelManager.notifyAcmOpen(): number
 	-- ACM watcher only fires when count is zero; keep duration contract for callers.
+	-- Desktop: the ACM no longer sits over the hotbar, so it stays (and nothing would release a hide).
+	if not isMobile() then
+		return 0
+	end
 	InventoryChromeAnimator.notifyHide("acm")
 	return cfg.HOTBAR_HIDE_DURATION
 end
@@ -264,15 +268,18 @@ function MobilePanelManager.init(playerGui: PlayerGui): ()
 	_playerGui = playerGui
 
 	InventoryChromeAnimator.init(playerGui)
-	InventoryChromeAnimator.setupAcmWatcher()
 
+	-- The ACM only covers the hotbar on phones; on desktop it no longer sits at the bottom, so the
+	-- hotbar stays put (and can never be left hidden by a missed ACM close).
 	if not isMobile() then
 		if cfg.HOTBAR_IDLE_HIDE_ENABLED == true then
 			InventoryChromeAnimator.setupDesktopIdle()
 		end
-		log:info("MobilePanelManager initialized for ACM hotbar focus")
+		log:info("MobilePanelManager initialized (desktop: idle hide only)")
 		return
 	end
+
+	InventoryChromeAnimator.setupAcmWatcher()
 
 	local overlayGui = Instance.new("ScreenGui")
 	overlayGui.Name = "MobilePanelOverlay"

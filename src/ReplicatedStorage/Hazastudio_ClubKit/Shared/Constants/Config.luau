@@ -1656,9 +1656,11 @@ Config.Loading = {
 			-- hero side-to-side loop (HERO_SWING 9 / HERO_HOLD 2.5) and the black dip + drop.
 			ORBIT = 6.5, -- seconds for the whole orbit
 			HANDOFF = 0.8, -- the last seconds of the orbit: letterbox opens, title + grade fade
-			-- gameplay camera the orbit lands on: height above the feet / distance behind
-			ORBIT_END_HEIGHT = 4.2,
-			ORBIT_END_DISTANCE = 11,
+			-- The orbit lands exactly where Roblox's default camera takes over (focus point from
+			-- BaseCamera:GetSubjectPosition; zoom and pitch read from the player's camera before
+			-- the cinematic starts). These are used only when that camera could not be read.
+			ORBIT_FALLBACK_ZOOM = 12.5, -- studs behind the focus point
+			ORBIT_FALLBACK_PITCH_DEG = -10.7, -- negative = looking down
 			FOLLOW_LERP = 10, -- root smoothing inside a shot (cuts snap)
 		},
 	},

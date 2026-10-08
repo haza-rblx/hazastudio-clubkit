@@ -759,6 +759,14 @@ local function showMenu()
 		onSettled = function()
 			isAnimating = false
 			activeFrame.Position = restingPosition
+			-- LAZY_PANEL_ROWS builds ~970 Settings rows on first show; inside the Settings open tween
+			-- that stalls its first frames. Build here instead, while the menu is at rest.
+			local shell = settingsUIRef
+			if shell and type(shell.ensureTabBuilt) == "function" then
+				task.defer(pcall, function()
+					shell:ensureTabBuilt("settings")
+				end)
+			end
 			if activeFrame:IsA("CanvasGroup") then
 				(activeFrame :: CanvasGroup).GroupTransparency = 0
 			end
@@ -939,7 +947,11 @@ local function bindButton(button: GuiButton?, action: (() -> ())?)
 	trackInitConnection(button.Activated:Connect(function()
 		UIMotion.spin(icon :: GuiObject?, 1)
 		UIMotion.releaseHoverTint(row)
-		closeMenuThen(onActivated)
+		if button:GetAttribute("KeepMenuOpen") == true then
+			onActivated()
+		else
+			closeMenuThen(onActivated)
+		end
 	end))
 end
 
@@ -995,7 +1007,11 @@ local function bindGuiObjectClick(target: GuiObject, action: () -> ())
 			return
 		end
 		UIMotion.wiggle(if chipIcon then chipIcon :: ImageLabel else target, 6)
-		closeMenuThen(action)
+		if target:GetAttribute("KeepMenuOpen") == true then
+			action()
+		else
+			closeMenuThen(action)
+		end
 	end))
 end
 
@@ -1014,6 +1030,7 @@ local function applyDiscordInvite(menuRoot: Instance)
 	-- Section3 has TextButton CommunityButton (row) + Frame CommunityButton (link chip).
 	local function visit(parent: Instance)
 		for _, child in ipairs(parent:GetChildren()) do
+			-- The Discord invite opens the browser without closing the top menu (KeepMenuOpen).
 			if child.Name == BUTTONS.COMMUNITY and child:IsA("GuiObject") then
 				local gui = child :: GuiObject
 				if display == "" then
@@ -1028,6 +1045,7 @@ local function applyDiscordInvite(menuRoot: Instance)
 					end
 				else
 					gui.Visible = true
+					gui:SetAttribute("KeepMenuOpen", true)
 					bindGuiObjectClick(gui, function()
 						openDiscordInvite(url)
 					end)

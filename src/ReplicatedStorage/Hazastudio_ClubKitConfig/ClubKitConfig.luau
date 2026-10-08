@@ -902,8 +902,8 @@ ClubKitConfig.Features = {
 	MusicPlayer = true,
 	SyncDance = true,
 	-- Rapid re-click of the PLAYING emote hard-restarts it (fade 0 "wutwut" stutter).
-	-- false = classic behavior (same-emote click toggles the dance off). Default false.
-	WutwutDance = false,
+	-- false = classic behavior (same-emote click toggles the dance off). Default true.
+	WutwutDance = true,
 	-- "Auto" topbar toggle that shuffles dance emotes on an interval. false = hide it.
 	AutoDance = true,
 	-- "Lead Dance" topbar pill (who is leading the floor, tap to follow). false = hide it.

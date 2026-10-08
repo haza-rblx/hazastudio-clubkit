@@ -252,6 +252,11 @@ function MenuShellUI.new(gui: ScreenGui)
 		if tab then
 			tab.ScrollBarThickness = 0
 			tab.ScrollBarImageTransparency = 1
+			-- Thickness 0 alone is not enough: the native bar still paints its Top/Mid/Bottom images
+			-- (and ScrollIndicatorHelper fades them in on scroll), doubling the overlay pill.
+			tab.TopImage = ""
+			tab.MidImage = ""
+			tab.BottomImage = ""
 			OverlayScrollbar.attach(tab, refs.outerWrapper, { side = "left", centerOn = refs.outerWrapper })
 		end
 	end

@@ -99,17 +99,22 @@ local function orbitPoint(theta: number, radius: number, height: number): Vector
 	return Vector3.new(math.sin(a) * radius, height, -math.cos(a) * radius)
 end
 
--- Front-left -> front -> right -> behind in one eased move. Radius, height and aim settle on the
--- gameplay camera (absolute studs, so divided by u before the shot multiplies by it).
+-- Where Roblox's own camera will sit the moment control returns, in stage space (absolute studs:
+-- the default camera does not scale with the avatar). Filled by _step from the same formula
+-- BaseCamera:GetSubjectPosition uses, so the orbit lands on it exactly and the hand-over has no
+-- jump. Until the first frame sets it, a sane pose behind the avatar.
+local landing = { pos = Vector3.new(0, 6, 12.3), target = Vector3.new(0, 4, 0) }
+
+-- Front-left -> front -> right -> behind in one eased move that settles on `landing`.
 local function orbitFn(t: number, u: number): (Vector3, Vector3, number)
 	local e = easeInOutSine(t)
 	local settle = e * e
 	local pos = orbitPoint(
 		lerp(40, -180, e),
-		lerp(9, CameraConfig.ORBIT_END_DISTANCE / u, settle),
-		lerp(3.1, CameraConfig.ORBIT_END_HEIGHT / u, settle)
-	) * u
-	local target = Vector3.new(0, lerp(2.5, 2.1 / u, settle), 0) * u
+		lerp(9 * u, landing.pos.Z, settle),
+		lerp(3.1 * u, landing.pos.Y, settle)
+	)
+	local target = Vector3.new(0, lerp(2.5 * u, landing.target.Y, settle), 0)
 	return pos, target, lerp(52, DEFAULT_FOV, e ^ 1.5)
 end
 
@@ -196,6 +201,10 @@ function LoadingStoryCamera.new()
 	self._revealEndFov = DEFAULT_FOV
 	self._rayParams = RaycastParams.new()
 	self._rayParams.FilterType = Enum.RaycastFilterType.Exclude
+	-- Roblox's stock camera: 12.5 studs behind, looking down 10.7 degrees. start() overwrites
+	-- these with what the player's camera actually has.
+	self._landZoom = CameraConfig.ORBIT_FALLBACK_ZOOM
+	self._landPitch = math.rad(CameraConfig.ORBIT_FALLBACK_PITCH_DEG)
 	return self
 end
 
@@ -257,6 +266,28 @@ function LoadingStoryCamera:_clearLine(target: Vector3, desired: Vector3): Vecto
 		end
 	end
 	return desired
+end
+
+-- ── Landing pose (what Roblox's default camera will do when control returns) ──
+
+-- The default camera follows HumanoidRootPart + a fixed offset (PlayerModule BaseCamera
+-- :GetSubjectPosition: R15 with automatic scaling = 1.5 + (rootHeight/2 - 1)), sits `zoom` studs
+-- behind it and looks down by `pitch`. None of that scales with the avatar, so neither does this.
+function LoadingStoryCamera:_updateLanding(root: BasePart, feetDrop: number)
+	local humanoid = root.Parent and root.Parent:FindFirstChildOfClass("Humanoid")
+	local offsetY = 1.5
+	local cameraOffset = Vector3.zero
+	if humanoid then
+		cameraOffset = humanoid.CameraOffset
+		if humanoid.RigType == Enum.HumanoidRigType.R15 then
+			offsetY = if humanoid.AutomaticScalingEnabled then 1.5 + (root.Size.Y / 2 - 1) else 2
+		end
+	end
+	local focusY = feetDrop + offsetY + cameraOffset.Y
+	local zoom = self._landZoom
+	local pitch = self._landPitch -- radians, negative = looking down
+	landing.target = Vector3.new(cameraOffset.X, focusY, cameraOffset.Z)
+	landing.pos = Vector3.new(cameraOffset.X, focusY - math.sin(pitch) * zoom, cameraOffset.Z + math.cos(pitch) * zoom)
 end
 
 -- ── Establishing shot ────────────────────────────────────────
@@ -423,11 +454,21 @@ function LoadingStoryCamera:_step(dt: number)
 	end
 	local stage = self._stage :: CFrame
 
+	self:_updateLanding(root, feetDrop)
 	local t = if shot == HOLD_SHOT then 1 else math.clamp(self._shotElapsed / shot.duration, 0, 1)
 	local localPos, localTarget, fov = shot.fn(t, u)
 	local target = stage:PointToWorldSpace(localTarget)
 	local pos = self:_clearLine(target, stage:PointToWorldSpace(localPos))
-	camera.CFrame = CFrame.lookAt(pos, target) * breathe
+	-- The idle sway fades out over the orbit's settle, so the last frame is exactly the pose the
+	-- default camera takes over with (any leftover tilt would show as a nudge at the hand-over).
+	local sway = 1
+	if shot == HOLD_SHOT then
+		sway = 0
+	elseif shot.name == "Orbit" then
+		local e = easeInOutSine(t)
+		sway = 1 - e * e
+	end
+	camera.CFrame = CFrame.lookAt(pos, target) * CFrame.identity:Lerp(breathe, sway)
 	camera.FieldOfView = fov
 end
 
@@ -527,6 +568,19 @@ function LoadingStoryCamera:start()
 	self._revealMode = nil
 	local cam = getCamera()
 	if cam then
+		-- Read the default camera's zoom and pitch BEFORE taking over: that is what the player
+		-- gets back, and the orbit lands on it (_updateLanding).
+		if cam.CameraType == Enum.CameraType.Custom then
+			local offset = cam.CFrame.Position - cam.Focus.Position
+			local zoom = offset.Magnitude
+			local pitch = math.asin(math.clamp(cam.CFrame.LookVector.Y, -1, 1))
+			if zoom >= 4 and zoom <= 40 then
+				self._landZoom = zoom
+			end
+			if pitch >= math.rad(-70) and pitch <= math.rad(20) then
+				self._landPitch = pitch
+			end
+		end
 		cam.CameraType = Enum.CameraType.Scriptable
 		cam.CameraSubject = nil
 	end
@@ -550,7 +604,9 @@ function LoadingStoryCamera:stop()
 	local cam = getCamera()
 	if cam then
 		pcall(function()
-			cam.FieldOfView = DEFAULT_FOV
+			-- Hand over on the player's saved FOV (published by SettingsController), not the default.
+			local savedFov = self._player:GetAttribute("HazaSettingsFov")
+			cam.FieldOfView = if type(savedFov) == "number" then savedFov else DEFAULT_FOV
 			cam.CameraType = Enum.CameraType.Custom
 			local character = self._player.Character
 			local humanoid = character and character:FindFirstChildOfClass("Humanoid")

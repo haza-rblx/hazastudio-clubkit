@@ -685,6 +685,8 @@ local function createAvatarContextController(deps: {
 			currentPayload = instantPayload
 			instantPaintApplied = true
 			ui:setData(instantPayload)
+			-- Reveal now: waiting for the server reply left a black card on every re-open.
+			ui:setLoading(false)
 		end
 		-- 3D avatar: pool-or-thumbnail. Does not yield on the main thread.
 		-- Panel still fully interactive (close button active) while pool warms.

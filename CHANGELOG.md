@@ -11,6 +11,17 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+### Fixed (menu / hotbar / FOV polish — 2026-10-08)
+
+- **FOV applied only when Settings was first opened.** The loading cameras reset `FieldOfView` to the default on hand-over; they now land on the player's saved FOV (`HazaSettingsFov` player attribute, published by `SettingsController`).
+- **First Menu → Settings open stuttered.** The lazily built Settings rows (~970 instances) are now built once the top menu has settled, not inside the Settings open tween.
+- **Hotbar hid for the ACM on desktop and could stay hidden.** The ACM watcher in `MobilePanelManager` now runs on phones only.
+- **Social Buzz / Saweria "copy link" lost its selection on the next key press (Ctrl included).** The design ships `SaweriaLink` with `Interactable = false`, and a non-interactive TextBox drops keyboard focus on any key press. `DonationSystemUI` now forces `Interactable = true` on it.
+- **Menu tabs showed two scrollbars (native + overlay pill).** `ScrollBarThickness = 0` does not stop the native bar painting its `TopImage`/`MidImage`/`BottomImage`; `MenuShellUI` now blanks them on the Profile, Settings and Event tabs.
+- **Social Buzz copy button labels:** idle reads "Click to copy" (was the design's "Type it manually in browser."), and the confirmation reads "Copied" without the check mark.
+- **ACM: black flash on open/close.** Close kept the card empty while it slid away (content hidden/reset up front) and re-open waited on the server reply before revealing the content. The content now hides/resets when the dismiss tween ends, and re-open reveals the instant paint immediately. On desktop `notifyAcmOpen` no longer hides the hotbar at all.
+- **Top menu Discord invite no longer closes the menu.** The Community row and invite chip keep their hover/press; clicking opens the invite and leaves the top menu open (`KeepMenuOpen` attribute set in `applyDiscordInvite`).
+
 ### Performance (client footprint on a near-empty server — 2026-10-07)
 
 Engine only; no GUI, DataStore, or buyer-config change. Switches are in `Config.ClientFootprint`, and each names its legacy value. Measured in an Experiment Area solo playtest after boot:
@@ -46,6 +57,19 @@ Engine only; no GUI, DataStore, or buyer-config change. Switches are in `Config.
   - The v2 path (`AvatarContextMenuV2` GUI, static picture, camera zoom/blur backdrop) is gone from `AvatarContextUI`, along with `FeatureFlags.AvatarContextMenuV2Enabled`, its `ConfigBootstrap` mapping, the schema default, the plugin toggle, the template key and the `InventoryChromeAnimator` watcher.
   - `Features.AvatarContextMenuV2` is now in `ClubKitConfigSchema.RETIRED_KEYS`. A buyer file that still has it is left alone and named once in the boot log.
   - A place that still has the v2 GUI gets its client copy destroyed at boot. Every kit GUI pack ships the v1 `AvatarContextMenu`.
+
+### Changed (Wutwut dance restart is now on by default for new installs — 2026-10-08)
+
+- `Features.WutwutDance` defaults to `true` in the config schema and the `ClubKitConfig` template, so a fresh install gets the rapid same-emote hard restart. Click the playing dance again within 0.45 s to restart it; a later click still stops it.
+- **Existing buyers are not changed:** fill-forward never overwrites a key they already have, so a buyer file with `WutwutDance = false` stays off. Nothing to do on update.
+- The engine default `Config.Sync.WUTWUT_ENABLED` stays `false` on purpose. `ConfigBootstrap` ORs the buyer flag with it, so raising it to `true` would switch the feature on for buyers who set `false`.
+- The delivery sheet (`docs/delivery/OWNER_ONBOARDING.txt`) now lists `WutwutDance = Ya`.
+
+### Changed (Dance panel: "Preparing dances..." no longer flashes on every click — 2026-10-08)
+
+- The search-bar placeholder "Preparing dances..." was tied to `isDancePreparing`, which a dance **click** also raises while the server confirms (~80 ms in Studio, longer on a busy server). So it flashed on every dance change.
+- It now shows only for the catalog warm-up. A click always carries `pendingAnimationName`, and the clicked row already repaints as selected, so the search bar stays on "Search dance or pose".
+- `Main.client` only (two call sites, no new locals). The store flag itself is unchanged, so the rate-limit and stale-ack handling in `SyncController` behave as before.
 
 ### Fixed (Packager "Install V6" nametag did not look like V4 — 2026-10-07)
 
@@ -96,7 +120,10 @@ All five are built in code at runtime on the existing GUIs (no RBXM needed); spe
   - **Part 2** (no input): letterbox bars, logo and title, and a character intro camera: venue establishing shot → feet → hands → face → full-body reveal → orbit → gameplay. Distances scale with the avatar's height, and solid walls between the camera and the avatar pull the camera in. Optional `Workspace.ClubKitCameraShots` BaseParts set the establishing shot.
     - **Outro (owner, 2026-10-08):**
       - The avatar no longer dances; it stands with its own idle.
-      - The hero sweep and the black dip + drop are replaced by one orbit (`STORY.CAMERA.ORBIT` 6.5 s): front-left → front → right → behind, landing on the gameplay camera (`ORBIT_END_HEIGHT` 4.2 / `ORBIT_END_DISTANCE` 11).
+      - The hero sweep and the black dip + drop are replaced by one orbit (`STORY.CAMERA.ORBIT` 6.5 s): front-left → front → right → behind, landing exactly where Roblox's default camera takes over, so the hand-over has no jump.
+        - The end pose is computed, not a constant: the focus point comes from the same formula as `BaseCamera:GetSubjectPosition` (HumanoidRootPart + 1.5 + (rootHeight/2 − 1) + `CameraOffset`), and zoom and pitch are read from the player's camera just before the cinematic starts. `ORBIT_FALLBACK_ZOOM` 12.5 / `ORBIT_FALLBACK_PITCH_DEG` −10.7 only apply if that camera can't be read.
+        - The idle camera sway fades out over the orbit's settle, so the last frame carries no leftover tilt.
+        - Measured in a playtest: the last cinematic frame and the first default-camera frame match to 3 decimals, and the camera stays put afterwards. Before, it jumped up and back at the hand-over.
       - During the orbit's last `HANDOFF` 0.8 s the letterbox opens and the title and grade fade, and control returns when it lands.
       - If the story never finishes (the `PART2_MAX` cap), the old black drop still runs.
 - **Buyer config** (fill-forward, nothing to edit): `ClubKitConfig.Loading.ArtworkImage` / `ArtworkVideo` set the part 1 background. Video wins when both are set (played muted); both empty = the experience thumbnail.

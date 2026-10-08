@@ -1890,12 +1890,20 @@ if clubKitOwnedSyncDance then
 		syncDanceSubscriptions:subscribe(ClientMods.SyncStore, "favoritedAnims", function(favorites)
 			emotePanel:setFavorites(favorites, true)
 		end)
+		-- "Preparing dances..." is for the catalog warm-up only. A dance CLICK also raises
+		-- isDancePreparing (while the server confirms), but it always carries
+		-- pendingAnimationName and the clicked row already repaints as selected, so the
+		-- search bar stays put (owner, 2026-10-08).
 		syncDanceSubscriptions:subscribe(ClientMods.SyncStore, "isDancePreparing", function(isPreparing)
-			emotePanel:setPreparingState(isPreparing)
+			local pending = ClientMods.SyncStore:get().pendingAnimationName
+			emotePanel:setPreparingState(isPreparing == true and not (type(pending) == "string" and pending ~= ""))
 		end)
 		syncDanceSubscriptions:subscribe(ClientMods.SyncStore, "isSyncing", refreshSyncOverlay)
 		syncDanceSubscriptions:subscribe(ClientMods.SyncStore, "syncTargetUserId", refreshSyncOverlay)
-		emotePanel:setPreparingState(ClientMods.SyncStore:get().isDancePreparing)
+		emotePanel:setPreparingState(
+			ClientMods.SyncStore:get().isDancePreparing == true
+				and not (type(ClientMods.SyncStore:get().pendingAnimationName) == "string" and ClientMods.SyncStore:get().pendingAnimationName ~= "")
+		)
 		emotePanel:setCurrentSpeed(ClientMods.SyncStore:get().currentSpeed, true)
 		emotePanel:setOpen(ClientMods.SyncStore:get().isPanelOpen, true)
 		refreshSyncOverlay()

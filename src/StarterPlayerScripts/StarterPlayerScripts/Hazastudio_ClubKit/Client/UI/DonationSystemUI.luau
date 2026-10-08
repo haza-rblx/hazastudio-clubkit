@@ -147,6 +147,10 @@ local function configureReadOnlySelectableLink(textBox: TextBox, getLink: () -> 
 	-- in a live playtest, 2026-09-24). The box's own text is set once here and again on
 	-- every payload refresh (the refresh path sets `Text` via `applyExternalProviderText`),
 	-- so nothing else is needed for the value to stay correct.
+	-- The design ships this box with Interactable = false; a non-interactive TextBox drops keyboard
+	-- focus (and with it the selection) on the very next key press, Ctrl included — measured in a
+	-- live playtest 2026-10-08 (same box clone: focus lost on LeftShift; Interactable = true: kept).
+	textBox.Interactable = true
 	textBox.Active = true
 	textBox.Selectable = true
 	textBox.TextEditable = true
@@ -891,7 +895,8 @@ end
 
 local COPY_HINT_KEYBOARD = "Press Ctrl+C / Cmd+C"
 local COPY_HINT_TOUCH = "Hold the link, then tap Copy"
-local COPY_DONE = "Copied ✓"
+local COPY_IDLE = "Click to copy"
+local COPY_DONE = "Copied"
 local COPY_DONE_SECONDS = 2
 local COPY_MODIFIERS = {
 	Enum.KeyCode.LeftControl,
@@ -956,6 +961,9 @@ function DonationSystemUI:_markCopied()
 end
 
 function DonationSystemUI:_bindCopyFeedback()
+	-- The design's own idle label ("Type it manually in browser.") is replaced by a plain call to action.
+	self._copyIdleText = COPY_IDLE
+	self:_setCopyLabel(COPY_IDLE)
 	local linkBox = self._refs.saweriaLink
 	if not linkBox then
 		return

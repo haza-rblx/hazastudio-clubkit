@@ -589,8 +589,9 @@ ClubKitConfigSchema.defaults = {
 		-- When false: SyncBhmsGate makes pack scripts no-op (topbar Dance / DanceGui off). Default false.
 		LegacySyncBhms = false,
 		-- Wutwut: rapid same-emote re-click hard-restarts the playing dance (fade 0 stutter).
-		-- Default false — classic same-emote click toggles the dance off.
-		WutwutDance = false,
+		-- Default true (owner, 2026-10-08) for NEW installs; fill-forward never changes a key a
+		-- buyer already has. false = classic: a same-emote click toggles the dance off.
+		WutwutDance = true,
 		-- "Auto" topbar toggle that shuffles dance emotes (Config.AutoDance). Default true.
 		AutoDance = true,
 		-- "Lead Dance" topbar pill (Config.Sync.LEAD_TOPBAR_ENABLED). Default true.
