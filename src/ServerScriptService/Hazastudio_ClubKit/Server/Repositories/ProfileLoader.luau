@@ -227,7 +227,7 @@ local function processJob(self: any, job: Job)
 	end
 
 	-- Budget refusal: put the job back after the negative-cache TTL instead of abandoning it
-	-- (until 2026-09-24 only Main's overhead listener requeued; settings / stickers / favorites /
+	-- (until 2026-09-24 only Main's overhead listener requeued; settings / favorites /
 	-- likes / venue quests stayed unloaded after a join storm). Listeners hear nothing until the
 	-- job finally loads or gives up.
 	if isBudgetRefusal(result) and Config.ProfileLoader.REQUEUE_ALL_ON_BUDGET ~= false and self._alive then

@@ -6,8 +6,8 @@
 --
 -- Pure: no Roblox services, no Config require — callers pass their own limits in.
 --
--- Accepted shapes deliberately match the kit's existing `normalizeImage`
--- (StickerService / StickerController): bare digits, or `rbxassetid://<digits>`.
+-- Accepted shapes: bare digits, or `rbxassetid://<digits>` (the shape the sticker panel's
+-- `normalizeImage` took before it was removed in 3.x).
 -- Library URLs are NOT accepted here either; one path quietly taking more than
 -- the other is how "but it worked in the sticker panel" bugs start.
 

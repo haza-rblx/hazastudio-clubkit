@@ -21,7 +21,7 @@ export type Callbacks = {
 }
 
 local HOTBAR_GUI_NAMES = hotbarCfg.GUI_NAMES
-local HOTBAR_FRAME_NAMES = { hotbarCfg.HOTBAR_WRAPPER_NAME, hotbarCfg.STICKER_WRAPPER_NAME }
+local HOTBAR_FRAME_NAMES = { hotbarCfg.HOTBAR_WRAPPER_NAME }
 local HOTBAR_CHROME_ROOT_NAME = hotbarCfg.HOTBAR_CHROME_ROOT_NAME
 
 local InventoryChromeAnimator = {}
@@ -143,7 +143,17 @@ local function setHotbarChromeChildrenVisible(visible: boolean): ()
 	end
 end
 
---- Wrap HotbarWrapper + StickerButtonWrapper (and screen UIListLayout) under one root we tween.
+-- Retired hotbar children (old buyer GUIs) are kept hidden and never join the chrome root.
+local function hideRetiredHotbarChildren(hotbarGui: Instance): ()
+	for _, name in ipairs(hotbarCfg.RETIRED_CHILD_NAMES) do
+		local retired = hotbarGui:FindFirstChild(name, true)
+		if retired ~= nil and retired:IsA("GuiObject") then
+			(retired :: GuiObject).Visible = false
+		end
+	end
+end
+
+--- Wrap HotbarWrapper (and screen UIListLayout) under one root we tween.
 local function ensureHotbarChromeRoot(): boolean
 	if _hotbarChromeRoot ~= nil and _hotbarChromeRoot.Parent ~= nil then
 		return true
@@ -156,12 +166,11 @@ local function ensureHotbarChromeRoot(): boolean
 	_hotbarGui = hotbarGui
 
 	local wrapper = hotbarGui:FindFirstChild(hotbarCfg.HOTBAR_WRAPPER_NAME, true)
-	local sticker = hotbarGui:FindFirstChild(hotbarCfg.STICKER_WRAPPER_NAME, true)
-	if wrapper == nil or sticker == nil or not wrapper:IsA("GuiObject") or not sticker:IsA("GuiObject") then
+	if wrapper == nil or not wrapper:IsA("GuiObject") then
 		return false
 	end
 	local wrapperGui = wrapper :: GuiObject
-	local stickerGui = sticker :: GuiObject
+	hideRetiredHotbarChildren(hotbarGui)
 
 	local root = hotbarGui:FindFirstChild(HOTBAR_CHROME_ROOT_NAME)
 	if root == nil or not root:IsA("Frame") then
@@ -179,7 +188,6 @@ local function ensureHotbarChromeRoot(): boolean
 			layout.Parent = chromeRoot
 		end
 		wrapperGui.Parent = chromeRoot
-		stickerGui.Parent = chromeRoot
 		root = chromeRoot
 	elseif wrapperGui.Parent ~= root then
 		local layout = findScreenHotbarListLayout(hotbarGui)
@@ -188,9 +196,6 @@ local function ensureHotbarChromeRoot(): boolean
 		end
 		if wrapperGui.Parent ~= root then
 			wrapperGui.Parent = root
-		end
-		if stickerGui.Parent ~= root then
-			stickerGui.Parent = root
 		end
 	end
 

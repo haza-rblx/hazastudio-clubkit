@@ -218,10 +218,7 @@ function HotbarUIBinder.new(deps: {
 	self._slots = buildRenderSlots(deps.refs.slots)
 	self._connections = {} :: { RBXScriptConnection }
 	self._unsubscribers = {} :: { () -> () }
-	self._disabledStickerDragDetectors = {} :: { DisabledDragDetector }
 	self._equipRequested = nil :: ((string) -> ())?
-	self._stickerRequested = nil :: (() -> ())?
-	self._lastStickerRequestClock = 0
 	self._mouseReady = false
 	self._pendingEquipKey = nil :: string?
 	self._backpackButton = deps.refs.backpackButton
@@ -234,7 +231,6 @@ function HotbarUIBinder.new(deps: {
 
 	self._refs.root.Enabled = not (Workspace.CurrentCamera and Workspace.CurrentCamera:GetAttribute("FreecamActive") == true)
 	self._refs.root.DisplayOrder = Config.Hotbar.DISPLAY_ORDER
-	self._refs.stickerButtonWrapper.Visible = true
 
 	self:_connectInput()
 	self:_subscribeStore()
@@ -419,40 +415,6 @@ function HotbarUIBinder:_connectInput(): ()
 	if self._store:get().hasTools then
 		self:_ensureStepConnection()
 	end
-
-	if self._refs.stickerButton then
-		self._refs.stickerButton.Visible = true
-		self._refs.stickerButton.Active = true
-
-		for _, descendant in ipairs(self._refs.stickerButton:GetDescendants()) do
-			if descendant:IsA("UIDragDetector") then
-				table.insert(self._disabledStickerDragDetectors, {
-					detector = descendant,
-					enabled = descendant.Enabled,
-				})
-				descendant.Enabled = false
-			end
-		end
-
-		self:_trackConnections(UIMotion.bindPress(self._refs.stickerButton))
-		self:_trackConnections(UIMotion.bindHover(self._refs.stickerButton))
-
-		local function requestStickerPanel()
-			local now = os.clock()
-			if now - self._lastStickerRequestClock < 0.35 then
-				-- Throttled: the trigger still answers the tap so it never feels dead.
-				UIMotion.wiggle(self._refs.stickerButton, 5)
-				return
-			end
-			self._lastStickerRequestClock = now
-
-			if self._stickerRequested then
-				self._stickerRequested()
-			end
-		end
-
-		self:_trackConnection(self._refs.stickerButton.Activated:Connect(requestStickerPanel))
-	end
 end
 
 function HotbarUIBinder:_findHotbarChromeRoot(): GuiObject?
@@ -594,10 +556,6 @@ function HotbarUIBinder:bindEquipRequested(callback: (string) -> ()): ()
 	self._equipRequested = callback
 end
 
-function HotbarUIBinder:bindStickerRequested(callback: () -> ()): ()
-	self._stickerRequested = callback
-end
-
 function HotbarUIBinder:renderHotbarSlots(slots: { HotbarSlotViewModel }, hasTools: boolean): ()
 	self:_render(slots, hasTools)
 end
@@ -610,13 +568,6 @@ function HotbarUIBinder:destroy(): ()
 			slot.refs.dragDetector.Enabled = slot.originalDragDetectorEnabled
 		end
 	end
-
-	for _, entry in ipairs(self._disabledStickerDragDetectors) do
-		if entry.detector and entry.detector.Parent then
-			entry.detector.Enabled = entry.enabled
-		end
-	end
-	table.clear(self._disabledStickerDragDetectors)
 
 	for _, unsubscribe in ipairs(self._unsubscribers) do
 		unsubscribe()

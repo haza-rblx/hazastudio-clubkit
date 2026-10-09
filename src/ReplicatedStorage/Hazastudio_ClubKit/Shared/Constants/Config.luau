@@ -1344,8 +1344,8 @@ Config.Hotbar = {
 	},
 	HOTBAR_WRAPPER_NAME = "HotbarWrapper",
 	HOTBAR_CHROME_ROOT_NAME = "HotbarChromeRoot",
-	STICKER_WRAPPER_NAME = "StickerButtonWrapper",
-	STICKER_TRIGGER_NAME = "StickerPanelTrigger",
+	-- Retired hotbar children (sticker panel removed 3.x): hidden on the client, swept at server boot.
+	RETIRED_CHILD_NAMES = { "StickerButtonWrapper" },
 	MAX_SLOTS = 10,
 	-- PhoneLayout uses this cap for hotbar slot count (club mobile layout).
 	MAX_SLOTS_MOBILE = 7,
@@ -1411,82 +1411,8 @@ Config.RoleTools = {
 	TOP_SPENDER_FOLDER = "TOP RUPIAH SPENDER",
 	TOP_DONATE_FOLDER = "TOP ROBUX DONATOR",
 }
--- ============================================================
--- STICKER SYSTEM
--- ============================================================
-Config.Sticker = {
-	GUI_NAME = "11-StickerSystemGUI",
-	DISPLAY_ORDER = 60,
-	BILLBOARD_GUI_NAME = "ShoulderStickerGUI",
-	BILLBOARD_IMAGE_NAME = "Sticker",
-	STICKER_IMAGE_ATTRIBUTE = "StickerImage",
-	STICKER_CLEAR_ATTRIBUTE = "StickerClear",
-	DATASTORE_NAME = scopedDataStoreKey("StickerCollection_v1"),
-	KEY_PREFIX = "Player_",
-	-- Shared pool: one upload appears in every player's picker (DataStore key separate from Player_*).
-	GLOBAL_POOL_KEY = "GlobalPool_v1",
-	REMOTE_SET = "StickerSet",
-	REMOTE_CLEAR = "StickerClear",
-	REMOTE_ADD = "StickerAdd",
-	REMOTE_REQUEST = "StickerRequest",
-	REMOTE_SYNC = "StickerSync",
-	REMOTE_READY_TIMEOUT = 10,
-	MAX_COLLECTION_SIZE = 80,
-	DEFAULT_COLLECTION = {
-		"rbxassetid://84494880468556",
-	},
-	DEFAULT_ADORNEE_PRIORITY = {
-		"UpperTorso",
-		"Torso",
-		"HumanoidRootPart",
-		"Head",
-	},
-	BILLBOARD_SIZE = UDim2.new(2.5, 0, 1.5, 0),
-	BILLBOARD_STUDS_OFFSET = Vector3.new(2.1, 1.8, 0),
-	BILLBOARD_MAX_DISTANCE = 40,
-	BILLBOARD_LIGHT_INFLUENCE = 1,
-	IMAGE_TRANSPARENCY = 0,
-	DISPLAY_DURATION_SECONDS = 5,
-	-- Picker click shows on shoulder only (session); DataStore write only on upload (ADD).
-	PERSIST_SELECTION_ON_SET = false,
-	PANEL_TWEEN_TIME = 0.22,
-	PANEL_CLOSED_OFFSET = 32,
-	MODAL_TWEEN_TIME = 0.18,
-	MODAL_CLOSED_SCALE = 0.94,
-	DEBUG = false,
-	-- Rate limits per remote command (server-side, per player)
-	RATE_LIMITS = {
-		SET = { max = 8, window = 5 },
-		CLEAR = { max = 8, window = 5 },
-		ADD = { max = 5, window = 10 },
-		REQUEST = { max = 3, window = 5 },
-	},
-}
--- ============================================================
--- STICKER BILLBOARD ANIMATION (client-side visual)
--- ============================================================
-Config.StickerAnim = {
-	-- Entrance (pop-in bounce)
-	ENTRANCE_DURATION = 0.38, -- total entrance time (seconds)
-	ENTRANCE_OVERSHOOT = 1.18, -- scale overshoot before settling to 1.0
-	-- Exit (fade-out + scale down)
-	EXIT_DURATION = 0.32,
-	EXIT_SCALE = 0.7, -- final scale before hiding
-	-- Idle float (sinusoidal Y offset)
-	FLOAT_SPEED = 2.2, -- radians per second
-	FLOAT_AMPLITUDE = 0.12, -- studs up/down
-	-- Idle wobble (subtle rotation)
-	WOBBLE_SPEED = 1.8, -- radians per second
-	WOBBLE_AMPLITUDE = 2.5, -- degrees
-	-- Sparkle particles on entrance
-	SPARKLE_COUNT = 5,
-	SPARKLE_SIZE_MIN = 10,
-	SPARKLE_SIZE_MAX = 16,
-	SPARKLE_DELAY_MAX = 0.2, -- stagger delay per sparkle
-	SPARKLE_FADE_IN = 0.25,
-	SPARKLE_HOLD = 0.3, -- hold visible before fading out
-	SPARKLE_FADE_OUT = 0.35,
-}
+-- Retired kit GUIs: the server boot sweep destroys these StarterGui templates (Server/Init/RetiredGuiSweep).
+Config.RETIRED_GUI_NAMES = { "11-StickerSystemGUI" }
 -- ============================================================
 -- FEATURE FLAGS
 -- ============================================================
@@ -1525,7 +1451,6 @@ Config.FeatureFlags = {
 	LevelSystemEnabled = true,
 	ShopEnabled = true,
 	CouplesEnabled = true,
-	StickersEnabled = true,
 	LeaderboardEnabled = true,
 	DonationCashEnabled = true,
 	DonationSaweriaEnabled = true,
@@ -4114,7 +4039,6 @@ Config.MobileScale = {
 	CUSTOM_TITLE_GUI = 0.55, -- 1000-01-CT-ADDON root UIScale on phone layout
 	FREE_TITLE_EVENT_CARD = 0.7, -- IconGroup.ADDON-FreeTitleEventTrigger resting UIScale on phone layout
 	JOIN_COMMUN_GUI = 0.48, -- 16-JoinCommunPrompt root UIScale on phone layout
-	STICKER_GUI = 0.8, -- 11-StickerSystemGUI
 	NOTIF_GUI = 0.75, -- 99-NotificationCenter
 	COMMAND_GUI = 0.8, -- CommandLibraryGUI
 	ACM_GUI = 0.68, -- AvatarContextMenu (+ remove Y offset on MainWrapper)
@@ -4314,6 +4238,11 @@ Config.Telemetry = {
 	ENABLED = true,
 	BUDGET_INTERVAL_SEC = 900,
 	PATH = "/v3/telemetry",
+	-- Instance-diet probe (docs/plans/instance-diet-2026-10-09.md). Temporary; flip to false to stop.
+	INSTANCES_ENABLED = true,
+	INSTANCES_SAMPLE_SEC = 60, -- client + server sample cadence
+	INSTANCES_CLIENT_BATCH_SEC = 300, -- one client → server RemoteEvent per 5 min
+	INSTANCES_FLUSH_SEC = 900, -- one POST per 15 min (HTTP budget rule, ADR 0007)
 }
 -- HTTP API wrapper — dedup + cache for GroupService/Players at 100 CCU.
 Config.HttpApi = {
@@ -4537,7 +4466,7 @@ Config.ClientFootprint = {
 	-- After boot, empty the StarterGui templates that already have their PlayerGui copy
 	-- (StarterGuiTrimService). -4,200 instances. Legacy: false.
 	TRIM_STARTER_GUI = true,
-	-- Templates that stay whole besides Sticker / PaidBroadcast (cloned on demand).
+	-- Templates that stay whole besides PaidBroadcast (cloned on demand).
 	STARTER_GUI_KEEP = { "00-LoadingScreen" },
 	-- The server leaderboard renderer drops row decoration that draws nothing (disabled UIStroke,
 	-- zero UIPadding, UICorner on a transparent Frame) and turns aspect-ratio constraints into

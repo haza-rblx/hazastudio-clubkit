@@ -11,6 +11,20 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+### Added (instance probe, temporary — instance diet Phase 1, 2026-10-09)
+
+- **Temporary instance telemetry** (`docs/plans/instance-diet-2026-10-09.md`, phase 1). The server (`Server/Net/InstanceTelemetry`) samples `Stats.InstanceCount` and the memory total. Each client (`Client/Services/InstanceProbeClient`) samples its own instance count and what the other players add (their Backpack and Character descendants, plus its own PlayerGui). Client batches go to the server over the new `InstanceProbeReport` RemoteEvent. The server validates them, accepts at most one batch per player per 240 s, and drops anything else silently. Every 15 min one aggregate POSTs to `/v3/telemetry` as `kind = "instances"` at bulk priority: no UserIds, no names, body capped at 32 KB.
+- **Config (engine):** `Config.Telemetry.INSTANCES_ENABLED` (true), `INSTANCES_SAMPLE_SEC` (60), `INSTANCES_CLIENT_BATCH_SEC` (300), `INSTANCES_FLUSH_SEC` (900). The probe runs only when `INSTANCES_ENABLED`, `Config.Telemetry.ENABLED` (buyer `ClubKitConfig.Telemetry.Enabled`) and `BudgetTelemetry.isEnabled()` are all true. Buyer config is unchanged.
+- **Not live yet:** the VPS ingest accepts any `kind` (checked 2026-10-09, no VPS change needed), so data arrives once a server runs this build. Remove the probe when the instance diet closes.
+
+### Removed (sticker panel — instance diet Phase 2, 2026-10-09)
+
+- **Breaking: the sticker panel is gone** (owner decision; `docs/plans/instance-diet-2026-10-09.md`). It also put a server-built `ShoulderStickerGUI` BillboardGui on every character. Deleted: `StickerService`, `StickerController` (server and client), `StickerRepository`, `StickerBillboardAnimator`. Removed from `Config`: `Config.Sticker`, `Config.StickerAnim`, `FeatureFlags.StickersEnabled`, `Hotbar.STICKER_*`, `MobileScale.STICKER_GUI`.
+- **Buyer key retired:** `Features.Stickers` is in `ClubKitConfigSchema.RETIRED_KEYS` (no longer filled forward, named once in the boot log). Buyer files are not edited.
+- **DataStore:** `StickerCollection_v1` is no longer read. The data stays in the store; nothing deletes it.
+- **Place GUIs:** the kit destroys `StarterGui["11-StickerSystemGUI"]` and the hotbar's `StickerButtonWrapper` at server boot (`Server/Init/RetiredGuiSweep`, names in `Config.RETIRED_GUI_NAMES` and `Config.Hotbar.RETIRED_CHILD_NAMES`). Buyers may delete those instances from their place (optional). A hotbar that still has the wrapper keeps working; the wrapper is hidden.
+- **Hotbar chrome:** `InventoryChromeAnimator` wraps `HotbarWrapper` alone. `HotbarGuiRefs` no longer requires the sticker wrapper (a missing wrapper used to return `ok = false` and kill the whole hotbar).
+
 ### Changed (topbar overflow: three dots + dropdown — 2026-10-09)
 
 - When the topbar runs out of width (phones), each side collapses into a three-dots button that opens a dropdown below the topbar. Before, the overflow was a horizontal strip that opened by itself at boot and could not be closed (three dots hidden). `Icon/Features/Overflow.luau`: `joinDropdown` instead of `joinMenu`, no select at creation, no auto-select, three dots always shown, tapping a row closes the dropdown, icons keep their natural width when deciding whether they fit (`overflowRestWidth`).

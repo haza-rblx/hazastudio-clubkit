@@ -936,7 +936,6 @@ ClubKitConfig.Features = {
 	-- Show the couple chat tag (💕 partner) in the General/chat prefix. Default true.
 	-- false hides the tag in chat only; the couple system + overhead couple name stay on.
 	ShowCoupleChatTag = true,
-	Stickers = true,
 	Leaderboards = true,
 	DonationCash = true,
 	DonationSaweria = true, -- legacy alias for DonationCash

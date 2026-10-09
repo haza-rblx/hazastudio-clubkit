@@ -693,7 +693,8 @@ trackClientLifecycle("PaidBroadcastController", ClientMods.PaidBroadcastControll
 trackClientLifecycle("AdminController", ClientMods.AdminController)
 trackClientLifecycle("AvatarLikeWorldEffect", ClientMods.AvatarLikeWorldEffect)
 trackClientLifecycle("TopMenuController", ClientMods.TopMenuController)
-trackClientLifecycle("StickerBillboardAnimator", ClientMods.StickerBillboardAnimator)
+-- Instance-diet probe (temporary; docs/plans/instance-diet-2026-10-09.md phase 1). Samples after gameplay.
+trackPostGameplayBootTask("InstanceProbe", ClientMods.InstanceProbeClient.start)
 
 local function createSubscriptionGroup(name: string): any
 	local groupLog = Logger.new(name)
@@ -1089,12 +1090,6 @@ end
 -- NukeEffectController.init({
 -- 	logger = Logger.new("NukeEffectController"),
 -- })
--- === Sticker Billboard Animations ===
-if Config.FeatureFlags.StickersEnabled ~= false then
-	ClientMods.StickerBillboardAnimator.init({
-		logger = Logger.new("StickerBillboardAnimator"),
-	})
-end
 ClientMods.ChatTagsController.init({})
 -- === Shared Topbar Icons ===
 -- Created BEFORE controller init so icons already exist
@@ -1674,38 +1669,6 @@ trackBootTask("HotbarController.init", function()
 			end,
 		})
 	end
-	if Config.FeatureFlags.StickersEnabled == false and refsResult.value.stickerButtonWrapper then
-		refsResult.value.stickerButtonWrapper.Visible = false
-	end
-	ensurePlayerGuiChild(playerGui, Config.Sticker.GUI_NAME, 10, hotbarLog)
-
-	local stickerCtrl = nil
-	if Config.FeatureFlags.StickersEnabled ~= false then
-		stickerCtrl = trackClientLifecycle(
-			"StickerController",
-			ClientMods.StickerController.create({
-				remotes = Remotes,
-				logger = Logger.new("StickerController"),
-			})
-		)
-		stickerCtrl:init()
-		-- Register sticker panel here (stickerCtrl available in this scope)
-		MobilePanelManager.register("sticker", Config.Sticker.GUI_NAME, function()
-			stickerCtrl:closePanel()
-		end)
-	end
-	binder:bindStickerRequested(function()
-		if Config.FeatureFlags.StickersEnabled == false or not stickerCtrl then
-			return
-		end
-		if stickerCtrl:isOpen() then
-			stickerCtrl:closePanel()
-			MobilePanelManager.close("sticker")
-		else
-			stickerCtrl:openPanel()
-			MobilePanelManager.open("sticker")
-		end
-	end)
 	local controller = trackClientLifecycle(
 		"HotbarController",
 		ClientMods.HotbarController.new({
@@ -1724,9 +1687,6 @@ trackBootTask("HotbarController.init", function()
 			if refsResult.value.root and refsResult.value.root.Parent then
 				refsResult.value.root.ResetOnSpawn = false
 				refsResult.value.root.Enabled = true
-				if refsResult.value.stickerButtonWrapper then
-					refsResult.value.stickerButtonWrapper.Visible = Config.FeatureFlags.StickersEnabled ~= false
-				end
 			end
 			service:refresh()
 		end)
@@ -2289,7 +2249,6 @@ do
 	if not okGui then
 		studioWarn("[ImagePreload] PlayerGui sweep failed: " .. tostring(guiErr))
 	end
-	reg("background", Config.Sticker, "Config.Sticker")
 
 	ImagePreloadService.start()
 end

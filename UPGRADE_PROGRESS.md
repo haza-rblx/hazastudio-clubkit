@@ -19,7 +19,7 @@ Internal scratch pad to track work **before** a version is released.
 | PARKLAB event absen (quest milestones) rollout | owner + agent | PARKLAB is still on 2.12.0 and has no event board. Needs: full engine sync, GUIs `18-EventQuestPopup`, `19-EventReminders` and the `EventTab` templates in `07-MenuGUI`; set `FreeTitleEvent.Trigger = "Topbar"` first (sync wipes the place-only topbar/menu); check `Group.GROUP_ID`; create the quest on the dashboard: 7 days 50 R$ ×100, 14 days 50 R$ ×150, 21 days voucher. Start 2026-10-09. |
 | Music panel 3.0 GUI RBXM | owner | Save the cover stack (`BackdropNear`, `BackdropFar`, `CoverImage`) into the template, then export `06-MusicPlayerGUI` v3 with `Enabled = false`. Buyers cannot run 3.0 scripts without it. |
 | Delete the duplicate `QueueListTemplate` in `06-MusicPlayerGUI` | owner | Place GUI only. |
-| Ctrl+S on THE BASIC TEST and the Experiment Area | owner | Unsaved synced files. |
+| Ctrl+S on THE BASIC TEST | owner | Unsaved synced files. The Experiment Area was saved 2026-10-10. |
 | clubkit-infra: commit and push `main`; deploy migration `0024` with `license-routes.js` and `discord.js` | owner | Foreign GUI detail. Migrations 0028 and 0029 are deployed (2026-10-09). |
 | 3.0 playtests: 2-player music pass, Stage E gate, per-track cover in game, panel refresh | owner | See UPGRADE.md "Known issues". |
 | UI motion: reduced-motion run, phone-emulator pass, live checks | owner | ADR 0011 gate. |
@@ -34,6 +34,66 @@ Internal scratch pad to track work **before** a version is released.
 | Packager `collect()` bundles installed admin loaders | agent | Backlog. |
 | RUST and NIGHT ZONE still on a 2.9.2-era build | owner | Plan the jump separately from the release. |
 | `sourcemap.json` stale since 2.6.0 | agent | Regenerate with `rojo sourcemap`. |
+| Experiment Area: delete the instance-diet leftovers (2026-10-10) | owner | The permission classifier blocked the agent's delete. By hand, after Ctrl+S: `StarterGui.11-StickerSystemGUI`, `StarterGui.10-HotbarGUI.StickerButtonWrapper`, the 5 sticker ModuleScripts (`Server.Services.StickerService`, `Server.Controllers.StickerController`, `Server.Repositories.StickerRepository`, `Client.Controllers.StickerController`, `Client.Utils.StickerBillboardAnimator`), and the 5 `ServerStorage` backup folders listed in the plan §2.D. None of them breaks anything if left in place. |
+| `robloxstudio` MCP bridge down | owner | Its Studio plugin is v3.2.0 but the MCP server is v3.1.6 (HTTP 426 `plugin_version_mismatch`). Update the server, or `eval_client_runtime` and the phone emulator stay unavailable. |
+
+---
+
+## Unreleased — file table (instance diet Phase 2: sticker removal, 2026-10-09)
+
+Plan: [`docs/plans/instance-diet-2026-10-09.md`](docs/plans/instance-diet-2026-10-09.md) §2. Not committed.
+- **Experiment Area:** synced and playtested 2026-10-10, together with Phase 1. The plan has the results under §2.D, §2.E and §Results. The owner saved it (Ctrl+S) the same day.
+- **Place leftovers not yet deleted:** the sticker GUIs, 5 sticker modules and 5 backup folders. The permission classifier blocked the delete.
+
+**Upgrade-guide note:** Sticker panel is gone; you may delete `11-StickerSystemGUI` (optional — the kit removes it at runtime).
+
+| File | Change | Buyer-owned? |
+|---|---|---|
+| `Server/Services/StickerService.luau` | Deleted | no |
+| `Server/Controllers/StickerController.luau` | Deleted | no |
+| `Server/Repositories/StickerRepository.luau` | Deleted | no |
+| `Client/Controllers/StickerController.luau` | Deleted | no |
+| `Client/Utils/StickerBillboardAnimator.luau` | Deleted | no |
+| `Server/Init/RetiredGuiSweep.luau` | New: boot sweep for retired GUIs (`11-StickerSystemGUI`, hotbar `StickerButtonWrapper`) | no |
+| `Server/Init/ServerModuleBag.luau` | Sticker entries removed; `RetiredGuiSweep` added | no |
+| `Server/Main.server.luau` | Sticker remotes, service and controller block removed; sweep call at top of boot; boot log text | no |
+| `Server/Repositories/ProfileLoader.luau` | Comment only (`stickers` no longer a load kind) | no |
+| `Client/Init/ClientModuleBag.luau` | `StickerController` and `StickerBillboardAnimator` entries removed | no |
+| `Main.client.luau` | Sticker billboard, hotbar sticker wiring, panel registration and `reg("background", Config.Sticker)` removed; hotbar wrapper visibility lines removed | no |
+| `Client/UI/HotbarUIBinder.luau` | `bindStickerRequested` and sticker button handling removed | no |
+| `Client/UI/HotbarGuiRefs.luau` | Sticker lookup and fields removed; a hotbar without the sticker wrapper is no longer `ok = false` | no |
+| `Client/Services/InventoryChromeAnimator.luau` | Wraps `HotbarWrapper` alone; retired sticker wrapper hidden if present | no |
+| `Client/Services/MobileScaleService.luau` | Sticker wrapper and `STICKER_GUI` scale removed | no |
+| `Client/Services/StarterGuiTrimService.luau` | Sticker keep removed; header comment updated | no |
+| `Client/Utils/ImageSwap.luau` | Comment only (example list) | no |
+| `Shared/Constants/Config.luau` | `Config.Sticker`, `Config.StickerAnim`, `FeatureFlags.StickersEnabled`, `Hotbar.STICKER_*`, `MobileScale.STICKER_GUI` removed; `RETIRED_GUI_NAMES`, `Hotbar.RETIRED_CHILD_NAMES` added | no |
+| `Shared/Config/ClubKitConfigSchema.luau` | `Stickers` default and feature row removed; `Features.Stickers` added to `RETIRED_KEYS` | no (engine; drives the buyer fill-forward) |
+| `Shared/Config/ConfigBootstrap.luau` | `Stickers` to `StickersEnabled` mapping removed | no (engine) |
+| `Shared/Domain/TitleImageDomain.luau` | Comment only (no longer names removed services) | no |
+| `Shared/Utils/CharacterReady.luau` | Comments only (no longer name removed services or consumers) | no |
+| `Hazastudio_ClubKitConfig/ClubKitConfig.luau` (template) | `Stickers = true,` removed; nothing else | template (ADR 0001) |
+| `CHANGELOG.md` | `[Unreleased]` "Removed" entry with the breaking note | no |
+| `tools/HotbarInventoryAudit.playmode.luau` | Dev tool only: the `stickerGui` line (read `Config.Sticker.GUI_NAME`) removed | no (not shipped) |
+
+Not touched (leave alone per plan): `Shared/Utils/CharacterReady.luau` `findAdornee` logic, `MotionPresets`, the `StickerCollection_v1` DataStore key (data stays, no longer read), `Secrets.luau`, every other buyer config key.
+
+---
+
+## Unreleased — file table (instance diet Phase 1: instance probe, temporary, 2026-10-09)
+
+Plan: [`docs/plans/instance-diet-2026-10-09.md`](docs/plans/instance-diet-2026-10-09.md) §1. Repo only: not committed, not deployed, VPS untouched. The VPS ingest check (1.D) and the solo Studio check (1.F) are owner steps. Buyer config is unchanged; buyers can still opt out with `ClubKitConfig.Telemetry.Enabled`.
+
+| File | Change | Buyer-owned? |
+|---|---|---|
+| `Shared/Constants/Config.luau` | `Config.Telemetry.INSTANCES_ENABLED`, `INSTANCES_SAMPLE_SEC`, `INSTANCES_CLIENT_BATCH_SEC`, `INSTANCES_FLUSH_SEC` added next to `BUDGET_INTERVAL_SEC` | no |
+| `Server/Net/InstanceTelemetry.luau` | New: server sampler, `InstanceProbeReport` receiver (shape check, 240 s per-player gap, silent drop), 15-min flush as `kind = "instances"` (32 KB cap, no ids or names) | no |
+| `Server/Init/ServerModuleBag.luau` | `InstanceTelemetry` entry added after `BudgetTelemetry` | no |
+| `Server/Main.server.luau` | `InstanceProbeReport` created in the remotes block; `ServerMods.InstanceTelemetry.start(...)` called there (no new top-level local) | no |
+| `Client/Services/InstanceProbeClient.luau` | New: client sampler (own count, other players' Backpack and Character, own PlayerGui); one batch per `INSTANCES_CLIENT_BATCH_SEC` | no |
+| `Client/Init/ClientModuleBag.luau` | `InstanceProbeClient` entry added | no |
+| `Main.client.luau` | `trackPostGameplayBootTask("InstanceProbe", ...)` starts the sampler (no new top-level local) | no |
+| `docs/adr/0007-product-telemetry.md` | One-line note: instances probe (temporary) rides phase B | no |
+| `CHANGELOG.md` | `[Unreleased]` "Added" entry | no |
 
 ---
 

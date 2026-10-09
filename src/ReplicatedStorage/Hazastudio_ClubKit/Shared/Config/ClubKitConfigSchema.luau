@@ -616,7 +616,6 @@ ClubKitConfigSchema.defaults = {
 		-- Show the couple chat tag (💕 partner) in the General/chat prefix. Default true.
 		-- false hides the tag in chat only; the couple system + overhead couple name stay on.
 		ShowCoupleChatTag = true,
-		Stickers = true,
 		Leaderboards = true,
 		DonationCash = true,
 		DonationSaweria = true,
@@ -676,7 +675,6 @@ ClubKitConfigSchema.FEATURE_MANIFEST = {
 		items = {
 			{ key = "Couples", label = "Couple system" },
 			{ key = "ShowCoupleChatTag", label = "Couple chat tag (General)" },
-			{ key = "Stickers", label = "Stickers" },
 			{ key = "LevelSystem", label = "Level & XP" },
 			{ key = "SelfCustomTitle", label = "Self-service custom title (1000-01-CT-ADDON)" },
 		},
@@ -814,6 +812,7 @@ ClubKitConfigSchema.RETIRED_KEYS = {
 	["Features.MusicReadOnlyLibrary"] = "3.0: the web library is the only music library",
 	["Features.MusicWebLibrary"] = "3.0: the web library is always on",
 	["Features.AvatarContextMenuV2"] = "the avatar context menu v2 redesign was removed (owner, 2026-10-07); the kit always uses AvatarContextMenu",
+	["Features.Stickers"] = "3.x: the sticker system was removed (instance diet, docs/plans/instance-diet-2026-10-09.md)",
 	-- Never released (owner, 2026-10-07); only places that ran an unreleased build carry these.
 	["Features.DailyQuest"] = "the Daily Quest addon was removed; use a streak quest on the event board (dashboard page Event)",
 	["DailyQuest"] = "the Daily Quest addon was removed; use a streak quest on the event board (dashboard page Event)",

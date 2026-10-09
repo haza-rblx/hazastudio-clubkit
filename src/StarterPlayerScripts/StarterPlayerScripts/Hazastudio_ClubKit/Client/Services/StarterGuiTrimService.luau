@@ -7,9 +7,9 @@
 --
 -- What stays:
 -- - each ScreenGui shell, because ForeignGuiGuardService asks StarterGui:FindFirstChild(name);
--- - templates that are cloned on demand (Sticker, PaidBroadcast) plus Config.ClientFootprint.STARTER_GUI_KEEP;
+-- - templates that are cloned on demand (PaidBroadcast) plus Config.ClientFootprint.STARTER_GUI_KEEP;
 -- - any template whose PlayerGui copy is missing, because the ensure*/fallback paths clone it.
--- Every fallback in the kit (TopMenuGuiRefs, StickerController, PaidBroadcastController,
+-- Every fallback in the kit (TopMenuGuiRefs, PaidBroadcastController,
 -- Main.client ensurePlayerGuiChild) checks PlayerGui first, so it never reaches an emptied template.
 
 local Players = game:GetService("Players")
@@ -25,11 +25,7 @@ local function keepNames(): { [string]: boolean }
 	for _, name in ipairs(Config.ClientFootprint.STARTER_GUI_KEEP) do
 		keep[name] = true
 	end
-	local sticker = Config.Sticker and Config.Sticker.GUI_NAME
 	local broadcast = Config.PaidBroadcast and Config.PaidBroadcast.GUI_NAME
-	if type(sticker) == "string" then
-		keep[sticker] = true
-	end
 	if type(broadcast) == "string" then
 		keep[broadcast] = true
 	end

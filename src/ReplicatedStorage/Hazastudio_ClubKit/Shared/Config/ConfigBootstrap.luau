@@ -750,7 +750,6 @@ function ConfigBootstrap.apply(config: any)
 			Settings = "SettingsEnabled",
 			Shop = "ShopEnabled",
 			Couples = "CouplesEnabled",
-			Stickers = "StickersEnabled",
 			Leaderboards = "LeaderboardEnabled",
 			DonationCash = "DonationCashEnabled",
 			DonationSaweria = "DonationSaweriaEnabled",

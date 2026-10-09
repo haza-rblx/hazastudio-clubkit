@@ -13,7 +13,7 @@
 --
 -- Rapid reassignment is safe: every call takes a generation token, and a late
 -- probe whose token has been superseded is discarded. That matters for recycled
--- list rows (leaderboards, sticker grid, admin player list), where the same
+-- list rows (leaderboards, admin player list), where the same
 -- holder is retargeted while an earlier fetch is still in flight.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")

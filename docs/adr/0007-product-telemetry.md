@@ -68,6 +68,8 @@ Existing plumbing this rides on (nothing is greenfield):
 | **E** | Dashboard telemetry pages (master health charts + owner Venue Insights) | Dashboard rebuild |
 | *(parallel, optional)* | Native `AnalyticsService` events for buyer-side engagement (buyer-visible, zero infra) | Trivial, independent |
 
+Note (2026-10-09): instances probe (temporary) rides phase B, as `kind = "instances"` on the same route, switched off by `Config.Telemetry.INSTANCES_ENABLED` (plan: `docs/plans/instance-diet-2026-10-09.md` §1).
+
 ## Decisions (resolved by the owner, 2026-08-28)
 
 1. **Transport:** separate `POST /game/{key}/v3/telemetry` endpoint (game-secret auth, v3 pattern).

@@ -4,8 +4,8 @@
 -- Call MobileScaleService.init(playerGui) once during bootstrap.
 -- Uses ChildAdded so it handles GUIs that load asynchronously.
 --
--- Hotbar: scales are applied to HotbarWrapper and StickerButtonWrapper
---   children (each already has its own UIScale), NOT to the root ScreenGui.
+-- Hotbar: scales are applied to the HotbarWrapper child (it already has its own UIScale),
+--   NOT to the root ScreenGui.
 -- Loading screen: Content Size.Y and UIPadding.PaddingBottom are adjusted.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -19,7 +19,7 @@ local mpm = Config.MobilePanelManager
 local TOPBAR_PLUS_NAMES = { "TopbarPlusGui", "TopbarPlus", "TopbarPlusHolder", "TopbarIcons" }
 
 -- Hotbar child frame names that each have their own UIScale.
-local HOTBAR_FRAME_NAMES = { "HotbarWrapper", "StickerButtonWrapper" }
+local HOTBAR_FRAME_NAMES = { "HotbarWrapper" }
 
 -- Root ScreenGui name → mobile UIScale value.
 -- Hotbar root is intentionally excluded; handled per-child below.
@@ -31,7 +31,6 @@ local SCALE_MAP: { [string]: number } = {
 	[Config.Music.GUI_NAME] = ms.MUSIC_GUI,
 	[Config.Settings.GUI_NAME] = ms.MENU_GUI,
 	[Config.Donation.GUI_NAME] = ms.DONATION_GUI,
-	[Config.Sticker.GUI_NAME] = ms.STICKER_GUI,
 	[Config.NotificationCenter.GUI_NAME] = ms.NOTIF_GUI,
 	[Config.NotificationCenter.GUI_NAME_V2] = ms.NOTIF_GUI,
 	[Config.CommandLibrary.GUI_NAME] = ms.COMMAND_GUI,

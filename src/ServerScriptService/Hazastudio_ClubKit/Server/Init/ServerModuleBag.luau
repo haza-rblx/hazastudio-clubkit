@@ -41,7 +41,6 @@ return {
 	RuntimeGuard = require(Server.Init.RuntimeGuard),
 	MovementGuard = require(Server.Init.MovementGuard),
 	createDonationEffectService = require(Server.Services.DonationEffectService),
-	createStickerService = require(Server.Services.StickerService),
 	createSettingsService = require(Server.Services.SettingsService),
 	RoleToolService = require(Server.Services.RoleToolService),
 	createPlayerSnapshotService = require(Server.Services.PlayerSnapshotService),
@@ -73,7 +72,6 @@ return {
 	createChatCommandController = require(Server.Controllers.ChatCommandController),
 	createSyncController = require(Server.Controllers.SyncController),
 	createDonationController = require(Server.Controllers.DonationController),
-	createStickerController = require(Server.Controllers.StickerController),
 	createSettingsController = require(Server.Controllers.SettingsController),
 	createPaidBroadcastController = require(Server.Controllers.PaidBroadcastController),
 	createCinematicDockController = require(Server.Controllers.CinematicDockController),
@@ -89,7 +87,6 @@ return {
 	GiftPendingRepository = require(Server.Repositories.GiftPendingRepository),
 	PerkQuotaRepository = require(Server.Repositories.PerkQuotaRepository),
 	ManualBagibagiRepository = require(Server.Repositories.ManualBagibagiRepository),
-	StickerRepository = require(Server.Repositories.StickerRepository),
 	TitleImageRegistryRepository = require(Server.Repositories.TitleImageRegistryRepository),
 	SettingsRepository = require(Server.Repositories.SettingsRepository),
 	FavoritesRepository = require(Server.Repositories.FavoritesRepository),
@@ -100,6 +97,10 @@ return {
 	BudgetMeter = require(Kit.Shared.Utils.BudgetMeter),
 	-- Production hardening P3: budget aggregate to POST /v3/telemetry (ADR 0007 phase B).
 	BudgetTelemetry = require(Server.Net.BudgetTelemetry),
+	-- Instance-diet probe (temporary; docs/plans/instance-diet-2026-10-09.md phase 1). Rides phase B.
+	InstanceTelemetry = require(Server.Net.InstanceTelemetry),
+	-- Boot sweep: removes retired GUIs (sticker panel) from StarterGui before players spawn.
+	RetiredGuiSweep = require(Server.Init.RetiredGuiSweep),
 	Result = require(Kit.Shared.Utils.Result),
 	Validator = require(Kit.Shared.Utils.Validator),
 	RateLimiter = require(Kit.Shared.Utils.RateLimiter),

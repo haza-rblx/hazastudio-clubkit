@@ -69,7 +69,6 @@ if playerGui then
 		lines[#lines + 1] = ("gui_%s=%s"):format(name, tostring(g ~= nil))
 	end
 	lines[#lines + 1] = "backpackGui=" .. tostring(playerGui:FindFirstChild(Config.Backpack.GUI_NAME) ~= nil)
-	lines[#lines + 1] = "stickerGui=" .. tostring(playerGui:FindFirstChild(Config.Sticker.GUI_NAME) ~= nil)
 end
 
 lines[#lines + 1] = "backpackToolCount=" .. tostring(countTools(player:FindFirstChild("Backpack")))

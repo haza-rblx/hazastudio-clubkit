@@ -62,6 +62,8 @@ do
 		kitFolder:SetAttribute("Vendor", KitProduct.Vendor)
 	end
 end
+-- Retired GUIs (sticker panel): drop their StarterGui copies before any player spawns.
+ServerMods.RetiredGuiSweep.run()
 if Config.DataStoreScope.IS_STUDIO and Config.DataStoreScope.USE_STUDIO_ISOLATION then
 	log:info("DataStore scope: Studio (isolated from live, persists across Studio restarts)", {
 		prefix = Config.DataStoreScope.PREFIX,
@@ -261,11 +263,6 @@ local AvatarContextUpdatedRemote = ensureRemoteEvent(Remotes, Config.AvatarConte
 local AvatarContextLikeRequestRemote = ensureRemoteEvent(Remotes, Config.AvatarContext.REMOTE_LIKE_REQUEST)
 local AvatarContextLikeResultRemote = ensureRemoteEvent(Remotes, Config.AvatarContext.REMOTE_LIKE_RESULT)
 local AvatarLikeEffectRemote = ensureRemoteEvent(Remotes, Config.AvatarContext.REMOTE_LIKE_EFFECT)
-ensureRemoteEvent(Remotes, Config.Sticker.REMOTE_SET)
-ensureRemoteEvent(Remotes, Config.Sticker.REMOTE_CLEAR)
-ensureRemoteEvent(Remotes, Config.Sticker.REMOTE_ADD)
-ensureRemoteEvent(Remotes, Config.Sticker.REMOTE_REQUEST)
-ensureRemoteEvent(Remotes, Config.Sticker.REMOTE_SYNC)
 ensureRemoteEvent(Remotes, Config.AfkGuard.REMOTE_REQUEST or "AfkRejoinRequest")
 local AfkRejoinResponseRemote = ensureRemoteEvent(Remotes, Config.AfkGuard.REMOTE_RESPONSE or "AfkRejoinResponse")
 -- Settings remotes
@@ -276,6 +273,8 @@ ensureRemoteEvent(Remotes, Config.Settings.REMOTE_RESET)
 ensureRemoteEvent(Remotes, Config.ProfileMenu.REMOTE_REQUEST)
 ensureRemoteEvent(Remotes, Config.ProfileMenu.REMOTE_SYNC)
 ensureRemoteEvent(Remotes, Config.ProfileMenu.REMOTE_UPDATE)
+-- Instance-diet probe (temporary): client batches arrive here; start() also runs the server sampler.
+ServerMods.InstanceTelemetry.start(ensureRemoteEvent(Remotes, "InstanceProbeReport"))
 -- Music remotes (early so client MusicPlayerController can bind before MusicService loads)
 if Config.FeatureFlags.MusicPlayerEnabled then
 	local musicConfig = Config.Music
@@ -478,14 +477,6 @@ ServerMods.MovementGuard.start({
 	carryService = carryService,
 	playerSnapshotService = playerSnapshotService,
 })
-local stickerService = trackLifecycle(
-	"StickerService",
-	ServerMods.createStickerService.new({
-		logger = Logger.new("StickerService"),
-		repository = ServerMods.StickerRepository,
-		-- profileLoader wired after SharedProfileLoader is created (before startAll).
-	})
-)
 trackLifecycle(
 	"RoleToolService",
 	ServerMods.RoleToolService.new({
@@ -715,7 +706,7 @@ sharedProfileLoader:onLoaded(function(event)
 	end)
 end)
 -- Critical join kinds only (overhead + profile). Secondary kinds
--- (likes_summary, favorites, settings, stickers, music_favorites) are deferred
+-- (likes_summary, favorites, settings, music_favorites) are deferred
 -- so join storms do not saturate DataStoreScheduler GetAsync slots.
 local function enqueueCriticalJoinLoads(player: Player)
 	sharedProfileLoader:enqueueKind(player, "overhead")
@@ -1130,31 +1121,9 @@ do
 	)
 	settingsController:init()
 end
-if Config.FeatureFlags.StickersEnabled ~= false then
-	-- Stickers join load folds into SharedProfileLoader (registered in onStart).
-	stickerService._profileLoader = sharedProfileLoader
-	trackLifecycle(
-		"StickerController",
-		ServerMods.createStickerController.new({
-			logger = Logger.new("StickerController"),
-			remotes = Remotes,
-			service = stickerService,
-			rateLimiters = {
-				SET = ServerMods.RateLimiter.new(Config.Sticker.RATE_LIMITS.SET.max, Config.Sticker.RATE_LIMITS.SET.window),
-				CLEAR = ServerMods.RateLimiter.new(Config.Sticker.RATE_LIMITS.CLEAR.max, Config.Sticker.RATE_LIMITS.CLEAR.window),
-				ADD = ServerMods.RateLimiter.new(Config.Sticker.RATE_LIMITS.ADD.max, Config.Sticker.RATE_LIMITS.ADD.window),
-				REQUEST = ServerMods.RateLimiter.new(
-					Config.Sticker.RATE_LIMITS.REQUEST.max,
-					Config.Sticker.RATE_LIMITS.REQUEST.window
-				),
-			},
-		})
-	)
-end
 -- serverLifecycle:startAll() called after all modules registered (below)
 -- ── Lifecycle startAll ──────────────────────────────────────
 -- Call onStart() for all modules registered via trackLifecycle.
--- StickerService and StickerController also start here.
 serverLifecycle:startAll()
 -- Start the proximity recompute loop (drives ServerMods.InterestManager channel membership).
 -- Must be called AFTER serverLifecycle:startAll() so all other services are live.
@@ -1450,7 +1419,7 @@ local _chatCommandController = ServerMods.createChatCommandController({
 })
 _chatCommandController:init()
 log:info(
-	"Server initialized. Overhead + Gift + Streak + Level + Couple + Shop + Sticker + Notify + AvatarContext + AvatarLike + Carry + CommandRouter + CommandLibrary + Settings ready."
+	"Server initialized. Overhead + Gift + Streak + Level + Couple + Shop + Notify + AvatarContext + AvatarLike + Carry + CommandRouter + CommandLibrary + Settings ready."
 )
 -- ============================================================
 -- AUTOSAVE + ServerRestartScheduled early flush
