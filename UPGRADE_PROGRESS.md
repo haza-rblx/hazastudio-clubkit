@@ -35,7 +35,7 @@ Internal scratch pad to track work **before** a version is released.
 | RUST and NIGHT ZONE still on a 2.9.2-era build | owner | Plan the jump separately from the release. |
 | `sourcemap.json` stale since 2.6.0 | agent | Regenerate with `rojo sourcemap`. |
 | Experiment Area: delete the instance-diet leftovers (2026-10-10) | owner | The permission classifier blocked the agent's delete. By hand, after Ctrl+S: `StarterGui.11-StickerSystemGUI`, `StarterGui.10-HotbarGUI.StickerButtonWrapper`, the 5 sticker ModuleScripts (`Server.Services.StickerService`, `Server.Controllers.StickerController`, `Server.Repositories.StickerRepository`, `Client.Controllers.StickerController`, `Client.Utils.StickerBillboardAnimator`), and the 5 `ServerStorage` backup folders listed in the plan §2.D. None of them breaks anything if left in place. |
-| `robloxstudio` MCP bridge down | owner | Its Studio plugin is v3.2.0 but the MCP server is v3.1.6 (HTTP 426 `plugin_version_mismatch`). Update the server, or `eval_client_runtime` and the phone emulator stay unavailable. |
+| `robloxstudio` MCP bridge down | owner | Its Studio plugin is v3.2.0 but the MCP server is v3.1.6 (HTTP 426 `plugin_version_mismatch`). Update the server, or `eval_client_runtime` stays unavailable. Studio's own phone emulator works with the `Roblox_Studio` bridge (used 2026-10-10). |
 
 ---
 
@@ -54,7 +54,7 @@ Plan: [`docs/plans/instance-diet-2026-10-09.md`](docs/plans/instance-diet-2026-1
 | `Server/Repositories/StickerRepository.luau` | Deleted | no |
 | `Client/Controllers/StickerController.luau` | Deleted | no |
 | `Client/Utils/StickerBillboardAnimator.luau` | Deleted | no |
-| `Server/Init/RetiredGuiSweep.luau` | New: boot sweep for retired GUIs (`11-StickerSystemGUI`, hotbar `StickerButtonWrapper`) | no |
+| `Server/Init/RetiredGuiSweep.luau` | New: boot sweep for retired GUIs (`11-StickerSystemGUI`, hotbar `StickerButtonWrapper`). It also sweeps the PlayerGui of players who spawned before it ran (boot race found 2026-10-10). | no |
 | `Server/Init/ServerModuleBag.luau` | Sticker entries removed; `RetiredGuiSweep` added | no |
 | `Server/Main.server.luau` | Sticker remotes, service and controller block removed; sweep call at top of boot; boot log text | no |
 | `Server/Repositories/ProfileLoader.luau` | Comment only (`stickers` no longer a load kind) | no |

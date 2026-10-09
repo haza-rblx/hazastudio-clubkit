@@ -339,7 +339,10 @@ These are owner-approved. Ctrl+S first.
   - **Hotbar:** shows with 11 buttons. Equip and unequip of a Backpack tool work.
   - **Logs:** no error or warning mentions sticker, hotbar, chrome or the new modules. The errors that did appear were animation asset permissions and a Roblox CoreScript TopBar timeout at client boot (CorePackages Rodux, not kit code).
   - **Chrome:** on desktop it never animates by design. `MobilePanelManager.init` returns early on desktop, and `HOTBAR_IDLE_HIDE_ENABLED = false`. So a fresh `InventoryChromeAnimator` was driven against the live hotbar instead. `notifyHide`/`notifyShow` built `HotbarChromeRoot`, wrapped `HotbarWrapper` with no sticker wrapper present, slid it out (scale 0.96) and back (scale 1.0).
-  - **Mobile emulator: not run.** The `robloxstudio` bridge was down: its plugin v3.2.0 does not match MCP server v3.1.6 (HTTP 426).
+  - **Mobile emulator, re-run 2026-10-10 with Studio's phone emulator on** (touch, no keyboard, 749×381 viewport; 7 hotbar slots, `MAX_SLOTS_MOBILE`). The live `MobileScaleService` set the `HotbarWrapper` UIScale to 0.8 (`Config.MobileScale.HOTBAR_GUI`). The hotbar fits on screen. `HotbarChromeRoot` was built on the phone with no sticker wrapper.
+  - **Boot race, found and fixed 2026-10-10.** In one run the player spawned before `RetiredGuiSweep` ran: `run()` is called after `ServerModuleBag`, whose requires are heavy. StarterGui was clean, but that player's PlayerGui (server copy and client) still held `11-StickerSystemGUI` and `StickerButtonWrapper`.
+    - **Fix:** `run()` now also sweeps every current player's PlayerGui. It never yields, so no spawn can land between the two passes.
+    - **Verified in a playtest.** After boot, nothing retired is left. Deterministic check: two copies planted in an already-spawned player's PlayerGui, then `run()` removed 2 and the hotbar stayed intact.
   - **Probe delta:** see §Results.
 
 ### 2.F Docs
