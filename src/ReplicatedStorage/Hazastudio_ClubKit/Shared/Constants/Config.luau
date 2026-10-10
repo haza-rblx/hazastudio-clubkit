@@ -1115,14 +1115,14 @@ Config.AutoDance = {
 	STOP_ON_DISABLE = true,
 }
 Config.Sync = {
-	REMOTE_FOLDER = "SyncRemotes",
-	REMOTE_ANIMATION_START = "animationStart",
-	REMOTE_START_SYNC = "startSync",
-	REMOTE_CHANGE_SPEED = "changeSpeed",
 	-- A leader who leaves (AFK rejoin teleport, disconnect) keeps their followers this long:
 	-- they keep dancing, and are bound back when the leader dances again. 0 = old behaviour
 	-- (followers stop at once). An AFK same-server rejoin takes about 10-30 s.
 	LEADER_RETURN_GRACE_SEC = 90,
+	REMOTE_FOLDER = "SyncRemotes",
+	REMOTE_ANIMATION_START = "animationStart",
+	REMOTE_START_SYNC = "startSync",
+	REMOTE_CHANGE_SPEED = "changeSpeed",
 	REMOTE_UPDATE_FAVORITES = "updateFavoritedAnimationsEvent",
 	REMOTE_SYNC_FAVORITES = "syncFavoritedAnimationsToClient",
 	REMOTE_NOTIFICATION = "SyncNotification",
@@ -2146,6 +2146,7 @@ Config.AfkGuard = {
 	MSG_SYNC_RESTORED = "[Session] Synced back to %s.",
 	MSG_SYNC_FALLBACK = "[Session] %s left — synced to %s.",
 	MSG_SYNC_SOLO = "[Session] Rejoined. Dance sync could not be restored.",
+	MSG_SYNC_WAITING = "[Session] Rejoined. Waiting for your dance leader to come back.",
 	MSG_FALLBACK_SERVER = "[Session] Rejoined on a new server — your friends may be on a different one.",
 }
 Config.Session = {
@@ -2153,13 +2154,15 @@ Config.Session = {
 	CMD_ALIAS_REJOIN = "rejoin",
 	CMD_ALIAS_BRING = "bring",
 	CMD_ALIAS_TO = "to",
+	CMD_ALIAS_SYNC = "sync",
 	RATE_MAX = 10,
 	RATE_WINDOW = 30,
 	RESTORE_Y_OFFSET = 0,
+	-- Rejoin restore waits this many seconds for ClientGameplayReady, then restores anyway.
+	RESTORE_CLIENT_READY_TIMEOUT = 120,
 	TELEPORT_Y_OFFSET = 3,
 	TELEPORT_FORWARD_OFFSET = 4,
 	-- Max seconds a /re in-flight lock may stick if apply/settle never finishes.
-	MSG_SYNC_WAITING = "[Session] Rejoined. Waiting for your dance leader to come back.",
 	REFRESH_LOCK_TIMEOUT = 12,
 	MSG_REFRESHING = "[Session] Refreshing your character.",
 	MSG_REFRESH_BUSY = "[Session] Refresh already in progress — wait a moment.",
@@ -2167,13 +2170,13 @@ Config.Session = {
 	MSG_REJOINING = "[Session] Rejoining this server and bringing your spot back.",
 	MSG_RESTORE_FAILED = "[Session] I could not read your last position, so I stopped there.",
 	MSG_REJOIN_FAILED = "[Session] Rejoin did not go through. Try again soon.",
-	CMD_ALIAS_SYNC = "sync",
 	MSG_RATE_LIMIT = "[Session] Give it a second before trying again.",
 	MSG_USAGE_REFRESH = "[Session] Just use /re.",
 	MSG_USAGE_REJOIN = "[Session] Just use /rejoin.",
-	-- Rejoin restore waits this many seconds for ClientGameplayReady, then restores anyway.
-	RESTORE_CLIENT_READY_TIMEOUT = 120,
 	MSG_USAGE_BRING = "[Teleport] Use /bring <player>.",
+	MSG_USAGE_SYNC_ALL = "[Sync] Use /sync all <player>.",
+	MSG_SYNC_ALL_NO_PERM = "[Sync] /sync all is for admins only.",
+	MSG_SYNC_ALL_DONE = "[Sync] %d player(s) synced to %s.",
 	MSG_USAGE_TO = "[Teleport] Use /to <player>.",
 	MSG_TELEPORT_NO_PERM = "[Teleport] This command is " .. Config.Membership.Tiers.Tier3.label .. "-only and above.",
 	MSG_TELEPORT_SELF = "[Teleport] Pick another player.",
@@ -2187,9 +2190,6 @@ Config.Session = {
 -- Keybinds: Shift+U float, Shift+G restore (same permission gate)
 -- ============================================================
 Config.Gravity = {
-	MSG_USAGE_SYNC_ALL = "[Sync] Use /sync all <player>.",
-	MSG_SYNC_ALL_NO_PERM = "[Sync] /sync all is for admins only.",
-	MSG_SYNC_ALL_DONE = "[Sync] %d player(s) synced to %s.",
 	REMOTE_FOLDER = "GravityRemotes",
 	COMMAND_REMOTE = "GravityCommand",
 	CMD_ALIAS = "gravity",
