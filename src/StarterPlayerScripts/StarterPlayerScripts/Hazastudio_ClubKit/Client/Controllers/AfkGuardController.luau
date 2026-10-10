@@ -99,9 +99,9 @@ local function init(deps: { remotes: Folder })
 		loggedIdleAfterRespawn = false
 	end))
 
-	-- Server -> client outcome channel. A transient denial un-fires the rung so
-	-- the same rung retries on the next tick; a hard denial leaves it fired and
-	-- lets the ladder escalate to the next rung on schedule.
+	-- Server -> client outcome channel. A transient denial re-arms the rung after the
+	-- server's retryAfterSec (+jitter); a permanent denial closes it for good and the
+	-- ladder escalates to the next rung on schedule.
 	if responseRemote then
 		track(responseRemote.OnClientEvent:Connect(function(payload: any)
 			if type(payload) ~= "table" then
@@ -117,8 +117,8 @@ local function init(deps: { remotes: Folder })
 			if outcome == nil then
 				return
 			end
-			if AfkGuardDomain.isTransientDenial(outcome) and stepIndex ~= nil then
-				cycle.firedSteps[stepIndex] = nil
+			if stepIndex ~= nil and AfkGuardDomain.outcomeTier(outcome) ~= "success" then
+				AfkGuardDomain.markFired(cycle.firedSteps, stepIndex, outcome, tonumber(payload.retryAfterSec), os.clock())
 			end
 		end))
 	end
@@ -142,7 +142,7 @@ local function init(deps: { remotes: Folder })
 			notifySafe(NotifService.warn, afkConfig.MSG_WARN)
 		end
 
-		local stepIndex, step = AfkGuardDomain.resolveLadderStep(idleTime, cycle.firedSteps)
+		local stepIndex, step = AfkGuardDomain.resolveLadderStep(idleTime, cycle.firedSteps, os.clock())
 		if stepIndex == nil or step == nil then
 			return
 		end
@@ -154,7 +154,10 @@ local function init(deps: { remotes: Folder })
 		local requestId = HttpService:GenerateGUID(false)
 		-- Mark fired BEFORE sending so a throw below cannot cause a tight retry
 		-- loop; a transient denial un-fires it via the response handler.
-		cycle.firedSteps[stepIndex] = true
+		-- firedSteps is now a deadline timestamp (os.clock + cooldown), not a
+		-- boolean, so a transient denial re-arms after the cooldown and a
+		-- permanent denial never re-arms (math.huge).
+		AfkGuardDomain.markFired(cycle.firedSteps, stepIndex, nil, nil, os.clock())
 
 		log:info("afk_rejoin_requested", {
 			requestId = requestId,
@@ -174,7 +177,7 @@ local function init(deps: { remotes: Folder })
 			})
 		end)
 		if not ok then
-			cycle.firedSteps[stepIndex] = nil
+			AfkGuardDomain.unfireStep(cycle.firedSteps, stepIndex)
 			log:warn("afk_rejoin_fire_failed", { error = tostring(err) })
 			notifySafe(NotifService.error, afkConfig.MSG_REJOIN_FAILED)
 			return

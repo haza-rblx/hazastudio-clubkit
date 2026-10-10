@@ -1119,6 +1119,10 @@ Config.Sync = {
 	REMOTE_ANIMATION_START = "animationStart",
 	REMOTE_START_SYNC = "startSync",
 	REMOTE_CHANGE_SPEED = "changeSpeed",
+	-- A leader who leaves (AFK rejoin teleport, disconnect) keeps their followers this long:
+	-- they keep dancing, and are bound back when the leader dances again. 0 = old behaviour
+	-- (followers stop at once). An AFK same-server rejoin takes about 10-30 s.
+	LEADER_RETURN_GRACE_SEC = 90,
 	REMOTE_UPDATE_FAVORITES = "updateFavoritedAnimationsEvent",
 	REMOTE_SYNC_FAVORITES = "syncFavoritedAnimationsToClient",
 	REMOTE_NOTIFICATION = "SyncNotification",
@@ -2094,31 +2098,35 @@ Config.AfkGuard = {
 	IDLE_WARN_SEC = 120,
 	-- First ladder rung; also the floor for server-side request validation
 	-- (min accepted idle = IDLE_THRESHOLD_SEC - IDLE_TOLERANCE_SEC).
-	IDLE_THRESHOLD_SEC = 13 * 60,
+	IDLE_THRESHOLD_SEC = 10 * 60,
 	IDLE_TOLERANCE_SEC = 30,
 	-- Escalation ladder. Each rung is one rejoin attempt; sameServer rungs come
 	-- first so the player lands back with the same crowd, then any-server rungs
 	-- as a last resort. Retries within one idle streak do NOT need a new rate
 	-- token (see AUTO_REJOIN_CYCLE_TTL_SEC).
 	REJOIN_LADDER = {
-		{ atIdleSec = 13 * 60, sameServer = true },
-		{ atIdleSec = 870, sameServer = true },
-		{ atIdleSec = 16 * 60, sameServer = false },
-		{ atIdleSec = 1050, sameServer = false },
+		{ atIdleSec = 10 * 60, sameServer = true },
+		{ atIdleSec = 690, sameServer = true },
+		{ atIdleSec = 13 * 60, sameServer = false },
+		{ atIdleSec = 870, sameServer = false },
 	},
 	-- Stop attempting past this: teleporting into the 20:00 kick window risks
 	-- landing the player mid-disconnect instead of cleanly rejoining.
 	HARD_STOP_IDLE_SEC = 19 * 60,
 	-- One token opens one AFK *cycle* (idle streak), not one request. Window is
-	-- below the 13-minute first rung so a fresh streak always has a token.
+	-- below the 10-minute first rung so a fresh streak always has a token.
 	AUTO_REJOIN_RATE_MAX = 1,
-	AUTO_REJOIN_RATE_WINDOW = 600,
-	-- How long a cycle stays open server-side; ladder spans 780s..1050s (270s).
+	AUTO_REJOIN_RATE_WINDOW = 540,
+	-- How long a cycle stays open server-side; ladder spans 600s..870s (270s).
 	AUTO_REJOIN_CYCLE_TTL_SEC = 600,
 	-- Teleport init failures are async (TeleportInitFailed); give up waiting after this long.
 	TELEPORT_INIT_TIMEOUT_SEC = 10,
 	-- AFK path only: how long to wait for the player to ACTUALLY leave before
-	-- calling the attempt failed. "No error reported" is not success.
+	-- calling the attempt failed. "No error reported" is not success. A same-server rejoin
+	-- lands slower than a jump to any server, so it gets the longer window.
+	TELEPORT_CONFIRM_TIMEOUT_SEC_SAME_SERVER = 30,
+	TELEPORT_CONFIRM_TIMEOUT_SEC_ANY_SERVER = 20,
+	-- Deprecated (superseded by the two keys above); no longer read by the engine.
 	TELEPORT_CONFIRM_TIMEOUT_SEC = 15,
 	-- Deprecated (superseded by REJOIN_LADDER); kept so buyer configs that set
 	-- them keep loading. No longer read by the engine.
@@ -2151,6 +2159,7 @@ Config.Session = {
 	TELEPORT_Y_OFFSET = 3,
 	TELEPORT_FORWARD_OFFSET = 4,
 	-- Max seconds a /re in-flight lock may stick if apply/settle never finishes.
+	MSG_SYNC_WAITING = "[Session] Rejoined. Waiting for your dance leader to come back.",
 	REFRESH_LOCK_TIMEOUT = 12,
 	MSG_REFRESHING = "[Session] Refreshing your character.",
 	MSG_REFRESH_BUSY = "[Session] Refresh already in progress — wait a moment.",
@@ -2161,6 +2170,8 @@ Config.Session = {
 	MSG_RATE_LIMIT = "[Session] Give it a second before trying again.",
 	MSG_USAGE_REFRESH = "[Session] Just use /re.",
 	MSG_USAGE_REJOIN = "[Session] Just use /rejoin.",
+	-- Rejoin restore waits this many seconds for ClientGameplayReady, then restores anyway.
+	RESTORE_CLIENT_READY_TIMEOUT = 120,
 	MSG_USAGE_BRING = "[Teleport] Use /bring <player>.",
 	MSG_USAGE_TO = "[Teleport] Use /to <player>.",
 	MSG_TELEPORT_NO_PERM = "[Teleport] This command is " .. Config.Membership.Tiers.Tier3.label .. "-only and above.",
