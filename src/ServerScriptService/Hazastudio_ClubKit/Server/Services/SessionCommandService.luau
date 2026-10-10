@@ -839,6 +839,49 @@ local function createSessionCommandService(deps: {
 		return Result.Err(tostring(err))
 	end
 
+	-- /sync all <player>: bind every other player in the server to the leader's dance chain.
+	-- Players already following that chain are skipped (a repeat sync request toggles OFF).
+	function service:handleSyncAll(player: Player, leader: Player): Result<nil>
+		if not syncService or type(syncService.handleSyncRequest) ~= "function" then
+			return Result.Err("sync_unavailable")
+		end
+		if not limiter:check(player.UserId) then
+			notify.player(player, Config.Session.MSG_RATE_LIMIT, "WARNING")
+			return Result.Err(Config.Session.MSG_RATE_LIMIT)
+		end
+		local leaderCharacter = leader.Character
+		local upstream = leaderCharacter and leaderCharacter:GetAttribute("Syncing")
+		local chainRoot = if type(upstream) == "string" and upstream ~= "" then upstream else leader.Name
+		local synced = 0
+		for _, other in ipairs(Players:GetPlayers()) do
+			local character = other.Character
+			if other == leader or other.Name == chainRoot or not character then
+				continue
+			end
+			if character:GetAttribute("Syncing") == chainRoot then
+				continue
+			end
+			local ok, result = pcall(function()
+				return syncService:handleSyncRequest(other, leader, true)
+			end)
+			if ok and result and result.ok then
+				synced += 1
+				if syncNotify then
+					pcall(syncNotify, other, {
+						type = "sync_success",
+						leaderName = result.value,
+						leaderDisplay = syncService:getLeaderDisplayName(result.value),
+						currentAnim = syncService:getCurrentAnimationName(result.value),
+						targetUserId = leader.UserId,
+					})
+				end
+			end
+		end
+		notify.player(player, string.format(Config.Session.MSG_SYNC_ALL_DONE, synced, leader.DisplayName), "SUCCESS")
+		log:info("sync_all", { player = player.Name, leader = leader.Name, synced = synced })
+		return Result.Ok(nil)
+	end
+
 	function service:handleBring(player: Player, target: Player): Result<nil>
 		if target == player then
 			notify.player(player, Config.Session.MSG_TELEPORT_SELF, "WARNING")

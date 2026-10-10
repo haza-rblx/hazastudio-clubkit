@@ -75,6 +75,7 @@ Plan: [`docs/plans/instance-diet-2026-10-09.md`](docs/plans/instance-diet-2026-1
 | `CHANGELOG.md` | `[Unreleased]` "Removed" entry with the breaking note | no |
 | `tools/HotbarInventoryAudit.playmode.luau` | Dev tool only: the `stickerGui` line (read `Config.Sticker.GUI_NAME`) removed | no (not shipped) |
 | `Server/Services/SessionCommandService.luau` | Replace (engine): teleport arrival (AFK and `/rejoin`) restored once in `restoreArrival` after `ClientGameplayReady`; `finalizeRejoinRestore`, the CharacterAdded AFK sync branch and `pendingJoinRestore` / `pendingAfkSyncRestore` removed | no |
+| `Server/Services/CommandExecutionService.luau` | Replace (engine): `/sync all <player>` (admin) → `SessionCommandService:handleSyncAll`; Config.Session `CMD_ALIAS_SYNC` + 3 messages | no |
 | `Server/Services/SyncService.luau` | Replace (engine): `isDanceStateHealthy` added (real Animator track check) | no |
 | `Shared/Constants/Config.luau` | Replace (engine): `AfkGuard` ladder 600/690/780/870 and `IDLE_THRESHOLD_SEC` 600, `AUTO_REJOIN_RATE_WINDOW` 540; `Session.RESTORE_CLIENT_READY_TIMEOUT` 120 (restore anyway on timeout) | no |
 

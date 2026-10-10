@@ -2167,6 +2167,7 @@ Config.Session = {
 	MSG_REJOINING = "[Session] Rejoining this server and bringing your spot back.",
 	MSG_RESTORE_FAILED = "[Session] I could not read your last position, so I stopped there.",
 	MSG_REJOIN_FAILED = "[Session] Rejoin did not go through. Try again soon.",
+	CMD_ALIAS_SYNC = "sync",
 	MSG_RATE_LIMIT = "[Session] Give it a second before trying again.",
 	MSG_USAGE_REFRESH = "[Session] Just use /re.",
 	MSG_USAGE_REJOIN = "[Session] Just use /rejoin.",
@@ -2186,6 +2187,9 @@ Config.Session = {
 -- Keybinds: Shift+U float, Shift+G restore (same permission gate)
 -- ============================================================
 Config.Gravity = {
+	MSG_USAGE_SYNC_ALL = "[Sync] Use /sync all <player>.",
+	MSG_SYNC_ALL_NO_PERM = "[Sync] /sync all is for admins only.",
+	MSG_SYNC_ALL_DONE = "[Sync] %d player(s) synced to %s.",
 	REMOTE_FOLDER = "GravityRemotes",
 	COMMAND_REMOTE = "GravityCommand",
 	CMD_ALIAS = "gravity",

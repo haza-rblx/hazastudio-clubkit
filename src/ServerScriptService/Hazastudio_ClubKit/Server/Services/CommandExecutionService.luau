@@ -5,6 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local OverheadDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.OverheadDomain)
+local PermissionDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.PermissionDomain)
 local AnnouncementRateLimitDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.AnnouncementRateLimitDomain)
 local Result = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Result)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
@@ -612,6 +613,34 @@ local function createCommandExecutionService(deps: {
 		return sessionCommandService[methodName](sessionCommandService, player, target)
 	end
 
+	-- /sync all <player>: admin only (PermissionDomain.canUseAdminPanel), it moves everyone.
+	local function executeSyncAll(player: Player, args: string): Result<nil>
+		local mode, query = string.match(trim(args), "^(%S+)%s*(.-)$")
+		if not mode or string.lower(mode) ~= "all" or trim(query or "") == "" then
+			notify.player(player, Config.Session.MSG_USAGE_SYNC_ALL, "WARNING")
+			return Result.Err("invalid sync usage")
+		end
+		local roleKey: string? = nil
+		if overheadService and type(overheadService.getEffectivePayload) == "function" then
+			local payloadResult = overheadService:getEffectivePayload(player)
+			if payloadResult.ok then
+				roleKey = payloadResult.value.role
+			end
+		end
+		if not PermissionDomain.canUseAdminPanel(roleKey, player.UserId) then
+			notify.player(player, Config.Session.MSG_SYNC_ALL_NO_PERM, "WARNING")
+			return Result.Err("sync all permission denied")
+		end
+		local leader = resolveTargetOrNotify(player, trim(query), "[Sync] I could not find '%s' in this server.", "[Sync] Give me at least 3 letters, or use the full name.", "[Sync] '%s' matches a few people. Be more specific: %s.")
+		if not leader then
+			return Result.Err("target not found")
+		end
+		if type(sessionCommandService.handleSyncAll) ~= "function" then
+			return Result.Err("sync handler unavailable")
+		end
+		return sessionCommandService:handleSyncAll(player, leader)
+	end
+
 	local function executeAnnounce(player: Player, args: string): Result<nil>
 		local message = trim(args)
 		if message == "" then
@@ -667,6 +696,7 @@ local function createCommandExecutionService(deps: {
 		[Config.Session.CMD_ALIAS_TO] = function(player: Player, args: string)
 			return executeTeleport(player, args, Config.Session.MSG_USAGE_TO, "handleTo")
 		end,
+		[Config.Session.CMD_ALIAS_SYNC] = executeSyncAll,
 		[Config.Announcement.CMD_ALIAS_ANNOUNCE] = executeAnnounce,
 		[Config.Announcement.CMD_ALIAS_ANNOUNCE_SHORT] = executeAnnounce,
 	}

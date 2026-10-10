@@ -11,6 +11,9 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+### Added (`/sync all <player>` — 2026-10-10)
+- Admin chat command (`Config.Session.CMD_ALIAS_SYNC`, admin-panel permission): every other player in the server is synced to that player's dance chain; players already in that chain are left alone. Notifies each synced player like a normal sync, and the caller with the count.
+
 ### Fixed (AFK rejoin arrival: restore once the client is ready — 2026-10-10)
 - AFK rejoin and `/rejoin` now restore position and dance sync in one path, `SessionCommandService.restoreArrival`, run once the client reports `ClientGameplayReady` (the inifixdulu order). It no longer runs at `CharacterAdded` while the client still loads, where the client or a venue loading screen put the player back at spawn.
 - If the ready signal does not arrive within `Config.Session.RESTORE_CLIENT_READY_TIMEOUT` (now 120s), the restore runs anyway instead of giving up.
