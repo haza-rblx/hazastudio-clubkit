@@ -1582,6 +1582,7 @@ trackBootTask("SettingsController.init", function()
 		})
 	)
 	settingsCtrl:init()
+	ClientMods.TopMenuController.setSettingsController(settingsCtrl)
 	-- Onboarding modal: registered always (manual open for tests), opened on its own only with
 	-- Config.Onboarding.ENABLED, once per session after the loading screen is done.
 	ClientMods.OnboardingController.register({

@@ -1134,6 +1134,179 @@ local function wireButtons(buttonMap: TopMenuGuiRefs.ButtonMap)
 	end)
 end
 
+-- Desktop volume strip (VolumeControl in 15-TopMenuGUI): ten tap segments that write the same
+-- musicVolume the Settings Music slider writes, through the settings controller's applySetting seam.
+-- Lit segments follow the stored value; repainted when the menu opens, so Settings changes show.
+local VOLUME_STEP = 10
+local VOLUME_LIT_COLOR = Color3.fromRGB(234, 75, 7)
+local VOLUME_DIM_COLOR = Color3.fromRGB(46, 46, 46)
+local settingsControllerRef: any = nil
+
+local function volumeSegments(): { GuiButton }
+	local segments: { GuiButton } = {}
+	local strip = refs and refs.desktopMenu:FindFirstChild("VolumeControl", true)
+	if not strip then
+		return segments
+	end
+	for index = 1, 100 // VOLUME_STEP do
+		local segment = strip:FindFirstChild("Seg" .. index, true)
+		if segment and segment:IsA("GuiButton") then
+			segments[index] = segment
+		end
+	end
+	return segments
+end
+
+local function paintVolume(override: number?)
+	local sc = settingsControllerRef
+	if not refs or not sc or type(sc.getSetting) ~= "function" then
+		return
+	end
+	local volume = override or tonumber(sc:getSetting("musicVolume")) or 0
+	volume = math.clamp(volume, 0, 100)
+	local lit = math.round(volume / VOLUME_STEP)
+	for index, segment in ipairs(volumeSegments()) do
+		segment.BackgroundColor3 = if index <= lit then VOLUME_LIT_COLOR else VOLUME_DIM_COLOR
+		segment.BackgroundTransparency = 0
+	end
+	local strip = refs.desktopMenu:FindFirstChild("VolumeControl", true)
+	local value = strip and strip:FindFirstChild("VolumeValue", true)
+	if value and value:IsA("TextLabel") then
+		value.Text = tostring(math.round(volume)) .. "%"
+	end
+end
+
+-- Quick toggles row (its own ScreenGui, Config.TopbarMenu.QUICK_GUI_NAME, exempt from Hide UI):
+-- Donation FX -> hideDonationWorldEffect, Overhead -> overheadVisible (false = hidden),
+-- Hide UI -> hideAllGui, Mute -> musicVolume 0 with the previous level kept for unmute.
+local QUICK_TOGGLE = {
+	donation = "Toggle_Donation",
+	overhead = "Toggle_Overhead",
+	hideUi = "Toggle_HideUI",
+	mute = "Toggle_Mute",
+}
+local volumeBeforeMute: number? = nil
+
+local function quickToggleButton(name: string): GuiButton?
+	local parent = refs and refs.root.Parent
+	local quick = parent and parent:FindFirstChild(Config.TopbarMenu.QUICK_GUI_NAME)
+	local row = quick and quick:FindFirstChild("QuickToggles")
+	local button = row and row:FindFirstChild(name)
+	if button and button:IsA("GuiButton") then
+		return button
+	end
+	return nil
+end
+
+local function quickToggleStates(): (boolean, boolean, boolean, boolean)
+	local sc = settingsControllerRef
+	if not sc or type(sc.getSetting) ~= "function" then
+		return false, false, false, false
+	end
+	local donationHidden = sc:getSetting("hideDonationWorldEffect") == true
+	local overheadHidden = sc:getSetting("overheadVisible") == false
+	local uiHidden = sc:getSetting("hideAllGui") == true
+	local muted = (tonumber(sc:getSetting("musicVolume")) or 0) <= 0
+	return donationHidden, overheadHidden, uiHidden, muted
+end
+
+local function paintQuickToggles()
+	local donationHidden, overheadHidden, uiHidden, muted = quickToggleStates()
+	local states = {
+		[QUICK_TOGGLE.donation] = donationHidden,
+		[QUICK_TOGGLE.overhead] = overheadHidden,
+		[QUICK_TOGGLE.hideUi] = uiHidden,
+		[QUICK_TOGGLE.mute] = muted,
+	}
+	for name, active in pairs(states) do
+		local button = quickToggleButton(name)
+		local disc = button and button:FindFirstChild("Disc")
+		if disc and disc:IsA("GuiObject") then
+			disc.BackgroundTransparency = if active then 0 else 0.8
+		end
+	end
+end
+
+local function bindQuickToggles()
+	task.spawn(function()
+		local parent = refs and refs.root.Parent
+		if not parent then
+			return
+		end
+		local quick = parent:WaitForChild(Config.TopbarMenu.QUICK_GUI_NAME, 15)
+		if not quick then
+			return
+		end
+		local function apply(field: string, value: any)
+			local sc = settingsControllerRef
+			if sc and type(sc.applySetting) == "function" then
+				sc:applySetting(field, value)
+			end
+		end
+		local function bind(name: string, action: () -> ())
+			local button = quickToggleButton(name)
+			if button then
+				bindButton(button, function()
+					action()
+					paintQuickToggles()
+					paintVolume()
+				end)
+			end
+		end
+		bind(QUICK_TOGGLE.donation, function()
+			local donationHidden = quickToggleStates()
+			apply("hideDonationWorldEffect", not donationHidden)
+		end)
+		bind(QUICK_TOGGLE.overhead, function()
+			local _, overheadHidden = quickToggleStates()
+			apply("overheadVisible", overheadHidden)
+		end)
+		bind(QUICK_TOGGLE.hideUi, function()
+			local _, _, uiHidden = quickToggleStates()
+			apply("hideAllGui", not uiHidden)
+		end)
+		bind(QUICK_TOGGLE.mute, function()
+			local _, _, _, muted = quickToggleStates()
+			if muted then
+				apply("musicVolume", volumeBeforeMute or 100)
+				volumeBeforeMute = nil
+			else
+				local sc = settingsControllerRef
+				volumeBeforeMute = (sc and tonumber(sc:getSetting("musicVolume"))) or 100
+				apply("musicVolume", 0)
+			end
+		end)
+		paintQuickToggles()
+	end)
+end
+
+local function bindVolumeControl()
+	for index, segment in ipairs(volumeSegments()) do
+		bindButton(segment, function()
+			local sc = settingsControllerRef
+			if not sc or type(sc.applySetting) ~= "function" then
+				return
+			end
+			local volume = index * VOLUME_STEP
+			sc:applySetting("musicVolume", volume)
+			paintVolume(volume)
+		end)
+	end
+	if refs then
+		refs.desktopMenu:GetPropertyChangedSignal("Visible"):Connect(function()
+			if refs and refs.desktopMenu.Visible then
+				paintVolume()
+			end
+		end)
+	end
+	paintVolume()
+end
+
+function TopMenuController.setSettingsController(sc: any)
+	settingsControllerRef = sc
+	paintVolume()
+end
+
 function TopMenuController.init(deps: InitDeps)
 	menuIconRef = deps.menuIcon
 	iconsRef = deps.icons
@@ -1194,6 +1367,8 @@ function TopMenuController.init(deps: InitDeps)
 
 	wireButtons(refs.desktopButtons)
 	wireButtons(refs.phoneButtons)
+	bindVolumeControl()
+	bindQuickToggles()
 	-- Record the rows' designed transparencies once, before any cascade has touched them.
 	for _, rows in ipairs({ refs.desktopRows, refs.phoneRows }) do
 		local elements: { GuiObject } = {}

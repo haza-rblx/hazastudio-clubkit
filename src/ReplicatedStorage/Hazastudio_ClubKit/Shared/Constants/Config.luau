@@ -2635,6 +2635,9 @@ Config.CinematicDock.TOPBAR_ICON = Config.Icons.Topbar.Camera
 -- ============================================================
 Config.TopbarMenu = {
 	GUI_NAME = "15-TopMenuGUI",
+	-- Own ScreenGui for the quick toggles row above the menu. It is exempt from Hide UI, so the
+	-- row can always bring the UI back.
+	QUICK_GUI_NAME = "15-QuickToggleGui",
 	DESKTOP_FRAME_NAME = "TopBarMenu",
 	PHONE_FRAME_NAME = "TopBarMenuPhone",
 	LABEL = "Menu",
