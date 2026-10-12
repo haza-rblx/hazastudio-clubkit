@@ -24,6 +24,10 @@ local EventCardKit = require(script.Parent.EventCardKit)
 local cfg = Config.EventBoard
 local path, setText = EventCardKit.path, EventCardKit.setText
 local DIM_TRANSPARENCY = 0.35
+-- Phones (2026-10-09): the card is authored for desktop (508 px under a 1.1 UIScale) and outgrew a
+-- phone screen. A centred full-screen stage above Wrapper carries a fit scale that shrinks it to
+-- the screen with this margin; Wrapper's own UIScale stays the open/close motion's.
+local FIT_MARGIN = 16
 -- Status text widths (design px), measured once per text.
 local statusWidths: { [string]: number } = {}
 
@@ -77,8 +81,54 @@ function EventQuestPopupUI.tryCreate(playerGui: Instance): any?
 		end
 	end
 	self:_wire()
+
+	local stage = Instance.new("Frame")
+	stage.Name = "FitStage"
+	stage.BackgroundTransparency = 1
+	stage.AnchorPoint = Vector2.new(0.5, 0.5)
+	stage.Position = UDim2.fromScale(0.5, 0.5)
+	stage.Size = UDim2.fromScale(1, 1)
+	local fitScale = Instance.new("UIScale")
+	fitScale.Name = "FitScale"
+	fitScale.Parent = stage
+	stage.Parent = gui
+	wrapper.Parent = stage
+	self._fitScale = fitScale
+	local wrapperScale = wrapper:FindFirstChildWhichIsA("UIScale")
+	self._wrapperRest = if wrapperScale then wrapperScale.Scale else 1
+	self:_track((card :: GuiObject):GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+		self:_fit()
+	end))
+	self:_track(gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+		self:_fit()
+	end))
+
 	gui.Enabled = false
 	return self
+end
+
+-- Shrinks (never grows) the stage until the card, at Wrapper's resting scale, fits the screen.
+-- AbsoluteSize already carries both live scales, so dividing by them gives the design size even
+-- while the open pop is running.
+function EventQuestPopupUI:_fit()
+	local card = self._card :: GuiObject
+	local fit = self._fitScale :: UIScale
+	local wrapperScale = self._wrapper:FindFirstChildWhichIsA("UIScale")
+	local live = fit.Scale * (if wrapperScale then wrapperScale.Scale else 1)
+	local size = card.AbsoluteSize
+	local room = (self._gui :: ScreenGui).AbsoluteSize
+	if live <= 0 or size.X <= 0 or size.Y <= 0 or room.X <= 0 or room.Y <= 0 then
+		return
+	end
+	local full = size / live * self._wrapperRest
+	local wanted = math.clamp(
+		math.min((room.X - 2 * FIT_MARGIN) / full.X, (room.Y - 2 * FIT_MARGIN) / full.Y),
+		0.3,
+		1
+	)
+	if math.abs(wanted - fit.Scale) > 0.002 then
+		fit.Scale = wanted
+	end
 end
 
 function EventQuestPopupUI:_track(conn: RBXScriptConnection)

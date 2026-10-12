@@ -176,6 +176,13 @@ local ROW_WIDTH, ROW_HEIGHT, ROW_ICON, ROW_GAP, ROW_PAD = 200, 44, 24, 12, 16
 function Overflow.styleRow(icon, overflowIcon, topbarX)
 	local image = icon:getInstance("IconImage")
 	local hasImage = image.Image ~= ""
+	-- The row order overwrites the topbar LayoutOrder, and removeModification does not put the old
+	-- value back: an icon leaving the dropdown kept order*1000 and jumped right of Menu (PARKLAB).
+	-- Keep the real order once, use it for the row and restore it on leave.
+	if icon.overflowTopbarOrder == nil then
+		icon.overflowTopbarOrder = icon.widget.LayoutOrder
+	end
+	local topbarOrder = icon.overflowTopbarOrder
 	local mods = {
 		{"Widget", "MinimumWidth", ROW_WIDTH},
 		{"Widget", "MinimumHeight", ROW_HEIGHT},
@@ -186,7 +193,7 @@ function Overflow.styleRow(icon, overflowIcon, topbarX)
 		{"IconImage", "Size", UDim2.fromOffset(ROW_ICON, ROW_ICON)},
 		{"ContentsList", "Padding", UDim.new(0, 0)},
 		-- Same order as on the topbar: the icon's order first, its screen position breaks ties
-		{"Widget", "LayoutOrder", icon.widget.LayoutOrder * 1000 + math.clamp(math.floor(topbarX), 0, 999)},
+		{"Widget", "LayoutOrder", topbarOrder * 1000 + math.clamp(math.floor(topbarX), 0, 999)},
 	}
 	if icon:getInstance("IconLabel").Text == "" then
 		local text = icon.overflowLabel or (Icon.overflowLabels and Icon.overflowLabels[image.Image])
@@ -197,6 +204,10 @@ function Overflow.styleRow(icon, overflowIcon, topbarX)
 	icon:modifyTheme(mods, "OverflowRow")
 	icon.joinJanitor:add(function()
 		icon:removeModification("OverflowRow")
+		if icon.overflowTopbarOrder ~= nil then
+			icon:setOrder(icon.overflowTopbarOrder / 100)
+			icon.overflowTopbarOrder = nil
+		end
 	end)
 	if not overflowIcon.overflowDropdownStyled then
 		overflowIcon.overflowDropdownStyled = true
@@ -365,9 +376,17 @@ function Overflow.updateBoundary(alignment)
 	-- We calculate the the absolute position of icons instead of reading
 	-- directly to determine where they would be if not within an overflow
 	local joinOverflow = false
-	local realXPositions = Overflow.getRealXPositions(alignment, ourOrderedIcons)
-	for i = #ourOrderedIcons, 1, -1 do
-		local icon = ourOrderedIcons[i]
+	-- Icons flagged alwaysOverflow (phone: freecam, music refresh) always sit in the dropdown, so
+	-- they do not take part in the "does it fit on the topbar" measurement.
+	local measuredIcons = {}
+	for _, icon in ipairs(ourOrderedIcons) do
+		if not icon.alwaysOverflow then
+			table.insert(measuredIcons, icon)
+		end
+	end
+	local realXPositions = Overflow.getRealXPositions(alignment, measuredIcons)
+	for i = #measuredIcons, 1, -1 do
+		local icon = measuredIcons[i]
 		local widgetX = Overflow.getWidth(icon)
 		local xPos = realXPositions[icon.UID]
 		if (isLeft and xPos + widgetX >= boundary) or (isRight and xPos <= boundary) then
@@ -385,6 +404,13 @@ function Overflow.updateBoundary(alignment)
 	end
 	if joinableCount == 0 then
 		joinOverflow = false
+	end
+	local widthOverflow = joinOverflow
+	for _, icon in ipairs(ourOrderedIcons) do
+		if icon.alwaysOverflow and not icon.keepOutsideOverflow and not overflowIconUIDs[icon.UID] then
+			joinOverflow = true
+			break
+		end
 	end
 	-- On the right the three dots sit just left of the pinned icons, so Menu stays the right-most button
 	if isRight then
@@ -412,7 +438,7 @@ function Overflow.updateBoundary(alignment)
 					icon.overflowRestWidth = nil
 					icon:leave()
 				end
-			elseif joinOverflow and not icon.parentIconUID then
+			elseif (widthOverflow or icon.alwaysOverflow) and not icon.parentIconUID then
 				-- joinDropdown (vertical list under the three dots) instead of joinMenu
 				-- (horizontal strip), so phones keep the topbar single-row.
 				icon.overflowRestWidth = Overflow.getWidth(icon)
@@ -434,7 +460,7 @@ function Overflow.updateBoundary(alignment)
 						overflowIcon:deselect("OverflowPick", overflowIcon)
 					end
 				end))
-			elseif not joinOverflow and icon.parentIconUID then
+			elseif not (widthOverflow or icon.alwaysOverflow) and icon.parentIconUID then
 				icon.overflowRestWidth = nil
 				icon:leave()
 			end

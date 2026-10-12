@@ -770,6 +770,35 @@ local function createFreecamController(_deps)
 		PlayerState.Pop()
 	end
 
+	-- A second freecam LocalScript ("Freecam" ScreenGui > FreecamScript) is injected into
+	-- PlayerGui at runtime. It binds the same actions and render step and overwrites our
+	-- Camera.CFrame every frame (WASD dead, camera locked) and turns on its stats overlay. Keep it off.
+	local function disableInjectedFreecam(gui: Instance)
+		if gui.Name ~= "Freecam" or not gui:IsA("ScreenGui") then
+			return
+		end
+		local injected = gui:FindFirstChild("FreecamScript")
+		if injected and injected:IsA("LocalScript") then
+			injected.Enabled = false
+		end
+		table.insert(moduleConnections, gui.ChildAdded:Connect(function(child)
+			if child.Name == "FreecamScript" and child:IsA("LocalScript") then
+				child.Enabled = false
+			end
+		end))
+	end
+
+	task.spawn(function()
+		local playerGui = LocalPlayer:WaitForChild("PlayerGui", 30)
+		if not playerGui then
+			return
+		end
+		for _, child in ipairs(playerGui:GetChildren()) do
+			disableInjectedFreecam(child)
+		end
+		table.insert(moduleConnections, playerGui.ChildAdded:Connect(disableInjectedFreecam))
+	end)
+
 	local enabled = false
 	local suppressAttributeSync = false
 

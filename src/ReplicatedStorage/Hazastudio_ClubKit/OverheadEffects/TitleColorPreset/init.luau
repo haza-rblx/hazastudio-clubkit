@@ -275,8 +275,13 @@ function Effect:Resume()
 end
 
 function Effect:Destroy()
+	-- A saved object can already be destroyed (a second effect on the same label saves the
+	-- first effect's gradient, which the first effect then tears down). Its Parent is locked,
+	-- and the throw used to abort the rest of Destroy, leaking every tick connection below.
 	for _, Object in self.SavedObjects do
-		Object.Parent = self.UIInstance;
+		pcall(function()
+			Object.Parent = self.UIInstance;
+		end);
 	end;
 	for _, Connection in self.Connections do
 		Connection:Disconnect();

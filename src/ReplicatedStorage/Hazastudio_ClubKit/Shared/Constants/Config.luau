@@ -54,6 +54,10 @@ Config.Branding = {
 	DISCORD_INVITE = "",
 	-- Venue default accent (ClubKitConfig.Branding.DefaultAccent; AccentDomain ids).
 	DEFAULT_ACCENT = "multicolor",
+	-- Kit GUIs the accent theme leaves as designed (AccentSurfaceTint). Venue GUIs are never themed.
+	-- Music player: track covers are artwork. Admin panels: title presets animate their own
+	-- colours, and the tint fighting them every frame made the choices flicker (owner, 2026-10-10).
+	ACCENT_NO_TINT_GUIS = { "06-MusicPlayerGUI", "04-AdminPanelv3", "04-AdminHub" },
 }
 -- ============================================================
 -- MEMBERSHIP TIERS (system-wide presentation config)
@@ -1221,11 +1225,16 @@ Config.Sync = {
 	-- IconGroup: panel v2 UIScale + 03-MainContentWrapper height (root IconGroup UIScale stays 1).
 	DANCE_PANEL_V2_SCALE_MOBILE = 0.75,
 	DANCE_PANEL_V2_SCALE_DESKTOP = 0.9,
-		-- DancePanelGUIWrapperv3 on phone (touch + short viewport): the desktop panel is ~570 px tall,
-		-- taller than a phone screen. Scaled to fit the height, and placed right of DancePanelButton.
-		DANCE_PANEL_V3_SCALE_MOBILE = 0.55,
-		DANCE_PANEL_V3_X_MOBILE = 64,
-		DANCE_PANEL_V3_Y_OFFSET_MOBILE = 43,
+	-- DancePanelGUIWrapperv3 on phone (touch + short viewport; owner-approved mock 2026-10-09): the
+	-- desktop panel is ~570 px tall. On a phone it keeps a readable scale, gets wider, and the dance
+	-- list is shorter; the speed bar stands on the list's right (DancePanelV3Look.applyPhone). Placed
+	-- right of DancePanelButton with its top edge just under the topbar; the hotbar hides while open.
+	DANCE_PANEL_V3_SCALE_MOBILE = 0.75,
+	DANCE_PANEL_V3_WIDTH_MOBILE = 256,
+	DANCE_PANEL_V3_CONTENT_HEIGHT_MOBILE = 260,
+	DANCE_PANEL_V3_X_MOBILE = 69,
+	DANCE_PANEL_V3_TOP_MOBILE = 60, -- screen px from the top edge
+
 	DANCE_MAIN_CONTENT_WRAPPER_HEIGHT_MOBILE = 270,
 	DANCE_MAIN_CONTENT_WRAPPER_HEIGHT_DESKTOP = 330,
 	TRIGGER_ATTRIBUTE = "OpensDancePanel",
@@ -1545,6 +1554,10 @@ Config.Loading = {
 	-- screen while the kit boots, then the character intro, played through without input.
 	-- Engine constant, not a buyer key.
 	STYLE = "classic",
+	-- Phones (touch, no keyboard, short side under MobilePanelManager.TABLET_MIN_SHORT_SIDE): the
+	-- template's ContentWrapper UIScale (authored for desktop) and the cinematic stack's left margin.
+	PHONE_UI_SCALE = 0.6,
+	PHONE_STACK_SIDE = 24,
 	-- Part 1 background (ClubKitConfig.Loading.ArtworkImage / ArtworkVideo); "" = experience thumbnail.
 	ARTWORK_IMAGE = "",
 	ARTWORK_VIDEO = "",
@@ -2051,7 +2064,7 @@ Config.Community = {
 -- the event first fires at ~129s of idle, then EXACTLY every 30s, and its `time`
 -- argument tracks real idle seconds since the last input. Roblox disconnects at
 -- 20:00 (1200s). Ladder times below are therefore reached on the tick at
--- 129 + 30k, e.g. the 780s rung actually fires at ~789s.
+-- 129 + 30k, e.g. the 600s rung actually fires at ~609s.
 --
 -- The old design fired a single rung at 17:00 (~1029s), leaving only 171s of
 -- margin, and the server's 1-token/900s limiter made retries impossible inside
@@ -3168,6 +3181,9 @@ Config.Donation = {
 	NOTIF_SLIDE_DURATION = 0.45, -- slide-in animation duration (seconds)
 	NOTIF_GAP_DURATION = 0.18, -- gap between notifications for distinct transitions
 	WORKSPACE_RESTORE_DELAY = 60,
+	-- true = the workspace live chat board (and running text) keep showing the last donation
+	-- until the next one replaces it, instead of popping out after WORKSPACE_RESTORE_DELAY.
+	LIVE_CHAT_PERSIST = true,
 	-- CollectionService tag applied to Workspace roots that host donation SurfaceGuis.
 	-- TagDonationDisplayRoots.server.luau applies this at runtime so the tag survives
 	-- place reloads without a manual Studio Command Bar step.
@@ -3343,6 +3359,10 @@ Config.Leaderboards = {
 	CLIENT_PLAY_ANIMATIONS = true,
 	-- Daily boards: DailyDonations (combined R$+RP), DailyDonationsRobux, DailyDonationsCash.
 	DAILY_ROBUX_ENABLED = true,
+	-- Daily Robux totals shared by every server through a MemoryStore SortedMap per WIB day
+	-- (Server/Repositories/DailyRobuxRepository). false = each server only knows its own.
+	DAILY_ROBUX_SHARED = true,
+	DAILY_ROBUX_STORE_NAME = "ClubKitDailyRobux_v1",
 	-- Merge daily Robux + cash into payload.dailyCombined (sorted by lastDonationAt desc).
 	DAILY_COMBINED_ENABLED = true,
 	-- Cap for combined list after merge (before showcase paging).
@@ -3616,7 +3636,7 @@ Config.Music = {
 	-- the literal in MusicDomain.validateTrack and brm-api's MAX_TRACK_PARTS.
 	MAX_TRACK_PARTS = 26,
 	NEW_DROPS_WINDOW_SECONDS = 7 * 24 * 60 * 60,
-	VOTE_SKIP_THRESHOLD = 0.5, -- 50% of players must vote
+	VOTE_SKIP_THRESHOLD = 0.75, -- share of the players in the vote who must vote skip (owner 2026-10-09: 75%)
 	-- Default playback speed for music GUI when track has no
 	-- per-track override (track.playbackSpeed = nil).
 	-- Controller and binder read this value on first load.
@@ -3943,10 +3963,10 @@ Config.Music = {
 	VOTE_SKIP_RATE_WINDOW = 30,
 	REQUEST_TRACK_RATE_MAX = 100,
 	REQUEST_TRACK_RATE_WINDOW = 30,
-	-- v3 Add sets / Shuffle: max tracks one DJ/admin request can queue (players get their free
-	-- REQUEST_TRACK_MAX_PER_USER_QUEUE slots instead).
+	-- v3 Add sets / Shuffle: DJs and admins only (owner 2026-10-09); max tracks one press queues.
 	REQUEST_MANY_MAX = 25,
-	REQUEST_TRACK_MAX_PER_USER_QUEUE = 100,
+	-- Songs one player may have waiting in the queue at once (owner 2026-10-09: 3).
+	REQUEST_TRACK_MAX_PER_USER_QUEUE = 3,
 	-- Play-once request (3.0, ADR 0010): a pasted audio asset ID plays once and is never saved.
 	-- PLAY_ONCE_REQUEST comes from ClubKitConfig.Music.PlayOnceRequest: "everyone" | "control" | "off".
 	-- Players without musicControl: MAX_PENDING waiting at a time, MAX_PER_WINDOW per WINDOW_SECONDS.
@@ -4483,6 +4503,10 @@ Config.ClientFootprint = {
 	TRIM_STARTER_GUI = true,
 	-- Templates that stay whole besides PaidBroadcast (cloned on demand).
 	STARTER_GUI_KEEP = { "00-LoadingScreen" },
+	-- Only kit GUIs are trimmed: numbered names ("01-…", "99-…", "1000-01-…") plus these.
+	-- A venue's own GUI is never touched — its scripts may clone the StarterGui template on
+	-- demand (PARKLAB DualGlowStick re-clones DualGlowColorGui on every equip).
+	STARTER_GUI_TRIM_EXTRA = { "AvatarContextMenu", "CommandLibraryGUI" },
 	-- The server leaderboard renderer drops row decoration that draws nothing (disabled UIStroke,
 	-- zero UIPadding, UICorner on a transparent Frame) and turns aspect-ratio constraints into
 	-- fixed sizes (rows are fixed height). Same pixels, about 5 fewer instances per row (-1,500
@@ -4498,6 +4522,10 @@ Config.ClientFootprint = {
 -- not buyer config. Off until the owner releases it.
 Config.Onboarding = {
 	ENABLED = false,
+	-- Phones: the modal fits in the band between the topbar and the hotbar, with this gap
+	-- under the topbar inset and this much kept clear at the bottom (hotbar + gap), in px.
+	PHONE_TOP_GAP = 10,
+	PHONE_BOTTOM_RESERVE = 66,
 }
 -- ============================================================
 -- CONFIG VALIDATION

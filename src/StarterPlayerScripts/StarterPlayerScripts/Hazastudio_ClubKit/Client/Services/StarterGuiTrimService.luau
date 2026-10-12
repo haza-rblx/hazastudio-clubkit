@@ -6,6 +6,9 @@
 -- PlayerGui copy. Measured: -4,218 instances; respawn left every PlayerGui GUI intact, 0 warnings.
 --
 -- What stays:
+-- - every GUI that is not the kit's (only numbered names and Config.ClientFootprint.STARTER_GUI_TRIM_EXTRA
+--   are trimmed): a venue script may clone its template on demand, e.g. PARKLAB's DualGlowStick
+--   destroys its PlayerGui copy on equip and re-clones StarterGui.DualGlowColorGui;
 -- - each ScreenGui shell, because ForeignGuiGuardService asks StarterGui:FindFirstChild(name);
 -- - templates that are cloned on demand (PaidBroadcast) plus Config.ClientFootprint.STARTER_GUI_KEEP;
 -- - any template whose PlayerGui copy is missing, because the ensure*/fallback paths clone it.
@@ -32,6 +35,18 @@ local function keepNames(): { [string]: boolean }
 	return keep
 end
 
+local function isKitGui(name: string): boolean
+	if string.match(name, "^%d+%-") then
+		return true
+	end
+	local extra = (Config.ClientFootprint :: any).STARTER_GUI_TRIM_EXTRA
+	if type(extra) == "table" then
+		return table.find(extra, name) ~= nil
+	end
+	-- Engine Config predating the list: the two kit GUIs without a number.
+	return name == "AvatarContextMenu" or name == "CommandLibraryGUI"
+end
+
 -- Returns how many instances were removed.
 function StarterGuiTrimService.run(): number
 	if Config.ClientFootprint.TRIM_STARTER_GUI ~= true then
@@ -44,7 +59,7 @@ function StarterGuiTrimService.run(): number
 	local keep = keepNames()
 	local removed = 0
 	for _, template in ipairs(StarterGui:GetChildren()) do
-		if template:IsA("LayerCollector") and not keep[template.Name] then
+		if template:IsA("LayerCollector") and not keep[template.Name] and isKitGui(template.Name) then
 			local live = playerGui:FindFirstChild(template.Name)
 			if live and live.ClassName == template.ClassName then
 				for _, child in ipairs(template:GetChildren()) do

@@ -121,6 +121,8 @@ function PanelShell:_applyDjGating()
 	local localPlayer = Players.LocalPlayer
 	local isDjOwner = state.isDjMode == true and localPlayer ~= nil and state.djOwnerUserId == localPlayer.UserId
 	local locked = state.isDjMode == true and not (isDjOwner or state.isControlAllowed == true)
+	-- Stage vs hero also depends on control/ownership, which can change without isDjMode changing.
+	self._nowPlaying:setDjMode(state.isDjMode == true)
 	if self._djLocked == locked then
 		return
 	end

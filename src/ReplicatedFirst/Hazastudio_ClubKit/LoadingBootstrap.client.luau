@@ -158,6 +158,28 @@ elseif not (runtimeRoot and runtimeRoot:IsA("ScreenGui")) then
 	end
 end
 
+-- Phones: the template is authored for desktop, so shrink its content (classic and cinematic).
+do
+	local UserInputService = game:GetService("UserInputService")
+	local camera = workspace.CurrentCamera
+	local viewport = if camera then camera.ViewportSize else Vector2.zero
+	local isPhone = UserInputService.TouchEnabled
+		and not UserInputService.KeyboardEnabled
+		and math.min(viewport.X, viewport.Y) < Config.MobilePanelManager.TABLET_MIN_SHORT_SIDE
+	local wrapper = if runtimeRoot then runtimeRoot:FindFirstChild("ContentWrapper") else nil
+	if isPhone and wrapper then
+		local scale = wrapper:FindFirstChildWhichIsA("UIScale")
+		if not scale then
+			scale = Instance.new("UIScale")
+			scale.Parent = wrapper
+		end
+		(scale :: UIScale).Scale = LoadingConfig.PHONE_UI_SCALE
+		if cinematicView then
+			cinematicView:applyPhoneLayout(LoadingConfig.PHONE_STACK_SIDE)
+		end
+	end
+end
+
 if BrandLogoApplier and runtimeRoot then
 	BrandLogoApplier.applyToInstance(runtimeRoot, Config)
 end

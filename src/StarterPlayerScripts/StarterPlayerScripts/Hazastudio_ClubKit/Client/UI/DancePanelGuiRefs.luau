@@ -28,6 +28,8 @@ export type Refs = {
 	speedHandle: GuiObject,
 	speedHandleButton: GuiButton?,
 	speedSliderVertical: boolean,
+	-- Set by DancePanelV3Look.applyPhone: the v3 panel in its phone layout (vertical segmented bar).
+	v3PhoneLayout: boolean?,
 	currentSpeedLabel: TextLabel?,
 	maxSpeedLabel: TextLabel?,
 	paginationWrapper: GuiObject?,

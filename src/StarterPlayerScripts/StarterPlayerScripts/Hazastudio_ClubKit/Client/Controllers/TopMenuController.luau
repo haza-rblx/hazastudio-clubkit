@@ -21,6 +21,7 @@ local NotifService = require(script.Parent.Parent.Services.NotifService)
 local AccentService = require(script.Parent.Parent.Services.AccentService)
 local AccentSurfaceTint = require(script.Parent.Parent.Services.AccentSurfaceTint)
 local EventBoardController = require(script.Parent.EventBoardController)
+local MobilePanelManager = require(script.Parent.Parent.Services.MobilePanelManager)
 
 local TopMenuController = {}
 local log = Logger.new("TopMenuController")
@@ -54,6 +55,9 @@ type AdoptedTrigger = {
 }
 
 local MENU_HIDDEN_MARGIN = 24
+-- Phone: the open menu hides every other GUI behind the dim overlay, like the other panels
+-- (MobilePanelManager; a no-op on desktop/tablet).
+local MOBILE_PANEL_ID = "topmenu"
 local BLUR_OPTIONS = {
 	enableBlur = true,
 	blurName = Config.TopbarMenu.BACKDROP_BLUR_NAME,
@@ -529,6 +533,7 @@ local function hideMenuImmediate()
 	end
 	refs.root.Enabled = false
 	disconnectClickOutside()
+	MobilePanelManager.close(MOBILE_PANEL_ID)
 	LeaderstatsVisibilityService.popHidden()
 end
 
@@ -644,6 +649,8 @@ local function hideMenu()
 	isOpen = false
 	isAnimating = true
 	disconnectClickOutside()
+	-- Restores the other GUIs now; the menu's own Enabled was saved true, so it still slides out.
+	MobilePanelManager.close(MOBILE_PANEL_ID)
 	applyLayoutVisibility()
 
 	local activeFrame = getActiveMenuFrame()
@@ -731,6 +738,8 @@ local function showMenu()
 	if refs.root.DisplayOrder < 50 then
 		refs.root.DisplayOrder = 50
 	end
+	-- After closeSettingsPanelIfOpen (it closes its own focus) and Enabled = true (saved as such).
+	MobilePanelManager.open(MOBILE_PANEL_ID)
 
 	applyLayoutVisibility()
 	playBackdropIn()
@@ -744,6 +753,10 @@ local function showMenu()
 	local restingPosition = getRestingPosition(activeFrame)
 	if not wasClosing then
 		setMenuFrameHiddenState(activeFrame, restingPosition)
+		-- The phone menu scrolls; a fresh open always starts at the first row.
+		if activeFrame:IsA("ScrollingFrame") then
+			(activeFrame :: ScrollingFrame).CanvasPosition = Vector2.zero
+		end
 	end
 	activeFrame.Visible = true
 
@@ -1160,6 +1173,8 @@ function TopMenuController.init(deps: InitDeps)
 	end
 	refs = resolved
 	log:info("TopMenuController ready", { gui = refs.root:GetFullName() })
+	-- Tapping the dim overlay closes the menu the same way the topbar icon does.
+	MobilePanelManager.register(MOBILE_PANEL_ID, refs.root.Name, requestCloseMenu)
 
 	desktopRestingPosition = refs.desktopMenu.Position
 	phoneRestingPosition = refs.phoneMenu.Position

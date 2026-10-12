@@ -896,10 +896,7 @@ local function createShopController(
 					if player and leaderboardNetwork then
 						leaderboardNetwork:fireClient(player, { type = "donation_sheets_refresh" })
 					end
-					refreshWorkspaceLeaderboards()
-					if player then
-						assignRobuxTopDonate(player)
-					end
+					-- Daily total first, so the refresh below already paints it.
 					if donationService and type(donationService.recordRobuxDonationDaily) == "function" then
 						local okDaily, errDaily = pcall(function()
 							donationService:recordRobuxDonationDaily({
@@ -908,6 +905,7 @@ local function createShopController(
 								displayName = donorName,
 								thumbnail = getUserThumbnail(userId),
 								amount = price,
+								purchaseId = purchaseId,
 							})
 						end)
 						if not okDaily then
@@ -916,6 +914,10 @@ local function createShopController(
 								error = tostring(errDaily),
 							})
 						end
+					end
+					refreshWorkspaceLeaderboards()
+					if player then
+						assignRobuxTopDonate(player)
 					end
 				end
 			end

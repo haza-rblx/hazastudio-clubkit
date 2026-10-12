@@ -179,9 +179,12 @@ local function applyIconGroupLayout(iconGroupGui: Instance): ()
 			-- DancePanelButton; on desktop it keeps its authored size and position.
 			if panelName == (if type(roots) == "table" then roots.v3 else "DancePanelGUIWrapperv3") then
 				panelGui:SetAttribute("DancePanelPhoneScale", mobile)
+				-- The open/close motion tweens this same UIScale; it settles here instead of at 1.
+				panelGui:SetAttribute("UIScaleRest", if mobile then syncCfg.DANCE_PANEL_V3_SCALE_MOBILE else nil)
+				-- Size and position are DancePanelUIBinder's (DancePanelV3Look.applyPhone), which also
+				-- records the open position the panel returns to.
 				if mobile then
 					getOrCreateRootScale(panelGui).Scale = syncCfg.DANCE_PANEL_V3_SCALE_MOBILE
-					panelGui.Position = UDim2.new(0, syncCfg.DANCE_PANEL_V3_X_MOBILE, panelGui.Position.Y.Scale, syncCfg.DANCE_PANEL_V3_Y_OFFSET_MOBILE)
 				end
 				continue
 			end

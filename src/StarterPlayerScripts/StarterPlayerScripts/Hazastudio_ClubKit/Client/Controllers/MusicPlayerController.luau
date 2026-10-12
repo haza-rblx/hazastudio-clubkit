@@ -2119,6 +2119,7 @@ function MusicPlayerController:_sendTransport(action: string, payload: { [string
 			not_playing = "Nothing is playing right now.",
 			queue_empty = "The queue is already empty.",
 			queue_limit_reached = "Your queue is full. Let a song play first.",
+			sets_control_only = "Only DJs and admins can queue a whole set. Request songs one by one.",
 			nothing_to_add = "Everything in this set is already queued.",
 			not_owner = "You can only remove your own requests.",
 			not_found = "That request already left the queue.",
@@ -3025,13 +3026,16 @@ function MusicPlayerController:_loadLibraryData(playlistId: string?, expectedSes
 		return
 	end
 
-	-- Every track this player may see (the server leaves private ones out): DJ Sets derive from it.
+	-- Every track this player may see (the server leaves private ones out).
 	local allTracks = self:_fetchTracks(nil, false)
 	if not self:_isPanelSessionActive(expectedSessionId) then
 		return
 	end
 	if allTracks and allTracks ~= self._store:get().allTracks then
-		self._store:set({ allTracks = allTracks, djSets = MusicLibraryModel.deriveDjSets(allTracks) })
+		-- DJ Sets (one card per track creator) are retired (owner, 2026-10-09): creator names on
+		-- tracks are inconsistent, so the cards scattered one DJ across many sets. The Library
+		-- lists playlists only; djSets stays empty and the LibraryView renders no set cards.
+		self._store:set({ allTracks = allTracks, djSets = {} })
 	end
 
 	local tracks

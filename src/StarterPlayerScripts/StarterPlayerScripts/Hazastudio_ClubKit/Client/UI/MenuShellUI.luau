@@ -10,6 +10,7 @@ local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Con
 local TitleEventDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.TitleEventDomain)
 local NotifService = require(script.Parent.Parent.Services.NotifService)
 local LeaderstatsVisibilityService = require(script.Parent.Parent.Services.LeaderstatsVisibilityService)
+local MobilePanelManager = require(script.Parent.Parent.Services.MobilePanelManager)
 local AnimationHelper = require(script.Parent.Parent.Utils.AnimationHelper)
 local PointerSpace = require(script.Parent.Parent.Utils.PointerSpace)
 local MotionPresets = require(script.Parent.Parent.Utils.MotionPresets)
@@ -28,6 +29,10 @@ type ProfileMenuPayload = Types.ProfileMenuPayload
 type OverheadPayload = Types.OverheadPayload
 
 local SIDEBAR_HIDDEN_MARGIN = 24
+-- MobilePanelManager id for the self-service custom title panel. It is its own buyer-installed
+-- ScreenGui and the shell opens it from the Title row / the event card, so on a phone it takes
+-- the panel focus like any other panel instead of being disabled behind the settings shell.
+local CUSTOM_TITLE_PANEL_ID = "customtitle"
 local BLUR_OPTIONS = {
 	enableBlur = true,
 	blurName = Config.Settings.BACKDROP_BLUR_NAME,
@@ -403,7 +408,7 @@ end
 function MenuShellUI:toggleCustomTitlePanel(): boolean
 	local panel = self._customTitle
 	if panel and panel.isOpen and panel:isOpen() then
-		panel:close()
+		self:_closeCustomTitlePanel()
 		return true
 	end
 	return self:openCustomTitlePanel()
@@ -639,6 +644,38 @@ end
 -- The self-service panel lives in its own buyer-installed ScreenGui, so it is
 -- resolved lazily and only once: a place running the flag without the GUI keeps
 -- the old modal instead of getting a button that does nothing.
+--
+-- It has no topbar icon of its own — it is opened from the Title row or the event card,
+-- either of which means the settings shell (or the top menu) is on screen already. So on a
+-- phone it takes the panel focus the same way its door does: the dim overlay goes up (which
+-- is what closes it on a tap outside) and the other GUIs step aside for it, instead of the
+-- panel being disabled behind them. Both calls below are no-ops off a phone, so there is
+-- nothing to branch on here — which also means the panel is presented after the focus
+-- switch: taking the focus disables the shell's GUI, and that would take the panel's own
+-- ScreenGui (a sibling in the PlayerGui) down with it.
+local function presentCustomTitlePanel(panel: any, payload: any): ()
+	MobilePanelManager.open(CUSTOM_TITLE_PANEL_ID)
+	panel:open(payload)
+end
+
+-- Hands the focus back. MPM.close is a no-op unless this panel still owns it, so a repeat call
+-- (two fast taps on the X) is harmless.
+local function releaseCustomTitleFocus(): ()
+	MobilePanelManager.close(CUSTOM_TITLE_PANEL_ID)
+end
+
+-- Close the panel from the shell's side. The panel's own controls hand the focus back
+-- themselves; this is for the callers that never touch them — a caller toggling it closed, and
+-- the dim overlay / watchdog, which have already released the focus by the time they call back
+-- (so the release below is the no-op in that direction).
+function MenuShellUI:_closeCustomTitlePanel(): ()
+	local panel = self._customTitle
+	if panel == nil then
+		return
+	end
+	panel:close(false, releaseCustomTitleFocus)
+end
+
 function MenuShellUI:_getCustomTitleUI(): any?
 	if self._customTitleResolved then
 		return self._customTitle
@@ -664,13 +701,24 @@ function MenuShellUI:_getCustomTitleUI(): any?
 			self._profileChangeCallback("customTitle", form)
 		end
 	end)
+	-- The panel dismisses itself through its own X / backdrop / Submit and Remove buttons, so the
+	-- close comes from the component rather than from a tap on the dim overlay, which MPM cannot
+	-- observe. This hook is what hands the focus — and so every other GUI — back.
+	panel:bindClose(releaseCustomTitleFocus)
 	panel:bindRemove(function()
+		releaseCustomTitleFocus()
 		if self._profileChangeCallback then
 			self._profileChangeCallback("customTitleRemove", true)
 		end
 	end)
 
 	self._customTitle = panel
+	-- Registered so the two paths that do not touch the panel itself still dismiss it: a tap on
+	-- the dim overlay and the watchdog's release both call this back after handing the focus on.
+	-- Reaching it any other way — its own X, its backdrop, Submit — never goes through here.
+	MobilePanelManager.register(CUSTOM_TITLE_PANEL_ID, Config.CustomTitle.GUI_NAME, function()
+		self:_closeCustomTitlePanel()
+	end)
 	return panel
 end
 
@@ -680,7 +728,7 @@ function MenuShellUI:_showProfileFieldModal(request: ProfileTabBinder.ProfileFie
 		if payload and (payload :: any).customTitleEnabled == true then
 			local panel = self:_getCustomTitleUI()
 			if panel then
-				panel:open(payload)
+				presentCustomTitlePanel(panel, payload)
 				return
 			end
 		end
@@ -1117,6 +1165,7 @@ local function createDisabledUI()
 	function ui:show() end
 	function ui:hide() end
 	function ui:openCustomTitlePanelWhenReady() end
+	function ui:_closeCustomTitlePanel() end
 	function ui:selectTab() end
 	function ui:hasTab(): boolean
 		return false

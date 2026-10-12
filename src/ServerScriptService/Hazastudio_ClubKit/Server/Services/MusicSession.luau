@@ -638,8 +638,9 @@ local function createMusicSession(deps: {
 		return count
 	end
 
+	local voteSkipThreshold = math.clamp(tonumber(config.VOTE_SKIP_THRESHOLD) or 0.75, 0.01, 1)
 	local function getRequiredVoteCount(totalPlayers: number): number
-		return math.max(1, math.floor(totalPlayers / 2) + 1)
+		return math.max(1, math.ceil(totalPlayers * voteSkipThreshold))
 	end
 
 	local function emitVoteState(payload: any, targetPlayer: Player?)

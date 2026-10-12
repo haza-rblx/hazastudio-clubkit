@@ -35,6 +35,8 @@ type QueueRow = {
 	key: string?,
 	fade: { GuiObject }?,
 	fadeBases: { [GuiObject]: number }?,
+	avatarPosition: UDim2?,
+	avatarEndPosition: UDim2?,
 }
 
 local function findPlaylist(playlists: any, playlistId: any): any?
@@ -176,7 +178,14 @@ end
 
 function NowPlayingView:setDjMode(enabled: boolean)
 	local refs = self._refs
-	local ownerId = self._store:get().djOwnerUserId
+	local state = self._store:get()
+	local ownerId = state.djOwnerUserId
+	-- The stage is the audience view. The DJ and anyone with control (admins) keep the normal hero
+	-- with the transport row, or they could not skip/seek during their own set.
+	local localPlayer = Players.LocalPlayer
+	local canControl = state.isControlAllowed == true
+		or (type(ownerId) == "number" and localPlayer ~= nil and ownerId == localPlayer.UserId)
+	enabled = enabled and not canControl
 	local key = if enabled then "dj:" .. tostring(ownerId) else "off"
 	if self._djKey == key then
 		return
@@ -439,6 +448,15 @@ function NowPlayingView:_row(index: number): QueueRow
 		entryId = nil,
 		key = nil,
 	}
+	-- "Queued by : <name>" on one line: the design wraps it, so a long name fell onto a second line
+	-- below the 23 px chip and the chip read "Queued by :". The chip fills its row and ends in "...".
+	row.requester.AutomaticSize = Enum.AutomaticSize.None
+	row.requester.Size = UDim2.fromScale(1, 1)
+	row.requester.TextWrapped = false
+	row.requester.TextTruncate = Enum.TextTruncate.AtEnd
+	-- The avatar sits left of the remove button; it moves into that slot when the button is hidden.
+	row.avatarPosition = row.avatar.Position
+	row.avatarEndPosition = UDim2.new(remove.Position.X.Scale, remove.Position.X.Offset, row.avatar.Position.Y.Scale, row.avatar.Position.Y.Offset)
 	-- Resolved before the bind below: the icon tier may move the icon into its UIMotionIconSlot.
 	local removeIcon = remove:FindFirstChildWhichIsA("ImageLabel")
 	table.insert(
@@ -491,7 +509,12 @@ function NowPlayingView:_bindRow(row: QueueRow, track: any, playlist: any?)
 	local ownRequest = track.isSystemAssigned ~= true
 		and localPlayer ~= nil
 		and tonumber(track.requesterUserId) == localPlayer.UserId
-	Visuals.setVisible(row.remove, row.entryId ~= nil and (self._transportAllowed == true or ownRequest))
+	local canRemove = row.entryId ~= nil and (self._transportAllowed == true or ownRequest)
+	Visuals.setVisible(row.remove, canRemove)
+	local avatarPosition = if canRemove then row.avatarPosition else row.avatarEndPosition
+	if avatarPosition and row.avatar.Position ~= avatarPosition then
+		row.avatar.Position = avatarPosition
+	end
 	row.instance.Name = tostring(track.queueEntryId or track.id or "QueueRow")
 end
 

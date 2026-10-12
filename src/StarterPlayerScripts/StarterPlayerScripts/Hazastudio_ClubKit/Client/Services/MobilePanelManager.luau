@@ -73,10 +73,15 @@ local function showOverlay(): ()
 	if frame == nil or gui == nil then
 		return
 	end
-	gui.Enabled = true
+	-- Cancel before enabling: a dismissal still in flight fires its Completed(Cancelled) the
+	-- moment it is cancelled, and that handler switches the GUI off. Cancelling first keeps the
+	-- re-show authoritative — open(B) over open(A) does exactly that, and the overlay used to
+	-- end up invisible behind the new panel (2026-10-12).
 	if _overlayTween ~= nil then
 		_overlayTween:Cancel()
+		_overlayTween = nil
 	end
+	gui.Enabled = true
 	_overlayTween = TweenService:Create(
 		frame,
 		TweenInfo.new(cfg.OVERLAY_TWEEN_IN, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
@@ -93,14 +98,17 @@ local function hideOverlay(): ()
 	end
 	if _overlayTween ~= nil then
 		_overlayTween:Cancel()
+		_overlayTween = nil
 	end
 	local tween = TweenService:Create(
 		frame,
 		TweenInfo.new(cfg.OVERLAY_TWEEN_OUT, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
 		{ BackgroundTransparency = 1 }
 	)
-	tween.Completed:Once(function()
-		if gui ~= nil then
+	tween.Completed:Once(function(state)
+		-- A cancelled dismissal must not switch the GUI off: the tween it abandoned was
+		-- replaced by a re-show (open over open), and that one owns the overlay now.
+		if state == Enum.PlaybackState.Completed and gui ~= nil then
 			gui.Enabled = false
 		end
 	end)

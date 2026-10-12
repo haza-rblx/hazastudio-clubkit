@@ -545,8 +545,8 @@ local function createMusicService(deps: {
 		return sess:adminSkip()
 	end
 
-	-- v3 transport. Pause / resume / seek / previous / clear need live control; removing your own
-	-- queue entry and bulk requests do not (the session caps them per player).
+	-- v3 transport. Pause / resume / seek / previous / clear and bulk requests (Add set / Shuffle,
+	-- owner 2026-10-09) need live control; removing your own queue entry does not.
 	function service:transport(player: Player, action: string, payload: any): (boolean, string, any?)
 		local sess = getOrCreateSession()
 		local canControl = service:isControlAllowed(player)
@@ -554,6 +554,9 @@ local function createMusicService(deps: {
 			local ok, err = sess:removeQueueEntry(player, tostring(payload.entryId or ""), canControl)
 			return ok, err, nil
 		elseif action == "request_many" then
+			if not canControl then
+				return false, "sets_control_only", nil
+			end
 			if not isStudioMode then
 				local allowed, _ = requestTrackLimiter:check(player.UserId)
 				if not allowed then

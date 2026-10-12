@@ -14,6 +14,7 @@ return function(uiInstance: GuiObject, speed: number, size: number, customColor:
 	Connection = SharedTickConnection({}, function(dt)
 		if (not mainGradient.Instance or mainGradient.Instance.Parent == nil) then
 			Connection:Disconnect();
+			return;
 		end;
 		Rotation = Rotation + speed * dt;
 		mainGradient:SetRotation(Rotation, 1);

@@ -83,6 +83,52 @@ local function createDonationController(deps: {
 	-- One-shot metadata heal: persist UserService identity so DN==username stops
 	-- re-resolving every rebuild. Deduped per server session.
 	local healedDisplayNames: { [number]: boolean } = {}
+	-- A leaderboard rebuild resolves dozens of donors at once; one task per donor used to fire
+	-- dozens of UpdateAsync at the same moment, fill every in-flight slot for 8s+ ("inflight_saturated",
+	-- budget itself healthy) and starve the donation path's own writes. One paced worker instead:
+	-- ~2 writes/s, bounded queue. A refused write is retried on a later rebuild, not in a storm.
+	local healQueue: { { userId: number, resolved: any } } = {}
+	local healWorker: { running: boolean } = { running = false }
+	local HEAL_PACE_SECONDS = 0.5
+	local HEAL_BACKOFF_SECONDS = 5
+	local HEAL_MAX_PENDING = 200
+	local function runHealWorker()
+		if healWorker.running then
+			return
+		end
+		healWorker.running = true
+		task.spawn(function()
+			while #healQueue > 0 do
+				local job = table.remove(healQueue, 1) :: { userId: number, resolved: any }
+				local userId, resolved = job.userId, job.resolved
+				local backoff = false
+				local ok, result = pcall(function()
+					return leaderboardRepository:healUserDisplayName(
+						userId,
+						resolved.username,
+						resolved.displayName,
+						resolved.thumbnail
+					)
+				end)
+				if not ok then
+					healedDisplayNames[userId] = nil
+					log:warn("healUserDisplayName failed", {
+						userId = userId,
+						error = tostring(result),
+					})
+				elseif type(result) == "table" and result.ok == false then
+					healedDisplayNames[userId] = nil
+					backoff = true
+					log:warn("healUserDisplayName rejected", {
+						userId = userId,
+						error = tostring(result.error),
+					})
+				end
+				task.wait(if backoff then HEAL_BACKOFF_SECONDS else HEAL_PACE_SECONDS)
+			end
+			healWorker.running = false
+		end)
+	end
 	LeaderboardIdentity.setWriteBackHandler(function(userId: number, resolved: any)
 		if healedDisplayNames[userId] then
 			return
@@ -90,30 +136,12 @@ local function createDonationController(deps: {
 		if not leaderboardRepository or type(leaderboardRepository.healUserDisplayName) ~= "function" then
 			return
 		end
+		if #healQueue >= HEAL_MAX_PENDING then
+			return -- not marked healed: a later rebuild offers it again
+		end
 		healedDisplayNames[userId] = true
-		task.spawn(function()
-			local ok, result = pcall(function()
-				return leaderboardRepository:healUserDisplayName(
-					userId,
-					resolved.username,
-					resolved.displayName,
-					resolved.thumbnail
-				)
-			end)
-			if not ok then
-				healedDisplayNames[userId] = nil
-				log:warn("healUserDisplayName failed", {
-					userId = userId,
-					error = tostring(result),
-				})
-			elseif type(result) == "table" and result.ok == false then
-				healedDisplayNames[userId] = nil
-				log:warn("healUserDisplayName rejected", {
-					userId = userId,
-					error = tostring(result.error),
-				})
-			end
-		end)
+		table.insert(healQueue, { userId = userId, resolved = resolved })
+		runHealWorker()
 	end)
 	local processedSnapshotReqs = TTLSet.create({
 		ttl = Config.Security.REQUEST_DEDUPE_WINDOW,

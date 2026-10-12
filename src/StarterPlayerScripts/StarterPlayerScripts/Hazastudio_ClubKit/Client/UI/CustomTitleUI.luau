@@ -174,6 +174,8 @@ function CustomTitleUI.tryCreate(playerGui: Instance, anim: any?): any?
 	self._selectedFont = nil :: string?
 	self._submitCallback = nil :: ((TitleForm) -> ())?
 	self._removeCallback = nil :: (() -> ())?
+	-- Owner hook (menu shell): its phone focus release. Nil until bindClose.
+	self._onExit = nil :: (() -> ())?
 	self._built = false
 
 	-- Designed transparencies for every fade this panel plays, captured once per element. Strong
@@ -335,6 +337,8 @@ function CustomTitleUI:_wire()
 		self._remove.AutoButtonColor = false
 		self:_bindMotion(self._remove)
 		self._remove.Activated:Connect(function()
+			-- The owner's remove callback releases the phone focus before the write goes out, so
+			-- the panel is not left sitting under the dim overlay while the server answers.
 			if self._removeCallback then
 				self._removeCallback()
 			end
@@ -361,8 +365,10 @@ function CustomTitleUI:_wire()
 	-- Optional chrome the buyer may not have added yet. Resolved by descendant
 	-- rather than direct child: the close control lives in whatever header or drag
 	-- bar the buyer builds around the panel, so its depth is theirs to change.
+	-- Both of these close the panel from inside it, where the dim overlay cannot see
+	-- the tap, so each hands the phone focus back once its dismissal has landed.
 	self:_bindIfButton(self._panel:FindFirstChild("CloseButton", true), function()
-		self:close()
+		CustomTitleUI.close(self, false, self._onExit)
 	end)
 	for _, modal in ipairs({ self._presetModal, self._typefaceModal }) do
 		if modal then
@@ -375,7 +381,7 @@ function CustomTitleUI:_wire()
 	end
 	local backdrop = findChild(self._gui, "Backdrop")
 	self:_bindIfButton(backdrop, function()
-		self:close()
+		CustomTitleUI.close(self, false, self._onExit)
 	end)
 	self._backdrop = if backdrop and backdrop:IsA("GuiObject") then backdrop else nil
 end
@@ -479,10 +485,22 @@ end
 
 -- `immediate` skips the tween for state resets (creation, an already-hidden
 -- frame), where a dismissal would otherwise flash the frame on screen to play it.
-function CustomTitleUI:_dismiss(frame: Frame?, immediate: boolean?, onDone: (() -> ())?)
+-- `onClosed` is the exit hook of the owner-driven close() alone: it runs whichever
+-- way the frame leaves the screen (tween done, tween cancelled, already hidden),
+-- once per close(), so a caller can hand back phone panel focus without depending
+-- on a callback AnimationHelper is free to skip.
+function CustomTitleUI:_dismiss(
+	frame: Frame?,
+	immediate: boolean?,
+	onDone: (() -> ())?,
+	onClosed: (() -> ())?
+)
 	if not frame then
 		if onDone then
 			onDone()
+		end
+		if onClosed then
+			onClosed()
 		end
 		return
 	end
@@ -492,12 +510,18 @@ function CustomTitleUI:_dismiss(frame: Frame?, immediate: boolean?, onDone: (() 
 		if onDone then
 			onDone()
 		end
+		if onClosed then
+			onClosed()
+		end
 		return
 	end
 	self._anim:dismissCenterPanel(frame, function()
 		resetModalVisual(frame)
 		if onDone then
 			onDone()
+		end
+		if onClosed then
+			onClosed()
 		end
 	end)
 end
@@ -649,7 +673,8 @@ function CustomTitleUI:_submitForm()
 		return
 	end
 	-- No acknowledgement comes back to this panel, so the pop is on the form being
-	-- sendable; it plays over the closing panel.
+	-- sendable; it plays over the closing panel. On a phone the focus goes back as the
+	-- dismissal lands, so the other GUIs are not left disabled while the form settles.
 	UIMotion.pop(UIMotion.scaleTargetOf(self._submit), 1.2)
 	self._submitCallback({
 		title = self._input.Text,
@@ -657,7 +682,7 @@ function CustomTitleUI:_submitForm()
 		preset = self._selectedPreset,
 		font = self._selectedFont,
 	} :: TitleForm)
-	self:close()
+	CustomTitleUI.close(self, false, self._onExit)
 end
 
 -- ============================================================
@@ -670,6 +695,14 @@ end
 
 function CustomTitleUI:bindRemove(callback: () -> ())
 	self._removeCallback = callback
+end
+
+-- The owner (the menu shell) is the only one that knows what the panel is sitting on — on a
+-- phone the panel takes the shared mobile panel focus, which has to come back when the panel
+-- goes. `onExit` runs as the dismissal lands, never on the creation-time close(true) and never
+-- on a picker handoff (those pass no callback), so wiring it here is safe at any time.
+function CustomTitleUI:bindClose(onExit: (() -> ())?)
+	self._onExit = onExit
 end
 
 -- Load the stored title into the form. Only on a fresh open: this is the half of
@@ -778,8 +811,11 @@ function CustomTitleUI:open(payload: any)
 	end
 end
 
-function CustomTitleUI:close(immediate: boolean?)
+function CustomTitleUI:close(immediate: boolean?, onClosed: (() -> ())?)
 	self:_bumpMotion()
+	-- The exit hook belongs to this close alone. A reopen bumps the same counter, so a slow
+	-- dismissal that a newer open superseded cannot release the fresh panel's phone focus.
+	local gen = self._motionGen
 	-- Stop the preset animations rather than leaving 33 RenderStepped loops
 	-- running behind a closed panel. The summary's effect goes too; open() repaints
 	-- it through applyPayload.
@@ -795,9 +831,23 @@ function CustomTitleUI:close(immediate: boolean?)
 	self._choiceKey = nil
 	-- Whichever of the three is on screen plays the same dismissal; the other two
 	-- take the immediate path, since _dismiss no-ops on an already-hidden frame.
-	self:_dismiss(self._presetModal, immediate)
-	self:_dismiss(self._typefaceModal, immediate)
-	self:_dismiss(self._panel, immediate)
+	-- The exit hook fires on the first of them to land, with a timer as the floor:
+	-- AnimationHelper drops a dismissal callback whenever that tween is cancelled or
+	-- superseded, and a hook chained only off it would then never run.
+	local fired = false
+	local function finish()
+		if fired or gen ~= self._motionGen then
+			return
+		end
+		fired = true
+		if onClosed then
+			onClosed()
+		end
+	end
+	self:_dismiss(self._presetModal, immediate, nil, finish)
+	self:_dismiss(self._typefaceModal, immediate, nil, finish)
+	self:_dismiss(self._panel, immediate, nil, finish)
+	task.delay(MotionPresets.centerClose().time + HANDOFF_SAFETY, finish)
 	if self._backdrop then
 		self._backdrop.Visible = false
 	end
