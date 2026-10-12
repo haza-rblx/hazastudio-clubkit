@@ -12,7 +12,8 @@ local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Con
 local cfg = Config.MobilePanelManager
 local hotbarCfg = Config.Hotbar
 
-export type ChromeHideReason = "acm" | "cinematic" | "idle"
+-- "dance": the dance panel on a phone reaches down over the hotbar (owner 2026-10-09).
+export type ChromeHideReason = "acm" | "cinematic" | "idle" | "dance"
 export type ChromePhase = "visible" | "hiding" | "hidden" | "showing"
 
 export type Callbacks = {
@@ -35,6 +36,7 @@ local _hideCounts: { [ChromeHideReason]: number } = {
 	acm = 0,
 	cinematic = 0,
 	idle = 0,
+	dance = 0,
 }
 local _phase: ChromePhase = "visible"
 local _hotbarRunToken = 0
@@ -50,6 +52,8 @@ local _backpackFrame: Frame? = nil
 local _backpackBasePosition: UDim2? = nil
 local _backpackOpen = false
 
+local _acmHiddenAt = 0
+local ACM_RELEASE_GRACE = 1.5
 local _idleHideToken = 0
 local _backpackSuppressesIdleHide = false
 local _idleConnections: { RBXScriptConnection } = {}
@@ -533,10 +537,13 @@ end
 
 function InventoryChromeAnimator.notifyHide(reason: ChromeHideReason): ()
 	local count = _hideCounts[reason] or 0
-	if count > 0 and (reason == "idle" or reason == "acm") then
+	if count > 0 and (reason == "idle" or reason == "acm" or reason == "dance") then
 		return
 	end
 	_hideCounts[reason] = count + 1
+	if reason == "acm" then
+		_acmHiddenAt = os.clock()
+	end
 	reconcileHotbarChrome()
 end
 
@@ -587,20 +594,42 @@ function InventoryChromeAnimator.setupAcmWatcher(): ()
 		return
 	end
 	-- The ACM (AvatarContextMenu; the v2 redesign was removed 2026-10-07).
+	-- AvatarContextController owns the real hide/release pair. This watcher is the safety net for a
+	-- wrapper that turns visible/hidden behind the controller's back, so it must NOT keep the
+	-- instance it first found: AvatarContextLook.prepareWrapper replaces the designed CanvasGroup
+	-- with a new Frame while the ACM GUI boots, destroying the original. Binding once left the
+	-- watcher dead and the hotbar hidden for the whole session (2026-10-12 phone bug).
 	local function watchGui(guiName: string)
 		task.spawn(function()
 			local acmGui = pg:WaitForChild(guiName, 30)
 			if acmGui == nil then
 				return
 			end
-			local mainWrapper = acmGui:FindFirstChild("MainWrapper")
-			if mainWrapper == nil or not mainWrapper:IsA("GuiObject") then
-				return
+			local connection: RBXScriptConnection? = nil
+			local boundWrapper: GuiObject? = nil
+			local function unbind()
+				if connection ~= nil then
+					connection:Disconnect()
+					connection = nil
+				end
+				boundWrapper = nil
 			end
-			local mw = mainWrapper :: GuiObject
-			table.insert(
-				_idleConnections,
-				mw:GetPropertyChangedSignal("Visible"):Connect(function()
+			local function bindWrapper()
+				local mainWrapper = acmGui:FindFirstChild("MainWrapper")
+				if mainWrapper == nil or not mainWrapper:IsA("GuiObject") then
+					unbind()
+					return
+				end
+				local mw = mainWrapper :: GuiObject
+				if boundWrapper == mw then
+					return
+				end
+				unbind()
+				boundWrapper = mw
+				connection = mw:GetPropertyChangedSignal("Visible"):Connect(function()
+					if mw.Parent == nil then
+						return
+					end
 					if mw.Visible then
 						if (_hideCounts.acm or 0) <= 0 then
 							InventoryChromeAnimator.notifyHide("acm")
@@ -609,7 +638,36 @@ function InventoryChromeAnimator.setupAcmWatcher(): ()
 						InventoryChromeAnimator.notifyShow("acm")
 					end
 				end)
-			)
+				table.insert(_idleConnections, connection :: RBXScriptConnection)
+			end
+			bindWrapper()
+			-- Follow the wrapper across the CanvasGroup -> Frame swap and any later rebuild.
+			table.insert(_idleConnections, acmGui.ChildAdded:Connect(function(child)
+				if child.Name == "MainWrapper" then
+					bindWrapper()
+				end
+			end))
+			table.insert(_idleConnections, acmGui.ChildRemoved:Connect(function(child)
+				if child == boundWrapper then
+					unbind()
+					task.defer(bindWrapper)
+				end
+			end))
+			-- A hide with no panel behind it (the avatar menu closed before its open animation ran,
+			-- so MainWrapper never turned visible) would leave the hotbar hidden for good: release
+			-- it. Look the wrapper up every tick — the instance we bound to may be long gone.
+			task.spawn(function()
+				while acmGui.Parent ~= nil do
+					task.wait(0.4)
+					if (_hideCounts.acm or 0) > 0 and os.clock() - _acmHiddenAt > ACM_RELEASE_GRACE then
+						local current = acmGui:FindFirstChild("MainWrapper")
+						local visible = current ~= nil and current:IsA("GuiObject") and (current :: GuiObject).Visible
+						if not visible then
+							InventoryChromeAnimator.notifyShow("acm")
+						end
+					end
+				end
+			end)
 		end)
 	end
 	watchGui("AvatarContextMenu")

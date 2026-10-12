@@ -12,6 +12,26 @@ Internal scratch pad to track work **before** a version is released.
 
 **3.0.0 released 2026-10-09.** The full 3.0 progress log (tables, decisions, verification notes) as it stood at release is in [`docs/releases/3.0.0/PROGRESS_ARCHIVE.md`](docs/releases/3.0.0/PROGRESS_ARCHIVE.md). Buyer guide: [`docs/releases/3.0.0/UPGRADE.md`](docs/releases/3.0.0/UPGRADE.md). File list: [`docs/releases/3.0.0/CHANGED_FILES.md`](docs/releases/3.0.0/CHANGED_FILES.md).
 
+## Unreleased — file table (phone stale hide/show UI: ACM hotbar + panel focus, 2026-10-12)
+
+Not committed. Repo files + the same changes ported into PARKLAB by MCP (place keeps its own ICA sticker handling, so that file was patched surgically, never replaced).
+
+| File | Change | Buyer-owned? |
+|---|---|---|
+| `Client/Controllers/AvatarContextController.luau` | New deps `notifyAcmOpen` / `notifyAcmClose`; `openPanel` hides the hotbar for the entrance, `closePanel` (the one funnel for every close path) releases it | no |
+| `Client/UI/AvatarContextUI.luau` | `ui:open(delaySeconds)` takes the entrance delay as an argument; `setBeforeOpenCallback` removed (and from the disabled stub) | no |
+| `Client/Services/InventoryChromeAnimator.luau` | `setupAcmWatcher` rebinds on `ChildAdded`/`ChildRemoved` and re-looks-up `MainWrapper` each grace tick, so the CanvasGroup→Frame swap cannot strand a hide; `notifyHide` stamps `_acmHiddenAt` | no |
+| `Client/Services/MobilePanelManager.luau` | `open()` closes the previously focused panel (restore + its close callback) before snapshotting the new one | no |
+| `Client/Controllers/CoupleController.luau` | `requestClose` helper; the X button and the breakup/notification dismiss paths deselect the icon | no |
+| `Client/UI/MenuShellUI.luau` | `hide()` fires its bound close callback after the slide-out, so a click-outside deselects the settings icon | no |
+| `Client/Controllers/AdminController.luau` | Role-revocation while the classic panel owns the icon deselects it after `ui:hide()` | no |
+| `Main.client.luau` | ACM wiring: the two notify deps are passed into the controller factory; `setBeforeOpenCallback` block removed | no |
+| `CHANGELOG.md` | `[Unreleased]` "Fixed" entry for the three phone bugs | no |
+
+Verified: 7-file luau-lsp pass shows no new diagnostics vs HEAD (only the pre-existing `_hideCounts` key-inference noise, now also covering `dance`); `tools/count-locals.ps1` OK (Main 138/200).
+
+---
+
 ## Carried over after 3.0.0
 
 | Item | Who | Notes |

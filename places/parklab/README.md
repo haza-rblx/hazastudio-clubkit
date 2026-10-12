@@ -10,6 +10,21 @@ Folder ini menyimpan **snapshot / catatan kode yang hanya ada di place PARKLAB**
 
 ## Log (terbaru dulu)
 
+### 2026-10-12 — Fix UI HP: hotbar ACM + fokus panel (belum Ctrl+S)
+
+- **Masalah:** (1) setelah menu avatar (ACM) ditutup, hotbar tetap hilang — watcher lama mem-bind `AvatarContextMenu.MainWrapper` sekali, padahal `AvatarContextLook.prepareWrapper` mengganti CanvasGroup itu dengan Frame baru saat panel boot, jadi koneksi mati dan hide terkunci (repro 1 dari 3 boot). (2) panel yang ditutup lewat tombol X/click-outside-nya sendiri tidak men-deselect icon topbar, jadi `MobilePanelManager.close` tidak pernah jalan dan semua GUI lain tetap `Enabled=false`.
+- **Perubahan di place (via MCP, engine-only):**
+  - `Client.Services.MobilePanelManager` — whole-file replace dari repo (bawa watchdog + nested-open close-previous). Live sebelumnya hanya beda oleh `notifyDancePanel`, yang tetap ada.
+  - `Client.Services.InventoryChromeAnimator` — **surgical**, bukan replace: place masih punya `STICKER_WRAPPER_NAME`/`StickerButtonWrapper` yang sudah dihapus dari repo. Ditambah `_acmHiddenAt`/`ACM_RELEASE_GRACE`, timestamp di `notifyHide`, dan `setupAcmWatcher` versi baru (re-bind via ChildAdded/ChildRemoved + re-lookup tiap grace tick).
+  - `Client.Controllers.AvatarContextController` — deps `notifyAcmOpen`/`notifyAcmClose`; `openPanel` meng-hide hotbar, `closePanel` me-release.
+  - `Client.UI.AvatarContextUI` — `ui:open(delaySeconds)`; `setBeforeOpenCallback` dihapus.
+  - `Main` — dua dep notify diteruskan ke factory controller; blok `setBeforeOpenCallback` dihapus. **Bukan replace** (place-only: menu HP sudah dibuang).
+  - `Client.Controllers.CoupleController`, `Client.UI.MenuShellUI`, `Client.Controllers.AdminController` — jalur tutup men-deselect icon (requestClose / close callback / role-revocation).
+- **Catatan en-dash:** `set_script_source` menormalkan U+2014 jadi `-` (emoji/em-dash place memang sudah mojibake sebelumnya). Komentar baru ditulis ASCII supaya push verifikasi bersih.
+- **Verifikasi (solo playtest `mode=play`, iphone_13, client-1; semua runtime-only):** 5/5 boot ACM hide→release dengan `MainWrapper` sudah `Frame`. Nested open `couple`→`shop`: panel lama benar-benar tertutup (`couple=false`), setelah `close("shop")` drift 0 GUI. Shell nyata (`makeShell({})`): `hide()` memicu close callback tepat 1×. Desktop: `notifyAcmOpen()` = 0 dan hotbar tidak pernah hide. Log 200 entri terakhir: tanpa error kit, tanpa release watchdog.
+- Detail: `.tmp/fixverify/RESULTS.md`.
+- **Belum Ctrl+S.** Simulasi klik via `simulate_mouse_input` tidak sampai ke client playtest di sesi ini (widget topbar `AbsolutePosition.Y = -36`, `Visible = false` walau selected), jadi jalur tap X/click-outside diuji lewat fungsi yang dipanggil handler-nya, bukan tap piksel.
+
 ### 2026-10-09 — Overflow topbar jadi tiga titik + dropdown, Menu tetap di luar (belum Ctrl+S)
 
 - Penyebab sebelumnya: yang berjalan di PARKLAB adalah `ReplicatedStorage.TopbarPlus.Icon` (TopbarPlus asli, dimuat pertama; `TopbarPlusReference` memakai salinan yang pertama). Overflow-nya strip horizontal yang terbuka sendiri dan titik tiganya tersembunyi. Edit saya sebelumnya hanya ke salinan kit, jadi tidak berpengaruh di sini (entri lama "terbuka sendiri sudah diperbaiki" salah).
@@ -60,6 +75,7 @@ Config buyer PARKLAB (dibaca 2026-10-06): `Features.SelfCustomTitle = true`; `Cu
 | `StarterPlayer.StarterPlayerScripts.Hazastudio_ClubKit.Main` | [bagian 2](./Main-client-freetitle-topbar-and-phone-menu.luau) | Menu "..." HP (Admin / Command Center / Freecam / Auto Dance / Free Title) | **Tidak ada** | **Sudah dibuang dari place 2026-10-09** (owner: terima hilang). Port ke repo kalau mau dikembalikan. |
 | `StarterPlayer.StarterPlayerScripts.Hazastudio_ClubKit.Client.UI.MenuShellUI` | — (1 baris: `if true then return end` di `_wireFreeTitleEvent`) | Kartu overlay dimatikan | Digantikan (gate Trigger) | Sama dengan baris pertama (`Trigger = "Topbar"`). |
 | `ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config` | — | `Config.Loading.STYLE = "cinematic"` (repo: `"classic"`) | **Tidak ada di repo** (eksperimen, flag off) | **Sync berikutnya reset ke `"classic"`.** Putuskan: port jadi buyer key (ADR 0001), atau terima kembali ke classic. |
+| `Client.Services.InventoryChromeAnimator` | [`.tmp/live-fix/ICA.push.luau`](../../.tmp/live-fix/ICA.push.luau) | Masih menangani `STICKER_WRAPPER_NAME`/`StickerButtonWrapper` (repo sudah menghapusnya, instance-diet Phase 2) | **Beda dari repo** — sengaja | Jangan whole-file replace ICA saat sync engine. Kalau place akhirnya menghapus sticker, ambil versi repo dan buang patch 2026-10-12 yang sudah tidak relevan. |
 
 ## Catatan lain
 

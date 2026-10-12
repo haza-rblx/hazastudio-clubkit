@@ -993,6 +993,15 @@ function MenuShellUI:hide()
 		if self._visibilityChangedCallback then
 			self._visibilityChangedCallback(false)
 		end
+		-- The shell closes itself on a click outside, so its owner (SettingsController) must be
+		-- told: its close callback deselects the topbar icon, and that deselected handler is what
+		-- hands the other GUIs back through MobilePanelManager (2026-10-12 phone stale-UI bug).
+		-- Firing it here is safe against re-entry: this callback's own hide() sees _visible false
+		-- and the GUI already disabled, and so returns at its guard.
+		local closeCallback = self._closeCallback
+		if closeCallback then
+			closeCallback()
+		end
 	end)
 	wrapperTween:Play()
 end

@@ -11,6 +11,11 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+### Fixed (phone: hotbar stayed hidden after the avatar context menu, panels left other UI hidden — 2026-10-12)
+- **Avatar context menu (ACM) no longer leaves the hotbar gone.** The hide was released only by a watcher bound once to `AvatarContextMenu.MainWrapper`, but `AvatarContextLook.prepareWrapper` replaces that CanvasGroup with a new Frame while the panel boots — the watcher died with the instance and the hide count latched at 1 (reproduced 1 boot in 3). `AvatarContextController` now owns the pair: `openPanel` calls `notifyAcmOpen` (its duration still delays the entrance) and `closePanel` — the only funnel for every close path — calls `notifyAcmClose`. `AvatarContextUI:open` takes the delay as an argument; `setBeforeOpenCallback` is gone. `InventoryChromeAnimator.setupAcmWatcher` stays as a safety net but rebinds through `ChildAdded`/`ChildRemoved` and re-looks-up the wrapper every grace tick, so a swapped instance can no longer strand it.
+- **A panel closed by its own X (or by an incoming-event path) no longer leaves every other GUI disabled.** The TopbarPlus deselected handler is what releases the focus, so the paths that skipped it now deselect: the couple panel's X and its breakup/notification dismiss (`requestClose` helper), the menu shell's click-outside (`MenuShellUI:hide` finally calls its bound close callback, which deselects the settings icon), and the admin panel when the local player loses the admin role while the panel is open.
+- **Opening a second panel while one is focused closes the first for real.** `MobilePanelManager.open` used to overwrite the active id, so `close` on the old id was a no-op and the stale selection kept everything hidden (top-menu rows opening a panel, the music store's `isOpen` subscription). It now closes the previous panel — restoring the snapshot and firing its close callback — before taking the new snapshot.
+
 ### Added (`/sync all <player>` — 2026-10-10)
 - Admin chat command (`Config.Session.CMD_ALIAS_SYNC`, admin-panel permission): every other player in the server is synced to that player's dance chain; players already in that chain are left alone. Notifies each synced player like a normal sync, and the caller with the count.
 

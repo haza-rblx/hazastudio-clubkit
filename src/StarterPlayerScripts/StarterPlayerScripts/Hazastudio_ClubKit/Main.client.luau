@@ -1107,7 +1107,8 @@ do
 end
 menuIcon:setImage(Config.Icons.Topbar.Menu, "Deselected")
 menuIcon:setLabel(Config.TopbarMenu.LABEL or "Menu")
-placeTopbarIcon(menuIcon, Config.TopbarMenu.ORDER)
+-- Phone: Menu is the right-most button (nothing sits to its right; the three dots sit just left of it).
+placeTopbarIcon(menuIcon, if PhoneLayout.isPhoneLayout() then 1000 else Config.TopbarMenu.ORDER)
 setCompactTopbarWidth(menuIcon, 72)
 setTopbarHorizontalPadding(menuIcon, 8)
 styleTopbarPill(menuIcon)
@@ -1247,8 +1248,11 @@ if Config.FeatureFlags.MusicPlayerEnabled then
 			if Config.Music.TOPBAR_ICON ~= "rbxassetid://0" then
 				icon:setImage(Config.Music.TOPBAR_ICON)
 			end
-			icon:setLabel(Config.Music.TOPBAR_LABEL)
+			-- Phone: only a "Reload Music" row under the three dots; the player opens from the Menu.
+			local onPhone = PhoneLayout.isPhoneLayout()
+			icon:setLabel(if onPhone then (Config.Music.TOPBAR_MENU_LOAD_TRACK_LABEL or "Reload Music") else Config.Music.TOPBAR_LABEL)
 			placeTopbarIcon(icon, Config.Music.TOPBAR_ORDER)
+			icon.alwaysOverflow = onPhone
 			setCompactTopbarWidth(icon, 36)
 			removeTopbarInnerPadding(icon)
 			styleTopbarPill(icon)
@@ -1310,7 +1314,13 @@ local _mobileFreecamController = trackClientLifecycle(
 		return Icon.new()
 	end,
 	applyTopbarStyle = function(icon: any)
-		placeTopbarIconLeft(icon, 1)
+		if PhoneLayout.isPhoneLayout() then
+			-- Phone: Freecam is a row under the three dots (same strip as Reload Music).
+			icon.alwaysOverflow = true
+			placeTopbarIcon(icon, 1)
+		else
+			placeTopbarIconLeft(icon, 1)
+		end
 		setCompactTopbarWidth(icon, 36)
 		removeTopbarInnerPadding(icon)
 		styleTopbarPill(icon)
@@ -1386,17 +1396,22 @@ do
 	end)
 	bindPanelIcon(settingsIcon, "settings")
 	if musicTopbarIcon ~= nil then
+		-- Overlay tap: openPlayer toggles an open panel shut (the icon is usually not selected
+		-- when the panel came from the top menu row, so deselect alone would leave it open).
 		MobilePanelManager.register("music", Config.Music.GUI_NAME, function()
+			if ClientMods.MusicPlayerStore:get().isOpen == true then
+				musicTopbarIcon:openPlayer()
+			end
 			musicTopbarIcon:deselect()
 		end)
-		-- Mobile focus when Music Player menu item opens the panel (not parent menu toggle).
-		if type(musicTopbarIcon.onOpenPlayer) == "function" then
-			musicTopbarIcon:onOpenPlayer(function()
+		-- Mobile focus follows the panel itself, not the icon: the panel's own close button and the
+		-- top menu row never select/deselect the icon, which left every other GUI hidden.
+		ClientMods.MusicPlayerStore:subscribe("isOpen", function(isOpen)
+			if isOpen == true then
 				MobilePanelManager.open("music")
-			end)
-		end
-		musicTopbarIcon:onDeselected(function()
-			MobilePanelManager.close("music")
+			else
+				MobilePanelManager.close("music")
+			end
 		end)
 	end
 end
@@ -1822,9 +1837,11 @@ if clubKitOwnedSyncDance then
 			local state = ClientMods.SyncStore:get()
 			emotePanel:setSyncOverlay(state.isSyncing, state.leaderDisplay, state.visualAnim)
 		end
-		-- Dance panel stays above other UI; it does not use MobilePanelManager focus hiding.
+		-- Dance panel stays above other UI; it does not use MobilePanelManager focus hiding. On a
+		-- phone it only puts the hotbar away while open (it reaches down over it).
 		syncDanceSubscriptions:subscribe(ClientMods.SyncStore, "isPanelOpen", function(isOpen)
 			emotePanel:setOpen(isOpen)
+			MobilePanelManager.notifyDancePanel(isOpen == true)
 		end)
 		syncDanceSubscriptions:subscribe(ClientMods.SyncStore, "favoritedAnims", function(favorites)
 			emotePanel:setFavorites(favorites, true)
@@ -1967,6 +1984,10 @@ trackBootTask("AvatarContextController.init", function()
 			logger = Logger.new("AvatarContextController"),
 			ui = avatarContextUI,
 			getCachedOverheadPayload = OverheadController.getCachedPayload,
+			-- Phone hotbar lifecycle: openPanel hides, closePanel releases. See
+			-- AvatarContextController for why this no longer watches the panel's Visible.
+			notifyAcmOpen = MobilePanelManager.notifyAcmOpen,
+			notifyAcmClose = MobilePanelManager.notifyAcmClose,
 		})
 	)
 	avatarContextUI:setCloseCallback(function()
@@ -2035,9 +2056,6 @@ trackBootTask("AvatarContextController.init", function()
 		if carryController and type(carryController.requestCarryByUserId) == "function" then
 			carryController:requestCarryByUserId(targetUserId)
 		end
-	end)
-	avatarContextUI:setBeforeOpenCallback(function(): number
-		return MobilePanelManager.notifyAcmOpen()
 	end)
 	if clubKitOwnedSyncDance and type(avatarContextUI.setSyncState) == "function" then
 		local avatarSyncSubscriptions = trackClientLifecycle(
