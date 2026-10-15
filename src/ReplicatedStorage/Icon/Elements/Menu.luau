@@ -6,7 +6,7 @@ return function(icon)
 	menu.Visible = true
 	menu.ZIndex = 1
 	menu.Size = UDim2.fromScale(1, 1)
-	menu.ClipsDescendants = false
+	menu.ClipsDescendants = true
 	menu.TopImage = ""
 	menu.BottomImage = ""
 	menu.HorizontalScrollBarInset = Enum.ScrollBarInset.Always

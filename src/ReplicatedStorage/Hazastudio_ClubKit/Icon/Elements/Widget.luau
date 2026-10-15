@@ -12,7 +12,7 @@ return function(icon, Icon)
 	widget.Visible = true
 	widget.ZIndex = 20
 	widget.Active = false
-	widget.ClipsDescendants = false
+	widget.ClipsDescendants = true
 
 	local button = Instance.new("Frame")
 	button.Name = "IconButton"
@@ -20,8 +20,16 @@ return function(icon, Icon)
 	button.ZIndex = 2
 	button.BorderSizePixel = 0
 	button.Parent = widget
-	button.ClipsDescendants = false
+	button.ClipsDescendants = true
 	button.Active = false -- This is essential for mobile scrollers to work when dragging
+	icon.deselected:Connect(function()
+		button.ClipsDescendants = true
+		task.delay(0.2, function()
+			if icon.isSelected then
+				button.ClipsDescendants = false
+			end
+		end)
+	end)
 
 	-- Account for PreferredTransparency which can be set by every player
 	local GuiService = game:GetService("GuiService")
@@ -419,17 +427,6 @@ return function(icon, Icon)
 	iconGradient.Name = "IconGradient"
 	iconGradient.Enabled = true
 	iconGradient.Parent = button
-
-	local iconStroke = Instance.new("UIStroke")
-	iconStroke.Name = "WidgetStroke"
-	iconStroke.Thickness = 1
-	iconStroke.Color = Color3.fromRGB(68, 68, 68)
-	iconStroke.Transparency = 0.7
-	iconStroke.Parent = button
-
-	-- WidgetStroke Color is overridden by setTopbarFill at runtime
-	-- via modifyTheme (deferred), which lets AccentSurfaceTint record the design value.
-	-- Default here is a visible mid-grey so AccentSurfaceTint picks it up.
 
 	local iconSpotGradient = Instance.new("UIGradient")
 	iconSpotGradient.Name = "IconSpotGradient"
