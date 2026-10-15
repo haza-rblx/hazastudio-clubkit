@@ -753,9 +753,26 @@ local function showMenu()
 	local restingPosition = getRestingPosition(activeFrame)
 	if not wasClosing then
 		setMenuFrameHiddenState(activeFrame, restingPosition)
-		-- The phone menu scrolls; a fresh open always starts at the first row.
+		-- The phone menu scrolls (the desktop one may too); a fresh open starts at the first row.
 		if activeFrame:IsA("ScrollingFrame") then
 			(activeFrame :: ScrollingFrame).CanvasPosition = Vector2.zero
+			-- A desktop menu that sizes to its rows (AutomaticSize Y) would run off a short screen.
+			-- UISizeConstraint does not cap an AutomaticSize ScrollingFrame, so pin it to a fixed
+			-- height (its rows, capped to the screen below its top edge), re-measured on every open.
+			local layout = activeFrame:FindFirstChildOfClass("UIListLayout")
+			if
+				layout
+				and (activeFrame.AutomaticSize == Enum.AutomaticSize.Y or activeFrame:GetAttribute("FitRowsToScreen"))
+			then
+				activeFrame:SetAttribute("FitRowsToScreen", true)
+				activeFrame.AutomaticSize = Enum.AutomaticSize.None
+				local maxH = math.max(120, refs.root.AbsoluteSize.Y - restingPosition.Y.Offset * 2)
+				local h = math.min(layout.AbsoluteContentSize.Y, maxH)
+				local size = activeFrame.Size
+				if size.Y.Scale ~= 0 or size.Y.Offset ~= h then
+					activeFrame.Size = UDim2.new(size.X, UDim.new(0, h))
+				end
+			end
 		end
 	end
 	activeFrame.Visible = true
