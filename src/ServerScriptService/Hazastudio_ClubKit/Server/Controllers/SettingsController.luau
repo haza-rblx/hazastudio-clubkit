@@ -76,12 +76,55 @@ local function createSettingsController(deps: {
 
 	local controller = {}
 
+	-- One-shot join reset (SettingsDomain.needsTitleLayerReset): publish SpecialTitle and
+	-- SpecialTitleImage = true, leaving every other public layer key untouched.
+	local function forcePublicTitleLayers(player: Player)
+		if not overheadRepository then
+			return
+		end
+		local forced: { [string]: boolean } = {}
+		if not OverheadDomain.isLayerDisabled("SpecialTitle") then
+			forced.SpecialTitle = true
+		end
+		if not OverheadDomain.isLayerDisabled("SpecialTitleImage") then
+			forced.SpecialTitleImage = true
+		end
+		if next(forced) == nil then
+			return
+		end
+
+		local didChange = false
+		local saved = overheadRepository:update(player.UserId, function(current)
+			local layers = table.clone(current.publicOverheadLayerVisible or {})
+			for key, value in pairs(forced) do
+				if layers[key] ~= value then
+					layers[key] = value
+					didChange = true
+				end
+			end
+			if not didChange then
+				return current
+			end
+			return OverheadDomain.mergeStored(current, { publicOverheadLayerVisible = layers })
+		end)
+		if not saved.ok then
+			log:warn("title layer public reset failed", { player = player.Name, error = saved.error })
+			return
+		end
+		if didChange and overheadController and type(overheadController.refreshPlayer) == "function" then
+			overheadController:refreshPlayer(player)
+		end
+	end
+
 	local function fireSync(player: Player)
 		local loaded = settingsService:load(player)
 		if not loaded.ok then
 			log:warn("load failed", { player = player.Name, error = loaded.error })
 			syncNetwork:fireClient(player, SettingsDomain.merge(nil, nil))
 			return
+		end
+		if loaded.titleLayerReset then
+			forcePublicTitleLayers(player)
 		end
 		syncNetwork:fireClient(player, loaded.value)
 	end
@@ -103,6 +146,9 @@ local function createSettingsController(deps: {
 			end
 			local loaded = settingsService:load(player)
 			if loaded.ok then
+				if loaded.titleLayerReset then
+					forcePublicTitleLayers(player)
+				end
 				syncNetwork:fireClient(player, loaded.value)
 				return
 			end
@@ -388,6 +434,15 @@ local function createSettingsController(deps: {
 		end
 
 		log:info("SettingsController initialized")
+	end
+
+	-- Push the player's current in-memory settings (includes unflushed grants). Used by
+	-- other controllers after they change stored overhead layer visibility.
+	function controller:syncPlayer(player: Player)
+		if not player.Parent or not settingsService:isLoaded(player) then
+			return
+		end
+		syncNetwork:fireClient(player, settingsService:get(player))
 	end
 
 	function controller:destroy()

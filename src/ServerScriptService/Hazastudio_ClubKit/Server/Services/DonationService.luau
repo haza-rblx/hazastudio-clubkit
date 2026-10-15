@@ -798,6 +798,10 @@ local function createDonationService(
 			DeliveryReportQueue.push(p3State.deliveryQueue, "display", donationId, player.UserId, displayEntry, os.clock())
 			return
 		end
+		-- Same guard as the batched path: only donations this server actually fired.
+		if not DeliveryReportQueue.isKnown(p3State.deliveryQueue, donationId, os.clock()) then
+			return
+		end
 		table.insert(_displayFlushQueue, displayEntry)
 		flushDisplayQueue()
 	end

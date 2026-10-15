@@ -390,14 +390,20 @@ function MobilePanelManager.notifyAcmClose(): ()
 	InventoryChromeAnimator.notifyShow("acm")
 end
 
--- Dance panel v3 on a phone reaches down over the hotbar; it hides while the panel is open.
+-- Large (non-phone) Dance panel leaves the hotbar visible. The open decision is
+-- remembered so close always balances it, even if the layout flips while the panel is open.
+local danceHidHotbar = false
 function MobilePanelManager.notifyDancePanel(open: boolean): ()
-	if not isMobile() then
-		return
-	end
 	if open then
-		InventoryChromeAnimator.notifyHide("dance")
-	else
+		if danceHidHotbar then
+			return
+		end
+		if isMobile() and require(script.Parent.Parent.Utils.PhoneLayout).isPhoneLayout() then
+			danceHidHotbar = true
+			InventoryChromeAnimator.notifyHide("dance")
+		end
+	elseif danceHidHotbar then
+		danceHidHotbar = false
 		InventoryChromeAnimator.notifyShow("dance")
 	end
 end

@@ -39,10 +39,6 @@ local DESIGN_ATTRIBUTE_PREFIX = "AccentDesign"
 
 -- Engine GUIs that manage their own look.
 local SKIPPED_SCREEN_GUIS = {
-	TopbarStandard = true,
-	TopbarStandardClipped = true,
-	TopbarCentered = true,
-	TopbarCenteredClipped = true,
 	BubbleChat = true,
 	Chat = true,
 }
@@ -413,7 +409,7 @@ end
 -- Kit ScreenGuis: numbered ("01-…", "99-…", "1000-01-…"), the kit's runtime "ClubKit…" hosts, and
 -- the two unnumbered kit GUIs. A venue's own GUI (PARKLAB's DualGlowColorGui swatches) keeps its
 -- colours, and so does every name in Config.Branding.ACCENT_NO_TINT_GUIS (the music player).
-local UNNUMBERED_KIT_GUIS = { AvatarContextMenu = true, CommandLibraryGUI = true }
+local UNNUMBERED_KIT_GUIS = { AvatarContextMenu = true, CommandLibraryGUI = true, TopbarStandard = true, TopbarStandardClipped = true, TopbarCentered = true, TopbarCenteredClipped = true }
 local function isThemedScreenGui(name: string): boolean
 	local noTint = (Config.Branding :: any).ACCENT_NO_TINT_GUIS
 	if type(noTint) ~= "table" then

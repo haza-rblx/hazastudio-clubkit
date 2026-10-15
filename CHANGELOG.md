@@ -11,6 +11,40 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+### Fixed (custom title invisible to its own wearer; title text and image are separate layers — 2026-10-15)
+- **A player could not see their own custom title while everyone else could.** The Settings row for the title layer had been removed, but players who had hidden it earlier still had `overheadLayerVisible.SpecialTitle = false` stored. The own-head render reads that stored value (`SettingsOverheadLayerVisible_*`); others read the public map, which an admin grant forced to `true`. Touching any other layer toggle then mirrored the stale `false` into the public map, so the title vanished for everyone until the next grant.
+- **One-shot reset:** a new stored-settings stamp (`SettingsDomain.TITLE_LAYER_BASE_SCHEMA` / `_titleLayerBase`, same pattern as `_musicVolBase`) sets both title layers back to visible for every existing player once; on that join the server also sets them visible in the public map (`SettingsController`, only those two keys). Players who had deliberately hidden their title see it again and can hide it from Settings.
+- **Title text and title image are separate layers.** New layer key `SpecialTitleImage` (the V5 banner) beside `SpecialTitle` (the text), each with its own Settings row (*Title Text* / *Title Image*, shown only when the player holds that piece) and its own `DefaultLayers` entry.
+- **Grants write both copies.** Admin grant, self-service title edit/purchase and the event-board title reward now set the layer visible in the wearer's stored Settings as well as the public map (`grantOverheadLayers` / `settingsSync`), so the two can no longer diverge. Offline targets get the public write only; the join reset covers them.
+- **Buyer note:** a venue that hard-offed the title with `Overhead.DefaultLayers.SpecialTitle = "off"` will now see image banners unless it also sets `SpecialTitleImage = "off"`. The new key fills forward as `true`.
+
+### Changed (Lead Dance dropdown — 2026-10-15)
+- **The "Lead Dance (N)" topbar icon opens the kit's own dropdown** instead of TopbarPlus's built-in one (new `Client/Controllers/LeadDanceDropdown`, driven by `SyncLeadTopbarController`). One row per other player holding the Lead Dance title or leading followers: avatar, name, "N synced", and a **Sync** / **Unsync** button; the leader you follow is pinned first ("You · N synced"). Rows follow the `15-TopMenuGUI` look (flat rows, 2px gaps, rounded group ends), the list sits under the icon, scales for phone (0.8) / desktop (0.92), shows at most 6 rows on desktop and only what fits above the hotbar on phone, and scrolls with half a row peeking. Tap outside closes it; with no leaders it shows "No lead dancers right now".
+- `Main.client` passes `onRequestUnsync` (→ `SyncController:onUnsync`) and `syncStore` to the controller; no new top-level locals. Fixes the unresponsive Sync Lead button reported on BACKHOME.
+
+### Fixed (touch: panel swipes no longer walk the character; large Dance panel keeps the hotbar — 2026-10-15)
+- **Panel swipes walked the character (`MobileScaleService.applyIconGroupLayout`, `Music/GuiRefs.resolve`):** root cause was `PlayerGui.TouchGui` (DisplayOrder 0) being hit-tested above a panel ScreenGui at DisplayOrder 0, so the engine DynamicThumbstick zone took a swipe that started on the panel. The `IconGroup` (hosts the Dance panel) and `06-MusicPlayerGUI` ScreenGuis are now forced to `DisplayOrder >= 1` in code, so buyers pick it up by source sync without touching their place files.
+- **Large Dance panel hid the hotbar (`MobilePanelManager.notifyDancePanel`):** the hotbar was hidden whenever `isMobile()`, including the large non-phone Dance panel. It now hides only when `PhoneLayout.isPhoneLayout()` is true, and the open decision is remembered so close always balances it.
+- **Not fixed by `gameProcessed` / `Active`:** the engine thumbstick ignores both, so the DisplayOrder change is the only fix for the swipe; no input-handling workaround was added.
+
+### Docs
+- `AGENTS.md` / `CLAUDE.md` gained an "Agent roles" section: Opus supervises; heavy work goes to Haiku subagents at medium effort only.
+
+### Fixed (BACKHOME feedback pass — 2026-10-13)
+- **Announcement / Paid broadcast membership gate (`ConfigBootstrap`, `PermissionDomain`):** `ClubKitConfig.Announcement.MinMembership` can now be set to `"none"` (or `"disabled"`) to disable free broadcasts for all membership tiers (including Supreme), requiring all non-staff players to use the paid broadcast flow.
+- **Join community prompt (`JoinCommunityPromptController`):** The prompt (`16-JoinCommunPrompt`) is now skipped immediately if the local player has already joined the group/community, preventing redundant popups on spawn.
+- **Title access gate (`TitleAccessDomain.evaluate`):** Admin-granted titles can now always be edited even when `Features.SelfCustomTitleEnabled` is `false`. Previously, the self-service flag check ran before checking `hasTitle` / `fromAdmin`, preventing existing title holders from customizing their title.
+- **Role tool priority shadow bug (`RoleToolService:_resolveFolderNames`):** Candidate folders are now filtered by existence in `ServerStorage.Tools` before priority comparison, preventing missing high-priority role folders from shadowing valid lower-priority membership folders.
+
+### Added (admin commands — 2026-10-13)
+- **Admin streak restoration (`/setstreak <player> <days>`):** Added `StreakService:setStreak` and chat command `/setstreak` (restricted to roles with `adminPanel` privilege) to allow admins to manually restore lost streak days for a player in the server.
+
+### Fixed (audit follow-up: XP save, donation display guard, compact formatting, role category order — 2026-10-13)
+- **A failed XP save no longer drops XP earned during its yield.** `LevelService.flush` restored the pending amount by assignment, overwriting XP that `addXp` queued while `UpdateAsync` was in flight; it now adds the two.
+- **The non-batched donation display path checks the donation was fired by this server.** `DonationService.handleNotifDisplay` only ran that check on the `DELIVERY_BATCH` path, so a client could write forged "displayed" ledger rows when a buyer turned batching off. It now requires `DeliveryReportQueue.isKnown`, as the batched path does.
+- **`formatCompact` promotes 999,950–999,999 to `1M`** instead of printing `1000K`.
+- **`RoleCategoryBuilder` sorts a copy of `RoleCategories`.** The sort used to reorder the buyer's config array in place.
+
 ### Fixed (phone: hotbar stayed hidden after the avatar context menu, panels left other UI hidden — 2026-10-12)
 - **Avatar context menu (ACM) no longer leaves the hotbar gone.** The hide was released only by a watcher bound once to `AvatarContextMenu.MainWrapper`, but `AvatarContextLook.prepareWrapper` replaces that CanvasGroup with a new Frame while the panel boots — the watcher died with the instance and the hide count latched at 1 (reproduced 1 boot in 3). `AvatarContextController` now owns the pair: `openPanel` calls `notifyAcmOpen` (its duration still delays the entrance) and `closePanel` — the only funnel for every close path — calls `notifyAcmClose`. `AvatarContextUI:open` takes the delay as an argument; `setBeforeOpenCallback` is gone. `InventoryChromeAnimator.setupAcmWatcher` stays as a safety net but rebinds through `ChildAdded`/`ChildRemoved` and re-looks-up the wrapper every grace tick, so a swapped instance can no longer strand it.
 - **A panel closed by its own X (or by an incoming-event path) no longer leaves every other GUI disabled.** The TopbarPlus deselected handler is what releases the focus, so the paths that skipped it now deselect: the couple panel's X and its breakup/notification dismiss (`requestClose` helper), the menu shell's click-outside (`MenuShellUI:hide` finally calls its bound close callback, which deselects the settings icon), and the admin panel when the local player loses the admin role while the panel is open.

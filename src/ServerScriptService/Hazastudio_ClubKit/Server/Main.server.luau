@@ -421,6 +421,9 @@ local playerSnapshotService = ServerMods.createPlayerSnapshotService.create({
 local backgroundJobScheduler = ServerMods.createBackgroundJobScheduler.create({
 	logger = Logger.new("BackgroundJobScheduler"),
 })
+-- Late-bound bridge: grants write stored overhead layers, then push the target's settings.
+-- SettingsController is constructed later; its syncPlayer is populated there.
+local settingsSync: { syncPlayer: ((Player) -> ())? } = { syncPlayer = nil }
 local overheadService = ServerMods.createOverheadService({
 	repo = repo,
 	avatarLikeRepository = avatarLikeRepository,
@@ -435,6 +438,8 @@ local profileMenuService = ServerMods.createProfileMenuService({
 	profileRepository = profileRepo,
 	overheadRepository = repo,
 	profileCommandService = profileCommandService,
+	settingsService = settingsService,
+	settingsSync = settingsSync,
 })
 local avatarContextService = ServerMods.createAvatarContextService({
 	logger = Logger.new("AvatarContextService"),
@@ -615,6 +620,8 @@ local eventBoardController = trackLifecycle(
 		overheadController = overheadController,
 		progressRepo = ServerMods.VenueQuestProgressRepository.new({ logger = Logger.new("VenueQuestProgressRepository") }),
 		levelService = levelService,
+		settingsService = settingsService,
+		settingsSync = settingsSync,
 		logger = Logger.new("EventBoardController"),
 	})
 )
@@ -769,6 +776,8 @@ local _adminController = ServerMods.createAdminController({
 	membershipCommandService = membershipCommandService,
 	playerLookupService = playerLookupService, -- DI fixed: inject lookup service
 	profileMenuSync = profileMenuSync,
+	settingsService = settingsService,
+	settingsSync = settingsSync,
 	titleImageRegistry = ServerMods.TitleImageRegistryRepository.create({}),
 })
 if Config.FeatureFlags.CouplesEnabled ~= false then
@@ -1119,6 +1128,9 @@ do
 			profileLoader = sharedProfileLoader,
 		})
 	)
+	settingsSync.syncPlayer = function(player: Player)
+		settingsController:syncPlayer(player)
+	end
 	settingsController:init()
 end
 -- serverLifecycle:startAll() called after all modules registered (below)
@@ -1413,6 +1425,56 @@ if Config.FeatureFlags.MusicPlayerEnabled then
 	musicFavoritesRepo = musicBoot.musicFavoritesRepo
 	_musicService = musicBoot.musicService
 end
+-- /setstreak <namaPlayer> <angka> — restore streak by admin
+do
+	local PermissionDomain_local = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.PermissionDomain)
+	chatCommandService:register("setstreak", function(caller: Player, unfilteredText: string, _requestId: string)
+		local callerRoleKey: string? = nil
+		if overheadService and type(overheadService.getEffectivePayload) == "function" then
+			local pr = overheadService:getEffectivePayload(caller)
+			if pr.ok then callerRoleKey = pr.value.role end
+		end
+		if not PermissionDomain_local.canUseAdminPanel(callerRoleKey, caller.UserId) then
+			Notify.player(caller, "[setstreak] Tidak punya izin.", "WARNING")
+			return
+		end
+
+		local _, args = unfilteredText:match("^/(%S+)%s*(.-)%s*$")
+		local targetName, daysStr = (args or ""):match("^(%S+)%s+(%d+)%s*$")
+		if not targetName or not daysStr then
+			Notify.player(caller, "[setstreak] Pemakaian: /setstreak <nama> <angka>", "WARNING")
+			return
+		end
+		local days = tonumber(daysStr)
+		if not days or days < 0 or days > 9999 then
+			Notify.player(caller, "[setstreak] Angka tidak valid (0–9999).", "WARNING")
+			return
+		end
+
+		local targetPlayer: Player? = nil
+		local lowerName = string.lower(targetName)
+		for _, p in ipairs(Players:GetPlayers()) do
+			if string.lower(p.Name) == lowerName or string.lower(p.DisplayName) == lowerName then
+				targetPlayer = p
+				break
+			end
+		end
+		if not targetPlayer then
+			Notify.player(caller, ("[setstreak] Player '%s' tidak ada di server ini."):format(targetName), "WARNING")
+			return
+		end
+
+		local result = streakService:setStreak(targetPlayer.UserId, days)
+		if result.ok then
+			Notify.player(caller, ("[setstreak] Streak %s -> %d hari."):format(targetPlayer.Name, days), "SUCCESS")
+			Notify.player(targetPlayer, ("[Admin] Streak kamu diset ke %d hari."):format(days), "INFO")
+			overheadController:refreshPlayer(targetPlayer)
+		else
+			Notify.player(caller, ("[setstreak] Gagal: %s"):format(tostring(result.error)), "ERROR")
+		end
+	end)
+end
+
 local _chatCommandController = ServerMods.createChatCommandController({
 	chatCommandService = chatCommandService,
 	commandExecutionService = commandExecutionService,

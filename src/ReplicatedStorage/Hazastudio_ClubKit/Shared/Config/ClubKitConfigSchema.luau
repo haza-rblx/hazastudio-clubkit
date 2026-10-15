@@ -482,6 +482,7 @@ ClubKitConfigSchema.defaults = {
 		ShowSupporterChip = true,
 		DefaultLayers = {
 			SpecialTitle = true,
+			SpecialTitleImage = true,
 			BadgeGroup = true,
 			Level = true,
 			SpecialRank = true,

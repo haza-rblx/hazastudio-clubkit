@@ -45,7 +45,7 @@ local function createLevelService(deps: {
 		end)
 
 		if not updateResult.ok then
-			pendingXp[userId] = pending
+			pendingXp[userId] = (pendingXp[userId] or 0) + pending
 			log:error("Failed to save XP", { userId = userId, err = updateResult.error })
 			return ResultUtil.Err(updateResult.error)
 		end

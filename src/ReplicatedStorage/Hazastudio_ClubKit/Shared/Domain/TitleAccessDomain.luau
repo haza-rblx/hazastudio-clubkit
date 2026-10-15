@@ -46,15 +46,21 @@ local function isTrue(value: any): boolean
 end
 
 function TitleAccessDomain.evaluate(input: AccessInput?): AccessState
-	if type(input) ~= "table" or not isTrue(input.selfServiceOn) then
+	if type(input) ~= "table" then
 		return LOCKED
 	end
 
 	-- A title with no recorded source is a legacy admin grant; only a title
 	-- explicitly marked as self-made loses the shield.
+	-- Admin-granted titles can always be edited, even when self-service is disabled.
 	if isTrue(input.hasTitle) and input.fromAdmin ~= false then
 		return { canEdit = true, reason = "admin" }
 	end
+
+	if not isTrue(input.selfServiceOn) then
+		return LOCKED
+	end
+
 	if isTrue(input.meetsLevel) then
 		return { canEdit = true, reason = "level" }
 	end

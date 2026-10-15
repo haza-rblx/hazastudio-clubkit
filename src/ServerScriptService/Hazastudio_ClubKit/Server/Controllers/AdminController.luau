@@ -56,6 +56,9 @@ local function createAdminController(deps: {
 	-- Optional: absent on a place that has not installed the image-title work, in
 	-- which case the "Or select" list simply comes back empty.
 	titleImageRegistry: any?,
+	-- Optional: stored-settings write for grants (so the target's own client shows the layer).
+	settingsService: any?,
+	settingsSync: { syncPlayer: ((Player) -> ())? }?,
 })
 	local repo = deps.repo
 	local overheadService = deps.overheadService
@@ -67,6 +70,20 @@ local function createAdminController(deps: {
 	local playerLookupService = deps.playerLookupService
 	local profileMenuSync = deps.profileMenuSync
 	local titleImageRegistry = deps.titleImageRegistry
+	local settingsService = deps.settingsService
+	local settingsSync = deps.settingsSync
+
+	-- Grants also force the layer on in the target's stored settings, so their own
+	-- client shows it. Only online targets: an offline target's settings are not loaded.
+	local function grantStoredLayers(userId: number, keys: { string })
+		local onlineTarget = Players:GetPlayerByUserId(userId)
+		if not settingsService or not onlineTarget then
+			return
+		end
+		if settingsService:grantOverheadLayers(onlineTarget, keys) and settingsSync and settingsSync.syncPlayer then
+			settingsSync.syncPlayer(onlineTarget)
+		end
+	end
 
 	-- Live-refresh the target's profile menu (if online) after an overhead-backed
 	-- profile field (specialTitle) changes, so an open profile panel updates
@@ -266,6 +283,7 @@ local function createAdminController(deps: {
 		if not rememberRequest(processedSetTitle, requestId) then
 			return
 		end
+		grantStoredLayers(target.UserId, { "SpecialTitle" })
 		overheadController:refreshPlayer(target)
 		refreshProfileMenu(target.UserId)
 		notify.player(player, Config.Admin.MSG_TITLE_SUCCESS:format(target.DisplayName), "SUCCESS")
@@ -328,13 +346,23 @@ local function createAdminController(deps: {
 		local target = lookupResult.value
 
 		local updatedResult = repo:update(target.UserId, function(current)
-			return OverheadDomain.mergeStored(current, {
+			local patch: { [string]: any } = {
 				specialTitleImage = if clearing then OverheadDomain.NIL else imageId,
-			})
+			}
+			-- An image grant also forces the image row's own layer key on, public side.
+			if not clearing and not OverheadDomain.isLayerDisabled("SpecialTitleImage") then
+				local layers = table.clone(current.publicOverheadLayerVisible or {})
+				layers.SpecialTitleImage = true
+				patch.publicOverheadLayerVisible = layers
+			end
+			return OverheadDomain.mergeStored(current, patch :: any)
 		end)
 		if not updatedResult.ok then
 			notify.player(player, Config.Admin.MSG_TITLE_SAVE_FAILED, "ERROR")
 			return
+		end
+		if not clearing then
+			grantStoredLayers(target.UserId, { "SpecialTitleImage" })
 		end
 		if not rememberRequest(processedSetTitleImage, data.requestId :: string) then
 			return

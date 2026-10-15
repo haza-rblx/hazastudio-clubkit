@@ -167,7 +167,7 @@ return function(Icon)
 	left.Visible = true
 	left.ZIndex = 1
 	left.Active = false
-	left.ClipsDescendants = true
+	left.ClipsDescendants = false
 	left.HorizontalScrollBarInset = Enum.ScrollBarInset.None
 	left.CanvasSize = UDim2.new(0, 0, 1, -1) -- This -1 prevents a dropdown scrolling appearance bug
 	left.AutomaticCanvasSize = Enum.AutomaticSize.X

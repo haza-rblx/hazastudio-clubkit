@@ -143,6 +143,8 @@ end
 local function applyIconGroupLayout(iconGroupGui: Instance): ()
 	if iconGroupGui:IsA("ScreenGui") then
 		iconGroupGui.IgnoreGuiInset = Config.MobileScale.ICON_GROUP_IGNORE_GUI_INSET == true
+		-- Above TouchGui (0): otherwise the engine thumbstick takes swipes on the Dance list.
+		iconGroupGui.DisplayOrder = math.max(iconGroupGui.DisplayOrder, 1)
 	end
 
 	local syncCfg = Config.Sync

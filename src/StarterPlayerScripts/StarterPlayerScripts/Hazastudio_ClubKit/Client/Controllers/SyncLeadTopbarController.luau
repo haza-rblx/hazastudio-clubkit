@@ -5,7 +5,9 @@
 -- Eligibility: Lead Dance overhead title and/or de facto lead (Character.IsLeader).
 -- Data: OverheadController role cache + live Character attributes (FollowerCount).
 -- Dedupe: one dropdown row per userId when both title and followers apply.
--- Wired from Main.client SyncDanceBootstrap → SyncController.requestSyncByUserId.
+-- The dropdown is the kit's LeadDanceDropdown (not TopbarPlus sub-icons); the icon stays the trigger.
+-- Following state: SyncStore leaderName (the leader's Player.Name the local player is synced to).
+-- Wired from Main.client SyncDanceBootstrap → SyncController.requestSyncByUserId / onUnsync.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -14,6 +16,7 @@ local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local NotifService = require(script.Parent.Parent.Services.NotifService)
 local OverheadDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.OverheadDomain)
 local OverheadController = require(script.Parent.OverheadController)
+local LeadDanceDropdown = require(script.Parent.LeadDanceDropdown)
 
 local LEAD_DANCE_ROLE_KEY = "LeadDance"
 
@@ -26,12 +29,12 @@ type LeaderEntry = {
 	followerCount: number,
 }
 
-local function bindIconSelected(icon: any, handler: () -> ()): RBXScriptConnection?
-	if icon and icon.selected and type(icon.selected.Connect) == "function" then
-		return icon.selected:Connect(handler)
+local function bindIconEvent(icon: any, eventName: string, handler: () -> ()): RBXScriptConnection?
+	if icon and icon[eventName] and type(icon[eventName].Connect) == "function" then
+		return icon[eventName]:Connect(handler)
 	end
 	if icon and type(icon.bindEvent) == "function" then
-		icon:bindEvent("selected", handler)
+		icon:bindEvent(eventName, handler)
 		return nil
 	end
 	return nil
@@ -60,63 +63,44 @@ local function hasDeFactoLead(character: Model?): boolean
 	return character ~= nil and character:GetAttribute("IsLeader") == true
 end
 
-local function formatLeaderLabel(info: LeaderEntry): string
-	local base = info.displayName .. " (@" .. info.name .. ")"
-	if info.followerCount > 0 then
-		return base .. " · " .. tostring(info.followerCount)
-	end
-	return base
-end
-
-local function buildMenuSignature(entries: { LeaderEntry }): string
-	local parts = table.create(#entries)
-	for _, info in ipairs(entries) do
-		table.insert(parts, string.format("%d:%d:%s", info.userId, info.followerCount, info.displayName))
-	end
-	table.sort(parts)
-	return table.concat(parts, "|")
-end
-
 local function createSyncLeadTopbarController(deps: {
 	icon: any,
 	iconFactory: () -> any,
 	onRequestSyncToLeader: ((userId: number) -> ())?,
+	onRequestUnsync: (() -> ())?,
+	syncStore: any?,
 })
 	local log = Logger.new("Client.SyncLeadTopbarController")
 	local mainIcon = deps.icon
-	local iconFactory = deps.iconFactory
 	local onRequestSyncToLeader = deps.onRequestSyncToLeader
+	local onRequestUnsync = deps.onRequestUnsync
+	local syncStore = deps.syncStore
 
 	assert(
 		type(onRequestSyncToLeader) == "function",
 		"SyncLeadTopbarController: onRequestSyncToLeader is required (Main.client must pass it at create time)"
 	)
 
-	local leaderIcons: { [number]: any } = {}
-	local leaderSubConnections: { [number]: { RBXScriptConnection } } = {}
 	local leaderState: { [number]: LeaderEntry } = {}
 	local characterConns: { [number]: { RBXScriptConnection } } = {}
 	local playerCharacterConns: { [number]: RBXScriptConnection } = {}
 
 	local mainSelectedConn: RBXScriptConnection? = nil
+	local mainDeselectedConn: RBXScriptConnection? = nil
 	local roleChangedUnsubscribe: (() -> ())? = nil
 	local overheadCacheUnsubscribe: (() -> ())? = nil
+	local storeUnsubscribe: (() -> ())? = nil
 
 	local rebuildPending = false
-	local lastMenuSignature = ""
+	-- True while the controller itself deselects the icon (after the dropdown closes), so the
+	-- icon's deselected handler does not re-enter the dropdown.
+	local syncingIcon = false
+	local dropdown: any = nil
 
 	local requestSyncToLeader: (number) -> ()
+	local requestUnsync: () -> ()
 	local scheduleRebuild: () -> ()
 	local rebuildMenu: () -> ()
-
-	local function disconnectLeaderSubs()
-		for userId, conns in pairs(leaderSubConnections) do
-			for _, conn in ipairs(conns) do
-				conn:Disconnect()
-			end
-			leaderSubConnections[userId] = nil
-		end
-	end
 
 	local function disconnectCharacterSubs(userId: number)
 		local conns = characterConns[userId]
@@ -172,71 +156,35 @@ local function createSyncLeadTopbarController(deps: {
 		end
 	end
 
+	-- Local player's current sync target (leader Player.Name), or nil when not synced.
+	local function currentLeaderName(): string?
+		if not syncStore then
+			return nil
+		end
+		local name = syncStore:get().leaderName
+		if type(name) == "string" then
+			return name
+		end
+		return nil
+	end
+
 	rebuildMenu = function()
-		disconnectLeaderSubs()
-
-		local entries = {} :: { LeaderEntry }
+		local leaderName = currentLeaderName()
+		local entries = {}
 		for _, info in pairs(leaderState) do
-			table.insert(entries, info)
-		end
-		table.sort(entries, function(a, b)
-			local nameCmp = a.displayName:lower() < b.displayName:lower()
-			if a.displayName:lower() ~= b.displayName:lower() then
-				return nameCmp
-			end
-			return a.followerCount > b.followerCount
-		end)
-
-		local signature = buildMenuSignature(entries)
-		if signature == lastMenuSignature then
-			updateMainIconLabel(#entries)
-			return
-		end
-		lastMenuSignature = signature
-
-		for userId, icon in pairs(leaderIcons) do
-			pcall(function()
-				icon:destroy()
-			end)
-			leaderIcons[userId] = nil
+			table.insert(entries, {
+				userId = info.userId,
+				displayName = info.displayName,
+				name = info.name,
+				followers = info.followerCount,
+				following = leaderName ~= nil and info.name == leaderName,
+			})
 		end
 
-		local items = {}
-		for _, info in ipairs(entries) do
-			local sub = iconFactory()
-			sub:setLabel(formatLeaderLabel(info))
-			if type(sub.modifyTheme) == "function" then
-				sub:modifyTheme({
-					{ "IconImage", "Visible", false },
-					{ "PaddingLeft", "Size", UDim2.fromScale(0, 1) },
-				})
-			end
-			if type(sub.oneClick) == "function" then
-				sub:oneClick(true)
-			end
-			leaderIcons[info.userId] = sub
-
-			local conns: { RBXScriptConnection } = {}
-			local capturedUserId = info.userId
-			local conn = bindIconSelected(sub, function()
-				requestSyncToLeader(capturedUserId)
-			end)
-			if conn then
-				table.insert(conns, conn)
-			end
-			leaderSubConnections[info.userId] = conns
-
-			table.insert(items, sub)
+		if dropdown then
+			dropdown:setEntries(entries)
 		end
-
-		if mainIcon then
-			updateMainIconLabel(#entries)
-			if type(mainIcon.setDropdown) == "function" then
-				mainIcon:setDropdown(items)
-			elseif type(mainIcon.setMenu) == "function" then
-				mainIcon:setMenu(items)
-			end
-		end
+		updateMainIconLabel(#entries)
 	end
 
 	scheduleRebuild = function()
@@ -273,12 +221,57 @@ local function createSyncLeadTopbarController(deps: {
 				log:warn("onRequestSyncToLeader handler threw", { userId = userId, err = tostring(err) })
 			end
 		end
+	end
+
+	requestUnsync = function()
+		if type(onRequestUnsync) ~= "function" then
+			return
+		end
+		local ok, err = pcall(onRequestUnsync)
+		if not ok then
+			log:warn("onRequestUnsync handler threw", { err = tostring(err) })
+			return
+		end
+		NotifService.show({
+			message = "Unsynced",
+			notifType = "INFO",
+			domain = "sync",
+			title = "Lead Dance",
+			duration = 2,
+		})
+	end
+
+	-- Icon deselect is driven by the dropdown closing; the flag stops the deselected handler
+	-- from closing the dropdown again.
+	local function setIconDeselected()
 		if mainIcon and type(mainIcon.deselect) == "function" then
+			syncingIcon = true
 			pcall(function()
 				mainIcon:deselect()
 			end)
+			syncingIcon = false
 		end
 	end
+
+	dropdown = LeadDanceDropdown.new({
+		getAnchor = function(): GuiObject?
+			-- TopbarPlus exposes the icon's Widget frame as icon.widget (see Icon.Utility / Overflow).
+			local widget = if mainIcon then mainIcon.widget else nil
+			if typeof(widget) == "Instance" and widget:IsA("GuiObject") then
+				return widget
+			end
+			return nil
+		end,
+		onSync = function(userId: number)
+			requestSyncToLeader(userId)
+		end,
+		onUnsync = function()
+			requestUnsync()
+		end,
+		onClosed = function()
+			setIconDeselected()
+		end,
+	})
 
 	local function bindCharacter(player: Player, character: Model)
 		disconnectCharacterSubs(player.UserId)
@@ -332,7 +325,6 @@ local function createSyncLeadTopbarController(deps: {
 		for _, player in ipairs(Players:GetPlayers()) do
 			applyEntryForPlayer(player)
 		end
-		lastMenuSignature = ""
 		scheduleRebuild()
 	end
 
@@ -375,18 +367,45 @@ local function createSyncLeadTopbarController(deps: {
 		end)
 	end
 
-	mainSelectedConn = bindIconSelected(mainIcon, function()
+	-- Following changes (sync started / ended) rebuild the rows so the Unsync row updates.
+	if syncStore and type(syncStore.subscribe) == "function" then
+		storeUnsubscribe = syncStore:subscribe("leaderName", function()
+			scheduleRebuild()
+		end)
+	end
+
+	-- Icon selected opens the dropdown with fresh rows; icon deselected closes it.
+	mainSelectedConn = bindIconEvent(mainIcon, "selected", function()
 		refreshAllLeaderEntries()
+		rebuildMenu()
+		if dropdown then
+			dropdown:open()
+		end
+	end)
+	mainDeselectedConn = bindIconEvent(mainIcon, "deselected", function()
+		if syncingIcon then
+			return
+		end
+		if dropdown then
+			dropdown:close()
+		end
 	end)
 
 	task.defer(refreshAllLeaderEntries)
 
 	return {
 		destroy = function()
-			disconnectLeaderSubs()
 			if mainSelectedConn then
 				mainSelectedConn:Disconnect()
 				mainSelectedConn = nil
+			end
+			if mainDeselectedConn then
+				mainDeselectedConn:Disconnect()
+				mainDeselectedConn = nil
+			end
+			if storeUnsubscribe then
+				storeUnsubscribe()
+				storeUnsubscribe = nil
 			end
 			if roleChangedUnsubscribe then
 				roleChangedUnsubscribe()
@@ -406,14 +425,11 @@ local function createSyncLeadTopbarController(deps: {
 			for userId in pairs(characterConns) do
 				disconnectCharacterSubs(userId)
 			end
-			for userId, icon in pairs(leaderIcons) do
-				pcall(function()
-					icon:destroy()
-				end)
-				leaderIcons[userId] = nil
+			if dropdown then
+				dropdown:destroy()
+				dropdown = nil
 			end
 			table.clear(leaderState)
-			lastMenuSignature = ""
 		end,
 	}
 end

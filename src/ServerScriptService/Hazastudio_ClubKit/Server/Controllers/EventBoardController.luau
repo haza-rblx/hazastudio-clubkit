@@ -60,8 +60,24 @@ local function createEventBoardController(deps: {
 	progressRepo: any, -- VenueQuestProgressRepository
 	levelService: any?,
 	logger: any?,
+	-- Optional: stored-settings write for title grants (own client shows the layer).
+	settingsService: any?,
+	settingsSync: { syncPlayer: ((Player) -> ())? }?,
 })
 	local log = deps.logger or Logger.new("EventBoardController")
+	local settingsService = deps.settingsService
+	local settingsSync = deps.settingsSync
+
+	-- Only an online target has loaded settings to write into.
+	local function grantStoredLayers(userId: number, keys: { string })
+		local onlineTarget = game:GetService("Players"):GetPlayerByUserId(userId)
+		if not settingsService or not onlineTarget then
+			return
+		end
+		if settingsService:grantOverheadLayers(onlineTarget, keys) and settingsSync and settingsSync.syncPlayer then
+			settingsSync.syncPlayer(onlineTarget)
+		end
+	end
 	local cfg = Config.EventBoard
 	local notify = deps.notify
 	local repo = deps.repo
@@ -440,6 +456,9 @@ local function createEventBoardController(deps: {
 			end)
 			if not updated.ok then
 				return false, cfg.MSG_SAVE_FAILED
+			end
+			if not skipped then
+				grantStoredLayers(userId, { "SpecialTitle" })
 			end
 			if skipped then
 				return true, cfg.MSG_REWARD_SKIPPED_TITLE

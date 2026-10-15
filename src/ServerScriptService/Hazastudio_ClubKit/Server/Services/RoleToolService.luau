@@ -127,7 +127,7 @@ function RoleToolService.new(deps: {
 	return self
 end
 
-function RoleToolService:_resolveFolderNames(payload: OverheadPayload): { string }
+function RoleToolService:_resolveFolderNames(payload: OverheadPayload, toolsRoot: Instance?): { string }
 	local cfg = Config.RoleTools
 	local folderNames = {}
 	local spenderRoles = Config.SpenderRoles
@@ -163,6 +163,17 @@ function RoleToolService:_resolveFolderNames(payload: OverheadPayload): { string
 			then cashConfig.ToolFolder
 			else (cfg.TOP_SPENDER_FOLDER or "TOP RUPIAH SPENDER")
 		addFolders(folderNames, { folder })
+	end
+
+	-- Filter only folders that actually exist in toolsRoot
+	if toolsRoot then
+		local existing = {}
+		for _, name in ipairs(folderNames) do
+			if findRoleToolFolder(toolsRoot, name) then
+				table.insert(existing, name)
+			end
+		end
+		folderNames = existing
 	end
 
 	-- Multi-role / multi-folder: satu folder only — yang prioritas tertinggi.
@@ -306,7 +317,7 @@ function RoleToolService:syncPlayer(player: Player, payload: OverheadPayload?)
 		return
 	end
 
-	local folderNames = self:_resolveFolderNames(effectivePayload)
+	local folderNames = self:_resolveFolderNames(effectivePayload, toolsRoot)
 	if #folderNames == 0 then
 		-- Downgrade to debug for Guest role (expected behavior, not an error)
 		local role = tostring(effectivePayload.role)

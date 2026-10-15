@@ -12,6 +12,45 @@ Internal scratch pad to track work **before** a version is released.
 
 **3.0.0 released 2026-10-09.** The full 3.0 progress log (tables, decisions, verification notes) as it stood at release is in [`docs/releases/3.0.0/PROGRESS_ARCHIVE.md`](docs/releases/3.0.0/PROGRESS_ARCHIVE.md). Buyer guide: [`docs/releases/3.0.0/UPGRADE.md`](docs/releases/3.0.0/UPGRADE.md). File list: [`docs/releases/3.0.0/CHANGED_FILES.md`](docs/releases/3.0.0/CHANGED_FILES.md).
 
+## Unreleased — file table (title layers + Lead Dance dropdown, 2026-10-15)
+
+Category: engine (source sync), plus one additive template key. Not committed. Built and playtested live in BACKHOME first, then ported from the live scripts.
+
+| File | Change | Buyer-owned? |
+|---|---|---|
+| `Shared/Domain/SettingsDomain.luau` | `TITLE_LAYER_BASE_SCHEMA`, `_titleLayerBase`, one-shot title-layer reset in `sanitizeStored`, `needsTitleLayerReset`, `SpecialTitleImage` default | no |
+| `Shared/Domain/Types.luau` | `_titleLayerBase` on the stored type | no |
+| `Shared/Domain/OverheadDomain.luau`, `Shared/Constants/Config.luau`, `Shared/Config/ClubKitConfigSchema.luau` | `SpecialTitleImage = true` in the layer defaults / schema | no |
+| `Server/Repositories/SettingsRepository.luau` | Captures the raw-record reset flag in `loadStrict`; `consumeTitleLayerReset` | no |
+| `Server/Services/SettingsService.luau` | `load` returns `titleLayerReset`; `grantOverheadLayers` | no |
+| `Server/Controllers/SettingsController.luau` | `forcePublicTitleLayers` on the reset join; `syncPlayer` | no |
+| `Server/Controllers/AdminController.luau`, `EventBoardController.luau`, `Server/Services/ProfileMenuService.luau` | Grants write the stored layer too (`grantStoredLayers`); image grant forces public `SpecialTitleImage` | no |
+| `Server/Main.server.luau` | Late-bound `settingsSync`, passed with `settingsService` to the three grant sites | no |
+| `Client/UI/OverheadUI.luau` | Image row gated on `SpecialTitleImage` | no |
+| `Client/UI/MenuSettingsCore.luau` | *Title Text* / *Title Image* rows | no |
+| `Client/Controllers/SettingsController.luau` | `SpecialTitleImage` label; `_titleLayerBase` carried in payload/save | no |
+| `Client/Controllers/LeadDanceDropdown.luau` | **New** — the kit's Lead Dance dropdown | no |
+| `Client/Controllers/SyncLeadTopbarController.luau` | Uses `LeadDanceDropdown` instead of TopbarPlus sub-icons; Sync/Unsync | no |
+| `Main.client.luau` | `onRequestUnsync` + `syncStore` in the controller deps (no new locals) | no |
+| `Hazastudio_ClubKitConfig/ClubKitConfig.luau` | Template only: `SpecialTitleImage = true` in `Overhead.DefaultLayers` (existing buyers get it via fill-forward) | **yes** |
+| `CHANGELOG.md`, `CONTEXT.md` | `[Unreleased]` entries; glossary for title layers and the dropdown | no |
+
+Verified: `count-locals` OK (Main.server 126, Main.client 138, MenuSettingsCore 140, OverheadUI 113, rest < 60); selene parses every touched file; the two dropdown files are byte-identical to the live place. Live playtest: own title visible, server/client boot clean, dropdown opens under the icon. **Not yet verified:** the reset on a real affected player, and Sync/Unsync from the dropdown with a second player (Studio playtest wedged before the two-player run).
+
+## Unreleased — file table (touch: panel swipes + large Dance panel hotbar, 2026-10-15)
+
+Category: engine (source sync). Not committed. Verified in Studio 2026-10-15 before the port; the repo change is the same logic.
+
+| File | Change | Buyer-owned? |
+|---|---|---|
+| `Client/Services/MobilePanelManager.luau` | `notifyDancePanel` hides the hotbar only on the phone layout (`PhoneLayout.isPhoneLayout()`), remembers the open decision in `danceHidHotbar` so close always balances it | no |
+| `Client/Services/MobileScaleService.luau` | `applyIconGroupLayout` forces `IconGroup.DisplayOrder >= 1` (above `TouchGui` 0, so the thumbstick does not take Dance-list swipes) | no |
+| `Client/UI/Music/GuiRefs.luau` | `resolve` forces `06-MusicPlayerGUI` ScreenGui `DisplayOrder >= 1` at resolve time | no |
+| `CHANGELOG.md` | `[Unreleased]` "Fixed (touch…)" entry and "Docs" bullet | no |
+| `CONTEXT.md` | "Touch panel layer" glossary entry | no |
+
+Verified: `tools/count-locals.ps1` OK on the three code files (MobilePanelManager 40, MobileScaleService 28, Music/GuiRefs 10).
+
 ## Unreleased — file table (phone stale hide/show UI: ACM hotbar + panel focus, 2026-10-12)
 
 Not committed. Repo files + the same changes ported into PARKLAB by MCP (place keeps its own ICA sticker handling, so that file was patched surgically, never replaced).
@@ -28,6 +67,18 @@ Not committed. Repo files + the same changes ported into PARKLAB by MCP (place k
 | `Client/Controllers/AdminController.luau` | Role-revocation while the classic panel owns the icon deselects it after `ui:hide()` | no |
 | `Main.client.luau` | ACM wiring: the two notify deps are passed into the controller factory; `setBeforeOpenCallback` block removed | no |
 | `CHANGELOG.md` | `[Unreleased]` "Fixed" entry for the three phone bugs | no |
+| `Server/Services/LevelService.luau` | `flush` restore on failure merges (`+`) instead of assigning, so XP added during the yield survives | no |
+| `Server/Services/DonationService.luau` | `handleNotifDisplay` non-batch path requires `DeliveryReportQueue.isKnown` before queueing a display | no |
+| `Shared/Utils/DonationAmountFormat.luau` | `formatCompact` returns `1M` for 999,950+ (was `1000K`) | no |
+| `Shared/Config/RoleCategoryBuilder.luau` | sorts `table.clone` of `RoleCategories`, not the buyer's array | no |
+| `Shared/Domain/TitleAccessDomain.luau` | Admin-granted title bypass moved before `selfServiceOn` gate | no |
+| `Server/Services/StreakService.luau` | Added `service:setStreak(userId, days)` for admin manual streak restore | no |
+| `Server/Services/RoleToolService.luau` | Candidate folders filtered by existence in `ServerStorage.Tools` before priority selection | no |
+| `Server/Main.server.luau` | Wired `/setstreak <nama> <angka>` chat command (adminPanel permission gated) | no |
+| `Client/Controllers/JoinCommunityPromptController.luau` | Skip `16-JoinCommunPrompt` popup if local player is already in the group | no |
+| `Shared/Config/ConfigBootstrap.luau` | Handle `MinMembership = "none"` to disable free announcement for all membership tiers | no |
+| `Shared/Domain/PermissionDomain.luau` | Check `minTierRaw == "none"` before role priority fallback | no |
+| `Shared/Domain/AnnouncementRateLimitDomain.luau` | Handle `minTierRaw == "none"` falling through to Player budget | no |
 
 Verified: 7-file luau-lsp pass shows no new diagnostics vs HEAD (only the pre-existing `_hideCounts` key-inference noise, now also covering `dance`); `tools/count-locals.ps1` OK (Main 138/200).
 

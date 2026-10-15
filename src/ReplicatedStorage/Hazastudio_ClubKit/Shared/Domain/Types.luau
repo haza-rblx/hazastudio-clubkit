@@ -469,6 +469,8 @@ export type SettingsStoredData = {
 	musicVolume: number,
 	-- 1+ = music default base is 100% (migrated from old 50% kit default)
 	_musicVolBase: number,
+	-- 1+ = SpecialTitle / SpecialTitleImage one-shot reset applied (see SettingsDomain)
+	_titleLayerBase: number,
 	graphicsPreset: GraphicsPreset,
 	shadowQuality: ShadowQuality,
 	postEffects: boolean,

@@ -166,6 +166,7 @@ local function createSettingsController(deps: {
 
 	local OVERHEAD_LAYER_LABELS: { [string]: string } = {
 		SpecialTitle = "Custom Title",
+		SpecialTitleImage = "Title Image",
 		BadgeGroup = "Badges",
 		SpecialRank = "Special Rank",
 		TopSpender = CashCurrencyDomain.getActive().shortRoleLabel,
@@ -563,6 +564,7 @@ local function createSettingsController(deps: {
 			textures = payload.textures,
 			musicVolume = payload.musicVolume,
 			_musicVolBase = payload._musicVolBase,
+			_titleLayerBase = payload._titleLayerBase,
 			graphicsPreset = payload.graphicsPreset,
 			shadowQuality = payload.shadowQuality,
 			postEffects = (payload :: any).postEffects == true,
@@ -1756,6 +1758,10 @@ local function applyPostProcessingSetting(instance: Instance, mode: GraphicsQual
 			_musicVolBase = math.max(
 				tonumber(currentPayload._musicVolBase) or 0,
 				SettingsDomain.MUSIC_VOLUME_BASE_SCHEMA
+			),
+			_titleLayerBase = math.max(
+				tonumber(currentPayload._titleLayerBase) or 0,
+				SettingsDomain.TITLE_LAYER_BASE_SCHEMA
 			),
 			graphicsPreset = currentPayload.graphicsPreset,
 			shadowQuality = currentPayload.shadowQuality,

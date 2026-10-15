@@ -923,6 +923,13 @@ local function wireButtons(groupId: number)
 end
 
 local function showModal(groupId: number)
+	local localPlayer = Players.LocalPlayer
+	if localPlayer ~= nil and isPlayerInGroupAsync(localPlayer, groupId) then
+		alreadyJoinedThisOpen = true
+		requestCommunityVipRecheck()
+		return
+	end
+
 	local resolved = resolveRefs()
 	if not resolved then
 		if not missingGuiWarned then
@@ -934,9 +941,7 @@ local function showModal(groupId: number)
 
 	refs = resolved
 	local r = resolved
-
-	local localPlayer = Players.LocalPlayer
-	alreadyJoinedThisOpen = localPlayer ~= nil and isPlayerInGroupAsync(localPlayer, groupId)
+	alreadyJoinedThisOpen = false
 
 	-- Gift / PaidBroadcast: enable ScreenGui, hide panel, then presentCenterPanel
 	-- (UIScale open 0.96→1 Sine Out + blur/zoom via MODAL_BLUR_OPTIONS).

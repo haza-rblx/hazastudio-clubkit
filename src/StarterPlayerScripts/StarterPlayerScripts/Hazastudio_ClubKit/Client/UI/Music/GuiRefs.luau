@@ -310,6 +310,8 @@ end
 
 function GuiRefs.resolve(playerGui: PlayerGui): Refs
 	local root = need(playerGui, Config.Music.GUI_NAME, "ScreenGui")
+	-- Above TouchGui (0): otherwise the engine thumbstick takes swipes on the music panel.
+	root.DisplayOrder = math.max(root.DisplayOrder, 1)
 	local main = need(root, "MainWrapper", "Frame")
 
 	local header = need(main, "01-HeaderWrapper", "Frame")

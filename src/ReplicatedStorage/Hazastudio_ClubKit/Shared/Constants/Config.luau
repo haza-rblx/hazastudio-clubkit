@@ -789,6 +789,7 @@ Config.Overhead = {
 	-- everyone and hides the layer's Settings row too.
 	DEFAULT_LAYER_VISIBLE = {
 		SpecialTitle = true,
+		SpecialTitleImage = true,
 		BadgeGroup = true,
 		Level = true,
 		SpecialRank = true,

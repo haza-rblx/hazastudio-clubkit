@@ -33,7 +33,7 @@ return {
 	{"Widget", "DesiredWidth", 44, "Deselected"},
 	{"Widget", "MinimumWidth", 44, "Deselected"},
 	{"Widget", "MinimumHeight", 44, "Deselected"},
-	{"Widget", "BorderSize", 4, "Deselected"},
+	{"Widget", "BorderSize", 0, "Deselected"},
   	{"IconButton", "BackgroundColor3", Color3.fromRGB(18, 18, 21), "Deselected"},
 	{"IconButton", "BackgroundTransparency", 0.08, "Deselected"},
 	{"IconImageScale", "Value", 0.5, "Deselected"},

@@ -946,6 +946,8 @@ local function setTopbarFill(icon: any, color: Color3)
 			{ "Widget", "BackgroundTransparency", 1 },
 			{ "IconButton", "BackgroundColor3", color },
 			{ "IconButton", "BackgroundTransparency", TOPBAR_FILL_TRANSPARENCY },
+			{ "WidgetStroke", "Color", color:Lerp(Color3.fromRGB(255, 255, 255), 0.35) },
+			{ "WidgetStroke", "Transparency", 0.7 },
 		})
 	end
 
@@ -1785,6 +1787,20 @@ if clubKitOwnedSyncDance then
 						return Icon.new()
 					end,
 					onRequestSyncToLeader = requestLeadDanceSync,
+					onRequestUnsync = function()
+						task.spawn(function()
+							local deadline = os.clock() + 8
+							while os.clock() < deadline do
+								if syncDanceController and type(syncDanceController.onUnsync) == "function" then
+									syncDanceController:onUnsync()
+									return
+								end
+								task.wait(0.1)
+							end
+							Logger.new("SyncDanceBootstrap"):warn("Lead Dance unsync handler unavailable")
+						end)
+					end,
+					syncStore = ClientMods.SyncStore,
 				})
 			)
 		end

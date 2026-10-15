@@ -25,6 +25,10 @@ function DonationAmountFormat.formatCompact(value: number): string
 		return string.format("%.1fM", rounded)
 	end
 	if amount >= 1_000 then
+		-- 999,950+ rounds to 1000.0K, which is 1M (no K→M promotion otherwise).
+		if amount >= 999_950 then
+			return "1M"
+		end
 		local thousands = amount / 1_000
 		if math.abs(thousands - math.floor(thousands + 0.0001)) < 0.05 then
 			return string.format("%dK", math.floor(thousands + 0.5))

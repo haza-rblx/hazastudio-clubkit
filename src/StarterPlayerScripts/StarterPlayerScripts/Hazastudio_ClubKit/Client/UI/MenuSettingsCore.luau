@@ -332,6 +332,8 @@ local SECTION_DEFS: { SettingsSectionDef } = {
 				label = "Top Robux",
 				requiresOverheadFeature = "TopDonate",
 			},
+			{ kind = "toggle", field = "overheadLayerVisible.SpecialTitle", label = "Title Text", requiresOverheadFeature = "SpecialTitle" },
+			{ kind = "toggle", field = "overheadLayerVisible.SpecialTitleImage", label = "Title Image", requiresOverheadFeature = "SpecialTitleImage" },
 			{ kind = "toggle", field = "overheadLayerVisible.Rank", label = "Role" },
 			{ kind = "toggle", field = "overheadLayerVisible.DisplayName", label = "Player Name" },
 			{ kind = "toggle", field = "overheadLayerVisible.CoupleName", label = "Couple Status" },
@@ -523,6 +525,9 @@ local function hasOverheadFeature(feature: string?, overheadPayload: any?): bool
 	end
 	if feature == "SpecialTitle" then
 		return hasText(overheadPayload.specialTitle)
+	end
+	if feature == "SpecialTitleImage" then
+		return hasText(overheadPayload.specialTitleImage)
 	end
 	if feature == "BadgeGroup" then
 		return type(overheadPayload.visibleBadges) == "table" and #overheadPayload.visibleBadges > 0

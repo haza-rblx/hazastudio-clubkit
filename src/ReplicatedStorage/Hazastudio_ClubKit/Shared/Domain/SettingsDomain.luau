@@ -15,6 +15,9 @@ local SettingsDomain = {}
 -- Schema for music volume product default (old kit default was 50%).
 SettingsDomain.MUSIC_VOLUME_BASE_SCHEMA = 1
 
+-- Schema for the one-shot reset that turns SpecialTitle / SpecialTitleImage back on.
+SettingsDomain.TITLE_LAYER_BASE_SCHEMA = 1
+
 local DEFAULT_STORED: SettingsStoredData = {
 	cameraFocus = "Torso",
 	fov = 70,
@@ -30,6 +33,7 @@ local DEFAULT_STORED: SettingsStoredData = {
 	textures = 2,
 	musicVolume = 100,
 	_musicVolBase = SettingsDomain.MUSIC_VOLUME_BASE_SCHEMA,
+	_titleLayerBase = SettingsDomain.TITLE_LAYER_BASE_SCHEMA,
 	-- Placeholders: defaultStoredData() replaces the preset with the buyer's default
 	-- (Config.Graphics.DEFAULT_PRESET) and cascades that preset's own fields.
 	graphicsPreset = "Low",
@@ -38,6 +42,7 @@ local DEFAULT_STORED: SettingsStoredData = {
 	overheadDistance = "Medium",
 	overheadLayerVisible = {
 		["SpecialTitle"] = true,
+		["SpecialTitleImage"] = true,
 		["BadgeGroup"] = true,
 		["Level"] = true,
 		["SpecialRank"] = true,
@@ -153,6 +158,14 @@ function SettingsDomain.defaultSessionData(): SettingsSessionData
 	}
 end
 
+-- True when stored settings predate the TITLE_LAYER_BASE_SCHEMA reset. New players (nil) return false.
+function SettingsDomain.needsTitleLayerReset(raw: any): boolean
+	if type(raw) ~= "table" then
+		return false
+	end
+	return pickNumber(raw._titleLayerBase, 0, 0, 999) < SettingsDomain.TITLE_LAYER_BASE_SCHEMA
+end
+
 function SettingsDomain.sanitizeStored(raw: any): SettingsStoredData
 	local base = SettingsDomain.defaultStoredData()
 	if type(raw) ~= "table" then
@@ -189,6 +202,14 @@ function SettingsDomain.sanitizeStored(raw: any): SettingsStoredData
 	base.shadowQuality = pickEnum(raw.shadowQuality, { "Off", "Balanced", "High" }, base.shadowQuality)
 	base.postEffects = pickBoolean(raw.postEffects, base.postEffects)
 	base.overheadLayerVisible = sanitizeMap(raw.overheadLayerVisible, base.overheadLayerVisible)
+	local titleLayerBase = pickNumber(raw._titleLayerBase, 0, 0, 999)
+	if titleLayerBase < SettingsDomain.TITLE_LAYER_BASE_SCHEMA then
+		-- One-shot: un-hide the custom title text and image for everyone with a stale false.
+		base.overheadLayerVisible.SpecialTitle = true
+		base.overheadLayerVisible.SpecialTitleImage = true
+		titleLayerBase = SettingsDomain.TITLE_LAYER_BASE_SCHEMA
+	end
+	base._titleLayerBase = titleLayerBase
 	base.overheadBadgeVisible = sanitizeMap(raw.overheadBadgeVisible, base.overheadBadgeVisible)
 	base.chatBubbleVisibility =
 		pickEnum(raw.chatBubbleVisibility, { "All", "Nearby", "Off" }, base.chatBubbleVisibility)
@@ -250,6 +271,7 @@ function SettingsDomain.merge(stored: SettingsStoredData?, session: SettingsSess
 		textures = storedData.textures,
 		musicVolume = storedData.musicVolume,
 		_musicVolBase = storedData._musicVolBase,
+		_titleLayerBase = storedData._titleLayerBase,
 		graphicsPreset = storedData.graphicsPreset,
 		shadowQuality = storedData.shadowQuality,
 		postEffects = storedData.postEffects,
