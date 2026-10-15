@@ -622,6 +622,16 @@ end
 function DancePanelUIBinder:_hideReferenceRows()
 	for _, refRow in pairs(self.refs.rowRefs) do
 		refRow.Visible = false
+		-- A design that holds a template twice (PARKLAB had two FavoritedState) would show the
+		-- unresolved copy as a "Starred" row in the list: hide every sibling with a template's name.
+		local parent = refRow.Parent
+		if parent then
+			for _, sibling in ipairs(parent:GetChildren()) do
+				if sibling ~= refRow and sibling.Name == refRow.Name and sibling:IsA("GuiObject") then
+					sibling.Visible = false
+				end
+			end
+		end
 	end
 end
 
