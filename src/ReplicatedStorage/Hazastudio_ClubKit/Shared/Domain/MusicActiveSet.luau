@@ -126,6 +126,17 @@ function MusicActiveSet.markPlayed(set: ActiveSet, trackId: string): boolean
 	return true
 end
 
+-- Inverse of markPlayed (Previous put a set track back in the queue). Only the last played item
+-- moves the cursor back, so a stale id (e.g. from a set that was replaced) changes nothing.
+function MusicActiveSet.unmarkPlayed(set: ActiveSet, trackId: string): boolean
+	local lastItem = set.order[set.played]
+	if set.played <= 0 or lastItem == nil or lastItem.id ~= trackId then
+		return false
+	end
+	set.played -= 1
+	return true
+end
+
 -- Drops the item at the cursor without playing it (track gone from the library, asset unplayable).
 function MusicActiveSet.skipNext(set: ActiveSet): boolean
 	if set.order[set.played + 1] == nil then

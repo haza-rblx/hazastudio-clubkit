@@ -11,14 +11,26 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+### Changed (loading: cinematic is the default — 2026-10-17)
+- `Config.Loading.STYLE` defaults to `"cinematic"` (was `"classic"`), matching what runs live in PARKLAB. Without `ClubKitConfig.Loading.ArtworkVideo`/`ArtworkImage`, part 1 falls back to the experience thumbnail. Set `STYLE = "classic"` in the engine `Config.luau` to go back.
+
+### Fixed (Lead Dance list always empty; tools dropped for regular players — 2026-10-17)
+- **Lead Dance:** the dropdown showed "No lead dancers right now" while the chip counted leads (e.g. "Lead Dance (2)"). `setEntries` was called with a colon but did not take `self`, so the real list was dropped. It now takes `self`; `open()` always rebuilds the rows, and a failed or mismatched rebuild warns `[LeadDanceDropdown]` and retries on the next update.
+- **Role tools:** players whose role has no tool folder (regular players) had their held tool unequipped on every role-tool sync ("held, then released"). The sync now unequips only when the held tool is a granted role tool, and records the role so repeat syncs are skipped. Admins/staff were not affected.
+
+### Changed (music: request limit for DJs and admins — 2026-10-16)
+- musicControl holders (DJs, admins) may have up to `REQUEST_TRACK_MAX_PER_USER_QUEUE_CONTROL` (300) single requests waiting in the queue; players keep `REQUEST_TRACK_MAX_PER_USER_QUEUE` (3).
+
 ### Added (music: active set on the server — 2026-10-16)
-- **Active set:** "Add set" and "Shuffle" send a source (playlist, Liked Tracks or New Drops), not every track id, so a large playlist (800+ tracks) no longer fails. The server resolves it in library order, caps it at `SET_MAX_TRACKS` (1500) and optionally shuffles it. One set per server; starting a set replaces the current one.
-- **Interleave:** the next set track waits in the queue, after at most `SET_INTERLEAVE` (1) queued request. With no requests waiting the set plays back to back. Requests keep the per-user limit; set tracks do not count against it.
+- **Active set:** "Add set" and "Shuffle" send a source (playlist, Liked Tracks or New Drops), not every track id, so a large playlist (800+ tracks) no longer fails. The server resolves it in library order, caps it at `SET_MAX_TRACKS` (1500) and optionally shuffles it. One set per server; a started set queues behind the others (see Queued sets below).
+- **Interleave (superseded by queued sets):** the next set track waits in the queue, after at most `SET_INTERLEAVE` (1) queued request. With no requests waiting the set plays back to back. Requests keep the per-user limit; set tracks do not count against it.
 - **Set actions** on the music transport: `set_start`, `set_stop`, `set_reshuffle` (control holders), `set_page` (everyone, `SET_PAGE_SIZE` per page, own rate limit `SET_PAGE_RATE`).
 - Oversized music transport payloads now get a `payload_too_large` reply instead of being dropped silently.
 - **Set card (client):** while a set plays, the queue shows one card at the top (accent banner, progress, next three set tracks, shuffle and remove for control holders). Set tracks are not drawn as queue rows.
 - **Full set sheet (client):** "View full set" opens the set's remaining tracks in a virtual list, paged 50 at a time with a debounced search. The music panel scales behind it. Back, Reshuffle and Remove set carry the kit's back, shuffle and trash icons.
 - The "someone queued a song" island ignores set tracks (`fromSet`), so a skip during a set no longer announces the set's next song as a request.
+- **Previous on a set track** moves the set cursor back (`MusicActiveSet.unmarkPlayed`), so Previous then Next neither skips nor repeats a set song and the Set card's played/total stays right. Set action rejections (`invalid_source`, `playlist_not_found`, `empty_set`, `no_active_set`, `set_finished`, `payload_too_large`) now show their own short message instead of the generic "didn't go through" toast.
+- **Queued sets:** "Add set" puts a set card at the end of the queue (after waiting requests) instead of replacing the running set, so sets and songs can mix (set, song, set, set). Up to `SET_QUEUE_MAX` (3) sets incl. the active one; over that `set_queue_full`. A set plays to the end once it reaches the front (`SET_INTERLEAVE` removed). Clear Queue also removes waiting set cards. A set no longer replays the song that was on air when it started. A waiting set shows as the Set card's banner ("UP NEXT SET", title, starter, track count, remove); the full card appears when it becomes active. Banners take the set playlist's cover colour (player accent for Liked Tracks / New Drops).
 
 ### Changed (music UI: smoother scrolling, queue virtualized — 2026-10-16)
 - **Wheel glide:** the Library track list, the playlist list and the Now Playing queue use `SmoothScrollHelper` for mouse-wheel scrolling (touch and scrollbar unchanged).

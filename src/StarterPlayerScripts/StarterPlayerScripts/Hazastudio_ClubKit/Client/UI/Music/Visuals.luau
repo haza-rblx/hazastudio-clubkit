@@ -229,6 +229,23 @@ function Visuals.applyTrackCover(
 	})
 end
 
+-- The accent a set takes from its playlist's cover (nil when there is no playlist or no colour).
+function Visuals.coverAccent(playlist: any?, config: any): Color3?
+	local ok, color = pcall(Cover.getPlaylistCoverAccentColor, playlist, config)
+	if ok and typeof(color) == "Color3" then
+		return color
+	end
+	return nil
+end
+
+-- Text and icons on a cover-coloured fill: white on a dark fill, near-black on a light one.
+function Visuals.onFillFor(color: Color3): Color3
+	if Cover.getColorLuminance(color) < 0.6 then
+		return Color3.new(1, 1, 1)
+	end
+	return Color3.fromRGB(18, 18, 18)
+end
+
 function Visuals.setHeadshot(image: ImageLabel, userId: number?, size: Enum.ThumbnailSize?)
 	local thumbSize = size or Enum.ThumbnailSize.Size100x100
 	if type(userId) ~= "number" or userId <= 0 then

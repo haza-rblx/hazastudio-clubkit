@@ -17,7 +17,8 @@ local MusicAssetProbe = require(script.Parent.MusicAssetProbe)
 
 type TrackInfo = MusicDomain.TrackInfo
 -- fromSet: the queue entry is the active set's next track (not a request, not counted against the cap).
-type QueueEntry = MusicDomain.QueueEntry & { fromSet: boolean? }
+-- setCard: the queue entry is a waiting set (its tracks live in queuedSets until it reaches the front).
+type QueueEntry = MusicDomain.QueueEntry & { fromSet: boolean?, setCard: boolean? }
 type PlaybackTiming = MusicDomain.PlaybackTiming
 
 local function createMusicSession(deps: {
@@ -43,6 +44,7 @@ local function createMusicSession(deps: {
 	)
 	local loadGraceSeconds = math.max(0, tonumber(config.ASSET_LOAD_GRACE_SECONDS) or 90)
 	local requestTrackMaxPerUserQueue = math.max(1, tonumber(config.REQUEST_TRACK_MAX_PER_USER_QUEUE) or 3)
+	local requestTrackMaxPerControlQueue = math.max(1, tonumber(config.REQUEST_TRACK_MAX_PER_USER_QUEUE_CONTROL) or 300)
 	local finishAdvanceToleranceSeconds = math.max(
 		2,
 		tonumber(config.PLAYBACK_FINISH_ADVANCE_TOLERANCE_SECONDS) or 15
@@ -50,7 +52,6 @@ local function createMusicSession(deps: {
 	local finishQuorumRatio = math.clamp(tonumber(config.PLAYBACK_FINISH_QUORUM_RATIO) or 0.5, 0.25, 1)
 	local globalPlaybackSpeed = math.max(0.05, tonumber(config.PLAYBACK_SPEED) or 1)
 	local randomGenerator = Random.new()
-	local setInterleave = math.max(0, math.floor(tonumber(config.SET_INTERLEAVE) or 1))
 
 	local state = {
 		currentTrackId = nil :: string?,
@@ -95,6 +96,8 @@ local function createMusicSession(deps: {
 	-- Active set (docs/plans/active-set.md): one set per server. Its next track sits in state.queue as
 	-- an entry with fromSet = true; the cursor (activeSet.played) moves when that entry starts playing.
 	local activeSet: MusicActiveSet.ActiveSet? = nil
+	-- Waiting sets, keyed by the entryId of their set card in state.queue (in memory only).
+	local queuedSets: { [string]: MusicActiveSet.ActiveSet } = {}
 
 	local function newEntryId(): string
 		return HttpService:GenerateGUID(false)
@@ -161,7 +164,18 @@ local function createMusicSession(deps: {
 	local function countQueuedTracksForUser(userId: number): number
 		local total = 0
 		for _, entry in ipairs(state.queue) do
-			if entry.source == "user" and entry.requesterUserId == userId and entry.fromSet ~= true then
+			if entry.source == "user" and entry.requesterUserId == userId and entry.fromSet ~= true and entry.setCard ~= true then
+				total += 1
+			end
+		end
+		return total
+	end
+
+	-- Sets that count against SET_QUEUE_MAX: the active set plus the waiting set cards.
+	local function countSets(): number
+		local total = if activeSet then 1 else 0
+		for _, entry in ipairs(state.queue) do
+			if entry.setCard == true then
 				total += 1
 			end
 		end
@@ -221,6 +235,25 @@ local function createMusicSession(deps: {
 	local function buildQueueTracks(entries: { QueueEntry }): { any }
 		local queueTracks: { any } = {}
 		for _, entry in ipairs(entries) do
+			if entry.setCard == true then
+				local set = queuedSets[entry.entryId]
+				if set then
+					table.insert(queueTracks, {
+						setCard = true,
+						queueEntryId = entry.entryId,
+						setId = set.id,
+						name = set.title,
+						creator = string.format("Set · %d tracks", #set.order),
+						total = #set.order,
+						sourceKind = set.sourceKind,
+						playlistId = set.sourceId,
+						requesterUserId = set.starterUserId,
+						requesterDisplayName = set.starterName,
+						totalDuration = 0,
+					})
+				end
+				continue
+			end
 			local track = getTrackById(entry.trackId)
 			if track then
 				local queueTrack = enrichTrack(track, entry)
@@ -267,9 +300,10 @@ local function createMusicSession(deps: {
 		state.queue = kept
 	end
 
-	-- Keeps exactly one set track waiting in the queue (at the interleave position). Called after
-	-- every change that can move the cursor or the queue. The set ends once its last track is no
-	-- longer on air, so the Set card stays up while that last track plays.
+	-- Keeps exactly one set track waiting in the queue, at the front: the active set plays to the end
+	-- before the next queue item. Called after every change that can move the cursor or the queue.
+	-- The set ends once its last track is no longer on air, so the Set card stays up while that last
+	-- track plays.
 	local function materialiseActiveSet()
 		local set = activeSet
 		if set == nil or hasPendingSetEntry() then
@@ -286,7 +320,7 @@ local function createMusicSession(deps: {
 					DisplayName = set.starterName,
 				}) :: any
 				entry.fromSet = true
-				table.insert(state.queue, MusicActiveSet.insertIndex(state.queue, setInterleave), entry)
+				table.insert(state.queue, 1, entry)
 				break
 			end
 			-- Gone from the library: move past it without playing.
@@ -296,6 +330,27 @@ local function createMusicSession(deps: {
 			log:info("Active set finished", { setId = set.id, total = #set.order })
 			activeSet = nil
 		end
+	end
+
+	-- A set card reached the front of the queue: its set becomes the active set. Leading items equal to
+	-- the track that just played are skipped, so a set started while its first song was on air does
+	-- not play that song twice.
+	local function activateSetCard(entry: QueueEntry, justPlayedTrackId: string?)
+		local set = queuedSets[entry.entryId]
+		queuedSets[entry.entryId] = nil
+		if set == nil then
+			return
+		end
+		activeSet = set
+		while justPlayedTrackId do
+			local nextItem = MusicActiveSet.nextItem(set)
+			if nextItem == nil or nextItem.id ~= justPlayedTrackId then
+				break
+			end
+			MusicActiveSet.skipNext(set)
+		end
+		log:info("Active set started", { setId = set.id, sourceKind = set.sourceKind, total = #set.order })
+		materialiseActiveSet()
 	end
 
 	local function buildActiveSetPayload(): any?
@@ -311,6 +366,7 @@ local function createMusicSession(deps: {
 			id = set.id,
 			title = set.title,
 			sourceKind = set.sourceKind,
+			sourceId = set.sourceId,
 			starterUserId = set.starterUserId,
 			starterName = set.starterName,
 			played = set.played,
@@ -925,6 +981,11 @@ local function createMusicSession(deps: {
 			local nextEntry: QueueEntry? = nil
 			if #state.queue > 0 then
 				nextEntry = table.remove(state.queue, 1)
+				-- A set card is not a track: it becomes the active set and the loop takes its first track.
+				if nextEntry.setCard == true then
+					activateSetCard(nextEntry :: QueueEntry, previousTrackId)
+					continue
+				end
 			elseif not state.isDjMode and #autoBuffer > 0 then
 				nextEntry = table.remove(autoBuffer, 1)
 			elseif not state.isDjMode then
@@ -1010,8 +1071,11 @@ local function createMusicSession(deps: {
 					if lookahead >= 2 then
 						break
 					end
-					lookahead += 1
-					MusicAssetProbe.prefetchTrack(getTrackById(upcoming.trackId))
+					-- A waiting set card has no track to warm up.
+					if upcoming.setCard ~= true then
+						lookahead += 1
+						MusicAssetProbe.prefetchTrack(getTrackById(upcoming.trackId))
+					end
 				end
 			end
 			return
@@ -1143,6 +1207,9 @@ local function createMusicSession(deps: {
 		end
 		if activeSet then
 			MusicActiveSet.dropIds(activeSet, deletedLookup)
+		end
+		for _, set in pairs(queuedSets) do
+			MusicActiveSet.dropIds(set, deletedLookup)
 		end
 		if currentTrackDeleted then
 			session:advanceQueue("track_deleted")
@@ -1283,7 +1350,8 @@ local function createMusicSession(deps: {
 		end
 	end
 
-	function session:requestTrack(player: Player, trackId: string): (boolean, string, any?)
+	-- canControl: musicControl holders get REQUEST_TRACK_MAX_PER_USER_QUEUE_CONTROL instead of the player limit.
+	function session:requestTrack(player: Player, trackId: string, canControl: boolean?): (boolean, string, any?)
 		if state.isDjMode and not canControlDuringDjMode(player) then
 			return false, "dj_only", nil
 		end
@@ -1299,7 +1367,8 @@ local function createMusicSession(deps: {
 				return false, "already_in_queue", nil
 			end
 		end
-		if state.isPlaying and countQueuedTracksForUser(player.UserId) >= requestTrackMaxPerUserQueue then
+		local perUserLimit = if canControl == true then requestTrackMaxPerControlQueue else requestTrackMaxPerUserQueue
+		if state.isPlaying and countQueuedTracksForUser(player.UserId) >= perUserLimit then
 			return false, "queue_limit_reached", nil
 		end
 
@@ -1577,7 +1646,13 @@ local function createMusicSession(deps: {
 		end
 		-- Back to the last played song; the song on air returns to the front of the queue.
 		local previousEntry = table.remove(playedHistory) :: QueueEntry
-		table.insert(state.queue, 1, state.currentEntry :: QueueEntry)
+		local onAir = state.currentEntry :: QueueEntry
+		-- A set track going back to the queue un-plays it: the cursor steps back and the waiting set
+		-- track is dropped, so the re-queued one is the set's next track again (no skip, no repeat).
+		if activeSet and onAir.fromSet == true and MusicActiveSet.unmarkPlayed(activeSet, onAir.trackId) then
+			removePendingSetEntries()
+		end
+		table.insert(state.queue, 1, onAir)
 		table.insert(state.queue, 1, previousEntry)
 		skipHistoryOnce = true
 		session:advanceQueue("previous")
@@ -1596,6 +1671,8 @@ local function createMusicSession(deps: {
 			return false, "queue_empty"
 		end
 		state.queue = kept
+		-- Waiting set cards are cleared with the requests, so their sets go too (the active set stays).
+		table.clear(queuedSets)
 		releasePlayOnceTracks()
 		if shouldMaintainAutoBuffer() then
 			ensureAutoBufferDepth(getAutoQueueDepth())
@@ -1611,6 +1688,7 @@ local function createMusicSession(deps: {
 			return false, result.reason
 		end
 		state.queue = result.queue
+		queuedSets[entryId] = nil
 		releasePlayOnceTracks()
 		materialiseActiveSet()
 		if shouldMaintainAutoBuffer() then
@@ -1675,7 +1753,8 @@ local function createMusicSession(deps: {
 	end
 
 	-- Active set (docs/plans/active-set.md). The service resolves the source to ordered items.
-	-- Starting a set replaces the current one; its waiting track leaves the queue first.
+	-- A started set is queued as a set card at the end of the queue (after waiting requests); it becomes
+	-- the active set when it reaches the front. A running set is never replaced.
 	function session:startActiveSet(
 		player: Player,
 		opts: {
@@ -1688,6 +1767,9 @@ local function createMusicSession(deps: {
 	): (boolean, string, any?)
 		if state.isDjMode and not canControlDuringDjMode(player) then
 			return false, "dj_only", nil
+		end
+		if countSets() >= math.max(1, math.floor(tonumber(config.SET_QUEUE_MAX) or 3)) then
+			return false, "set_queue_full", nil
 		end
 		local set = MusicActiveSet.create({
 			id = newEntryId(),
@@ -1706,12 +1788,13 @@ local function createMusicSession(deps: {
 		if set == nil then
 			return false, "empty_set", nil
 		end
-		removePendingSetEntries()
 		clearAutoBuffer()
 		sanitizeQueue()
-		activeSet = set
-		log:info("Active set started", { player = player.Name, sourceKind = opts.sourceKind, total = #set.order })
-		materialiseActiveSet()
+		local cardEntry = MusicDomain.newUserQueueEntry("", newEntryId(), player) :: any
+		cardEntry.setCard = true
+		queuedSets[cardEntry.entryId] = set
+		table.insert(state.queue, cardEntry)
+		log:info("Set queued", { player = player.Name, sourceKind = opts.sourceKind, total = #set.order })
 		if not state.isPlaying then
 			session:advanceQueue()
 		else

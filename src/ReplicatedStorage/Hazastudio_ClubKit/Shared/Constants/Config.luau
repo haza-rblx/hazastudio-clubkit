@@ -1551,10 +1551,10 @@ Config.Loading = {
 	WELCOME_DISMISS_FORMAT = "Welcome to the club, %s",
 	-- PRIMARY_GREETING: filled by ConfigBootstrap from ClubKitConfig.Branding.Greeting
 	-- "classic" = StarterGui.00-LoadingScreen template + six-shot avatar orbit.
-	-- "cinematic" = two parts (experiment, CONTEXT.md "Loading style"): a skippable artwork
-	-- screen while the kit boots, then the character intro, played through without input.
+	-- "cinematic" = two parts (default since 2026-10-17, CONTEXT.md "Loading style"): a skippable
+	-- artwork screen while the kit boots, then the character intro, played through without input.
 	-- Engine constant, not a buyer key.
-	STYLE = "classic",
+	STYLE = "cinematic",
 	-- Phones (touch, no keyboard, short side under MobilePanelManager.TABLET_MIN_SHORT_SIDE): the
 	-- template's ContentWrapper UIScale (authored for desktop) and the cinematic stack's left margin.
 	PHONE_UI_SCALE = 0.6,
@@ -3973,6 +3973,8 @@ Config.Music = {
 	REQUEST_MANY_MAX = 25,
 	-- Songs one player may have waiting in the queue at once (owner 2026-10-09: 3).
 	REQUEST_TRACK_MAX_PER_USER_QUEUE = 3,
+	-- The same limit for musicControl holders (DJs, admins) (owner 2026-10-16: 300).
+	REQUEST_TRACK_MAX_PER_USER_QUEUE_CONTROL = 300,
 	-- Play-once request (3.0, ADR 0010): a pasted audio asset ID plays once and is never saved.
 	-- PLAY_ONCE_REQUEST comes from ClubKitConfig.Music.PlayOnceRequest: "everyone" | "control" | "off".
 	-- Players without musicControl: MAX_PENDING waiting at a time, MAX_PER_WINDOW per WINDOW_SECONDS.
@@ -3998,9 +4000,8 @@ Config.Music = {
 	TRANSPORT_RATE_MAX = 30,
 	TRANSPORT_RATE_WINDOW = 30,
 	-- Active set (docs/plans/active-set.md): one server-side set source, materialised one track at a time.
-	-- SET_INTERLEAVE = requests that may play between two set tracks (0 = set first, then requests).
 	SET_MAX_TRACKS = 1500,
-	SET_INTERLEAVE = 1,
+	SET_QUEUE_MAX = 3, -- sets in the queue at once, the active set included
 	SET_PAGE_SIZE = 50,
 	SET_PAGE_RATE = { count = 10, window = 10 },
 	-- D2 (quota-efficiency-pass-2026-06, Phase 1): extended from 15s to 30s.

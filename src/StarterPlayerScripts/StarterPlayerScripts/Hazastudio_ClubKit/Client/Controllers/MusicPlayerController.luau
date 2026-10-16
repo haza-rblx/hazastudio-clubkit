@@ -2122,7 +2122,7 @@ function MusicPlayerController:_sendTransport(action: string, payload: { [string
 			elseif action == "set_start" then
 				self:_showNotification({
 					title = "Set added",
-					message = "The set is playing in the queue.",
+					message = "The set was added to the queue.",
 					domain = "music",
 					dedupeKey = "music_set_start",
 				}, "success")
@@ -2137,10 +2137,17 @@ function MusicPlayerController:_sendTransport(action: string, payload: { [string
 			queue_empty = "The queue is already empty.",
 			queue_limit_reached = "Your queue is full. Let a song play first.",
 			sets_control_only = "Only DJs and admins can queue a whole set. Request songs one by one.",
+			set_queue_full = "The queue already has 3 sets. Wait for one to finish.",
 			nothing_to_add = "Everything in this set is already queued.",
 			not_owner = "You can only remove your own requests.",
 			not_found = "That request already left the queue.",
 			dj_only = "The DJ is controlling the queue right now.",
+			invalid_source = "That set can't be played.",
+			playlist_not_found = "That playlist no longer exists.",
+			empty_set = "This set has no playable tracks.",
+			no_active_set = "No set is playing right now.",
+			set_finished = "The set has already finished.",
+			payload_too_large = "That request was too big. Try a smaller set.",
 		}
 		self._log:debug("Transport failed", { action = action, error = err })
 		self:_showNotification({

@@ -16,6 +16,7 @@ local SmoothScrollHelper = require(script.Parent.Parent.Parent.Utils.SmoothScrol
 local Visuals = require(script.Parent.Visuals)
 local ListPool = require(script.Parent.ListPool)
 local SetCardView = require(script.Parent.SetCardView)
+local SetBanner = require(script.Parent.SetBanner)
 
 local PROGRESS_INTERVAL = 0.2
 local ROW_STAGGER_SECONDS = 0.04
@@ -31,8 +32,12 @@ type QueueRow = {
 	length: TextLabel,
 	requester: TextLabel,
 	avatar: ImageLabel,
+	info: Frame,
+	wrapper: Frame,
 	coverHost: Frame,
 	coverImage: ImageLabel,
+	-- The set banner a waiting set card wears (built lazily, hidden for track rows).
+	banner: any?,
 	remove: ImageButton,
 	entryId: string?,
 	fade: { GuiObject }?,
@@ -94,6 +99,7 @@ function NowPlayingView.new(deps: { refs: GuiRefs.Refs, store: any, config: any,
 		scroll = queueScroll,
 		refs = deps.refs,
 		store = deps.store,
+		config = deps.config,
 		fire = self._fire,
 		onViewAll = function()
 			if deps.setSheet then
@@ -490,6 +496,8 @@ function NowPlayingView:_createQueueRow(instance: GuiObject): QueueRow
 		length = GuiRefs.need(trackInfo, "TrackLength", "TextLabel"),
 		requester = GuiRefs.need(GuiRefs.need(info, "RequesterWrapper", "Frame"), "RequesterDisplayName", "TextLabel"),
 		avatar = GuiRefs.need(info, "RequesterProfilePicture", "ImageLabel"),
+		info = info,
+		wrapper = GuiRefs.need(instance, "Wrapper", "Frame") :: Frame,
 		coverHost = coverHost,
 		coverImage = GuiRefs.need(coverHost, "ImageLabel", "ImageLabel"),
 		remove = remove,
@@ -528,7 +536,58 @@ function NowPlayingView:_createQueueRow(instance: GuiObject): QueueRow
 	return row
 end
 
+-- The banner a waiting set card wears: the same face as the active Set card (SetBanner), built once
+-- per row. Its remove control is wired here; it shows only when the row's remove rule allows it.
+function NowPlayingView:_setBanner(row: QueueRow): any
+	local existing = row.banner
+	if existing then
+		return existing
+	end
+	local banner = SetBanner.new(row.instance, {
+		kicker = "UP NEXT SET",
+		family = row.title.FontFace.Family,
+		trashIcon = SetBanner.TRASH_ICON,
+		oneLineTitle = true,
+	})
+	row.banner = banner
+	local trash = banner.trash :: TextButton
+	local trashIcon = trash:FindFirstChildWhichIsA("ImageLabel")
+	table.insert(
+		self._connections,
+		trash.Activated:Connect(function()
+			if row.entryId then
+				UIMotion.wiggle(trashIcon, 16)
+				self._fire("OnTransport", "remove", { entryId = row.entryId })
+			end
+		end)
+	)
+	return banner
+end
+
+function NowPlayingView:_bindSetBanner(row: QueueRow, track: any, playlist: any?)
+	local banner = self:_setBanner(row)
+	local count = math.floor(tonumber(track.total) or 0)
+	local fill, onFill = SetBanner.colorsFor(playlist, self._config)
+	banner:setData({
+		title = tostring(track.name or ""),
+		starterName = tostring(track.requesterDisplayName or ""),
+		starterUserId = tonumber(track.requesterUserId),
+		counter = string.format("%d %s", count, if count == 1 then "Track" else "Tracks"),
+	})
+	banner:paint(fill, onFill)
+	Visuals.setVisible(banner.frame, true)
+end
+
 function NowPlayingView:_bindRow(row: QueueRow, track: any, playlist: any?)
+	local isSet = track.setCard == true
+	-- A waiting set card is drawn as its banner alone: the track layout (cover, text, length) hides.
+	Visuals.setVisible(row.wrapper, not isSet)
+	Visuals.setVisible(row.info, not isSet)
+	if isSet then
+		self:_bindSetBanner(row, track, playlist)
+	elseif row.banner then
+		Visuals.setVisible(row.banner.frame, false)
+	end
 	Visuals.setText(row.title, tostring(track.name or ""))
 	Visuals.setText(row.creator, tostring(track.creator or ""))
 	Visuals.setText(row.length, Visuals.formatClock(tonumber(track.totalDuration) or 0))
@@ -540,13 +599,15 @@ function NowPlayingView:_bindRow(row: QueueRow, track: any, playlist: any?)
 		Visuals.setVisible(row.avatar, true)
 		Visuals.setHeadshot(row.avatar, tonumber(track.requesterUserId))
 	end
-	Visuals.applyTrackCover(
-		row.coverImage,
-		track,
-		playlist,
-		self._config,
-		{ gradientHost = row.coverHost, listThumb = true }
-	)
+	if not isSet then
+		Visuals.applyTrackCover(
+			row.coverImage,
+			track,
+			playlist,
+			self._config,
+			{ gradientHost = row.coverHost, listThumb = true }
+		)
+	end
 	row.entryId = if type(track.queueEntryId) == "string" then track.queueEntryId else nil
 	local localPlayer = Players.LocalPlayer
 	local ownRequest = track.isSystemAssigned ~= true
@@ -554,6 +615,9 @@ function NowPlayingView:_bindRow(row: QueueRow, track: any, playlist: any?)
 		and tonumber(track.requesterUserId) == localPlayer.UserId
 	local canRemove = row.entryId ~= nil and (self._transportAllowed == true or ownRequest)
 	Visuals.setVisible(row.remove, canRemove)
+	if row.banner then
+		Visuals.setVisible(row.banner.trash, canRemove)
+	end
 	local avatarPosition = if canRemove then row.avatarPosition else row.avatarEndPosition
 	if avatarPosition and row.avatar.Position ~= avatarPosition then
 		row.avatar.Position = avatarPosition

@@ -3,29 +3,26 @@
 -- Active set card: the one queue row that stands for a whole set. It sits above the virtual queue
 -- rows (LayoutOrder -2, ListPool reads its height as `leading`). Built from code, no template.
 -- Geometry and colours follow the approved set card mock (card C): 2 px holder, 12 px corners,
--- solid accent banner 122 px tall, three up-next rows, "View full set" pill, no outline.
+-- solid banner 122 px tall (built by SetBanner, shared with a waiting set's queue row), three
+-- up-next rows, "View full set" pill, no outline.
 -- Shuffle and Remove set show for musicControl holders only. Hidden while no set is active.
 -- Contract: docs/plans/active-set.md.
 
 local AccentService = require(script.Parent.Parent.Parent.Services.AccentService)
 local UIMotion = require(script.Parent.Parent.Parent.Utils.UIMotion)
 local Visuals = require(script.Parent.Visuals)
+local SetBanner = require(script.Parent.SetBanner)
 
-local FALLBACK_FAMILY = "rbxasset://fonts/families/GothamSSm.json"
 local SHUFFLE_ICON = "rbxassetid://123512558618382"
-local TRASH_ICON = "rbxassetid://78255461602603"
 local CORNER = UDim.new(0, 12)
 local UP_NEXT_ROWS = 3
 local BANNER_HEIGHT = 122
-local BANNER_FILL_HEIGHT = 12
 local BUTTON_SIZE = 34
 local UP_NEXT_ROW_HEIGHT = 30
 local UP_NEXT_NUMBER_WIDTH = 34
 local UP_NEXT_DURATION_WIDTH = 50
 local BG_CARD = Color3.fromRGB(22, 22, 22)
 local BG_PILL = Color3.fromRGB(33, 33, 33)
-local BG_AVATAR = Color3.fromRGB(53, 53, 53)
-local BG_BUTTON = Color3.fromRGB(0, 0, 0)
 local TEXT_WHITE = Color3.new(1, 1, 1)
 local TEXT_GRAY = Color3.fromRGB(196, 196, 196)
 local TEXT_DIM = Color3.fromRGB(125, 125, 125)
@@ -37,92 +34,12 @@ type Row = {
 	duration: TextLabel,
 }
 
-local function corner(parent: Instance, radius: UDim?)
-	local c = Instance.new("UICorner")
-	c.CornerRadius = radius or CORNER
-	c.Parent = parent
-end
-
-local function pad(parent: Instance, left: number, right: number, top: number, bottom: number)
-	local p = Instance.new("UIPadding")
-	p.PaddingLeft = UDim.new(0, left)
-	p.PaddingRight = UDim.new(0, right)
-	p.PaddingTop = UDim.new(0, top)
-	p.PaddingBottom = UDim.new(0, bottom)
-	p.Parent = parent
-end
-
--- Font family of the queue's own track titles, so the card matches the rows around it.
-local function resolveFamily(root: Instance): string
-	local ref = root:FindFirstChild("TrackTitle", true)
-	if ref and ref:IsA("TextLabel") then
-		return ref.FontFace.Family
-	end
-	return FALLBACK_FAMILY
-end
-
-local function makeLabel(parent: Instance, name: string, family: string, weight: Enum.FontWeight, size: number): TextLabel
-	local l = Instance.new("TextLabel")
-	l.Name = name
-	l.BackgroundTransparency = 1
-	l.BorderSizePixel = 0
-	l.FontFace = Font.new(family, weight, Enum.FontStyle.Normal)
-	l.TextSize = size
-	l.TextColor3 = TEXT_WHITE
-	l.TextXAlignment = Enum.TextXAlignment.Left
-	l.TextYAlignment = Enum.TextYAlignment.Center
-	l.TextTruncate = Enum.TextTruncate.AtEnd
-	l.Text = ""
-	l.Parent = parent
-	return l
-end
-
-local function makeFrame(parent: Instance, name: string, size: UDim2): Frame
-	local f = Instance.new("Frame")
-	f.Name = name
-	f.BackgroundTransparency = 1
-	f.BorderSizePixel = 0
-	f.Size = size
-	f.Parent = parent
-	return f
-end
-
--- Rich text for the starter line: the name is bold, and escaped so it cannot break the markup.
-local function startedText(name: string): string
-	local safe = string.gsub(string.gsub(string.gsub(name, "&", "&amp;"), "<", "&lt;"), ">", "&gt;")
-	return "Started by <b>" .. safe .. "</b>"
-end
-
-local function makeIconButton(parent: Instance, name: string, image: string, iconScale: number, position: UDim2): TextButton
-	local button = Instance.new("TextButton")
-	button.Name = name
-	button.Text = ""
-	button.AutoButtonColor = false
-	button.BorderSizePixel = 0
-	button.BackgroundColor3 = BG_BUTTON
-	button.BackgroundTransparency = 0.7
-	button.AnchorPoint = Vector2.new(1, 0)
-	button.Position = position
-	button.Size = UDim2.fromOffset(BUTTON_SIZE, BUTTON_SIZE)
-	button.Visible = false
-	button.Parent = parent
-	corner(button, UDim.new(1, 0))
-	local stroke = Instance.new("UIStroke")
-	stroke.Color = TEXT_WHITE
-	stroke.Transparency = 0.75
-	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	stroke.Parent = button
-	local icon = Instance.new("ImageLabel")
-	icon.Name = "Icon"
-	icon.BackgroundTransparency = 1
-	icon.AnchorPoint = Vector2.new(0.5, 0.5)
-	icon.Position = UDim2.fromScale(0.5, 0.5)
-	icon.Size = UDim2.fromScale(iconScale, iconScale)
-	icon.Image = image
-	icon.ImageColor3 = TEXT_WHITE
-	icon.Parent = button
-	return button
-end
+local corner = SetBanner.corner
+local pad = SetBanner.pad
+local makeLabel = SetBanner.makeLabel
+local makeFrame = SetBanner.makeFrame
+local makeIconButton = SetBanner.makeIconButton
+local resolveFamily = SetBanner.resolveFamily
 
 local SetCardView = {}
 SetCardView.__index = SetCardView
@@ -131,14 +48,17 @@ function SetCardView.new(deps: {
 	scroll: ScrollingFrame,
 	refs: any,
 	store: any,
+	config: any?,
 	fire: (string, ...any) -> any,
 	onViewAll: () -> (),
 })
 	local self = setmetatable({}, SetCardView) :: any
 	self._store = deps.store
+	self._config = deps.config
 	self._fire = deps.fire
 	self._onViewAll = deps.onViewAll
 	self._signature = nil :: string?
+	self._coverFill = nil :: Color3?
 	self._control = false
 	self._connections = {} :: { RBXScriptConnection }
 	self._rows = {} :: { Row }
@@ -164,81 +84,33 @@ function SetCardView.new(deps: {
 	cardLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	cardLayout.Parent = card
 
-	-- Banner: solid accent with rounded top corners (the square filler keeps the bottom square
-	-- under the banner's bottom 12 px, which is how the mock rounds only the top).
-	local banner = makeFrame(card, "Banner", UDim2.new(1, 0, 0, BANNER_HEIGHT))
-	banner.LayoutOrder = 1
+	-- Banner: the shared set banner, full card width, kicker "NOW RUNNING A SET", two-line title.
+	local banner = SetBanner.new(card, {
+		height = BANNER_HEIGHT,
+		kicker = "NOW RUNNING A SET",
+		family = family,
+		trashIcon = SetBanner.TRASH_ICON,
+	})
+	banner.frame.LayoutOrder = 1
 	self._banner = banner
-	local bannerTop = Instance.new("Frame")
-	bannerTop.Name = "Top"
-	bannerTop.BorderSizePixel = 0
-	bannerTop.Size = UDim2.fromScale(1, 1)
-	bannerTop.Parent = banner
-	corner(bannerTop)
-	local bannerFill = Instance.new("Frame")
-	bannerFill.Name = "BottomFill"
-	bannerFill.BorderSizePixel = 0
-	bannerFill.Size = UDim2.new(1, 0, 0, BANNER_FILL_HEIGHT)
-	bannerFill.Position = UDim2.new(0, 0, 1, -BANNER_FILL_HEIGHT)
-	bannerFill.Parent = banner
-	self._bannerParts = { bannerTop, bannerFill }
+	local content = banner.content
 
-	local content = makeFrame(banner, "Content", UDim2.fromScale(1, 1))
-	content.ZIndex = 2
-	pad(content, 14, 12, 12, 14)
-
-	local kicker = makeLabel(content, "Kicker", family, Enum.FontWeight.ExtraBold, 12)
-	kicker.Size = UDim2.new(1, -86, 0, 14)
-	kicker.TextTransparency = 0.25
-	kicker.Text = "NOW RUNNING A SET"
-	self._kicker = kicker
-
-	local title = makeLabel(content, "Title", family, Enum.FontWeight.ExtraBold, 20)
-	title.Position = UDim2.fromOffset(0, 18)
-	title.Size = UDim2.new(1, -86, 0, 44)
-	title.TextWrapped = true
-	title.LineHeight = 1
-	title.TextYAlignment = Enum.TextYAlignment.Top
-	self._title = title
-
-	-- Controls sit top-right, 8 px apart, 34 px round (shuffle, then remove).
+	-- Shuffle sits left of Remove, 8 px apart (Remove is the banner's own control).
 	local shuffleImage = SHUFFLE_ICON
 	local shuffleIcon = if deps.refs and deps.refs.library then deps.refs.library.shuffleButton:FindFirstChildWhichIsA("ImageLabel") else nil
 	if shuffleIcon then
 		shuffleImage = shuffleIcon.Image
 	end
 	self._shuffle = makeIconButton(content, "ShuffleSet", shuffleImage, 0.55, UDim2.new(1, -42, 0, 0))
-	self._trash = makeIconButton(content, "RemoveSet", TRASH_ICON, 0.6, UDim2.new(1, 0, 0, 0))
+	local trash = banner.trash :: TextButton
 	table.insert(self._connections, self._shuffle.Activated:Connect(function()
 		UIMotion.spin(self._shuffle:FindFirstChildWhichIsA("ImageLabel"))
 		self._fire("OnTransport", "set_reshuffle")
 	end))
-	table.insert(self._connections, self._trash.Activated:Connect(function()
-		UIMotion.wiggle(self._trash:FindFirstChildWhichIsA("ImageLabel"), 14)
+	table.insert(self._connections, trash.Activated:Connect(function()
+		UIMotion.wiggle(trash:FindFirstChildWhichIsA("ImageLabel"), 14)
 		self._fire("OnTransport", "set_stop")
 	end))
-
-	-- Starter row at the bottom of the banner: 24 px headshot, "Started by <name>", counter.
-	local startedRow = makeFrame(content, "StartedRow", UDim2.new(1, 0, 0, 24))
-	startedRow.Position = UDim2.new(0, 0, 1, -24)
-	local avatar = Instance.new("ImageLabel")
-	avatar.Name = "StarterAvatar"
-	avatar.BackgroundColor3 = BG_AVATAR
-	avatar.BorderSizePixel = 0
-	avatar.Size = UDim2.fromOffset(24, 24)
-	avatar.Parent = startedRow
-	corner(avatar, UDim.new(1, 0))
-	self._avatar = avatar
-	local started = makeLabel(startedRow, "Started", family, Enum.FontWeight.SemiBold, 14)
-	started.RichText = true
-	started.Position = UDim2.fromOffset(32, 0)
-	started.Size = UDim2.new(1, -120, 1, 0)
-	self._started = started
-	local counter = makeLabel(startedRow, "Counter", family, Enum.FontWeight.Bold, 15)
-	counter.Position = UDim2.new(1, -100, 0, 0)
-	counter.Size = UDim2.fromOffset(100, 24)
-	counter.TextXAlignment = Enum.TextXAlignment.Right
-	self._counter = counter
 
 	-- Progress: 3 px along the bottom edge of the banner.
 	local track = Instance.new("Frame")
@@ -248,7 +120,7 @@ function SetCardView.new(deps: {
 	track.Size = UDim2.new(1, 0, 0, 3)
 	track.BackgroundTransparency = 0.85
 	track.ZIndex = 3
-	track.Parent = banner
+	track.Parent = banner.frame
 	local fill = Instance.new("Frame")
 	fill.Name = "Fill"
 	fill.BorderSizePixel = 0
@@ -313,7 +185,7 @@ function SetCardView.new(deps: {
 		self._onViewAll()
 	end))
 
-	for _, button in ipairs({ self._shuffle, self._trash, viewAll }) do
+	for _, button in ipairs({ self._shuffle, trash, viewAll }) do
 		for _, connection in ipairs(UIMotion.bindPress(button)) do
 			table.insert(self._connections, connection)
 		end
@@ -330,35 +202,39 @@ function SetCardView.new(deps: {
 	return self
 end
 
--- Accent banner (the playlist's accent, or the player's accent). Text and icons take the accent's
--- on-colour, as the rest of the kit does on accent fills.
+-- Accent banner: the set playlist's cover colour, or the player's accent when there is no playlist
+-- or no colour (SetBanner.colorsFor). Text and icons take the fill's on-colour, as the rest of the
+-- kit does on accent fills.
 function SetCardView:_paintAccent()
-	local accent = AccentService.get()
-	for _, part in ipairs(self._bannerParts) do
-		part.BackgroundColor3 = accent.fill
+	local fill = self._coverFill
+	local onFill: Color3
+	if fill then
+		onFill = Visuals.onFillFor(fill)
+	else
+		local accent = AccentService.get()
+		fill = accent.fill
+		onFill = accent.onFill
 	end
-	for _, child in ipairs({ self._kicker, self._title, self._started, self._counter }) do
-		child.TextColor3 = accent.onFill
-	end
-	self._fill.BackgroundColor3 = accent.onFill
-	self._progressTrack.BackgroundColor3 = accent.onFill
-	for _, button in ipairs({ self._shuffle, self._trash }) do
-		local stroke = button:FindFirstChildWhichIsA("UIStroke")
-		if stroke then
-			stroke.Color = accent.onFill
-		end
-		local icon = button:FindFirstChildWhichIsA("ImageLabel")
-		if icon then
-			icon.ImageColor3 = accent.onFill
-		end
-	end
+	self._banner:paint(fill, onFill)
+	self._fill.BackgroundColor3 = onFill
+	self._progressTrack.BackgroundColor3 = onFill
+	SetBanner.paintButton(self._shuffle, onFill)
 end
 
 -- Shuffle and Remove set: musicControl holders only (set_reshuffle / set_stop are gated the same).
 function SetCardView:setControl(allowed: boolean)
 	self._control = allowed
 	self._shuffle.Visible = allowed
-	self._trash.Visible = allowed
+	self._banner.trash.Visible = allowed
+end
+
+-- The playlist a set was started from (nil for Liked Tracks / New Drops, which have no playlist).
+function SetCardView:_playlistFor(set: any): any?
+	local playlists = self._store:get().playlists
+	if type(playlists) ~= "table" or type(set.sourceId) ~= "string" then
+		return nil
+	end
+	return playlists[set.sourceId]
 end
 
 -- Idempotent: the store echoes the full state on every sync, so an unchanged set repaints nothing.
@@ -369,6 +245,13 @@ function SetCardView:update(set: any?)
 			self.frame.Visible = false
 		end
 		return
+	end
+	-- The banner colour follows the set's playlist, so a playlist recolour repaints even when the
+	-- set itself is unchanged.
+	local coverFill = Visuals.coverAccent(self:_playlistFor(set), self._config)
+	if coverFill ~= self._coverFill then
+		self._coverFill = coverFill
+		self:_paintAccent()
 	end
 	local upNext = if type(set.upNext) == "table" then set.upNext else {}
 	local upIds = {}
@@ -392,10 +275,12 @@ function SetCardView:update(set: any?)
 	local played = math.floor(tonumber(set.played) or 0)
 	local total = math.floor(tonumber(set.total) or 0)
 	self.frame.Visible = true
-	Visuals.setText(self._title, tostring(set.title or ""))
-	self._started.Text = startedText(tostring(set.starterName or ""))
-	Visuals.setHeadshot(self._avatar, tonumber(set.starterUserId))
-	Visuals.setText(self._counter, string.format("%d / %d", played, total))
+	self._banner:setData({
+		title = tostring(set.title or ""),
+		starterName = tostring(set.starterName or ""),
+		starterUserId = tonumber(set.starterUserId),
+		counter = string.format("%d / %d", played, total),
+	})
 	local progress = if total > 0 then math.clamp(played / total, 0, 1) else 0
 	self._fill.Size = UDim2.fromScale(progress, 1)
 
@@ -427,6 +312,6 @@ SetCardView.makeLabel = makeLabel
 SetCardView.makeFrame = makeFrame
 SetCardView.corner = corner
 SetCardView.pad = pad
-SetCardView.startedText = startedText
+SetCardView.startedText = SetBanner.startedText
 
 return SetCardView

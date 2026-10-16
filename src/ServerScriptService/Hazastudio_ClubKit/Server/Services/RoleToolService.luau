@@ -299,7 +299,10 @@ function RoleToolService:syncPlayer(player: Player, payload: OverheadPayload?)
 	-- FIX: Unequip tools before destroying to prevent orphaned pose/animation
 	if character then
 		local humanoid = character:FindFirstChildOfClass("Humanoid")
-		if humanoid then
+		local equipped = character:FindFirstChildOfClass("Tool")
+		-- Only unequip when the held tool is a granted role tool about to be destroyed;
+		-- StarterPack/other tools must stay in hand.
+		if humanoid and equipped and equipped:GetAttribute(cfg.GRANT_ATTRIBUTE) then
 			humanoid:UnequipTools()
 		end
 	end
@@ -330,6 +333,8 @@ function RoleToolService:syncPlayer(player: Player, payload: OverheadPayload?)
 			role = role,
 			effectiveMembership = tostring(effectivePayload.effectiveMembership or ""),
 		})
+		-- Mark synced so GUARD 1 skips repeat syncs for roles without a folder.
+		self._lastSyncedRole[player.UserId] = newRole
 		notifyClientToolsSynced(player, countBackpackTools(player))
 		return
 	end

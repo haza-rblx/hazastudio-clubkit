@@ -18,11 +18,13 @@ Category: engine (source sync). Not committed. Contract: `docs/plans/active-set.
 
 | File | Change | Buyer-owned? |
 |---|---|---|
-| `Shared/Domain/MusicActiveSet.luau` | New, pure: cap/shuffle/cursor, reshuffle of the remaining order, page with query filter, interleave insert index | no |
-| `Server/Services/MusicSession.luau` | `activeSet` state; set track materialised one at a time (`fromSet` entry); cursor moves on start; auto buffer off while a set runs; per-user cap ignores set entries; `activeSet` in queue update and state payloads; `startActiveSet` / `stopActiveSet` / `reshuffleActiveSet` / `pageActiveSet` | no |
+| `Shared/Domain/MusicActiveSet.luau` | New, pure: cap/shuffle/cursor, reshuffle of the remaining order, page with query filter, interleave insert index; `unmarkPlayed` (Previous on a set track) | no |
+| `Server/Services/MusicSession.luau` | `activeSet` state; set track materialised one at a time (`fromSet` entry); cursor moves on start; auto buffer off while a set runs; per-user cap ignores set entries; `activeSet` in queue update and state payloads; `startActiveSet` / `stopActiveSet` / `reshuffleActiveSet` / `pageActiveSet`; `previous()` on a set track steps the cursor back and drops the waiting set entry. Queued sets: `queuedSets` + set card entries (`setCard`) in `state.queue`; `activateSetCard` on advance; `countSets` / `set_queue_full`; set cards drawn in `buildQueueTracks`; Clear Queue and remove drop cards; set cards skipped by prefetch lookahead | no |
 | `Server/Services/MusicService.luau` | `startActiveSet` resolves the source (library order); `transport` routes `set_start/set_stop/set_reshuffle` (control) and `set_page` (everyone) | no |
 | `Server/Controllers/MusicController.luau` | Transport accepts `set_*`; `set_page` has its own limiter (`SET_PAGE_RATE`); oversized or invalid transport payloads reply instead of dropping; set replies are `{ ok, reason?, ... }` | no |
-| `Shared/Constants/Config.luau` | `SET_MAX_TRACKS`, `SET_INTERLEAVE`, `SET_PAGE_SIZE`, `SET_PAGE_RATE` | no |
+| `Shared/Constants/Config.luau` | `SET_MAX_TRACKS`, `SET_QUEUE_MAX` (replaces `SET_INTERLEAVE`, removed 2026-10-16 with queued sets), `SET_PAGE_SIZE`, `SET_PAGE_RATE`; `Loading.STYLE` default `"cinematic"` (2026-10-17) | no |
+| `Client/Controllers/LeadDanceDropdown.luau` | `setEntries(self, entries)` (colon-call fix); forced rebuild on `open()`; pcall + row-count warn | no |
+| `Server/Services/RoleToolService.luau` | `syncPlayer` unequips only a held `KitRoleTool`; sets `_lastSyncedRole` on the no-folder path | no |
 | `CHANGELOG.md`, `UPGRADE_PROGRESS.md` | `[Unreleased]` entry; this table | no |
 
 **Not yet verified in Studio:** set start/stop/reshuffle end to end, interleave feel in a 2-player playtest, `set_page` with query on a 1500-track set. Known gap: `previous` on a set track re-queues the played entry without moving the cursor back.
@@ -34,10 +36,10 @@ Category: engine (source sync). Not committed. Contract: `docs/plans/active-set.
 | `Client/UI/Music/SetCardView.luau` | **New**: Set card at the top of the queue (LayoutOrder -2), built from code; shuffle / remove for control holders; `View full set` | no |
 | `Client/UI/Music/SetSheetView.luau` | **New**: Full set sheet, own ScreenGui, virtual list (52 px pitch), `set_page` paging with skeleton rows, debounced search | no |
 | `Client/UI/Music/ListPool.luau` | `leading` option: the Set card's height plus layout gap is kept out of the index math | no |
-| `Client/UI/Music/NowPlayingView.luau` | Builds the Set card; skips `fromSet` entries; card control follows transport gate | no |
+| `Client/UI/Music/NowPlayingView.luau` | Builds the Set card; skips `fromSet` entries; card control follows transport gate. Queued sets: waiting set cards (`setCard`) draw as a queue row with an empty length label | no |
 | `Client/UI/Music/PanelShell.luau` | Creates / destroys the sheet; `setOnTransportRequest` callback | no |
 | `Client/UI/Music/LibraryView.luau` | Shuffle / Add set send `set_start` with a source (favorites, new_drops, playlist), not track ids | no |
-| `Client/Controllers/MusicPlayerController.luau` | `activeSet` stored from queue update and state sync; `_requestTransportAsync` for `set_page`; set_start toast | no |
+| `Client/Controllers/MusicPlayerController.luau` | `activeSet` stored from queue update and state sync; `_requestTransportAsync` for `set_page`; set_start toast; short messages for set_* rejections. Queued sets: `set_queue_full` message, set_start toast reads "The set was added to the queue." | no |
 | `CHANGELOG.md`, `UPGRADE_PROGRESS.md` | `[Unreleased]` entries; this table | no |
 
 ## Unreleased — file table (music UI: wheel glide, queue virtualization, list clip, 2026-10-16)

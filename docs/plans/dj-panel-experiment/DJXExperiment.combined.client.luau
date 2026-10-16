@@ -84,7 +84,7 @@ root.AnchorPoint = Vector2.new(0.5, 0.5)
 root.Position = UDim2.fromScale(0.5, 0.5)
 local function fit()
 	local vp = camera.ViewportSize
-	local h = root.AbsoluteSize.Y / math.max(scale.Scale, 0.01)
+	local h = root:GetAttribute("DJXFullH") or root.AbsoluteSize.Y / math.max(scale.Scale, 0.01) -- full height while minimised (1.5)
 	scale.Scale = math.min(1, (vp.X - 48) / 1250, (vp.Y - 72) / math.max(h, 1))
 end
 camera:GetPropertyChangedSignal("ViewportSize"):Connect(fit)
@@ -111,7 +111,7 @@ do
 	local left = new("Frame", { Size = UDim2.fromScale(0.36, 1), BackgroundTransparency = 1 }, header)
 	row(left)
 	txt(left, { Text = "DJ BOOTH", FontFace = B, TextSize = 16, LayoutOrder = 1 })
-	local onair = noTint(new("Frame", { AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.new(0, 0, 0, 22), BackgroundColor3 = C.live, LayoutOrder = 2 }, left))
+	local onair = noTint(new("Frame", { Name = "DJX_OnAir", Visible = false, AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.new(0, 0, 0, 22), BackgroundColor3 = C.live, LayoutOrder = 2 }, left))
 	new("UICorner", { CornerRadius = UDim.new(0, 6) }, onair)
 	new("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) }, onair)
 	row(onair, nil, 6)
@@ -119,9 +119,11 @@ do
 	new("UICorner", { CornerRadius = UDim.new(1, 0) }, dot)
 	txt(onair, { Text = "ON AIR", FontFace = B, TextSize = 12, LayoutOrder = 2 })
 	local glow = new("UIStroke", { Color = C.live, Thickness = 0, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, onair)
-	txt(left, { Text = "24 listening", TextColor3 = C.dim, TextSize = 13, LayoutOrder = 3 })
+	local listening = txt(left, { Text = "24 listening", TextColor3 = C.dim, TextSize = 13, LayoutOrder = 3, Name = "DJX_Listening" })
 
-	local hype = new("Frame", { Size = UDim2.new(0.2, 0, 0, 30), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), BackgroundTransparency = 1 }, header)
+	local hype = new("Frame", { Name = "DJX_Hype", Size = UDim2.new(0.2, 0, 0, 30), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), BackgroundTransparency = 1 }, header)
+	-- 2.1 toast: shown in the hype slot for 2 s when Go live / End set fails
+	local toast = txt(header, { Name = "DJX_Toast", Text = "", FontFace = B, TextSize = 12, TextColor3 = C.accent, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Visible = false })
 	txt(hype, { Text = "CROWD HYPE", FontFace = B, TextSize = 11, TextColor3 = C.dim })
 	local pct = txt(hype, { Text = "60%", FontFace = B, TextSize = 11, AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0) })
 	local bar = new("Frame", { Size = UDim2.new(1, 0, 0, 6), AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), BackgroundColor3 = C.card2 }, hype)
@@ -138,10 +140,71 @@ do
 		return b
 	end
 	local drop = hbtn("DROP", 88, C.accent, 1)
-	hbtn("TAKE OVER", 100, C.card2, 2)
+	local goLive = hbtn("TAKE OVER", 100, C.card2, 2)
+	goLive.Name = "DJX_GoLive"
 	new("Frame", { Size = UDim2.fromOffset(1, 20), BackgroundColor3 = W, BackgroundTransparency = 0.85, BorderSizePixel = 0, LayoutOrder = 3 }, right)
-	hbtn("—", 32, C.card, 4)
+	local minBtn = hbtn("—", 32, C.card, 4)
 	hbtn("×", 32, C.card, 5, 18)
+
+	-- 1.5 minimise: "—" tweens the panel down to the header row (top edge stays put); click again
+	-- restores the full height. Children below the header are clipped by root.ClipsDescendants.
+	-- While minimised, fit() uses the frozen full height so the scale does not jump.
+	local MIN_TWEEN = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	local minimised, busy = false, false
+	local listAlign = nil
+	minBtn.MouseButton1Click:Connect(function()
+		if busy then
+			return
+		end
+		busy = true
+		local hH = header.Size.Y.Offset
+		local tabs = overlay:FindFirstChild("DJX_Tabs")
+		if not minimised then
+			minimised = true
+			local fullH = root.AbsoluteSize.Y / math.max(scale.Scale, 0.01)
+			root:SetAttribute("DJXFullH", fullH)
+			-- top-anchor at the same spot the centred panel's top edge had, so only the height moves
+			root.AnchorPoint = Vector2.new(0.5, 0)
+			root.Position = UDim2.new(0.5, 0, 0.5, -fullH / 2)
+			root.AutomaticSize = Enum.AutomaticSize.None
+			root.Size = UDim2.new(0, 1250, 0, fullH)
+			-- the root list is centred vertically; while the content overflows the short panel it would
+			-- push the header up, so pin it to the top for the minimised state
+			local lay = root:FindFirstChildOfClass("UIListLayout")
+			listAlign = lay and lay.VerticalAlignment
+			if lay then
+				lay.VerticalAlignment = Enum.VerticalAlignment.Top
+			end
+			if tabs then
+				tabs.Visible = false
+			end
+			local tw = TweenService:Create(root, MIN_TWEEN, { Size = UDim2.new(0, 1250, 0, hH) })
+			tw.Completed:Once(function()
+				busy = false
+			end)
+			tw:Play()
+		else
+			minimised = false
+			local fullH = root:GetAttribute("DJXFullH") or 0
+			local tw = TweenService:Create(root, MIN_TWEEN, { Size = UDim2.new(0, 1250, 0, fullH) })
+			tw.Completed:Once(function()
+				root.AnchorPoint = Vector2.new(0.5, 0.5)
+				root.Position = UDim2.new(0.5, 0, 0.5, 0)
+				root.Size = UDim2.new(0, 1250, 0, 0)
+				root.AutomaticSize = Enum.AutomaticSize.Y
+				root:SetAttribute("DJXFullH", nil)
+				local lay = root:FindFirstChildOfClass("UIListLayout")
+				if lay and listAlign then
+					lay.VerticalAlignment = listAlign
+				end
+				if tabs then
+					tabs.Visible = true
+				end
+				busy = false
+			end)
+			tw:Play()
+		end
+	end)
 
 	local busy = false
 	drop.MouseButton1Click:Connect(function()
@@ -170,16 +233,44 @@ do
 	end)
 
 	local t0 = os.clock()
-	RunService.RenderStepped:Connect(function()
+	-- 2.3 Crowd Hype (2026-10-16): replaces the seeded mock wave. Target = louder of the two deck Sounds
+	-- (PlaybackLoudness x Volume / 400, same scale as the VU meters); eased with fast attack, slow release.
+	local hypeVal, hypePct = 0, -1
+	local function deckLoud(name)
+		local snd = gui:FindFirstChild(name)
+		if snd and snd:IsA("Sound") then
+			return math.clamp(snd.PlaybackLoudness * snd.Volume / 400, 0, 1)
+		end
+		return 0
+	end
+	RunService.RenderStepped:Connect(function(dt)
 		local t = os.clock() - t0
 		local p = (math.sin(t * math.pi * 1.4) + 1) / 2
 		glow.Thickness = p * 3
 		glow.Transparency = 0.25 + p * 0.7
 		dot.BackgroundTransparency = (t % 1) < 0.5 and 0 or 0.7
-		local h = 0.62 + math.sin(t * 0.7) * 0.12 + math.sin(t * 2.3) * 0.04
-		fill.Size = UDim2.fromScale(h, 1)
-		pct.Text = math.floor(h * 100) .. "%"
+		local target = math.max(deckLoud("DJXDeckA"), deckLoud("DJXDeckB"))
+		local k = if target > hypeVal then 1 - math.exp(-dt * 12) else 1 - math.exp(-dt * 1.5)
+		hypeVal += (target - hypeVal) * k
+		fill.Size = UDim2.fromScale(hypeVal, 1)
+		local pctNow = math.floor(hypeVal * 100)
+		if pctNow ~= hypePct then
+			hypePct = pctNow
+			pct.Text = pctNow .. "%"
+		end
 	end)
+
+	-- 2.3 "N listening" = players in this server. PlayerRemoving is deferred so the leaver is already gone.
+	local function refreshListening()
+		listening.Text = #Players:GetPlayers() .. " listening"
+	end
+	Players.PlayerAdded:Connect(function()
+		task.defer(refreshListening)
+	end)
+	Players.PlayerRemoving:Connect(function()
+		task.defer(refreshListening)
+	end)
+	refreshListening()
 end
 
 -- ════════════════════════════════════════════════════════════
@@ -198,7 +289,7 @@ do
 				local secs = world and 8 or 3
 				local bz = false
 				b.MouseButton1Click:Connect(function()
-					if bz then
+					if bz or b:GetAttribute("DJXGate") then
 						return
 					end
 					bz = true
@@ -284,11 +375,7 @@ do
 		{ image = head(156), title = "Amapiano Sunset Set Vol. 3", sub = "Requested by Kevin  ·  1 vote", meta = "12:30", buttons = { { "Play next", C.ok, 92 }, { "Skip", C.card2, 64 } } },
 	})
 	local queue = makeList("DJX_Queue")
-	fill(queue, {
-		{ coverText = "UP NEXT", title = "Peggy Gou — (It Goes Like) Nanana", sub = "Loads on Deck B", meta = "124 BPM", buttons = { { "Load B", C.card2, 72 } } },
-		{ coverText = "#2", title = "Calvin Harris — Desire", sub = "Queued by Nadia", meta = "122 BPM", buttons = { { "Load B", C.card2, 72 } } },
-		{ coverText = "#3", title = "Rufus Du Sol — Innerbloom", sub = "Session set", meta = "121 BPM", buttons = { { "Load B", C.card2, 72 } } },
-	})
+	fill(queue, {}) -- no mock rows: section 13 draws the real session queue (2026-10-16)
 	for _, sf in { scroll, requests, queue } do
 		local pad = sf:FindFirstChildOfClass("UIPadding")
 		if pad then
@@ -315,7 +402,7 @@ do
 			b.TextColor3 = n == name and W or C.dim
 		end
 	end
-	for i, def in { { "Library", "Library" }, { "Requests", "Requests  3" }, { "Queue", "Queue  3" } } do
+	for i, def in { { "Library", "Library" }, { "Requests", "Requests  3" }, { "Queue", "Queue  0" } } do
 		local b = new("TextButton", { Text = def[2], FontFace = B, TextSize = 13, AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.new(0, 0, 1, 0), BackgroundColor3 = C.card2, LayoutOrder = i, ZIndex = 6 }, tabs)
 		new("UIPadding", { PaddingLeft = UDim.new(0, 14), PaddingRight = UDim.new(0, 14) }, b)
 		new("UICorner", { CornerRadius = UDim.new(1, 0) }, b)
@@ -482,7 +569,7 @@ do
 	local top = new("Frame", { Size = UDim2.new(1, 0, 0, TOP), BackgroundTransparency = 1 }, center)
 	new("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) }, top)
 	local function tag(deck, bpm, anchorX)
-		local f = new("Frame", { AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.new(0, 0, 1, 0), AnchorPoint = Vector2.new(anchorX, 0), Position = UDim2.fromScale(anchorX, 0), BackgroundTransparency = 1 }, top)
+		local f = new("Frame", { Visible = false, AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.new(0, 0, 1, 0), AnchorPoint = Vector2.new(anchorX, 0), Position = UDim2.fromScale(anchorX, 0), BackgroundTransparency = 1 }, top) -- 1.6: BPM tags hidden (no BPM data)
 		new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 5), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = anchorX == 1 and Enum.HorizontalAlignment.Right or Enum.HorizontalAlignment.Left }, f)
 		-- neutral grey chip, 15 px (12 x1.25, owner: "gedein dikit secara proporsional"). The letter sits
 		-- in its own label. Measured at 10x (scaled text, no pixel snapping) it is centred with no nudge,
@@ -495,6 +582,13 @@ do
 	end
 	tag("A", "124.0", 0)
 	tag("B", "122.0", 1)
+	-- 1.6 (2026-10-16): SYNC needs BPM data the kit does not have, so both SYNC buttons are hidden
+	for _, n in { "Deck_A", "Deck_B" } do
+		local sync = deckWrapper[n].ControlPad2:FindFirstChild("SyncSpeedDeckA&B")
+		if sync then
+			sync.Visible = false
+		end
+	end
 	local body = new("Frame", { Size = UDim2.new(1, -16, 1, -(TOP + BOTTOM)), Position = UDim2.fromOffset(8, TOP), BackgroundTransparency = 1 }, center)
 	local VUW, LGAP = 5, 6
 	local GW = VUW * 2 + 2 -- two meter columns a side, 2 px apart
@@ -584,52 +678,73 @@ do
 		end
 		return strips, labels
 	end
-	local function number(labels, firstBar)
-		for copy, list in labels do
-			for k, lbl in list do
-				local n = firstBar + (copy - 1) * 4 + (k - 1)
-				lbl.Text = n >= 1 and tostring(n) or ""
-			end
-		end
-	end
+	-- 1.6 (2026-10-16): bar numbers and beat lines implied a fixed 124 BPM grid, so they are hidden
 	local stripsA, labelsA = build(laneA, 7, 0)
 	local stripsB, labelsB = build(laneB, 42, N / 4) -- one bar of silence, then bar 1
-	local barA = 97
-	number(labelsA, barA)
-	number(labelsB, 0)
-	noTint(new("Frame", { Size = UDim2.new(1, 0, 0, 2), AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromScale(0, 0.35), BackgroundColor3 = Color3.fromRGB(255, 40, 40), BorderSizePixel = 0, ZIndex = 5 }, body))
-
-	local function loudest()
-		local best, bl = nil, -1
-		for _, s in SoundService:GetDescendants() do
-			if s:IsA("Sound") and s.IsPlaying and s.TimeLength > 30 and s.PlaybackLoudness > bl then
-				best, bl = s, s.PlaybackLoudness
+	for _, labels in { labelsA, labelsB } do
+		for _, list in labels do
+			for _, lbl in list do
+				lbl.Visible = false
 			end
 		end
-		return best
 	end
-	local music, lastScan = loudest(), os.clock()
-	local posA, posB, lvA, lvB = 0, -0.1, 0, 0 -- B is cued: bar 1 sits on the playhead (35%)
+	noTint(new("Frame", { Size = UDim2.new(1, 0, 0, 2), AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromScale(0, 0.35), BackgroundColor3 = Color3.fromRGB(255, 40, 40), BorderSizePixel = 0, ZIndex = 5 }, body))
+
+	-- per-deck VU source: the deck's own Sound (DJXDeckA / DJXDeckB), PlaybackLoudness x Volume / 400
+	local function deckLevel(name)
+		local snd = gui:FindFirstChild(name)
+		if snd and snd:IsA("Sound") then
+			return math.clamp(snd.PlaybackLoudness * snd.Volume / 400, 0, 1)
+		end
+		return 0
+	end
+	-- 1.6 rolling loudness history (2026-10-16): one sample per 1/30 s per deck. Row HIST_P (the playhead,
+	-- 35 % down) holds the newest sample and older samples sit above it, scrolling away. The first strip's
+	-- bars are reused (Size written, nothing created per frame); the second strip and beat lines are hidden.
+	local HIST_P, ROW_H = 45, 1 / N
+	local function historyRows(strips)
+		local rows = {}
+		strips[2].Visible = false
+		for _, c in strips[1]:GetChildren() do
+			if c:IsA("TextLabel") or (c:IsA("Frame") and c.Size.Y.Offset == 1) then
+				c.Visible = false
+			elseif c:IsA("Frame") then
+				table.insert(rows, c)
+			end
+		end
+		table.sort(rows, function(x, y)
+			return x.Position.Y.Scale < y.Position.Y.Scale
+		end)
+		for _, bar in rows do
+			bar.BackgroundTransparency = 0.1
+			bar.Size = UDim2.new(0, 0, ROW_H, 0)
+		end
+		return { rows = rows, h = {} }
+	end
+	local function pushSample(hist, level)
+		local h, rows = hist.h, hist.rows
+		for k = HIST_P, 2, -1 do
+			h[k] = h[k - 1] or 0
+		end
+		h[1] = level
+		for k = 1, HIST_P do
+			local v = h[k] or 0
+			local bar = rows[HIST_P - k + 1]
+			bar.Size = UDim2.new(v * 0.96, 0, ROW_H, 0)
+			bar.BackgroundColor3 = if v < 0.5 then HIGH:Lerp(MIDC, v * 2) else MIDC:Lerp(LOW, (v - 0.5) * 2)
+		end
+	end
+	local histA, histB = historyRows(stripsA), historyRows(stripsB)
+	local lvA, lvB, sampleAcc = 0, 0, 0
 	RunService.RenderStepped:Connect(function(dt)
-		if os.clock() - lastScan > 3 then
-			lastScan = os.clock()
-			music = loudest()
+		sampleAcc += dt
+		if sampleAcc >= 1 / 30 then
+			sampleAcc = sampleAcc % (1 / 30)
+			pushSample(histA, deckLevel("DJXDeckA"))
+			pushSample(histB, deckLevel("DJXDeckB"))
 		end
-		local lv = math.clamp((music and music.PlaybackLoudness or 0) / 500, 0, 1)
-		local nextA = posA + dt * (124 / 60) / BEATS
-		if nextA >= 1 then
-			barA += 4
-			number(labelsA, barA)
-		end
-		posA = nextA % 1
-		for i, s in stripsA do
-			s.Position = UDim2.fromScale(0, (i - 1) - posA)
-		end
-		for i, s in stripsB do
-			s.Position = UDim2.fromScale(0, (i - 1) - posB)
-		end
-		lvA = math.max(lv * (0.85 + math.random() * 0.3), lvA - dt * 1.6)
-		lvB = math.max(0.05, lvB - dt * 1.6)
+		lvA = math.max(deckLevel("DJXDeckA") * (0.85 + math.random() * 0.3), lvA - dt * 1.6)
+		lvB = math.max(deckLevel("DJXDeckB") * (0.85 + math.random() * 0.3), lvB - dt * 1.6)
 		vuA.Size = UDim2.fromScale(1, math.clamp(lvA, 0, 1))
 		vuB.Size = UDim2.fromScale(1, math.clamp(lvB, 0, 1))
 	end)
@@ -1080,6 +1195,7 @@ do
 		local protoAll = list.AllTracks:Clone()
 		local selectedId = nil -- nil = All Tracks
 		local mocksGone = false
+		local searchText = "" -- 01-SearchSong box, lower-cased on use
 
 		local function fmt(sec)
 			sec = math.floor(sec or 0)
@@ -1098,7 +1214,7 @@ do
 			end)
 			return out
 		end
-		local function visibleTracks()
+		local function playlistTracks()
 			local all = store:get().allTracks or {}
 			local out = {}
 			if selectedId == nil then
@@ -1116,6 +1232,21 @@ do
 			table.sort(out, function(a, b)
 				return a.name < b.name
 			end)
+			return out
+		end
+
+		-- playlist tracks, then the search box filter (title or creator, plain find, case-insensitive)
+		local function visibleTracks()
+			local q = string.lower(searchText)
+			if q == "" then
+				return playlistTracks()
+			end
+			local out = {}
+			for _, t in playlistTracks() do
+				if string.find(string.lower(t.name or ""), q, 1, true) or string.find(string.lower(t.creator or ""), q, 1, true) then
+					table.insert(out, t)
+				end
+			end
 			return out
 		end
 
@@ -1201,6 +1332,13 @@ do
 			renderTracks()
 		end
 
+		-- 1.1 search: every edit re-renders the track list (empty box = no filter)
+		local searchBox = root.DJ_Library["1-SelectPlaylist"]["01-SearchSong"]
+		searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+			searchText = searchBox.Text
+			renderTracks()
+		end)
+
 		store:subscribe("playlists", refresh)
 		store:subscribe("allTracks", refresh)
 		refresh()
@@ -1274,6 +1412,162 @@ end
 -- strip writes them; section 13 reads them. MASTER 0..1 scales both deck Sounds, XFADE 0..1 shapes
 -- the crossfader (0 = smooth, 1 = cut), REVERB / ECHO 0..1 set the wet level of each deck's effect.
 local DJXStrip = { master = 0.8, xfade = 0, reverb = 0, echo = 0 }
+
+-- 3.1 LIVE / CUE (2026-10-16): the deck that drives the room while I am the DJ owner. Default A.
+local DJXLive = { deck = "A" }
+
+-- ════════════════════════════════════════════════════════════
+-- 2.1 Go live / ON AIR (2026-10-16). The header's TAKE OVER button (DJX_GoLive) is the DJ-mode switch.
+--     Click fires MusicSetDjMode {enabled, requestId} (the only server call here) and waits up to 8 s for
+--     the matching MusicResponse. ON AIR shows only while the store says DJ mode is on AND this player is
+--     the owner (D7). Labels and ON AIR follow the store, so another DJ or the server clears them too.
+-- ════════════════════════════════════════════════════════════
+do
+	local header = root:FindFirstChild("DJX_Header")
+	-- buttons and ON AIR sit inside the header's left / right frames, so search the subtree
+	local goLive = header and header:FindFirstChild("DJX_GoLive", true)
+	local onair = header and header:FindFirstChild("DJX_OnAir", true)
+	local hype = header and header:FindFirstChild("DJX_Hype", true)
+	local toast = header and header:FindFirstChild("DJX_Toast", true)
+	local okStore, store = pcall(function()
+		local K = player:WaitForChild("PlayerScripts", 5):WaitForChild("Hazastudio_ClubKit", 5)
+		return require(K:WaitForChild("Client", 5):WaitForChild("State", 5):WaitForChild("MusicPlayerStore", 5))
+	end)
+	local remotes = game:GetService("ReplicatedStorage"):WaitForChild("Remotes", 10)
+	local setDjRE = remotes and remotes:WaitForChild("MusicSetDjMode", 10)
+	local responseRE = remotes and remotes:WaitForChild("MusicResponse", 10)
+
+	if okStore and store and goLive and onair and toast and setDjRE and responseRE then
+		local REQUEST_TIMEOUT = 8
+		local inFlight = false
+		local toastToken = 0
+
+		local function render()
+			local s = store:get()
+			local onAir = s.isDjMode == true and s.djOwnerUserId == player.UserId
+			onair.Visible = onAir
+			goLive.Text = if onAir then "End set" else "Go live"
+		end
+
+		local function showToast(text)
+			toastToken += 1
+			local token = toastToken
+			toast.Text = text
+			toast.Visible = true
+			if hype then
+				hype.Visible = false
+			end
+			task.delay(2, function()
+				if toastToken == token then
+					toast.Visible = false
+					if hype then
+						hype.Visible = true
+					end
+				end
+			end)
+		end
+
+		local function requestDjMode(enabled: boolean)
+			inFlight = true
+			local requestId = game:GetService("HttpService"):GenerateGUID(false)
+			local result = nil
+			local conn = responseRE.OnClientEvent:Connect(function(payload)
+				if type(payload) == "table" and payload.type == "music_response" and payload.responseType == "set_dj_mode" and payload.requestId == requestId and result == nil then
+					result = payload
+				end
+			end)
+			local deadline = os.clock() + REQUEST_TIMEOUT
+			setDjRE:FireServer({ enabled = enabled, requestId = requestId })
+			while result == nil and os.clock() < deadline do
+				task.wait(0.05)
+			end
+			conn:Disconnect()
+			inFlight = false
+
+			if result == nil then
+				showToast("Failed")
+			elseif result.ok ~= true then
+				local err = result.error
+				if err == "no_permission" then
+					showToast("No permission")
+				elseif err == "rate_limited" then
+					showToast("Slow down")
+				else
+					showToast("Failed")
+				end
+			else
+				-- the kit's own toggle writes the reply into the store as well: a switch-off does not always
+				-- come back as a state sync, so without this the label stayed on "End set"
+				local on = type(result.data) == "table" and result.data.isDjMode == true
+				store:set({ isDjMode = on, djOwnerUserId = if on then player.UserId else store.NONE })
+			end
+			render()
+		end
+
+		goLive.MouseButton1Click:Connect(function()
+			if inFlight then
+				return
+			end
+			local s = store:get()
+			local enable = not (s.isDjMode == true and s.djOwnerUserId == player.UserId)
+				if not enable then
+					DJXLive.fxOff() -- 3.5: effects go off before DJ mode does (the server rejects them after)
+				end
+			task.spawn(requestDjMode, enable)
+		end)
+
+		store:subscribe("isDjMode", render)
+		store:subscribe("djOwnerUserId", render)
+		render()
+	end
+end
+
+-- ════════════════════════════════════════════════════════════
+-- 3.1 LIVE / CUE badges (2026-10-16). While I am the DJ owner (store: isDjMode and djOwnerUserId is me)
+--     each deck's track tile shows a badge: LIVE (#d85a30) on the deck that drives the room, CUE (#4c7dff)
+--     on the other. Clicking a CUE badge makes that deck LIVE (DJXLive.deck). Not the owner: badges hidden.
+do
+	local okStore, store = pcall(function()
+		local K = player:WaitForChild("PlayerScripts", 5):WaitForChild("Hazastudio_ClubKit", 5)
+		return require(K:WaitForChild("Client", 5):WaitForChild("State", 5):WaitForChild("MusicPlayerStore", 5))
+	end)
+	if okStore and store then
+		local LIVE_COLOR = Color3.fromHex("d85a30")
+		local CUE_COLOR = Color3.fromHex("4c7dff")
+		local badges = {}
+		local function isOwner()
+			local s = store:get()
+			return s.isDjMode == true and s.djOwnerUserId == player.UserId
+		end
+		local function render()
+			DJXLive.refresh = render
+			local owner = isOwner()
+			for letter, badge in badges do
+				local live = DJXLive.deck == letter
+				badge.Holder.Visible = owner
+				badge.Button.Text = if live then "LIVE" else "CUE"
+				badge.Holder.BackgroundColor3 = if live then LIVE_COLOR else CUE_COLOR
+			end
+		end
+		for _, letter in { "A", "B" } do
+			local tile = deckRoot.CurrentTrack["Track_" .. letter]
+			-- a Frame holds the button, so the tile's own TextButton (labelsOf) is still the first one
+			local holder = new("Frame", { Name = "DJX_Badge_" .. letter, Visible = false, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -8, 0, 6), Size = UDim2.fromOffset(44, 16), BackgroundColor3 = CUE_COLOR, ZIndex = 8 }, tile)
+			new("UICorner", { CornerRadius = UDim.new(0, 4) }, holder)
+			local button = new("TextButton", { Name = "Button", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, AutoButtonColor = false, Text = "CUE", FontFace = B, TextColor3 = W, TextSize = 11, ZIndex = 9 }, holder)
+			button.MouseButton1Click:Connect(function()
+				if isOwner() and DJXLive.deck ~= letter then
+					DJXLive.deck = letter
+					render()
+				end
+			end)
+			badges[letter] = { Holder = holder, Button = button }
+		end
+		store:subscribe("isDjMode", render)
+		store:subscribe("djOwnerUserId", render)
+		render()
+	end
+end
 
 -- ════════════════════════════════════════════════════════════
 -- 13. Drag a library row onto Deck A / B (owner, 2026-10-11): hold a row, drag it over a deck
@@ -1449,6 +1743,10 @@ do
 				eqUi[letter][band] = { knob = wrap[band]:FindFirstChild("Knob", true), label = wrap[band][band .. "Value"], db = 0 }
 			end
 		end
+		-- 3.5: read by the effects sender (section 3.5 below) for the LIVE deck's EQ
+		DJXLive.eqDb = function(letter, band)
+			return eqUi[letter][band].db
+		end
 		-- FILTER knob (section 8 turns it: Rotation = (v - 0.5) * 270, 0.5 = off, below = LPF, above =
 		-- HPF). Roblox has no filter effect, so it is built from a second EqualizerSoundEffect in
 		-- series with the EQ: LPF cuts High (and Mid from 60 % up), HPF cuts Low (same). The cut grows
@@ -1550,6 +1848,18 @@ do
 			end
 		end
 		local function jumpToCue(letter, d, cue)
+		-- 3.3: a hot cue on the LIVE deck of the DJ owner also moves the room (positions in the d.pos units)
+		if DJXLive.deck == letter and DJXLive.owner() then
+			local rate = (d.t.playbackSpeed or 1) * (d.speed or 1)
+			local off = d.partStart[cue.part]
+			if not off then
+				off = 0
+				for k = 1, cue.part - 1 do
+					off += partDur(d, k)
+				end
+			end
+			DJXLive.seekTo((off + cue.t) / rate)
+		end
 			if cue.part == d.partIndex and d.sound then
 				d.sound.TimePosition = cue.t
 			else
@@ -1769,7 +2079,373 @@ do
 				end
 			end
 		end
-		local function loadDeck(letter, t)
+		-- 3.2 Load on LIVE deck (2026-10-16). While I am the DJ owner the LIVE deck's local Sound is muted: the
+--     room plays the track through the kit (roomPlay). Add-from-ID tracks (id:<digits>) are not sent to the
+--     room, so they stay audible locally. Everything else is local, as before.
+local function djRoomMuted(letter)
+	local d = decks[letter]
+	if not d or DJXLive.deck ~= letter or string.sub(tostring(d.t.id), 1, 3) == "id:" then
+		return false
+	end
+	local s = store:get()
+	return s.isDjMode == true and s.djOwnerUserId == player.UserId
+end
+local roomRemotes = game:GetService("ReplicatedStorage"):WaitForChild("Remotes", 10)
+local roomHeader = root:FindFirstChild("DJX_Header")
+local roomToastLabel = roomHeader and roomHeader:FindFirstChild("DJX_Toast", true)
+local roomHype = roomHeader and roomHeader:FindFirstChild("DJX_Hype", true)
+local roomToastToken = 0
+local function roomToast(text)
+	if not roomToastLabel then
+		return
+	end
+	roomToastToken += 1
+	local token = roomToastToken
+	roomToastLabel.Text = text
+	roomToastLabel.Visible = true
+	if roomHype then
+		roomHype.Visible = false
+	end
+	task.delay(2, function()
+		if roomToastToken == token then
+			roomToastLabel.Visible = false
+			if roomHype then
+				roomHype.Visible = true
+			end
+		end
+	end)
+end
+-- 3.3 room helpers (2026-10-16). The room position is the kit's own timing (MusicDomain.getTimingElapsedSeconds).
+DJXLive.elapsed = function(): number
+	local timing = store:get().playbackTiming
+	if type(timing) ~= "table" or (tonumber(timing.startServerTime) or 0) <= 0 then
+		return 0
+	end
+	if timing.isPaused == true then
+		return math.max(0, tonumber(timing.pausedElapsed) or 0)
+	end
+	return math.max(0, workspace:GetServerTimeNow() - timing.startServerTime)
+end
+DJXLive.owner = function(): boolean
+	local s = store:get()
+	return s.isDjMode == true and s.djOwnerUserId == player.UserId
+end
+-- The kit allows 30 transport calls per 30 s, so this sends at most one per 1.05 s. It yields: call it from a
+-- spawned task. A payload without requestId gets one.
+DJXLive.transport = function(payload)
+	local wait = 1.05 - (os.clock() - (DJXLive.lastTransportAt or -math.huge))
+	if wait > 0 then
+		task.wait(wait)
+	end
+	DJXLive.lastTransportAt = os.clock()
+	local transportRE = roomRemotes and roomRemotes:FindFirstChild("MusicTransport")
+	if transportRE then
+		if payload.requestId == nil then
+			payload.requestId = game:GetService("HttpService"):GenerateGUID(false)
+		end
+		transportRE:FireServer(payload)
+	end
+end
+-- Seek the room to an absolute track position (seconds). The server clamps one seek to +-30 s, so a longer
+-- jump goes in steps. A newer seekTo cancels an older one that is still stepping.
+DJXLive.seekSeq = 0
+DJXLive.seekTo = function(target: number)
+	DJXLive.seekSeq += 1
+	local seq = DJXLive.seekSeq
+	task.spawn(function()
+		local remaining = target - DJXLive.elapsed()
+		while math.abs(remaining) > 0.05 and DJXLive.seekSeq == seq do
+			local step = math.clamp(remaining, -30, 30)
+			DJXLive.transport({ action = "seek", delta = step })
+			remaining -= step
+		end
+	end)
+end
+
+-- 3.5 Effects on LIVE (2026-10-16, D4). While I am the DJ owner, the LIVE deck's HIGH / MID / LOW (its EQ knobs)
+-- and the bottom strip's REVERB / ECHO (shared by both decks) go to the room through MusicDjEffect, so everyone hears
+-- them. The kit keeps one value per item (a set replaces it), so a flusher compares what it wants with what it last
+-- sent and sends only the changes, at most once per 0.4 s (Config DJ_EFFECT_RATE_MAX 150 per 60 s). A LIVE switch or
+-- DROP resets the comparison, so the new LIVE deck's values go out once. End set sends the effects off first: the
+-- server rejects effect writes once DJ mode is off, and it keeps the last values.
+do
+	local EFFECT_INTERVAL = 0.4
+	local EQ_ITEM = { High = "high", Mid = "mid", Low = "low" }
+	local sent = {}
+	local wasOwner = false
+	local lastDeck = nil
+	local muted = false
+
+	local function sendFx(payload)
+		local remote = roomRemotes and roomRemotes:FindFirstChild("MusicDjEffect")
+		if remote then
+			payload.requestId = game:GetService("HttpService"):GenerateGUID(false)
+			remote:FireServer(payload)
+		end
+	end
+
+	-- what the room should hear now: "effect|item" = value (items are numbers, "enabled" is a boolean)
+	local function wanted()
+		local want = {}
+		local v = DJXStrip.reverb
+		want["reverb|enabled"] = v > 0
+		want["reverb|wet"] = -30 + v * 30
+		v = DJXStrip.echo
+		want["echo|enabled"] = v > 0
+		want["echo|wet"] = -24 + v * 24
+		want["echo|feedback"] = 0.2 + v * 0.4
+		local eqOn = false
+		for band, item in EQ_ITEM do
+			local db = math.clamp(DJXLive.eqDb(DJXLive.deck, band), -12, 10)
+			want["equalizer|" .. item] = db
+			if db ~= 0 then
+				eqOn = true
+			end
+		end
+		want["equalizer|enabled"] = eqOn
+		return want
+	end
+
+	local function flush()
+		local owner = DJXLive.owner()
+		if owner ~= wasOwner then
+			wasOwner = owner
+			sent = {}
+			muted = false
+			lastDeck = nil
+		end
+		if not owner or muted then
+			return
+		end
+		if DJXLive.deck ~= lastDeck then
+			lastDeck = DJXLive.deck
+			sent = {}
+		end
+		for key, value in wanted() do
+			if sent[key] ~= value then
+				sent[key] = value
+				local effectId, item = string.match(key, "^(%a+)|(%a+)$")
+				if item == "enabled" then
+					sendFx({ effectAction = "toggle", effectId = effectId, value = value })
+				else
+					sendFx({ effectAction = "set_value", effectId = effectId, itemId = item, value = value })
+				end
+			end
+		end
+	end
+
+	DJXLive.fxOff = function()
+		if muted or not DJXLive.owner() then
+			return
+		end
+		muted = true
+		for _, effectId in { "reverb", "echo", "equalizer" } do
+			sendFx({ effectAction = "toggle", effectId = effectId, value = false })
+		end
+	end
+
+	task.spawn(function()
+		while true do
+			task.wait(EFFECT_INTERVAL)
+			flush()
+		end
+	end)
+end
+
+-- D5 effect pads (2026-10-16). The kit has one matching command, /ungravity (admin-panel gated on the server), so
+-- Ungravity All Players is the only WORLD pad left. Camera Shake / Rotate / Darken Camera have no command here, and the
+-- SFX pads (Air Horn, Chord 1, Drum Hat, Spaceship) need a kit broadcast (phase 4): all five are hidden. The rows
+-- re-layout over the shown pads (UIListLayout skips hidden ones) and a row with none is hidden. Ungravity sends
+-- CommandLibraryExecute only while I am the DJ owner (section 3 ignores its clicks otherwise, via the DJXGate attribute).
+-- A refusal ("No permission.") shows as a toast.
+do
+	local WIRED = { ["Ungravity All Players"] = "/ungravity" }
+	local sg = root.DJ_SoundAndGlobalEffects
+	local rows = { sg.Top, sg.Bottom }
+	local buttons = {}
+	for _, row in rows do
+		for _, b in row:GetChildren() do
+			if b:IsA("TextButton") then
+				table.insert(buttons, { btn = b, row = row, cmd = WIRED[b.Text] })
+			end
+		end
+	end
+	for _, row in rows do
+		local shown = {}
+		for _, e in buttons do
+			if e.row == row then
+				e.btn.Visible = e.cmd ~= nil
+				if e.cmd then
+					table.insert(shown, e.btn)
+				end
+			end
+		end
+		for _, b in shown do
+			b.Size = UDim2.new(1 / #shown, 0, b.Size.Y.Scale, b.Size.Y.Offset)
+		end
+		row.Visible = #shown > 0
+	end
+
+	local pending = {}
+	task.spawn(function()
+		local resRE = roomRemotes and roomRemotes:WaitForChild("CommandLibraryExecuteResult", 30)
+		if resRE and resRE:IsA("RemoteEvent") then
+			resRE.OnClientEvent:Connect(function(resp)
+				if type(resp) ~= "table" or resp.requestId == nil then
+					return
+				end
+				if pending[resp.requestId] and resp.ok == false then
+					roomToast(tostring(resp.error or "Failed"))
+				end
+				pending[resp.requestId] = nil
+			end)
+		end
+	end)
+	for _, e in buttons do
+		if e.cmd then
+			e.btn.MouseButton1Click:Connect(function()
+				local cmdRE = roomRemotes and roomRemotes:FindFirstChild("CommandLibraryExecute")
+				if not DJXLive.owner() or not cmdRE or not cmdRE:IsA("RemoteEvent") then
+					return
+				end
+				local requestId = game:GetService("HttpService"):GenerateGUID(false)
+				pending[requestId] = true
+				cmdRE:FireServer({ requestId = requestId, commandText = e.cmd })
+			end)
+		end
+	end
+
+	-- the gate: a WORLD pad is inert (and has no cooldown) unless I am the DJ owner
+	task.spawn(function()
+		local last = nil
+		while true do
+			local owner = DJXLive.owner()
+			if owner ~= last then
+				last = owner
+				for _, e in buttons do
+					if e.cmd then
+						local gate = if owner then nil else true
+						if e.btn:GetAttribute("DJXGate") ~= gate then
+							e.btn:SetAttribute("DJXGate", gate)
+						end
+					end
+				end
+			end
+			task.wait(0.25)
+		end
+	end)
+end
+
+-- The kit has no play-now remote. The owner's path (payloads copied from MusicPlayerController):
+--   MusicTransport {action = "clear", requestId}  -> reply responseType "transport". Sent once per Go live (D8).
+--   MusicTransport {action = "remove", entryId}   -> drops one queued request ahead of the new track (D8).
+--   MusicRequestTrack {trackId, requestId}        -> plays at once when the room is idle, else queued at the end.
+--   MusicAdminSkip {requestId}                    -> advances to the queue front, which is the new track.
+-- D8: the first LIVE load after Go live clears the room. Later loads keep the room's queue, remove the requests
+-- that sit ahead of the new entry (set entries stay), then skip. The skip is sent only when the room was playing.
+local function roomPlay(t)
+	local tid = t.id
+	if type(tid) ~= "string" or string.sub(tid, 1, 3) == "id:" then
+		roomToast("Library tracks only")
+		return
+	end
+	local requestRE = roomRemotes and roomRemotes:FindFirstChild("MusicRequestTrack")
+	local skipRE = roomRemotes and roomRemotes:FindFirstChild("MusicAdminSkip")
+	local responseRE = roomRemotes and roomRemotes:FindFirstChild("MusicResponse")
+	if not (roomRemotes and roomRemotes:FindFirstChild("MusicTransport") and requestRE and skipRE and responseRE) then
+		roomToast("Failed")
+		return
+	end
+	local HttpService = game:GetService("HttpService")
+	local now = store:get().currentTrack
+	if type(now) == "table" and now.id == tid then
+		return
+	end
+	local wasPlaying = store:get().isPlaying == true
+	if DJXLive.cleared ~= true then
+		-- first LIVE load after Go live: clear the room's own requests (waiting set cards stay)
+		local clearId = HttpService:GenerateGUID(false)
+		local reply = nil
+		local conn = responseRE.OnClientEvent:Connect(function(payload)
+			if type(payload) == "table" and payload.type == "music_response" and payload.responseType == "transport" and payload.requestId == clearId and reply == nil then
+				reply = payload
+			end
+		end)
+		DJXLive.transport({ action = "clear", requestId = clearId })
+		local deadline = os.clock() + 6
+		while reply == nil and os.clock() < deadline do
+			task.wait(0.05)
+		end
+		conn:Disconnect()
+		if reply == nil then
+			roomToast("Failed")
+			return
+		end
+		if reply.ok == true or reply.error == "queue_empty" then
+			DJXLive.cleared = true
+		end
+		requestRE:FireServer({ trackId = tid, requestId = HttpService:GenerateGUID(false) })
+		if wasPlaying then
+			task.wait(0.4)
+			skipRE:FireServer({ requestId = HttpService:GenerateGUID(false) })
+		end
+	elseif not wasPlaying then
+		-- later LIVE load, room idle: the request plays at once, nothing is ahead of it
+		requestRE:FireServer({ trackId = tid, requestId = HttpService:GenerateGUID(false) })
+	else
+		-- later LIVE load (D8): no clear. Request, wait for my new entry, remove the requests ahead of it, skip
+		local before = {}
+		for _, e in store:get().queue or {} do
+			before[e.queueEntryId or ""] = true
+		end
+		requestRE:FireServer({ trackId = tid, requestId = HttpService:GenerateGUID(false) })
+		local queue, mine = {}, nil
+		local deadline = os.clock() + 5
+		repeat
+			task.wait(0.1)
+			queue = store:get().queue or {}
+			for i, e in queue do
+				if not before[e.queueEntryId or ""] and e.id == tid and e.requesterUserId == player.UserId then
+					mine = i
+					break
+				end
+			end
+		until mine ~= nil or os.clock() > deadline
+		if mine == nil then
+			roomToast("Failed")
+			return
+		end
+		for i = 1, mine - 1 do
+			local e = queue[i]
+			if e.fromSet ~= true then
+				DJXLive.transport({ action = "remove", entryId = e.queueEntryId })
+			end
+		end
+		task.wait(0.4)
+		skipRE:FireServer({ requestId = HttpService:GenerateGUID(false) })
+	end
+	local deadline2 = os.clock() + 5
+	repeat
+		task.wait(0.1)
+		now = store:get().currentTrack
+	until (type(now) == "table" and now.id == tid) or os.clock() > deadline2
+	if not (type(now) == "table" and now.id == tid) then
+		roomToast("Room did not change")
+	end
+end
+-- D8: the flag resets when the DJ mode goes off or the owner changes (End set, another DJ, or ownership lost).
+for _, key in { "isDjMode", "djOwnerUserId" } do
+	store:subscribe(key, function()
+		if not DJXLive.owner() then
+			DJXLive.cleared = false
+		end
+	end)
+end
+local function loadDeck(letter, t)
+	local live = store:get()
+	if letter == DJXLive.deck and live.isDjMode == true and live.djOwnerUserId == player.UserId then
+		task.spawn(roomPlay, t)
+	end
 			local old = decks[letter]
 			if old and old.sound then
 				old.sound:Destroy()
@@ -1810,6 +2486,12 @@ do
 					btn.MouseButton1Click:Connect(function()
 						local cur = decks[letter]
 						cur.playing = not cur.playing
+							-- 3.3: the LIVE deck of the DJ owner drives the room, so play / pause go to the room (store timing decides)
+							if DJXLive.deck == letter and DJXLive.owner() then
+								local timing = store:get().playbackTiming
+								local paused = type(timing) == "table" and timing.isPaused == true
+								task.spawn(DJXLive.transport, { action = if paused then "resume" else "pause" })
+							end
 						-- the panel controller flips its own copy of the colour on the same click and starts
 						-- from "stopped"; paint ours last so button and sound agree
 						task.defer(function()
@@ -2017,6 +2699,9 @@ do
 					end
 					local fader = math.clamp(1 - d.ctl.fader.Position.Y.Scale, 0, 1)
 					local vol = fader * gains[letter] * DJXStrip.master -- MASTER (bottom strip) scales both decks
+						if djRoomMuted(letter) then
+							vol = 0 -- 3.2: the room plays this track through the kit; the local copy only keeps time
+						end
 					if snd.Volume ~= vol then
 						snd.Volume = vol
 					end
@@ -2045,6 +2730,11 @@ do
 					d.clipTotal = total
 					d.dur = math.max(total / rate, 1)
 					d.pos = math.min((d.offset + snd.TimePosition) / rate, d.dur)
+					-- 3.3: the LIVE deck of the DJ owner shows the room's position (its local copy is muted)
+					local roomTrack = store:get().currentTrack
+					if DJXLive.deck == letter and type(roomTrack) == "table" and roomTrack.id == d.t.id and DJXLive.owner() then
+						d.pos = math.min(DJXLive.elapsed(), d.dur)
+					end
 				end
 				paint(letter)
 				updateWave(letter, d)
@@ -2066,6 +2756,294 @@ do
 			end
 		end)
 		loadEvt.Parent = gui
+
+		-- 1.7 Add from ID (2026-10-16): the dock under the library. Digits only; one probe at a time.
+		-- Local only: a hidden Sound probes the asset (IsLoaded + TimeLength, 8 s timeout), then the
+		-- id plays on deck A. Not MusicResolveRequestAsset: that queues the track for the whole room.
+		do
+			local dock = root.DJ_Library:FindFirstChild("FlyingDock")
+			local idBox = dock and dock:FindFirstChild("IDInput")
+			local idBtn = dock and dock:FindFirstChild("AddfromIDButton")
+			if idBox and idBtn and idBox:IsA("TextBox") then
+				local idHome = idBox.PlaceholderText
+				local busy = false
+				local statusSeq = 0
+				local function showStatus(msg)
+					statusSeq += 1
+					local mine = statusSeq
+					idBox.PlaceholderText = msg
+					task.delay(2, function()
+						if statusSeq == mine then
+							idBox.PlaceholderText = idHome
+						end
+					end)
+				end
+				local function submitId()
+					if busy then
+						return
+					end
+					local digits = string.gsub(idBox.Text, "%D", "")
+					if digits == "" then
+						idBox.Text = ""
+						showStatus("Invalid ID")
+						return
+					end
+					busy = true
+					statusSeq += 1
+					idBox.PlaceholderText = "Checking..."
+					task.spawn(function()
+						local probe = Instance.new("Sound")
+						probe.Name = "DJXIdProbe"
+						probe.Volume = 0
+						probe.SoundId = "rbxassetid://" .. digits
+						probe.Parent = gui
+						local t0 = os.clock()
+						while not probe.IsLoaded and os.clock() - t0 < 8 do
+							task.wait(0.1)
+						end
+						local len = probe.TimeLength
+						probe:Destroy()
+						busy = false
+						if len > 0 then
+							idBox.PlaceholderText = idHome
+							idBox.Text = ""
+							loadDeck("A", {
+								id = "id:" .. digits,
+								name = "ID " .. digits,
+								creator = "Added from ID",
+								parts = { digits },
+								partDurations = { len },
+								totalDuration = len,
+								playbackSpeed = 1,
+							})
+						else
+							showStatus("Not found")
+						end
+					end)
+				end
+				idBtn.Activated:Connect(submitId)
+				idBox.FocusLost:Connect(function(enterPressed: boolean)
+					if enterPressed then
+						submitId()
+					end
+				end)
+			end
+		end
+
+		-- 1.2 real Queue tab (2026-10-16): the kit's session queue (MusicPlayerStore "queue" = user
+		-- requests, "Next up") as library-style rows; the tab count is its length; "Load B" calls loadDeck("B")
+		do
+			local qScroll = root.DJ_Library["2-SelectSong"].TrackList:FindFirstChild("DJX_Queue")
+			local qTab = nil
+			local tabsFrame = overlay:FindFirstChild("DJX_Tabs")
+			if tabsFrame then
+				for _, b in tabsFrame:GetChildren() do
+					if b:IsA("TextButton") and string.sub(b.Text, 1, 5) == "Queue" then
+						qTab = b
+					end
+				end
+			end
+			local function fmtLen(sec)
+				sec = math.floor(sec or 0)
+				return string.format("%d:%02d", sec // 60, sec % 60)
+			end
+			local function renderQueue()
+				local q = store:get().queue or {}
+				local all = store:get().allTracks or {}
+				if qScroll then
+					for _, c in qScroll:GetChildren() do
+						if c.Name == "RealQueueRow" then
+							c:Destroy()
+						end
+					end
+					for i, entry in q do
+						local t = all[entry.id] or entry
+						local row = rowsScroll.TrackWrapperTemplate:Clone()
+						row.Name = "RealQueueRow"
+						row.LayoutOrder = i
+						row.Visible = true
+						local info = row.TrackInformationWrapper.TrackInformation
+						local leftD, rightD
+						for _, d in info:GetChildren() do
+							if d.Name == "TrackDetails" then
+								if d:FindFirstChild("TrackTitle") then
+									leftD = d
+								else
+									rightD = d
+								end
+							end
+						end
+						row.RelatedPlaylistCover.PlaylistName.Text = "#" .. i
+						leftD.TrackTitle.Text = t.name or ""
+						leftD.TrackCreator.Text = t.creator or ""
+						rightD.TrackBPM.Visible = false
+						rightD.TrackLength.Visible = false
+						local bar = new("Frame", { AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.new(0, 0, 0, 30), AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0), BackgroundTransparency = 1, ZIndex = 4 }, row)
+						new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, bar)
+						new("TextLabel", { Text = fmtLen(t.totalDuration), FontFace = B, TextSize = 13, TextColor3 = C.dim, BackgroundTransparency = 1, AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.new(0, 0, 1, 0), LayoutOrder = 0 }, bar)
+						local loadBtn = noTint(new("TextButton", { Text = "Load B", FontFace = B, TextSize = 13, TextColor3 = W, Size = UDim2.fromOffset(72, 30), BackgroundColor3 = C.card2, LayoutOrder = 1, ZIndex = 5 }, bar))
+						new("UICorner", { CornerRadius = UDim.new(0, 8) }, loadBtn)
+						loadBtn.MouseButton1Click:Connect(function()
+							loadDeck("B", (store:get().allTracks or {})[t.id] or t)
+						end)
+						row.Parent = qScroll
+					end
+				end
+				if qTab then
+					local n = 0
+					for _ in q do
+						n += 1
+					end
+					qTab.RichText = true
+					qTab.Text = 'Queue  <font color="#767676">' .. n .. "</font>"
+				end
+			end
+			store:subscribe("queue", renderQueue)
+			renderQueue()
+		end
+
+		do
+		-- 3.4 DROP (2026-10-16). The header DROP (owner only) and the crossfader (past 90 % toward CUE; re-armed
+		-- below 60 %) send the CUE deck to the room: roomPlay(CUE track), seek the room to where CUE was (plus the
+		-- time since the DROP began), then CUE becomes LIVE and the old LIVE deck is paused at its position.
+		-- djRoomMuted mutes the new LIVE deck's local Sound and unmutes the old one. Empty CUE deck: its drop
+		-- outline pulses (1.4) and nothing else changes.
+		local dropBtn = nil
+		if roomHeader then
+			for _, g in roomHeader:GetDescendants() do
+				if g:IsA("TextButton") and g.Text == "DROP" then
+					dropBtn = g
+					break
+				end
+			end
+		end
+		local dropping = false
+		local armed = false
+		local function doDrop()
+			if dropping or not DJXLive.owner() then
+				return
+			end
+			local oldLive = DJXLive.deck
+			local cueLetter = if oldLive == "A" then "B" else "A"
+			local cueD = decks[cueLetter]
+			if not cueD then
+				if DJXLive.pulse then
+					DJXLive.pulse(cueLetter)
+				end
+				return
+			end
+			dropping = true
+			local cueTrack = cueD.t
+			local notedPos = cueD.pos or 0
+			local notedAt = os.clock()
+			task.spawn(function()
+				roomPlay(cueTrack)
+				local now = store:get().currentTrack
+				if type(now) == "table" and now.id == cueTrack.id then
+					DJXLive.seekTo(notedPos + (os.clock() - notedAt))
+					DJXLive.deck = cueLetter
+					local old = decks[oldLive]
+					if old then
+						old.playing = false
+						if old.ctl.btn and old.ctl.btnBase then
+							old.ctl.btn.BackgroundColor3 = old.ctl.btnBase
+						end
+					end
+					if DJXLive.refresh then
+						DJXLive.refresh()
+					end
+				end
+				dropping = false
+			end)
+		end
+		if dropBtn then
+			local function dropRender()
+				dropBtn.Visible = DJXLive.owner()
+			end
+			dropBtn.MouseButton1Click:Connect(doDrop)
+			store:subscribe("isDjMode", dropRender)
+			store:subscribe("djOwnerUserId", dropRender)
+			dropRender()
+		end
+		RunService.Heartbeat:Connect(function()
+			local v = crossValue()
+			-- how far the handle is toward the CUE side: 0 = on the LIVE side, 1 = on CUE
+			local toCue = if DJXLive.deck == "A" then v else 1 - v
+			if toCue < 0.6 then
+				armed = true
+			end
+			if not DJXLive.owner() then
+				return
+			end
+			if armed and toCue >= 0.9 then
+				armed = false
+				doDrop()
+			end
+		end)
+	end
+
+		-- 1.4 play before load (2026-10-16): a deck's play button with nothing loaded pulses that deck's
+		-- blue drop outline once (in, then out) instead of doing nothing; with a track loaded the button
+		-- is the normal toggle that loadDeck wires
+		do
+			local pulseSeq = {}
+				local pulse
+				DJXLive.pulse = function(letter)
+					return pulse(letter)
+				end
+			pulse = function(letter)
+				pulseSeq[letter] = (pulseSeq[letter] or 0) + 1
+				local seq = pulseSeq[letter]
+				for _, f in zoneOf(letter) do
+					local s = f:FindFirstChild("DropOutline")
+					local wasOn = s ~= nil and s.Enabled -- resting state: a new outline rests off
+					if not s then
+						s = Instance.new("UIStroke")
+						s.Name = "DropOutline"
+						s.Color = DROP_BLUE
+						s.Thickness = 2
+						s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+						s.Parent = f
+					end
+					s.Color = DROP_BLUE
+					s.Transparency = 1
+					s.Enabled = true
+					task.spawn(function()
+						local tIn = TweenService:Create(s, TweenInfo.new(0.18, Enum.EasingStyle.Quad), { Transparency = 0 })
+						tIn:Play()
+						tIn.Completed:Wait()
+						task.wait(0.12)
+						if pulseSeq[letter] ~= seq then
+							return
+						end
+						local tOut = TweenService:Create(s, TweenInfo.new(0.35, Enum.EasingStyle.Quad), { Transparency = 1 })
+						tOut:Play()
+						tOut.Completed:Wait()
+						if pulseSeq[letter] == seq and s.Parent then
+							s.Enabled = wasOn
+							s.Transparency = 0
+						end
+					end)
+				end
+			end
+			for _, letter in LETTERS do
+				local btn = deckControls(letter).btn
+				if btn then
+					local base = btn.BackgroundColor3
+					btn.MouseButton1Click:Connect(function()
+						if decks[letter] then
+							return -- loaded: the toggle wired by loadDeck handles the click
+						end
+						pulse(letter)
+						task.defer(function()
+							if not decks[letter] then
+								btn.BackgroundColor3 = base -- undo the panel controller's own colour flip
+							end
+						end)
+					end)
+				end
+			end
+		end
 
 		-- drag
 		local pending, ghost, ghostHint, hover = nil, nil, nil, nil
@@ -2273,7 +3251,7 @@ do
 	local header = root:FindFirstChild("DJX_Header")
 	if header then
 		for _, d in header:GetDescendants() do
-			local isDropBtn = d:IsA("TextButton") and (d.Text == "DROP" or d.Text == "TAKE OVER")
+			local isDropBtn = false -- 3.4: the DROP button is shown and managed by the 3.4 block (owner only)
 			local isDivider = d:IsA("Frame") and d.Size.X.Offset == 1 and d.Size.Y.Offset == 20
 			if isDropBtn or isDivider then
 				d.Visible = false
@@ -2509,7 +3487,7 @@ do
 					bc.CornerRadius = UDim.new(0, 3)
 					if string.sub(b.Text, 1, 5) == "Queue" then
 						b.RichText = true
-						b.Text = 'Queue  <font color="#767676">3</font>'
+						-- the count is written by section 13 from the real queue
 					end
 					-- select() paints inactive tabs C.dim; keep them at the spec grey (the active one stays white)
 					if b.TextColor3 ~= W then

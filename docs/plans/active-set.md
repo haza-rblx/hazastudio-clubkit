@@ -14,10 +14,36 @@ reply**, so the client times out. 800 ids ≈ 10–31 KB; only ~23–70 ids fit.
 - An **Active set** is a server-side *source*, not queue content. The client sends a **source reference**
   (never track ids); the server resolves it to an ordered list (cap `Config.Music.SET_MAX_TRACKS = 1500`),
   optionally shuffled, plus a cursor.
-- **One active set per server.** Starting a set replaces the current one.
-- **Interleave (option C, `Config.Music.SET_INTERLEAVE = 1`):** after each set track, at most 1 queued
-  request plays before the next set track. With no requests waiting the set plays back to back. With no
-  set, the queue behaves exactly as today (auto buffer only when neither exists).
+- ~~One active set per server; starting a set replaces the current one.~~ **Superseded 2026-10-16 by
+  "Queued sets" below.**
+- ~~Interleave (`SET_INTERLEAVE = 1`).~~ **Retired 2026-10-16:** a set plays to the end once it is active.
+  With no set, the queue behaves exactly as before (auto buffer only when neither a set nor requests exist).
+
+## Queued sets (owner-approved 2026-10-16, PARKLAB playtest)
+
+Owner: "set A, then a request, then set B" must be possible; a second "Add set" must not overwrite the
+running set's card.
+
+- **A set is a queue item.** `set_start` appends a **set card entry** at the end of the queue, after the
+  requests already waiting (so it lands below them). The queue can mix freely: set, song, set, set.
+- **Activation:** when a set card reaches the front of the queue it becomes the **active set** (the big
+  Set card). If nothing is playing, `set_start` activates it at once.
+- **Plays to the end:** while a set is active its next track is always at the front of the queue
+  (insert index 1), so everything behind it waits until the set finishes. Requests added meanwhile go to
+  the end of the queue as usual. `SET_INTERLEAVE` is removed from engine `Config.luau` (it was never in
+  buyer config, so nothing to retire there).
+- **Limit `Config.Music.SET_QUEUE_MAX = 3`**, counting the active set plus waiting set cards. Over the
+  limit `set_start` replies `set_queue_full`.
+- **Waiting set card actions: remove only** (existing transport `remove` with its `entryId`; control
+  holders, or the starter as owner). Shuffle / View full set / Remove set appear once it is active.
+- **Waiting set look:** a waiting set card is drawn as only the banner of the Set card ("UP NEXT SET",
+  title, starter, track count, remove), not as a track row or a Library playlist row. The banner colour
+  is the set playlist's cover colour; with no playlist (Liked Tracks / New Drops) or no colour it is the
+  player's accent. The active set keeps the full Set card.
+- **Clear Queue** removes requests **and** waiting set cards; the active set keeps playing.
+- **No repeat on activation:** when a set activates, leading items equal to the track that just played
+  are skipped (the set started while its first song was already on air played it twice).
+- `set_stop` / `set_reshuffle` / `set_page` act on the active set only (unchanged).
 - Who: **start / stop / reshuffle = `musicControl` holders** (same gate as today's `request_many`).
   *default:* **viewing the remaining set (pages) = everyone.**
 - *default:* the set **keeps playing when its starter leaves** (it is the venue's set, not the player's).
@@ -59,9 +85,14 @@ activeSet = nil | {
 Set tracks that the server materialises into the queue for playback carry `fromSet = true` on the queue
 entry; the client does **not** draw those as normal queue rows (the Set card represents them).
 
+Waiting set cards appear in `queue` at their position as
+`{ setCard = true, queueEntryId, setId, name = title, creator = "Set · N tracks", total, sourceKind,
+requesterUserId = starterUserId, requesterDisplayName = starterName, playlistId = sourceId? }` and are
+drawn as a normal queue row (cover from the playlist, "Queued by : starter", remove button).
+
 ### Config keys (engine `Config.luau`, Music section — not buyer config)
 
-`SET_MAX_TRACKS = 1500`, `SET_INTERLEAVE = 1`, `SET_PAGE_SIZE = 50`, `SET_PAGE_RATE = { count = 10, window = 10 }`.
+`SET_MAX_TRACKS = 1500`, `SET_QUEUE_MAX = 3`, `SET_PAGE_SIZE = 50`, `SET_PAGE_RATE = { count = 10, window = 10 }`.
 
 ## Client
 

@@ -2,6 +2,12 @@
 
 This repo's actual agent workflow lives in [`AGENTS.md`](AGENTS.md) and [`.mimocode/skills/`](.mimocode/skills/) — written for Cursor/Mimo, but the discipline is the user's, not tool-specific. Follow it here too, always. This file condenses the load-bearing parts so they survive context compaction without a re-read; treat `AGENTS.md` as the source of truth if anything here drifts.
 
+## Agent roles (load-bearing — from `AGENTS.md`)
+
+- **Opus = senior Roblox advisor/supervisor.** It plans, delegates, and reviews. No heavy work inline (deep audits, multi-file sweeps, bulk edits, long log reading, implementation) unless the user explicitly says so.
+- **Heavy work goes to subagents with `model: "haiku"` and `effort: "medium"` only.** Write a tight spec, then verify the result before reporting it.
+- Small checks inline are fine. Keep replies concise, because the user's token budget is small.
+
 ## Product
 
 Hazastudio Club Kit (Basic Club Kit) — Roblox club/venue kit sold to multiple buyers (each runs their own Studio place: KASTA, RUST, vicenorth, Atlantis, PARKLAB, …). Luau via Rojo. Active version in [`VERSION`](VERSION).

@@ -530,7 +530,7 @@ local function createMusicService(deps: {
 			local allowed, _ = requestTrackLimiter:check(player.UserId)
 			if not allowed then return false, "rate_limited", nil end
 		end
-		return getOrCreateSession():requestTrack(player, trackId)
+		return getOrCreateSession():requestTrack(player, trackId, service:isControlAllowed(player))
 	end
 
 	function service:voteSkip(player: Player, voteType: string?): (boolean, string)

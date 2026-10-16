@@ -314,7 +314,7 @@ function LeadDanceDropdown.new(deps: Deps)
 		text.TextXAlignment = Enum.TextXAlignment.Center
 	end
 
-	local function rebuildRows()
+	local function rebuildRowsUnsafe()
 		for _, conn in ipairs(rowConns) do
 			conn:Disconnect()
 		end
@@ -333,6 +333,27 @@ function LeadDanceDropdown.new(deps: Deps)
 		end
 	end
 
+	-- Defensive: a failed or partial rebuild resets the signature so the next setEntries/open
+	-- rebuilds again instead of leaving stale rows (chip count vs. empty list report).
+	local function rebuildRows()
+		local ok, err = pcall(rebuildRowsUnsafe)
+		if not ok then
+			signature = nil
+			warn(string.format("[LeadDanceDropdown] rebuildRows failed (entries=%d): %s", #entries, tostring(err)))
+			return
+		end
+		local rows = 0
+		for _, child in ipairs(scroll:GetChildren()) do
+			if string.sub(child.Name, 1, 4) == "Row_" then
+				rows += 1
+			end
+		end
+		if rows ~= #entries then
+			signature = nil
+			warn(string.format("[LeadDanceDropdown] row mismatch: rows=%d entries=%d", rows, #entries))
+		end
+	end
+
 	close = function()
 		if not isOpen then
 			return
@@ -344,7 +365,8 @@ function LeadDanceDropdown.new(deps: Deps)
 		end
 	end
 
-	api.setEntries = function(input: { Entry })
+	-- Called as dropdown:setEntries(entries) (colon), so the first param is self.
+	api.setEntries = function(_self: any, input: { Entry })
 		local sorted = table.clone(input)
 		table.sort(sorted, function(a, b)
 			if a.following ~= b.following then
@@ -376,6 +398,8 @@ function LeadDanceDropdown.new(deps: Deps)
 		end
 		isOpen = true
 		gui.Enabled = true
+		-- Always render the latest entries on open, regardless of the cached signature.
+		rebuildRows()
 		layout()
 	end
 
