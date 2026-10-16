@@ -383,6 +383,7 @@ local function createMusicService(deps: {
 		if next(removedTrackIds) ~= nil then
 			session:pruneDeletedTracks(removedTrackIds)
 		end
+		session:prunePrivateSystemTracks()
 		session:onLibraryReloaded()
 	end
 

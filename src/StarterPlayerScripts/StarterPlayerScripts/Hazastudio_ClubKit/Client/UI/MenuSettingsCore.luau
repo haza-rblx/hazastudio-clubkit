@@ -1437,9 +1437,13 @@ local function createSliderRow(
 	-- waits until it travels past the slop, then either takes the slider (horizontal) or leaves it
 	-- to the scroll (vertical). A touch that never moves is a tap: it sets the value on release.
 	local TouchIntent = require(script.Parent.Parent.Utils.TouchIntent)
+	local TouchScrollAssist = require(script.Parent.Parent.Utils.TouchScrollAssist)
 	local pendingTouch: InputObject? = nil
 	local pendingStart = Vector2.zero
 	local pendingStartedAt = 0
+	-- Once the list takes the finger, this script stops hearing it move, so the release looks like
+	-- a still finger: a scroll that started on the bar must not count as a tap.
+	local pendingCanvasStart = Vector2.zero
 	local function onBarPress(input: InputObject)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 			beginDrag(input.Position.X)
@@ -1447,6 +1451,7 @@ local function createSliderRow(
 			pendingTouch = input
 			pendingStart = Vector2.new(input.Position.X, input.Position.Y)
 			pendingStartedAt = os.clock()
+			pendingCanvasStart = if scrollingFrame then scrollingFrame.CanvasPosition else Vector2.zero
 		end
 	end
 
@@ -1476,7 +1481,9 @@ local function createSliderRow(
 			if pendingTouch == input then
 				pendingTouch = nil
 				local delta = Vector2.new(input.Position.X, input.Position.Y) - pendingStart
-				if TouchIntent.isTap(delta, os.clock() - pendingStartedAt) then
+				local scrolled = scrollingFrame ~= nil
+					and (scrollingFrame.CanvasPosition - pendingCanvasStart).Magnitude > 1
+				if not scrolled and TouchIntent.isTap(delta, os.clock() - pendingStartedAt) then
 					beginDrag(pendingStart.X)
 					endDrag()
 				end
@@ -1498,6 +1505,9 @@ local function createSliderRow(
 			pendingTouch = nil
 			if verdict == "slider" then
 				beginDrag(input.Position.X)
+			elseif scrollingFrame then
+				-- Owner test: the list does not take a drag that starts on the bar; scroll it by hand.
+				TouchScrollAssist.follow(input, scrollingFrame, Vector3.new(pendingStart.X, pendingStart.Y, 0))
 			end
 			return
 		end

@@ -500,19 +500,45 @@ local function createSessionCommandService(deps: {
 		settlePosition(true)
 		settleSync(true)
 		local finalDistance: number? = nil
-		-- Checks at +2s, +5s and +10s after the first restore.
-		for _, waitSec in ipairs({ 2, 3, 5 }) do
-			task.wait(waitSec)
-			if not player.Parent then
-				return
+		local function recheck(): boolean
+			-- Checks at +2s, +5s and +10s after a restore.
+			for _, waitSec in ipairs({ 2, 3, 5 }) do
+				task.wait(waitSec)
+				if not player.Parent then
+					return false
+				end
+				finalDistance = settlePosition(false)
+				settleSync(false)
 			end
-			finalDistance = settlePosition(false)
-			settleSync(false)
+			return true
+		end
+		if not recheck() then
+			return
+		end
+		-- No ready signal in time (slow phone, or the app in the background after a long AFK): the
+		-- client's own loading still runs later and drops the avatar back at spawn. Restore again
+		-- once it does report ready.
+		local lateReady = false
+		if not ready then
+			local lateTimeout = tonumber(Config.Session.RESTORE_LATE_READY_TIMEOUT) or 0
+			local deadline = os.clock() + lateTimeout
+			while not clientGameplayReady[userId] and os.clock() < deadline and player.Parent do
+				task.wait(0.5)
+			end
+			if clientGameplayReady[userId] and player.Parent then
+				lateReady = true
+				settlePosition(true)
+				settleSync(false)
+				if not recheck() then
+					return
+				end
+			end
 		end
 		log:info("rejoin_arrival", {
 			player = player.Name,
 			userId = userId,
 			clientReady = ready,
+			lateReady = lateReady,
 			finalDistance = finalDistance,
 			positionFixes = positionFixes,
 			wantsDance = wantsDance,

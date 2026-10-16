@@ -226,6 +226,16 @@ local function createMusicSession(deps: {
 		return type(track.parts) == "table" and #track.parts >= 1
 	end
 
+	-- A track whose playlist is private only plays when someone queues it; the idle DJ skips it.
+	local function isTrackInPrivatePlaylist(track: TrackInfo): boolean
+		local playlistId = (track :: any).playlistId
+		if type(playlistId) ~= "string" or playlistId == "" then
+			return false
+		end
+		local playlist = repo:getPlaylist(playlistId)
+		return type(playlist) == "table" and (playlist :: any).visibility == "private"
+	end
+
 	local function collectExcludedTrackIds(previousTrackId: string?): { [string]: true }
 		local excludedLookup = {} :: { [string]: true }
 		if previousTrackId and previousTrackId ~= "" then
@@ -254,7 +264,7 @@ local function createMusicSession(deps: {
 		local emergencyCandidates: { string } = {}
 		local excludedLookup = collectExcludedTrackIds(previousTrackId)
 		for trackId, track in pairs(result.value) do
-			if isTrackPlayable(track) then
+			if isTrackPlayable(track) and not isTrackInPrivatePlaylist(track) then
 				if not excludedLookup[trackId] and trackId ~= lastSystemTrackId then
 					table.insert(preferredCandidates, trackId)
 				elseif not excludedLookup[trackId] then
@@ -990,6 +1000,28 @@ local function createMusicSession(deps: {
 			broadcastQueueUpdated()
 			syncStateToAllMembers()
 		end
+	end
+
+	--- A playlist turned private keeps its track ids, so pruneDeletedTracks never sees it: drop the
+	--- idle DJ's picks from it out of the auto buffer. Player requests in the queue stay.
+	function session:prunePrivateSystemTracks()
+		local newBuffer: { QueueEntry } = {}
+		local prunedCount = 0
+		for _, entry in ipairs(autoBuffer) do
+			local track = repo:getTrack(entry.trackId)
+			if track and isTrackInPrivatePlaylist(track) then
+				prunedCount += 1
+			else
+				table.insert(newBuffer, entry)
+			end
+		end
+		if prunedCount == 0 then
+			return
+		end
+		autoBuffer = newBuffer
+		log:info("Pruned private-playlist tracks from auto buffer", { prunedCount = prunedCount })
+		broadcastQueueUpdated()
+		syncStateToAllMembers()
 	end
 
 	--- Poll/cross-server library reload: refresh metadata for members only.

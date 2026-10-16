@@ -2174,6 +2174,8 @@ Config.Session = {
 	RESTORE_Y_OFFSET = 0,
 	-- Rejoin restore waits this many seconds for ClientGameplayReady, then restores anyway.
 	RESTORE_CLIENT_READY_TIMEOUT = 120,
+	-- After that timeout, keep watching this long for a late ready and restore again (0 = off).
+	RESTORE_LATE_READY_TIMEOUT = 600,
 	TELEPORT_Y_OFFSET = 3,
 	TELEPORT_FORWARD_OFFSET = 4,
 	-- Max seconds a /re in-flight lock may stick if apply/settle never finishes.
