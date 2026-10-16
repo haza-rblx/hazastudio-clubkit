@@ -11,6 +11,21 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+### Added (music: active set on the server — 2026-10-16)
+- **Active set:** "Add set" and "Shuffle" send a source (playlist, Liked Tracks or New Drops), not every track id, so a large playlist (800+ tracks) no longer fails. The server resolves it in library order, caps it at `SET_MAX_TRACKS` (1500) and optionally shuffles it. One set per server; starting a set replaces the current one.
+- **Interleave:** the next set track waits in the queue, after at most `SET_INTERLEAVE` (1) queued request. With no requests waiting the set plays back to back. Requests keep the per-user limit; set tracks do not count against it.
+- **Set actions** on the music transport: `set_start`, `set_stop`, `set_reshuffle` (control holders), `set_page` (everyone, `SET_PAGE_SIZE` per page, own rate limit `SET_PAGE_RATE`).
+- Oversized music transport payloads now get a `payload_too_large` reply instead of being dropped silently.
+- **Set card (client):** while a set plays, the queue shows one card at the top (accent banner, progress, next three set tracks, shuffle and remove for control holders). Set tracks are not drawn as queue rows.
+- **Full set sheet (client):** "View full set" opens the set's remaining tracks in a virtual list, paged 50 at a time with a debounced search. The music panel scales behind it. Back, Reshuffle and Remove set carry the kit's back, shuffle and trash icons.
+- The "someone queued a song" island ignores set tracks (`fromSet`), so a skip during a set no longer announces the set's next song as a request.
+
+### Changed (music UI: smoother scrolling, queue virtualized — 2026-10-16)
+- **Wheel glide:** the Library track list, the playlist list and the Now Playing queue use `SmoothScrollHelper` for mouse-wheel scrolling (touch and scrollbar unchanged).
+- **Queue virtualization:** the Now Playing queue runs on `ListPool`, so only rows near the viewport exist. When the head is removed, rows move with their entry (no rebind, no re-fade). A fade-in plays only for entries new to the queue.
+- **Virtual list row reuse:** `ListPool` moves a row that already holds an item's key instead of rebinding it. Redraws now run in the same frame as a scroll. Index math uses the measured on-screen row height, so rows that render scaled no longer drift.
+- **Track list clips its descendants**, and `VIRTUAL_TRACK_ROW_BUFFER` drops from 6 to 4 to cut overdraw.
+
 ### Fixed (music: revoked / private / deleted audio is auto-skipped by the server — 2026-10-16)
 - **A track whose audio Roblox revoked (experience lost access), made private, deleted or that is not audio no longer leaves a long silence.** The server never got a verdict for it, so a track with no stored duration ran out the `AUTO_ADVANCE_UNKNOWN_DURATION_SECONDS` (180 s) + load-grace timer before moving on.
 - **New `Server/Services/MusicAssetProbe`:** the server preloads each part's audio itself, using a `Sound` parented under `ServerStorage.__MusicAssetProbe` (never replicated). Only `AssetFetchStatus.Failure` skips. `TimedOut` is retried (3 s, 8 s), then counts as "Unknown" and never skips, so a slow network can't skip a good track. Players' clients play no part in the verdict. Verdicts are cached for the life of the server; probes are de-duplicated and capped at 3 at once.

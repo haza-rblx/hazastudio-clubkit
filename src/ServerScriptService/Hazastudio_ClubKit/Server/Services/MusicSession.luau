@@ -10,12 +10,14 @@ local MusicDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.M
 local MusicDurationPolicy = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicDurationPolicy)
 local MusicTransportPolicy = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicTransportPolicy)
 local MusicPlayOncePolicy = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicPlayOncePolicy)
+local MusicActiveSet = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicActiveSet)
 local NetworkPerfCounters = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.NetworkPerfCounters)
 local MusicAssetValidator = require(script.Parent.MusicAssetValidator)
 local MusicAssetProbe = require(script.Parent.MusicAssetProbe)
 
 type TrackInfo = MusicDomain.TrackInfo
-type QueueEntry = MusicDomain.QueueEntry
+-- fromSet: the queue entry is the active set's next track (not a request, not counted against the cap).
+type QueueEntry = MusicDomain.QueueEntry & { fromSet: boolean? }
 type PlaybackTiming = MusicDomain.PlaybackTiming
 
 local function createMusicSession(deps: {
@@ -48,6 +50,7 @@ local function createMusicSession(deps: {
 	local finishQuorumRatio = math.clamp(tonumber(config.PLAYBACK_FINISH_QUORUM_RATIO) or 0.5, 0.25, 1)
 	local globalPlaybackSpeed = math.max(0.05, tonumber(config.PLAYBACK_SPEED) or 1)
 	local randomGenerator = Random.new()
+	local setInterleave = math.max(0, math.floor(tonumber(config.SET_INTERLEAVE) or 1))
 
 	local state = {
 		currentTrackId = nil :: string?,
@@ -89,6 +92,9 @@ local function createMusicSession(deps: {
 	local skipHistoryOnce = false
 	-- Play-once tracks (3.0): never in the library, kept only while an entry still points at them.
 	local playOnceTracks: { [string]: TrackInfo } = {}
+	-- Active set (docs/plans/active-set.md): one set per server. Its next track sits in state.queue as
+	-- an entry with fromSet = true; the cursor (activeSet.played) moves when that entry starts playing.
+	local activeSet: MusicActiveSet.ActiveSet? = nil
 
 	local function newEntryId(): string
 		return HttpService:GenerateGUID(false)
@@ -155,7 +161,7 @@ local function createMusicSession(deps: {
 	local function countQueuedTracksForUser(userId: number): number
 		local total = 0
 		for _, entry in ipairs(state.queue) do
-			if entry.source == "user" and entry.requesterUserId == userId then
+			if entry.source == "user" and entry.requesterUserId == userId and entry.fromSet ~= true then
 				total += 1
 			end
 		end
@@ -217,10 +223,101 @@ local function createMusicSession(deps: {
 		for _, entry in ipairs(entries) do
 			local track = getTrackById(entry.trackId)
 			if track then
-				table.insert(queueTracks, enrichTrack(track, entry))
+				local queueTrack = enrichTrack(track, entry)
+				if entry.fromSet == true and queueTrack then
+					queueTrack.fromSet = true
+				end
+				table.insert(queueTracks, queueTrack)
 			end
 		end
 		return queueTracks
+	end
+
+	-- Active set helpers. Items are refreshed from the library on every read, so a renamed or
+	-- re-timed track shows its current values; the snapshot taken at set start is the fallback.
+	local function refreshedSetItem(item: MusicActiveSet.Item): MusicActiveSet.Item
+		local track = getTrackById(item.id)
+		if not track then
+			return item
+		end
+		return {
+			id = item.id,
+			name = track.name,
+			creator = track.creator,
+			totalDuration = track.totalDuration,
+		}
+	end
+
+	local function hasPendingSetEntry(): boolean
+		for _, entry in ipairs(state.queue) do
+			if entry.fromSet == true then
+				return true
+			end
+		end
+		return false
+	end
+
+	local function removePendingSetEntries()
+		local kept: { QueueEntry } = {}
+		for _, entry in ipairs(state.queue) do
+			if entry.fromSet ~= true then
+				table.insert(kept, entry)
+			end
+		end
+		state.queue = kept
+	end
+
+	-- Keeps exactly one set track waiting in the queue (at the interleave position). Called after
+	-- every change that can move the cursor or the queue. The set ends once its last track is no
+	-- longer on air, so the Set card stays up while that last track plays.
+	local function materialiseActiveSet()
+		local set = activeSet
+		if set == nil or hasPendingSetEntry() then
+			return
+		end
+		while true do
+			local nextItem = MusicActiveSet.nextItem(set)
+			if nextItem == nil then
+				break
+			end
+			if getTrackById(nextItem.id) then
+				local entry = MusicDomain.newUserQueueEntry(nextItem.id, newEntryId(), {
+					UserId = set.starterUserId,
+					DisplayName = set.starterName,
+				}) :: any
+				entry.fromSet = true
+				table.insert(state.queue, MusicActiveSet.insertIndex(state.queue, setInterleave), entry)
+				break
+			end
+			-- Gone from the library: move past it without playing.
+			MusicActiveSet.skipNext(set)
+		end
+		if MusicActiveSet.nextItem(set) == nil and not (state.currentEntry and state.currentEntry.fromSet == true) then
+			log:info("Active set finished", { setId = set.id, total = #set.order })
+			activeSet = nil
+		end
+	end
+
+	local function buildActiveSetPayload(): any?
+		local set = activeSet
+		if set == nil then
+			return nil
+		end
+		local upNext: { any } = {}
+		for _, item in ipairs(MusicActiveSet.upNext(set)) do
+			table.insert(upNext, refreshedSetItem(item))
+		end
+		return {
+			id = set.id,
+			title = set.title,
+			sourceKind = set.sourceKind,
+			starterUserId = set.starterUserId,
+			starterName = set.starterName,
+			played = set.played,
+			total = #set.order,
+			shuffle = set.shuffle,
+			upNext = upNext,
+		}
 	end
 
 	local function isTrackPlayable(track: TrackInfo): boolean
@@ -305,7 +402,7 @@ local function createMusicSession(deps: {
 	end
 
 	local function shouldMaintainAutoBuffer(): boolean
-		if state.isDjMode or not IDLE_SYSTEM_FALLBACK_ENABLED then
+		if state.isDjMode or not IDLE_SYSTEM_FALLBACK_ENABLED or activeSet ~= nil then
 			return false
 		end
 		return #state.queue <= getAutoBufferRefillMaxUserQueue()
@@ -327,10 +424,11 @@ local function createMusicSession(deps: {
 		state.queue = nextUserQueue
 	end
 
-	local function buildQueueUpdatePayload(): { queue: { any }, prefetchBuffer: { any } }
+	local function buildQueueUpdatePayload(): { queue: { any }, prefetchBuffer: { any }, activeSet: any? }
 		return {
 			queue = buildQueueTracks(state.queue),
 			prefetchBuffer = buildQueueTracks(autoBuffer),
+			activeSet = buildActiveSetPayload(),
 		}
 	end
 
@@ -819,6 +917,7 @@ local function createMusicSession(deps: {
 		local skipped = 0
 
 		while skipped < maxSkips do
+			materialiseActiveSet()
 			if shouldMaintainAutoBuffer() then
 				ensureAutoBufferDepth(getAutoQueueDepth())
 			end
@@ -854,6 +953,9 @@ local function createMusicSession(deps: {
 					trackId = nextEntry.trackId,
 					usePreload = usePreloadValidate,
 				})
+				if activeSet and nextEntry.fromSet == true then
+					MusicActiveSet.markPlayed(activeSet, nextEntry.trackId)
+				end
 				continue
 			end
 
@@ -863,10 +965,18 @@ local function createMusicSession(deps: {
 					trackId = nextEntry.trackId,
 					entryId = nextEntry.entryId,
 				})
+				if activeSet and nextEntry.fromSet == true then
+					MusicActiveSet.markPlayed(activeSet, nextEntry.trackId)
+				end
 				continue
 			end
 
 			startTrackPlayback(nextEntry, nextTrack :: TrackInfo)
+			-- A set track starting moves the cursor, then the following set track is queued.
+			if activeSet and nextEntry.fromSet == true then
+				MusicActiveSet.markPlayed(activeSet, nextEntry.trackId)
+			end
+			materialiseActiveSet()
 			log:info("Track changed", {
 				trackId = nextEntry.trackId,
 				entryId = nextEntry.entryId,
@@ -930,6 +1040,7 @@ local function createMusicSession(deps: {
 			queue = buildQueueTracks(state.queue),
 			prefetchBuffer = buildQueueTracks(autoBuffer),
 			djEffects = djEffectState,
+			activeSet = buildActiveSetPayload(),
 		}
 	end
 
@@ -1030,9 +1141,13 @@ local function createMusicSession(deps: {
 				currentTrackDeleted = currentTrackDeleted,
 			})
 		end
+		if activeSet then
+			MusicActiveSet.dropIds(activeSet, deletedLookup)
+		end
 		if currentTrackDeleted then
 			session:advanceQueue("track_deleted")
 		elseif queueChanged or bufferChanged then
+			materialiseActiveSet()
 			broadcastQueueUpdated()
 			syncStateToAllMembers()
 		end
@@ -1470,10 +1585,17 @@ local function createMusicSession(deps: {
 	end
 
 	function session:clearQueue(): (boolean, string)
-		if #state.queue == 0 then
+		-- The active set's waiting track is not a request: clearing keeps it (it is queued again below).
+		local kept: { QueueEntry } = {}
+		for _, entry in ipairs(state.queue) do
+			if entry.fromSet == true then
+				table.insert(kept, entry)
+			end
+		end
+		if #kept == #state.queue then
 			return false, "queue_empty"
 		end
-		table.clear(state.queue)
+		state.queue = kept
 		releasePlayOnceTracks()
 		if shouldMaintainAutoBuffer() then
 			ensureAutoBufferDepth(getAutoQueueDepth())
@@ -1490,6 +1612,7 @@ local function createMusicSession(deps: {
 		end
 		state.queue = result.queue
 		releasePlayOnceTracks()
+		materialiseActiveSet()
 		if shouldMaintainAutoBuffer() then
 			ensureAutoBufferDepth(getAutoQueueDepth())
 		end
@@ -1549,6 +1672,109 @@ local function createMusicSession(deps: {
 			broadcastQueueUpdated()
 		end
 		return true, "", { added = added }
+	end
+
+	-- Active set (docs/plans/active-set.md). The service resolves the source to ordered items.
+	-- Starting a set replaces the current one; its waiting track leaves the queue first.
+	function session:startActiveSet(
+		player: Player,
+		opts: {
+			title: string,
+			sourceKind: string,
+			sourceId: string?,
+			items: { any },
+			shuffle: boolean,
+		}
+	): (boolean, string, any?)
+		if state.isDjMode and not canControlDuringDjMode(player) then
+			return false, "dj_only", nil
+		end
+		local set = MusicActiveSet.create({
+			id = newEntryId(),
+			title = opts.title,
+			sourceKind = opts.sourceKind,
+			sourceId = opts.sourceId,
+			starterUserId = player.UserId,
+			starterName = player.DisplayName,
+			items = opts.items,
+			cap = config.SET_MAX_TRACKS or 1500,
+			shuffle = opts.shuffle,
+			random = function(upper: number): number
+				return randomGenerator:NextInteger(1, upper)
+			end,
+		})
+		if set == nil then
+			return false, "empty_set", nil
+		end
+		removePendingSetEntries()
+		clearAutoBuffer()
+		sanitizeQueue()
+		activeSet = set
+		log:info("Active set started", { player = player.Name, sourceKind = opts.sourceKind, total = #set.order })
+		materialiseActiveSet()
+		if not state.isPlaying then
+			session:advanceQueue()
+		else
+			broadcastQueueUpdated()
+		end
+		return true, "", { total = #set.order }
+	end
+
+	function session:stopActiveSet(): (boolean, string)
+		if activeSet == nil then
+			return false, "no_active_set"
+		end
+		activeSet = nil
+		removePendingSetEntries()
+		log:info("Active set stopped")
+		if shouldMaintainAutoBuffer() then
+			ensureAutoBufferDepth(getAutoQueueDepth())
+		end
+		broadcastQueueUpdated()
+		return true, ""
+	end
+
+	function session:reshuffleActiveSet(): (boolean, string)
+		local set = activeSet
+		if set == nil then
+			return false, "no_active_set"
+		end
+		if MusicActiveSet.remainingCount(set) <= 0 then
+			return false, "set_finished"
+		end
+		removePendingSetEntries()
+		MusicActiveSet.reshuffle(set, function(upper: number): number
+			return randomGenerator:NextInteger(1, upper)
+		end, newEntryId())
+		materialiseActiveSet()
+		if not state.isPlaying then
+			session:advanceQueue()
+		else
+			broadcastQueueUpdated()
+		end
+		return true, ""
+	end
+
+	-- Page of the remaining order (everyone may read it). Returns the reply fields.
+	function session:pageActiveSet(offset: any, limit: any, query: any): (boolean, string, any?)
+		local set = activeSet
+		if set == nil then
+			return false, "no_active_set", nil
+		end
+		local result = MusicActiveSet.page(set, {
+			offset = offset,
+			limit = limit,
+			query = query,
+			pageSize = config.SET_PAGE_SIZE or 50,
+		})
+		if not result.ok then
+			return false, result.reason, nil
+		end
+		local tracks: { any } = {}
+		for _, item in ipairs(result.tracks or {}) do
+			table.insert(tracks, refreshedSetItem(item))
+		end
+		return true, "", { offset = result.offset, total = result.total, tracks = tracks }
 	end
 
 	function session:getDjEffectState(): any

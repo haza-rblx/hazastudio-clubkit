@@ -82,6 +82,17 @@ local function fireMusicResponse(
 	})
 end
 
+-- Set actions (docs/plans/active-set.md) reply with { ok, reason?, ...fields } as the response data.
+local function setActionReply(ok: boolean, data: any?, err: string?): any
+	local reply: { [string]: any } = { ok = ok, reason = if ok then nil else (err or "request_failed") }
+	if ok and type(data) == "table" then
+		for key, value in pairs(data) do
+			reply[key] = value
+		end
+	end
+	return reply
+end
+
 local function getMusicFailureNotification(action: string, reason: string, config: any?): (string, string)
 	local queueLimit = math.max(1, tonumber(config and config.REQUEST_TRACK_MAX_PER_USER_QUEUE) or 3)
 
@@ -283,6 +294,9 @@ local function createMusicController(deps: {
 		local resolveRequestAssetCache = makeIdempotencyCache()
 		local transportCache = makeIdempotencyCache()
 		local transportLimiter = RateLimiter.new(config.TRANSPORT_RATE_MAX, config.TRANSPORT_RATE_WINDOW)
+		-- set_page is open to everyone, so it has its own limit and does not spend the transport budget.
+		local setPageRate = if type(config.SET_PAGE_RATE) == "table" then config.SET_PAGE_RATE else { count = 10, window = 10 }
+		local setPageLimiter = RateLimiter.new(setPageRate.count, setPageRate.window)
 		-- Wire callbacks to Service
 		-- skipReason: optional string for client notification (vote_skip, admin_skip, etc.)
 		service:setOnTrackChanged(function(payload: any, members: { Player }, skipReason: string?)
@@ -408,6 +422,10 @@ local function createMusicController(deps: {
 			clear = true,
 			remove = true,
 			request_many = true,
+			set_start = true,
+			set_stop = true,
+			set_reshuffle = true,
+			set_page = true,
 		}
 		local MAX_BULK_TRACK_IDS = 200
 		local MAX_SEEK_SECONDS = 30
@@ -415,6 +433,19 @@ local function createMusicController(deps: {
 			local valid, reason = validatePayload(raw)
 			if not valid then
 				log:warn("Transport: invalid payload", { player = player.Name, reason = reason })
+				-- Always answer when the request id is readable, so the client never waits on a drop.
+				if type(raw) == "table" and type((raw :: any).requestId) == "string" then
+					local isSetAction = string.sub(tostring((raw :: any).action or ""), 1, 4) == "set_"
+					fireMusicResponse(
+						responseRE,
+						player,
+						"transport",
+						(raw :: any).requestId,
+						false,
+						if isSetAction then setActionReply(false, nil, reason) else nil,
+						reason
+					)
+				end
 				return
 			end
 			local requestId = (raw :: any).requestId
@@ -423,8 +454,20 @@ local function createMusicController(deps: {
 				fireMusicResponse(responseRE, player, "transport", requestId, false, nil, "invalid_action")
 				return
 			end
-			if not transportLimiter:check(player.UserId) then
-				fireMusicResponse(responseRE, player, "transport", requestId, false, nil, "rate_limited")
+			local isSetAction = string.sub(action, 1, 4) == "set_"
+			local limited = if action == "set_page"
+				then not setPageLimiter:check(player.UserId)
+				else not transportLimiter:check(player.UserId)
+			if limited then
+				fireMusicResponse(
+					responseRE,
+					player,
+					"transport",
+					requestId,
+					false,
+					if isSetAction then setActionReply(false, nil, "rate_limited") else nil,
+					"rate_limited"
+				)
 				return
 			end
 			if not checkIdempotency(transportCache, requestId) then
@@ -450,11 +493,25 @@ local function createMusicController(deps: {
 					else nil,
 				shuffle = (raw :: any).shuffle == true,
 				trackIds = trackIds,
+				-- Active set fields (only read by set_* actions).
+				source = if type((raw :: any).source) == "table"
+					then {
+						kind = if type((raw :: any).source.kind) == "string" then (raw :: any).source.kind else nil,
+						id = if type((raw :: any).source.id) == "string" then (raw :: any).source.id else nil,
+					}
+					else nil,
+				offset = if type((raw :: any).offset) == "number" then (raw :: any).offset else nil,
+				limit = if type((raw :: any).limit) == "number" then (raw :: any).limit else nil,
+				query = if type((raw :: any).query) == "string" then (raw :: any).query else nil,
 			}
 			task.spawn(function()
 				local ok, err, data = service:transport(player, action, payload)
 				if not ok then
 					log:debug("Transport rejected", { player = player.Name, action = action, reason = err })
+				end
+				if isSetAction then
+					fireMusicResponse(responseRE, player, "transport", requestId, ok, setActionReply(ok, data, err), err)
+					return
 				end
 				fireMusicResponse(responseRE, player, "transport", requestId, ok, data, err)
 			end)

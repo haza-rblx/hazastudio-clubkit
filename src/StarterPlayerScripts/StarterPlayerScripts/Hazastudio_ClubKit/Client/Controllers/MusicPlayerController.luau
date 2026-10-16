@@ -1781,6 +1781,8 @@ function MusicPlayerController:_applyServerState(data: any, options: { forcePlay
 		isPlayOnceAllowed = data.isPlayOnceAllowed == true,
 		queue = newQueue,
 		prefetchBuffer = newBuffer,
+		-- The Set card's payload; NONE clears it when no set is active.
+		activeSet = if type(data.activeSet) == "table" then data.activeSet else self._store.NONE,
 	})
 	require(script.Parent.Parent.UI.Music.QueueIsland).observe(newQueue, self._config, self._store:get().playlists)
 	self:_setMusicIconVisible(self:_computeIconVisible())
@@ -2094,7 +2096,15 @@ function MusicPlayerController:_bootstrapInitialPlayback()
 	})
 end
 
--- v3 transport actions (pause, resume, seek, previous, clear, remove, request_many).
+-- Yields until the server replies with the transport result (`{ ok, data?, error? }`). Callers
+-- run it in a spawned task; the Set sheet uses it for set_page.
+function MusicPlayerController:_requestTransportAsync(action: string, payload: { [string]: any }?): any
+	local request = if type(payload) == "table" then table.clone(payload) else {}
+	request.action = action
+	return self:_requestMusicAsync("transport", self._transportRE, request)
+end
+
+-- v3 transport actions (pause, resume, seek, previous, clear, remove, request_many, set_*).
 function MusicPlayerController:_sendTransport(action: string, payload: { [string]: any }?)
 	local request = if type(payload) == "table" then table.clone(payload) else {}
 	request.action = action
@@ -2108,6 +2118,13 @@ function MusicPlayerController:_sendTransport(action: string, payload: { [string
 					message = string.format("%d %s added to the queue", added, if added == 1 then "track" else "tracks"),
 					domain = "music",
 					dedupeKey = "music_request_many",
+				}, "success")
+			elseif action == "set_start" then
+				self:_showNotification({
+					title = "Set added",
+					message = "The set is playing in the queue.",
+					domain = "music",
+					dedupeKey = "music_set_start",
 				}, "success")
 			end
 			return
@@ -2506,6 +2523,7 @@ function MusicPlayerController:initEngine()
 			store:set({
 				queue = data.queue or {},
 				prefetchBuffer = data.prefetchBuffer or {},
+				activeSet = if type(data.activeSet) == "table" then data.activeSet else store.NONE,
 			})
 			require(script.Parent.Parent.UI.Music.QueueIsland).observe(store:get().queue, self._config, store:get().playlists)
 			if self._panelInitialized then
@@ -2605,6 +2623,10 @@ function MusicPlayerController:initPanel()
 
 	binder:setOnTransport(function(action: string, payload: any)
 		self:_sendTransport(action, payload)
+	end)
+
+	binder:setOnTransportRequest(function(action: string, payload: any)
+		return self:_requestTransportAsync(action, payload)
 	end)
 
 	binder:setOnAdminSkip(function()

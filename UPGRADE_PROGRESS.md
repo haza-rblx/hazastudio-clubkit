@@ -12,6 +12,48 @@ Internal scratch pad to track work **before** a version is released.
 
 **3.0.0 released 2026-10-09.** The full 3.0 progress log (tables, decisions, verification notes) as it stood at release is in [`docs/releases/3.0.0/PROGRESS_ARCHIVE.md`](docs/releases/3.0.0/PROGRESS_ARCHIVE.md). Buyer guide: [`docs/releases/3.0.0/UPGRADE.md`](docs/releases/3.0.0/UPGRADE.md). File list: [`docs/releases/3.0.0/CHANGED_FILES.md`](docs/releases/3.0.0/CHANGED_FILES.md).
 
+## Unreleased — file table (music: active set, server half, 2026-10-16)
+
+Category: engine (source sync). Not committed. Contract: `docs/plans/active-set.md`. Config keys added to the shared `Config.luau` Music section (`SET_MAX_TRACKS`, `SET_INTERLEAVE`, `SET_PAGE_SIZE`, `SET_PAGE_RATE`); no DataStore keys, no buyer files. In-memory state only (one set per server).
+
+| File | Change | Buyer-owned? |
+|---|---|---|
+| `Shared/Domain/MusicActiveSet.luau` | New, pure: cap/shuffle/cursor, reshuffle of the remaining order, page with query filter, interleave insert index | no |
+| `Server/Services/MusicSession.luau` | `activeSet` state; set track materialised one at a time (`fromSet` entry); cursor moves on start; auto buffer off while a set runs; per-user cap ignores set entries; `activeSet` in queue update and state payloads; `startActiveSet` / `stopActiveSet` / `reshuffleActiveSet` / `pageActiveSet` | no |
+| `Server/Services/MusicService.luau` | `startActiveSet` resolves the source (library order); `transport` routes `set_start/set_stop/set_reshuffle` (control) and `set_page` (everyone) | no |
+| `Server/Controllers/MusicController.luau` | Transport accepts `set_*`; `set_page` has its own limiter (`SET_PAGE_RATE`); oversized or invalid transport payloads reply instead of dropping; set replies are `{ ok, reason?, ... }` | no |
+| `Shared/Constants/Config.luau` | `SET_MAX_TRACKS`, `SET_INTERLEAVE`, `SET_PAGE_SIZE`, `SET_PAGE_RATE` | no |
+| `CHANGELOG.md`, `UPGRADE_PROGRESS.md` | `[Unreleased]` entry; this table | no |
+
+**Not yet verified in Studio:** set start/stop/reshuffle end to end, interleave feel in a 2-player playtest, `set_page` with query on a 1500-track set. Known gap: `previous` on a set track re-queues the played entry without moving the cursor back.
+
+## Unreleased — file table (music: active set client, Set card + Full set sheet, 2026-10-16)
+
+| File | Change | Buyer-owned? |
+|---|---|---|
+| `Client/UI/Music/SetCardView.luau` | **New**: Set card at the top of the queue (LayoutOrder -2), built from code; shuffle / remove for control holders; `View full set` | no |
+| `Client/UI/Music/SetSheetView.luau` | **New**: Full set sheet, own ScreenGui, virtual list (52 px pitch), `set_page` paging with skeleton rows, debounced search | no |
+| `Client/UI/Music/ListPool.luau` | `leading` option: the Set card's height plus layout gap is kept out of the index math | no |
+| `Client/UI/Music/NowPlayingView.luau` | Builds the Set card; skips `fromSet` entries; card control follows transport gate | no |
+| `Client/UI/Music/PanelShell.luau` | Creates / destroys the sheet; `setOnTransportRequest` callback | no |
+| `Client/UI/Music/LibraryView.luau` | Shuffle / Add set send `set_start` with a source (favorites, new_drops, playlist), not track ids | no |
+| `Client/Controllers/MusicPlayerController.luau` | `activeSet` stored from queue update and state sync; `_requestTransportAsync` for `set_page`; set_start toast | no |
+| `CHANGELOG.md`, `UPGRADE_PROGRESS.md` | `[Unreleased]` entries; this table | no |
+
+## Unreleased — file table (music UI: wheel glide, queue virtualization, list clip, 2026-10-16)
+
+Category: engine (source sync). Not committed. No config keys added, no DataStore keys, no buyer files. `VIRTUAL_TRACK_ROW_BUFFER` changes 6 to 4 in `Config.luau` (shared constant, not `ClubKitConfig`).
+
+| File | Change | Buyer-owned? |
+|---|---|---|
+| `Client/UI/Music/ListPool.luau` | Same-frame redraw on scroll; key-based row reuse (move, don't rebind); absolute-pixel stride from measured row height | no |
+| `Client/UI/Music/NowPlayingView.luau` | Queue on `ListPool` (key = entry id + requester); fade-in only for keys new to the queue; `SmoothScrollHelper` on the queue | no |
+| `Client/UI/Music/LibraryView.luau` | `SmoothScrollHelper` on track and playlist lists; `trackScroll.ClipsDescendants = true`; handles destroyed in `destroy()` | no |
+| `Shared/Constants/Config.luau` | `VIRTUAL_TRACK_ROW_BUFFER` 6 to 4 | no |
+| `CHANGELOG.md`, `UPGRADE_PROGRESS.md` | `[Unreleased]` entry; this table | no |
+
+**Not yet verified in Studio:** wheel glide feel, queue head-removal without rebind (check in a playtest), scaled-row index math on phone.
+
 ## Unreleased — file table (music: server audio probe auto-skip, 2026-10-16)
 
 Category: engine (source sync). Not committed. Built and playtested live in PARKLAB first, then ported from the live scripts (delta against `ServerStorage._Backup_Scripts_2026-10-16.*_preAssetProbe`). No config keys, no DataStore keys, no buyer files.

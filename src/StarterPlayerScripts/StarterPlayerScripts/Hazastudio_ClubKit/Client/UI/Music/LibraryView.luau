@@ -1,8 +1,8 @@
 --!strict
 -- PATH: StarterPlayerScripts/Client/UI/Music/LibraryView.luau
 -- Library tab: playlist column (Liked Tracks, New Drops, playlists, DJ Sets), the selected set's
--- detail, a virtual track list, PrivateWall and Request From ID. Shuffle / Add set queue the
--- tracks currently listed (server caps them per player).
+-- detail, a virtual track list, PrivateWall and Request From ID. Shuffle / Add set start an
+-- Active set from the selected list (set_start sends a source reference, not track ids).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -11,6 +11,7 @@ local Cover = require(script.Parent.Parent.MusicPlayerCoverHelpers)
 local GuiRefs = require(script.Parent.GuiRefs)
 local ListPool = require(script.Parent.ListPool)
 local UIMotion = require(script.Parent.Parent.Parent.Utils.UIMotion)
+local SmoothScrollHelper = require(script.Parent.Parent.Parent.Utils.SmoothScrollHelper)
 local Visuals = require(script.Parent.Visuals)
 
 local ROW_STAGGER_SECONDS = 0.03
@@ -185,6 +186,7 @@ function LibraryView.new(deps: { refs: GuiRefs.Refs, store: any, config: any, fi
 	self._newDropsId = tostring(deps.config.SPECIAL_PLAYLIST_NEW_DROPS_ID or "__new_drops__")
 	self._playlists = {} :: { [string]: any }
 	self._pools = { nonImage = {}, image = {}, djSet = {} } :: { [string]: { PlaylistRow } }
+	self._scrollHandles = {} :: { { destroy: () -> () } }
 	self._trackCount = 0
 	self._items = {} :: { any }
 	self._setRequestLockedUntil = 0
@@ -244,6 +246,10 @@ function LibraryView:bind()
 	local refs = self._refs
 	local store = self._store
 
+	refs.trackScroll.ClipsDescendants = true
+	table.insert(self._scrollHandles, SmoothScrollHelper.attach(refs.trackScroll))
+	table.insert(self._scrollHandles, SmoothScrollHelper.attach(refs.playlistScroll))
+
 	self:_bindBackdrops()
 
 	local newDropsInfo = need(refs.newDropsButton, "PlaylistInformation", "Frame")
@@ -260,14 +266,12 @@ function LibraryView:bind()
 	end))
 
 	local function requestSet(shuffle: boolean)
-		if os.clock() < self._setRequestLockedUntil or #self._items == 0 then
+		local source = self:_setSource()
+		if os.clock() < self._setRequestLockedUntil or #self._items == 0 or not source then
 			return
 		end
-		local trackIds = {}
-		for _, track in ipairs(self._items) do
-			table.insert(trackIds, tostring(track.id))
-		end
-		self._fire("OnTransport", "request_many", { trackIds = trackIds, shuffle = shuffle })
+		-- The server resolves the source; the client never sends track ids (see active-set.md).
+		self._fire("OnTransport", "set_start", { source = source, shuffle = shuffle })
 		-- Brief lock against double taps; both buttons share it.
 		self._setRequestLockedUntil = os.clock() + SET_REQUEST_LOCK_SECONDS
 		self:_applySetButtons()
@@ -1163,8 +1167,22 @@ function LibraryView:_bindTrackRow(row: any, track: any, index: number)
 	row.instance.Name = row.trackId
 end
 
+-- The set_start source for the selected list: Liked Tracks, New Drops or a playlist. DJ sets and
+-- All Tracks have no source kind yet, so their set buttons stay off.
+function LibraryView:_setSource(): { kind: string, id: string? }?
+	local selected = self._store:get().selectedPlaylistId
+	if selected == self._favoritesId then
+		return { kind = "favorites" }
+	elseif selected == self._newDropsId then
+		return { kind = "new_drops" }
+	elseif type(selected) == "string" and type(self._playlists[selected]) == "table" and not self:_findDjSet(selected) then
+		return { kind = "playlist", id = selected }
+	end
+	return nil
+end
+
 function LibraryView:_applySetButtons()
-	local enabled = #self._items > 0 and os.clock() >= self._setRequestLockedUntil
+	local enabled = #self._items > 0 and os.clock() >= self._setRequestLockedUntil and self:_setSource() ~= nil
 	setButtonEnabled(self._refs.shuffleButton, enabled)
 	setButtonEnabled(self._refs.addSetButton, enabled)
 end
@@ -1201,6 +1219,9 @@ function LibraryView:destroy()
 	for _, unsubscribe in ipairs(self._unsubscribers) do
 		unsubscribe()
 	end
+	for _, handle in ipairs(self._scrollHandles) do
+		handle.destroy()
+	end
 	for _, pool in pairs(self._pools) do
 		for _, row in ipairs(pool) do
 			row.instance:Destroy()
@@ -1209,6 +1230,7 @@ function LibraryView:destroy()
 	self._trackPool:destroy()
 	table.clear(self._connections)
 	table.clear(self._unsubscribers)
+	table.clear(self._scrollHandles)
 end
 
 return LibraryView

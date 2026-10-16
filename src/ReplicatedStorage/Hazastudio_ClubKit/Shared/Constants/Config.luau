@@ -3633,7 +3633,7 @@ Config.Music = {
 	-- (DataStore cache miss = ~500ms, BudgetGate defer up to 5s) plus per-track
 	-- thumbnail resolution. 10s tripped on cold boot.
 	REMOTE_REQUEST_TIMEOUT = 30,
-	VIRTUAL_TRACK_ROW_BUFFER = 6,
+	VIRTUAL_TRACK_ROW_BUFFER = 4,
 	VIRTUAL_TRACK_MAX_RENDERED_ROWS = 60,
 	THUMBNAIL_CACHE_MAX = 100,
 	-- Playback
@@ -3997,6 +3997,12 @@ Config.Music = {
 	DJ_EFFECT_RATE_WINDOW = 60,
 	TRANSPORT_RATE_MAX = 30,
 	TRANSPORT_RATE_WINDOW = 30,
+	-- Active set (docs/plans/active-set.md): one server-side set source, materialised one track at a time.
+	-- SET_INTERLEAVE = requests that may play between two set tracks (0 = set first, then requests).
+	SET_MAX_TRACKS = 1500,
+	SET_INTERLEAVE = 1,
+	SET_PAGE_SIZE = 50,
+	SET_PAGE_RATE = { count = 10, window = 10 },
 	-- D2 (quota-efficiency-pass-2026-06, Phase 1): extended from 15s to 30s.
 	-- Music library rarely changes. Revert to 15s via Config if admin upload track UX issue.
 	-- DataStore-heavy path, not HTTP-API culprit. Default OK.
