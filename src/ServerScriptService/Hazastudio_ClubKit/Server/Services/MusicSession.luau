@@ -12,6 +12,7 @@ local MusicTransportPolicy = require(ReplicatedStorage.Hazastudio_ClubKit.Shared
 local MusicPlayOncePolicy = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicPlayOncePolicy)
 local NetworkPerfCounters = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.NetworkPerfCounters)
 local MusicAssetValidator = require(script.Parent.MusicAssetValidator)
+local MusicAssetProbe = require(script.Parent.MusicAssetProbe)
 
 type TrackInfo = MusicDomain.TrackInfo
 type QueueEntry = MusicDomain.QueueEntry
@@ -856,6 +857,15 @@ local function createMusicSession(deps: {
 				continue
 			end
 
+			if MusicAssetProbe.getTrackStatus(nextTrack) == "Failure" then
+				skipped += 1
+				log:warn("Skipping track: audio unavailable (server probe)", {
+					trackId = nextEntry.trackId,
+					entryId = nextEntry.entryId,
+				})
+				continue
+			end
+
 			startTrackPlayback(nextEntry, nextTrack :: TrackInfo)
 			log:info("Track changed", {
 				trackId = nextEntry.trackId,
@@ -868,6 +878,32 @@ local function createMusicSession(deps: {
 			end
 			broadcastTrackChanged()
 			broadcastQueueUpdated()
+
+			-- Confirm the started track really loads; if the probe says Failure, skip it.
+			local startedEntryId = nextEntry.entryId
+			local startedTrack = nextTrack :: TrackInfo
+			task.spawn(function()
+				local probeStatus = MusicAssetProbe.probeTrackAsync(startedTrack)
+				if probeStatus == "Failure" and state.currentEntry ~= nil and state.currentEntry.entryId == startedEntryId then
+					log:warn("Current track audio unavailable, auto-skipping", {
+						trackId = startedTrack.id,
+						entryId = startedEntryId,
+					})
+					session:advanceQueue("asset_failure")
+				end
+			end)
+
+			-- Warm the probe cache for the next 2 upcoming tracks (queue first, then auto buffer).
+			local lookahead = 0
+			for _, list in ipairs({ state.queue, autoBuffer }) do
+				for _, upcoming in ipairs(list) do
+					if lookahead >= 2 then
+						break
+					end
+					lookahead += 1
+					MusicAssetProbe.prefetchTrack(getTrackById(upcoming.trackId))
+				end
+			end
 			return
 		end
 
@@ -1167,6 +1203,7 @@ local function createMusicSession(deps: {
 		end
 
 		table.insert(state.queue, entry)
+		MusicAssetProbe.prefetchTrack(track)
 		broadcastQueueUpdated()
 		log:debug("Track requested", { player = player.Name, trackId = trackId })
 		return true, "", {

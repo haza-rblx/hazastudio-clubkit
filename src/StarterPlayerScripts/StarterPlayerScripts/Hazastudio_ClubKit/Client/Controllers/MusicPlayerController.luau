@@ -3113,6 +3113,8 @@ function MusicPlayerController:_resolveRequestAsset(assetIdRaw: string)
 			message = "Only DJs and admins can request songs by asset ID here."
 		elseif err == "asset_not_audio" then
 			message = "That asset ID isn't an audio file."
+		elseif err == "asset_unavailable" then
+			message = "This audio can't be played (private or removed)."
 		elseif err == "asset_unverified" then
 			message = "Couldn't check that asset right now. Try again in a moment."
 		elseif err == "invalid_asset_id" then

@@ -23,6 +23,7 @@ local KIT_ROOT_NAMES: { [string]: boolean } = {
 	Hazastudio_ClubKitConfig = true,
 	Hazastudio_ClubKitSecrets = true,
 	Icon = true,
+	__MusicAssetProbe = true, -- server-side audio probe Sounds (MusicAssetProbe), parented under ServerStorage
 }
 
 local _started = false

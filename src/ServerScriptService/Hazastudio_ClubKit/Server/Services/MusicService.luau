@@ -13,6 +13,7 @@ local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Con
 local MusicDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicDomain)
 local PermissionDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.PermissionDomain)
 local MusicPlayOncePolicy = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicPlayOncePolicy)
+local MusicAssetProbe = require(script.Parent.MusicAssetProbe)
 
 local RateLimiter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.RateLimiter)
 local HttpApiCounter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.HttpApiCounter)
@@ -480,6 +481,10 @@ local function createMusicService(deps: {
 		})
 		if not track then
 			return false, buildReason, nil
+		end
+
+		if MusicAssetProbe.probeTrackAsync(track) == "Failure" then
+			return false, "asset_unavailable", nil
 		end
 
 		local after = evaluatePlayOnce(player, now)

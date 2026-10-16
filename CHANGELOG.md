@@ -11,6 +11,15 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+### Fixed (music: revoked / private / deleted audio is auto-skipped by the server — 2026-10-16)
+- **A track whose audio Roblox revoked (experience lost access), made private, deleted or that is not audio no longer leaves a long silence.** The server never got a verdict for it, so a track with no stored duration ran out the `AUTO_ADVANCE_UNKNOWN_DURATION_SECONDS` (180 s) + load-grace timer before moving on.
+- **New `Server/Services/MusicAssetProbe`:** the server preloads each part's audio itself, using a `Sound` parented under `ServerStorage.__MusicAssetProbe` (never replicated). Only `AssetFetchStatus.Failure` skips. `TimedOut` is retried (3 s, 8 s), then counts as "Unknown" and never skips, so a slow network can't skip a good track. Players' clients play no part in the verdict. Verdicts are cached for the life of the server; probes are de-duplicated and capped at 3 at once.
+- **`MusicSession`:** `advanceQueue` skips an entry whose probe is already Failure without yielding. The track that starts is probed in the background and skipped with reason `asset_failure` (existing client toast) if it fails. The next 2 entries, and every new request, are probed ahead, so most bad tracks are skipped before they start. A multi-part track is skipped as a whole if any part fails.
+- **Request From ID (`requestPlayOnce`):** the asset is probed before queueing and rejected with `asset_unavailable` ("This audio can't be played (private or removed).").
+- `RuntimeGuard` exempts `__MusicAssetProbe` from the SoundGuard "Rogue sound" check.
+- **Why not Marketplace:** `GetProductInfoAsync` cannot see a permission revoke. Private audio from another creator that *is* shared with the experience looks identical to one that is not. Studio Edit-mode preloads are also unreliable (Success for 404 IDs), so verify in a playtest server.
+- The old `ASSET_VALIDATE_USE_PRELOAD` path stays off: it preloads string content IDs, which hang forever on the server.
+
 ### Fixed (custom title invisible to its own wearer; title text and image are separate layers — 2026-10-15)
 - **A player could not see their own custom title while everyone else could.** The Settings row for the title layer had been removed, but players who had hidden it earlier still had `overheadLayerVisible.SpecialTitle = false` stored. The own-head render reads that stored value (`SettingsOverheadLayerVisible_*`); others read the public map, which an admin grant forced to `true`. Touching any other layer toggle then mirrored the stale `false` into the public map, so the title vanished for everyone until the next grant.
 - **One-shot reset:** a new stored-settings stamp (`SettingsDomain.TITLE_LAYER_BASE_SCHEMA` / `_titleLayerBase`, same pattern as `_musicVolBase`) sets both title layers back to visible for every existing player once; on that join the server also sets them visible in the public map (`SettingsController`, only those two keys). Players who had deliberately hidden their title see it again and can hide it from Settings.

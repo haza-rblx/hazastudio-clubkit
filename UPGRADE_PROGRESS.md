@@ -12,6 +12,23 @@ Internal scratch pad to track work **before** a version is released.
 
 **3.0.0 released 2026-10-09.** The full 3.0 progress log (tables, decisions, verification notes) as it stood at release is in [`docs/releases/3.0.0/PROGRESS_ARCHIVE.md`](docs/releases/3.0.0/PROGRESS_ARCHIVE.md). Buyer guide: [`docs/releases/3.0.0/UPGRADE.md`](docs/releases/3.0.0/UPGRADE.md). File list: [`docs/releases/3.0.0/CHANGED_FILES.md`](docs/releases/3.0.0/CHANGED_FILES.md).
 
+## Unreleased — file table (music: server audio probe auto-skip, 2026-10-16)
+
+Category: engine (source sync). Not committed. Built and playtested live in PARKLAB first, then ported from the live scripts (delta against `ServerStorage._Backup_Scripts_2026-10-16.*_preAssetProbe`). No config keys, no DataStore keys, no buyer files.
+
+| File | Change | Buyer-owned? |
+|---|---|---|
+| `Server/Services/MusicAssetProbe.luau` | **New**: server-side probe (`getCached`, `probeAsync`, `getTrackStatus`, `probeTrackAsync`, `prefetchTrack`); Sound under `ServerStorage.__MusicAssetProbe`; Failure only skips, TimedOut retried then Unknown | no |
+| `Server/Services/MusicSession.luau` | `advanceQueue`: cached-Failure skip, background probe of the started track → `advanceQueue("asset_failure")`, lookahead prefetch of 2; `requestTrack` prefetch | no |
+| `Server/Services/MusicService.luau` | `requestPlayOnce` rejects `asset_unavailable` on probe Failure | no |
+| `Client/Controllers/MusicPlayerController.luau` | `asset_unavailable` message for Request From ID | no |
+| `Server/Init/RuntimeGuard.luau` | `__MusicAssetProbe` added to `KIT_ROOT_NAMES` | no |
+| `CHANGELOG.md`, `CONTEXT.md` | `[Unreleased]` entry; "Server audio probe" glossary | no |
+
+Verified in the PARKLAB playtest (Server datamodel): private-ungranted, 404, HTTP-400 and non-audio IDs → Failure in ~1 s; good and shared-foreign audio → Success; cached repeat 0 ms; 6 parts in parallel ~1.2 s; probe Sounds cleaned up; no RuntimeGuard flags. End to end: play-once of a private ID rejected with `asset_unavailable`; a queued 404 library track ("Trance") skipped at its turn with no gap; a broken track started before its probe finished ("SOEGI…", a Place ID) was auto-skipped 0.2 s later with `asset_failure`. `count-locals`: MusicSession 11, MusicService 17. **Not yet verified:** a live server, and an asset revoked mid-session. The engine caches a fetch status per id, so a revoke after the server already loaded the track is only caught by new servers.
+
+**PARKLAB data:** library tracks "Trance" (`125021736394780`, 404) and "SOEGI BORNEAN - ASMALIBRASI AMAPIANO" (`123789`, a Place) are broken; they are now skipped, but should be fixed or removed from the library. PARKLAB place changes are unsaved: Ctrl+S, publish.
+
 ## Unreleased — file table (title layers + Lead Dance dropdown, 2026-10-15)
 
 Category: engine (source sync), plus one additive template key. Not committed. Built and playtested live in BACKHOME first, then ported from the live scripts.
