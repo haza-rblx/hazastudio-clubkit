@@ -972,11 +972,8 @@ function MenuShellUI:show()
 
 	self:_selectTab(self._activeTabKey)
 
-	-- Cascade the page in behind the sidebar tween, but only on a real open: re-showing an
-	-- already-visible panel must not restart the fade under the player's cursor.
-	if not wasVisible then
-		self:_staggerTab(self:_tabPage(self._activeTabKey) :: ScrollingFrame)
-	end
+	-- No content cascade on open (owner, 2026-10-17): the page rides in solid with the slow
+	-- slide; fading the rows in behind it read as a second, competing motion.
 
 	-- Add click-outside detection
 	if self._clickOutsideConnection then

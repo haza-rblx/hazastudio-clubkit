@@ -17,6 +17,7 @@ local Visuals = require(script.Parent.Visuals)
 local ListPool = require(script.Parent.ListPool)
 local SetCardView = require(script.Parent.SetCardView)
 local SetBanner = require(script.Parent.SetBanner)
+local WavyProgress = require(script.Parent.WavyProgress)
 
 local PROGRESS_INTERVAL = 0.2
 local ROW_STAGGER_SECONDS = 0.04
@@ -127,6 +128,16 @@ end
 
 function NowPlayingView:bind()
 	local refs = self._refs
+	if not self._wavy then
+		self._wavy = WavyProgress.new({
+			fill = refs.progressFill,
+			startLabel = refs.elapsedLabel,
+			endLabel = refs.lengthLabel,
+			isPlaying = function(): boolean
+				return self._store:get().isPlaying == true
+			end,
+		})
+	end
 	Visuals.setText(refs.voteSkipLabel, "Vote Skip")
 	table.insert(
 		self._connections,
@@ -660,6 +671,10 @@ end
 
 function NowPlayingView:destroy()
 	self:stopProgress()
+	if self._wavy then
+		self._wavy:destroy()
+		self._wavy = nil
+	end
 	for _, connection in ipairs(self._connections) do
 		connection:Disconnect()
 	end

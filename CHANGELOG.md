@@ -11,6 +11,16 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+### Changed (centre panels grow from and shrink to nothing — 2026-10-17)
+- Every centre panel (dance panel, avatar context menu, command library, shop, gift, donation, admin, music shell, …) now opens from scale 0 (Exponential Out, 1.20 s) and closes to scale 0 (Cubic In, 0.75 s), toward the panel's own AnchorPoint, instead of 0.96 → 1 with a fade. Shared preset: `MotionPresets.centerOpen/centerClose`; timings: `Config.UIMotion.CENTER_OPEN_TIME` / `CENTER_CLOSE_TIME`. CanvasGroup panels on the size-stable path still fade (ADR 0005), now on these timings. `MOTION_SCALE` / `TRANSITION_SCALE` and reduced motion still apply.
+
+### Changed (music: wavy progress line — 2026-10-17)
+- The Now Playing progress bar is drawn as a Material You style wave: the played part waves, then a gap, a vertical thumb, another gap and the flat remaining track. The wave flows toward the thumb while playing and flattens on pause. It spans exactly from the elapsed-time label's left edge to the length label's right edge. New `Client/UI/Music/WavyProgress.luau`; the designed `ProgressBar`/`InnerBar` stay in the GUI (hidden) and still carry the progress value.
+- Cost: a static strip of segments scrolled inside a clipping frame, so only a few property writes per frame. It is idle while the panel is hidden or paused.
+
+### Changed (menu panel slides in slowly, content no longer fades — 2026-10-17)
+- The Profile / Settings / Event menu (`MenuShellUI`) slides in on Exponential Out over 1.0 s (was Quint Out 0.38 s) and out on Cubic In over 0.5 s (was Sine In 0.26 s), via `MotionPresets.sidebarSlideInInfo` / `sidebarSlideOutInfo`. The page no longer cascades its rows in on open; it arrives solid with the panel. The tab-switch cross-fade is unchanged.
+
 ### Changed (loading: cinematic is the default — 2026-10-17)
 - `Config.Loading.STYLE` defaults to `"cinematic"` (was `"classic"`), matching what runs live in PARKLAB. Without `ClubKitConfig.Loading.ArtworkVideo`/`ArtworkImage`, part 1 falls back to the experience thumbnail. Set `STYLE = "classic"` in the engine `Config.luau` to go back.
 

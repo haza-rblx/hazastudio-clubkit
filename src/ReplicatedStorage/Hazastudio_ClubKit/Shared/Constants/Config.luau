@@ -1693,10 +1693,11 @@ Config.UIMotion = {
 	-- Transitions only (panel / modal / sidebar TRAVEL: slide, settle, scale-in), on top of
 	-- MOTION_SCALE. Fades and content motion (stagger, hover, press) never read it. 1 = as designed.
 	TRANSITION_SCALE = 1,
-	-- 2026-09-16 feel pass: the centre panel opens longer and softer, and always closes faster than
-	-- it opens. These shadow the same-named fallbacks in Client/Utils/MotionPresets — change both.
-	CENTER_OPEN_TIME = 0.40,
-	CENTER_CLOSE_TIME = 0.24,
+	-- 2026-10-17 shrink pass (owner A/B on the dance panel): centre panels grow from / shrink to
+	-- scale 0 — Exponential Out open, Cubic In close — and still close faster than they open.
+	-- These shadow the same-named fallbacks in Client/Utils/MotionPresets — change both.
+	CENTER_OPEN_TIME = 1.20,
+	CENTER_CLOSE_TIME = 0.75,
 	SIDEBAR_SPRING_FREQ = 3.8, -- TopMenu / sidebar critically-damped spring (softer = lower)
 	-- CanvasGroup textures are re-created whenever their size changes (Roblox docs), and
 	-- render BLANK when the client's texture budget is exceeded. When true, every UIScale

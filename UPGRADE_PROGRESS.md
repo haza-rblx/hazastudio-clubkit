@@ -12,6 +12,26 @@ Internal scratch pad to track work **before** a version is released.
 
 **3.0.0 released 2026-10-09.** The full 3.0 progress log (tables, decisions, verification notes) as it stood at release is in [`docs/releases/3.0.0/PROGRESS_ARCHIVE.md`](docs/releases/3.0.0/PROGRESS_ARCHIVE.md). Buyer guide: [`docs/releases/3.0.0/UPGRADE.md`](docs/releases/3.0.0/UPGRADE.md). File list: [`docs/releases/3.0.0/CHANGED_FILES.md`](docs/releases/3.0.0/CHANGED_FILES.md).
 
+## Unreleased — file table (UI motion: centre panel shrink, 2026-10-17)
+
+Category: engine (source sync). Not committed. No new config keys (existing `Config.UIMotion.CENTER_OPEN_TIME` / `CENTER_CLOSE_TIME` retuned), no DataStore keys, no buyer files. Also applied live to the Experiment Area place (unsaved).
+
+| File | Change | Buyer-owned? |
+|---|---|---|
+| `Client/Utils/MotionPresets.luau` | `centerOpen` startScale 0.96 → 0, Quint → Exponential Out; `centerClose` endScale 0.96 → 0, Sine → Cubic In; fallbacks 1.20 / 0.75 | no |
+| `Shared/Constants/Config.luau` | `UIMotion.CENTER_OPEN_TIME` 0.40 → 1.20, `CENTER_CLOSE_TIME` 0.24 → 0.75 | no |
+| `Client/Utils/MotionPresets.luau` | `sidebarSlideInInfo` 0.38 Quint Out → 1.0 Exponential Out; `sidebarSlideOutInfo` 0.26 Sine In → 0.5 Cubic In (menu shell is the only caller) | no |
+| `Client/UI/MenuShellUI.luau` | `show()` no longer calls `_staggerTab` on open (page arrives solid) | no |
+| `Client/UI/Music/WavyProgress.luau` | **new** — wavy progress line (M3 variant: amp 4, wavelength 36, thickness 4, 0.7 cycles/s, bar thumb, 6 px gaps) | no |
+| `Client/UI/Music/NowPlayingView.luau` | creates `WavyProgress` in `bind()`, destroys it in `destroy()` | no |
+| `CHANGELOG.md`, `UPGRADE_PROGRESS.md` | `[Unreleased]` entries; this table | no |
+
+**Wavy progress:** picked live as lab variant 3; repo module ported to the Experiment place (unsaved) but not yet run after a restart.
+
+**Menu slide:** picked live as lab variant 6 (no fade) over shrink variants; repo build itself not re-tested after restart.
+
+**Not yet verified in Studio:** every centre panel after the change (only the dance panel was A/B'd by hand); ACM still slides `panelOpen.yOffset` on top of the shrink; CanvasGroup fade panels at 1.2 s may feel slow.
+
 ## Unreleased — file table (music: active set, server half, 2026-10-16)
 
 Category: engine (source sync). Not committed. Contract: `docs/plans/active-set.md`. Config keys added to the shared `Config.luau` Music section (`SET_MAX_TRACKS`, `SET_INTERLEAVE`, `SET_PAGE_SIZE`, `SET_PAGE_RATE`); no DataStore keys, no buyer files. In-memory state only (one set per server).

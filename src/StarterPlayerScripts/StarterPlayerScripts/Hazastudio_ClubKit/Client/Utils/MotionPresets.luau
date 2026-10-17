@@ -131,7 +131,7 @@ local function readCenterOpenTime(): number
 			return t
 		end
 	end
-	return 0.40
+	return 1.20
 end
 
 local function readCenterCloseTime(): number
@@ -142,26 +142,29 @@ local function readCenterCloseTime(): number
 			return t
 		end
 	end
-	return 0.24
+	return 0.75
 end
 
--- Quint Out over a long open: most of the 0.96 -> 1 travel lands early, then a long soft tail, which
--- reads as luxurious rather than sluggish. No overshoot here — a centre panel is the kit's largest
--- surface and the one most often clipped by its own rounded frame.
+-- Shrink pass (owner, 2026-10-17, chosen live on the dance panel over 0.96 -> 1 + fade, which read
+-- as a fade rather than a shrink): a centre panel grows from nothing toward its AnchorPoint and
+-- shrinks back into it. Exponential Out lands almost all of the growth early and settles over a long
+-- tail; Cubic In holds the panel a beat, then pulls it away. Still no overshoot — the panel is the
+-- kit's largest surface and the one most often clipped by its own rounded frame. CanvasGroup panels
+-- on the size-stable path keep fading instead (ADR 0005), only their timing follows these presets.
 function MotionPresets.centerOpen(): CenterOpenPreset
 	return {
-		startScale = 0.96,
+		startScale = 0,
 		time = readCenterOpenTime(),
-		style = Enum.EasingStyle.Quint,
+		style = Enum.EasingStyle.Exponential,
 		direction = Enum.EasingDirection.Out,
 	}
 end
 
 function MotionPresets.centerClose(): CenterClosePreset
 	return {
-		endScale = 0.96,
+		endScale = 0,
 		time = readCenterCloseTime(),
-		style = Enum.EasingStyle.Sine,
+		style = Enum.EasingStyle.Cubic,
 		direction = Enum.EasingDirection.In,
 	}
 end
@@ -240,12 +243,15 @@ function MotionPresets.sidebarOutInfo(): TweenInfo
 end
 
 -- The sidebar's slide on its own (the fade keeps sidebarInInfo / sidebarOutInfo).
+-- Slow-slide pass (owner, 2026-10-17, picked live on the menu shell over a shrink): the menu
+-- (Profile / Settings / Event) glides in on a long Exponential Out tail and leaves on Cubic In,
+-- still in half the time it took to arrive.
 function MotionPresets.sidebarSlideInInfo(): TweenInfo
-	return MotionPresets.transitionInfo(0.38, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+	return MotionPresets.transitionInfo(1.0, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)
 end
 
 function MotionPresets.sidebarSlideOutInfo(): TweenInfo
-	return MotionPresets.transitionInfo(0.26, Enum.EasingStyle.Sine, Enum.EasingDirection.In)
+	return MotionPresets.transitionInfo(0.5, Enum.EasingStyle.Cubic, Enum.EasingDirection.In)
 end
 
 -- Critically-damped spring freq (Hz-ish via Freecam formula). Lower = softer slide.
