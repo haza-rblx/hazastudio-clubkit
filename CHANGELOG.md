@@ -11,6 +11,13 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+### Changed (custom title pickers open as a stacked sheet — 2026-10-18)
+- The preset and typeface pickers of the custom title panel open as a stacked sheet over the card: the card shrinks and dims behind it while the picker rises (0.45 s Quint Out); Back or a pick shrinks the picker away (0.3 s Cubic In). The footer button reads "Back" until a choice is made, then the chosen label, with a small pop when it changes. Back text: `Config.CustomTitle.PICKER_BACK_LABEL`.
+
+### Fixed (custom title card overhang, off-centre card, accent tint — 2026-10-18)
+- The custom title card overhung its close button when the shipped panel was narrower than the card (281 vs 320); the panel now takes the card's width, and its list is centred so a shrunk card stays centred. Applied from code, so every buyer's GUI is corrected without an edit.
+- The custom title editor is excluded from the accent tint (`Config.Branding.ACCENT_NO_TINT_GUIS`): its preset previews animate their own colours.
+
 ### Changed (centre panels grow from and shrink to nothing — 2026-10-17)
 - Every centre panel (dance panel, avatar context menu, command library, shop, gift, donation, admin, music shell, …) now opens from scale 0 (Exponential Out, 1.20 s) and closes to scale 0 (Cubic In, 0.75 s), toward the panel's own AnchorPoint, instead of 0.96 → 1 with a fade. Shared preset: `MotionPresets.centerOpen/centerClose`; timings: `Config.UIMotion.CENTER_OPEN_TIME` / `CENTER_CLOSE_TIME`. CanvasGroup panels on the size-stable path still fade (ADR 0005), now on these timings. `MOTION_SCALE` / `TRANSITION_SCALE` and reduced motion still apply.
 

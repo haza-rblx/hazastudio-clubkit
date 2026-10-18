@@ -12,6 +12,18 @@ Internal scratch pad to track work **before** a version is released.
 
 **3.0.0 released 2026-10-09.** The full 3.0 progress log (tables, decisions, verification notes) as it stood at release is in [`docs/releases/3.0.0/PROGRESS_ARCHIVE.md`](docs/releases/3.0.0/PROGRESS_ARCHIVE.md). Buyer guide: [`docs/releases/3.0.0/UPGRADE.md`](docs/releases/3.0.0/UPGRADE.md). File list: [`docs/releases/3.0.0/CHANGED_FILES.md`](docs/releases/3.0.0/CHANGED_FILES.md).
 
+## Unreleased — file table (custom title: stacked picker sheet, 2026-10-18)
+
+Category: engine (source sync). Not committed. One new config key (`Config.CustomTitle.PICKER_BACK_LABEL`) and one tint exclusion added to the shared `Config.luau`; no DataStore keys, no buyer files. The card overhang fix is applied from code, so the buyer's `1000-01-CT-ADDON` GUI is not edited.
+
+| File | Change | Buyer-owned? |
+|---|---|---|
+| `Client/UI/CustomTitleUI.luau` | Pickers stacked over the card (parented to the ScreenGui, `_stackPickers`); card shrink + dim chrome (`StackScale`, `StackDim`); `_openPicker` / `_closePicker` rewritten; `_setPicked` drives the confirm label; `_handoff`, `_slide`, parallax and the header back button removed; panel width and list alignment fixed in `tryCreate` | no |
+| `Shared/Constants/Config.luau` | `ACCENT_NO_TINT_GUIS` += `1000-01-CT-ADDON`; `CustomTitle.PICKER_BACK_LABEL = "Back"` | no |
+| `CHANGELOG.md`, `UPGRADE_PROGRESS.md` | `[Unreleased]` entries; this table | no |
+
+**Not yet verified in Studio:** the stacked sheet push/pop feel on a phone and desktop, the Back/confirm label swap, and the dim blocking taps on the card while a picker is up.
+
 ## Unreleased — file table (UI motion: centre panel shrink, 2026-10-17)
 
 Category: engine (source sync). Not committed. No new config keys (existing `Config.UIMotion.CENTER_OPEN_TIME` / `CENTER_CLOSE_TIME` retuned), no DataStore keys, no buyer files. Also applied live to the Experiment Area place (unsaved).

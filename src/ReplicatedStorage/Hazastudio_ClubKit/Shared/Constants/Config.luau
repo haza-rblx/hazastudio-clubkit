@@ -57,7 +57,8 @@ Config.Branding = {
 	-- Kit GUIs the accent theme leaves as designed (AccentSurfaceTint). Venue GUIs are never themed.
 	-- Music player: track covers are artwork. Admin panels: title presets animate their own
 	-- colours, and the tint fighting them every frame made the choices flicker (owner, 2026-10-10).
-	ACCENT_NO_TINT_GUIS = { "06-MusicPlayerGUI", "04-AdminPanelv3", "04-AdminHub" },
+	-- Custom title editor: its preset previews animate their own colours too.
+	ACCENT_NO_TINT_GUIS = { "06-MusicPlayerGUI", "04-AdminPanelv3", "04-AdminHub", "1000-01-CT-ADDON" },
 }
 -- ============================================================
 -- MEMBERSHIP TIERS (system-wide presentation config)
@@ -2776,6 +2777,7 @@ Config.CustomTitle = {
 	MSG_LOCKED_PANEL = "%s to unlock this custom feature.",
 	-- Replaces the quota line while the free title is what is opening the panel.
 	MSG_FREE_TITLE = "Your first title is free — this one is on the house.",
+	PICKER_BACK_LABEL = "Back", -- picker footer button before a choice is made
 	UNLOCK_LEVEL = "reach Lv %d",
 	UNLOCK_ROBUX = "donate %d R$",
 	UNLOCK_CASH = "donate %s",
