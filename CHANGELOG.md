@@ -11,6 +11,15 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+### Changed (Admin Spotlight replaces the Admin Hub — 2026-10-18)
+- The Admin Hub is now "Admin Spotlight": a code-built panel (no template GUI needed) with one search field for actions and `/commands` (`/bring sari` picks the player too, ↑/↓ + Enter, `/` to focus), a Recent row, and grouped Player / Server actions styled like the top menu. Actions that need a player ask for one when tapped; actions with options open an Apple-Settings-style sheet. All action logic, gates, role catalog, gift tiers and donation flows are unchanged. The old `04-AdminHub` GUI can stay in the place; it is no longer used.
+
+### Added (admin: edit player stats — 2026-10-18)
+- "Edit stats" in Admin Spotlight: set a player's level, XP, streak, and today's streak-quest progress / completed. New RemoteFunctions `AdminGetStats` / `AdminSetStats` (`Config.Admin.REMOTE_GET_STATS` / `REMOTE_SET_STATS`), gated by the admin-panel permission.
+
+### Changed (admin permission — 2026-10-18)
+- `/setlevel` now uses the admin-panel permission, the same as `/setstreak` (it used the gift permission).
+
 ### Changed (custom title pickers open as a stacked sheet — 2026-10-18)
 - The preset and typeface pickers of the custom title panel open as a stacked sheet over the card: the card shrinks and dims behind it while the picker rises (0.45 s Quint Out); Back or a pick shrinks the picker away (0.3 s Cubic In). The footer button reads "Back" until a choice is made, then the chosen label, with a small pop when it changes. Back text: `Config.CustomTitle.PICKER_BACK_LABEL`.
 

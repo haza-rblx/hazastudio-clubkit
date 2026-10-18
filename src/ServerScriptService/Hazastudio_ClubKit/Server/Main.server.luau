@@ -779,6 +779,9 @@ local _adminController = ServerMods.createAdminController({
 	settingsService = settingsService,
 	settingsSync = settingsSync,
 	titleImageRegistry = ServerMods.TitleImageRegistryRepository.create({}),
+	levelService = levelService,
+	streakService = streakService,
+	eventBoardController = eventBoardController,
 })
 if Config.FeatureFlags.CouplesEnabled ~= false then
 	ServerMods.createCoupleController({

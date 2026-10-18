@@ -12,12 +12,11 @@ local CashCurrencyDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.D
 local DonationAmountFormat = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.DonationAmountFormat)
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local OverheadController = require(script.Parent.OverheadController)
-local AdminHubUI = require(script.Parent.Parent.UI.AdminHubUI)
-local MobileScaleService = require(script.Parent.Parent.Services.MobileScaleService)
+local AdminSpotlightUI = require(script.Parent.Parent.UI.AdminSpotlightUI)
 local createCommandLibraryService = require(script.Parent.Parent.Services.CommandLibraryService)
 local NotifService = require(script.Parent.Parent.Services.NotifService)
 
-type PlayerEntry = AdminHubUI.PlayerEntry
+type PlayerEntry = AdminSpotlightUI.PlayerEntry
 
 local SETROLE_OPTIONS = {
 	{ key = "CoOwner", label = "Co-Owner", desc = "Leadership · admin panel" },
@@ -107,6 +106,7 @@ local ACTIONS = {
 	{ id = "role", group = "access", gate = "admin", needsPlayer = true, title = "Set role" },
 	{ id = "gift", group = "access", gate = "admin", needsPlayer = true, title = "Gift membership" },
 	{ id = "title", group = "identity", gate = "admin", needsPlayer = true, title = "Custom title" },
+	{ id = "stats", group = "identity", gate = "admin", needsPlayer = true, title = "Edit stats" },
 	{ id = "donate", group = "donations", gate = "admin", needsPlayer = false, title = "Donations" },
 	{ id = "refresh", group = "donations", gate = "owner", needsPlayer = false, title = "Reload boards" },
 }
@@ -114,7 +114,13 @@ local ACTIONS = {
 local _connections: { RBXScriptConnection } = {}
 local _unsubs: { () -> () } = {}
 
+-- Set by init: routes admin notices into the open Spotlight panel (returns true when handled).
+local notifySink: ((string, NotifService.NotifType?) -> boolean)? = nil
+
 local function notify(message: string, notifType: NotifService.NotifType?, dedupeKey: string?)
+	if notifySink and notifySink(message, notifType) then
+		return
+	end
 	NotifService.show({
 		message = message,
 		notifType = notifType or "INFO",
@@ -169,18 +175,15 @@ local function init(deps: {
 	local openTitlePanel = deps.openTitlePanel
 	local commandService = createCommandLibraryService()
 
-	local hubName = Config.Admin.HUB_GUI_NAME or "04-AdminHub"
-	local gui = localPlayer.PlayerGui:FindFirstChild(hubName) :: ScreenGui?
-	if not gui then
-		gui = localPlayer.PlayerGui:WaitForChild(hubName, Config.Admin.GUI_WAIT_TIMEOUT or 30) :: ScreenGui?
+	-- The Spotlight panel is code-built, so there is no 04-AdminHub template to wait for.
+	local ui = AdminSpotlightUI.new()
+	notifySink = function(message: string, notifType: NotifService.NotifType?): boolean
+		if not ui:isVisible() then
+			return false
+		end
+		ui:toast(message, notifType)
+		return true
 	end
-	if not gui then
-		log:warn("Admin Hub GUI missing; controller skipped", { guiName = hubName })
-		return {}
-	end
-
-	MobileScaleService.applyAdminHubLayout(gui)
-	local ui = AdminHubUI.new(gui)
 	local selectedPlayer: PlayerEntry? = nil
 	local donateMode = "test"
 	local floatSpeed = tonumber(Config.Gravity.DEFAULT_SPEED) or 3
@@ -432,6 +435,128 @@ local function init(deps: {
 				},
 			})
 		end)
+	end
+
+	-- Edit stats: fetch via AdminGetStats, then edit with AdminSetStats (changed fields only).
+	local function openStatsSheet(entry: PlayerEntry)
+		local remotes = deps.remotes
+		local getRemote = if remotes then remotes:WaitForChild(Config.Admin.REMOTE_GET_STATS, 5) else nil
+		local setRemote = if remotes then remotes:WaitForChild(Config.Admin.REMOTE_SET_STATS, 5) else nil
+		if not (getRemote and getRemote:IsA("RemoteFunction") and setRemote and setRemote:IsA("RemoteFunction")) then
+			notify("Stats remotes missing — ask for the server update", "ERROR")
+			return
+		end
+		local okGet, stats = pcall(function()
+			return (getRemote :: RemoteFunction):InvokeServer(entry.userId)
+		end)
+		if not okGet or type(stats) ~= "table" then
+			notify("Stats unavailable for " .. entry.displayName, "WARNING")
+			return
+		end
+		local s = stats :: any
+		local origLevel = math.floor(tonumber(s.level) or 1)
+		local origXp = math.floor(tonumber(s.xp) or 0)
+		local xpToNext = tonumber(s.xpToNext)
+		local origStreak = math.floor(tonumber(s.streakDays) or 0)
+		local daily = s.daily
+		local hasDaily = type(daily) == "table"
+		local goal = if hasDaily then math.max(1, math.floor(tonumber(daily.goal) or 1)) else 1
+		local origProgress = if hasDaily then math.floor(tonumber(daily.progress) or 0) else 0
+		local origCompleted = hasDaily and daily.completed == true
+		local questLabel = if hasDaily and type(daily.label) == "string" and daily.label ~= "" then daily.label else "Daily quest"
+
+		local getLevel: () -> number = function()
+			return origLevel
+		end
+		local getStreak: () -> number = function()
+			return origStreak
+		end
+		local getProgress: () -> number = function()
+			return origProgress
+		end
+		local getCompleted: () -> boolean = function()
+			return origCompleted
+		end
+		local xpBox: TextBox? = nil
+
+		ui:openSheet("stats", "Edit Stats", function(body)
+			ui:showSelectedPlayer(body, entry, function()
+				ui:closeSheet(true)
+				askPlayer("Edit stats — who?", function(nextPlayer)
+					openStatsSheet(nextPlayer)
+				end)
+			end)
+			ui:addFieldLabel(body, "Level")
+			getLevel = ui:addStepper(body, "Level", origLevel, 1, 9999)
+			local xpText = if xpToNext then (tostring(origXp) .. " / " .. tostring(xpToNext)) else tostring(origXp)
+			xpBox = ui:addValueField(body, "XP", xpText)
+			ui:addHint(body, "XP resets when the level changes.")
+			ui:addFieldLabel(body, "Streak")
+			getStreak = ui:addStepper(body, "Days in a row", origStreak, 0, 9999)
+			if hasDaily then
+				ui:addFieldLabel(body, "Daily quest")
+				getProgress = ui:addStepper(body, "Progress", origProgress, 0, goal, function(n: number): string
+					return tostring(n) .. " of " .. tostring(goal)
+				end)
+				getCompleted = ui:addToggle(body, "Completed", origCompleted)
+				ui:addHint(body, questLabel)
+			end
+		end, {
+			{
+				text = "Cancel",
+				primary = false,
+				onClick = function()
+					ui:closeSheet()
+				end,
+			},
+			{
+				text = "Save",
+				primary = true,
+				onClick = function()
+					local changes: { [string]: any } = {}
+					local level = math.floor(getLevel())
+					if level ~= origLevel then
+						changes.level = level
+					end
+					local xpNow = origXp
+					if xpBox then
+						xpNow = tonumber(string.match(xpBox.Text, "^%s*(%d+)")) or origXp
+					end
+					if xpNow ~= origXp then
+						changes.xp = xpNow
+					end
+					local streak = math.floor(getStreak())
+					if streak ~= origStreak then
+						changes.streakDays = streak
+					end
+					if hasDaily then
+						local progress = math.floor(getProgress())
+						if progress ~= origProgress then
+							changes.dailyProgress = progress
+						end
+						if getCompleted() ~= origCompleted then
+							changes.dailyCompleted = getCompleted()
+						end
+					end
+					if next(changes) == nil then
+						notify("No changes to save", "INFO")
+						ui:closeSheet()
+						return
+					end
+					local okSet, success, message = pcall(function()
+						return (setRemote :: RemoteFunction):InvokeServer(entry.userId, changes)
+					end)
+					if not okSet then
+						notify("Stats save failed", "ERROR")
+					elseif success == true then
+						notify(if type(message) == "string" and message ~= "" then message else "Stats saved for " .. entry.displayName, "SUCCESS")
+						ui:closeSheet()
+					else
+						notify(if type(message) == "string" and message ~= "" then message else "Stats save refused", "ERROR")
+					end
+				end,
+			},
+		})
 	end
 
 	local function openGearSpeedSheet(chromeFromActionId: string?)
@@ -1116,6 +1241,8 @@ local function init(deps: {
 				openRoleSheet(entry)
 			elseif actionId == "gift" then
 				openGiftSheet(entry)
+			elseif actionId == "stats" then
+				openStatsSheet(entry)
 			elseif actionId == "title" then
 				runInstant("title", entry)
 			else

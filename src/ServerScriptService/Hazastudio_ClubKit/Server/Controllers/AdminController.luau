@@ -7,6 +7,7 @@ local Players = game:GetService("Players")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local OverheadDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.OverheadDomain)
+local LevelDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.LevelDomain)
 local PermissionDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.PermissionDomain)
 local TitleStyleDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.TitleStyleDomain)
 local TitleImageDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.TitleImageDomain)
@@ -59,8 +60,16 @@ local function createAdminController(deps: {
 	-- Optional: stored-settings write for grants (so the target's own client shows the layer).
 	settingsService: any?,
 	settingsSync: { syncPlayer: ((Player) -> ())? }?,
+	-- Optional: "Edit stats" sheet. Level/XP need the level system; streak and the daily quest
+	-- are read/written through their owners.
+	levelService: any?,
+	streakService: any?,
+	eventBoardController: any?,
 })
 	local repo = deps.repo
+	local levelService = deps.levelService
+	local streakService = deps.streakService
+	local eventBoardController = deps.eventBoardController
 	local overheadService = deps.overheadService
 	local overheadController = deps.overheadController
 	local grantRemote = deps.grantRemote
@@ -166,6 +175,16 @@ local function createAdminController(deps: {
 			return existing
 		end
 		local remote = Instance.new("RemoteEvent")
+		remote.Name = name
+		remote.Parent = remotesFolder
+		return remote
+	end
+	local function getOrCreateRemoteFunction(name: string): RemoteFunction
+		local existing = remotesFolder:FindFirstChild(name)
+		if existing and existing:IsA("RemoteFunction") then
+			return existing
+		end
+		local remote = Instance.new("RemoteFunction")
 		remote.Name = name
 		remote.Parent = remotesFolder
 		return remote
@@ -576,6 +595,142 @@ local function createAdminController(deps: {
 		notify.player(player, Config.Admin.MSG_TITLE_RESET_SUCCESS:format(target.DisplayName), "SUCCESS")
 		log:info("Reset title", { by = player.Name, target = target.Name })
 	end)
+	-- ============================================================
+	-- Remotes: AdminGetStats / AdminSetStats (RemoteFunctions, Admin Spotlight "Edit stats")
+	-- Gate: isAdmin (PermissionDomain.canUseAdminPanel) + the shared admin rate limiter.
+	-- Handlers never error back to the client.
+	-- ============================================================
+	local function isFiniteNumber(value: any): boolean
+		return type(value) == "number" and value == value and value ~= math.huge and value ~= -math.huge
+	end
+
+	local function readStats(userId: number): { [string]: any }?
+		if not Players:GetPlayerByUserId(userId) then
+			return nil
+		end
+		local loaded = repo:load(userId)
+		if not loaded.ok then
+			return nil
+		end
+		local stored = loaded.value
+		local level = math.max(1, math.floor(tonumber(stored.level) or 1))
+		local daily: { [string]: any }? = nil
+		if eventBoardController and type(eventBoardController.getStreakQuestStanding) == "function" then
+			daily = eventBoardController:getStreakQuestStanding(userId)
+		end
+		return {
+			level = level,
+			xp = math.max(0, math.floor(tonumber(stored.xp) or 0)),
+			xpToNext = LevelDomain.xpNeeded(level),
+			streakDays = math.max(0, math.floor(tonumber(stored.streakDays) or 0)),
+			daily = daily,
+		}
+	end
+
+	local function handleSetStats(player: Player, targetUserId: any, changes: any): (boolean, string)
+		if not isAdmin(player) then
+			return false, Config.Admin.MSG_GIFT_NO_PERM
+		end
+		if not checkRate(player) then
+			return false, Config.Admin.MSG_GIFT_RATE_LIMIT
+		end
+		if type(targetUserId) ~= "number" or targetUserId <= 0 or targetUserId % 1 ~= 0 then
+			return false, "Invalid player"
+		end
+		if type(changes) ~= "table" then
+			return false, "Invalid data"
+		end
+		for _, field in ipairs({ "level", "xp", "streakDays", "dailyProgress" }) do
+			local value = changes[field]
+			if value ~= nil and not isFiniteNumber(value) then
+				return false, "Invalid number: " .. field
+			end
+		end
+		if changes.dailyCompleted ~= nil and type(changes.dailyCompleted) ~= "boolean" then
+			return false, "Invalid data: dailyCompleted"
+		end
+		local target = Players:GetPlayerByUserId(targetUserId)
+		if not target then
+			return false, "Player is not in this server"
+		end
+		if (changes.level ~= nil or changes.xp ~= nil) and not levelService then
+			return false, "Level system is off"
+		end
+
+		-- Daily quest first: it is the step most likely to refuse (no active streak quest, or the
+		-- player's data is still saving), so a refusal leaves the other fields untouched.
+		if changes.dailyProgress ~= nil or changes.dailyCompleted ~= nil then
+			if not eventBoardController or type(eventBoardController.setStreakQuestStanding) ~= "function" then
+				return false, "No active streak quest"
+			end
+			local dailyProgress = if changes.dailyProgress ~= nil then math.floor(changes.dailyProgress) else nil
+			local okDaily, dailyMessage = eventBoardController:setStreakQuestStanding(
+				targetUserId,
+				dailyProgress,
+				changes.dailyCompleted
+			)
+			if not okDaily then
+				return false, dailyMessage
+			end
+		end
+
+		-- Level before XP: a level change resets XP, so an XP value in the same save applies after it.
+		if changes.level ~= nil then
+			local result = levelService:setLevel(targetUserId, math.floor(changes.level))
+			if not result.ok then
+				return false, "Could not save level"
+			end
+		end
+		if changes.xp ~= nil then
+			local result = levelService:setXp(targetUserId, math.floor(changes.xp))
+			if not result.ok then
+				return false, "Could not save XP"
+			end
+		end
+
+		if changes.streakDays ~= nil then
+			if not streakService then
+				return false, "Streak system is off"
+			end
+			local result = streakService:setStreak(targetUserId, math.max(0, math.floor(changes.streakDays)))
+			if not result.ok then
+				return false, "Could not save streak"
+			end
+		end
+
+		overheadController:refreshPlayer(target)
+		log:info("Stats edited", { by = player.Name, target = target.Name })
+		return true, "Stats updated"
+	end
+
+	local GetStatsRemote = getOrCreateRemoteFunction(Config.Admin.REMOTE_GET_STATS)
+	GetStatsRemote.OnServerInvoke = function(player: Player, targetUserId: any): any
+		local ok, result = pcall(function(): { [string]: any }?
+			-- Read-only, so it does not spend a rate token; Set does.
+			if type(targetUserId) ~= "number" or not isAdmin(player) then
+				return nil
+			end
+			return readStats(targetUserId)
+		end)
+		if not ok then
+			log:error("AdminGetStats failed", { by = player.Name, err = tostring(result) })
+			return nil
+		end
+		return result
+	end
+
+	local SetStatsRemote = getOrCreateRemoteFunction(Config.Admin.REMOTE_SET_STATS)
+	SetStatsRemote.OnServerInvoke = function(player: Player, targetUserId: any, changes: any): (boolean, string)
+		local ok, success, message = pcall(function(): (boolean, string)
+			return handleSetStats(player, targetUserId, changes)
+		end)
+		if not ok then
+			log:error("AdminSetStats failed", { by = player.Name, err = tostring(success) })
+			return false, "Could not save stats"
+		end
+		return success, message
+	end
+
 	log:info("AdminController initialized")
 	return {}
 end

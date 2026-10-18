@@ -2309,6 +2309,10 @@ Config.Admin = {
 	REMOTE_SET_TITLE_IMAGE = "AdminSetTitleImage",
 	-- Client asks, server replies to that client with the place-global registry.
 	REMOTE_TITLE_IMAGE_LIST = "AdminTitleImageList",
+	-- Admin Spotlight "Edit stats". RemoteFunctions: Get(targetUserId) -> snapshot,
+	-- Set(targetUserId, changes) -> (ok, message). Gate: canUseAdminPanel + RATE_*.
+	REMOTE_GET_STATS = "AdminGetStats",
+	REMOTE_SET_STATS = "AdminSetStats",
 	RATE_MAX = 5,
 	RATE_WINDOW = 30,
 	-- v3 header tabs. Applied over the template's own text only when that text is

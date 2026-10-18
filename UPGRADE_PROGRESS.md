@@ -12,6 +12,22 @@ Internal scratch pad to track work **before** a version is released.
 
 **3.0.0 released 2026-10-09.** The full 3.0 progress log (tables, decisions, verification notes) as it stood at release is in [`docs/releases/3.0.0/PROGRESS_ARCHIVE.md`](docs/releases/3.0.0/PROGRESS_ARCHIVE.md). Buyer guide: [`docs/releases/3.0.0/UPGRADE.md`](docs/releases/3.0.0/UPGRADE.md). File list: [`docs/releases/3.0.0/CHANGED_FILES.md`](docs/releases/3.0.0/CHANGED_FILES.md).
 
+## Unreleased — file table (Admin Spotlight replaces the Admin Hub UI, 2026-10-18)
+
+Category: engine (source sync). Not committed. Spec: [`docs/plans/admin-spotlight/SPEC.md`](docs/plans/admin-spotlight/SPEC.md). Two new remote names in the shared `Config.luau`; no DataStore key changes (stats are written to their existing fields), no buyer files. The `04-AdminHub` template GUI stays in buyer places but is no longer bound. Phase 2 (Spotlight title modal) is pending; the Title row still opens the v3 editor.
+
+| File | Change | Buyer-owned? |
+|---|---|---|
+| `Client/UI/AdminSpotlightUI.luau` | **New.** Code-built Spotlight panel (`04-AdminSpotlight`): search, Recent, grouped action rows, Apple-style sheets and player picker, toast, `OverlayScrollbar`. Same public API as `AdminHubUI`, plus `addStepper` / `addValueField` / `addToggle` | no |
+| `Client/Controllers/AdminHubController.luau` | Uses `AdminSpotlightUI`; no longer waits for `04-AdminHub`; new `stats` action + `openStatsSheet` (Get → edit → Set changed fields) | no |
+| `Server/Controllers/AdminController.luau` | `AdminGetStats` / `AdminSetStats` RemoteFunctions (canUseAdminPanel; Set is rate-limited) | no |
+| `Server/Controllers/EventBoardController.luau` | `getStreakQuestStanding` / `setStreakQuestStanding` (the live daily quest is the board's streak quest) | no |
+| `Server/Services/LevelService.luau` | `setXp` (clamped below the next level) | no |
+| `Server/Controllers/LevelController.luau` | `/setlevel` gate → `PermissionDomain.canUseAdminPanel` (same as `/setstreak`) | no |
+| `Server/Init/EarlyRemotes.luau` | Creates the two RemoteFunctions | no |
+| `Server/Main.server.luau` | Passes `levelService`, `streakService`, `eventBoardController` to `createAdminController` (no new top-level locals) | no |
+| `Shared/Constants/Config.luau` | `Admin.REMOTE_GET_STATS`, `Admin.REMOTE_SET_STATS` | no |
+
 ## Unreleased — file table (custom title: stacked picker sheet, 2026-10-18)
 
 Category: engine (source sync). Not committed. One new config key (`Config.CustomTitle.PICKER_BACK_LABEL`) and one tint exclusion added to the shared `Config.luau`; no DataStore keys, no buyer files. The card overhang fix is applied from code, so the buyer's `1000-01-CT-ADDON` GUI is not edited.
