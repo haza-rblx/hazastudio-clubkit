@@ -311,12 +311,12 @@ local function init(deps: {
 			else
 				ui:addFieldLabel(body, "Message")
 				box = ui:addTextBox(body, "AnnounceMessage", "Say something to the server…", true)
-				ui:addHint(body, "Max " .. tostring(maxLen) .. " characters (Config.Announcement).")
+				ui:addHint(body, "Up to " .. tostring(maxLen) .. " characters.")
 			end
 			-- No default message: leave the box empty so the placeholder shows.
 			ui:setSheetFoot({
 				{
-					text = "Send announce",
+					text = "Send",
 					primary = true,
 					onClick = function()
 						local msg = string.gsub(box.Text, "^%s*(.-)%s*$", "%1")
@@ -353,13 +353,9 @@ local function init(deps: {
 				ui:applyPickCardLabels(pickHost, setroleOptions)
 				getPicked = ui:bindPickCards(pickHost, initialKey, function() end)
 			else
-				ui:addCallout(
-					body,
-					"RoleCategories keys from ClubKitConfig. Not VIP membership (use Gift). Spenders are leaderboard-only.",
-					"soft",
-					"Staff role override"
-				)
+				ui:addFieldLabel(body, "Staff role")
 				getPicked = ui:addPickGrid(body, setroleOptions, initialKey, function() end)
+				ui:addHint(body, "VIP is a membership, not a role. Use Gift for that.")
 			end
 			ui:setSheetFoot({
 				{
@@ -372,7 +368,7 @@ local function init(deps: {
 					end,
 				},
 				{
-					text = "Apply role",
+					text = "Apply",
 					primary = true,
 					onClick = function()
 						local roleKey = getPicked()
@@ -405,17 +401,13 @@ local function init(deps: {
 				end
 				getPicked = ui:bindPickCards(pickHost, initial, function() end, allowed)
 			else
-				ui:addCallout(
-					body,
-					"Config.Gift Tier1 / Tier2 / Tier3 → labels from ClubKitConfig.Membership. Not a staff role.",
-					"ok",
-					"Membership gift"
-				)
+				ui:addFieldLabel(body, "Membership")
 				getPicked = ui:addPickGrid(body, tiers, initial, function() end)
+				ui:addHint(body, "Gives the membership perks. Not a staff role.")
 			end
 			ui:setSheetFoot({
 				{
-					text = "Ungift",
+					text = "Ungift membership",
 					primary = false,
 					onClick = function()
 						runCommand("/" .. Config.Gift.CMD_ALIAS_UNGIFT .. " " .. entry.username .. " " .. getPicked())
@@ -424,7 +416,7 @@ local function init(deps: {
 					end,
 				},
 				{
-					text = "Gift membership",
+					text = "Gift",
 					primary = true,
 					onClick = function()
 						local tier = getPicked()
@@ -656,6 +648,7 @@ local function init(deps: {
 		end, nil, chromeFromActionId or "ungravity")
 	end
 
+	local openDonateSheet: () -> () -- assigned below; the legacy body reopens the sheet
 	local function openDonateSheetLegacy(body: GuiObject)
 		local modes = {
 			{ key = "test", label = "Fake donations", desc = "VFX only — player or everyone", ownerOnly = false },
@@ -674,23 +667,93 @@ local function init(deps: {
 			end
 		end
 
+		local function pickPlayer(title: string)
+			ui:closeSheet(true)
+			askPlayer(title, function(entry)
+				selectedPlayer = entry
+				openDonateSheet()
+			end)
+		end
+
+		local rebuildContent: (string) -> ()
+
+		-- Mode list first (only when owner modes exist), then one content frame rebuilt per mode.
+		if #modeOptions > 1 then
+			ui:addFieldLabel(body, "Mode")
+			ui:addPickGrid(body, modeOptions, donateMode, function(key)
+				donateMode = key
+				rebuildContent(key)
+			end, 1)
+		end
+
 		local content = Instance.new("Frame")
 		content.Name = "DonateContent"
 		content.BackgroundTransparency = 1
 		content.Size = UDim2.new(1, 0, 0, 0)
 		content.AutomaticSize = Enum.AutomaticSize.Y
-		content.Parent = body
+		content.LayoutOrder = 10
 		local contentLay = Instance.new("UIListLayout")
-		contentLay.FillDirection = Enum.FillDirection.Vertical
-		contentLay.Padding = UDim.new(0, 18)
+		contentLay.SortOrder = Enum.SortOrder.LayoutOrder
+		contentLay.Padding = UDim.new(0, 12) -- same rhythm as the sheet body
 		contentLay.Parent = content
+		if #modeOptions > 1 then
+			local contentPad = Instance.new("UIPadding")
+			contentPad.PaddingTop = UDim.new(0, 6) -- section gap after the Mode list
+			contentPad.Parent = content
+		end
+		content.Parent = body
 
 		local kind = "cash"
 		local fakeTarget = "player"
 		local amountBox: TextBox? = nil
 		local messageBox: TextBox? = nil
 
-		local function rebuildContent(mode: string)
+		local function trimmed(box: TextBox?): string
+			return if box then (string.gsub(box.Text, "^%s*(.-)%s*$", "%1")) else ""
+		end
+
+		local function foot(primaryText: string, onClick: () -> ())
+			ui:setSheetFoot({ { text = primaryText, primary = true, onClick = onClick } })
+		end
+
+		local function addCurrency(mode: string)
+			ui:addFieldLabel(content, "Currency")
+			ui:addChipRow(content, { "Cash", "Robux" }, if kind == "robux" then "Robux" else "Cash", function(value)
+				kind = if value == "Robux" then "robux" else "cash"
+				rebuildContent(mode)
+			end)
+		end
+
+		-- Amount section: input, preset chips, and the formatted amount as a live footnote.
+		local function addAmount(note: string?)
+			local defaultAmt = if kind == "robux" then "100" else "10000"
+			local chips = if kind == "robux" then DONATE_ROBUX_CHIPS else DONATE_IDR_CHIPS
+			ui:addFieldLabel(content, "Amount") -- the currency shows in the live footnote
+			local box = ui:addTextBox(content, "Amount", defaultAmt)
+			box.Text = defaultAmt
+			amountBox = box
+			ui:addChipRow(content, chips, defaultAmt, function(value)
+				box.Text = value
+			end)
+			local preview = ui:addHint(content, "")
+			local function sync()
+				local n = tonumber(box.Text) or 0
+				local shown = if kind == "robux" then ("R$ " .. tostring(n)) else DonationAmountFormat.formatCash(n)
+				preview.Text = if note then shown .. " · " .. note else shown
+			end
+			box:GetPropertyChangedSignal("Text"):Connect(sync)
+			sync()
+		end
+
+		local function addMessage(initial: string, footnote: string)
+			ui:addFieldLabel(content, "Message")
+			local box = ui:addTextBox(content, "Message", "Optional…", true)
+			box.Text = initial
+			messageBox = box
+			ui:addHint(content, footnote)
+		end
+
+		rebuildContent = function(mode: string)
 			for _, child in ipairs(content:GetChildren()) do
 				if not child:IsA("UIListLayout") then
 					child:Destroy()
@@ -700,199 +763,94 @@ local function init(deps: {
 			messageBox = nil
 
 			if mode == "test" then
-				ui:addCallout(content, "Plays donate VFX only — board score unchanged.", "soft", "Does not save.")
 				ui:addFieldLabel(content, "Target")
-				local getTarget = ui:addChipRow(content, { "Player", "Everyone" }, if fakeTarget == "everyone" then "Everyone" else "Player", function(value)
+				ui:addChipRow(content, { "Player", "Everyone" }, if fakeTarget == "everyone" then "Everyone" else "Player", function(value)
 					fakeTarget = if value == "Everyone" then "everyone" else "player"
 					rebuildContent(mode)
 				end)
-				fakeTarget = if getTarget() == "Everyone" then "everyone" else "player"
-
 				if fakeTarget == "player" then
 					if selectedPlayer then
 						ui:showSelectedPlayer(content, selectedPlayer, function()
-							ui:closeSheet(true)
-							askPlayer("Fake donations — who?", function(entry)
-								selectedPlayer = entry
-								openDonateSheet()
-							end)
+							pickPlayer("Fake donations — who?")
 						end)
 					else
-						ui:addCallout(content, "Pick a player for per-player fake donations, or switch target to Everyone.", "soft", "Pick a player")
+						ui:addHint(content, "Pick a player, or switch to Everyone.")
 					end
 				end
-
-				ui:addFieldLabel(content, "Currency")
-				local getKind = ui:addChipRow(content, { "Cash", "Robux" }, if kind == "robux" then "Robux" else "Cash", function(value)
-					kind = if value == "Robux" then "robux" else "cash"
-					rebuildContent(mode)
-				end)
-				kind = if getKind() == "Robux" then "robux" else "cash"
-
-				local defaultAmt = if kind == "robux" then "100" else "10000"
-				local preview = ui:addPreview(content, if kind == "robux" then "R$ 100" else DonationAmountFormat.formatCash(10000))
-				ui:addFieldLabel(content, "Amount")
-				amountBox = ui:addTextBox(content, "Amount", defaultAmt)
-				amountBox.Text = defaultAmt
-				local function syncPreview()
-					local n = tonumber(amountBox and amountBox.Text) or 0
-					preview.Text = if kind == "robux" then ("R$ " .. tostring(n)) else DonationAmountFormat.formatCash(n)
-				end
-				amountBox:GetPropertyChangedSignal("Text"):Connect(syncPreview)
-				syncPreview()
-				local chips = if kind == "robux" then DONATE_ROBUX_CHIPS else DONATE_IDR_CHIPS
-				ui:addChipRow(content, chips, amountBox.Text, function(value)
-					if amountBox then
-						amountBox.Text = value
-					end
-				end)
-				ui:addFieldLabel(content, "Message")
-				messageBox = ui:addTextBox(content, "Message", "Optional…", true)
-				messageBox.Text = "Thanks!"
-
+				addCurrency(mode)
+				addAmount(nil)
+				addMessage("Thanks!", "Plays the donation effect only. The board score doesn't change.")
 				if fakeTarget == "player" and not selectedPlayer then
-					ui:setSheetFoot({
-						{
-							text = "Pick player",
-							primary = true,
-							onClick = function()
-								ui:closeSheet(true)
-								askPlayer("Fake donations — who?", function(entry)
-									selectedPlayer = entry
-									openDonateSheet()
-								end)
-							end,
-						},
-					})
+					foot("Choose", function()
+						pickPlayer("Fake donations — who?")
+					end)
 				else
-					ui:setSheetFoot({
-						{
-							text = "Play fake donations",
-							primary = true,
-							onClick = function()
-								local amt = if amountBox then amountBox.Text else "0"
-								local msg = if messageBox then string.gsub(messageBox.Text, "^%s*(.-)%s*$", "%1") else ""
-								local cmd = if kind == "robux" then Config.Donation.CMD_FAKE_ROBUX else Config.Donation.CMD_FAKE_CASH
-								local parts = { "/" .. cmd }
-								if fakeTarget == "player" and selectedPlayer then
-									table.insert(parts, selectedPlayer.username)
-								end
-								table.insert(parts, amt)
-								if msg ~= "" then
-									table.insert(parts, msg)
-								end
-								runCommand(table.concat(parts, " "))
-								notify("Fake donations played", "SUCCESS")
-								ui:closeSheet()
-							end,
-						},
-					})
+					foot("Play", function()
+						local msg = trimmed(messageBox)
+						local cmd = if kind == "robux" then Config.Donation.CMD_FAKE_ROBUX else Config.Donation.CMD_FAKE_CASH
+						local parts = { "/" .. cmd }
+						if fakeTarget == "player" and selectedPlayer then
+							table.insert(parts, selectedPlayer.username)
+						end
+						table.insert(parts, if amountBox then amountBox.Text else "0")
+						if msg ~= "" then
+							table.insert(parts, msg)
+						end
+						runCommand(table.concat(parts, " "))
+						notify("Fake donations played", "SUCCESS")
+						ui:closeSheet()
+					end)
 				end
-				return
-			end
-
-			if not selectedPlayer then
-				ui:addCallout(content, "This owner ledger action needs a target player before you can continue.", "soft", "Player required.")
-				ui:setSheetFoot({
-					{
-						text = "Pick player",
-						primary = true,
-						onClick = function()
-							ui:closeSheet(true)
-							askPlayer("Donations — who?", function(entry)
-								selectedPlayer = entry
-								openDonateSheet()
-							end)
-						end,
-					},
-				})
-				return
-			end
-
-			ui:showSelectedPlayer(content, selectedPlayer, function()
-				ui:closeSheet(true)
-				askPlayer("Donations — who?", function(entry)
-					selectedPlayer = entry
-					openDonateSheet()
+			elseif not selectedPlayer then
+				ui:addHint(content, "Pick the player whose board score changes.")
+				foot("Choose", function()
+					pickPlayer("Donations — who?")
 				end)
-			end)
-
-			if mode == "credit" then
-				ui:addCallout(content, "Adds a real cash credit for this player and plays donate FX.", "ok", "Saves to the board.")
-				ui:addFieldLabel(content, "Cash amount (" .. CashCurrencyDomain.getActive().adminHint .. ")")
-				amountBox = ui:addTextBox(content, "Amount", "10000")
-				amountBox.Text = "10000"
-				ui:addChipRow(content, DONATE_IDR_CHIPS, "10000", function(value)
-					if amountBox then
-						amountBox.Text = value
-					end
-				end)
-				ui:addFieldLabel(content, "Message")
-				messageBox = ui:addTextBox(content, "Message", "Optional…", true)
-				ui:setSheetFoot({
-					{
-						text = "Give credit",
-						primary = true,
-						onClick = function()
-							local amt = if amountBox then amountBox.Text else "0"
-							local msg = if messageBox then string.gsub(messageBox.Text, "^%s*(.-)%s*$", "%1") else ""
-							local parts = { "/" .. Config.Donation.CMD_DONATE_CASH, selectedPlayer.username, amt }
-							if msg ~= "" then
-								table.insert(parts, msg)
-							end
-							runCommand(table.concat(parts, " "))
-							notify("Credit sent to " .. selectedPlayer.displayName, "SUCCESS")
-							ui:closeSheet()
-						end,
-					},
-				})
 			else
-				ui:addCallout(content, "Changes the board number directly — no donate FX.", "warn", "Manual fix.")
-				ui:addFieldLabel(content, "Currency")
-				local getKind = ui:addChipRow(content, { "Cash", "Robux" }, if kind == "robux" then "Robux" else "Cash", function(value)
-					kind = if value == "Robux" then "robux" else "cash"
-					rebuildContent(mode)
+				local target = selectedPlayer
+				ui:showSelectedPlayer(content, target, function()
+					pickPlayer("Donations — who?")
 				end)
-				kind = if getKind() == "Robux" then "robux" else "cash"
+				if mode == "credit" then
+					kind = "cash"
+					addAmount(nil)
+					addMessage("", "Saves to the board and plays the donation effect.")
+					foot("Give", function()
+						local msg = trimmed(messageBox)
+						local parts = { "/" .. Config.Donation.CMD_DONATE_CASH, target.username, if amountBox then amountBox.Text else "0" }
+						if msg ~= "" then
+							table.insert(parts, msg)
+						end
+						runCommand(table.concat(parts, " "))
+						notify("Credit sent to " .. target.displayName, "SUCCESS")
+						ui:closeSheet()
+					end)
+				else
+					addCurrency(mode)
+					addAmount("set directly, no donation effect")
+					foot("Apply", function()
+						local amt = if amountBox then amountBox.Text else "0"
+						-- Robux → setrobux (persists to the OrderedDataStore); Cash → addcash.
+						local cmd = if kind == "robux" then Config.Donation.CMD_ADD_ROBUX else Config.Donation.CMD_ADD_CASH
+						runCommand("/" .. cmd .. " " .. target.username .. " " .. amt)
+						notify("Score updated for " .. target.displayName, "SUCCESS")
+						ui:closeSheet()
+					end)
+				end
+			end
 
-				local defaultAmt = if kind == "robux" then "100" else "10000"
-				ui:addFieldLabel(
-					content,
-					if kind == "robux" then "Amount (Robux)" else "Amount (" .. CashCurrencyDomain.getActive().adminHint .. ")"
-				)
-				amountBox = ui:addTextBox(content, "Amount", defaultAmt)
-				amountBox.Text = defaultAmt
-				ui:addChipRow(content, if kind == "robux" then DONATE_ROBUX_CHIPS else DONATE_IDR_CHIPS, defaultAmt, function(value)
-					if amountBox then
-						amountBox.Text = value
-					end
-				end)
-				ui:setSheetFoot({
-					{
-						text = "Apply score edit",
-						primary = true,
-						onClick = function()
-							local amt = if amountBox then amountBox.Text else "0"
-							-- Robux → setrobux (persists to the OrderedDataStore); Cash → addcash.
-							local cmd = if kind == "robux" then Config.Donation.CMD_ADD_ROBUX else Config.Donation.CMD_ADD_CASH
-							runCommand("/" .. cmd .. " " .. selectedPlayer.username .. " " .. amt)
-							notify("Score updated for " .. selectedPlayer.displayName, "SUCCESS")
-							ui:closeSheet()
-						end,
-					},
-				})
+			-- Insertion order is the layout order (LayoutOrder ties are unordered).
+			for index, child in ipairs(content:GetChildren()) do
+				if child:IsA("GuiObject") then
+					child.LayoutOrder = index
+				end
 			end
 		end
 
-		ui:addPickGrid(body, modeOptions, donateMode, function(key)
-			donateMode = key
-			rebuildContent(key)
-		end, 1)
-		content.Parent = body
 		rebuildContent(donateMode)
 	end
 
-	local function openDonateSheet()
+	openDonateSheet = function()
 		ui:openSheet("donate", "Donations", function(body)
 			if not ui:usesActionTemplate(body) then
 				openDonateSheetLegacy(body)

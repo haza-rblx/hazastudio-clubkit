@@ -18,7 +18,7 @@ Category: engine (source sync). Not committed. Spec: [`docs/plans/admin-spotligh
 
 | File | Change | Buyer-owned? |
 |---|---|---|
-| `Client/UI/AdminSpotlightUI.luau` | **New.** Code-built Spotlight panel (`04-AdminSpotlight`): search, Recent, grouped action rows, Apple-style sheets and player picker, toast, `OverlayScrollbar`. Same public API as `AdminHubUI`, plus `addStepper` / `addValueField` / `addToggle` | no |
+| `Client/UI/AdminSpotlightUI.luau` | **New.** Code-built Spotlight panel (`04-AdminSpotlight`): search, Recent, grouped action rows, Apple-style sheets and player picker, toast, `OverlayScrollbar`. Same public API as `AdminHubUI`, plus `addStepper` / `addValueField` / `addToggle`. 2026-10-19: sheet sections + shared row groups, explicit modal height with a scrolling body, own background blur (`AdminSpotlightUIBlur`) | no |
 | `Client/Controllers/AdminHubController.luau` | Uses `AdminSpotlightUI`; no longer waits for `04-AdminHub`; new `stats` action + `openStatsSheet` (Get → edit → Set changed fields) | no |
 | `Server/Controllers/AdminController.luau` | `AdminGetStats` / `AdminSetStats` RemoteFunctions (canUseAdminPanel; Set is rate-limited) | no |
 | `Server/Controllers/EventBoardController.luau` | `getStreakQuestStanding` / `setStreakQuestStanding` (the live daily quest is the board's streak quest) | no |

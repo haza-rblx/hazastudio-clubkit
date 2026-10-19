@@ -5,6 +5,7 @@
 -- usesActionTemplate() is always false, so the controller takes its code-built path.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Lighting = game:GetService("Lighting")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
@@ -49,7 +50,8 @@ type Modal = {
 	right: TextButton,
 	title: TextLabel,
 	sub: TextLabel,
-	body: Frame,
+	body: ScrollingFrame,
+	bodyLimit: UISizeConstraint,
 	tw: Tween?,
 }
 
@@ -64,6 +66,7 @@ local DIM_T = 0.45
 local RECENT_MAX = 4
 local TOAST_HOLD = 2.6
 local PANEL_SLIDE = 120
+local BLUR_NAME = "AdminSpotlightUIBlur"
 local MAIN_MAX = Vector2.new(500, 640)
 local MODAL_MAX = 400
 local SEGMENT_MAX = 4
@@ -469,8 +472,8 @@ local function inset(parent: Instance, name: string): Frame
 	local f = frame(parent, name, UDim2.new(1, 0, 0, 0), C.white, 1)
 	f.AutomaticSize = Enum.AutomaticSize.Y
 	local pad = Instance.new("UIPadding")
-	pad.PaddingLeft = UDim.new(0, 16)
-	pad.PaddingRight = UDim.new(0, 16)
+	pad.PaddingLeft = UDim.new(0, 12)
+	pad.PaddingRight = UDim.new(0, 12)
 	pad.Parent = f
 	local lay = Instance.new("UIListLayout")
 	lay.SortOrder = Enum.SortOrder.LayoutOrder
@@ -479,7 +482,79 @@ local function inset(parent: Instance, name: string): Frame
 	return f
 end
 
+-- Preferences sections: a caps header opens a section (header 6 group 6 footnote); consecutive
+-- rows share one group (2px gaps, 18 outer / 4 inner); a footnote or the next header closes it.
+-- Body gap 12 + section top 6 = 18 between sections (07-MenuGUI rhythm).
+local sheetSection: { [Instance]: Frame } = setmetatable({}, { __mode = "k" }) :: any
+local openRowGroup: { [Instance]: Frame } = setmetatable({}, { __mode = "k" }) :: any
+
+local function alive(f: Frame?): Frame?
+	return if f and f.Parent then f else nil
+end
+
+-- Children keep insertion order (LayoutOrder ties are unordered, and resegment sorts by it).
+local function autoOrder(container: Instance)
+	local n = 0
+	container.ChildAdded:Connect(function(child)
+		if child:IsA("GuiObject") then
+			n += 1
+			child.LayoutOrder = n
+		end
+	end)
+end
+
+local function hostOf(parent: Instance): Instance
+	return alive(sheetSection[parent]) or parent
+end
+
+local function beginSection(parent: Instance): Frame
+	-- The first block in a body sits right under the nav; later sections get the extra 12.
+	local first = true
+	for _, child in ipairs(parent:GetChildren()) do
+		if child:IsA("GuiObject") then
+			first = false
+			break
+		end
+	end
+	local s = frame(parent, "Section", UDim2.new(1, 0, 0, 0), C.white, 1)
+	s.AutomaticSize = Enum.AutomaticSize.Y
+	local pad = Instance.new("UIPadding")
+	pad.PaddingTop = UDim.new(0, if first then 0 else 6)
+	pad.Parent = s
+	local lay = Instance.new("UIListLayout")
+	lay.SortOrder = Enum.SortOrder.LayoutOrder
+	lay.Padding = UDim.new(0, 6)
+	lay.Parent = s
+	autoOrder(s)
+	sheetSection[parent] = s
+	return s
+end
+
+-- Row adders: join the group the previous row opened in the same host.
+local function rowGroup(parent: Instance, name: string): Frame
+	local host = hostOf(parent)
+	local open = alive(openRowGroup[host])
+	if open then
+		return open
+	end
+	local g = group(host, name)
+	autoOrder(g)
+	openRowGroup[host] = g
+	return g
+end
+
+-- Any other widget ends the run of rows and goes into the open section (or the body).
+local function breakRows(parent: Instance): Instance
+	local host = hostOf(parent)
+	openRowGroup[host] = nil
+	return host
+end
+
+-- The group row is a plain Frame and the TextBox sits inside it: a group paints its rows with a
+-- SegFill child, and a child always draws over its parent's own text (Sibling ZIndex).
 local function textRow(parent: Instance, name: string, placeholder: string, multi: boolean): TextBox
+	local row = frame(parent, "InputRow", UDim2.new(1, 0, 0, if multi then 96 else 48), C.white, 1)
+	parent = row
 	local box = Instance.new("TextBox")
 	box.Name = name
 	box.BackgroundTransparency = 1
@@ -495,10 +570,11 @@ local function textRow(parent: Instance, name: string, placeholder: string, mult
 	box.TextYAlignment = if multi then Enum.TextYAlignment.Top else Enum.TextYAlignment.Center
 	box.MultiLine = multi
 	box.TextWrapped = multi
-	box.Size = UDim2.new(1, 0, 0, if multi then 96 else 48)
+	box.ZIndex = 2
+	box.Size = UDim2.fromScale(1, 1)
 	local pad = Instance.new("UIPadding")
-	pad.PaddingLeft = UDim.new(0, 16)
-	pad.PaddingRight = UDim.new(0, 16)
+	pad.PaddingLeft = UDim.new(0, 12)
+	pad.PaddingRight = UDim.new(0, 12)
 	pad.PaddingTop = UDim.new(0, if multi then 10 else 0)
 	pad.PaddingBottom = UDim.new(0, if multi then 10 else 0)
 	pad.Parent = box
@@ -506,30 +582,31 @@ local function textRow(parent: Instance, name: string, placeholder: string, mult
 	return box
 end
 
+local MODALS: { Modal } = {}
+
 local function buildModal(gui: ScreenGui, name: string, hasSub: boolean): Modal
 	local modal = frame(gui, name, UDim2.new(1, -32, 0, 0), C.modal, 0)
 	modal.AnchorPoint = Vector2.new(0.5, 0.5)
 	modal.Position = UDim2.fromScale(0.5, 0.5)
-	modal.AutomaticSize = Enum.AutomaticSize.Y
 	modal.Visible = false
 	corner(modal, UDim.new(0, 28))
 	local limit = Instance.new("UISizeConstraint")
 	limit.MaxSize = Vector2.new(MODAL_MAX, 4000)
 	limit.Parent = modal
 	local pad = Instance.new("UIPadding")
-	pad.PaddingTop = UDim.new(0, 16)
-	pad.PaddingBottom = UDim.new(0, 16)
-	pad.PaddingLeft = UDim.new(0, 16)
-	pad.PaddingRight = UDim.new(0, 16)
+	pad.PaddingTop = UDim.new(0, 12)
+	pad.PaddingBottom = UDim.new(0, 12)
+	pad.PaddingLeft = UDim.new(0, 12)
+	pad.PaddingRight = UDim.new(0, 12)
 	pad.Parent = modal
 	local lay = Instance.new("UIListLayout")
 	lay.SortOrder = Enum.SortOrder.LayoutOrder
-	lay.Padding = UDim.new(0, 16)
+	lay.Padding = UDim.new(0, 4)
 	lay.Parent = modal
 	local scale = Instance.new("UIScale")
 	scale.Parent = modal
 
-	local nav = frame(modal, "Nav", UDim2.new(1, 0, 0, if hasSub then 64 else 56), C.white, 1)
+	local nav = frame(modal, "Nav", UDim2.new(1, 0, 0, if hasSub then 56 else 48), C.white, 1)
 	nav.LayoutOrder = 0
 	local left = clickable(nav, "Left", C.white, 1)
 	left.Size = UDim2.new(0, 96, 1, 0)
@@ -550,23 +627,52 @@ local function buildModal(gui: ScreenGui, name: string, hasSub: boolean): Modal
 	right.Visible = false
 	local title = label(nav, "Title", "", 16, Enum.FontWeight.Bold, C.white)
 	title.TextXAlignment = Enum.TextXAlignment.Center
-	title.Position = UDim2.new(0, 96, 0, if hasSub then 10 else 18)
+	title.Position = UDim2.new(0, 96, 0, if hasSub then 8 else 14)
 	title.Size = UDim2.new(1, -192, 0, 20)
 	local sub = label(nav, "Sub", "", 12, Enum.FontWeight.Medium, C.muted)
 	sub.TextXAlignment = Enum.TextXAlignment.Center
-	sub.Position = UDim2.new(0, 96, 0, 32)
+	sub.Position = UDim2.new(0, 96, 0, 28)
 	sub.Size = UDim2.new(1, -192, 0, 16)
 	sub.Visible = hasSub
 
-	local body = frame(modal, "Body", UDim2.new(1, 0, 0, 0), C.white, 1)
-	body.AutomaticSize = Enum.AutomaticSize.Y
+	-- Body scrolls once it would run past the screen (see fitModals), so the nav and foot stay on screen.
+	local body = Instance.new("ScrollingFrame")
+	body.Name = "Body"
+	body.BackgroundTransparency = 1
+	body.BorderSizePixel = 0
+	body.Size = UDim2.new(1, 0, 0, 0)
+	body.CanvasSize = UDim2.fromOffset(0, 0)
+	body.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	body.ScrollingDirection = Enum.ScrollingDirection.Y
+	body.ScrollBarThickness = 0
+	body.ClipsDescendants = true
 	body.LayoutOrder = 1
+	body.Parent = modal
+	local bodyLimit = Instance.new("UISizeConstraint")
+	bodyLimit.MaxSize = Vector2.new(MODAL_MAX, 4000)
+	bodyLimit.Parent = body
 	local bodyLay = Instance.new("UIListLayout")
 	bodyLay.SortOrder = Enum.SortOrder.LayoutOrder
 	bodyLay.Padding = UDim.new(0, 12)
 	bodyLay.Parent = body
+	OverlayScrollbar.attach(body, body)
 
-	return {
+	-- Explicit height (AutomaticSize undercounts a ScrollingFrame child): padding + nav + gap +
+	-- body content, the body capped by bodyLimit. Content is measured in design pixels: the nav's
+	-- fixed height gives the total UIScale above it (the open pop runs 0.92 -> 1).
+	local function resize()
+		local navH = nav.Size.Y.Offset
+		local ratio = if navH > 0 and nav.AbsoluteSize.Y > 0 then nav.AbsoluteSize.Y / navH else 1
+		local content = math.ceil(bodyLay.AbsoluteContentSize.Y / ratio)
+		local bodyH = math.min(content, bodyLimit.MaxSize.Y)
+		body.Size = UDim2.new(1, 0, 0, bodyH)
+		modal.Size = UDim2.new(1, -32, 0, 12 + navH + 4 + bodyH + 12)
+	end
+	bodyLay:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(resize)
+	bodyLimit:GetPropertyChangedSignal("MaxSize"):Connect(resize)
+	nav:GetPropertyChangedSignal("Size"):Connect(resize)
+
+	local m: Modal = {
 		frame = modal,
 		scale = scale,
 		nav = nav,
@@ -575,14 +681,29 @@ local function buildModal(gui: ScreenGui, name: string, hasSub: boolean): Modal
 		title = title,
 		sub = sub,
 		body = body,
+		bodyLimit = bodyLimit,
 		tw = nil,
 	}
+	table.insert(MODALS, m)
+	return m
+end
+
+-- Keeps every modal body inside the screen height; the body scrolls instead of pushing the foot off.
+local function fitModals()
+	local camera = workspace.CurrentCamera
+	local screenY = if camera then camera.ViewportSize.Y else 720
+	-- Chrome above the body: nav (48-56), list gap (4), top/bottom padding (24), outer margin (~48).
+	local bodyMax = math.max(160, screenY - 160)
+	for _, m in MODALS do
+		m.bodyLimit.MaxSize = Vector2.new(MODAL_MAX, bodyMax)
+	end
 end
 
 local function presentModal(m: Modal)
 	if m.tw then
 		m.tw:Cancel()
 	end
+	fitModals()
 	m.frame.Visible = true
 	m.scale.Scale = 0.92
 	m.tw = tween(m.scale, 0.4, Enum.EasingStyle.Quint, Enum.EasingDirection.Out, { Scale = 1 })
@@ -635,6 +756,7 @@ function AdminSpotlightUI.new()
 	self._toastToken = 0
 	self._dimToken = 0
 	self._panelTween = nil :: Tween?
+	self._blurTween = nil :: Tween?
 	self._dimTween = nil :: Tween?
 	self._onPlayerPicked = nil :: ((PlayerEntry) -> ())?
 	self._onAction = nil :: ((string) -> ())?
@@ -1346,6 +1468,50 @@ function AdminSpotlightUI:setGreetingRole(role: string?)
 	self._greetingRole = if type(role) == "string" and role ~= "" then role else "Player"
 end
 
+-- Lighting BlurEffect behind the panel. Config.PanelBlur.ENABLED stays off for the other panels
+-- (the expensive path), so the Spotlight fades its own blur using the same SIZE / FADE values.
+-- SettingsController still zeroes any "Blur" effect when depth-of-field is off.
+function AdminSpotlightUI:_fadeBlur(open: boolean)
+	local blurConfig = Config.PanelBlur
+	local isTable = type(blurConfig) == "table"
+	local size = if isTable then tonumber(blurConfig.SIZE) or 36 else 36
+	local fadeIn = if isTable then tonumber(blurConfig.FADE_IN) or 0.32 else 0.32
+	local fadeOut = if isTable then tonumber(blurConfig.FADE_OUT) or 0.22 else 0.22
+
+	local found = Lighting:FindFirstChild(BLUR_NAME)
+	local blur: BlurEffect
+	if found and found:IsA("BlurEffect") then
+		blur = found
+	else
+		if not open then
+			return
+		end
+		blur = Instance.new("BlurEffect")
+		blur.Name = BLUR_NAME
+		blur.Size = 0
+		blur.Enabled = false
+		blur.Parent = Lighting
+	end
+
+	if self._blurTween then
+		self._blurTween:Cancel()
+		self._blurTween = nil
+	end
+	if open then
+		blur.Enabled = true
+		self._blurTween = tween(blur, fadeIn, Enum.EasingStyle.Sine, Enum.EasingDirection.Out, { Size = size })
+	else
+		local t = tween(blur, fadeOut, Enum.EasingStyle.Sine, Enum.EasingDirection.Out, { Size = 0 })
+		self._blurTween = t
+		t.Completed:Connect(function()
+			if self._blurTween == t then
+				blur.Enabled = false
+				self._blurTween = nil
+			end
+		end)
+	end
+end
+
 function AdminSpotlightUI:show()
 	if self._panelTween then
 		self._panelTween:Cancel()
@@ -1355,6 +1521,7 @@ function AdminSpotlightUI:show()
 	self._main.Visible = true
 	self._main.Position = UDim2.new(0.5, 0, 0.5, PANEL_SLIDE)
 	self:_resetSearch()
+	self:_fadeBlur(true)
 	self._panelTween = tween(self._main, 1.0, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out, {
 		Position = UDim2.fromScale(0.5, 0.5),
 	})
@@ -1362,6 +1529,7 @@ end
 
 function AdminSpotlightUI:hide()
 	self:_forceClose()
+	self:_fadeBlur(false)
 	if not self._main.Visible then
 		self._gui.Enabled = false
 		return
@@ -1546,31 +1714,56 @@ end
 
 -- Nav bar: the secondary button is the left action ("Cancel" when it reads Cancel), the
 -- primary button is the right action text.
+-- Nav keeps "Cancel" on the left and the primary verb on the right (Apple Settings). Secondary
+-- actions (Unset role, Ungift, Change player) become a last group of centred rows in the body.
 function AdminSpotlightUI:setSheetFoot(buttons: { SheetFootButton })
-	local secondary: SheetFootButton? = nil
 	local primary: SheetFootButton? = nil
+	local extras: { SheetFootButton } = {}
 	for index, def in ipairs(buttons) do
 		if def.primary == true or (def.primary == nil and index == #buttons) then
 			primary = def
-		elseif secondary == nil then
-			secondary = def
+		elseif def.text ~= "Cancel" then
+			table.insert(extras, def)
 		end
 	end
-	local leftDef = secondary
-	local leftText = if leftDef then leftDef.text else "Cancel"
-	self:_applyFoot(leftText, function()
-		if leftDef then
-			leftDef.onClick()
-		else
-			self:closeSheet()
-		end
+	self:_applyFoot("Cancel", function()
+		self:closeSheet()
 	end, primary)
+
+	local body = self._sheet.body
+	local old = body:FindFirstChild("FootActions")
+	if old then
+		old:Destroy()
+	end
+	if #extras == 0 then
+		return
+	end
+	local section = beginSection(body)
+	sheetSection[body] = nil
+	section.Name = "FootActions"
+	section.LayoutOrder = 100000
+	local g = group(section, "Actions")
+	for index, def in ipairs(extras) do
+		local row = clickable(g, "Action", C.row, 1)
+		row.Size = UDim2.new(1, 0, 0, 48)
+		row.LayoutOrder = index
+		-- Text on a child label: the row's own text would sit under its SegFill child.
+		local text = label(row, "Text", def.text, 15, Enum.FontWeight.SemiBold, C.white)
+		text.TextXAlignment = Enum.TextXAlignment.Center
+		text.Size = UDim2.fromScale(1, 1)
+		hoverRow(row, C.ctrl)
+		local onClick = def.onClick
+		table.insert(self._footConns, row.MouseButton1Click:Connect(function()
+			onClick()
+		end))
+	end
 end
 
 function AdminSpotlightUI:showSelectedPlayer(parent: Instance, entry: PlayerEntry?, onChange: (() -> ())?)
 	if not entry then
 		return
 	end
+	parent = breakRows(parent)
 	local g = group(parent, "SelectedPlayerInfo")
 	g.LayoutOrder = -10
 	local row = clickable(g, "Target", C.row, 1)
@@ -1614,7 +1807,7 @@ end
 
 function AdminSpotlightUI:addCallout(parent: Instance, text: string, variant: string?, title: string?)
 	local _ = variant
-	local box = inset(parent, "Callout")
+	local box = inset(breakRows(parent), "Callout")
 	if title and title ~= "" then
 		local heading = wrapText(box, "Title", title, 12, Enum.FontWeight.Bold, C.white)
 		heading.LayoutOrder = 1
@@ -1623,20 +1816,25 @@ function AdminSpotlightUI:addCallout(parent: Instance, text: string, variant: st
 	body.LayoutOrder = 2
 end
 
-function AdminSpotlightUI:addHint(parent: Instance, text: string)
-	local box = inset(parent, "Hint")
-	wrapText(box, "Hint", text, 12, Enum.FontWeight.Medium, C.muted)
+-- Footnote: closes the open section.
+function AdminSpotlightUI:addHint(parent: Instance, text: string): TextLabel
+	local box = inset(breakRows(parent), "Hint")
+	local t = wrapText(box, "Hint", text, 12, Enum.FontWeight.Medium, C.muted)
+	sheetSection[parent] = nil
+	return t
 end
 
+-- Caps header: opens a new section.
 function AdminSpotlightUI:addFieldLabel(parent: Instance, text: string)
-	local box = inset(parent, "FieldLabelBox")
+	breakRows(parent)
+	local box = inset(beginSection(parent), "FieldLabelBox")
 	local t = label(box, "FieldLabel", string.upper(text), 12, Enum.FontWeight.Bold, C.muted)
 	t.TextTruncate = Enum.TextTruncate.None
 	t.Size = UDim2.new(1, 0, 0, 16)
 end
 
 function AdminSpotlightUI:addPreview(parent: Instance, text: string): TextLabel
-	local g = group(parent, "Preview")
+	local g = group(breakRows(parent), "Preview")
 	local row = frame(g, "Row", UDim2.new(1, 0, 0, 64), C.white, 1)
 	local t = label(row, "Preview", text, 22, Enum.FontWeight.Bold, C.white)
 	t.TextXAlignment = Enum.TextXAlignment.Center
@@ -1644,7 +1842,7 @@ function AdminSpotlightUI:addPreview(parent: Instance, text: string): TextLabel
 end
 
 function AdminSpotlightUI:addTextBox(parent: Instance, name: string, placeholder: string, multiLine: boolean?): TextBox
-	local g = group(parent, "Input_" .. name)
+	local g = group(breakRows(parent), "Input_" .. name)
 	return textRow(g, name, placeholder, multiLine == true)
 end
 
@@ -1658,7 +1856,7 @@ function AdminSpotlightUI:addPickGrid(
 ): () -> string
 	local _ = columns
 	local picked = initialKey
-	local g = group(parent, "PickGrid")
+	local g = group(breakRows(parent), "PickGrid")
 	local rings: { [string]: { ring: Frame, core: Frame } } = {}
 
 	local function sync()
@@ -1675,16 +1873,16 @@ function AdminSpotlightUI:addPickGrid(
 		row.Size = UDim2.new(1, 0, 0, if hasDesc then 56 else 48)
 		row.LayoutOrder = index
 		local title = label(row, "T", opt.label, 15, Enum.FontWeight.Medium, C.white)
-		title.Position = UDim2.fromOffset(16, if hasDesc then 9 else 0)
+		title.Position = UDim2.fromOffset(12, if hasDesc then 9 else 0)
 		title.Size = UDim2.new(1, -70, 0, if hasDesc then 20 else 48)
 		if hasDesc then
 			local desc = label(row, "D", opt.desc :: string, 12, Enum.FontWeight.Medium, C.muted)
-			desc.Position = UDim2.fromOffset(16, 29)
+			desc.Position = UDim2.fromOffset(12, 29)
 			desc.Size = UDim2.new(1, -70, 0, 16)
 		end
 		local ring = frame(row, "Ring", UDim2.fromOffset(22, 22), C.ctrl, 0)
 		ring.AnchorPoint = Vector2.new(1, 0.5)
-		ring.Position = UDim2.new(1, -16, 0.5, 0)
+		ring.Position = UDim2.new(1, -12, 0.5, 0)
 		corner(ring, UDim.new(1, 0))
 		local core = frame(ring, "Core", UDim2.fromOffset(8, 8), C.black, 0)
 		core.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -1706,15 +1904,16 @@ end
 
 -- Segmented control for up to SEGMENT_MAX values; larger sets wrap into pill chips.
 function AdminSpotlightUI:addChipRow(parent: Instance, values: { string }, initial: string, onChanged: (string) -> ()): () -> string
+	parent = breakRows(parent)
 	local picked = initial
 	local count = #values
 
 	if count <= SEGMENT_MAX then
 		local wrap = frame(parent, "ChipRow", UDim2.new(1, 0, 0, 32), C.white, 1)
 		local track = frame(wrap, "Track", UDim2.new(1, 0, 1, 0), C.ctrl, 0)
-		corner(track, UDim.new(0, 9))
+		corner(track, UDim.new(1, 0)) -- pill, like every other control
 		local thumb = frame(track, "Thumb", UDim2.new(1 / count, -4, 1, -4), C.white, 0)
-		corner(thumb, UDim.new(0, 7))
+		corner(thumb, UDim.new(1, 0))
 		local labels: { [string]: TextButton } = {}
 		local function indexOf(value: string): number
 			for i, v in ipairs(values) do
@@ -1802,22 +2001,22 @@ end
 -- Target-free stepper row: value to the left, an iOS "-|+" pill on the right.
 function AdminSpotlightUI:addStepper(parent: Instance, labelText: string, value: number, minV: number, maxV: number, fmt: ((number) -> string)?): () -> number
 	local current = math.clamp(math.floor(value), minV, maxV)
-	local g = group(parent, "Stepper_" .. labelText)
+	local g = rowGroup(parent, "Stepper_" .. labelText)
 	local row = frame(g, "Row", UDim2.new(1, 0, 0, 48), C.white, 1)
 
 	local name = label(row, "Label", labelText, 15, Enum.FontWeight.Medium, C.white)
-	name.Position = UDim2.fromOffset(16, 0)
-	name.Size = UDim2.new(1, -16 - 240, 1, 0)
+	name.Position = UDim2.fromOffset(12, 0)
+	name.Size = UDim2.new(1, -12 - 240, 1, 0)
 
 	local shown = label(row, "Value", "", 15, Enum.FontWeight.SemiBold, C.muted)
 	shown.TextXAlignment = Enum.TextXAlignment.Right
 	shown.AnchorPoint = Vector2.new(1, 0.5)
-	shown.Position = UDim2.new(1, -(16 + 94 + 12), 0.5, 0)
+	shown.Position = UDim2.new(1, -(12 + 94 + 12), 0.5, 0)
 	shown.Size = UDim2.fromOffset(120, 20)
 
 	local pill = frame(row, "Pill", UDim2.fromOffset(94, 32), C.ctrl, 0)
 	pill.AnchorPoint = Vector2.new(1, 0.5)
-	pill.Position = UDim2.new(1, -16, 0.5, 0)
+	pill.Position = UDim2.new(1, -12, 0.5, 0)
 	corner(pill, UDim.new(1, 0))
 	local minus = clickable(pill, "Minus", C.ctrl, 1)
 	minus.Size = UDim2.new(0.5, 0, 1, 0)
@@ -1858,11 +2057,11 @@ end
 
 -- Value field: label on the left, a TextBox on the right.
 function AdminSpotlightUI:addValueField(parent: Instance, labelText: string, text: string): TextBox
-	local g = group(parent, "Field_" .. labelText)
+	local g = rowGroup(parent, "Field_" .. labelText)
 	local row = frame(g, "Row", UDim2.new(1, 0, 0, 48), C.white, 1)
 	local name = label(row, "Label", labelText, 15, Enum.FontWeight.Medium, C.white)
-	name.Position = UDim2.fromOffset(16, 0)
-	name.Size = UDim2.new(1, -16 - 170, 1, 0)
+	name.Position = UDim2.fromOffset(12, 0)
+	name.Size = UDim2.new(1, -12 - 170, 1, 0)
 	local box = Instance.new("TextBox")
 	box.Name = "Value"
 	box.BackgroundColor3 = C.ctrl
@@ -1872,15 +2071,15 @@ function AdminSpotlightUI:addValueField(parent: Instance, labelText: string, tex
 	box.Text = text
 	box.TextColor3 = C.white
 	box.TextSize = 15
-	box.FontFace = face(Enum.FontWeight.Medium)
+	box.FontFace = face(Enum.FontWeight.SemiBold)
 	box.TextXAlignment = Enum.TextXAlignment.Right
 	box.AnchorPoint = Vector2.new(1, 0.5)
-	box.Position = UDim2.new(1, -16, 0.5, 0)
+	box.Position = UDim2.new(1, -12, 0.5, 0)
 	box.Size = UDim2.fromOffset(150, 32)
-	corner(box, UDim.new(0, 9))
+	corner(box, UDim.new(1, 0)) -- same pill as the stepper and toggle
 	local pad = Instance.new("UIPadding")
-	pad.PaddingLeft = UDim.new(0, 10)
-	pad.PaddingRight = UDim.new(0, 10)
+	pad.PaddingLeft = UDim.new(0, 14)
+	pad.PaddingRight = UDim.new(0, 14)
 	pad.Parent = box
 	box.Parent = row
 	return box
@@ -1889,16 +2088,16 @@ end
 -- iOS-style switch: white track with a black knob when on.
 function AdminSpotlightUI:addToggle(parent: Instance, labelText: string, on: boolean): () -> boolean
 	local state = on
-	local g = group(parent, "Toggle_" .. labelText)
+	local g = rowGroup(parent, "Toggle_" .. labelText)
 	local row = clickable(g, "Row", C.row, 1)
 	row.Size = UDim2.new(1, 0, 0, 48)
 	local name = label(row, "Label", labelText, 15, Enum.FontWeight.Medium, C.white)
-	name.Position = UDim2.fromOffset(16, 0)
-	name.Size = UDim2.new(1, -16 - 70, 1, 0)
+	name.Position = UDim2.fromOffset(12, 0)
+	name.Size = UDim2.new(1, -12 - 70, 1, 0)
 
 	local track = frame(row, "Track", UDim2.fromOffset(48, 28), C.ctrl, 0)
 	track.AnchorPoint = Vector2.new(1, 0.5)
-	track.Position = UDim2.new(1, -16, 0.5, 0)
+	track.Position = UDim2.new(1, -12, 0.5, 0)
 	corner(track, UDim.new(1, 0))
 	local knob = frame(track, "Knob", UDim2.fromOffset(24, 24), C.white, 0)
 	corner(knob, UDim.new(1, 0))

@@ -11,6 +11,15 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+### Fixed (Admin Spotlight sheets layout — 2026-10-19)
+- Sheets now follow the Preferences grouping: a caps header opens a section, consecutive rows share one group (2 px apart, rounded only at the group's ends), and the footnote sits right under its group, with clear space between sections. Before, every row was its own pill and headers, rows and footnotes were evenly spaced.
+- A sheet's last footnote no longer spills below the sheet, and a sheet taller than the screen scrolls instead of running off it.
+- The Spotlight panel blurs the background while it is open.
+- Text fields in sheets (Announce message, picker search, donation amount and message) show their text and placeholder again; they were hidden behind the row background.
+- Sheet nav always reads Cancel on the left and a short verb on the right (Send, Apply, Gift, Play, Give); secondary actions (Unset role, Ungift membership, Change player) moved to a last group in the sheet.
+- Donations sheet rebuilt into sections: Target, Currency, Amount (presets plus the formatted amount as its footnote), Message, with the "does it save" note as a footnote instead of a callout at the top. Picking another player from the Donations sheet no longer errors.
+- Role and Gift sheets use a section header and footnote instead of a callout naming config keys.
+
 ### Changed (Admin Spotlight replaces the Admin Hub — 2026-10-18)
 - The Admin Hub is now "Admin Spotlight": a code-built panel (no template GUI needed) with one search field for actions and `/commands` (`/bring sari` picks the player too, ↑/↓ + Enter, `/` to focus), a Recent row, and grouped Player / Server actions styled like the top menu. Actions that need a player ask for one when tapped; actions with options open an Apple-Settings-style sheet. All action logic, gates, role catalog, gift tiers and donation flows are unchanged. The old `04-AdminHub` GUI can stay in the place; it is no longer used.
 
