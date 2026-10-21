@@ -2310,6 +2310,8 @@ Config.Admin = {
 	-- candidates above stay the v2 path, so a place without v3 is unaffected.
 	GUI_NAME_V3 = "04-AdminPanelv3",
 	HUB_GUI_NAME = "04-AdminHub",
+	-- Code-built Admin Spotlight (AdminSpotlightUI) that replaced the 04-AdminHub shell.
+	SPOTLIGHT_GUI_NAME = "04-AdminSpotlight",
 	GUI_WAIT_TIMEOUT = 30, -- WaitForChild GUI timeout (seconds)
 	GUI_SCALE_BAKED = 0.82,
 	GUI_SCALE_MOBILE = 0.54,

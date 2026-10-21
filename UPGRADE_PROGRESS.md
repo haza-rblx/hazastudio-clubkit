@@ -12,6 +12,24 @@ Internal scratch pad to track work **before** a version is released.
 
 **3.0.0 released 2026-10-09.** The full 3.0 progress log (tables, decisions, verification notes) as it stood at release is in [`docs/releases/3.0.0/PROGRESS_ARCHIVE.md`](docs/releases/3.0.0/PROGRESS_ARCHIVE.md). Buyer guide: [`docs/releases/3.0.0/UPGRADE.md`](docs/releases/3.0.0/UPGRADE.md). File list: [`docs/releases/3.0.0/CHANGED_FILES.md`](docs/releases/3.0.0/CHANGED_FILES.md).
 
+## Unreleased — file table (v4 optimization pass, 2026-10-21)
+
+Category: engine (source sync). Branch `perf/v4`. Driven by measurements in Experiment Area playtests (see `docs/plans/v4-optimize/AUDIT.md`). No config, DataStore or remote changes.
+
+| File | Change | Buyer-owned? |
+|---|---|---|
+| `Client/Controllers/DonationLeaderboardController.luau` | Podium loop gated by `boardInView` (distance + on screen); value count-up throttled to `VALUE_COUNTER_HZ` 30 | no |
+| `Server/Init/StarterGuiPrune.luau` | **New.** Removes never-bound admin ScreenGui templates from StarterGui at boot (runtime only) | no |
+| `Server/Init/ServerModuleBag.luau` | `pruneStarterGui` | no |
+| `Server/Main.server.luau` | Calls `ServerMods.pruneStarterGui(Config)` after `provisionEarlyRemotes` (no new top-level local; 126) | no |
+| `Shared/Constants/Config.luau` | `Config.Admin.SPOTLIGHT_GUI_NAME = "04-AdminSpotlight"` | no |
+| `Client/UI/AdminSpotlightUI.luau` | ScreenGui name from `Config.Admin.SPOTLIGHT_GUI_NAME` | no |
+| `Main.client.luau` | MobilePanelManager "admin" registers the Spotlight when Admin Hub is on (bug fix, NZ port) | no |
+| `Client/UI/AdminHubUI.luau` | **Removed** (unused since Admin Spotlight) | no |
+| `tools/PerfProbe.playmode.luau` | **New.** Read-only playtest probe (GUI instances, memory tags, remote traffic, frame time) | no (tool) |
+| `docs/plans/v4-optimize/AUDIT.md` | **New.** Measured audit, corrected findings, next targets | no |
+| `CHANGELOG.md`, `UPGRADE_PROGRESS.md` | Entries for this change | no |
+
 ## Unreleased — file table (Giveaway, 2026-10-21)
 
 Category: engine (source sync) + config. Not committed. Ported from `.tmp/auto-gacha` (approved PARKLAB prototype). New config section `ClubKitConfig.Giveaway` (schema + template, fill-forward), five remotes, one DataStore (`Giveaway_v1`, existing live documents load unchanged). Main.server / Main.client get one `trackLifecycle` / `trackBootTask` line each (no new top-level locals).

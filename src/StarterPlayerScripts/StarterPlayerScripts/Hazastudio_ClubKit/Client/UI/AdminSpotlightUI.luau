@@ -774,7 +774,7 @@ function AdminSpotlightUI.new()
 
 	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui") :: PlayerGui
 	local gui = Instance.new("ScreenGui")
-	gui.Name = "04-AdminSpotlight"
+	gui.Name = Config.Admin.SPOTLIGHT_GUI_NAME or "04-AdminSpotlight"
 	gui.ResetOnSpawn = false
 	gui.IgnoreGuiInset = true
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling

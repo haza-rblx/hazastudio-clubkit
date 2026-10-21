@@ -113,6 +113,11 @@ local PODIUM_RISE = TweenInfo.new(0.9, Enum.EasingStyle.Quint, Enum.EasingDirect
 local VALUE_COUNTER_DURATION = 0.9
 local PODIUM_SEQUENCE_GAP = 0.2
 local PODIUM_LOOP_INTERVAL = 30
+-- Podium loop only plays for boards the local camera can actually see (within the SurfaceGui
+-- MaxDistance, or this many studs when that is 0, and in front of the camera).
+local PODIUM_VISIBLE_DISTANCE = 150
+-- Count-up label writes per second. Each write re-renders the whole board canvas.
+local VALUE_COUNTER_HZ = 30
 local SUPPORTING_CARD_FADE = TweenInfo.new(0.32, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
 local DAILY_CARD_LIMIT = 3
 -- Organic easing curves: Sine/Cubic for smoothness, low-amplitude Back to avoid overshoot.
@@ -292,6 +297,21 @@ local function playPodiumSequence(gui: SurfaceGui, spec: BoardSpec)
 	end
 end
 
+local function boardInView(gui: SurfaceGui): boolean
+	local adornee = gui.Adornee or gui.Parent
+	local camera = workspace.CurrentCamera
+	if not (camera and adornee and adornee:IsA("BasePart")) then
+		return false
+	end
+	local offset = adornee.Position - camera.CFrame.Position
+	local limit = if gui.MaxDistance > 0 then gui.MaxDistance else PODIUM_VISIBLE_DISTANCE
+	if offset.Magnitude > limit then
+		return false
+	end
+	local _, onScreen = camera:WorldToViewportPoint(adornee.Position)
+	return onScreen
+end
+
 local function ensurePodiumLoop(gui: SurfaceGui, spec: BoardSpec)
 	local record = marks.of(gui)
 	if record.podiumLoopStarted then
@@ -303,7 +323,11 @@ local function ensurePodiumLoop(gui: SurfaceGui, spec: BoardSpec)
 		task.wait(2)
 		while gui.Parent do
 			local startedAt = os.clock()
-			playPodiumSequence(gui, spec)
+			-- Off-screen or far boards skip this round: nobody sees the rise, and every count-up
+			-- frame would re-render a ~400-instance canvas for nothing.
+			if boardInView(gui) then
+				playPodiumSequence(gui, spec)
+			end
 			task.wait(math.max(1, PODIUM_LOOP_INTERVAL - (os.clock() - startedAt)))
 		end
 		record.podiumLoopStarted = nil
@@ -639,13 +663,17 @@ animatePodiumValueCounter = function(podium: GuiObject, spec: BoardSpec)
 	label.Text = formatDonationValue(spec.kind, 0)
 
 	task.spawn(function()
+		local lastWrite = -math.huge
 		while label.Parent and record.valueCounterGeneration == generation do
-			local alpha = math.clamp((os.clock() - startedAt) / VALUE_COUNTER_DURATION, 0, 1)
-			local easedAlpha = 1 - ((1 - alpha) ^ 3)
-			label.Text = formatDonationValue(spec.kind, finalValue * easedAlpha)
-
+			local now = os.clock()
+			local alpha = math.clamp((now - startedAt) / VALUE_COUNTER_DURATION, 0, 1)
 			if alpha >= 1 then
 				break
+			end
+			if now - lastWrite >= 1 / VALUE_COUNTER_HZ then
+				lastWrite = now
+				local easedAlpha = 1 - ((1 - alpha) ^ 3)
+				label.Text = formatDonationValue(spec.kind, finalValue * easedAlpha)
 			end
 
 			RunService.Heartbeat:Wait()

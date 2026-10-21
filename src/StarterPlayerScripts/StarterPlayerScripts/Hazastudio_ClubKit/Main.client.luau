@@ -1143,10 +1143,12 @@ do
 			MobilePanelManager.close(panelId)
 		end)
 	end
+	-- Admin Hub on = the code-built Spotlight owns the admin surface; registering the old
+	-- 04-AdminHub shell made phones open the empty template and hide the Spotlight.
 	MobilePanelManager.register(
 		"admin",
 		if Config.FeatureFlags.AdminHubEnabled == true
-			then (Config.Admin.HUB_GUI_NAME or Config.Admin.GUI_NAME)
+			then (Config.Admin.SPOTLIGHT_GUI_NAME or Config.Admin.GUI_NAME)
 			else Config.Admin.GUI_NAME,
 		function()
 			adminIcon:deselect()

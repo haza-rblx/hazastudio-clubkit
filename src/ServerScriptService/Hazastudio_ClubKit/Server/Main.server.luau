@@ -299,6 +299,13 @@ if Config.FeatureFlags.MusicPlayerEnabled then
 end
 -- Late-bound controller remotes: create early so client boot does not wait on heavy server wiring.
 provisionEarlyRemotes(ReplicatedStorage, Remotes, Config)
+-- Drop kit ScreenGui templates this server never binds before anyone spawns with a copy.
+do
+	local pruned = ServerMods.pruneStarterGui(Config)
+	if #pruned > 0 then
+		log:info("Pruned unused StarterGui templates", { names = table.concat(pruned, ",") })
+	end
+end
 -- Interface Notify - inject into controller as deps
 type NotifyPayload = {
 	message: string,

@@ -11,6 +11,18 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+### Performance (v4 optimization pass — 2026-10-21)
+- **Board podium loop runs only for boards in view.** Every world leaderboard used to replay its top-3 podium rise and value count-up every 30 s forever, including boards across the map. It now plays only when the board is within its SurfaceGui `MaxDistance` (150 studs when that is 0) and on screen. Measured in Experiment Area: 0 board text writes in 25 s with the camera away (was a full podium sequence per board every 30 s).
+- **Podium value count-up writes at 30 Hz** instead of every frame. Each write re-renders the whole board canvas (~400 instances); 3 podiums now cost ~81 writes per sequence instead of ~160 at 60 fps.
+- **Unused admin templates are no longer cloned into every player.** At boot the server removes kit ScreenGui templates it will never bind from StarterGui (runtime only, the place file is untouched): `04-AdminHub` (always; the Admin Hub is the code-built Spotlight), `04-AdminPanel` when `04-AdminPanelv2` is installed, and `04-AdminPanelv3` unless `Features.AdminPanelV3Enabled`. Measured in Experiment Area: PlayerGui 9,065 → 8,315 instances per player.
+- Removed `Client/UI/AdminHubUI.luau` (2,005 lines, no longer required anywhere since Admin Spotlight).
+
+### Fixed (v4 optimization pass — 2026-10-21)
+- Phones with Admin Hub on: the mobile panel manager registered the old `04-AdminHub` shell as the admin panel, so opening it enabled the empty template and hid the Spotlight. It now registers `04-AdminSpotlight` (`Config.Admin.SPOTLIGHT_GUI_NAME`). Ported from the NIGHT ZONE live fix.
+
+### Performance tooling
+- **`tools/PerfProbe.playmode.luau`**: read-only playtest probe. Reports PlayerGui instances per ScreenGui (enabled/disabled), world SurfaceGui/BillboardGui counts, developer memory tags, RemoteEvent traffic per remote and frame time.
+
 ### Added (Giveaway: hourly prize draw — 2026-10-21)
 - **Giveaway** (Auto Gacha) ported from the PARKLAB prototype: every hour (or as soon as `MinPlayers` are in the server) one player is drawn at random, shown on a reel with a winner toast and an optional winner cinematic (15 variants). The card at the top of the screen shows the countdown, players and prize to every player.
 - Admins open it from **Admin Spotlight > Giveaway**: turn it on or off, card position, interval, minimum players, spin duration, winner cinematic, prize (R$), spin now, reset the timer, and history. Prizes are paid through Roblox's Robux Transfers API (10–500 R$ per prompt); a manual "Mark paid" fallback covers prompts that cannot open.
