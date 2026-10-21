@@ -50,6 +50,15 @@ frame times are not representative; relative comparisons and instance counts are
 5. **Board rows only for ranks with data** (`WorkspaceLeaderboardRenderer`): 40 of 46 rows per list
    board were hidden clones in Experiment Area. Measured: world SurfaceGuis 6,002 → 1,727. Savings
    scale with how far a board is from its limit (full boards are unchanged).
+6. **Calendar flame sways paused off screen** (`EventCardKit`). An idle property-write audit
+   (20 s) found 13 looping flame tweens writing Rotation ~28×/s each, 3 of them inside the closed
+   Event tab. A shared 1 Hz visibility check pauses them. Measured: hidden 0 writes / 3 s, visible
+   324 writes / 3 s (3 flames, unchanged).
+
+Idle writes still present, by design: `BoardAmbience` (30 Hz, boards within 140 studs and in
+front of the camera; Experiment Area spawns next to all five) and the topbar `RunningText` marquee.
+A MicroProfiler A/B of BoardAmbience was inconclusive (Studio frame time swung 65 → 150 ms between
+captures); re-measure on a device before changing it.
 
 ## Next targets, by measured size
 

@@ -289,16 +289,66 @@ local function templates(cal: Instance): { [string]: GuiObject }
 end
 
 -- Swaying flame: each done tile breathes on its own beat so a row never moves in step.
+-- Flame sways loop forever, and a looping tween writes Rotation every frame even on a hidden card
+-- (the Event tab keeps its painted calendar while closed) — each write re-renders the whole
+-- ScreenGui. One 1 Hz check pauses the sways that are off screen. v4 audit 2026-10-21: 13 flames
+-- × ~28 writes/s idle before.
+local SWAY_CHECK_INTERVAL = 1
+local swayTweens: { [Tween]: GuiObject } = {}
+local swayCheckRunning = false
+
+local function onScreen(node: Instance): boolean
+	local current: Instance? = node
+	while current do
+		if current:IsA("LayerCollector") then
+			return current.Enabled
+		end
+		if current:IsA("GuiObject") and not current.Visible then
+			return false
+		end
+		current = current.Parent
+	end
+	return false
+end
+
+local function runSwayCheck()
+	if swayCheckRunning then
+		return
+	end
+	swayCheckRunning = true
+	task.spawn(function()
+		while next(swayTweens) do
+			task.wait(SWAY_CHECK_INTERVAL)
+			for tween, image in pairs(swayTweens) do
+				if image.Parent == nil then
+					tween:Cancel()
+					swayTweens[tween] = nil
+				elseif onScreen(image) then
+					if tween.PlaybackState ~= Enum.PlaybackState.Playing then
+						tween:Play()
+					end
+				elseif tween.PlaybackState == Enum.PlaybackState.Playing then
+					tween:Pause()
+				end
+			end
+		end
+		swayCheckRunning = false
+	end)
+end
+
 local function sway(image: GuiObject)
 	if UIMotion.reduced() then
 		return
 	end
 	image.Rotation = -4
-	TweenService:Create(
+	local tween = TweenService:Create(
 		image,
 		TweenInfo.new(0.9 + math.random() * 0.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
 		{ Rotation = 4 }
-	):Play()
+	)
+	tween:Play()
+	swayTweens[tween] = image
+	runSwayCheck()
 end
 
 export type PaintOptions = {
