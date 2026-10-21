@@ -25,6 +25,7 @@ Category: engine (source sync). Branch `perf/v4`. Driven by measurements in Expe
 | `Shared/Constants/Config.luau` | `Config.Admin.SPOTLIGHT_GUI_NAME = "04-AdminSpotlight"` | no |
 | `Client/UI/AdminSpotlightUI.luau` | ScreenGui name from `Config.Admin.SPOTLIGHT_GUI_NAME` | no |
 | `Main.client.luau` | MobilePanelManager "admin" registers the Spotlight when Admin Hub is on (bug fix, NZ port) | no |
+| `Shared/Leaderboards/WorkspaceLeaderboardRenderer.luau` | List rows cloned only for ranks with an entry (was: every rank up to `spec.limit`, hidden when empty) | no |
 | `Client/UI/AdminHubUI.luau` | **Removed** (unused since Admin Spotlight) | no |
 | `tools/PerfProbe.playmode.luau` | **New.** Read-only playtest probe (GUI instances, memory tags, remote traffic, frame time) | no (tool) |
 | `docs/plans/v4-optimize/AUDIT.md` | **New.** Measured audit, corrected findings, next targets | no |

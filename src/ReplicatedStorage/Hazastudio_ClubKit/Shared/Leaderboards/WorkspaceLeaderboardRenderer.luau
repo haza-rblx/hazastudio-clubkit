@@ -1247,7 +1247,17 @@ local function renderBoard(spec: BoardSpec, payload: any): boolean
 	local template = gui:FindFirstChild(spec.templateName, true)
 	if template and template:IsA("GuiObject") then
 		for rank = 4, spec.limit do
-			updateCard(getRow(template, rank), entries[rank], rank, spec.kind, true)
+			local entry = entries[rank]
+			if entry ~= nil or rank == 4 then
+				updateCard(getRow(template, rank), entry, rank, spec.kind, true)
+			else
+				-- No entry at this rank: hide a row that already exists, but never clone one
+				-- (~21 instances) only to hide it. Boards used to build every row up to the limit.
+				local existing = template.Parent and template.Parent:FindFirstChild("GeneratedLeaderboardRow" .. rank)
+				if existing and existing:IsA("GuiObject") then
+					updateCard(existing, nil, rank, spec.kind, true)
+				end
+			end
 		end
 		local listParent = template.Parent
 		if listParent then

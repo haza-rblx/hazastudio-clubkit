@@ -47,12 +47,15 @@ frame times are not representative; relative comparisons and instance counts are
    controllers boot clean.
 3. **Mobile admin panel registration** points at `04-AdminSpotlight` (NZ live bug, ported).
 4. Removed dead `AdminHubUI.luau`.
+5. **Board rows only for ranks with data** (`WorkspaceLeaderboardRenderer`): 40 of 46 rows per list
+   board were hidden clones in Experiment Area. Measured: world SurfaceGuis 6,002 → 1,727. Savings
+   scale with how far a board is from its limit (full boards are unchanged).
 
 ## Next targets, by measured size
 
-1. **World boards (6,002 instances).** Each board pre-renders up to its limit (~50 rows × ~7
-   instances) although ~6–8 rows are visible. Options: lower row limits per board, or virtualize
-   board rows (pool of visible rows, scroll by data). Needs owner decision on visible row count.
+1. **Full boards.** A board at its limit still holds ~50 rows × ~21 instances while ~7 are visible.
+   Options: lower row limits per board, or virtualize board rows (pool of visible rows, scroll by
+   data). Needs an owner decision on how many rows a board should list.
 2. **Disabled ScreenGuis (38 % of PlayerGui).** Candidates: templates for panels a player opens
    rarely (Couple, Shop, Event popups). A lazy-clone path (template moved to ReplicatedStorage at
    boot, cloned on first open) needs per-binder changes; do one panel at a time with a playtest.
