@@ -108,6 +108,7 @@ local ACTIONS = {
 	{ id = "title", group = "identity", gate = "admin", needsPlayer = true, title = "Custom title" },
 	{ id = "stats", group = "identity", gate = "admin", needsPlayer = true, title = "Edit stats" },
 	{ id = "donate", group = "donations", gate = "admin", needsPlayer = false, title = "Donations" },
+	{ id = "giveaway", group = "donations", gate = "admin", needsPlayer = false, title = "Giveaway" },
 	{ id = "refresh", group = "donations", gate = "owner", needsPlayer = false, title = "Reload boards" },
 }
 
@@ -168,11 +169,13 @@ local function init(deps: {
 	remotes: Folder?,
 	icon: any?,
 	openTitlePanel: (() -> ())?,
+	openGiveaway: (() -> ())?,
 })
 	local log = Logger.new("Client.AdminHubController")
 	local localPlayer = Players.LocalPlayer
 	local topbarIcon = deps.icon
 	local openTitlePanel = deps.openTitlePanel
+	local openGiveaway = deps.openGiveaway
 	local commandService = createCommandLibraryService()
 
 	-- The Spotlight panel is code-built, so there is no 04-AdminHub template to wait for.
@@ -1182,6 +1185,16 @@ local function init(deps: {
 
 		if actionId == "announce" then
 			openAnnounceSheet()
+			return
+		end
+		if actionId == "giveaway" then
+			ui:hide()
+			if topbarIcon then
+				topbarIcon:deselect()
+			end
+			if openGiveaway then
+				openGiveaway()
+			end
 			return
 		end
 		if actionId == "donate" then

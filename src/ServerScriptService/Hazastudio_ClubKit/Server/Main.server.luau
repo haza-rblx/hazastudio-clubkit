@@ -611,6 +611,9 @@ local streakController = ServerMods.createStreakController({
 })
 -- Event board (ADR 0015): venue posts + venue quests from the customer dashboard. Registers its
 -- own players (current and joining) and pulls the board on onStart.
+-- Giveaway (Auto Gacha): hourly prize draw; settings + history in DataStore Giveaway_v1.
+trackLifecycle("GiveawayService", ServerMods.createGiveawayService({ remotes = Remotes }))
+
 local eventBoardController = trackLifecycle(
 	"EventBoardController",
 	ServerMods.createEventBoardController({

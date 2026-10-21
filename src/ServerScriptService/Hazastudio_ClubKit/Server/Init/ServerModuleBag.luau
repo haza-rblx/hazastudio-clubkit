@@ -25,6 +25,7 @@ return {
 	createAvatarContextService = require(Server.Services.AvatarContextService),
 	createAvatarLikeService = require(Server.Services.AvatarLikeService),
 	createCarryService = require(Server.Services.CarryService),
+	createGiveawayService = require(Server.Services.GiveawayService),
 	createGravityService = require(Server.Services.GravityService),
 	createDroneService = require(Server.Services.DroneService),
 	createProfileCommandService = require(Server.Services.ProfileCommandService),

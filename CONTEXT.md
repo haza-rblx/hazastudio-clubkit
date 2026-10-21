@@ -7,6 +7,7 @@ Domain glossary for agents. Terms only — no implementation details, no workflo
 - **Kit** — the Hazastudio Club Kit as a whole: the product buyers install into their Roblox place.
 - **Engine** — the replaceable core of the Kit: the `Hazastudio_ClubKit` folders under ReplicatedFirst, ReplicatedStorage, ServerScriptService, StarterPlayerScripts, plus related StarterGui. Updated wholesale on release.
 - **Showcase** — `ClubKitShowcase`, a dev-only demo assembly. Not part of the Engine; never shipped via source sync.
+- **Giveaway** — the hourly prize draw (prototype name "Auto Gacha"). The timer, or the server reaching `MinPlayers`, picks one player at random; admins pay the prize via the Robux Transfers API. Settings and history persist in DataStore `Giveaway_v1`. Opt-in per buyer (`ClubKitConfig.Giveaway.Enabled`). Admins run it from Admin Spotlight > Giveaway.
 
 ## Ownership boundary
 

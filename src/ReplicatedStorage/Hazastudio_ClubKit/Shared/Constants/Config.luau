@@ -577,6 +577,25 @@ Config.PaidBroadcast = {
 	MSG_PRODUCT_NOT_CONFIGURED = "[Broadcast] Paid broadcast is not available yet.",
 	MSG_PURCHASE_FAILED = "[Broadcast] Purchase could not be completed.",
 }
+-- Giveaway (Auto Gacha): hourly prize draw. Buyer defaults are ClubKitConfig.Giveaway (ConfigBootstrap
+-- writes DEFAULT_*). Live values edited in the admin sheet persist in DataStore STORE_NAME/STORE_KEY
+-- (versioned: never rename) and win over the defaults.
+Config.Giveaway = {
+	STORE_NAME = "Giveaway_v1",
+	STORE_KEY = "state",
+	REMOTE_STATE = "GiveawayState",
+	REMOTE_SPIN = "GiveawaySpin",
+	REMOTE_ADMIN = "GiveawayAdmin",
+	REMOTE_HISTORY = "GiveawayHistory",
+	REMOTE_NOTICE = "GiveawayNotice",
+	DEFAULT_ENABLED = false,
+	DEFAULT_INTERVAL_MINUTES = 60,
+	DEFAULT_MIN_PLAYERS = 50,
+	DEFAULT_PRIZE_ROBUX = 50,
+	DEFAULT_ANCHOR = "TopCenter",
+	DEFAULT_SPIN_DURATION = 4.6,
+	DEFAULT_WIN_FX_VARIANT = 1,
+}
 Config.CinematicDock = {
 	REMOTE_REQUEST = "CinematicDockRequest",
 	REMOTE_BROADCAST = "CinematicDockBroadcast",

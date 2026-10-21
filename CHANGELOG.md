@@ -11,6 +11,12 @@ Active version: see [`VERSION`](VERSION).
 
 ## [Unreleased]
 
+### Added (Giveaway: hourly prize draw — 2026-10-21)
+- **Giveaway** (Auto Gacha) ported from the PARKLAB prototype: every hour (or as soon as `MinPlayers` are in the server) one player is drawn at random, shown on a reel with a winner toast and an optional winner cinematic (15 variants). The card at the top of the screen shows the countdown, players and prize to every player.
+- Admins open it from **Admin Spotlight > Giveaway**: turn it on or off, card position, interval, minimum players, spin duration, winner cinematic, prize (R$), spin now, reset the timer, and history. Prizes are paid through Roblox's Robux Transfers API (10–500 R$ per prompt); a manual "Mark paid" fallback covers prompts that cannot open.
+- Settings and history persist in DataStore `Giveaway_v1` (key `state`, versioned). Config defaults: `ClubKitConfig.Giveaway` (`Enabled = false`, buyers opt in). Admin edits in the sheet override the defaults once saved.
+- Remotes `GiveawayState`, `GiveawaySpin`, `GiveawayAdmin`, `GiveawayHistory`, `GiveawayNotice` (`Config.Giveaway`), created by `EarlyRemotes`.
+
 ### Fixed (Admin Spotlight sheets layout — 2026-10-19)
 - Sheets now follow the Preferences grouping: a caps header opens a section, consecutive rows share one group (2 px apart, rounded only at the group's ends), and the footnote sits right under its group, with clear space between sections. Before, every row was its own pill and headers, rows and footnotes were evenly spaced.
 - A sheet's last footnote no longer spills below the sheet, and a sheet taller than the screen scrolls instead of running off it.

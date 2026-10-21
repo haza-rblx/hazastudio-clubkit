@@ -1507,10 +1507,17 @@ if Config.FeatureFlags.AdminHubEnabled == true then
 					adminPanelApi.show()
 				end
 			end,
+			openGiveaway = function()
+				ClientMods.GiveawayController.open()
+			end,
 		})
 		trackClientLifecycle("AdminHubController", hubApi)
 	end)
 end
+trackBootTask("GiveawayController.init", function()
+	local giveawayApi = ClientMods.GiveawayController.init({ remotes = Remotes })
+	trackClientLifecycle("GiveawayController", giveawayApi)
+end)
 trackBootTask("CommandLibraryController.init", function()
 	local commandLibraryService = trackClientLifecycle(
 		"CommandLibraryService",

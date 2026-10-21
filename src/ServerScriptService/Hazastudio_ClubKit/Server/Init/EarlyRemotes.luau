@@ -83,6 +83,16 @@ local function provisionRemotesFolder(remotes: Folder, config: any)
 	ensureRemoteEvent(remotes, config.CinematicDock.REMOTE_BROADCAST)
 	ensureRemoteEvent(remotes, config.CinematicDock.REMOTE_TARGETS)
 
+	for _, name in ipairs({
+		config.Giveaway.REMOTE_STATE,
+		config.Giveaway.REMOTE_SPIN,
+		config.Giveaway.REMOTE_ADMIN,
+		config.Giveaway.REMOTE_HISTORY,
+		config.Giveaway.REMOTE_NOTICE,
+	}) do
+		ensureRemoteEvent(remotes, name)
+	end
+
 	ensureRemoteEvent(remotes, config.Drone.REMOTE_REQUEST)
 	ensureRemoteEvent(remotes, config.Drone.REMOTE_CAMERA)
 	ensureRemoteEvent(remotes, config.Drone.REMOTE_STATE)

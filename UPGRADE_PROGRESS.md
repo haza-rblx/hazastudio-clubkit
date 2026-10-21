@@ -12,6 +12,30 @@ Internal scratch pad to track work **before** a version is released.
 
 **3.0.0 released 2026-10-09.** The full 3.0 progress log (tables, decisions, verification notes) as it stood at release is in [`docs/releases/3.0.0/PROGRESS_ARCHIVE.md`](docs/releases/3.0.0/PROGRESS_ARCHIVE.md). Buyer guide: [`docs/releases/3.0.0/UPGRADE.md`](docs/releases/3.0.0/UPGRADE.md). File list: [`docs/releases/3.0.0/CHANGED_FILES.md`](docs/releases/3.0.0/CHANGED_FILES.md).
 
+## Unreleased — file table (Giveaway, 2026-10-21)
+
+Category: engine (source sync) + config. Not committed. Ported from `.tmp/auto-gacha` (approved PARKLAB prototype). New config section `ClubKitConfig.Giveaway` (schema + template, fill-forward), five remotes, one DataStore (`Giveaway_v1`, existing live documents load unchanged). Main.server / Main.client get one `trackLifecycle` / `trackBootTask` line each (no new top-level locals).
+
+| File | Change | Buyer-owned? |
+|---|---|---|
+| `Server/Services/GiveawayService.luau` | **New.** Draw loop, Transfers API payout (RobuxTransferSender only), DataStore load/save (no save before a successful load), admin gate (`PermissionDomain.canUseAdminPanel` + Studio) | no |
+| `Client/Controllers/GiveawayController.luau` | **New.** Remotes, shared state, HUD + sheet wiring, `open()` for Admin Spotlight | no |
+| `Client/UI/Giveaway/GiveawayHud.luau` | **New.** Card, toast, reel, winner cue, responsive scale | no |
+| `Client/UI/Giveaway/GiveawaySheet.luau` | **New.** Admin sheet: Tiles hero, card position, Combo steppers, history + pay chips, drag, fit to screen | no |
+| `Client/UI/Giveaway/GiveawayWinFx.luau` | **New.** Winner cinematic (copy of the prototype WinFx; `LuckyDraw*` instance names renamed `Giveaway*`) | no |
+| `Client/Controllers/AdminHubController.luau` | `giveaway` action (gate `admin`, group Donations) opens the sheet via `openGiveaway` dep | no |
+| `Client/UI/AdminSpotlightUI.luau` | `giveaway` entry in the action catalog and `ACTION_ORDER` | no |
+| `Client/Init/ClientModuleBag.luau` | `GiveawayController` | no |
+| `Server/Init/ServerModuleBag.luau` | `createGiveawayService` | no |
+| `Server/Init/EarlyRemotes.luau` | Creates the five `Giveaway` remotes | no |
+| `Server/Main.server.luau` | `trackLifecycle("GiveawayService", …)` | no |
+| `Main.client.luau` | `GiveawayController.init` boot task; `openGiveaway` dep for the Admin Hub | no |
+| `Shared/Constants/Config.luau` | `Config.Giveaway` (store/remote names, `DEFAULT_*`) | no |
+| `Shared/Config/ConfigBootstrap.luau` | Copies `ClubKitConfig.Giveaway` into `Config.Giveaway.DEFAULT_*` | no |
+| `Shared/Config/ClubKitConfigSchema.luau` | `defaults.Giveaway` (fill-forward) | no |
+| `Hazastudio_ClubKitConfig/ClubKitConfig.luau` | **Template** `ClubKitConfig.Giveaway` section. Buyer-owned: review manually, do not replace | **yes (review)** |
+| `CHANGELOG.md`, `UPGRADE_PROGRESS.md`, `CONTEXT.md` | Entries for this change | no |
+
 ## Unreleased — file table (Admin Spotlight replaces the Admin Hub UI, 2026-10-18)
 
 Category: engine (source sync). Not committed. Spec: [`docs/plans/admin-spotlight/SPEC.md`](docs/plans/admin-spotlight/SPEC.md). Two new remote names in the shared `Config.luau`; no DataStore key changes (stats are written to their existing fields), no buyer files. The `04-AdminHub` template GUI stays in buyer places but is no longer bound. Phase 2 (Spotlight title modal) is pending; the Title row still opens the v3 editor.

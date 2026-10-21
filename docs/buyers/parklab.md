@@ -1,7 +1,7 @@
 # PARKLAB (`parklab`)
 
 Catatan konfigurasi dan kustomisasi place-spesifik untuk **PARKLAB** ("[8 BIT EVENT] PARKLAB").
-*Diperbarui: 2026-10-16*
+*Diperbarui: 2026-10-21*
 
 - PlaceId: `80098131973647`
 - Owner: Group `347553422` ("LABS Project") — semua animasi yang dipakai place ini harus milik group ini, kalau tidak gagal load (kaku) di live game.
@@ -95,6 +95,49 @@ Scan 2026-10-16: 641 track, 26 part milik creator lain (bukan group `347553422`)
 
 ---
 
-## 6. Wajib setelah edit
+## 6. Giveaway / Auto Gacha + SZV6 DJ (live-only, 2026-10-21)
+
+Semua di bawah ini dipasang langsung di place (bukan dari repo). Port repo-nya ada terpisah (uncommitted) dan **belum** punya putaran polish terakhir (lihat akhir bagian ini).
+
+**Instance di place:**
+- `ServerScriptService.AutoGachaServer` (Script) — jadwal draw, spin, history, payout.
+- `StarterPlayerScripts.AutoGachaClient` (LocalScript) — HUD card, toast reel, sheet admin.
+- `ReplicatedStorage.AutoGachaProto` (Folder) berisi `WinFx` (ModuleScript, 15 cinematic). Remotes (`State`, `Spin`, `AdminRequest`, `History`, `Notice`) dibuat server saat runtime.
+- Sumber kerja: `.tmp/auto-gacha/*.luau` (diserve `127.0.0.1:8765`, dipasang lewat `ScriptEditorService:UpdateSourceAsync`).
+
+**Perilaku:**
+- Draw tiap Interval kalau pemain ≥ Min players; kalau timer habis di bawah threshold → nunggu, spin begitu tercapai. Admin bisa Spin now / Reset timer.
+- Prize dalam **Robux** (bukan "R$"). Pay = Roblox **Transfers API** (`PromptRobuxTransferAsync`, receipt `RobuxTransferSender` → auto Paid). Sender wajib Roblox Plus; 10–500 per prompt; penerima dapat 90%. Gagal prompt → fallback "Mark paid" manual. Di Studio transfer "optimistically succeed".
+- Persist: DataStore `Giveaway_v1` key `state` = `{ v=1, nextId, history, pending, config }` (config: IntervalSeconds, MinPlayers, Anchor, PrizeText, WinFxVariant, Enabled, SpinDuration). Save debounce 6 s + BindToClose.
+- Admin gate: `PermissionDomain.canUseAdminPanel(player:GetAttribute("_LKG_Role"), userId)` (Studio = semua). **Jangan pakai** `isAdminUser`/`CreatorId`: owner place ini (`hazatargz`, rank 254 di group 347553422) tidak lolos keduanya; `OverheadDomain.resolveRole(254)` balik `Guest` — role asli ada di attribute `_LKG_Role = "Staff"`.
+- Entry admin: tile **Giveaway** di Admin Hub lama (`04-AdminHub`, section donations), di-clone client saat runtime. `ClubKitConfig.AdminHub = true` di place ini.
+- Setting terakhir: Prize 50, Interval 45 min, Min players 50, Spin 5.5 s, Winner cinematic 4 (Ascension Vortex), Card position Top right.
+
+**UI (disetujui owner):** HUD card (Hero "Tiles", stepper "Combo"); toast reel tengah saat spin lalu naik pas landing; sheet draggable tanpa dim overlay, skala = UIScale `1000-01-CT-ADDON` di desktop (+3 px font ≤16), di HP skala 1 dan dipas antara topbar–hotbar; HUD card geser keluar layar saat `15-TopMenuGUI` / `07-MenuGUI` / `1000-01-CT-ADDON` menutupinya; setting pakai **Save/Discard bar** (Card position langsung); History: Back pill + Edit → Delete → Confirm (server `deleteEntry`). Cinematic: 2,4 s terakhir kamera settle ke dada (bukan overhead tag). Dicek di iPhone 7 (667×375).
+
+**SZV6 DJ console (pihak ketiga, server script obfuscated + phone-home — owner terima risikonya):**
+- Dipindah dari `Workspace.SZV6` ke service asli (`SSS.DJMusic`, `SPS.DJMusic`, `ServerStorage.{LicenseConfig,MusicConfig,MusicLibraryStore}`, `StarterGui.DJMusicConsole`). Backup utuh: `ServerStorage.SZV6_backup`.
+- Client: TopbarPlus diganti `ReplicatedStorage.Hazastudio_ClubKit.Icon` (kit), pill gaya kit, `setOrder(20)` kiri setelah ABSEN.
+- `MusicConfig.IsDJ`: admin kit (cek `_LKG_Role` seperti di atas, nunggu attribute ≤15 s) + group DJ lama `721052710` rank 202/254.
+- Dropdown topbar musik kit: **Reload Music / Reload DJ Music** (baris "Music Player" dihapus atas permintaan owner; player tetap dibuka dari top menu). "Reload DJ Music" = MusicResync dari seller (DJControl `RequestSync` → tunggu DJBroadcast `StateSync` ≤5 s → Loaded!/Failed). Keduanya diubah di **engine copy place** `Client/UI/MusicTopbarIcon.luau` (setupMenu) — hilang kalau engine PARKLAB di-upgrade, pasang ulang. Script MusicResync terpisah dari seller **tidak** dipasang (butuh `Packages.TopbarPlus`).
+- Belum: auto-mute musik kit saat deck SZV6 main.
+
+**Progress (per 2026-10-21):**
+- [x] Giveaway terpasang permanen di place (server + client + WinFx), DataStore `Giveaway_v1` bersih dari data mock.
+- [x] Pay via Transfers API — alur lengkap teruji di Studio (Studio selalu sukses).
+- [x] Responsive iPhone 7, hide-on-menu, Save bar, skala CT, Back/Edit/Delete, kamera settle — terpasang; **sebagian belum dicek visual** setelah perubahan terakhir (font +3, sheet 320×552, Back/Edit, kamera settle, label Robux, Reload DJ Music).
+- [x] SZV6 dipindah ke service asli + tombol DJ di topbar kit (admin kit + rank 202/254 group `721052710`).
+- [x] Dropdown musik: Reload Music / Reload DJ Music.
+- [ ] Owner **Save + Publish** PARKLAB.
+- [ ] Tes live: transfer Robux sungguhan (akun admin dengan Roblox Plus) + tombol DJ untuk admin vs non-admin.
+- [ ] Auto-mute musik kit saat deck SZV6 main.
+- [ ] Opsional: opsi "Mark paid" manual yang selalu ada (kalau dibayar di luar panel); matikan rank group DJ kalau mau admin-only.
+- [ ] Sinkron polish terakhir ke port repo (daftar di bawah), lalu tes di place hasil sync repo.
+
+**Belum masuk port repo:** hide-on-menu, Save bar, skala CT + font bump, sheet 320×552, Back/Edit/Delete, camera settle, label "Robux", fix canvas scroll saat UIScale. Repo pakai Admin Spotlight (bukan tile Admin Hub).
+
+---
+
+## 7. Wajib setelah edit
 
 Ctrl+S lalu Publish PARKLAB — semua perubahan di atas baru sampai ke buyer setelah publish.

@@ -181,6 +181,15 @@ local ACTION_META: { [string]: ActionMeta } = {
 		sheet = true,
 		speed = false,
 	},
+	giveaway = {
+		title = "Giveaway",
+		subtitle = "Hourly prize draw · settings & history",
+		alias = "/giveaway",
+		glyph = "GA",
+		needsPlayer = false,
+		sheet = false,
+		speed = false,
+	},
 	refresh = {
 		title = "Reload boards",
 		subtitle = "Refresh every leaderboard",
@@ -195,7 +204,7 @@ local ACTION_META: { [string]: ActionMeta } = {
 -- Main-list order. Player actions first, then server actions ("Affects everyone").
 local ACTION_ORDER = {
 	"bring", "to", "role", "gift", "title", "stats",
-	"announce", "ungravity", "gravity", "donate", "refresh",
+	"announce", "ungravity", "gravity", "donate", "giveaway", "refresh",
 }
 
 local function face(weight: Enum.FontWeight): Font

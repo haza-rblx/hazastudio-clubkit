@@ -168,6 +168,16 @@ ClubKitConfigSchema.defaults = {
 	PaidBroadcast = {
 		ProductId = 0,
 	},
+	-- Giveaway (Auto Gacha) defaults; admins edit live values in Admin Spotlight > Giveaway.
+	Giveaway = {
+		Enabled = false, -- buyers opt in
+		IntervalMinutes = 60,
+		MinPlayers = 50,
+		PrizeRobux = 50,
+		Anchor = "TopCenter", -- "TopLeft" | "TopCenter" | "TopRight"
+		SpinDuration = 4.6,
+		WinFxVariant = 1, -- 0 = None, 1..15
+	},
 	-- Free /announce + free broadcast UI. Tier1=VIP, Tier2=VVIP, Tier3=Supreme (or label).
 	Announcement = {
 		MinMembership = "Tier2",

@@ -670,6 +670,21 @@ function ConfigBootstrap.apply(config: any)
 		end
 	end
 
+	-- Giveaway (Auto Gacha): buyer defaults. Live values come from the admin sheet (DataStore).
+	local giveaway = clubKit.Giveaway
+	if type(config.Giveaway) == "table" and type(giveaway) == "table" then
+		config.Giveaway.DEFAULT_ENABLED = giveaway.Enabled == true
+		config.Giveaway.DEFAULT_INTERVAL_MINUTES = tonumber(giveaway.IntervalMinutes) or config.Giveaway.DEFAULT_INTERVAL_MINUTES
+		config.Giveaway.DEFAULT_MIN_PLAYERS = tonumber(giveaway.MinPlayers) or config.Giveaway.DEFAULT_MIN_PLAYERS
+		config.Giveaway.DEFAULT_PRIZE_ROBUX = tonumber(giveaway.PrizeRobux) or config.Giveaway.DEFAULT_PRIZE_ROBUX
+		local anchor = giveaway.Anchor
+		if anchor == "TopLeft" or anchor == "TopCenter" or anchor == "TopRight" then
+			config.Giveaway.DEFAULT_ANCHOR = anchor
+		end
+		config.Giveaway.DEFAULT_SPIN_DURATION = tonumber(giveaway.SpinDuration) or config.Giveaway.DEFAULT_SPIN_DURATION
+		config.Giveaway.DEFAULT_WIN_FX_VARIANT = tonumber(giveaway.WinFxVariant) or config.Giveaway.DEFAULT_WIN_FX_VARIANT
+	end
+
 	local announcement = clubKit.Announcement
 	if type(config.Announcement) == "table" and type(announcement) == "table" then
 		local minRaw = announcement.MinMembership
