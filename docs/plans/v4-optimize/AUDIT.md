@@ -75,6 +75,42 @@ captures); re-measure on a device before changing it.
    AdminSpotlightUI edit; NIGHT ZONE has 6+ live-only engine changes. A sync check
    (repo vs place byte diff per module) should run before every release.
 
+## Per-player instance cost (validated 2026-10-21)
+
+Same avatar (hazatargz) in an empty baseplate vs Experiment Area, one player, after the fixes
+above. Character contents were diffed path by path: identical except the kit additions.
+
+| Seen by | Baseplate | Experiment Area | Kit adds |
+|---|---|---|---|
+| Other players (character) | 389 | 446 | **+57**: `OverheadGUIMainTemplateV6` (55) + `AudioEmitter`/`Wire` (2) |
+| Server (character + Player object) | 395 | 6,074 | **+5,679** |
+| ↳ server PlayerGui | 3 | 5,196 | +5,193 = an exact StarterGui copy (5,193; the other 2 are Roblox `Freecam`) |
+| ↳ Backpack + StarterGear | 2 | 423 | +421 (tools held twice; `Shark` 151 each) |
+| Owning client PlayerGui | 3 | 9,855 | +9,852 (~4,660 built by client code) |
+| Owning client PlayerScripts | 4 | 258 | +254 |
+
+Validated facts:
+- Server memory for one StarterGui copy: 5 clones on the server raised the `Instances` memory tag by
+  5.4 MB, so **~1.1 MB per player** (Studio figure).
+- `PlayerGui` is `PlayerReplicated` (engine docs): its contents go only to the owner, never to
+  other players. Kit GUIs do not multiply on other clients.
+- A ScreenGui created by the client is invisible to the server (probe: server `FindFirstChild` →
+  false).
+
+Corrected claims (do not repeat):
+- "PlayerGui copies are sent to every player": false, owner only.
+- "Client-side cloning speeds up join": false. Templates in ReplicatedStorage still replicate to
+  each client, same count. The only gain is server memory (~1.1 MB/player).
+
+Open: the owner observed ~1,300 instances per player somewhere; not reproduced here (character
+446, character + Backpack + StarterGear 869). Need the place and how it was counted. If the felt
+"multiplier" is client FPS with many players, measure that separately (multiplayer playtest), since
+kit per-character cost is only +57.
+
+Options, not started: (1) client-side GUI cloning to drop the server copy, per GUI behind a flag;
+(2) give tools on `CharacterAdded` instead of StarterGear (−211/player, server + owner);
+(3) simplify the `Shark` tool (151).
+
 ## How to re-measure
 
 Run `tools/PerfProbe.playmode.luau` in a playtest client (command bar or MCP
