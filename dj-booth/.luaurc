@@ -1,0 +1,8 @@
+{
+	"languageMode": "strict",
+	"aliases": {
+		"pkg": "Packages",
+		"spkg": "ServerPackages",
+		"shared": "src/shared"
+	}
+}

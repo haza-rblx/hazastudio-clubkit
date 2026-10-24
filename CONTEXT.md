@@ -181,6 +181,13 @@ Plan: `docs/plans/dj-panel-experiment/implementation-plan-2026-10-16.md`. Lives 
 - **DJ-local controls** — FILTER, MASTER, XFADE CURVE and everything on the cue deck change only the DJ's own monitor; the kit has no room-wide effect for them.
 - **Who may DJ** — whoever `MusicService:setDjMode` accepts; everyone else gets no DJ topbar pill.
 
+## DJ booth (HazaDJ / DJX, `dj-booth/`, ADR 0020 + 0021)
+
+- **Anchor** — a deck's position as `pos` seconds at server time `at`. Every client derives the current position from it: `pos + (now − at) × speed × (1 + pitch)`. The server never writes a playing Sound's `TimePosition`.
+- **Client-owned deck** — Deck A / B are Sounds that each client builds and plays itself, with its own effect chain. The server owns only the transport and mixer state (ADR 0021, replacing the server-replicated decks of ADR 0020 §4).
+- **Load loop** — the client's never-give-up load for a deck: preload, forceRefetch, a bounded wait, then backoff. The cycle repeats until the track plays or stops being wanted. It is silent: no toast, and no Reload button.
+- **Watchdog** — the client's 2 s check that resumes, or reloads, a deck the state says is playing but whose Sound is not.
+
 ## Overhead layer visibility (ADR 0009)
 
 - **Wearer side vs viewer side** — two independent systems, easy to confuse. `publicOverheadLayerVisible` / `publicOverheadBadgeVisible` on `Overhead_v1` are the **wearer's** state: what everyone else sees on your nametag, and what Settings → *Name Tag Details* writes through the server. The client attributes `SettingsOverheadLayerVisible_*` / `SettingsOverheadBadgeVisible_*` only filter the viewer's **own** head, as instant feedback before the server has mirrored the change; they must never filter other players' nametags.

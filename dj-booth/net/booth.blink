@@ -1,0 +1,184 @@
+-- HazaDJ network schema. Compile: `blink net/booth` (from dj-booth/).
+-- Everything a client asks for goes through `Do` (edits, with a result) or `Live` (continuous
+-- controls: faders, knobs, the crossfader). The server validates the sender's role on every call.
+
+option Casing = Pascal
+option RemoteScope = "HAZADJ"
+option ClientOutput = "../src/client/Net.luau"
+option ServerOutput = "../src/server/Net.luau"
+option TypesOutput = "../src/shared/NetTypes.luau"
+
+type Id = string(1..40)
+type Deck = u8(1..2)
+
+enum TrackField = { Title, Artist, Bpm, Key, Speed, Gain, Start, AssetId }
+enum PlaylistField = { Name, CoverText, Image, Color, Shuffle }
+enum PadField = { Label, Kind, Sound, Effect, Volume, Reach, Intensity, Duration, Cooldown }
+enum DeckAction = { Play, Pause, CueDown, CueUp, Sync, Eject }
+enum LiveParam = { Pitch, Vol, Filter, EqHigh, EqMid, EqLow, Echo, Reverb, Flanger, Xfader, Curve, Master }
+enum RoleChoice = { Resident, Guest }
+enum Gate = { Group, Pass }
+
+struct BatchItem {
+	AssetId: f64(1..),
+	Title: string(0..120),
+	Artist: string(0..120),
+	Len: f32?,
+}
+
+struct SettingsValues {
+	volume: u16(0..800),
+	normalize: boolean,
+	limiter: boolean,
+	fadeOut: u8(0..10),
+	crossfade: u8(0..12),
+	pitch: u8(1..3),
+	keyLock: boolean,
+	syncOnLoad: boolean,
+	autoCue: boolean,
+	busyDeck: u8(1..3),
+	padCooldown: u8(1..3),
+	deckOff: string(0..40),
+	speakers: u8(1..3),
+	openAtBooth: boolean,
+	standLock: boolean,
+	maxSet: u8(1..4),
+	idle: u8(1..4),
+	announce: boolean,
+	nowPlaying: boolean,
+	billboard: boolean,
+	lights: boolean,
+	camFx: boolean,
+	camFxAmount: u8(0..100),
+}
+
+enum Command = "Kind" {
+	TrackAdd {
+		AssetId: f64(1..),
+		Title: string(1..120),
+		Artist: string(0..120),
+		Bpm: u16(40..220)?,
+		Key: string(2..3)?,
+		Len: f32?,
+		Speed: f32(0.5..1.5),
+		Lists: Id[..64],
+	},
+	TrackAddBatch { Items: BatchItem[1..20], Lists: Id[..64] },
+	TrackEdit { Id: Id, Field: TrackField, Text: string(0..120)?, Number: f64? },
+	TrackRemove { Id: Id },
+	TrackInPlaylist { Track: Id, Playlist: Id, On: boolean },
+	TrackMove { Playlist: Id, Track: Id, By: i8(-1..1) },
+	PlaylistCreate {},
+	PlaylistEdit { Id: Id, Field: PlaylistField, Text: string(0..60)?, Number: f64?, Flag: boolean? },
+	PlaylistDelete { Id: Id },
+	SoundAdd { AssetId: f64(1..) },
+	SoundRemove { Id: Id },
+	PadEdit { Index: u8(1..8), Field: PadField, Text: string(0..40)?, Number: f64? },
+	PadAssign { Index: u8(1..8) },
+	PadClear { Index: u8(1..8) },
+	PadsReset {},
+	PersonAdd { Who: string(1..40), Role: RoleChoice, Ends: u8(1..3) },
+	PersonEdit { UserId: f64, Role: RoleChoice?, Ends: u8(1..3)? },
+	PersonRemove { UserId: f64 },
+	GateEdit { Gate: Gate, On: boolean?, Value: string(0..20)?, Rank: string(0..5)? },
+	TakeOverPolicy { Policy: u8(1..3) },
+	SettingsSave { Values: SettingsValues },
+	PrefsSet { PanelSize: u8(1..3)?, ReduceMotion: boolean?, Hotkey: u8(1..4)?, View: string(3..6)? },
+	Load { Deck: Deck, Track: Id },
+	QueueAdd { Track: Id },
+	QueueRemove { Key: string(1..40) },
+	QueueMove { Key: string(1..40), By: i8(-1..1) },
+	QueueClear {},
+	QueueAll { Playlist: Id },
+	Automix { On: boolean },
+	Deck { Deck: Deck, Action: DeckAction },
+	HotCue { Deck: Deck, N: u8(1..8), Clear: boolean },
+	Seek { Deck: Deck, Seconds: f32(0..) },
+	PadPress { Index: u8(1..8) },
+	TakeBooth {},
+	EndSet {},
+}
+
+struct Result {
+	Ok: boolean,
+	Message: string?,
+	Id: string?,
+}
+
+struct ProbeResult {
+	AssetId: f64,
+	Ok: boolean,
+	Name: string?,
+	Creator: string?,
+	Len: f32?,
+	Pending: boolean?,
+}
+
+-- edits and one-off actions; returns whether it worked (and a new id where one is made)
+function Do {
+	Yield: Coroutine,
+	Data: Command,
+	Return: Result,
+}
+
+-- checks asset ids with Roblox: name, creator, length; Ok = the audio loads in this experience
+function Probe {
+	Yield: Coroutine,
+	Data: f64[1..20],
+	Return: ProbeResult[],
+}
+
+-- continuous controls while dragging (the client throttles to ~30 Hz)
+event Live {
+	From: Client,
+	Type: Reliable,
+	Call: SingleSync,
+	Data: (Deck, LiveParam, f32),
+}
+
+-- jog: nudge the playhead by a few seconds while scratching
+event Nudge {
+	From: Client,
+	Type: Unreliable,
+	Call: SingleSync,
+	Data: (Deck, f32(-4..4)),
+}
+
+-- the client is ready for state (CharmSync starts sending)
+event Ready {
+	From: Client,
+	Type: Reliable,
+	Call: SingleSync,
+}
+
+-- CharmSync patches
+event Sync {
+	From: Server,
+	Type: Reliable,
+	Call: SingleSync,
+	Data: unknown,
+}
+
+-- a world pad hit: camera effects run on each client
+event WorldFx {
+	From: Server,
+	Type: Reliable,
+	Call: SingleSync,
+	Data: (u8, u8, f32),
+}
+
+-- a pad sound: every client plays its own one-shot (volume 0..2 = a Sound's Volume; near = at the booth)
+event PadSfx {
+	From: Server,
+	Type: Reliable,
+	Call: SingleSync,
+	Data: (f64(1..), f32(0..2), boolean),
+}
+
+-- a short message for one player (an edit was refused, someone took over)
+event Toast {
+	From: Server,
+	Type: Reliable,
+	Call: SingleSync,
+	Data: string(0..120),
+}
