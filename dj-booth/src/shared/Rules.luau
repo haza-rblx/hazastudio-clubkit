@@ -26,7 +26,7 @@ function Rules.caps(role: Types.Role?): Caps
 	return NONE
 end
 
--- may `role` take the booth from someone who is playing? policy: 1 owner, 2 residents, 3 any DJ
+-- may `role` take the DJ deck from someone who is playing? policy: 1 owner, 2 residents, 3 any DJ
 function Rules.canTakeOver(role: Types.Role?, policy: number): boolean
 	if role == "Owner" then
 		return true
@@ -48,7 +48,7 @@ function Rules.guestEndsAt(choice: number, now: number, utcOffsetHours: number?)
 	if choice == 2 then
 		return now + 3600
 	elseif choice == 3 then
-		-- 23:00 tonight in the venue's time (UTC+7 by default, the owner's WIB)
+		-- 23:00 tonight in the game's time (UTC+7 by default, the owner's WIB)
 		local off = (utcOffsetHours or 7) * 3600
 		local localNow = now + off
 		local dayStart = localNow - localNow % 86400

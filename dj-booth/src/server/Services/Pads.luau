@@ -1,7 +1,7 @@
 --!strict
--- The eight pads. SFX pads play a one-shot for the room (everywhere, or from the booth for "near
--- the booth"); world pads run camera effects on every client and low gravity on the server.
--- Cooldowns are booth-wide and enforced here; the ready time syncs so the pads count down.
+-- The eight pads. SFX pads play a one-shot for the room (everywhere, or from the DJ deck for "near
+-- the DJ deck"); world pads run camera effects on every client and low gravity on the server.
+-- Cooldowns are deck-wide and enforced here; the ready time syncs so the pads count down.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage.HazaDJ.Shared
@@ -17,8 +17,8 @@ local gravityToken = 0
 local baseGravity = workspace.Gravity
 
 -- each client plays its own one-shot (the server makes no Sound)
-local function oneShot(assetId: number, volume: number, nearBooth: boolean)
-	Net.PadSfx.FireAll(assetId, math.clamp(volume, 0, 1) * 2, nearBooth)
+local function oneShot(assetId: number, volume: number, nearDjDeck: boolean)
+	Net.PadSfx.FireAll(assetId, math.clamp(volume, 0, 1) * 2, nearDjDeck)
 end
 
 function Pads.press(i: number): (boolean, string?)

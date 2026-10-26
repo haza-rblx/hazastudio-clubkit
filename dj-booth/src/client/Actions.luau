@@ -16,7 +16,7 @@ export type Result = NetTypes.Result
 function Actions.run(cmd: NetTypes.Command): Result
 	local ok, result = pcall(Net.Do.Invoke, cmd)
 	if not ok then
-		Toast.show("The booth didn't answer. Try again.")
+		Toast.show("The DJ deck didn't answer. Try again.")
 		return { Ok = false }
 	end
 	if not result.Ok and result.Message then
@@ -29,7 +29,7 @@ end
 function Actions.quiet(cmd: NetTypes.Command): Result
 	local ok, result = pcall(Net.Do.Invoke, cmd)
 	if not ok then
-		return { Ok = false, Message = "The booth didn't answer. Try again." }
+		return { Ok = false, Message = "The DJ deck didn't answer. Try again." }
 	end
 	return result
 end

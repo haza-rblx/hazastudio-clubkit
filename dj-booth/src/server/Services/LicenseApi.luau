@@ -183,7 +183,7 @@ function LicenseApi.verify(secret: string): Answer
 	return post("/verify", identity(), secret)
 end
 
--- tells the licence server why this download refused to run here (a venue mismatch, say). Fire
+-- tells the licence server why this download refused to run here (a game mismatch, say). Fire
 -- and forget: the answer is ignored, and a failure is silent.
 function LicenseApi.beacon(reason: string)
 	if stubOn() then

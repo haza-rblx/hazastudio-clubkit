@@ -1,5 +1,5 @@
 --!strict
--- Persistence for the booth's own data: library, access (residents, gates) and settings, as one
+-- Persistence for the DJ deck's own data: library, access (residents, gates) and settings, as one
 -- versioned DataStore document. Global state, so not ProfileStore (that is per player, session
 -- locked). Writes are debounced UpdateAsync calls; other servers hear about a save through
 -- MessagingService and reload. Guests are session only and never written.
@@ -17,7 +17,7 @@ local Types = require(Shared.Types)
 local State = require(script.Parent.State)
 
 local STORE_NAME = "HazaDJ_v1" -- the document key is versioned; a format change gets a new name
-local DOC_KEY = "booth"
+local DOC_KEY = "booth" -- stays "booth": the DataStore key predates the DJ deck rename
 local TOPIC = "HazaDJ_v1_saved"
 local DEBOUNCE = 6
 local SIZE_WARN = 3_500_000
@@ -42,7 +42,7 @@ local lastSaveAt = 0
 
 Store.fixture = false
 
--- fill fields a newer build added, so an old document never crashes the booth
+-- fill fields a newer build added, so an old document never crashes the DJ deck
 local function fillForward<T>(value: any, defaults: T): T
 	if type(value) ~= "table" or type(defaults) ~= "table" then
 		return if value == nil then defaults else value
@@ -88,6 +88,12 @@ local function apply(doc: Doc)
 	end
 	access.people = people
 	State.access(access)
+	-- settings saved before the DJ deck rename kept openAtBooth; carry it over once
+	local saved: any = doc.settings
+	if saved and saved.openAtBooth ~= nil and saved.openAtDjDeck == nil then
+		saved.openAtDjDeck = saved.openAtBooth
+		saved.openAtBooth = nil
+	end
 	State.settings(fillForward(doc.settings, Defaults.settings()))
 	rev = doc.rev or 0
 	applyingRemote = false
@@ -116,7 +122,7 @@ local function save()
 	local doc = snapshot()
 	local size = #HttpService:JSONEncode(doc)
 	if size > SIZE_WARN then
-		warn(`[HazaDJ] booth document is {size} bytes; the library is close to the DataStore limit`)
+		warn(`[HazaDJ] DJ deck document is {size} bytes; the library is close to the DataStore limit`)
 	end
 	local ok = retry("save", function()
 		return (store :: DataStore):UpdateAsync(DOC_KEY, function(old: Doc?)
@@ -172,7 +178,7 @@ function Store.start()
 	end
 	local ok, ds = pcall(DataStoreService.GetDataStore, DataStoreService, STORE_NAME)
 	if not ok then
-		warn("[HazaDJ] DataStores unavailable (enable Studio API access to save); the booth runs from memory")
+		warn("[HazaDJ] DataStores unavailable (enable Studio API access to save); the DJ deck runs from memory")
 		memoryOnly = true
 		return
 	end
@@ -181,7 +187,7 @@ function Store.start()
 		return (ds :: DataStore):GetAsync(DOC_KEY)
 	end)
 	if not loaded then
-		warn("[HazaDJ] could not read the booth document; the booth runs from memory: " .. tostring(doc))
+		warn("[HazaDJ] could not read the DJ deck document; the DJ deck runs from memory: " .. tostring(doc))
 		memoryOnly = true
 		return
 	end

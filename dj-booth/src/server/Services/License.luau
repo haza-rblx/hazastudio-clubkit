@@ -1,5 +1,5 @@
 --!strict
--- The venue's licence (ADR 0022). Keeps the licence record in its own DataStore (the secret never
+-- The game's licence (ADR 0022). Keeps the licence record in its own DataStore (the secret never
 -- leaves the server, and a copied place file carries none of it), confirms it with the licence
 -- server every 30 minutes, and lets the place owner activate a code or redeem a guest pass. The
 -- rules live in LicensePolicy; State.license holds what owners may see.
@@ -36,8 +36,8 @@ local attempts: { [number]: { number } } = {}
 local changed: { (View) -> () } = {}
 local busy = false
 local started = false
--- set at start() when this download was stamped for another venue; nil otherwise
-local venueMismatch: string? = nil
+-- set at start() when this download was stamped for another game; nil otherwise
+local gameMismatch: string? = nil
 
 export type Result = { Ok: boolean, Message: string? }
 
@@ -49,11 +49,11 @@ local MESSAGES: { [string]: string } = {
 	owner_mismatch = "That code belongs to a different owner.",
 	revoked = "That license has been revoked.",
 	expired = "That guest pass has ended.",
-	wrong_venue = "This copy of djX was downloaded for a different experience. Download your own copy from your Hazastudio account.",
+	wrong_game = "This copy of djX was downloaded for a different experience. Download your own copy from your Hazastudio account.",
 }
 
--- this place as the venue check sees it
-local function here(): LicensePolicy.Venue
+-- this place as the game check sees it
+local function here(): LicensePolicy.GameIdentity
 	return {
 		universeId = game.GameId,
 		ownerId = game.CreatorId,
@@ -66,8 +66,8 @@ local function view(): View
 		-- the Studio demo fixture (parity checks) runs unlocked
 		return { status = "active", kind = "full" }
 	end
-	if venueMismatch then
-		return { status = "denied", reason = venueMismatch }
+	if gameMismatch then
+		return { status = "denied", reason = gameMismatch }
 	end
 	return LicensePolicy.evaluate(record, os.time())
 end
@@ -152,10 +152,10 @@ end
 -- the owner pasted a code (an activation code, or a guest pass when `guest`)
 local function submit(player: Player, raw: string, guest: boolean): Result
 	if not Roles.isOwner(player) then
-		return { Ok = false, Message = "Only the place owner can activate the booth." }
+		return { Ok = false, Message = "Only the place owner can activate the DJ deck." }
 	end
-	if venueMismatch then
-		return { Ok = false, Message = MESSAGES.wrong_venue }
+	if gameMismatch then
+		return { Ok = false, Message = MESSAGES.wrong_game }
 	end
 	if game.GameId == 0 then
 		return { Ok = false, Message = "Publish the place first, then activate it." }
@@ -171,7 +171,7 @@ local function submit(player: Player, raw: string, guest: boolean): Result
 	end
 	local current = view()
 	if guest and current.status == "active" then
-		return { Ok = false, Message = "This venue already has a full license." }
+		return { Ok = false, Message = "This game already has a full license." }
 	end
 	if busy then
 		return { Ok = false, Message = "Already checking a code. One moment." }
@@ -280,10 +280,10 @@ function License.start()
 	end
 	-- an unpublished Studio place cannot activate anyway, so it is not checked
 	if not Store.fixture and not (RunService:IsStudio() and game.GameId == 0) then
-		venueMismatch = LicensePolicy.venueMismatch(Stamp, here())
-		if venueMismatch then
-			warn("[HazaDJ] this download was made for another venue: " .. venueMismatch)
-			LicenseApi.beacon(venueMismatch)
+		gameMismatch = LicensePolicy.gameMismatch(Stamp, here())
+		if gameMismatch then
+			warn("[HazaDJ] this download was made for another game: " .. gameMismatch)
+			LicenseApi.beacon(gameMismatch)
 		end
 	end
 	refresh()
@@ -307,8 +307,8 @@ function License.start()
 		)
 	end)
 
-	-- a download stamped for another venue is never verified (the beacon already went out)
-	if not venueMismatch then
+	-- a download stamped for another game is never verified (the beacon already went out)
+	if not gameMismatch then
 		janitor:Add(
 			task.spawn(function()
 				if record then

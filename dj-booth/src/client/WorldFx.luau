@@ -1,6 +1,6 @@
 --!strict
 -- World pads on every client: camera shake, camera rotate (a roll), darken. Intensity 0..100 is
--- already scaled by the booth's "Effect strength".
+-- already scaled by the DJ deck's "Effect strength".
 local Lighting = game:GetService("Lighting")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")

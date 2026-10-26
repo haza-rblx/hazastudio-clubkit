@@ -1,6 +1,6 @@
 --!strict
 -- The deck pads (70 px): the Pads tab's pads as one line each, 4 x 2. A press asks the server; the
--- booth-wide cooldown comes back as a ready time, drawn as a draining fill and a countdown chip.
+-- deck-wide cooldown comes back as a ready time, drawn as a draining fill and a countdown chip.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Vide = require(ReplicatedStorage.HazaDJ.Packages.Vide)

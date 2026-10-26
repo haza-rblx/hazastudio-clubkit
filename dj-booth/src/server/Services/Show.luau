@@ -1,16 +1,17 @@
 --!strict
--- What the room sees: "… is live" and now-playing toasts, the live DJ's name over the booth, the
--- beat for club lights, and the booth's prompt / floor. The venue opts in by tagging parts:
---   HazaDJ_Booth   - the DJ booth (name billboard, "Open the decks" prompt, near-booth pads)
+-- What the room sees: "… is live" and now-playing toasts, the live DJ's name over the DJ deck, the
+-- beat for club lights, and the DJ deck's prompt / floor. The game opts in by tagging parts:
+--   HazaDJ_DjDeck  - the DJ deck (name billboard, "Open the decks" prompt, near-DJ deck pads);
+--                    the older HazaDJ_Booth tag still works
 --   HazaDJ_Stand   - the floor behind the decks (kept for DJs when "DJs only" is on)
---   HazaDJ_Speaker - where the decks are heard from in club-zone / booth-area mode
+--   HazaDJ_Speaker - where the decks are heard from in club-zone / DJ deck area mode
 -- Lights listen to workspace attributes HazaDJ_BPM and HazaDJ_BeatAt (server time of a beat).
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Charm = require(ReplicatedStorage.HazaDJ.Packages.Charm)
-local Booth = require(script.Parent.Booth)
+local DjDeck = require(script.Parent.DjDeck)
 local Net = require(script.Parent.Parent.Net)
 local Roles = require(script.Parent.Roles)
 local State = require(script.Parent.State)
@@ -30,11 +31,11 @@ local function nameOf(userId: number?): string?
 end
 
 local function billboard()
-	local booth = CollectionService:GetTagged("HazaDJ_Booth")[1]
-	if not booth or not booth:IsA("BasePart") then
+	local djDeck = CollectionService:GetTagged("HazaDJ_DjDeck")[1] or CollectionService:GetTagged("HazaDJ_Booth")[1]
+	if not djDeck or not djDeck:IsA("BasePart") then
 		return
 	end
-	local bb = booth:FindFirstChild("HazaDJ_Name") :: BillboardGui?
+	local bb = djDeck:FindFirstChild("HazaDJ_Name") :: BillboardGui?
 	local name = nameOf(State.session().live)
 	local on = State.settings().billboard and name ~= nil
 	if not on then
@@ -47,7 +48,7 @@ local function billboard()
 		local g = Instance.new("BillboardGui")
 		g.Name = "HazaDJ_Name"
 		g.Size = UDim2.fromOffset(240, 40)
-		g.StudsOffset = Vector3.new(0, booth.Size.Y / 2 + 3, 0)
+		g.StudsOffset = Vector3.new(0, djDeck.Size.Y / 2 + 3, 0)
 		g.AlwaysOnTop = false
 		g.MaxDistance = 200
 		local l = Instance.new("TextLabel")
@@ -59,34 +60,34 @@ local function billboard()
 		l.TextColor3 = Color3.new(1, 1, 1)
 		l.TextStrokeTransparency = 0.6
 		l.Parent = g
-		g.Parent = booth
+		g.Parent = djDeck
 		bb = g
 	end
 	((bb :: BillboardGui):FindFirstChild("Name") :: TextLabel).Text = name :: string
 end
 
 local function prompt()
-	local booth = CollectionService:GetTagged("HazaDJ_Booth")[1]
-	if not booth or not booth:IsA("BasePart") then
+	local djDeck = CollectionService:GetTagged("HazaDJ_DjDeck")[1] or CollectionService:GetTagged("HazaDJ_Booth")[1]
+	if not djDeck or not djDeck:IsA("BasePart") then
 		return
 	end
-	local pp = booth:FindFirstChild("HazaDJ_Open") :: ProximityPrompt?
-	if State.settings().openAtBooth then
+	local pp = djDeck:FindFirstChild("HazaDJ_Open") :: ProximityPrompt?
+	if State.settings().openAtDjDeck then
 		if not pp then
 			local p = Instance.new("ProximityPrompt")
 			p.Name = "HazaDJ_Open"
 			p.ActionText = "Open the decks"
-			p.ObjectText = "DJ booth"
+			p.ObjectText = "DJ deck"
 			p.MaxActivationDistance = 12
 			p.RequiresLineOfSight = false
-			p.Parent = booth
+			p.Parent = djDeck
 		end
 	elseif pp then
 		pp:Destroy()
 	end
 end
 
--- non-DJs standing on the booth floor are moved off it
+-- non-DJs standing on the DJ deck floor are moved off it
 local function guardStand()
 	if not State.settings().standLock then
 		return
@@ -123,7 +124,7 @@ local function beat()
 end
 
 function Show.start()
-	Booth.onLiveChanged(function(live)
+	DjDeck.onLiveChanged(function(live)
 		billboard()
 		local name = nameOf(live)
 		if live and name and State.settings().announce then

@@ -461,16 +461,18 @@ end
 
 -- ── pad sounds (ADR 0021 §5): each client plays its own one-shot ──
 
-local function playPad(assetId: number, volume: number, nearBooth: boolean)
+local function playPad(assetId: number, volume: number, nearDjDeck: boolean)
 	local s = Instance.new("Sound")
 	s.SoundId = "rbxassetid://" .. string.format("%d", assetId)
 	s.Volume = volume
-	local booth = if nearBooth then CollectionService:GetTagged("HazaDJ_Booth")[1] else nil
-	if booth and booth:IsA("BasePart") then
+	local djDeck = if nearDjDeck
+		then CollectionService:GetTagged("HazaDJ_DjDeck")[1] or CollectionService:GetTagged("HazaDJ_Booth")[1]
+		else nil
+	if djDeck and djDeck:IsA("BasePart") then
 		s.RollOffMode = Enum.RollOffMode.InverseTapered
 		s.RollOffMinDistance = 15
 		s.RollOffMaxDistance = 80
-		s.Parent = booth
+		s.Parent = djDeck
 	else
 		s.Parent = SoundService
 	end

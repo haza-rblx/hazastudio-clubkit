@@ -1,9 +1,9 @@
 --!strict
 -- The lock screen (ADR 0022), as approved live in DJX Lite (owner, 2026-10-26): solid black, a stage
--- light on a hanging "BACKSTAGE" venue pass, and a compact form (one code field, Activate, "Have a
+-- light on a hanging "BACKSTAGE PASS" lanyard, and a compact form (one code field, Activate, "Have a
 -- guest pass?" opening a sub-modal). The pass prints the code as it is typed; an accepted code
 -- stamps ACCESS GRANTED and pulls the pass up. A guest pass that ran out shows the same screen with
--- an EXPIRED stamp. Only the place owner ever sees it (nobody else may open a locked booth). On a
+-- an EXPIRED stamp. Only the place owner ever sees it (nobody else may open a locked DJ deck). On a
 -- small screen the pass is left out and the form is shown at a readable size.
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
@@ -57,11 +57,11 @@ end
 type Copy = { title: string, body: string, guest: boolean, band: string, corner: string, expired: boolean }
 local COPY: { [string]: Copy } = {
 	locked = {
-		title = "Your booth is\nwaiting backstage.",
+		title = "Your DJ deck is\nwaiting backstage.",
 		body = "Paste the code from your Hazastudio dashboard to unlock the decks in every server.",
 		guest = true,
 		band = "NOT ACTIVATED",
-		corner = "VENUE PASS",
+		corner = "BACKSTAGE PASS",
 		expired = false,
 	},
 	expired = {
@@ -73,20 +73,20 @@ local COPY: { [string]: Copy } = {
 		expired = true,
 	},
 	denied = {
-		title = "Your booth is\nlocked.",
+		title = "Your DJ deck is\nlocked.",
 		body = "Hazastudio turned this license off. Paste a new code, or contact support.",
 		guest = false,
 		band = "LICENSE OFF",
-		corner = "VENUE PASS",
+		corner = "BACKSTAGE PASS",
 		expired = false,
 	},
-	-- a download stamped for another venue (the reason picks this copy under `denied`)
-	venue = {
-		title = "This copy belongs\nto another venue.",
+	-- a download stamped for another game (the reason picks this copy under `denied`)
+	wrongGame = {
+		title = "This copy belongs\nto another game.",
 		body = "Download your own djX from your Hazastudio account, then activate it here.",
 		guest = false,
-		band = "WRONG VENUE",
-		corner = "VENUE PASS",
+		band = "WRONG GAME",
+		corner = "BACKSTAGE PASS",
 		expired = false,
 	},
 	offline = {
@@ -94,7 +94,7 @@ local COPY: { [string]: Copy } = {
 		body = "The license couldn't be confirmed for 7 days. Keep HTTP requests on; it unlocks once confirmed.",
 		guest = false,
 		band = "OFFLINE",
-		corner = "VENUE PASS",
+		corner = "BACKSTAGE PASS",
 		expired = false,
 	},
 }
@@ -226,22 +226,22 @@ function Lock.new(p: Props): Frame
 	local shown = function()
 		return isOwner() and (celebrating() or not LicensePolicy.unlocked(Store.license()))
 	end
-	local wrongVenue = function(): boolean
+	local wrongGame = function(): boolean
 		local reason = Store.license().reason
 		return status() == "denied" and (reason == "universe_mismatch" or reason == "owner_mismatch")
 	end
 	local copy = function(): Copy
-		if wrongVenue() then
-			return COPY.venue
+		if wrongGame() then
+			return COPY.wrongGame
 		end
 		return COPY[status()] or COPY.locked
 	end
 
-	local venue = source("This venue")
+	local gameName = source("This game")
 	task.spawn(function()
 		local ok, info = pcall(MarketplaceService.GetProductInfo, MarketplaceService, game.PlaceId)
 		if ok and type(info) == "table" and info.Name then
-			venue(info.Name)
+			gameName(info.Name)
 		end
 	end)
 
@@ -467,7 +467,7 @@ function Lock.new(p: Props): Frame
 				ZIndex = 62,
 			}),
 			band,
-			row(204, "VENUE", venue),
+			row(204, "GAME", gameName),
 			row(248, "HOLDER", player.DisplayName .. "  ·  @" .. player.Name),
 			notches,
 			perforation,
@@ -845,7 +845,7 @@ function Lock.new(p: Props): Frame
 				ZIndex = 62,
 			}),
 			label(function()
-				return if done() then "The booth is now live in every server of this venue." else copy().body
+				return if done() then "The DJ deck is now live in every server of this game." else copy().body
 			end, {
 				AutomaticSize = Enum.AutomaticSize.None,
 				Position = UDim2.fromOffset(0, 66),
@@ -863,7 +863,7 @@ function Lock.new(p: Props): Frame
 				Size = UDim2.fromOffset(FORM_W, 36),
 				ZIndex = 62,
 				Visible = function()
-					return not wrongVenue()
+					return not wrongGame()
 				end,
 				codeField,
 			}),
@@ -872,7 +872,7 @@ function Lock.new(p: Props): Frame
 				Size = UDim2.fromOffset(FORM_W, 36),
 				ZIndex = 62,
 				Visible = function()
-					return not wrongVenue()
+					return not wrongGame()
 				end,
 				primary(function()
 					local s = state()

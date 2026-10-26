@@ -1,5 +1,5 @@
 --!strict
--- The client's view of the booth: the signals CharmSync patches from the server, wrapped as Vide
+-- The client's view of the DJ deck: the signals CharmSync patches from the server, wrapped as Vide
 -- sources for the UI, plus local UI state that is only this player's (which tab, view mode).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")

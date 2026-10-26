@@ -253,7 +253,7 @@ end
 function Library.createPlaylist(): (boolean, string?, string?)
 	local lib = State.library()
 	if #lib.playlists >= MAX_PLAYLISTS then
-		return false, "That's the most playlists the booth keeps."
+		return false, "That's the most playlists the DJ deck keeps."
 	end
 	local function taken(name: string): boolean
 		for _, p in lib.playlists do
@@ -327,7 +327,7 @@ end
 function Library.addSound(assetId: number): (boolean, string?, string?)
 	local lib = State.library()
 	if #lib.sounds >= MAX_SOUNDS then
-		return false, "That's the most sounds the booth keeps."
+		return false, "That's the most sounds the DJ deck keeps."
 	end
 	for _, s in lib.sounds do
 		if s.assetId == assetId then

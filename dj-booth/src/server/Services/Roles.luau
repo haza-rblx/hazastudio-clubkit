@@ -1,5 +1,5 @@
 --!strict
--- Who each player is to the booth: Owner (the experience's creator), a listed Resident or Guest,
+-- Who each player is to the DJ deck: Owner (the experience's creator), a listed Resident or Guest,
 -- or a guest let in by a group rank / game pass. Keeps each player's `me` signal (role, abilities,
 -- panel prefs from ProfileStore) and the online list current.
 local MarketplaceService = game:GetService("MarketplaceService")
@@ -97,7 +97,7 @@ function Roles.roleOf(player: Player): Types.Role?
 	return nil
 end
 
--- while the booth is locked (ADR 0022) only the owner may open it, to see the activation screen
+-- while the DJ deck is locked (ADR 0022) only the owner may open it, to see the activation screen
 local function capsOf(role: Types.Role?): Rules.Caps
 	if role ~= "Owner" and not LicensePolicy.unlocked(State.license()) then
 		return Rules.caps(nil)

@@ -9,7 +9,7 @@ local Dict = require(Shared.Dict)
 local QueueLogic = require(Shared.Queue)
 local Rules = require(Shared.Rules)
 local Types = require(Shared.Types)
-local Booth = require(script.Parent.Booth)
+local DjDeck = require(script.Parent.DjDeck)
 local Decks = require(script.Parent.Decks)
 local DeckBrakeConfig = require(Shared.DeckBrakeConfig)
 local Library = require(script.Parent.Library)
@@ -69,17 +69,17 @@ local LIBRARY = {
 	PadClear = true,
 	PadsReset = true,
 }
--- the licence's own commands: the only ones a locked booth takes (License checks the owner)
+-- the licence's own commands: the only ones a locked DJ deck takes (License checks the owner)
 local LICENSE = { Activate = true, RedeemGuest = true }
 local ACCESS = { PersonAdd = true, PersonEdit = true, PersonRemove = true, GateEdit = true, TakeOverPolicy = true }
--- what plays: these claim the booth first (the queue feeds Auto mix, so it counts)
+-- what plays: these claim the DJ deck first (the queue feeds Auto mix, so it counts)
 local DECKS = {
 	Load = true,
 	Deck = true,
 	HotCue = true,
 	Seek = true,
 	PadPress = true,
-	TakeBooth = true,
+	TakeDjDeck = true,
 	QueueAdd = true,
 	QueueRemove = true,
 	QueueMove = true,
@@ -227,7 +227,7 @@ handlers.PersonRemove = function(_, c)
 	State.update(State.access, function(cur)
 		return Dict.merge(cur, { people = Dict.set(cur.people, key, nil) })
 	end)
-	Booth.release(c.UserId)
+	DjDeck.release(c.UserId)
 	return ok()
 end
 handlers.GateEdit = function(_, c)
@@ -379,7 +379,7 @@ end
 handlers.PadPress = function(_, c)
 	return wrap(Pads.press(c.Index))
 end
-handlers.TakeBooth = function()
+handlers.TakeDjDeck = function()
 	return ok()
 end
 handlers.EndSet = function(player)
@@ -387,7 +387,7 @@ handlers.EndSet = function(player)
 		return no("Only the live DJ can end the set.")
 	end
 	task.spawn(Decks.fadeOutAll)
-	Booth.release(State.session().live or player.UserId)
+	DjDeck.release(State.session().live or player.UserId)
 	return ok()
 end
 
@@ -408,20 +408,20 @@ function Commands.run(player: Player, c: any): Result
 	-- the licence's own commands go straight to License, which only lets the place owner through
 	if not LICENSE[kind] then
 		if not License.unlocked() then
-			return no("The booth isn't activated yet.")
+			return no("The DJ deck isn't activated yet.")
 		end
 		local caps = Roles.caps(player)
-		-- anyone may keep their own panel prefs; everything else needs the booth
+		-- anyone may keep their own panel prefs; everything else needs the DJ deck
 		if kind ~= "PrefsSet" and not caps.canOpen then
-			return no("You don't have access to the booth.")
+			return no("You don't have access to the DJ deck.")
 		elseif LIBRARY[kind] and not caps.canEditLibrary then
 			return no("Only residents and the owner can edit the library.")
 		elseif ACCESS[kind] and not caps.canEditAccess then
 			return no("Only the owner can change who has access.")
 		elseif kind == "SettingsSave" and not caps.canEditSettings then
-			return no("Only the owner can change the booth's settings.")
+			return no("Only the owner can change the DJ deck's settings.")
 		elseif DECKS[kind] then
-			local okClaim, why = Booth.claim(player)
+			local okClaim, why = DjDeck.claim(player)
 			if not okClaim then
 				return no(why)
 			end
@@ -451,7 +451,7 @@ function Commands.start()
 		if not License.unlocked() or not allow(player, 0.25) then
 			return
 		end
-		if not Booth.claim(player) then
+		if not DjDeck.claim(player) then
 			return
 		end
 		Decks.live(deck, param, value)
@@ -460,7 +460,7 @@ function Commands.start()
 		if not License.unlocked() or State.session().live ~= player.UserId then
 			return
 		end
-		Booth.touch()
+		DjDeck.touch()
 		Decks.nudge(deck, delta)
 	end)
 	Players.PlayerRemoving:Connect(function(p)

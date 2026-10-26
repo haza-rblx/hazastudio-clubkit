@@ -1,5 +1,5 @@
 --!strict
--- Background preload (ADR 0021 §7): asks Roblox to fetch the booth's audio ahead of time, so a deck's
+-- Background preload (ADR 0021 §7): asks Roblox to fetch the DJ deck's audio ahead of time, so a deck's
 -- first load is a cache hit. Order: the tracks on the decks, the queue, then the library newest first.
 -- Each id is asked for once; a slow fetch frees its slot after 25 s even if Roblox has not answered.
 local ContentProvider = game:GetService("ContentProvider")

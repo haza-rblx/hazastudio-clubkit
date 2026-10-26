@@ -553,7 +553,7 @@ function PadsView.new(S: State.S, props: Base.Props?): Frame
 			table.insert(
 				items,
 				Layout.field(5, "Heard by", nil, {
-					Controls.segmented({ "Everyone", "Near the booth" }, p0.reach or 1, function(k)
+					Controls.segmented({ "Everyone", "Near the DJ deck" }, p0.reach or 1, function(k)
 						edit("Reach", nil, k)
 					end, 279),
 				})
@@ -599,7 +599,7 @@ function PadsView.new(S: State.S, props: Base.Props?): Frame
 					settle("Cooldown", v)
 				end),
 				label(
-					"booth-wide",
+					"deck-wide",
 					{ Position = UDim2.fromOffset(132, 8), FontFace = R, TextSize = 12, TextColor3 = C.dim }
 				),
 			})

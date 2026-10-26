@@ -1,5 +1,5 @@
 --!strict
--- What a fresh booth starts with. The library is empty; the pads and their sounds are the kit's
+-- What a fresh DJ deck starts with. The library is empty; the pads and their sounds are the kit's
 -- defaults (Roblox-licensed SFX, so they play in any experience).
 local Types = require(script.Parent.Types)
 local DeckBrakeConfig = require(script.Parent.DeckBrakeConfig)
@@ -49,7 +49,7 @@ function Defaults.settings(): Types.Settings
 		padCooldown = 1,
 		deckOff = DeckBrakeConfig.Preset,
 		speakers = 2,
-		openAtBooth = true,
+		openAtDjDeck = true,
 		standLock = true,
 		maxSet = 1,
 		idle = 3,
@@ -66,7 +66,7 @@ end
 Defaults.SECTION_KEYS = {
 	sound = { "volume", "normalize", "limiter", "fadeOut", "crossfade" },
 	decks = { "pitch", "keyLock", "syncOnLoad", "autoCue", "busyDeck", "padCooldown", "deckOff" },
-	booth = { "speakers", "openAtBooth", "standLock", "maxSet", "idle" },
+	djDeck = { "speakers", "openAtDjDeck", "standLock", "maxSet", "idle" },
 	show = { "announce", "nowPlaying", "billboard", "lights", "camFx", "camFxAmount" },
 	panel = { "panelSize", "hotkey", "reduceMotion" },
 }

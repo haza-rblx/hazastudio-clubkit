@@ -1,6 +1,6 @@
 --!strict
 -- Who is on the decks. The first player with access who touches a deck or a pad becomes the live
--- DJ; others can take over per the booth's rule. Ends a set after the idle limit or the longest-set
+-- DJ; others can take over per the DJ deck's rule. Ends a set after the idle limit or the longest-set
 -- limit, and keeps the stats (sets, time on the decks, last set).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -12,7 +12,7 @@ local Net = require(script.Parent.Parent.Net)
 local Roles = require(script.Parent.Roles)
 local State = require(script.Parent.State)
 
-local Booth = {}
+local DjDeck = {}
 
 local MAX_SET = { 0, 30 * 60, 3600, 2 * 3600 }
 local IDLE = { 0, 5 * 60, 10 * 60, 15 * 60 }
@@ -20,7 +20,7 @@ local IDLE = { 0, 5 * 60, 10 * 60, 15 * 60 }
 local lastInput = 0
 local liveChanged: { (number?, number?) -> () } = {}
 
-function Booth.onLiveChanged(fn: (number?, number?) -> ())
+function DjDeck.onLiveChanged(fn: (number?, number?) -> ())
 	table.insert(liveChanged, fn)
 end
 
@@ -76,10 +76,10 @@ local function setLive(userId: number?)
 end
 
 -- a player wants to use the decks or pads: returns whether they may, and why not
-function Booth.claim(player: Player): (boolean, string?)
+function DjDeck.claim(player: Player): (boolean, string?)
 	local role = Roles.roleOf(player)
 	if not Rules.caps(role).canOpen then
-		return false, "You don't have access to the booth."
+		return false, "You don't have access to the DJ deck."
 	end
 	local live = State.session().live
 	if live == player.UserId then
@@ -91,26 +91,26 @@ function Booth.claim(player: Player): (boolean, string?)
 		return false, liveHere.DisplayName .. " is on the decks."
 	end
 	if liveHere then
-		Net.Toast.Fire(liveHere, player.DisplayName .. " took over the booth.")
+		Net.Toast.Fire(liveHere, player.DisplayName .. " took over the DJ deck.")
 	end
 	setLive(player.UserId)
 	lastInput = os.clock()
 	return true
 end
 
-function Booth.release(userId: number)
+function DjDeck.release(userId: number)
 	if State.session().live == userId then
 		setLive(nil)
 	end
 end
 
-function Booth.touch()
+function DjDeck.touch()
 	lastInput = os.clock()
 end
 
-function Booth.start()
+function DjDeck.start()
 	Players.PlayerRemoving:Connect(function(p)
-		Booth.release(p.UserId)
+		DjDeck.release(p.UserId)
 	end)
 	-- idle and longest-set limits
 	task.spawn(function()
@@ -125,7 +125,7 @@ function Booth.start()
 				if idle > 0 and os.clock() - lastInput > idle then
 					setLive(nil)
 				elseif maxSet > 0 and s.liveSince and os.time() - s.liveSince > maxSet then
-					Net.Toast.Fire(p, "Your set reached the booth's time limit.")
+					Net.Toast.Fire(p, "Your set reached the DJ deck's time limit.")
 					setLive(nil)
 				end
 			end
@@ -133,4 +133,4 @@ function Booth.start()
 	end)
 end
 
-return Booth
+return DjDeck

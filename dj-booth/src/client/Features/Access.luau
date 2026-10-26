@@ -1,6 +1,6 @@
 --!strict
 -- The Access tab (311 | 624 | 311): views on the left (Everyone, Residents, Guests, the group-rank
--- and game-pass gates, the booth rules), the DJ table in the middle, the picked DJ's profile or the
+-- and game-pass gates, the DJ deck rules), the DJ table in the middle, the picked DJ's profile or the
 -- add form on the right. Rule pages widen the middle to 937.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -130,7 +130,7 @@ function Access.new(props: Base.Props?): Frame
 				if a.gates.group.on then W else C.faint
 			),
 			row("pass", "Game pass", if a.gates.pass.on then "On" else "Off", if a.gates.pass.on then W else C.faint),
-			Layout.sideCaption(nx(), "Booth"),
+			Layout.sideCaption(nx(), "DJ deck"),
 			row("rules", "Rules", ""),
 		}
 	end)
@@ -413,7 +413,7 @@ function Access.new(props: Base.Props?): Frame
 			Layout.settingRow(
 				nx(),
 				"Take over",
-				"Who can take the booth from the live DJ",
+				"Who can take the DJ deck from the live DJ",
 				Controls.segmented({ "Owner", "Residents", "Any DJ" }, untrack(Store.access).gates.takeOver, function(i)
 					Actions.send({ Kind = "TakeOverPolicy", Policy = i })
 				end, 240),
@@ -584,7 +584,7 @@ function Access.new(props: Base.Props?): Frame
 		local fields: { any } = {}
 		if isOwner then
 			fields = {
-				label("This is you. The owner can't be removed and always has the booth.", {
+				label("This is you. The owner can't be removed and always has the DJ deck.", {
 					FontFace = R,
 					TextSize = 12,
 					TextColor3 = C.dim,
@@ -699,7 +699,7 @@ function Access.new(props: Base.Props?): Frame
 									.. p.handle
 									.. " loses "
 									.. string.lower(p.role)
-									.. " access to the booth"
+									.. " access to the DJ deck"
 									.. (if p.live then " and comes off the decks now." else "."),
 								action = "Remove access",
 								onConfirm = function()

@@ -1,7 +1,7 @@
 --!strict
 -- The Settings tab (311 | 937): sections on the left, the section's cards on the right. Edits go
 -- into a draft; a Save / Discard bar shows while the draft differs (owner, 2026-10-22). "This
--- panel" is the player's own prefs (ProfileStore); the rest is the booth's (owner only).
+-- panel" is the player's own prefs (ProfileStore); the rest is the DJ deck's (owner only).
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -34,7 +34,7 @@ local PREF_KEYS = { panelSize = true, reduceMotion = true, hotkey = true }
 local SECTIONS = {
 	{ key = "sound", title = "Sound" },
 	{ key = "decks", title = "Decks" },
-	{ key = "booth", title = "Booth" },
+	{ key = "djDeck", title = "DJ deck" },
 	{ key = "show", title = "Show" },
 	{ key = "panel", title = "This panel" },
 	{ key = "license", title = "License" }, -- the owner only (ADR 0022)
@@ -84,7 +84,7 @@ local function deckOffIndex(name: string): number
 	return 1
 end
 
--- the saved values: booth settings + this player's prefs, flattened
+-- the saved values: DJ deck settings + this player's prefs, flattened
 local function saved(): { [string]: any }
 	local v = table.clone(Store.settings()) :: any
 	local prefs = Store.me().prefs
@@ -167,7 +167,7 @@ function Settings.new(props: Base.Props?): Frame
 	do
 		local nx = Layout.counter()
 		for _, grp in
-			{ { "Room", { "sound", "show" } }, { "Booth", { "decks", "booth", "license" } }, { "You", { "panel" } } }
+			{ { "Room", { "sound", "show" } }, { "DJ deck", { "decks", "djDeck", "license" } }, { "You", { "panel" } } }
 		do
 			table.insert(navKids, Layout.sideCaption(nx(), grp[1]))
 			for _, key in grp[2] do
@@ -324,20 +324,20 @@ function Settings.new(props: Base.Props?): Frame
 		end
 		return out
 	end
-	BUILD.booth = function(nx)
+	BUILD.djDeck = function(nx)
 		local out = {}
 		for _, x in
-			Layout.group(nx, "At the booth", {
+			Layout.group(nx, "At the DJ deck", {
 				Layout.settingRow(
 					nx(),
-					"Open at the booth",
+					"Open at the DJ deck",
 					"Open this panel when a DJ steps up",
-					toggle("openAtBooth")
+					toggle("openAtDjDeck")
 				),
 				Layout.settingRow(
 					nx(),
 					"DJs only behind the decks",
-					"Keep everyone else off the booth floor",
+					"Keep everyone else off the DJ deck floor",
 					toggle("standLock"),
 					true
 				),
@@ -350,12 +350,12 @@ function Settings.new(props: Base.Props?): Frame
 				Layout.settingRow(
 					nx(),
 					"Longest set",
-					"Hand the booth on after this long",
+					"Hand the DJ deck on after this long",
 					drop("maxSet", { "No limit", "30 minutes", "1 hour", "2 hours" })
 				),
 				Layout.settingRow(
 					nx(),
-					"Free an idle booth",
+					"Free an idle DJ deck",
 					"Hand over after no input for…",
 					drop("idle", { "Never", "5 minutes", "10 minutes", "15 minutes" }),
 					true
@@ -379,7 +379,7 @@ function Settings.new(props: Base.Props?): Frame
 				Layout.settingRow(nx(), "Now playing", "Show the track title to the room", toggle("nowPlaying")),
 				Layout.settingRow(
 					nx(),
-					"Name above the booth",
+					"Name above the DJ deck",
 					"The live DJ's name floats over the decks",
 					toggle("billboard"),
 					true
@@ -449,13 +449,13 @@ function Settings.new(props: Base.Props?): Frame
 		return out
 	end
 
-	-- the licence as the owner sees it (ADR 0022): status, time left, venue, owner; and, while on a
+	-- the licence as the owner sees it (ADR 0022): status, time left, game, owner; and, while on a
 	-- guest pass, a field to switch to a full licence
-	local venue = source("This venue")
+	local gameName = source("This game")
 	task.spawn(function()
 		local okInfo, info = pcall(MarketplaceService.GetProductInfo, MarketplaceService, game.PlaceId)
 		if okInfo and type(info) == "table" and info.Name then
-			venue(info.Name)
+			gameName(info.Name)
 		end
 	end)
 	local function text(t: any, props: Base.Props?): TextLabel
@@ -526,7 +526,7 @@ function Settings.new(props: Base.Props?): Frame
 		})
 		for _, x in
 			Layout.group(nx, "Status", {
-				Layout.settingRow(nx(), "License", "What this venue is running on", pill),
+				Layout.settingRow(nx(), "License", "What this game is running on", pill),
 				Layout.settingRow(
 					nx(),
 					"Time left",
@@ -534,14 +534,14 @@ function Settings.new(props: Base.Props?): Frame
 							function()
 								local v = lic()
 								if v.status == "guest" and v.expiresAt then
-									return `Ends {os.date("%d %b %Y, %H:%M", v.expiresAt)} · then the booth locks`
+									return `Ends {os.date("%d %b %Y, %H:%M", v.expiresAt)} · then the DJ deck locks`
 								end
 								return "A full license does not expire"
 							end
 						) :: any,
 					timeLeft
 				),
-				Layout.settingRow(nx(), "Venue", "Universe " .. tostring(game.GameId), text(venue)),
+				Layout.settingRow(nx(), "Game", "Universe " .. tostring(game.GameId), text(gameName)),
 				Layout.settingRow(
 					nx(),
 					"Owner",
@@ -595,13 +595,13 @@ function Settings.new(props: Base.Props?): Frame
 	local function save()
 		local d = untrack(draft)
 		local s = untrack(saved)
-		local boothChanged, prefsChanged = false, false
+		local djDeckChanged, prefsChanged = false, false
 		for k, v in d do
 			if s[k] ~= v then
 				if PREF_KEYS[k] then
 					prefsChanged = true
 				else
-					boothChanged = true
+					djDeckChanged = true
 				end
 			end
 		end
@@ -614,14 +614,14 @@ function Settings.new(props: Base.Props?): Frame
 					Hotkey = d.hotkey,
 				})
 			end
-			if boothChanged then
+			if djDeckChanged then
 				local values = {}
 				for k in Defaults.settings() :: any do
 					values[k] = d[k]
 				end
 				local r = Actions.run({ Kind = "SettingsSave", Values = values :: any })
 				if not r.Ok then
-					-- refused (not the owner): drop the booth edits so the bar doesn't linger
+					-- refused (not the owner): drop the DJ deck edits so the bar doesn't linger
 					local back = table.clone(untrack(draft))
 					for k in Defaults.settings() :: any do
 						back[k] = untrack(saved)[k]

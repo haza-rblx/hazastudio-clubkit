@@ -38,7 +38,7 @@ export type Answer =
 	| { kind: "denied", reason: string }
 	| { kind: "unreachable", detail: string? }
 
-LicensePolicy.GRACE = 7 * 86400 -- an activated venue keeps playing this long without a confirmation
+LicensePolicy.GRACE = 7 * 86400 -- an activated game keeps playing this long without a confirmation
 LicensePolicy.VERIFY_EVERY = 1800
 LicensePolicy.CODE_MIN = 8
 LicensePolicy.CODE_MAX = 128
@@ -172,12 +172,12 @@ function LicensePolicy.leftText(seconds: number): string
 	return `{math.max(mins, if s > 0 then 1 else 0)} min left`
 end
 
--- a place's venue: its universe and owner (a User or a Group)
-export type Venue = { universeId: number, ownerId: number, ownerType: string }
+-- a place's game: its universe and owner (a User or a Group)
+export type GameIdentity = { universeId: number, ownerId: number, ownerType: string }
 
 -- why a download stamped for `stamp` does not belong in the place `here`; nil when it does, or
 -- when the download is not pre-bound (universeId 0, a dev download)
-function LicensePolicy.venueMismatch(stamp: Venue, here: Venue): string?
+function LicensePolicy.gameMismatch(stamp: GameIdentity, here: GameIdentity): string?
 	if stamp.universeId == 0 then
 		return nil
 	end

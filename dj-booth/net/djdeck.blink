@@ -1,4 +1,4 @@
--- HazaDJ network schema. Compile: `blink net/booth` (from dj-booth/).
+-- HazaDJ network schema. Compile: `blink net/djdeck` (from dj-booth/).
 -- Everything a client asks for goes through `Do` (edits, with a result) or `Live` (continuous
 -- controls: faders, knobs, the crossfader). The server validates the sender's role on every call.
 
@@ -40,7 +40,7 @@ struct SettingsValues {
 	padCooldown: u8(1..3),
 	deckOff: string(0..40),
 	speakers: u8(1..3),
-	openAtBooth: boolean,
+	openAtDjDeck: boolean,
 	standLock: boolean,
 	maxSet: u8(1..4),
 	idle: u8(1..4),
@@ -95,9 +95,9 @@ enum Command = "Kind" {
 	HotCue { Deck: Deck, N: u8(1..8), Clear: boolean },
 	Seek { Deck: Deck, Seconds: f32(0..) },
 	PadPress { Index: u8(1..8) },
-	TakeBooth {},
+	TakeDjDeck {},
 	EndSet {},
-	-- the licence (ADR 0022): owner only, the only commands a locked booth accepts
+	-- the licence (ADR 0022): owner only, the only commands a locked DJ deck accepts
 	Activate { Code: string(1..128) },
 	RedeemGuest { Code: string(1..128) },
 }
@@ -170,7 +170,7 @@ event WorldFx {
 	Data: (u8, u8, f32),
 }
 
--- a pad sound: every client plays its own one-shot (volume 0..2 = a Sound's Volume; near = at the booth)
+-- a pad sound: every client plays its own one-shot (volume 0..2 = a Sound's Volume; near = at the DJ deck)
 event PadSfx {
 	From: Server,
 	Type: Reliable,

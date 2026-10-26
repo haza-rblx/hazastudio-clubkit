@@ -1,7 +1,7 @@
 --!strict
 -- The panel shell: one ScreenGui, the 1250-wide root on 2 px gutters (header, then the Decks rows or
 -- a management page), view modes (Deck docked at the bottom · Window centred · Full), the fit to
--- the screen, and how it opens (hotkey, the booth's prompt, the DJ button).
+-- the screen, and how it opens (hotkey, the DJ deck's prompt, the DJ button).
 local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -41,7 +41,7 @@ function App.new(): ScreenGui
 	end)
 
 	local tab, open = Store.tab, Store.open
-	-- the owner of a locked booth sees the lock screen (ADR 0022); it always takes the Window size
+	-- the owner of a locked DJ deck sees the lock screen (ADR 0022); it always takes the Window size
 	local locked = function()
 		return Store.me().role == "Owner" and not LicensePolicy.unlocked(Store.license())
 	end
@@ -60,7 +60,7 @@ function App.new(): ScreenGui
 	local canOpen = function()
 		return Store.me().canOpen
 	end
-	-- the owner of a locked booth gets the lock screen once on joining (a beat later, so a licence
+	-- the owner of a locked DJ deck gets the lock screen once on joining (a beat later, so a licence
 	-- that arrives just after the role doesn't open it for nothing)
 	local lockOpened = false
 	effect(function()
@@ -305,7 +305,7 @@ function App.new(): ScreenGui
 	end)
 
 	-- the topbar button (TopbarPlus): shown to anyone with access, selected while the panel is open
-	local icon = Icon.new():setName("HazaDJ"):setImage(Theme.MUSIC_ICON):setLabel("DJ"):setCaption("DJ booth")
+	local icon = Icon.new():setName("HazaDJ"):setImage(Theme.MUSIC_ICON):setLabel("DJ"):setCaption("DJ deck")
 	icon.toggled:Connect(function(selected: boolean)
 		if selected ~= untrack(open) then
 			open(selected)
@@ -424,7 +424,7 @@ function App.new(): ScreenGui
 			open(not untrack(open))
 		end
 	end)
-	-- the booth's "Open the decks" prompt
+	-- the DJ deck's "Open the decks" prompt
 	ProximityPromptService.PromptTriggered:Connect(function(prompt, who)
 		if who == Players.LocalPlayer and prompt.Name == "HazaDJ_Open" and untrack(canOpen) then
 			open(true)

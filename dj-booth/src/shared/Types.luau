@@ -1,5 +1,5 @@
 --!strict
--- The booth's data model. Everything here is plain data (JSON-safe), so the same shapes are stored
+-- The DJ deck's data model. Everything here is plain data (JSON-safe), so the same shapes are stored
 -- in the DataStore, synced to clients by CharmSync and read by the UI.
 
 export type TrackStatus = "ready" | "unavailable" | "checking"
@@ -46,7 +46,7 @@ export type Pad = {
 	sound: string?, -- Sound id
 	effect: number?, -- 1 shake, 2 rotate, 3 darken, 4 low gravity
 	volume: number?, -- 0 .. 100
-	reach: number?, -- 1 everyone, 2 near the booth
+	reach: number?, -- 1 everyone, 2 near the DJ deck
 	intensity: number?, -- 0 .. 100
 	duration: number?, -- seconds
 	cooldown: number,
@@ -100,8 +100,8 @@ export type Settings = {
 	busyDeck: number, -- 1 ask, 2 block, 3 allow
 	padCooldown: number, -- 1 none, 2 short, 3 long
 	deckOff: string, -- deck-off brake preset name, "" = instant stop
-	speakers: number, -- 1 whole map, 2 club zone, 3 booth area
-	openAtBooth: boolean,
+	speakers: number, -- 1 whole map, 2 club zone, 3 DJ deck area
+	openAtDjDeck: boolean,
 	standLock: boolean,
 	maxSet: number, -- 1 none, 2 30 min, 3 1 h, 4 2 h
 	idle: number, -- 1 never, 2 5 min, 3 10 min, 4 15 min
