@@ -11,6 +11,7 @@ Charm = "littensy/charm@0.11.1"
 CharmSync = "littensy/charm-sync@0.4.1"
 VideCharm = "littensy/vide-charm@0.4.1"
 TopbarPlus = "1foreverhd/topbarplus@3.5.0"
+Janitor = "howmanysmall/janitor@1.18.3"
 
 [server-dependencies]
 ProfileStore = "lm-loleris/profilestore@1.0.3"

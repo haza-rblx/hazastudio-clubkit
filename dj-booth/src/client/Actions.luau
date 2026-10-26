@@ -3,6 +3,7 @@
 -- a toast); dragged controls stream through `Live`, throttled to ~30 Hz with a trailing send.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local Janitor = require(ReplicatedStorage.HazaDJ.Packages.Janitor)
 local NetTypes = require(ReplicatedStorage.HazaDJ.Shared.NetTypes)
 local Net = require(script.Parent.Net)
 local Store = require(script.Parent.Store)
@@ -34,6 +35,11 @@ function Actions.probe(ids: { number }): { NetTypes.ProbeResult }
 	return if ok then result else {}
 end
 
+-- the delayed sends, one per key: adding under a key replaces (cancels) the one waiting there.
+-- A timer takes itself out (RemoveNoClean) before it sends, so a replacement never cancels a send
+-- that is already in flight
+local timers = Janitor.new()
+
 local RATE = 1 / 30
 local pending: { [string]: { deck: number, param: string, v: number } } = {}
 local lastSent: { [string]: number } = {}
@@ -50,41 +56,42 @@ function Actions.live(deck: number, param: NetTypes.LiveParam, v: number)
 		local first = pending[key] == nil
 		pending[key] = { deck = deck, param = param, v = v }
 		if first then
-			task.delay(RATE, function()
-				local p = pending[key]
-				if p then
-					pending[key] = nil
-					lastSent[key] = os.clock()
-					Net.Live.Fire(p.deck, p.param :: any, p.v)
-				end
-			end)
+			local index = "live:" .. key
+			timers:Add(
+				task.delay(RATE, function()
+					timers:RemoveNoClean(index)
+					local p = pending[key]
+					if p then
+						pending[key] = nil
+						lastSent[key] = os.clock()
+						Net.Live.Fire(p.deck, p.param :: any, p.v)
+					end
+				end),
+				true,
+				index
+			)
 		end
 	end
 end
 
 -- an edit sent once the value settles (drags on rulers, meters, steppers): the latest value for a
--- key goes out after `delay`
-local settle: { [string]: { cmd: NetTypes.Command, at: number } } = {}
+-- key goes out `delay` after its last change (each change restarts that key's timer)
+local settle: { [string]: NetTypes.Command } = {}
 function Actions.settle(key: string, cmd: NetTypes.Command, delay: number?)
-	local first = settle[key] == nil
-	settle[key] = { cmd = cmd, at = os.clock() }
-	if first then
-		local d = delay or 0.2
-		local function check()
-			local e = settle[key]
-			if not e then
-				return
-			end
-			local wait = e.at + d - os.clock()
-			if wait > 0 then
-				task.delay(wait, check)
-				return
-			end
+	settle[key] = cmd
+	local index = "settle:" .. key
+	timers:Add(
+		task.delay(delay or 0.2, function()
+			timers:RemoveNoClean(index)
+			local latest = settle[key]
 			settle[key] = nil
-			Actions.run(e.cmd)
-		end
-		task.delay(d, check)
-	end
+			if latest then
+				Actions.run(latest)
+			end
+		end),
+		true,
+		index
+	)
 end
 
 function Actions.nudge(deck: number, seconds: number)

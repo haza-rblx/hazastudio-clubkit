@@ -13,9 +13,24 @@ version = "0.4.1"
 dependencies = []
 
 [[package]]
+name = "evaera/promise"
+version = "4.0.0"
+dependencies = []
+
+[[package]]
 name = "hazastudio/dj-booth"
 version = "0.1.0"
-dependencies = [["Charm", "littensy/charm@0.11.1"], ["CharmSync", "littensy/charm-sync@0.4.1"], ["TopbarPlus", "1foreverhd/topbarplus@3.5.0"], ["Vide", "centau/vide@0.4.1"], ["VideCharm", "littensy/vide-charm@0.4.1"], ["ProfileStore", "lm-loleris/profilestore@1.0.3"]]
+dependencies = [["Charm", "littensy/charm@0.11.1"], ["CharmSync", "littensy/charm-sync@0.4.1"], ["Janitor", "howmanysmall/janitor@1.18.3"], ["TopbarPlus", "1foreverhd/topbarplus@3.5.0"], ["Vide", "centau/vide@0.4.1"], ["VideCharm", "littensy/vide-charm@0.4.1"], ["ProfileStore", "lm-loleris/profilestore@1.0.3"]]
+
+[[package]]
+name = "howmanysmall/janitor"
+version = "1.18.3"
+dependencies = [["Promise", "howmanysmall/typed-promise@4.0.6"]]
+
+[[package]]
+name = "howmanysmall/typed-promise"
+version = "4.0.6"
+dependencies = [["Promise", "evaera/promise@4.0.0"]]
 
 [[package]]
 name = "littensy/charm"

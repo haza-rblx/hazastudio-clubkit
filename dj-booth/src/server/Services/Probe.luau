@@ -8,6 +8,7 @@ local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
 
+local Janitor = require(ReplicatedStorage.HazaDJ.Packages.Janitor)
 local Dict = require(ReplicatedStorage.HazaDJ.Shared.Dict)
 local State = require(script.Parent.State)
 local Store = require(script.Parent.Store)
@@ -25,6 +26,9 @@ folder.Name = "HazaDJ_Probe"
 folder.Parent = ServerStorage
 
 local cache: { [number]: { result: Result, at: number } } = {}
+-- the two background sweeps; stop() ends them
+local janitor = Janitor.new()
+local started = false
 
 -- one attempt: the length if it loaded, else whether Roblox reports the fetch as failed
 local function attempt(assetId: number): (number?, boolean)
@@ -167,37 +171,49 @@ local function probeSound(id: string)
 end
 
 function Probe.start()
-	if Store.fixture then
+	if Store.fixture or started then
 		return -- the fixture's ids are made up; keep its statuses
 	end
+	started = true
 	-- a slow background sweep: one track every 2 s, then again every 30 minutes
-	task.spawn(function()
-		while true do
-			for id in State.library().tracks do
-				Probe.track(id)
-				task.wait(2)
-			end
-			task.wait(1800)
-		end
-	end)
-	-- anything that timed out (status "checking") is asked again every 5 minutes
-	task.spawn(function()
-		while true do
-			task.wait(PENDING_EVERY)
-			for id, t in State.library().tracks do
-				if t.status == "checking" then
+	janitor:Add(
+		task.spawn(function()
+			while true do
+				for id in State.library().tracks do
 					Probe.track(id)
 					task.wait(2)
 				end
+				task.wait(1800)
 			end
-			for _, s in State.library().sounds do
-				if s.status == "checking" then
-					probeSound(s.id)
-					task.wait(2)
+		end),
+		true
+	)
+	-- anything that timed out (status "checking") is asked again every 5 minutes
+	janitor:Add(
+		task.spawn(function()
+			while true do
+				task.wait(PENDING_EVERY)
+				for id, t in State.library().tracks do
+					if t.status == "checking" then
+						Probe.track(id)
+						task.wait(2)
+					end
+				end
+				for _, s in State.library().sounds do
+					if s.status == "checking" then
+						probeSound(s.id)
+						task.wait(2)
+					end
 				end
 			end
-		end
-	end)
+		end),
+		true
+	)
+end
+
+function Probe.stop()
+	janitor:Cleanup()
+	started = false
 end
 
 return Probe

@@ -8,6 +8,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local Charm = require(ReplicatedStorage.HazaDJ.Packages.Charm)
+local Janitor = require(ReplicatedStorage.HazaDJ.Packages.Janitor)
 local Shared = ReplicatedStorage.HazaDJ.Shared
 local Defaults = require(Shared.Defaults)
 local Dict = require(Shared.Dict)
@@ -22,6 +23,10 @@ local Roles = {}
 
 local PrefsStore = ProfileStore.New("HazaDJ_Prefs_v1", { prefs = Defaults.prefs() })
 local profiles: { [Player]: any } = {}
+-- what the service holds for its lifetime (listeners, the expiry loop), and what each player holds
+-- while they are in the server (their prefs session); leaving cleans the player's in one go
+local janitor = Janitor.new()
+local perPlayer: { [Player]: typeof(Janitor.new()) } = {}
 local gateCache: { [number]: boolean } = {}
 local changed: { (Player) -> () } = {}
 
@@ -198,18 +203,29 @@ local function loadPrefs(player: Player)
 	end
 	profile:AddUserId(player.UserId)
 	profile:Reconcile()
-	profile.OnSessionEnd:Connect(function()
-		profiles[player] = nil
-	end)
-	if player.Parent ~= Players then
+	local mine = perPlayer[player]
+	if player.Parent ~= Players or not mine then
 		profile:EndSession()
 		return
 	end
+	mine:Add(
+		profile.OnSessionEnd:Connect(function()
+			profiles[player] = nil
+		end),
+		"Disconnect"
+	)
+	mine:Add(function()
+		profile:EndSession() -- a no-op if the session already ended on its own
+	end, true)
 	profiles[player] = profile
 	setPrefs(player, Dict.merge(Defaults.prefs(), profile.Data.prefs or {}))
 end
 
 local function join(player: Player)
+	if perPlayer[player] then
+		return -- already joined (start's sweep and PlayerAdded can both see the same player)
+	end
+	perPlayer[player] = Janitor.new()
 	State.update(State.session, function(s)
 		return Dict.merge(s, { online = Dict.set(s.online, tostring(player.UserId), true) })
 	end)
@@ -223,9 +239,10 @@ local function leave(player: Player)
 	State.update(State.session, function(s)
 		return Dict.merge(s, { online = Dict.set(s.online, tostring(player.UserId), nil) })
 	end)
-	local profile = profiles[player]
-	if profile then
-		profile:EndSession()
+	local mine = perPlayer[player]
+	if mine then
+		perPlayer[player] = nil
+		mine:Destroy() -- ends the prefs session
 	end
 	gateCache[player.UserId] = nil
 	ownerCache[player.UserId] = nil
@@ -236,39 +253,57 @@ function Roles.start()
 	for _, p in Players:GetPlayers() do
 		task.spawn(join, p)
 	end
-	Players.PlayerAdded:Connect(join)
-	Players.PlayerRemoving:Connect(leave)
+	janitor:Add(Players.PlayerAdded:Connect(join), "Disconnect")
+	janitor:Add(Players.PlayerRemoving:Connect(leave), "Disconnect")
 
 	-- people or gates changed: everyone's role may have too
-	Charm.subscribe(function()
-		return State.access().people
-	end, Roles.refreshAll)
-	Charm.subscribe(function()
-		return State.access().gates
-	end, Roles.recheckGates)
+	janitor:Add(
+		Charm.subscribe(function()
+			return State.access().people
+		end, Roles.refreshAll),
+		true
+	)
+	janitor:Add(
+		Charm.subscribe(function()
+			return State.access().gates
+		end, Roles.recheckGates),
+		true
+	)
 
 	-- guests whose time ran out lose access
-	task.spawn(function()
-		while true do
-			task.wait(15)
-			local now = os.time()
-			local expired = {}
-			for k, p in State.access().people do
-				if Rules.guestExpired(p, now) then
-					table.insert(expired, k)
+	janitor:Add(
+		task.spawn(function()
+			while true do
+				task.wait(15)
+				local now = os.time()
+				local expired = {}
+				for k, p in State.access().people do
+					if Rules.guestExpired(p, now) then
+						table.insert(expired, k)
+					end
+				end
+				if #expired > 0 then
+					State.update(State.access, function(a)
+						local people = table.clone(a.people)
+						for _, k in expired do
+							people[k] = nil
+						end
+						return Dict.merge(a, { people = people })
+					end)
 				end
 			end
-			if #expired > 0 then
-				State.update(State.access, function(a)
-					local people = table.clone(a.people)
-					for _, k in expired do
-						people[k] = nil
-					end
-					return Dict.merge(a, { people = people })
-				end)
-			end
-		end
-	end)
+		end),
+		true
+	)
+end
+
+-- stops listening and ends every prefs session (shutdown, or a test harness)
+function Roles.stop()
+	janitor:Cleanup()
+	for player, mine in perPlayer do
+		perPlayer[player] = nil
+		mine:Destroy()
+	end
 end
 
 function Roles.player(userId: number): Player?

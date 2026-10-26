@@ -11,6 +11,7 @@ local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Charm = require(ReplicatedStorage.HazaDJ.Packages.Charm)
+local Janitor = require(ReplicatedStorage.HazaDJ.Packages.Janitor)
 local Shared = ReplicatedStorage.HazaDJ.Shared
 local DeckBrakeConfig = require(Shared.DeckBrakeConfig)
 local DeckClock = require(Shared.DeckClock)
@@ -44,6 +45,7 @@ type Deck = {
 	gen: number, -- bumps whenever `wanted` changes; a load loop quits once it is stale
 	running: number?, -- the generation a load loop is running for
 	loaded: boolean, -- the wanted asset has loaded into `sound`
+	loader: typeof(Janitor.new()), -- holds the running load loop; a new loop replaces (cancels) the old one
 	anchorPos: number?, -- the anchor last applied to the Sound
 	anchorAt: number?,
 }
@@ -170,6 +172,7 @@ local function build(n: number): Deck
 		shift = shift,
 		gen = 0,
 		loaded = false,
+		loader = Janitor.new(),
 	}
 end
 
@@ -241,6 +244,7 @@ local function loadLoop(d: Deck, gen: number)
 				if d.running == gen then
 					d.running = nil
 				end
+				d.loader:RemoveNoClean("loop")
 				applyTransport(d)
 				return
 			end
@@ -260,12 +264,15 @@ local function loadLoop(d: Deck, gen: number)
 	if d.running == gen then
 		d.running = nil
 	end
+	d.loader:RemoveNoClean("loop")
 end
 
--- start a load loop unless one is already running for the current generation
+-- start a load loop unless one is already running for the current generation. A stale loop is
+-- cancelled where it waits (it only ever waits between setting ids, so the Sound is left as is; the
+-- new loop sets its own id). The gen checks stay as the second guard.
 local function startLoop(d: Deck)
 	if d.running ~= d.gen then
-		task.spawn(loadLoop, d, d.gen)
+		d.loader:Add(task.spawn(loadLoop, d, d.gen), true, "loop")
 	end
 end
 
@@ -467,14 +474,21 @@ local function playPad(assetId: number, volume: number, nearBooth: boolean)
 	else
 		s.Parent = SoundService
 	end
-	s.Ended:Once(function()
-		s:Destroy()
-	end)
-	task.delay(PAD_MAX_TIME, function()
-		if s.Parent then
-			s:Destroy()
-		end
-	end)
+	-- a one-shot: whichever comes first (it ends, or the time cap) cleans the Sound and the other
+	local shot = Janitor.new()
+	shot:Add(s, "Destroy")
+	shot:Add(
+		s.Ended:Once(function()
+			shot:Destroy()
+		end),
+		"Disconnect"
+	)
+	shot:Add(
+		task.delay(PAD_MAX_TIME, function()
+			shot:Destroy()
+		end),
+		true
+	)
 	s:Play()
 end
 
