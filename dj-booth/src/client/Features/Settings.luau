@@ -2,6 +2,8 @@
 -- The Settings tab (311 | 937): sections on the left, the section's cards on the right. Edits go
 -- into a draft; a Save / Discard bar shows while the draft differs (owner, 2026-10-22). "This
 -- panel" is the player's own prefs (ProfileStore); the rest is the booth's (owner only).
+local MarketplaceService = game:GetService("MarketplaceService")
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Vide = require(ReplicatedStorage.HazaDJ.Packages.Vide)
@@ -9,6 +11,7 @@ local Shared = ReplicatedStorage.HazaDJ.Shared
 local Defaults = require(Shared.Defaults)
 local DeckBrakeConfig = require(Shared.DeckBrakeConfig)
 local Format = require(Shared.Format)
+local LicensePolicy = require(Shared.LicensePolicy)
 local Mix = require(Shared.Mix)
 local Actions = require(script.Parent.Parent.Actions)
 local Store = require(script.Parent.Parent.Store)
@@ -34,6 +37,7 @@ local SECTIONS = {
 	{ key = "booth", title = "Booth" },
 	{ key = "show", title = "Show" },
 	{ key = "panel", title = "This panel" },
+	{ key = "license", title = "License" }, -- the owner only (ADR 0022)
 }
 
 -- deck-off brake: "" = instant stop, then the presets in a fixed order, the rest sorted after
@@ -145,11 +149,26 @@ function Settings.new(props: Base.Props?): Frame
 		decks = function()
 			return Mix.PITCH_LABELS[draft().pitch] or ""
 		end,
+		license = function()
+			local v = Store.license()
+			if v.status == "active" then
+				return "Active"
+			elseif v.status == "guest" then
+				local days = math.floor((v.secondsLeft or 0) / 86400)
+				return if days >= 1 then `{days} day{if days == 1 then "" else "s"} left` else "Ends today"
+			end
+			return "Locked"
+		end,
 	}
+	local isOwner = function()
+		return Store.me().role == "Owner"
+	end
 	local navKids = {}
 	do
 		local nx = Layout.counter()
-		for _, grp in { { "Room", { "sound", "show" } }, { "Booth", { "decks", "booth" } }, { "You", { "panel" } } } do
+		for _, grp in
+			{ { "Room", { "sound", "show" } }, { "Booth", { "decks", "booth", "license" } }, { "You", { "panel" } } }
+		do
 			table.insert(navKids, Layout.sideCaption(nx(), grp[1]))
 			for _, key in grp[2] do
 				local sec
@@ -158,22 +177,25 @@ function Settings.new(props: Base.Props?): Frame
 						sec = x
 					end
 				end
-				table.insert(
-					navKids,
-					Layout.sideRow(
-						nx(),
-						function()
-							return current() == key
-						end,
-						sec.title,
-						meta[key],
-						nil,
-						function()
-							current(key)
-							Controls.closeMenu()
-						end
-					)
+				local navRow = Layout.sideRow(
+					nx(),
+					function()
+						return current() == key
+					end,
+					sec.title,
+					meta[key],
+					nil,
+					function()
+						current(key)
+						Controls.closeMenu()
+					end
 				)
+				if key == "license" then
+					Vide.effect(function()
+						navRow.Visible = isOwner()
+					end)
+				end
+				table.insert(navKids, navRow)
 			end
 		end
 	end
@@ -427,6 +449,149 @@ function Settings.new(props: Base.Props?): Frame
 		return out
 	end
 
+	-- the licence as the owner sees it (ADR 0022): status, time left, venue, owner; and, while on a
+	-- guest pass, a field to switch to a full licence
+	local venue = source("This venue")
+	task.spawn(function()
+		local okInfo, info = pcall(MarketplaceService.GetProductInfo, MarketplaceService, game.PlaceId)
+		if okInfo and type(info) == "table" and info.Name then
+			venue(info.Name)
+		end
+	end)
+	local function text(t: any, props: Base.Props?): TextLabel
+		return label(
+			t,
+			Base.with({ TextSize = 13, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.fromScale(1, 0.5) }, props)
+		)
+	end
+	BUILD.license = function(nx)
+		local lic = Store.license
+		local isGuest = function()
+			return lic().status == "guest"
+		end
+		local out = {}
+		local pill = Base.new("Frame", {
+			Size = UDim2.fromOffset(0, 26),
+			AutomaticSize = Enum.AutomaticSize.X,
+			BackgroundColor3 = C.field,
+			Base.round(1),
+			Base.pad(10, 12, 0, 0),
+			Base.hlist(8),
+			Base.new("Frame", {
+				Size = UDim2.fromOffset(6, 6),
+				LayoutOrder = 1,
+				BackgroundColor3 = function()
+					local s = lic().status
+					return if s == "active" then C.ok elseif s == "guest" then Theme.W else C.red
+				end,
+				Base.round(1),
+			}),
+			label(function()
+				local s = lic().status
+				return if s == "active" then "Active" elseif s == "guest" then "Guest pass" else "Locked"
+			end, { TextSize = 13, LayoutOrder = 2 }),
+		})
+		local timeLeft = frame({
+			Size = UDim2.fromOffset(180, 30),
+			text(function()
+				local v = lic()
+				return if v.status == "guest" then LicensePolicy.leftText(v.secondsLeft or 0) else "No end date"
+			end, {
+				AnchorPoint = Vector2.new(1, 0),
+				Size = UDim2.new(1, 0, 0, 16),
+				AutomaticSize = Enum.AutomaticSize.None,
+				TextXAlignment = Enum.TextXAlignment.Right,
+				Position = function()
+					return if isGuest() then UDim2.fromScale(1, 0) else UDim2.new(1, 0, 0.5, -8)
+				end,
+			}),
+			Base.new("Frame", {
+				AnchorPoint = Vector2.new(1, 1),
+				Position = UDim2.fromScale(1, 1),
+				Size = UDim2.fromOffset(180, 4),
+				BackgroundColor3 = C.field,
+				Visible = isGuest,
+				Base.round(1),
+				Base.new("Frame", {
+					BackgroundColor3 = Theme.W,
+					Size = function()
+						local v = lic()
+						local span = (v.expiresAt or 0) - (v.startedAt or 0)
+						local f = if span > 0 then math.clamp((v.secondsLeft or 0) / span, 0, 1) else 1
+						return UDim2.fromScale(f, 1)
+					end,
+					Base.round(1),
+				}),
+			}),
+		})
+		for _, x in
+			Layout.group(nx, "Status", {
+				Layout.settingRow(nx(), "License", "What this venue is running on", pill),
+				Layout.settingRow(
+					nx(),
+					"Time left",
+					(
+							function()
+								local v = lic()
+								if v.status == "guest" and v.expiresAt then
+									return `Ends {os.date("%d %b %Y, %H:%M", v.expiresAt)} · then the booth locks`
+								end
+								return "A full license does not expire"
+							end
+						) :: any,
+					timeLeft
+				),
+				Layout.settingRow(nx(), "Venue", "Universe " .. tostring(game.GameId), text(venue)),
+				Layout.settingRow(
+					nx(),
+					"Owner",
+					"Only the owner can change the license",
+					text("@" .. Players.LocalPlayer.Name),
+					true
+				),
+			}, true)
+		do
+			table.insert(out, x)
+		end
+		local code = ""
+		local upgrade = Layout.group(nx, "Upgrade", {
+			Layout.settingRow(
+				nx(),
+				"Activation code",
+				"Turns the guest pass into a full license",
+				frame({
+					Size = UDim2.fromOffset(336, 32),
+					Controls.input({
+						placeholder = "Activation code",
+						w = 244,
+						onText = function(t: string)
+							code = t
+						end,
+					}),
+					Controls.button({
+						text = "Activate",
+						kind = "primary",
+						w = 84,
+						h = 32,
+						onClick = function()
+							if (string.gsub(code, "%s", "")) ~= "" then
+								Actions.send({ Kind = "Activate", Code = code })
+							end
+						end,
+					}, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0) }),
+				}),
+				true
+			),
+		})
+		for _, x in upgrade do
+			Vide.effect(function()
+				x.Visible = isGuest()
+			end)
+			table.insert(out, x)
+		end
+		return out
+	end
+
 	local function save()
 		local d = untrack(draft)
 		local s = untrack(saved)
@@ -521,22 +686,25 @@ function Settings.new(props: Base.Props?): Frame
 			return {
 				Layout.pageHead(
 					title,
-					Controls.button({
-						text = "Reset to defaults",
-						kind = "ghost",
-						h = 32,
-						onClick = function()
-							-- Reset fills the draft with the defaults; nothing changes until Save
-							local d = table.clone(untrack(draft))
-							local defaults = Defaults.settings() :: any
-							local prefs = Defaults.prefs() :: any
-							for _, k in Defaults.SECTION_KEYS[sec] do
-								d[k] = if defaults[k] ~= nil then defaults[k] else prefs[k]
-							end
-							draft(d)
-							epoch(untrack(epoch) + 1)
-						end,
-					})
+					-- the licence has nothing to reset
+					if sec == "license"
+						then nil
+						else Controls.button({
+							text = "Reset to defaults",
+							kind = "ghost",
+							h = 32,
+							onClick = function()
+								-- Reset fills the draft with the defaults; nothing changes until Save
+								local d = table.clone(untrack(draft))
+								local defaults = Defaults.settings() :: any
+								local prefs = Defaults.prefs() :: any
+								for _, k in Defaults.SECTION_KEYS[sec] do
+									d[k] = if defaults[k] ~= nil then defaults[k] else prefs[k]
+								end
+								draft(d)
+								epoch(untrack(epoch) + 1)
+							end,
+						})
 				),
 				Layout.pageBody(BUILD[sec](Layout.counter()), {
 					Size = function()

@@ -1,6 +1,16 @@
 # ADR 0022 — DJX standalone: in-game licence activation
 
-**Status:** Accepted — design settled with the owner 2026-10-26. Nothing built yet.
+**Status:** Accepted. The design was settled with the owner on 2026-10-26.
+
+The in-game half was built the same day and tested in DJX Lite against a Studio stand-in for the licence server (`LicenseApi`, attribute `HazaDJ_LicenseStub`):
+- `shared/LicensePolicy` (Lune-tested)
+- `server/Services/License` + `LicenseApi` + `Stamp`
+- the boot gate in `init.server`, `Commands`, `Roles` and `Sync`
+- `client/Features/Lock` and the Settings › License section
+
+Still to do:
+- the real VPS endpoints, the account and stamped downloads (ADR 0023)
+- obfuscation
 **Date:** 2026-10-26
 
 ## Context
@@ -25,6 +35,11 @@ The leak that matters today: a secret pasted into a place file (like the Club Ki
     - **Duration is set per code** in the dashboard, default 7 days.
     - **Licence status lives in the Settings page** (Active / Guest pass with time left / Locked). The owner sees it there, with no badge in the header.
     - **When a trial ends:** the Backstage lock screen returns with "Your guest pass has ended." and only the activation-code field. The guest-pass link is hidden.
+12. **Every download is stamped** (owner, 2026-10-26).
+    - **Format and stamping:** the buyer downloads a `.rbxm` from their account. The VPS copies the release template and stamps that copy (Lune) with the licence data (licence id, buyer Roblox user id) and a fingerprint unique to that download. Every download is logged.
+    - **Fingerprint placement:** spread over many inconspicuous points, so removing one is not enough. It never changes how the UI looks.
+    - **Activation stays manual — two layers:** the file carries the licence + fingerprint, and the owner still pastes the code in game. The VPS accepts an activation only when the pasted code and the file's embedded licence belong to the same licence.
+    - **On a mismatch or a reused code:** the activation is denied and the beacon names the download it came from.
 10. **Own test places use dev codes**: normal codes flagged `dev` in the dashboard (excluded from sales), so the owner's places go through the exact buyer path.
 
 ## Proposed flow

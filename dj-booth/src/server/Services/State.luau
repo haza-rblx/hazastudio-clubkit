@@ -17,6 +17,8 @@ State.session = Charm.atom(Defaults.session())
 -- the tracks on the decks and in the queue, for every player: each client plays the decks itself
 -- (ADR 0021), so listeners who never open the panel still need those tracks' asset, length and gain
 State.stage = Charm.atom(Defaults.stage())
+-- the licence as owners may see it (ADR 0022): a LicensePolicy.View, never the secret
+State.license = Charm.atom({ status = "locked" } :: any)
 
 Charm.effect(function()
 	local s = State.session()

@@ -25,6 +25,15 @@ function Actions.run(cmd: NetTypes.Command): Result
 	return result
 end
 
+-- like run, without the toast: for screens that show the refusal themselves (the lock screen)
+function Actions.quiet(cmd: NetTypes.Command): Result
+	local ok, result = pcall(Net.Do.Invoke, cmd)
+	if not ok then
+		return { Ok = false, Message = "The booth didn't answer. Try again." }
+	end
+	return result
+end
+
 -- fire and forget (handlers that must not yield)
 function Actions.send(cmd: NetTypes.Command)
 	task.spawn(Actions.run, cmd)

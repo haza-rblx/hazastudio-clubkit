@@ -97,6 +97,9 @@ enum Command = "Kind" {
 	PadPress { Index: u8(1..8) },
 	TakeBooth {},
 	EndSet {},
+	-- the licence (ADR 0022): owner only, the only commands a locked booth accepts
+	Activate { Code: string(1..128) },
+	RedeemGuest { Code: string(1..128) },
 }
 
 struct Result {

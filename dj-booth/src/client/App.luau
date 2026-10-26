@@ -10,6 +10,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local Icon = require(ReplicatedStorage.HazaDJ.Packages.TopbarPlus)
 local Vide = require(ReplicatedStorage.HazaDJ.Packages.Vide)
+local LicensePolicy = require(ReplicatedStorage.HazaDJ.Shared.LicensePolicy)
 local Actions = require(script.Parent.Actions)
 local Store = require(script.Parent.Store)
 local Theme = require(script.Parent.Theme)
@@ -19,6 +20,7 @@ local Access = require(script.Parent.Features.Access)
 local Decks = require(script.Parent.Features.Decks)
 local Header = require(script.Parent.Features.Header)
 local Library = require(script.Parent.Features.Library)
+local Lock = require(script.Parent.Features.Lock)
 local Settings = require(script.Parent.Features.Settings)
 local Debug = require(script.Parent.Debug)
 
@@ -38,7 +40,15 @@ function App.new(): ScreenGui
 		viewport(camera.ViewportSize)
 	end)
 
-	local tab, view, open = Store.tab, Store.view, Store.open
+	local tab, open = Store.tab, Store.open
+	-- the owner of a locked booth sees the lock screen (ADR 0022); it always takes the Window size
+	local locked = function()
+		return Store.me().role == "Owner" and not LicensePolicy.unlocked(Store.license())
+	end
+	local chosenView = Store.view
+	local view = function(): string
+		return if locked() then "window" else chosenView()
+	end
 	-- the Studio demo fixture opens straight away, like the prototype
 	local fixtureOpened = false
 	effect(function()
@@ -50,6 +60,19 @@ function App.new(): ScreenGui
 	local canOpen = function()
 		return Store.me().canOpen
 	end
+	-- the owner of a locked booth gets the lock screen once on joining (a beat later, so a licence
+	-- that arrives just after the role doesn't open it for nothing)
+	local lockOpened = false
+	effect(function()
+		if not lockOpened and Store.ready() and locked() then
+			lockOpened = true
+			task.delay(1.5, function()
+				if untrack(locked) then
+					open(true)
+				end
+			end)
+		end
+	end)
 
 	-- the saved view mode comes from prefs once
 	local viewLoaded = false
@@ -57,14 +80,14 @@ function App.new(): ScreenGui
 		local prefs = Store.me().prefs
 		if not viewLoaded and Store.ready() then
 			viewLoaded = true
-			view(prefs.view)
+			chosenView(prefs.view)
 		end
 	end)
 	local function setView(m: string)
-		if untrack(view) == m then
+		if untrack(chosenView) == m then
 			return
 		end
-		view(m)
+		chosenView(m)
 		if m == "deck" and untrack(tab) ~= "Decks" then
 			tab("Decks")
 		end
@@ -161,6 +184,20 @@ function App.new(): ScreenGui
 	header.ZIndex = 2
 	menuLayer.Parent = header
 	Controls.setMenuHost(menuLayer, Theme.PAGE_H, scaleNow)
+	-- the lock screen covers the whole panel, from the same layer as the menus (above them).
+	-- Below ~0.75 scale (phones) it drops the pass and shows the form at a readable size.
+	local lockScreen = Lock.new({
+		compact = function()
+			return scale() < 0.75
+		end,
+		boost = function()
+			return math.clamp(0.95 / scale(), 1, 2.4)
+		end,
+		onClose = function()
+			open(false)
+		end,
+	})
+	lockScreen.Parent = header
 
 	root = create("Frame")({
 		Name = "Panel",

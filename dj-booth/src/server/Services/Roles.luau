@@ -13,6 +13,7 @@ local Shared = ReplicatedStorage.HazaDJ.Shared
 local Defaults = require(Shared.Defaults)
 local Dict = require(Shared.Dict)
 local Fixture = require(Shared.Fixture)
+local LicensePolicy = require(Shared.LicensePolicy)
 local Rules = require(Shared.Rules)
 local Types = require(Shared.Types)
 local ProfileStore = require(script.Parent.Parent.ServerPackages.ProfileStore)
@@ -26,7 +27,7 @@ local profiles: { [Player]: any } = {}
 -- what the service holds for its lifetime (listeners, the expiry loop), and what each player holds
 -- while they are in the server (their prefs session); leaving cleans the player's in one go
 local janitor = Janitor.new()
-local perPlayer: { [Player]: typeof(Janitor.new()) } = {}
+local perPlayer: { [Player]: any } = {} -- a Janitor each (its self-typed methods don't fit a map type)
 local gateCache: { [number]: boolean } = {}
 local changed: { (Player) -> () } = {}
 
@@ -96,13 +97,21 @@ function Roles.roleOf(player: Player): Types.Role?
 	return nil
 end
 
+-- while the booth is locked (ADR 0022) only the owner may open it, to see the activation screen
+local function capsOf(role: Types.Role?): Rules.Caps
+	if role ~= "Owner" and not LicensePolicy.unlocked(State.license()) then
+		return Rules.caps(nil)
+	end
+	return Rules.caps(role)
+end
+
 function Roles.caps(player: Player): Rules.Caps
-	return Rules.caps(Roles.roleOf(player))
+	return capsOf(Roles.roleOf(player))
 end
 
 local function refresh(player: Player)
 	local role = Roles.roleOf(player)
-	local caps = Rules.caps(role)
+	local caps = capsOf(role)
 	local me = State.me(player.UserId)
 	local cur = me()
 	if

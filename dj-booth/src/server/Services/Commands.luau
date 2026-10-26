@@ -13,6 +13,7 @@ local Booth = require(script.Parent.Booth)
 local Decks = require(script.Parent.Decks)
 local DeckBrakeConfig = require(Shared.DeckBrakeConfig)
 local Library = require(script.Parent.Library)
+local License = require(script.Parent.License)
 local Net = require(script.Parent.Parent.Net)
 local Pads = require(script.Parent.Pads)
 local Probe = require(script.Parent.Probe)
@@ -68,6 +69,8 @@ local LIBRARY = {
 	PadClear = true,
 	PadsReset = true,
 }
+-- the licence's own commands: the only ones a locked booth takes (License checks the owner)
+local LICENSE = { Activate = true, RedeemGuest = true }
 local ACCESS = { PersonAdd = true, PersonEdit = true, PersonRemove = true, GateEdit = true, TakeOverPolicy = true }
 -- what plays: these claim the booth first (the queue feeds Auto mix, so it counts)
 local DECKS = {
@@ -388,25 +391,40 @@ handlers.EndSet = function(player)
 	return ok()
 end
 
+handlers.Activate = function(player, c)
+	local r = License.activate(player, c.Code)
+	return wrap(r.Ok, r.Message)
+end
+handlers.RedeemGuest = function(player, c)
+	local r = License.redeem(player, c.Code)
+	return wrap(r.Ok, r.Message)
+end
+
 function Commands.run(player: Player, c: any): Result
 	if not allow(player) then
 		return no("Slow down a little.")
 	end
 	local kind = c.Kind
-	local caps = Roles.caps(player)
-	-- anyone may keep their own panel prefs; everything else needs the booth
-	if kind ~= "PrefsSet" and not caps.canOpen then
-		return no("You don't have access to the booth.")
-	elseif LIBRARY[kind] and not caps.canEditLibrary then
-		return no("Only residents and the owner can edit the library.")
-	elseif ACCESS[kind] and not caps.canEditAccess then
-		return no("Only the owner can change who has access.")
-	elseif kind == "SettingsSave" and not caps.canEditSettings then
-		return no("Only the owner can change the booth's settings.")
-	elseif DECKS[kind] then
-		local okClaim, why = Booth.claim(player)
-		if not okClaim then
-			return no(why)
+	-- the licence's own commands go straight to License, which only lets the place owner through
+	if not LICENSE[kind] then
+		if not License.unlocked() then
+			return no("The booth isn't activated yet.")
+		end
+		local caps = Roles.caps(player)
+		-- anyone may keep their own panel prefs; everything else needs the booth
+		if kind ~= "PrefsSet" and not caps.canOpen then
+			return no("You don't have access to the booth.")
+		elseif LIBRARY[kind] and not caps.canEditLibrary then
+			return no("Only residents and the owner can edit the library.")
+		elseif ACCESS[kind] and not caps.canEditAccess then
+			return no("Only the owner can change who has access.")
+		elseif kind == "SettingsSave" and not caps.canEditSettings then
+			return no("Only the owner can change the booth's settings.")
+		elseif DECKS[kind] then
+			local okClaim, why = Booth.claim(player)
+			if not okClaim then
+				return no(why)
+			end
 		end
 	end
 	local h = handlers[kind]
@@ -424,13 +442,13 @@ end
 function Commands.start()
 	Net.Do.On(Commands.run)
 	Net.Probe.On(function(player, ids)
-		if not Roles.caps(player).canEditLibrary or not allow(player, 4) then
+		if not License.unlocked() or not Roles.caps(player).canEditLibrary or not allow(player, 4) then
 			return {}
 		end
 		return Probe.many(ids)
 	end)
 	Net.Live.On(function(player, deck, param, value)
-		if not allow(player, 0.25) then
+		if not License.unlocked() or not allow(player, 0.25) then
 			return
 		end
 		if not Booth.claim(player) then
@@ -439,7 +457,7 @@ function Commands.start()
 		Decks.live(deck, param, value)
 	end)
 	Net.Nudge.On(function(player, deck, delta)
-		if State.session().live ~= player.UserId then
+		if not License.unlocked() or State.session().live ~= player.UserId then
 			return
 		end
 		Booth.touch()

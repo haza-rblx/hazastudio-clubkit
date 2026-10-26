@@ -14,6 +14,8 @@ local Sync = {}
 
 local ready: { [Player]: boolean } = {}
 local granted: { [Player]: boolean } = {}
+-- owners also get the licence view (ADR 0022); nobody else ever does
+local licensed: { [Player]: boolean } = {}
 
 local PANEL_KEYS = { "library", "access" }
 local ROOM_KEYS = { "session", "settings", "stage" }
@@ -21,6 +23,10 @@ local ROOM_KEYS = { "session", "settings", "stage" }
 local function grant(player: Player)
 	if not ready[player] then
 		return
+	end
+	if not licensed[player] and Roles.isOwner(player) then
+		licensed[player] = true
+		CharmSync.server.addSignalsToClient(player, { license = State.license })
 	end
 	local canOpen = State.me(player.UserId)().canOpen
 	if canOpen and not granted[player] then
@@ -46,6 +52,10 @@ function Sync.start()
 			granted[player] = nil
 			CharmSync.server.removeSignalsFromClient(player, `me-{player.UserId}`, table.unpack(PANEL_KEYS))
 			CharmSync.server.removeSignalsFromClient(player, table.unpack(ROOM_KEYS))
+			if licensed[player] then
+				licensed[player] = nil
+				CharmSync.server.removeSignalsFromClient(player, "license")
+			end
 		end
 		ready[player] = true
 		CharmSync.server.addSignalsToClient(player, {
@@ -60,6 +70,7 @@ function Sync.start()
 	Players.PlayerRemoving:Connect(function(player)
 		ready[player] = nil
 		granted[player] = nil
+		licensed[player] = nil
 		CharmSync.server.removeClient(player)
 	end)
 end

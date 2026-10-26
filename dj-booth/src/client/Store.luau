@@ -11,6 +11,7 @@ local Vide = require(Packages.Vide)
 local VideCharm = require(Packages.VideCharm)
 local Shared = ReplicatedStorage.HazaDJ.Shared
 local Defaults = require(Shared.Defaults)
+local LicensePolicy = require(Shared.LicensePolicy)
 local Types = require(Shared.Types)
 local Net = require(script.Parent.Net)
 
@@ -32,6 +33,8 @@ Store.meAtom = Charm.atom({
 	canEditSettings = false,
 	prefs = Defaults.prefs(),
 } :: Types.Me)
+-- the licence view (ADR 0022): only the owner is ever sent it; everyone else keeps "locked"
+Store.licenseAtom = Charm.atom({ status = "locked" } :: LicensePolicy.View)
 -- true once the first full state has arrived
 Store.readyAtom = Charm.atom(false)
 
@@ -41,6 +44,7 @@ Store.access = (nil :: any) :: () -> Types.Access
 Store.settings = (nil :: any) :: () -> Types.Settings
 Store.session = (nil :: any) :: () -> Types.Session
 Store.me = (nil :: any) :: () -> Types.Me
+Store.license = (nil :: any) :: () -> LicensePolicy.View
 Store.ready = (nil :: any) :: () -> boolean
 
 function Store.bind()
@@ -49,6 +53,7 @@ function Store.bind()
 	Store.settings = VideCharm.useSignalState(Store.settingsAtom)
 	Store.session = VideCharm.useSignalState(Store.sessionAtom)
 	Store.me = VideCharm.useSignalState(Store.meAtom)
+	Store.license = VideCharm.useSignalState(Store.licenseAtom)
 	Store.ready = VideCharm.useSignalState(Store.readyAtom)
 end
 
@@ -59,6 +64,7 @@ function Store.start()
 		settings = Store.settingsAtom,
 		session = Store.sessionAtom,
 		stage = Store.stageAtom,
+		license = Store.licenseAtom,
 		[`me-{player.UserId}`] = Store.meAtom,
 	})
 	Net.Sync.On(function(payloads)

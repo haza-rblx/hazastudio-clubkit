@@ -372,6 +372,116 @@ check(
 		and fx.priority.shift == 1
 )
 
+-- LicensePolicy (ADR 0022)
+local LicensePolicy = load("LicensePolicy")
+do
+	local DAY = 86400
+	local T = 1_800_000_000 -- a fixed "now"
+	local full = { v = 1, secret = "s1", kind = "full", licenseId = "L1", lastOkAt = T - DAY }
+	local guest = { v = 1, secret = "s2", kind = "guest", licenseId = "G1", expiresAt = T + 3 * DAY, lastOkAt = T - 60 }
+
+	check("license: no record is locked", LicensePolicy.evaluate(nil, T).status == "locked")
+	check("license: full, confirmed yesterday", LicensePolicy.evaluate(full, T).status == "active")
+	local g = LicensePolicy.evaluate(guest, T)
+	check("license: guest running", g.status == "guest" and g.secondsLeft == 3 * DAY)
+	check("license: guest at its end is expired", LicensePolicy.evaluate(guest, T + 3 * DAY).status == "expired")
+	-- the grace: 7 days without a confirmation, then offline
+	local stale = table.clone(full)
+	stale.lastOkAt = T - 7 * DAY
+	check("license: exactly 7 days unconfirmed still plays", LicensePolicy.evaluate(stale, T).status == "active")
+	stale.lastOkAt = T - 7 * DAY - 1
+	check("license: past 7 days unconfirmed is offline", LicensePolicy.evaluate(stale, T).status == "offline")
+	-- the grace never stretches a guest pass past its end
+	local oldGuest = table.clone(guest)
+	oldGuest.lastOkAt = T - 2 * DAY
+	oldGuest.expiresAt = T - 1
+	check("license: grace does not extend a guest pass", LicensePolicy.evaluate(oldGuest, T).status == "expired")
+	local denied = table.clone(full)
+	denied.denied = "universe_mismatch"
+	local d = LicensePolicy.evaluate(denied, T)
+	check("license: denial wins", d.status == "denied" and d.reason == "universe_mismatch")
+	check(
+		"license: unlocked only active/guest",
+		LicensePolicy.unlocked({ status = "active" })
+			and LicensePolicy.unlocked({ status = "guest" })
+			and not LicensePolicy.unlocked({ status = "expired" })
+			and not LicensePolicy.unlocked({ status = "offline" })
+			and not LicensePolicy.unlocked({ status = "denied" })
+			and not LicensePolicy.unlocked({ status = "locked" })
+	)
+
+	-- verify answers
+	local yes = LicensePolicy.applyVerify(denied, { kind = "ok" }, T)
+	check("verify: a yes clears a denial and refreshes", yes.denied == nil and yes.lastOkAt == T)
+	local no = LicensePolicy.applyVerify(full, { kind = "denied", reason = "revoked" }, T)
+	check("verify: a no sticks, keeps the old confirmation", no.denied == "revoked" and no.lastOkAt == T - DAY)
+	local silent = LicensePolicy.applyVerify(full, { kind = "unreachable" }, T)
+	check("verify: no answer changes nothing", silent.lastOkAt == T - DAY and silent.denied == nil)
+	local upgraded = LicensePolicy.applyVerify(guest, { kind = "ok", licenseKind = "full" }, T)
+	check("verify: guest upgraded to full loses its end", upgraded.kind == "full" and upgraded.expiresAt == nil)
+	local kept = LicensePolicy.applyVerify(guest, { kind = "ok" }, T)
+	check("verify: guest keeps its end without a new one", kept.expiresAt == T + 3 * DAY)
+	check("verify: does not mutate the input", denied.denied == "universe_mismatch")
+
+	-- activation answers
+	local act = LicensePolicy.fromActivation(
+		{ kind = "ok", secret = "x", licenseId = "L9", licenseKind = "full", expiresAt = T + 5 },
+		T
+	)
+	check("activate: full record", act and act.kind == "full" and act.expiresAt == nil and act.lastOkAt == T)
+	local gAct = LicensePolicy.fromActivation(
+		{ kind = "ok", secret = "y", licenseId = "G2", licenseKind = "guest", expiresAt = T + 7 * DAY },
+		T
+	)
+	local gView = LicensePolicy.evaluate(gAct, T + DAY)
+	check(
+		"activate: a guest pass carries its start into the view",
+		gView.startedAt == T and gView.secondsLeft == 6 * DAY
+	)
+	check(
+		"activate: guest needs an end",
+		LicensePolicy.fromActivation({ kind = "ok", secret = "x", licenseId = "G9", licenseKind = "guest" }, T) == nil
+	)
+	check("activate: needs a secret", LicensePolicy.fromActivation({ kind = "ok", licenseId = "L9" }, T) == nil)
+	check(
+		"activate: a denial makes no record",
+		LicensePolicy.fromActivation({ kind = "denied", reason = "used" }, T) == nil
+	)
+
+	-- two servers saving
+	local older = table.clone(full)
+	local newer = table.clone(full)
+	newer.lastOkAt = T
+	check("merge: keeps the newer confirmation", LicensePolicy.merge(newer, older).lastOkAt == T)
+	local other = table.clone(full)
+	other.secret = "rotated"
+	check("merge: a new secret replaces the old record", LicensePolicy.merge(newer, other).secret == "rotated")
+
+	-- codes and attempts
+	check("code: trims spaces", LicensePolicy.normalizeCode("  djx_live_ABCD-1234 \n") == "djx_live_ABCD-1234")
+	check("code: too short", LicensePolicy.normalizeCode("abc123") == nil)
+	check("code: odd characters", LicensePolicy.normalizeCode("abcd1234<script>") == nil)
+	check("code: too long", LicensePolicy.normalizeCode(string.rep("a", 129)) == nil)
+	local times = {}
+	local allowed = 0
+	for i = 1, 7 do
+		local okA
+		okA, times = LicensePolicy.allowAttempt(times, T + i)
+		if okA then
+			allowed += 1
+		end
+	end
+	check("attempts: 5 per window", allowed == 5)
+	local okLater = LicensePolicy.allowAttempt(times, T + 1 + 600)
+	check("attempts: window slides", okLater == true)
+
+	check("left: days", LicensePolicy.leftText(5 * DAY + 4 * 3600 + 59) == "5 days 4 h left")
+	check("left: one day", LicensePolicy.leftText(DAY) == "1 day 0 h left")
+	check("left: hours", LicensePolicy.leftText(3 * 3600 + 20 * 60) == "3 h 20 min left")
+	check("left: under a minute shows 1", LicensePolicy.leftText(30) == "1 min left")
+	check("left: zero", LicensePolicy.leftText(0) == "0 min left")
+end
+
 print(string.format("%d passed, %d failed", passed, failures))
 if failures > 0 then
 	process.exit(1)
