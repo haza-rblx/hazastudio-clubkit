@@ -31,6 +31,7 @@ local App = {}
 
 local HOTKEYS = { Enum.KeyCode.J, Enum.KeyCode.K, Enum.KeyCode.B }
 local SIZES = { 0.85, 1, 1.15 }
+local PANEL_CORNER = 4
 
 function App.new(): ScreenGui
 	Store.bind()
@@ -184,9 +185,75 @@ function App.new(): ScreenGui
 	header.ZIndex = 2
 	menuLayer.Parent = header
 	Controls.setMenuHost(menuLayer, Theme.PAGE_H, scaleNow)
+	-- after an unlock, the rows under the header rise into place one after another as the lock's
+	-- curtain parts (owner, 2026-10-26). Each row's content is pushed down through its UIPadding and
+	-- eased back, under a veil in the panel colour that fades as it lands.
+	local RISE_Y = 28
+	local RISE = TweenInfo.new(0.8, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)
+	local function riseIn()
+		if untrack(Store.me).prefs.reduceMotion == true then
+			return
+		end
+		local rows: { GuiObject } = {}
+		for _, r in deckRows do
+			if r:IsA("GuiObject") and r.Visible then
+				if r.Name == "Deck" then
+					for _, c in r:GetChildren() do
+						if c:IsA("GuiObject") and c.Visible then
+							table.insert(rows, c)
+						end
+					end
+				else
+					table.insert(rows, r)
+				end
+			end
+		end
+		if pages.Visible then
+			table.insert(rows, pages)
+		end
+		table.sort(rows, function(x, y)
+			return x.AbsolutePosition.Y < y.AbsolutePosition.Y
+		end)
+		local s = scaleNow()
+		local origin = menuLayer.AbsolutePosition
+		for i, row in rows do
+			local pad = row:FindFirstChildOfClass("UIPadding")
+			local made = pad == nil
+			if not pad then
+				pad = Instance.new("UIPadding")
+				pad.Parent = row
+			end
+			local top = (pad :: UIPadding).PaddingTop
+			pad.PaddingTop = UDim.new(top.Scale, top.Offset + RISE_Y)
+			local veil = create("Frame")({
+				Position = UDim2.fromOffset(
+					(row.AbsolutePosition.X - origin.X) / s,
+					(row.AbsolutePosition.Y - origin.Y) / s
+				),
+				Size = UDim2.fromOffset(row.AbsoluteSize.X / s, row.AbsoluteSize.Y / s),
+				BackgroundColor3 = C.root,
+				BorderSizePixel = 0,
+				ZIndex = 41,
+				Parent = menuLayer,
+			})
+			task.delay((i - 1) * 0.07, function()
+				TweenService:Create(pad :: UIPadding, RISE, { PaddingTop = top }):Play()
+				TweenService:Create(veil, TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+					BackgroundTransparency = 1,
+				}):Play()
+			end)
+			task.delay((i - 1) * 0.07 + RISE.Time, function()
+				veil:Destroy()
+				if made then
+					(pad :: UIPadding):Destroy()
+				end
+			end)
+		end
+	end
 	-- the lock screen covers the whole panel, from the same layer as the menus (above them).
 	-- Below ~0.75 scale (phones) it drops the pass and shows the form at a readable size.
 	local lockScreen = Lock.new({
+		onReveal = riseIn,
 		compact = function()
 			return scale() < 0.75
 		end,
@@ -199,19 +266,16 @@ function App.new(): ScreenGui
 	})
 	lockScreen.Parent = header
 
-	root = create("Frame")({
-		Name = "Panel",
-		-- hidden until opened: a visible root whose first sink gets cancelled by a relayout stays on
-		-- screen with open() false, and the deck clocks (gated on open) then only move on re-anchors
-		Visible = false,
-		Size = UDim2.new(0, Theme.PANEL_W, 0, 0),
+	-- the rows under the header sit on their own backing, so the header alone can show the room
+	-- through it (owner, 2026-10-26); the 2 px gutters stay solid
+	local body = create("Frame")({
+		Name = "Body",
+		Size = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundColor3 = C.root,
 		BorderSizePixel = 0,
-		ClipsDescendants = true,
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		create("UICorner")({ CornerRadius = UDim.new(0, 0) }),
+		LayoutOrder = 1,
+		create("UIPadding")({ PaddingTop = UDim.new(0, 2) }),
 		create("UIListLayout")({
 			FillDirection = Enum.FillDirection.Vertical,
 			HorizontalAlignment = Enum.HorizontalAlignment.Center,
@@ -219,12 +283,115 @@ function App.new(): ScreenGui
 			Padding = UDim.new(0, 2),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
+		pages,
+		deckRows,
+	})
+
+	root = create("Frame")({
+		Name = "Panel",
+		-- hidden until opened: a visible root whose first sink gets cancelled by a relayout stays on
+		-- screen with open() false, and the deck clocks (gated on open) then only move on re-anchors
+		Visible = false,
+		Size = UDim2.new(0, Theme.PANEL_W, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ClipsDescendants = true,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		-- 4 px corners and a soft drop shadow (owner, 2026-10-26, picked live)
+		create("UICorner")({ CornerRadius = UDim.new(0, PANEL_CORNER) }),
+		create("UIShadow")({
+			Color = Color3.new(0, 0, 0),
+			Transparency = 0.45,
+			BlurRadius = UDim.new(0, 40),
+			Offset = UDim2.fromOffset(0, 12),
+			-- the header is see-through: the shadow mustn't darken what shows behind it
+			ShowBehindParent = false,
+		}),
+		create("UIListLayout")({
+			FillDirection = Enum.FillDirection.Vertical,
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			VerticalAlignment = Enum.VerticalAlignment.Center,
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}),
 		create("UIStroke")({ Color = C.tile, Thickness = 1 }),
 		uiScale,
 		header,
-		pages,
-		deckRows,
+		body,
 	}) :: Frame
+
+	-- a frame's rounded corners don't clip its children, so whatever tile sits in a corner of the
+	-- panel gets that corner rounded too. Re-run when the layout changes (mode, page); the corners it
+	-- rounded last time go back first.
+	local cornered: { [UICorner]: { UDim } } = {}
+	local CORNERS = { "TopLeftRadius", "TopRightRadius", "BottomLeftRadius", "BottomRightRadius" }
+	local function shown(g: GuiObject): boolean
+		local at: Instance? = g
+		while at and at ~= root do
+			if at:IsA("GuiObject") and not at.Visible then
+				return false
+			end
+			at = at.Parent
+		end
+		return true
+	end
+	local function roundCorners()
+		for c, was in cornered do
+			for i, k in CORNERS do
+				(c :: any)[k] = was[i]
+			end
+		end
+		table.clear(cornered)
+		local p0, s0 = root.AbsolutePosition, root.AbsoluteSize
+		for _, d in root:GetDescendants() do
+			if not d:IsA("GuiObject") or d.BackgroundTransparency >= 1 or d:IsDescendantOf(lockScreen) then
+				continue
+			end
+			local p, s = d.AbsolutePosition, d.AbsoluteSize
+			local l, r = math.abs(p.X - p0.X) < 2, math.abs(p.X + s.X - p0.X - s0.X) < 2
+			local t, b = math.abs(p.Y - p0.Y) < 2, math.abs(p.Y + s.Y - p0.Y - s0.Y) < 2
+			if not ((l or r) and (t or b)) or not shown(d) then
+				continue
+			end
+			local c = d:FindFirstChildOfClass("UICorner")
+			if not c then
+				c = Instance.new("UICorner")
+				c.CornerRadius = UDim.new(0, 0)
+				c.Parent = d
+			end
+			local corner = c :: UICorner
+			cornered[corner] = {
+				corner.TopLeftRadius,
+				corner.TopRightRadius,
+				corner.BottomLeftRadius,
+				corner.BottomRightRadius,
+			}
+			local r4 = UDim.new(0, PANEL_CORNER)
+			if t and l then
+				corner.TopLeftRadius = r4
+			end
+			if t and r then
+				corner.TopRightRadius = r4
+			end
+			if b and l then
+				corner.BottomLeftRadius = r4
+			end
+			if b and r then
+				corner.BottomRightRadius = r4
+			end
+		end
+	end
+	effect(function()
+		view()
+		tab()
+		open()
+		-- after the layout has settled
+		task.defer(function()
+			task.wait()
+			roundCorners()
+		end)
+	end)
 
 	-- ── motion (owner, 2026-10-23, picked live in the playtest: "rise morph") ──
 	-- open: rise from below the screen, Expo Out 1.0 s; close: sink, Cubic In 0.5 s.

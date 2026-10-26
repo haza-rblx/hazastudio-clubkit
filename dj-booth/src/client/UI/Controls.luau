@@ -8,6 +8,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local Vide = require(ReplicatedStorage.HazaDJ.Packages.Vide)
 local Base = require(script.Parent.Base)
+local Hover = require(script.Parent.Hover)
 local Theme = require(script.Parent.Parent.Theme)
 
 local create, source, effect, read, untrack = Vide.create, Vide.source, Vide.effect, Vide.read, Vide.untrack
@@ -58,12 +59,7 @@ function Controls.button(o: ButtonOpts, props: Props?): TextButton
 		AutoButtonColor = false,
 		Size = UDim2.fromOffset(o.w or 0, o.h or 32),
 		AutomaticSize = if o.w then Enum.AutomaticSize.None else Enum.AutomaticSize.X,
-		MouseEnter = function()
-			hover(true)
-		end,
-		MouseLeave = function()
-			hover(false)
-		end,
+		Hover.track(hover),
 		Activated = o.onClick,
 		if o.w then nil else pad(14),
 		corner(4),
@@ -209,12 +205,7 @@ function Controls.segmented(
 			TextColor3 = function()
 				return if cur() == i then W elseif hover() then C.soft else C.dim
 			end,
-			MouseEnter = function()
-				hover(true)
-			end,
-			MouseLeave = function()
-				hover(false)
-			end,
+			Hover.track(hover),
 			Activated = function()
 				if untrack(cur) == i then
 					return
@@ -286,12 +277,7 @@ function Controls.toggle(on: any, onChange: (boolean) -> (), props: Props?): Tex
 		BackgroundColor3 = C.tile,
 		BorderSizePixel = 0,
 		AutoButtonColor = false,
-		MouseEnter = function()
-			hover(true)
-		end,
-		MouseLeave = function()
-			hover(false)
-		end,
+		Hover.track(hover),
 		Activated = function()
 			local v = not untrack(state)
 			state(v)
@@ -344,12 +330,7 @@ function Controls.stepper(
 			BorderSizePixel = 0,
 			Size = UDim2.fromOffset(28, 28),
 			Position = UDim2.fromOffset(x, 2),
-			MouseEnter = function()
-				hover(true)
-			end,
-			MouseLeave = function()
-				hover(false)
-			end,
+			Hover.track(hover),
 			Activated = function()
 				local cur = untrack(v)
 				local nv = math.clamp(cur + d * step, min, max)
@@ -493,12 +474,7 @@ function Controls.buildMenu(anchor: GuiObject, options: { string }, current: num
 			BorderSizePixel = 0,
 			LayoutOrder = i,
 			ZIndex = 42,
-			MouseEnter = function()
-				hover(true)
-			end,
-			MouseLeave = function()
-				hover(false)
-			end,
+			Hover.track(hover),
 			Activated = function()
 				Controls.closeMenu()
 				pick(i, o)
@@ -578,12 +554,7 @@ function Controls.dropdown(
 		end,
 		BorderSizePixel = 0,
 		AutoButtonColor = false,
-		MouseEnter = function()
-			hover(true)
-		end,
-		MouseLeave = function()
-			hover(false)
-		end,
+		Hover.track(hover),
 		Activated = function()
 			local opts = read(options)
 			Controls.openMenu(btn, opts, untrack(cur), function(i, o)
@@ -786,6 +757,7 @@ local function bindDrag(hit: GuiObject, area: GuiObject, o: ValueOpts, get: () -
 		end
 		lastClick = now
 		fromX(io.Position.X)
+		local release = Hover.hold()
 		local moveC, endC
 		moveC = UserInputService.InputChanged:Connect(function(m)
 			if Base.isMove(m) then
@@ -796,6 +768,7 @@ local function bindDrag(hit: GuiObject, area: GuiObject, o: ValueOpts, get: () -
 			if Base.isPress(e) then
 				moveC:Disconnect()
 				endC:Disconnect()
+				release()
 			end
 		end)
 	end)

@@ -97,6 +97,7 @@ export type Settings = {
 	keyLock: boolean,
 	syncOnLoad: boolean,
 	autoCue: boolean,
+	playOnLoad: boolean, -- a track the DJ loads starts right away (Auto mix loads stay paused)
 	busyDeck: number, -- 1 ask, 2 block, 3 allow
 	padCooldown: number, -- 1 none, 2 short, 3 long
 	deckOff: string, -- deck-off brake preset name, "" = instant stop

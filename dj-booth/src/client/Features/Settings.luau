@@ -287,6 +287,12 @@ function Settings.new(props: Base.Props?): Frame
 		end
 		for _, x in
 			Layout.group(nx, "Loading", {
+				Layout.settingRow(
+					nx(),
+					"Play on load",
+					"A dropped or loaded track starts right away",
+					toggle("playOnLoad")
+				),
 				Layout.settingRow(nx(), "Skip silence", "Start at the first sound, not at 0:00", toggle("autoCue")),
 				Layout.settingRow(
 					nx(),
@@ -325,26 +331,9 @@ function Settings.new(props: Base.Props?): Frame
 		return out
 	end
 	BUILD.djDeck = function(nx)
+		-- "Open at the DJ deck" and "DJs only behind the decks" are left out until the DJ deck can be
+		-- set up in game: both need a tagged part, which no game had (owner, 2026-10-26)
 		local out = {}
-		for _, x in
-			Layout.group(nx, "At the DJ deck", {
-				Layout.settingRow(
-					nx(),
-					"Open at the DJ deck",
-					"Open this panel when a DJ steps up",
-					toggle("openAtDjDeck")
-				),
-				Layout.settingRow(
-					nx(),
-					"DJs only behind the decks",
-					"Keep everyone else off the DJ deck floor",
-					toggle("standLock"),
-					true
-				),
-			})
-		do
-			table.insert(out, x)
-		end
 		for _, x in
 			Layout.group(nx, "Sets", {
 				Layout.settingRow(
@@ -376,26 +365,15 @@ function Settings.new(props: Base.Props?): Frame
 					"Show “… is live” to everyone",
 					toggle("announce")
 				),
-				Layout.settingRow(nx(), "Now playing", "Show the track title to the room", toggle("nowPlaying")),
-				Layout.settingRow(
-					nx(),
-					"Name above the DJ deck",
-					"The live DJ's name floats over the decks",
-					toggle("billboard"),
-					true
-				),
+				-- "Name above the DJ deck" and "Lights follow the beat" are left out for the same reason:
+				-- the name needs a tagged DJ deck, and nothing reads the beat yet (owner, 2026-10-26)
+				Layout.settingRow(nx(), "Now playing", "Show the track title to the room", toggle("nowPlaying"), true),
 			}, true)
 		do
 			table.insert(out, x)
 		end
 		for _, x in
 			Layout.group(nx, "In the room", {
-				Layout.settingRow(
-					nx(),
-					"Lights follow the beat",
-					"Club lights pulse on the playing deck's BPM",
-					toggle("lights")
-				),
 				Layout.settingRow(nx(), "Camera effects", "Pads may shake or tilt listeners' cameras", toggle("camFx")),
 				Layout.settingRow(
 					nx(),

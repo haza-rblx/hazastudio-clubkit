@@ -12,6 +12,7 @@ local Actions = require(script.Parent.Parent.Parent.Actions)
 local Store = require(script.Parent.Parent.Parent.Store)
 local Theme = require(script.Parent.Parent.Parent.Theme)
 local Base = require(script.Parent.Parent.Parent.UI.Base)
+local Hover = require(script.Parent.Parent.Parent.UI.Hover)
 local Controls = require(script.Parent.Parent.Parent.UI.Controls)
 local Covers = require(script.Parent.Parent.Parent.UI.Covers)
 local Layout = require(script.Parent.Parent.Parent.UI.Layout)
@@ -171,12 +172,7 @@ local function playlistChips(order: number, isIn: (string) -> boolean, toggleIn:
 						BorderSizePixel = 0,
 						Size = UDim2.fromOffset(PICK, PICK),
 						LayoutOrder = i,
-						MouseEnter = function()
-							hover(true)
-						end,
-						MouseLeave = function()
-							hover(false)
-						end,
+						Hover.track(hover),
 						Activated = function()
 							toggleIn(pl.id)
 						end,

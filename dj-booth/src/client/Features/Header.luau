@@ -1,11 +1,12 @@
 --!strict
--- The 40 px header: page tabs on the left, the "hazastudio" mark in the middle, the Deck · Window ·
+-- The 40 px header: page tabs on the left, the "xfade" mark in the middle, the Deck · Window ·
 -- Full switch with its tiny screens, and close on the right.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
 local Vide = require(ReplicatedStorage.HazaDJ.Packages.Vide)
 local Base = require(script.Parent.Parent.UI.Base)
+local Hover = require(script.Parent.Parent.UI.Hover)
 local Theme = require(script.Parent.Parent.Theme)
 
 local create, source, effect, untrack = Vide.create, Vide.source, Vide.effect, Vide.untrack
@@ -93,12 +94,7 @@ local function tabButton(p: Props, key: string, text: string, order: number)
 			BorderSizePixel = 0,
 			Size = UDim2.fromScale(1, 1),
 			ZIndex = 2,
-			MouseEnter = function()
-				hover(true)
-			end,
-			MouseLeave = function()
-				hover(false)
-			end,
+			Hover.track(hover),
 			Activated = function()
 				p.setTab(key)
 			end,
@@ -152,12 +148,7 @@ local function viewSwitch(p: Props)
 			Position = UDim2.fromOffset(2 + (i - 1) * BW, 2),
 			Size = UDim2.fromOffset(BW, 24),
 			ZIndex = 2,
-			MouseEnter = function()
-				hover(true)
-			end,
-			MouseLeave = function()
-				hover(false)
-			end,
+			Hover.track(hover),
 			Activated = function()
 				p.setView(m[1])
 			end,
@@ -233,12 +224,7 @@ local function capsule(order: number, isClose: boolean, onClick: () -> ())
 		BackgroundColor3 = function()
 			return if hover() then (if isClose then C.red else C.raised) else C.field
 		end,
-		MouseEnter = function()
-			hover(true)
-		end,
-		MouseLeave = function()
-			hover(false)
-		end,
+		Hover.track(hover),
 		Activated = onClick,
 		corner(4),
 		if isClose then { glyph(12, 45), glyph(12, -45) } else glyph(10),
@@ -254,6 +240,9 @@ function Header.new(p: Props): Frame
 		Name = "Header",
 		Size = UDim2.new(1, 0, 0, Theme.HEADER_H),
 		BackgroundColor3 = C.tile,
+		-- 80 %: the room shows through the header only; the panel behind it is see-through and the
+		-- rows below sit on their own backing (App, owner 2026-10-26)
+		BackgroundTransparency = 0.2,
 		LayoutOrder = -1,
 		create("UIPadding")({ PaddingLeft = UDim.new(0, 16), PaddingRight = UDim.new(0, 16) }),
 		frame({
@@ -271,21 +260,43 @@ function Header.new(p: Props): Frame
 				tabs,
 			}),
 		}),
-		-- the wordmark: "djX DUAL DECK" over a small "by kosmik", centred like a logo lockup
-		-- (owner, 2026-10-23); "by kosmik" at 50 %
+		-- the wordmark (owner, 2026-10-26, picked live): "xfade" with a red outlined DUAL DECK tag, over
+		-- a small "by kosmik" at 50 %; nudged 1 px up so it reads centred (no descenders)
 		frame({
 			Name = "Title",
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(0.5, 0.5),
+			Position = UDim2.new(0.5, 0, 0.5, -1),
 			AutomaticSize = Enum.AutomaticSize.XY,
 			ZIndex = 5,
 			Base.vlist(0, { HorizontalAlignment = Enum.HorizontalAlignment.Center }),
-			label("djX DUAL DECK", {
-				FontFace = Theme.BRAND,
-				TextSize = 16,
-				TextTransparency = 0, -- 100 % (owner, 2026-10-23)
+			frame({
+				AutomaticSize = Enum.AutomaticSize.XY,
 				LayoutOrder = 1,
 				ZIndex = 5,
+				hlist(5),
+				label("xfade", {
+					FontFace = Font.new(Theme.BRAND.Family, Enum.FontWeight.ExtraBold),
+					TextSize = 19,
+					LayoutOrder = 1,
+					ZIndex = 5,
+				}),
+				frame({
+					Size = UDim2.fromOffset(0, 16),
+					AutomaticSize = Enum.AutomaticSize.X,
+					LayoutOrder = 2,
+					ZIndex = 5,
+					Base.corner(2),
+					Base.stroke(C.redText, 1),
+					Base.pad(5, 5, 0, 0),
+					label("DUAL DECK", {
+						AutomaticSize = Enum.AutomaticSize.X,
+						Size = UDim2.fromScale(0, 1),
+						FontFace = Theme.BRAND,
+						TextSize = 12,
+						TextColor3 = C.redText,
+						ZIndex = 5,
+					}),
+				}),
 			}),
 			label("by kosmik", {
 				FontFace = Theme.SB,

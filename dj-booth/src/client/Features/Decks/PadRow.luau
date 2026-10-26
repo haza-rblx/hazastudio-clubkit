@@ -8,6 +8,7 @@ local Actions = require(script.Parent.Parent.Parent.Actions)
 local Store = require(script.Parent.Parent.Parent.Store)
 local Theme = require(script.Parent.Parent.Parent.Theme)
 local Base = require(script.Parent.Parent.Parent.UI.Base)
+local Hover = require(script.Parent.Parent.Parent.UI.Hover)
 local Model = require(script.Parent.Model)
 
 local create, source, indexes = Vide.create, Vide.source, Vide.indexes
@@ -48,12 +49,7 @@ function PadRow.new(height: number, props: Base.Props?): Frame
 			BackgroundColor3 = function()
 				return if not pad().kind then C.field elseif hover() and not busy() then C.select else C.raised
 			end,
-			MouseEnter = function()
-				hover(true)
-			end,
-			MouseLeave = function()
-				hover(false)
-			end,
+			Hover.track(hover),
 			Activated = function()
 				if pad().kind and not Vide.untrack(busy) then
 					Actions.send({ Kind = "PadPress", Index = i })

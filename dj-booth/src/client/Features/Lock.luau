@@ -1,5 +1,5 @@
 --!strict
--- The lock screen (ADR 0022), as approved live in DJX Lite (owner, 2026-10-26): solid black, a stage
+-- The lock screen (ADR 0022), as approved live in DJX Lite (owner, 2026-10-26): the deck's own surface colour, a stage
 -- light on a hanging "BACKSTAGE PASS" lanyard, and a compact form (one code field, Activate, "Have a
 -- guest pass?" opening a sub-modal). The pass prints the code as it is typed; an accepted code
 -- stamps ACCESS GRANTED and pulls the pass up. A guest pass that ran out shows the same screen with
@@ -18,10 +18,12 @@ local Actions = require(script.Parent.Parent.Actions)
 local Store = require(script.Parent.Parent.Store)
 local Theme = require(script.Parent.Parent.Theme)
 local Base = require(script.Parent.Parent.UI.Base)
+local Hover = require(script.Parent.Parent.UI.Hover)
 
 local create, source, effect, untrack, cleanup = Vide.create, Vide.source, Vide.effect, Vide.untrack, Vide.cleanup
 local C, W = Theme.C, Theme.W
 local BLACK = Theme.BLACK
+local BG = C.tile -- the deck's own surface, so the lock reads as part of the panel (owner, 2026-10-26)
 local frame, label = Base.frame, Base.label
 
 local Lock = {}
@@ -30,6 +32,7 @@ export type Props = {
 	compact: () -> boolean, -- a small screen: no pass, the form at a readable size
 	boost: () -> number, -- the form's extra scale in compact mode
 	onClose: () -> (),
+	onReveal: (() -> ())?, -- the curtain starts to part: the panel can bring its rows in
 }
 
 local CANVAS_W, CANVAS_H = 1250, 802
@@ -199,12 +202,7 @@ local function primary(text: () -> string, enabled: () -> boolean, onClick: () -
 		TextColor3 = function()
 			return if enabled() then C.ink else C.faint
 		end,
-		MouseEnter = function()
-			hover(true)
-		end,
-		MouseLeave = function()
-			hover(false)
-		end,
+		Hover.track(hover),
 		Activated = function()
 			if untrack(enabled) then
 				onClick()
@@ -319,7 +317,7 @@ function Lock.new(p: Props): Frame
 		Base.pad(24, 24, 0, 0),
 		bandL,
 		label(function()
-			return copy().band
+			return if celebrating() then "ACTIVATED" else copy().band
 		end, {
 			AutomaticSize = Enum.AutomaticSize.None,
 			Size = UDim2.fromScale(1, 1),
@@ -429,7 +427,7 @@ function Lock.new(p: Props): Frame
 				AnchorPoint = Vector2.new(0.5, 0.5),
 				Position = UDim2.new(ax, if ax == 0 then -24 else 24, 0, 303),
 				Size = UDim2.fromOffset(18, 18),
-				BackgroundColor3 = BLACK,
+				BackgroundColor3 = BG,
 				ZIndex = 63,
 				Base.round(1),
 			})
@@ -448,7 +446,7 @@ function Lock.new(p: Props): Frame
 			AnchorPoint = Vector2.new(0.5, 0),
 			Position = UDim2.new(0.5, 0, 0, 16),
 			Size = UDim2.fromOffset(64, 12),
-			BackgroundColor3 = BLACK,
+			BackgroundColor3 = BG,
 			ZIndex = 62,
 			Base.round(1),
 		}),
@@ -559,15 +557,53 @@ function Lock.new(p: Props): Frame
 	local root: Frame
 	local formGroup: CanvasGroup
 	local codeBox: TextBox
+	-- ── the reveal to the decks (owner, 2026-10-26: "curtain", picked live from four takes): the
+	-- pass lifts away, a seam of light splits the middle, then the two halves part like stage doors.
+	-- In Studio, changing HazaDJ's UnlockPreview attribute replays it. ──
 	local function flyAway()
 		tween(swing, TweenInfo.new(0.7, Enum.EasingStyle.Cubic, Enum.EasingDirection.In), {
 			Position = UDim2.fromOffset(PX, PIVOT_Y - 1000),
 		})
 		tween(beam, TweenInfo.new(0.5), { GroupTransparency = 1 })
 		tween(formGroup, TweenInfo.new(0.5), { GroupTransparency = 1 })
-		task.wait(0.45)
-		tween(root, TweenInfo.new(0.5), { BackgroundTransparency = 1 })
-		task.wait(0.55)
+		task.wait(0.4)
+		-- under the pass and the beam (Sibling z), over the root's own fill
+		local layer = frame({ Name = "Reveal", Size = UDim2.fromScale(1, 1), ZIndex = 60, Parent = root })
+		local halves = {}
+		for i, ax in { 0, 1 } do
+			halves[i] = Base.new("Frame", {
+				AnchorPoint = Vector2.new(ax, 0),
+				Position = UDim2.fromScale(ax, 0),
+				Size = UDim2.fromScale(0.5, 1),
+				BackgroundColor3 = BG,
+				ZIndex = 61,
+				Parent = layer,
+			})
+		end
+		local seam = Base.new("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.new(0, 2, 0, 0),
+			BackgroundColor3 = W,
+			ZIndex = 62,
+			Parent = layer,
+		})
+		root.BackgroundTransparency = 1
+		tween(
+			seam,
+			TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+			{ Size = UDim2.new(0, 2, 1, 0) }
+		)
+		task.wait(0.3)
+		if p.onReveal then
+			task.spawn(p.onReveal)
+		end
+		local open = TweenInfo.new(0.9, Enum.EasingStyle.Exponential, Enum.EasingDirection.InOut)
+		tween(halves[1], open, { Position = UDim2.fromScale(-0.5, 0) })
+		tween(halves[2], open, { Position = UDim2.fromScale(1.5, 0) })
+		tween(seam, TweenInfo.new(0.5), { Size = UDim2.new(0, 60, 1, 0), BackgroundTransparency = 1 })
+		task.wait(0.9)
+		layer:Destroy()
 		-- wait for the server's licence to land so the lock doesn't flash back
 		local t0 = os.clock()
 		while not LicensePolicy.unlocked(untrack(Store.license)) and os.clock() - t0 < 5 do
@@ -678,12 +714,7 @@ function Lock.new(p: Props): Frame
 			BackgroundColor3 = function()
 				return if hover() then Color3.fromHex("3f3f3f") else C.card2
 			end,
-			MouseEnter = function()
-				hover(true)
-			end,
-			MouseLeave = function()
-				hover(false)
-			end,
+			Hover.track(hover),
 			Activated = onClick,
 			Base.corner(6),
 		}) :: TextButton
@@ -805,12 +836,7 @@ function Lock.new(p: Props): Frame
 		end,
 	}) :: TextButton
 	local linkHover = source(false)
-	guestLink.MouseEnter:Connect(function()
-		linkHover(true)
-	end)
-	guestLink.MouseLeave:Connect(function()
-		linkHover(false)
-	end)
+	Hover.watch(guestLink, linkHover)
 	effect(function()
 		guestLink.TextColor3 = if linkHover() then W else C.dim
 	end)
@@ -909,12 +935,7 @@ function Lock.new(p: Props): Frame
 		BackgroundColor3 = function()
 			return if closeHover() then C.red else C.field
 		end,
-		MouseEnter = function()
-			closeHover(true)
-		end,
-		MouseLeave = function()
-			closeHover(false)
-		end,
+		Hover.track(closeHover),
 		Activated = p.onClose,
 		Base.corner(4),
 		-- on a phone the panel is scaled down; the close keeps a finger-sized target
@@ -943,12 +964,13 @@ function Lock.new(p: Props): Frame
 		Name = "Lock",
 		Position = UDim2.fromOffset(-16, 0),
 		Size = UDim2.fromOffset(CANVAS_W, CANVAS_H),
-		BackgroundColor3 = BLACK,
+		BackgroundColor3 = BG,
 		BackgroundTransparency = 0,
 		ClipsDescendants = true,
 		ZIndex = 60,
 		Active = true, -- clicks don't reach the panel underneath
 		Visible = shown,
+		Base.corner(4), -- the panel's corners (App)
 		beam,
 		swing,
 		formGroup,
@@ -991,6 +1013,23 @@ function Lock.new(p: Props): Frame
 			conn:Disconnect()
 		end)
 	end)
+
+	-- Studio only: replay the unlock without a code (see the reveal above)
+	if RunService:IsStudio() then
+		local replay = ReplicatedStorage.HazaDJ:GetAttributeChangedSignal("UnlockPreview"):Connect(function()
+			if untrack(done) or not untrack(isOwner) then
+				return
+			end
+			task.spawn(function()
+				state("done")
+				celebrate()
+				flyAway()
+			end)
+		end)
+		cleanup(function()
+			replay:Disconnect()
+		end)
+	end
 
 	-- Esc closes the guest pass sub-modal
 	local esc = UserInputService.InputBegan:Connect(function(input)

@@ -7,6 +7,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local Vide = require(ReplicatedStorage.HazaDJ.Packages.Vide)
 local Base = require(script.Parent.Base)
+local Hover = require(script.Parent.Hover)
 local Theme = require(script.Parent.Parent.Theme)
 
 local create = Vide.create
@@ -63,6 +64,7 @@ function Hardware.drag(
 		if hidden then
 			UserInputService.MouseIconEnabled = false
 		end
+		local release = Hover.hold()
 		local moveC, endC
 		moveC = UserInputService.InputChanged:Connect(function(m)
 			if Base.isMove(m) then
@@ -73,6 +75,7 @@ function Hardware.drag(
 			if Base.isPress(e) then
 				moveC:Disconnect()
 				endC:Disconnect()
+				release()
 				if hidden then
 					UserInputService.MouseIconEnabled = iconWas
 				end

@@ -13,6 +13,7 @@ local Actions = require(script.Parent.Parent.Parent.Actions)
 local Store = require(script.Parent.Parent.Parent.Store)
 local Theme = require(script.Parent.Parent.Parent.Theme)
 local Base = require(script.Parent.Parent.Parent.UI.Base)
+local Hover = require(script.Parent.Parent.Parent.UI.Hover)
 local Hardware = require(script.Parent.Parent.Parent.UI.Hardware)
 local Model = require(script.Parent.Model)
 
@@ -23,6 +24,9 @@ local frame, label, corner = Base.frame, Base.label, Base.corner
 local Deck = {}
 
 Deck.HEAD_H = 60
+local HEAD_W = 624
+-- a pin's head is a slightly flat pill (owner, 2026-10-26): a digit centres more cleanly in it
+local PIN_W, PIN_HEAD, PIN_STEM = 16, 12, 5
 Deck.BODY_H = 231
 
 -- ── header: 40 px cover, title over artist · BPM · key, remaining over position / length ──
@@ -35,7 +39,7 @@ function Deck.header(m: Model.Deck, props: Base.Props?): Frame
 	return Base.new(
 		"Frame",
 		Base.with({
-			Size = UDim2.fromOffset(624, Deck.HEAD_H),
+			Size = UDim2.fromOffset(HEAD_W, Deck.HEAD_H),
 			BackgroundColor3 = C.tile,
 			Base.new("Frame", {
 				Position = UDim2.fromOffset(16, 10),
@@ -53,7 +57,7 @@ function Deck.header(m: Model.Deck, props: Base.Props?): Frame
 				}),
 			}),
 			label(title, {
-				Position = UDim2.fromOffset(68, 11),
+				Position = UDim2.fromOffset(68, 8),
 				FontFace = SB,
 				TextSize = 14,
 				TextColor3 = function()
@@ -71,15 +75,15 @@ function Deck.header(m: Model.Deck, props: Base.Props?): Frame
 					.. (if bpm then bpm .. " BPM" else "— BPM")
 					.. "  ·  "
 					.. (t.key or "—")
-			end, { Position = UDim2.fromOffset(68, 31), FontFace = R, TextSize = 12, TextColor3 = C.dim }),
+			end, { Position = UDim2.fromOffset(68, 27), FontFace = R, TextSize = 12, TextColor3 = C.dim }),
 			label(function()
 				return Model.headerLeft(m)
-			end, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -42, 0, 9), FontFace = B, TextSize = 18 }),
+			end, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -42, 0, 6), FontFace = B, TextSize = 18 }),
 			label(function()
 				return Model.headerAt(m)
 			end, {
 				AnchorPoint = Vector2.new(1, 0),
-				Position = UDim2.new(1, -42, 0, 33),
+				Position = UDim2.new(1, -42, 0, 29),
 				FontFace = SB,
 				TextSize = 12,
 				TextColor3 = C.dim,
@@ -89,7 +93,7 @@ function Deck.header(m: Model.Deck, props: Base.Props?): Frame
 				Text = "",
 				AutoButtonColor = false,
 				AnchorPoint = Vector2.new(1, 0),
-				Position = UDim2.new(1, -16, 0, 10),
+				Position = UDim2.new(1, -16, 0, 7),
 				Size = UDim2.fromOffset(20, 20),
 				BackgroundColor3 = C.field,
 				BorderSizePixel = 0,
@@ -97,12 +101,7 @@ function Deck.header(m: Model.Deck, props: Base.Props?): Frame
 				Visible = function()
 					return m.track() ~= nil
 				end,
-				MouseEnter = function()
-					ejectHover(true)
-				end,
-				MouseLeave = function()
-					ejectHover(false)
-				end,
+				Hover.track(ejectHover),
 				Activated = function()
 					m.run("Eject")
 				end,
@@ -125,6 +124,96 @@ function Deck.header(m: Model.Deck, props: Base.Props?): Frame
 						return if m.live() then C.red else W
 					end,
 				}),
+			}),
+			-- markers on the progress line (owner, 2026-10-26, picked live): each set hot cue is a pin, its
+			-- number in a round head on a 1 px stem down to the line (red for the one last hit); the CUE
+			-- point is a red triangle pointing down onto the line. The text above sits 3-4 px up for them.
+			frame({
+				AnchorPoint = Vector2.new(0, 1),
+				Position = UDim2.new(0, 0, 1, -3),
+				Size = UDim2.new(1, 0, 0, PIN_HEAD + PIN_STEM),
+				ZIndex = 2,
+				Base.rebuild(function(): string
+					local t, d = m.track(), m.deck()
+					if not (t and t.len) then
+						return ""
+					end
+					local key = t.len .. ":" .. d.cue .. ":" .. tostring(d.lastCue)
+					for k = 1, 8 do
+						key ..= ":" .. tostring((t.cues or {})[tostring(k)])
+					end
+					return key
+				end, function(key: string)
+					if key == "" then
+						return nil
+					end
+					local t, d = m.track(), m.deck()
+					local len = (t :: any).len :: number
+					local cues = {}
+					for k, at in (t :: any).cues or {} do
+						table.insert(cues, { n = tonumber(k) :: number, at = at :: number })
+					end
+					table.sort(cues, function(a, b)
+						return a.at < b.at
+					end)
+					local out = {}
+					-- later pins stack over earlier ones; the dark rim keeps touching heads apart
+					local half = math.ceil(PIN_W / 2)
+					for i, c in cues do
+						local hit = d.lastCue == c.n
+						local color = if hit then C.red else W
+						local x = math.floor(math.clamp(c.at / len, 0, 1) * HEAD_W)
+						table.insert(
+							out,
+							Base.new("Frame", {
+								AnchorPoint = Vector2.new(0.5, 1),
+								Position = UDim2.new(0, x, 1, 0),
+								Size = UDim2.fromOffset(1, PIN_STEM + 1),
+								BackgroundColor3 = color,
+								ZIndex = 3 + i * 2,
+							})
+						)
+						-- the head stays whole at the ends; the stem keeps the true spot
+						table.insert(
+							out,
+							label(tostring(c.n), {
+								AutomaticSize = Enum.AutomaticSize.None,
+								AnchorPoint = Vector2.new(0.5, 0),
+								Position = UDim2.fromOffset(math.clamp(x, half, HEAD_W - half), 0),
+								Size = UDim2.fromOffset(PIN_W, PIN_HEAD),
+								BackgroundTransparency = 0,
+								BackgroundColor3 = color,
+								FontFace = B,
+								TextSize = 12,
+								TextColor3 = if hit then W else C.tile,
+								TextXAlignment = Enum.TextXAlignment.Center,
+								ZIndex = 4 + i * 2,
+								Base.round(1),
+								Base.stroke(C.tile, 1.5, { ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
+							})
+						)
+					end
+					-- CUE: the lower half of a turned square, over the pins
+					table.insert(
+						out,
+						frame({
+							AnchorPoint = Vector2.new(0.5, 1),
+							Position = UDim2.new(math.clamp(d.cue / len, 0, 1), 0, 1, 0),
+							Size = UDim2.fromOffset(11, 6),
+							ClipsDescendants = true,
+							ZIndex = 30,
+							Base.new("Frame", {
+								AnchorPoint = Vector2.new(0.5, 0.5),
+								Position = UDim2.fromScale(0.5, 0),
+								Size = UDim2.fromOffset(8, 8),
+								Rotation = 45,
+								BackgroundColor3 = C.red,
+								ZIndex = 30,
+							}),
+						})
+					)
+					return out
+				end),
 			}),
 			-- the progress line seeks: click along the header's bottom edge
 			create("TextButton")({
@@ -310,6 +399,7 @@ local function jog(m: Model.Deck, cx: number, cy: number): Frame
 		end
 		local last = angle(io.Position)
 		local acc, sentAt = 0, os.clock()
+		local release = Hover.hold()
 		local moveC, endC
 		moveC = UserInputService.InputChanged:Connect(function(mv)
 			if not Base.isMove(mv) then
@@ -333,6 +423,7 @@ local function jog(m: Model.Deck, cx: number, cy: number): Frame
 			if Base.isPress(e) then
 				moveC:Disconnect()
 				endC:Disconnect()
+				release()
 				if math.abs(acc) > 0.01 then
 					m.nudge(acc)
 				end

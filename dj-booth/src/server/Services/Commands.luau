@@ -282,10 +282,11 @@ handlers.PrefsSet = function(player, c)
 	return ok()
 end
 
--- a loaded track starts playing straight away (owner, 2026-10-23)
+-- a loaded track starts playing straight away (owner, 2026-10-23), unless Settings › Play on load
+-- is off (owner, 2026-10-26); Auto mix's own loads never go through here
 handlers.Load = function(_, c)
 	local loaded, err = Decks.load(c.Deck, c.Track)
-	if not loaded then
+	if not loaded or not State.settings().playOnLoad then
 		return wrap(loaded, err)
 	end
 	return wrap(Decks.play(c.Deck))

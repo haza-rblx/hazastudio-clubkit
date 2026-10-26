@@ -13,6 +13,7 @@ local Actions = require(script.Parent.Parent.Actions)
 local Store = require(script.Parent.Parent.Store)
 local Theme = require(script.Parent.Parent.Theme)
 local Base = require(script.Parent.Parent.UI.Base)
+local Hover = require(script.Parent.Parent.UI.Hover)
 local Controls = require(script.Parent.Parent.UI.Controls)
 local Covers = require(script.Parent.Parent.UI.Covers)
 local CoverPop = require(script.CoverPop)
@@ -294,12 +295,7 @@ function Library.new(props: Base.Props?): (Frame, () -> number)
 				BackgroundTransparency = function()
 					return if nameFocus() or nameHover() then 0 else 1
 				end,
-				MouseEnter = function()
-					nameHover(true)
-				end,
-				MouseLeave = function()
-					nameHover(false)
-				end,
+				Hover.track(nameHover),
 				corner(4),
 				create("TextBox")({
 					Name = "PlaylistNameBox",
@@ -549,12 +545,7 @@ function Library.new(props: Base.Props?): (Frame, () -> number)
 							LayoutOrder = order,
 							TextSize = 14,
 							BackgroundTransparency = 1,
-							MouseEnter = function()
-								th(true)
-							end,
-							MouseLeave = function()
-								th(false)
-							end,
+							Hover.track(th),
 						})
 					end
 					tools = frame({
@@ -591,12 +582,7 @@ function Library.new(props: Base.Props?): (Frame, () -> number)
 						BackgroundTransparency = function()
 							return if on or hover() then 0 else 1
 						end,
-						MouseEnter = function()
-							hover(true)
-						end,
-						MouseLeave = function()
-							hover(false)
-						end,
+						Hover.track(hover),
 						Activated = function()
 							S.selected(t.id)
 							S.adding(false)

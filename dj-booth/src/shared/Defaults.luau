@@ -45,6 +45,7 @@ function Defaults.settings(): Types.Settings
 		keyLock = true,
 		syncOnLoad = false,
 		autoCue = true,
+		playOnLoad = true,
 		busyDeck = 1,
 		padCooldown = 1,
 		deckOff = DeckBrakeConfig.Preset,
@@ -65,7 +66,7 @@ end
 -- the keys each Settings section owns (Reset to defaults)
 Defaults.SECTION_KEYS = {
 	sound = { "volume", "normalize", "limiter", "fadeOut", "crossfade" },
-	decks = { "pitch", "keyLock", "syncOnLoad", "autoCue", "busyDeck", "padCooldown", "deckOff" },
+	decks = { "pitch", "keyLock", "syncOnLoad", "autoCue", "playOnLoad", "busyDeck", "padCooldown", "deckOff" },
 	djDeck = { "speakers", "openAtDjDeck", "standLock", "maxSet", "idle" },
 	show = { "announce", "nowPlaying", "billboard", "lights", "camFx", "camFxAmount" },
 	panel = { "panelSize", "hotkey", "reduceMotion" },

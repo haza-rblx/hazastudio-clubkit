@@ -12,6 +12,7 @@ local Actions = require(script.Parent.Parent.Actions)
 local Store = require(script.Parent.Parent.Store)
 local Theme = require(script.Parent.Parent.Theme)
 local Base = require(script.Parent.Parent.UI.Base)
+local Hover = require(script.Parent.Parent.UI.Hover)
 local Controls = require(script.Parent.Parent.UI.Controls)
 local Covers = require(script.Parent.Parent.UI.Covers)
 local Layout = require(script.Parent.Parent.UI.Layout)
@@ -273,12 +274,7 @@ function Access.new(props: Base.Props?): Frame
 						BackgroundTransparency = function()
 							return if on or hover() then 0 else 1
 						end,
-						MouseEnter = function()
-							hover(true)
-						end,
-						MouseLeave = function()
-							hover(false)
-						end,
+						Hover.track(hover),
 						Activated = function()
 							selected(p.userId)
 							adding(false)

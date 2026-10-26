@@ -8,6 +8,7 @@ local Shared = ReplicatedStorage.HazaDJ.Shared
 local Format = require(Shared.Format)
 local Types = require(Shared.Types)
 local Base = require(script.Parent.Base)
+local Hover = require(script.Parent.Hover)
 local Theme = require(script.Parent.Parent.Theme)
 
 local create, source, read = Vide.create, Vide.source, Vide.read
@@ -138,12 +139,7 @@ function Covers.row(o: RowOpts): TextButton
 		BackgroundTransparency = function()
 			return if read(o.on) or hover() then 0 else 1
 		end,
-		MouseEnter = function()
-			hover(true)
-		end,
-		MouseLeave = function()
-			hover(false)
-		end,
+		Hover.track(hover),
 		Activated = o.onClick,
 		Base.hlist(0, nil, { VerticalAlignment = Enum.VerticalAlignment.Top }),
 		Base.pad(8, 8, 4, 4),

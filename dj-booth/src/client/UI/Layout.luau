@@ -5,6 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Vide = require(ReplicatedStorage.HazaDJ.Packages.Vide)
 local Base = require(script.Parent.Base)
+local Hover = require(script.Parent.Hover)
 local Theme = require(script.Parent.Parent.Theme)
 
 local create, source = Vide.create, Vide.source
@@ -80,12 +81,7 @@ function Layout.sideRow(
 		BackgroundTransparency = function()
 			return if Vide.read(on) or hover() then 0 else 1
 		end,
-		MouseEnter = function()
-			hover(true)
-		end,
-		MouseLeave = function()
-			hover(false)
-		end,
+		Hover.track(hover),
 		Activated = onClick,
 		label(title, {
 			AnchorPoint = Vector2.new(0, 0.5),

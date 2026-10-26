@@ -12,6 +12,7 @@ local Actions = require(script.Parent.Parent.Parent.Actions)
 local Store = require(script.Parent.Parent.Parent.Store)
 local Theme = require(script.Parent.Parent.Parent.Theme)
 local Base = require(script.Parent.Parent.Parent.UI.Base)
+local Hover = require(script.Parent.Parent.Parent.UI.Hover)
 local Controls = require(script.Parent.Parent.Parent.UI.Controls)
 local Covers = require(script.Parent.Parent.Parent.UI.Covers)
 local Layout = require(script.Parent.Parent.Parent.UI.Layout)
@@ -378,12 +379,7 @@ function DeckLibrary.new(height: number, props: Base.Props?): Frame
 			BorderSizePixel = 0,
 			LayoutOrder = order,
 			ZIndex = 3,
-			MouseEnter = function()
-				hover(true)
-			end,
-			MouseLeave = function()
-				hover(false)
-			end,
+			Hover.track(hover),
 			Activated = onClick,
 			corner(4),
 		})
@@ -403,12 +399,7 @@ function DeckLibrary.new(height: number, props: Base.Props?): Frame
 			end,
 			BorderSizePixel = 0,
 			ZIndex = 3,
-			MouseEnter = function()
-				hover(true)
-			end,
-			MouseLeave = function()
-				hover(false)
-			end,
+			Hover.track(hover),
 			Activated = onClick,
 			corner(4),
 			frame({ Size = UDim2.fromScale(1, 1), Visible = hover, ZIndex = 3, mark(W) }),
@@ -610,12 +601,7 @@ function DeckLibrary.new(height: number, props: Base.Props?): Frame
 					BackgroundTransparency = function()
 						return if on or hover() then 0 else 1
 					end,
-					MouseEnter = function()
-						hover(true)
-					end,
-					MouseLeave = function()
-						hover(false)
-					end,
+					Hover.track(hover),
 					Activated = function()
 						-- the release that ends a drag is not a click
 						if not DragLoad.recent() then

@@ -13,6 +13,7 @@ local Actions = require(script.Parent.Parent.Parent.Actions)
 local Store = require(script.Parent.Parent.Parent.Store)
 local Theme = require(script.Parent.Parent.Parent.Theme)
 local Base = require(script.Parent.Parent.Parent.UI.Base)
+local Hover = require(script.Parent.Parent.Parent.UI.Hover)
 local Controls = require(script.Parent.Parent.Parent.UI.Controls)
 local Covers = require(script.Parent.Parent.Parent.UI.Covers)
 local Layout = require(script.Parent.Parent.Parent.UI.Layout)
@@ -156,12 +157,7 @@ function PadsView.new(S: State.S, props: Base.Props?): Frame
 			BackgroundColor3 = function()
 				return if hover() then Color3.fromHex("3d3d3d") else C.card2
 			end,
-			MouseEnter = function()
-				hover(true)
-			end,
-			MouseLeave = function()
-				hover(false)
-			end,
+			Hover.track(hover),
 			Activated = function()
 				togglePreview(s)
 			end,
@@ -191,12 +187,7 @@ function PadsView.new(S: State.S, props: Base.Props?): Frame
 						-- lighter = picked, like the track rows (the tiles sit one step up from the page)
 						return if i == sel then C.raised elseif hover() then C.flat else rest
 					end,
-					MouseEnter = function()
-						hover(true)
-					end,
-					MouseLeave = function()
-						hover(false)
-					end,
+					Hover.track(hover),
 					Activated = function()
 						if not p.kind then
 							Actions.send({ Kind = "PadAssign", Index = i })
@@ -366,12 +357,7 @@ function PadsView.new(S: State.S, props: Base.Props?): Frame
 					BackgroundTransparency = function()
 						return if hover() then 0 else 1
 					end,
-					MouseEnter = function()
-						hover(true)
-					end,
-					MouseLeave = function()
-						hover(false)
-					end,
+					Hover.track(hover),
 					lead,
 					fixed(
 						s.name,
