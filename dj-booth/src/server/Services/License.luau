@@ -15,6 +15,7 @@ local LicensePolicy = require(ReplicatedStorage.HazaDJ.Shared.LicensePolicy)
 local LicenseApi = require(script.Parent.LicenseApi)
 local Roles = require(script.Parent.Roles)
 local State = require(script.Parent.State)
+local Stamp = require(script.Parent.Parent.Stamp)
 local Store = require(script.Parent.Store)
 
 type Record = LicensePolicy.Record
@@ -35,6 +36,8 @@ local attempts: { [number]: { number } } = {}
 local changed: { (View) -> () } = {}
 local busy = false
 local started = false
+-- set at start() when this download was stamped for another venue; nil otherwise
+local venueMismatch: string? = nil
 
 export type Result = { Ok: boolean, Message: string? }
 
@@ -46,12 +49,25 @@ local MESSAGES: { [string]: string } = {
 	owner_mismatch = "That code belongs to a different owner.",
 	revoked = "That license has been revoked.",
 	expired = "That guest pass has ended.",
+	wrong_venue = "This copy of djX was downloaded for a different experience. Download your own copy from your Hazastudio account.",
 }
+
+-- this place as the venue check sees it
+local function here(): LicensePolicy.Venue
+	return {
+		universeId = game.GameId,
+		ownerId = game.CreatorId,
+		ownerType = if game.CreatorType == Enum.CreatorType.Group then "Group" else "User",
+	}
+end
 
 local function view(): View
 	if Store.fixture then
 		-- the Studio demo fixture (parity checks) runs unlocked
 		return { status = "active", kind = "full" }
+	end
+	if venueMismatch then
+		return { status = "denied", reason = venueMismatch }
 	end
 	return LicensePolicy.evaluate(record, os.time())
 end
@@ -137,6 +153,9 @@ end
 local function submit(player: Player, raw: string, guest: boolean): Result
 	if not Roles.isOwner(player) then
 		return { Ok = false, Message = "Only the place owner can activate the booth." }
+	end
+	if venueMismatch then
+		return { Ok = false, Message = MESSAGES.wrong_venue }
 	end
 	if game.GameId == 0 then
 		return { Ok = false, Message = "Publish the place first, then activate it." }
@@ -259,6 +278,14 @@ function License.start()
 		end
 		record = read()
 	end
+	-- an unpublished Studio place cannot activate anyway, so it is not checked
+	if not Store.fixture and not (RunService:IsStudio() and game.GameId == 0) then
+		venueMismatch = LicensePolicy.venueMismatch(Stamp, here())
+		if venueMismatch then
+			warn("[HazaDJ] this download was made for another venue: " .. venueMismatch)
+			LicenseApi.beacon(venueMismatch)
+		end
+	end
 	refresh()
 	if LicenseApi.usingStub() then
 		print("[HazaDJ] licence: using the Studio stand-in")
@@ -280,18 +307,21 @@ function License.start()
 		)
 	end)
 
-	janitor:Add(
-		task.spawn(function()
-			if record then
-				verify()
-			end
-			while true do
-				task.wait(LicensePolicy.VERIFY_EVERY)
-				verify()
-			end
-		end),
-		true
-	)
+	-- a download stamped for another venue is never verified (the beacon already went out)
+	if not venueMismatch then
+		janitor:Add(
+			task.spawn(function()
+				if record then
+					verify()
+				end
+				while true do
+					task.wait(LicensePolicy.VERIFY_EVERY)
+					verify()
+				end
+			end),
+			true
+		)
+	end
 	janitor:Add(
 		task.spawn(function()
 			while true do

@@ -480,6 +480,40 @@ do
 	check("left: hours", LicensePolicy.leftText(3 * 3600 + 20 * 60) == "3 h 20 min left")
 	check("left: under a minute shows 1", LicensePolicy.leftText(30) == "1 min left")
 	check("left: zero", LicensePolicy.leftText(0) == "0 min left")
+
+	-- the venue check: a stamped download only runs in the place it was pre-bound to
+	local bound = { universeId = 5551, ownerId = 777, ownerType = "User" }
+	check(
+		"venue: not pre-bound (universe 0) passes anywhere",
+		LicensePolicy.venueMismatch({ universeId = 0, ownerId = 0, ownerType = "User" }, {
+			universeId = 9001,
+			ownerId = 42,
+			ownerType = "Group",
+		}) == nil
+	)
+	check(
+		"venue: same universe and owner passes",
+		LicensePolicy.venueMismatch(bound, { universeId = 5551, ownerId = 777, ownerType = "User" }) == nil
+	)
+	check(
+		"venue: another universe is a universe_mismatch",
+		LicensePolicy.venueMismatch(bound, { universeId = 5552, ownerId = 777, ownerType = "User" })
+			== "universe_mismatch"
+	)
+	check(
+		"venue: same universe, another owner id is an owner_mismatch",
+		LicensePolicy.venueMismatch(bound, { universeId = 5551, ownerId = 778, ownerType = "User" }) == "owner_mismatch"
+	)
+	check(
+		"venue: same owner id, User vs Group is an owner_mismatch",
+		LicensePolicy.venueMismatch(bound, { universeId = 5551, ownerId = 777, ownerType = "Group" })
+			== "owner_mismatch"
+	)
+	check(
+		"venue: universe mismatch wins over owner mismatch",
+		LicensePolicy.venueMismatch(bound, { universeId = 5552, ownerId = 778, ownerType = "Group" })
+			== "universe_mismatch"
+	)
 end
 
 print(string.format("%d passed, %d failed", passed, failures))

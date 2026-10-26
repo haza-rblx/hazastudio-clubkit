@@ -80,6 +80,15 @@ local COPY: { [string]: Copy } = {
 		corner = "VENUE PASS",
 		expired = false,
 	},
+	-- a download stamped for another venue (the reason picks this copy under `denied`)
+	venue = {
+		title = "This copy belongs\nto another venue.",
+		body = "Download your own djX from your Hazastudio account, then activate it here.",
+		guest = false,
+		band = "WRONG VENUE",
+		corner = "VENUE PASS",
+		expired = false,
+	},
 	offline = {
 		title = "Waiting for\nHazastudio.",
 		body = "The license couldn't be confirmed for 7 days. Keep HTTP requests on; it unlocks once confirmed.",
@@ -217,7 +226,14 @@ function Lock.new(p: Props): Frame
 	local shown = function()
 		return isOwner() and (celebrating() or not LicensePolicy.unlocked(Store.license()))
 	end
+	local wrongVenue = function(): boolean
+		local reason = Store.license().reason
+		return status() == "denied" and (reason == "universe_mismatch" or reason == "owner_mismatch")
+	end
 	local copy = function(): Copy
+		if wrongVenue() then
+			return COPY.venue
+		end
 		return COPY[status()] or COPY.locked
 	end
 
@@ -842,11 +858,22 @@ function Lock.new(p: Props): Frame
 				TextYAlignment = Enum.TextYAlignment.Top,
 				ZIndex = 62,
 			}),
-			frame({ Position = UDim2.fromOffset(0, 120), Size = UDim2.fromOffset(FORM_W, 36), ZIndex = 62, codeField }),
+			frame({
+				Position = UDim2.fromOffset(0, 120),
+				Size = UDim2.fromOffset(FORM_W, 36),
+				ZIndex = 62,
+				Visible = function()
+					return not wrongVenue()
+				end,
+				codeField,
+			}),
 			frame({
 				Position = UDim2.fromOffset(0, 164),
 				Size = UDim2.fromOffset(FORM_W, 36),
 				ZIndex = 62,
+				Visible = function()
+					return not wrongVenue()
+				end,
 				primary(function()
 					local s = state()
 					return if done() then "Open the decks" elseif s == "checking" then "Checking…" else "Activate"

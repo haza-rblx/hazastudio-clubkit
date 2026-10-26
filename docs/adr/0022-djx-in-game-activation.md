@@ -40,6 +40,13 @@ The leak that matters today: a secret pasted into a place file (like the Club Ki
     - **Fingerprint placement:** spread over many inconspicuous points, so removing one is not enough. It never changes how the UI looks.
     - **Activation stays manual — two layers:** the file carries the licence + fingerprint, and the owner still pastes the code in game. The VPS accepts an activation only when the pasted code and the file's embedded licence belong to the same licence.
     - **On a mismatch or a reused code:** the activation is denied and the beacon names the download it came from.
+    - **Venue pre-bound at download** (owner, 2026-10-26):
+      - The buyer enters their place link before downloading. The VPS resolves the universe + owner through the Roblox API, pre-binds the licence to them, and stamps `universeId`, `placeId` and `ownerId` into the file next to the licence + fingerprint.
+      - In game, djX compares the stamp to `game.GameId` and the place owner. A file running anywhere else stays locked and beacons its download id before any code is pasted.
+      - The VPS also refuses an activation whose universe/owner differs from the pre-bind.
+      - Moving the place or universe means a new download. A move to a group means an admin rebind, then a re-stamped file.
+    - **How stamping works:** the VPS keeps one clean template `.rbxm` per release. On each download, Lune (a Linux binary on the VPS) opens a copy, fills the `Stamp` ModuleScript, spreads the fingerprint, and writes a new file. The template is never edited. `.rbxm` is binary and compressed, so plain text replacement cannot work; `.rbxmx` was rejected as larger and readable.
+    - **Order with obfuscation:** `Stamp` stays a separate data module outside the obfuscated set. Obfuscation runs once per release; stamping runs per download.
 10. **Own test places use dev codes**: normal codes flagged `dev` in the dashboard (excluded from sales), so the owner's places go through the exact buyer path.
 
 ## Proposed flow

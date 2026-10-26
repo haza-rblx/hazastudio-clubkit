@@ -172,4 +172,22 @@ function LicensePolicy.leftText(seconds: number): string
 	return `{math.max(mins, if s > 0 then 1 else 0)} min left`
 end
 
+-- a place's venue: its universe and owner (a User or a Group)
+export type Venue = { universeId: number, ownerId: number, ownerType: string }
+
+-- why a download stamped for `stamp` does not belong in the place `here`; nil when it does, or
+-- when the download is not pre-bound (universeId 0, a dev download)
+function LicensePolicy.venueMismatch(stamp: Venue, here: Venue): string?
+	if stamp.universeId == 0 then
+		return nil
+	end
+	if here.universeId ~= stamp.universeId then
+		return "universe_mismatch"
+	end
+	if here.ownerId ~= stamp.ownerId or here.ownerType ~= stamp.ownerType then
+		return "owner_mismatch"
+	end
+	return nil
+end
+
 return LicensePolicy

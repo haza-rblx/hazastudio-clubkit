@@ -183,6 +183,20 @@ function LicenseApi.verify(secret: string): Answer
 	return post("/verify", identity(), secret)
 end
 
+-- tells the licence server why this download refused to run here (a venue mismatch, say). Fire
+-- and forget: the answer is ignored, and a failure is silent.
+function LicenseApi.beacon(reason: string)
+	if stubOn() then
+		print(`[HazaDJ] licence beacon (stub): {reason}`)
+		return
+	end
+	local payload = identity()
+	payload.reason = reason
+	task.spawn(function()
+		pcall(post, "/beacon", payload)
+	end)
+end
+
 function LicenseApi.usingStub(): boolean
 	return stubOn()
 end
