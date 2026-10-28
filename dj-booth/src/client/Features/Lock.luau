@@ -1,12 +1,9 @@
 --!strict
--- The lock screen (ADR 0022), as approved live in DJX Lite (owner, 2026-10-26): the deck's own surface colour, a stage
--- light on a hanging "BACKSTAGE PASS" lanyard, and a compact form (one code field, Activate, "Have a
--- guest pass?" opening a sub-modal). The pass prints the code as it is typed; an accepted code
--- stamps ACCESS GRANTED and pulls the pass up. A guest pass that ran out shows the same screen with
--- an EXPIRED stamp. Only the place owner ever sees it (nobody else may open a locked DJ deck). On a
--- small screen the pass is left out and the form is shown at a readable size.
-local MarketplaceService = game:GetService("MarketplaceService")
-local Players = game:GetService("Players")
+-- The lock screen (ADR 0022): a full-bleed artwork panel with a compact form (one code field,
+-- Activate, "Have a guest pass?" opening a sub-modal), the xfade mark on top and a copyright line.
+-- An accepted code makes the panel rise with everything in it, then the decks are there. A guest pass
+-- that ran out shows the same screen with a different title. Only the place owner ever sees it (nobody
+-- else may open a locked DJ deck).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
@@ -32,23 +29,18 @@ export type Props = {
 	compact: () -> boolean, -- a small screen: no pass, the form at a readable size
 	boost: () -> number, -- the form's extra scale in compact mode
 	onClose: () -> (),
-	onReveal: (() -> ())?, -- the curtain starts to part: the panel can bring its rows in
+	onReveal: (() -> ())?, -- the panel starts to rise: the panel can bring its rows in
 }
 
 local CANVAS_W, CANVAS_H = 1250, 802
-local PX = 400 -- the pass hangs at this x
-local PIVOT_Y, STRAP, PASS_W, PASS_H = -40, 230, 300, 430
 local FORM_W = 300
-local INK2 = Color3.fromHex("d0d0d0") -- the perforation on the white pass
+local FORM_H = 212 -- the form's height
+local LOGO_TOP, LOGO_H = 40, 62 -- the xfade mark sits at the top of the right column
+local COPY_TOP = CANVAS_H - 36 -- the copyright's top edge
+local RIGHT_X = 937 -- centre of the right-hand column (the artwork fills the left)
+local FORM_Y = math.floor((LOGO_TOP + LOGO_H + COPY_TOP) / 2) -- the form sits centred between the mark and the copyright
+local ARTWORK = "rbxassetid://133559573964792"
 local BTN_OVER = Color3.fromHex("dcdcdc")
-
-local function nseq(points: { { number } }): NumberSequence
-	local keys = {}
-	for _, p in points do
-		table.insert(keys, NumberSequenceKeypoint.new(p[1], p[2]))
-	end
-	return NumberSequence.new(keys)
-end
 
 local function tween(inst: Instance, info: TweenInfo, goal: { [string]: any })
 	local t = TweenService:Create(inst, info, goal)
@@ -61,7 +53,7 @@ type Copy = { title: string, body: string, guest: boolean, band: string, corner:
 local COPY: { [string]: Copy } = {
 	locked = {
 		title = "Your DJ deck is\nwaiting backstage.",
-		body = "Paste the code from your Hazastudio dashboard to unlock the decks in every server.",
+		body = "Enter your activation code",
 		guest = true,
 		band = "NOT ACTIVATED",
 		corner = "BACKSTAGE PASS",
@@ -102,34 +94,6 @@ local COPY: { [string]: Copy } = {
 	},
 }
 
--- the barcode: bars drawn from a seed (the universe, or the code being typed)
-local function printBars(holder: Frame, seed: number)
-	holder:ClearAllChildren()
-	local r = Random.new(seed)
-	local x = 0
-	while x < 252 do
-		local w = r:NextInteger(1, 4)
-		if r:NextNumber() > 0.35 then
-			Base.new("Frame", {
-				Position = UDim2.fromOffset(x, 0),
-				Size = UDim2.fromOffset(math.min(w, 252 - x), 32),
-				BackgroundColor3 = C.ink,
-				ZIndex = 62,
-				Parent = holder,
-			})
-		end
-		x += w + r:NextInteger(1, 3)
-	end
-end
-
-local function seedOf(text: string): number
-	local h = 7
-	for i = 1, #text do
-		h = (h * 31 + string.byte(text, i)) % 2147483647
-	end
-	return h
-end
-
 -- a code field: 36 px, corner 6, a white edge while focused, red on an error
 local function field(
 	placeholder: string,
@@ -147,7 +111,7 @@ local function field(
 		TextColor3 = W,
 		FontFace = Theme.SB,
 		TextSize = 13,
-		TextXAlignment = Enum.TextXAlignment.Left,
+		TextXAlignment = Enum.TextXAlignment.Center,
 		ClearTextOnFocus = false,
 		ClipsDescendants = true,
 		ZIndex = 62,
@@ -213,7 +177,6 @@ local function primary(text: () -> string, enabled: () -> boolean, onClick: () -
 end
 
 function Lock.new(p: Props): Frame
-	local player = Players.LocalPlayer
 	local isOwner = function()
 		return Store.me().role == "Owner"
 	end
@@ -235,292 +198,7 @@ function Lock.new(p: Props): Frame
 		return COPY[status()] or COPY.locked
 	end
 
-	local gameName = source("This game")
-	task.spawn(function()
-		local ok, info = pcall(MarketplaceService.GetProductInfo, MarketplaceService, game.PlaceId)
-		if ok and type(info) == "table" and info.Name then
-			gameName(info.Name)
-		end
-	end)
-
-	-- ── the stage light ──
-	local strips = {}
-	for i = 0, 85 do
-		table.insert(
-			strips,
-			Base.new("Frame", {
-				AnchorPoint = Vector2.new(0.5, 0),
-				Position = UDim2.new(0.5, 0, 0, i * 10),
-				Size = UDim2.fromOffset(math.floor(150 + i / 85 * 480), 10),
-				BackgroundColor3 = W,
-				BackgroundTransparency = 0.78,
-				ZIndex = 61,
-				Base.gradient({
-					Transparency = nseq({ { 0, 1 }, { 0.25, 0.35 }, { 0.5, 0 }, { 0.75, 0.35 }, { 1, 1 } }),
-				}),
-			})
-		)
-	end
-	local beam = create("CanvasGroup")({
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.fromOffset(PX, -20),
-		Size = UDim2.fromOffset(640, 860),
-		BackgroundTransparency = 1,
-		ZIndex = 61,
-		Base.gradient({ Rotation = 90, Transparency = nseq({ { 0, 0.15 }, { 0.5, 0.55 }, { 0.85, 0.85 }, { 1, 1 } }) }),
-		strips,
-	}) :: CanvasGroup
-
-	-- ── the pass on its lanyard (a frame twice the drop tall, so Rotation pivots at the hook) ──
-	local L = STRAP + PASS_H
-	local passTop = L + STRAP
-	local strapPrint = {}
-	for i = 0, 3 do
-		table.insert(
-			strapPrint,
-			label("djX", {
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				Position = UDim2.new(0.5, 0, 0, 36 + i * 56),
-				Size = UDim2.fromOffset(60, 14),
-				AutomaticSize = Enum.AutomaticSize.None,
-				Rotation = 90,
-				FontFace = Theme.BRAND,
-				TextSize = 12,
-				TextTransparency = 0.4,
-				TextXAlignment = Enum.TextXAlignment.Center,
-				ZIndex = 61,
-			})
-		)
-	end
-
-	local cornerLbl = label(function()
-		return copy().corner
-	end, {
-		AutomaticSize = Enum.AutomaticSize.None,
-		Size = UDim2.new(1, 0, 0, 16),
-		TextSize = 12,
-		TextColor3 = C.dim,
-		TextXAlignment = Enum.TextXAlignment.Right,
-		ZIndex = 62,
-	})
-	local bandL = label("OWNER ONLY", {
-		AutomaticSize = Enum.AutomaticSize.None,
-		Size = UDim2.fromScale(1, 1),
-		FontFace = Theme.B,
-		ZIndex = 62,
-	})
-	local band = Base.new("Frame", {
-		Position = UDim2.fromOffset(-24, 150),
-		Size = UDim2.new(1, 48, 0, 36),
-		BackgroundColor3 = C.red,
-		ZIndex = 62,
-		Base.pad(24, 24, 0, 0),
-		bandL,
-		label(function()
-			return if celebrating() then "ACTIVATED" else copy().band
-		end, {
-			AutomaticSize = Enum.AutomaticSize.None,
-			Size = UDim2.fromScale(1, 1),
-			TextSize = 12,
-			TextTransparency = 0.12,
-			TextXAlignment = Enum.TextXAlignment.Right,
-			ZIndex = 62,
-		}),
-	})
-	local bars = frame({ Position = UDim2.fromOffset(0, 320), Size = UDim2.fromOffset(252, 32), ZIndex = 62 })
-	printBars(bars, game.GameId % 100000)
-
-	local function stamp(
-		text: string,
-		color: Color3,
-		size: number,
-		w: number,
-		h: number
-	): (Frame, UIScale, UIStroke, TextLabel)
-		local s = create("UIScale")({ Scale = 1 }) :: UIScale
-		local st = Base.stroke(color, 4)
-		local t = label(text, {
-			AutomaticSize = Enum.AutomaticSize.None,
-			Size = UDim2.fromScale(1, 1),
-			FontFace = Theme.B,
-			TextSize = size,
-			LineHeight = 0.9,
-			TextColor3 = color,
-			TextXAlignment = Enum.TextXAlignment.Center,
-			ZIndex = 64,
-		})
-		local f = Base.new("Frame", {
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.new(0.5, 6, 0, 292),
-			Size = UDim2.fromOffset(w, h),
-			Rotation = -11,
-			BackgroundTransparency = 1,
-			Visible = false,
-			ZIndex = 64,
-			Base.corner(6),
-			st,
-			s,
-			t,
-		})
-		return f, s, st, t
-	end
-	local granted, grantedScale, grantedStroke, grantedText = stamp("ACCESS\nGRANTED", C.ok, 23, 188, 70)
-	local expiredStamp = stamp("EXPIRED", C.red, 28, 168, 58)
-	effect(function()
-		expiredStamp.Visible = copy().expired and not celebrating()
-	end)
-
 	local code = source("")
-	local caption = label(function()
-		local c = code()
-		return if c == "" then "UNIVERSE " .. tostring(game.GameId) else "CODE  " .. c
-	end, {
-		AutomaticSize = Enum.AutomaticSize.None,
-		Position = UDim2.fromOffset(0, 358),
-		Size = UDim2.new(1, 0, 0, 14),
-		TextSize = 12,
-		TextColor3 = function()
-			return if code() == "" then C.dim else C.ink
-		end,
-		TextTruncate = Enum.TextTruncate.AtEnd,
-		ZIndex = 62,
-	})
-	-- the pass reprints its barcode from what is typed
-	effect(function()
-		local c = code()
-		untrack(function()
-			printBars(bars, if c == "" then game.GameId % 100000 else seedOf(c))
-		end)
-	end)
-
-	local function row(y: number, title: string, value: any)
-		return {
-			label(title, { Position = UDim2.fromOffset(0, y), TextSize = 12, TextColor3 = C.dim, ZIndex = 62 }),
-			label(value, {
-				AutomaticSize = Enum.AutomaticSize.None,
-				Position = UDim2.fromOffset(0, y + 16),
-				Size = UDim2.new(1, 0, 0, 18),
-				TextSize = 15,
-				TextColor3 = C.ink,
-				TextTruncate = Enum.TextTruncate.AtEnd,
-				ZIndex = 62,
-			}),
-		}
-	end
-	local perforation = {}
-	for i = 0, 19 do
-		table.insert(
-			perforation,
-			Base.new("Frame", {
-				Position = UDim2.fromOffset(6 + i * 12, 302),
-				Size = UDim2.fromOffset(6, 2),
-				BackgroundColor3 = INK2,
-				ZIndex = 62,
-			})
-		)
-	end
-	local notches = {}
-	for _, ax in { 0, 1 } do
-		table.insert(
-			notches,
-			Base.new("Frame", {
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				Position = UDim2.new(ax, if ax == 0 then -24 else 24, 0, 303),
-				Size = UDim2.fromOffset(18, 18),
-				BackgroundColor3 = BG,
-				ZIndex = 63,
-				Base.round(1),
-			})
-		)
-	end
-
-	local pass = Base.new("Frame", {
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, passTop),
-		Size = UDim2.fromOffset(PASS_W, PASS_H),
-		BackgroundColor3 = W,
-		ZIndex = 62,
-		Base.corner(10),
-		-- the hole the clip goes through
-		Base.new("Frame", {
-			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.new(0.5, 0, 0, 16),
-			Size = UDim2.fromOffset(64, 12),
-			BackgroundColor3 = BG,
-			ZIndex = 62,
-			Base.round(1),
-		}),
-		frame({
-			Position = UDim2.fromOffset(24, 46),
-			Size = UDim2.new(1, -48, 1, -46),
-			ZIndex = 62,
-			label("djX DUAL DECK", { FontFace = Theme.BRAND, TextSize = 13, TextColor3 = C.ink, ZIndex = 62 }),
-			cornerLbl,
-			label("BACK\nSTAGE", {
-				Position = UDim2.fromOffset(0, 34),
-				FontFace = Theme.B,
-				TextSize = 54,
-				LineHeight = 0.88,
-				TextColor3 = C.ink,
-				ZIndex = 62,
-			}),
-			band,
-			row(204, "GAME", gameName),
-			row(248, "HOLDER", player.DisplayName .. "  ·  @" .. player.Name),
-			notches,
-			perforation,
-			bars,
-			caption,
-		}),
-		granted,
-		expiredStamp,
-	})
-	local swing = frame({
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromOffset(PX, PIVOT_Y),
-		Size = UDim2.fromOffset(PASS_W + 40, L * 2),
-		ZIndex = 61,
-		Base.new("Frame", {
-			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.new(0.5, 0, 0, L),
-			Size = UDim2.fromOffset(34, STRAP + 6),
-			BackgroundColor3 = C.red,
-			ZIndex = 61,
-			Base.new(
-				"Frame",
-				{ Size = UDim2.new(0, 3, 1, 0), BackgroundColor3 = W, BackgroundTransparency = 0.82, ZIndex = 61 }
-			),
-			Base.new("Frame", {
-				AnchorPoint = Vector2.new(1, 0),
-				Position = UDim2.fromScale(1, 0),
-				Size = UDim2.new(0, 3, 1, 0),
-				BackgroundColor3 = BLACK,
-				BackgroundTransparency = 0.75,
-				ZIndex = 61,
-			}),
-			strapPrint,
-		}),
-		-- the clip
-		Base.new("Frame", {
-			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.new(0.5, 0, 0, L + STRAP - 22),
-			Size = UDim2.fromOffset(46, 36),
-			BackgroundColor3 = C.card2,
-			ZIndex = 63,
-			Base.corner(7),
-			Base.stroke(C.raised, 2),
-			Base.new("Frame", {
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				Position = UDim2.fromScale(0.5, 0.6),
-				Size = UDim2.fromOffset(22, 6),
-				BackgroundColor3 = C.raised,
-				ZIndex = 63,
-				Base.round(1),
-			}),
-		}),
-		pass,
-	})
-
 	-- ── the form ──
 	local state = source("idle") -- idle | error | checking | done
 	local err = source("")
@@ -534,76 +212,27 @@ function Lock.new(p: Props): Frame
 		return false
 	end
 
-	local wobbleAt = -100
 	local shakeAt = -100
 	local formShake = 0
 	local function celebrate()
 		celebrating(true)
 		done(true)
-		granted.Visible = true
-		grantedScale.Scale = 1.9
-		grantedText.TextTransparency = 1
-		grantedStroke.Transparency = 1
-		tween(grantedScale, TweenInfo.new(0.32, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 })
-		tween(grantedText, TweenInfo.new(0.12), { TextTransparency = 0 })
-		tween(grantedStroke, TweenInfo.new(0.12), { Transparency = 0 })
-		task.wait(0.2)
-		wobbleAt = os.clock()
-		tween(band, TweenInfo.new(0.25), { BackgroundColor3 = C.ok })
-		bandL.Text = "ALL ACCESS"
-		task.wait(1.2)
+		task.wait(0.8)
 	end
 
 	local root: Frame
 	local formGroup: CanvasGroup
 	local codeBox: TextBox
-	-- ── the reveal to the decks (owner, 2026-10-26: "curtain", picked live from four takes): the
-	-- pass lifts away, a seam of light splits the middle, then the two halves part like stage doors.
-	-- In Studio, changing HazaDJ's UnlockPreview attribute replays it. ──
+	-- ── the reveal to the decks (owner): the whole panel rises with everything in it, then the decks are
+	-- there. In Studio, changing HazaDJ's UnlockPreview attribute replays it. ──
 	local function flyAway()
-		tween(swing, TweenInfo.new(0.7, Enum.EasingStyle.Cubic, Enum.EasingDirection.In), {
-			Position = UDim2.fromOffset(PX, PIVOT_Y - 1000),
-		})
-		tween(beam, TweenInfo.new(0.5), { GroupTransparency = 1 })
-		tween(formGroup, TweenInfo.new(0.5), { GroupTransparency = 1 })
-		task.wait(0.4)
-		-- under the pass and the beam (Sibling z), over the root's own fill
-		local layer = frame({ Name = "Reveal", Size = UDim2.fromScale(1, 1), ZIndex = 60, Parent = root })
-		local halves = {}
-		for i, ax in { 0, 1 } do
-			halves[i] = Base.new("Frame", {
-				AnchorPoint = Vector2.new(ax, 0),
-				Position = UDim2.fromScale(ax, 0),
-				Size = UDim2.fromScale(0.5, 1),
-				BackgroundColor3 = BG,
-				ZIndex = 61,
-				Parent = layer,
-			})
-		end
-		local seam = Base.new("Frame", {
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.new(0, 2, 0, 0),
-			BackgroundColor3 = W,
-			ZIndex = 62,
-			Parent = layer,
-		})
-		root.BackgroundTransparency = 1
-		tween(
-			seam,
-			TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-			{ Size = UDim2.new(0, 2, 1, 0) }
-		)
-		task.wait(0.3)
 		if p.onReveal then
 			task.spawn(p.onReveal)
 		end
-		local open = TweenInfo.new(0.9, Enum.EasingStyle.Exponential, Enum.EasingDirection.InOut)
-		tween(halves[1], open, { Position = UDim2.fromScale(-0.5, 0) })
-		tween(halves[2], open, { Position = UDim2.fromScale(1.5, 0) })
-		tween(seam, TweenInfo.new(0.5), { Size = UDim2.new(0, 60, 1, 0), BackgroundTransparency = 1 })
-		task.wait(0.9)
-		layer:Destroy()
+		tween(root, TweenInfo.new(0.7, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {
+			Position = UDim2.fromOffset(-16, -CANVAS_H),
+		})
+		task.wait(0.7)
 		-- wait for the server's licence to land so the lock doesn't flash back
 		local t0 = os.clock()
 		while not LicensePolicy.unlocked(untrack(Store.license)) and os.clock() - t0 < 5 do
@@ -614,13 +243,7 @@ function Lock.new(p: Props): Frame
 		state("idle")
 		codeBox.Text = "" -- the box drives `code`; clearing only the source would leave its text up
 		code("")
-		granted.Visible = false
-		band.BackgroundColor3 = C.red
-		bandL.Text = "OWNER ONLY"
-		swing.Position = UDim2.fromOffset(PX, PIVOT_Y)
-		beam.GroupTransparency = 0
-		formGroup.GroupTransparency = 0
-		root.BackgroundTransparency = 0
+		root.Position = UDim2.fromOffset(-16, 0)
 	end
 
 	local function activate()
@@ -633,7 +256,6 @@ function Lock.new(p: Props): Frame
 			local ok = submit("Activate", c, function(message)
 				err(message)
 				state("error")
-				wobbleAt = os.clock()
 				shakeAt = os.clock()
 			end)
 			if ok then
@@ -822,8 +444,9 @@ function Lock.new(p: Props): Frame
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		AutoButtonColor = false,
-		Size = UDim2.fromOffset(0, 16),
-		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.fromOffset(FORM_W, 16),
+		AutomaticSize = Enum.AutomaticSize.None,
+		TextXAlignment = Enum.TextXAlignment.Center,
 		FontFace = Theme.SB,
 		TextSize = 12,
 		Text = "Have a guest pass?",
@@ -848,13 +471,13 @@ function Lock.new(p: Props): Frame
 	})
 	formGroup = create("CanvasGroup")({
 		BackgroundTransparency = 1,
-		AnchorPoint = function()
-			return if p.compact() then Vector2.new(0.5, 0.5) else Vector2.new(0, 0.5)
-		end,
+		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = function()
-			return if p.compact() then UDim2.fromOffset(CANVAS_W / 2, CANVAS_H / 2) else UDim2.fromOffset(718, 411)
+			return if p.compact()
+				then UDim2.fromOffset(CANVAS_W / 2, CANVAS_H / 2)
+				else UDim2.fromOffset(RIGHT_X, FORM_Y)
 		end,
-		Size = UDim2.fromOffset(FORM_W + 4, 254),
+		Size = UDim2.fromOffset(FORM_W + 4, FORM_H),
 		ZIndex = 62,
 		formScale,
 		-- 2 px of room so the field's outer edge isn't clipped by the group
@@ -865,6 +488,9 @@ function Lock.new(p: Props): Frame
 			label(function()
 				return if done() then "You're in.\nThe decks are yours." else copy().title
 			end, {
+				AutomaticSize = Enum.AutomaticSize.Y,
+				Size = UDim2.fromOffset(FORM_W, 0),
+				TextXAlignment = Enum.TextXAlignment.Center,
 				FontFace = Theme.B,
 				TextSize = 26,
 				LineHeight = 1.05,
@@ -874,18 +500,19 @@ function Lock.new(p: Props): Frame
 				return if done() then "The DJ deck is now live in every server of this game." else copy().body
 			end, {
 				AutomaticSize = Enum.AutomaticSize.None,
-				Position = UDim2.fromOffset(0, 66),
+				Position = UDim2.fromOffset(0, 61),
 				Size = UDim2.fromOffset(FORM_W, 34),
 				FontFace = Theme.R,
 				TextSize = 13,
 				TextColor3 = C.soft,
 				TextWrapped = true,
+				TextXAlignment = Enum.TextXAlignment.Center,
 				LineHeight = 1.25,
 				TextYAlignment = Enum.TextYAlignment.Top,
 				ZIndex = 62,
 			}),
 			frame({
-				Position = UDim2.fromOffset(0, 120),
+				Position = UDim2.fromOffset(0, 105),
 				Size = UDim2.fromOffset(FORM_W, 36),
 				ZIndex = 62,
 				Visible = function()
@@ -894,7 +521,7 @@ function Lock.new(p: Props): Frame
 				codeField,
 			}),
 			frame({
-				Position = UDim2.fromOffset(0, 164),
+				Position = UDim2.fromOffset(0, 149),
 				Size = UDim2.fromOffset(FORM_W, 36),
 				ZIndex = 62,
 				Visible = function()
@@ -907,9 +534,12 @@ function Lock.new(p: Props): Frame
 					return done() or (state() ~= "checking" and (string.gsub(code(), "%s", "")) ~= "")
 				end, activate),
 			}),
-			frame({ Position = UDim2.fromOffset(0, 210), Size = UDim2.fromOffset(FORM_W, 16), ZIndex = 62, guestLink }),
+			frame({ Position = UDim2.fromOffset(0, 191), Size = UDim2.fromOffset(FORM_W, 16), ZIndex = 62, guestLink }),
 			label(err, {
-				Position = UDim2.fromOffset(0, 234),
+				Position = UDim2.fromOffset(0, 211),
+				AutomaticSize = Enum.AutomaticSize.Y,
+				Size = UDim2.fromOffset(FORM_W, 0),
+				TextXAlignment = Enum.TextXAlignment.Center,
 				TextSize = 12,
 				FontFace = Theme.R,
 				TextColor3 = C.redText,
@@ -960,6 +590,76 @@ function Lock.new(p: Props): Frame
 		glyph.Parent = close
 	end)
 
+	-- the xfade mark at the top of the right column (static props, so the compact-mode bindings never move it)
+	local logo = frame({
+		Name = "XfadeLogo",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.fromOffset(RIGHT_X, LOGO_TOP),
+		AutomaticSize = Enum.AutomaticSize.XY,
+		ZIndex = 62,
+		Visible = function()
+			return not p.compact()
+		end,
+		Base.vlist(4, { HorizontalAlignment = Enum.HorizontalAlignment.Center }),
+		label("xfade", {
+			FontFace = Font.new(Theme.BRAND.Family, Enum.FontWeight.ExtraBold),
+			TextSize = 19,
+			LayoutOrder = 1,
+			ZIndex = 62,
+		}),
+		frame({
+			Size = UDim2.fromOffset(0, 16),
+			AutomaticSize = Enum.AutomaticSize.X,
+			LayoutOrder = 2,
+			ZIndex = 62,
+			Base.corner(2),
+			Base.stroke(C.redText, 1),
+			Base.pad(5, 5, 0, 0),
+			label("DUAL DECK", {
+				AutomaticSize = Enum.AutomaticSize.X,
+				Size = UDim2.fromScale(0, 1),
+				FontFace = Theme.BRAND,
+				TextSize = 12,
+				TextColor3 = C.redText,
+				ZIndex = 62,
+			}),
+		}),
+		label("by kosmik", {
+			FontFace = Theme.SB,
+			TextSize = 12,
+			TextTransparency = 0.5,
+			LayoutOrder = 3,
+			ZIndex = 62,
+		}),
+	})
+
+	-- the copyright mark under the right column
+	local copyright = label("© 2026 Cosmic Studio HQ", {
+		Name = "Copyright",
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.fromOffset(RIGHT_X, CANVAS_H - 20),
+		Size = UDim2.fromOffset(FORM_W, 16),
+		AutomaticSize = Enum.AutomaticSize.None,
+		FontFace = Theme.R,
+		TextSize = 11,
+		TextColor3 = Color3.fromRGB(150, 150, 150),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		ZIndex = 62,
+		Visible = function()
+			return not p.compact()
+		end,
+	})
+
+	-- the artwork fills the whole lock (the form, logo and copyright sit on top of it)
+	local artwork = create("ImageLabel")({
+		Name = "Artwork",
+		BackgroundTransparency = 1,
+		Image = ARTWORK,
+		ScaleType = Enum.ScaleType.Crop,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 61,
+	})
+
 	root = Base.new("Frame", {
 		Name = "Lock",
 		Position = UDim2.fromOffset(-16, 0),
@@ -971,37 +671,19 @@ function Lock.new(p: Props): Frame
 		Active = true, -- clicks don't reach the panel underneath
 		Visible = shown,
 		Base.corner(4), -- the panel's corners (App)
-		beam,
-		swing,
 		formGroup,
+		logo,
+		copyright,
+		artwork,
 		close,
 		modal,
 	}) :: Frame
-	effect(function()
-		local compact = p.compact()
-		beam.Visible = not compact
-		swing.Visible = not compact
-	end)
-
-	-- motion: sway, a lean toward the cursor, a shake on a wrong code; only while it is on screen
+	-- motion: a shake on a wrong code; only while it is on screen
 	effect(function()
 		if not shown() then
 			return
 		end
-		local t0 = os.clock()
-		local tilt = 0
-		local conn = RunService.RenderStepped:Connect(function(dt: number)
-			local t = os.clock() - t0
-			local m = UserInputService:GetMouseLocation()
-			local c = pass.AbsolutePosition + pass.AbsoluteSize / 2
-			local want = if (m - c).Magnitude < 420 * (root.AbsoluteSize.X / CANVAS_W)
-				then math.clamp((m.X - c.X) / 160, -1, 1) * -3
-				else 0
-			tilt += (want - tilt) * math.min(1, dt * 4)
-			local w = os.clock() - wobbleAt
-			local wobble = if w < 0.8 then math.sin(w * 32) * 5 * math.exp(-w * 5) else 0
-			local flying = untrack(done) and swing.Position.Y.Offset < PIVOT_Y - 1
-			swing.Rotation = (if flying then 0 else math.sin(t * 1.1) * 2 + tilt) + wobble
+		local conn = RunService.RenderStepped:Connect(function()
 			local e = os.clock() - shakeAt
 			local dx = if e < 0.45 then math.sin(e * 48) * 7 * (1 - e / 0.45) else 0
 			if dx ~= formShake then
