@@ -702,8 +702,21 @@ function Settings.new(props: Base.Props?): Frame
 		lastDirty = d
 	end)
 
-	local mainTile = Base.tile(313, 0, 937, PAGE_H, { main, bar })
-	return frame(Base.with({ Name = "Settings", Size = UDim2.fromScale(1, 1), navTile, mainTile }, props))
+	local mainTile = Base.tile(313, 0, 635, PAGE_H, { main, bar })
+	-- the right column: the lock screen's artwork, so the tab reads as part of the same panel. It sits
+	-- 1 px below the header's bottom edge and runs to the panel's bottom, so
+	-- it never bleeds under the header, whose background is only 80% opaque.
+	local sideTile = Base.tile(950, -1, 300, PAGE_H + 1, {
+		Base.new("ImageLabel", {
+			Name = "Artwork",
+			BackgroundTransparency = 1,
+			Image = "rbxassetid://110878579761479", -- the Settings column artwork
+			ScaleType = Enum.ScaleType.Crop,
+			Size = UDim2.fromScale(1, 1),
+			ZIndex = 1,
+		}),
+	})
+	return frame(Base.with({ Name = "Settings", Size = UDim2.fromScale(1, 1), navTile, mainTile, sideTile }, props))
 end
 
 return Settings

@@ -2,6 +2,29 @@
 
 Releases go to the licence server with `lune run tools/release` (version from `wally.toml`).
 
+## [0.2.2] — 2026-10-29
+
+### Lock screen (`Features/Lock.luau`)
+- Fixed: the artwork covered the whole 1250 × 802 canvas, so it ran under the activation form.
+  It now fills the left half only (`fromScale(0.5, 1)`), which is the column `RIGHT_X = 937` was
+  always written for. Verified in playtest: artwork 625 × 802, form at 785–1089, centre 937.
+
+### Settings (`Features/Settings.luau`)
+- New right-hand column: the lock screen's artwork (rbxassetid://110878579761479, Crop) in a
+  300 px tile, so the tab reads as part of the same panel. The section column narrows 937 → 635;
+  nav 311 + main 635 + side 300 + two 2 px gutters = 1250, unchanged.
+- The tile starts 1 px below the header's bottom edge and runs to the panel's bottom (y = -1,
+  height `PAGE_H + 1`), so it never bleeds under the header, whose background is only 80 % opaque.
+
+## [0.2.1] — 2026-10-28
+
+### Lock screen (`Features/Lock.luau`)
+- Redesigned: full-bleed artwork behind the panel, xfade mark at the top of the right column, the
+  activation form centred between the mark and the copyright.
+- Copy: title "Your DJ deck is / waiting backstage.", body "Enter your activation code".
+- Backstage pass, lanyard, beam, stamps and the "ALL ACCESS" band removed. The guest pass modal stays.
+- Unlock: the whole panel rises 0.7 s with its contents, then hides.
+
 ## [0.2.0] — 2026-10-26
 
 Released: template 433 KB, sha256 `7717630e5c65…`. Commit `fe9dec1`. Every look below was picked

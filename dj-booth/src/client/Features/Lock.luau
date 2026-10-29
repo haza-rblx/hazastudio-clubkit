@@ -650,13 +650,13 @@ function Lock.new(p: Props): Frame
 		end,
 	})
 
-	-- the artwork fills the whole lock (the form, logo and copyright sit on top of it)
+	-- the artwork fills the left half only (the form, logo and copyright sit on the right column)
 	local artwork = create("ImageLabel")({
 		Name = "Artwork",
 		BackgroundTransparency = 1,
 		Image = ARTWORK,
 		ScaleType = Enum.ScaleType.Crop,
-		Size = UDim2.fromScale(1, 1),
+		Size = UDim2.fromScale(0.5, 1), -- left half; the right column (RIGHT_X) holds the form
 		ZIndex = 61,
 	})
 
