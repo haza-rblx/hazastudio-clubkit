@@ -10,11 +10,15 @@ local MusicDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.M
 local MusicDurationPolicy = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicDurationPolicy)
 local MusicTransportPolicy = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicTransportPolicy)
 local MusicPlayOncePolicy = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicPlayOncePolicy)
+local MusicActiveSet = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicActiveSet)
 local NetworkPerfCounters = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.NetworkPerfCounters)
 local MusicAssetValidator = require(script.Parent.MusicAssetValidator)
+local MusicAssetProbe = require(script.Parent.MusicAssetProbe)
 
 type TrackInfo = MusicDomain.TrackInfo
-type QueueEntry = MusicDomain.QueueEntry
+-- fromSet: the queue entry is the active set's next track (not a request, not counted against the cap).
+-- setCard: the queue entry is a waiting set (its tracks live in queuedSets until it reaches the front).
+type QueueEntry = MusicDomain.QueueEntry & { fromSet: boolean?, setCard: boolean? }
 type PlaybackTiming = MusicDomain.PlaybackTiming
 
 local function createMusicSession(deps: {
@@ -40,6 +44,7 @@ local function createMusicSession(deps: {
 	)
 	local loadGraceSeconds = math.max(0, tonumber(config.ASSET_LOAD_GRACE_SECONDS) or 90)
 	local requestTrackMaxPerUserQueue = math.max(1, tonumber(config.REQUEST_TRACK_MAX_PER_USER_QUEUE) or 3)
+	local requestTrackMaxPerControlQueue = math.max(1, tonumber(config.REQUEST_TRACK_MAX_PER_USER_QUEUE_CONTROL) or 300)
 	local finishAdvanceToleranceSeconds = math.max(
 		2,
 		tonumber(config.PLAYBACK_FINISH_ADVANCE_TOLERANCE_SECONDS) or 15
@@ -88,6 +93,11 @@ local function createMusicSession(deps: {
 	local skipHistoryOnce = false
 	-- Play-once tracks (3.0): never in the library, kept only while an entry still points at them.
 	local playOnceTracks: { [string]: TrackInfo } = {}
+	-- Active set (docs/plans/active-set.md): one set per server. Its next track sits in state.queue as
+	-- an entry with fromSet = true; the cursor (activeSet.played) moves when that entry starts playing.
+	local activeSet: MusicActiveSet.ActiveSet? = nil
+	-- Waiting sets, keyed by the entryId of their set card in state.queue (in memory only).
+	local queuedSets: { [string]: MusicActiveSet.ActiveSet } = {}
 
 	local function newEntryId(): string
 		return HttpService:GenerateGUID(false)
@@ -154,7 +164,18 @@ local function createMusicSession(deps: {
 	local function countQueuedTracksForUser(userId: number): number
 		local total = 0
 		for _, entry in ipairs(state.queue) do
-			if entry.source == "user" and entry.requesterUserId == userId then
+			if entry.source == "user" and entry.requesterUserId == userId and entry.fromSet ~= true and entry.setCard ~= true then
+				total += 1
+			end
+		end
+		return total
+	end
+
+	-- Sets that count against SET_QUEUE_MAX: the active set plus the waiting set cards.
+	local function countSets(): number
+		local total = if activeSet then 1 else 0
+		for _, entry in ipairs(state.queue) do
+			if entry.setCard == true then
 				total += 1
 			end
 		end
@@ -214,16 +235,159 @@ local function createMusicSession(deps: {
 	local function buildQueueTracks(entries: { QueueEntry }): { any }
 		local queueTracks: { any } = {}
 		for _, entry in ipairs(entries) do
+			if entry.setCard == true then
+				local set = queuedSets[entry.entryId]
+				if set then
+					table.insert(queueTracks, {
+						setCard = true,
+						queueEntryId = entry.entryId,
+						setId = set.id,
+						name = set.title,
+						creator = string.format("Set · %d tracks", #set.order),
+						total = #set.order,
+						sourceKind = set.sourceKind,
+						playlistId = set.sourceId,
+						requesterUserId = set.starterUserId,
+						requesterDisplayName = set.starterName,
+						totalDuration = 0,
+					})
+				end
+				continue
+			end
 			local track = getTrackById(entry.trackId)
 			if track then
-				table.insert(queueTracks, enrichTrack(track, entry))
+				local queueTrack = enrichTrack(track, entry)
+				if entry.fromSet == true and queueTrack then
+					queueTrack.fromSet = true
+				end
+				table.insert(queueTracks, queueTrack)
 			end
 		end
 		return queueTracks
 	end
 
+	-- Active set helpers. Items are refreshed from the library on every read, so a renamed or
+	-- re-timed track shows its current values; the snapshot taken at set start is the fallback.
+	local function refreshedSetItem(item: MusicActiveSet.Item): MusicActiveSet.Item
+		local track = getTrackById(item.id)
+		if not track then
+			return item
+		end
+		return {
+			id = item.id,
+			name = track.name,
+			creator = track.creator,
+			totalDuration = track.totalDuration,
+		}
+	end
+
+	local function hasPendingSetEntry(): boolean
+		for _, entry in ipairs(state.queue) do
+			if entry.fromSet == true then
+				return true
+			end
+		end
+		return false
+	end
+
+	local function removePendingSetEntries()
+		local kept: { QueueEntry } = {}
+		for _, entry in ipairs(state.queue) do
+			if entry.fromSet ~= true then
+				table.insert(kept, entry)
+			end
+		end
+		state.queue = kept
+	end
+
+	-- Keeps exactly one set track waiting in the queue, at the front: the active set plays to the end
+	-- before the next queue item. Called after every change that can move the cursor or the queue.
+	-- The set ends once its last track is no longer on air, so the Set card stays up while that last
+	-- track plays.
+	local function materialiseActiveSet()
+		local set = activeSet
+		if set == nil or hasPendingSetEntry() then
+			return
+		end
+		while true do
+			local nextItem = MusicActiveSet.nextItem(set)
+			if nextItem == nil then
+				break
+			end
+			if getTrackById(nextItem.id) then
+				local entry = MusicDomain.newUserQueueEntry(nextItem.id, newEntryId(), {
+					UserId = set.starterUserId,
+					DisplayName = set.starterName,
+				}) :: any
+				entry.fromSet = true
+				table.insert(state.queue, 1, entry)
+				break
+			end
+			-- Gone from the library: move past it without playing.
+			MusicActiveSet.skipNext(set)
+		end
+		if MusicActiveSet.nextItem(set) == nil and not (state.currentEntry and state.currentEntry.fromSet == true) then
+			log:info("Active set finished", { setId = set.id, total = #set.order })
+			activeSet = nil
+		end
+	end
+
+	-- A set card reached the front of the queue: its set becomes the active set. Leading items equal to
+	-- the track that just played are skipped, so a set started while its first song was on air does
+	-- not play that song twice.
+	local function activateSetCard(entry: QueueEntry, justPlayedTrackId: string?)
+		local set = queuedSets[entry.entryId]
+		queuedSets[entry.entryId] = nil
+		if set == nil then
+			return
+		end
+		activeSet = set
+		while justPlayedTrackId do
+			local nextItem = MusicActiveSet.nextItem(set)
+			if nextItem == nil or nextItem.id ~= justPlayedTrackId then
+				break
+			end
+			MusicActiveSet.skipNext(set)
+		end
+		log:info("Active set started", { setId = set.id, sourceKind = set.sourceKind, total = #set.order })
+		materialiseActiveSet()
+	end
+
+	local function buildActiveSetPayload(): any?
+		local set = activeSet
+		if set == nil then
+			return nil
+		end
+		local upNext: { any } = {}
+		for _, item in ipairs(MusicActiveSet.upNext(set)) do
+			table.insert(upNext, refreshedSetItem(item))
+		end
+		return {
+			id = set.id,
+			title = set.title,
+			sourceKind = set.sourceKind,
+			sourceId = set.sourceId,
+			starterUserId = set.starterUserId,
+			starterName = set.starterName,
+			played = set.played,
+			total = #set.order,
+			shuffle = set.shuffle,
+			upNext = upNext,
+		}
+	end
+
 	local function isTrackPlayable(track: TrackInfo): boolean
 		return type(track.parts) == "table" and #track.parts >= 1
+	end
+
+	-- A track whose playlist is private only plays when someone queues it; the idle DJ skips it.
+	local function isTrackInPrivatePlaylist(track: TrackInfo): boolean
+		local playlistId = (track :: any).playlistId
+		if type(playlistId) ~= "string" or playlistId == "" then
+			return false
+		end
+		local playlist = repo:getPlaylist(playlistId)
+		return type(playlist) == "table" and (playlist :: any).visibility == "private"
 	end
 
 	local function collectExcludedTrackIds(previousTrackId: string?): { [string]: true }
@@ -254,7 +418,7 @@ local function createMusicSession(deps: {
 		local emergencyCandidates: { string } = {}
 		local excludedLookup = collectExcludedTrackIds(previousTrackId)
 		for trackId, track in pairs(result.value) do
-			if isTrackPlayable(track) then
+			if isTrackPlayable(track) and not isTrackInPrivatePlaylist(track) then
 				if not excludedLookup[trackId] and trackId ~= lastSystemTrackId then
 					table.insert(preferredCandidates, trackId)
 				elseif not excludedLookup[trackId] then
@@ -294,7 +458,7 @@ local function createMusicSession(deps: {
 	end
 
 	local function shouldMaintainAutoBuffer(): boolean
-		if state.isDjMode or not IDLE_SYSTEM_FALLBACK_ENABLED then
+		if state.isDjMode or not IDLE_SYSTEM_FALLBACK_ENABLED or activeSet ~= nil then
 			return false
 		end
 		return #state.queue <= getAutoBufferRefillMaxUserQueue()
@@ -316,10 +480,11 @@ local function createMusicSession(deps: {
 		state.queue = nextUserQueue
 	end
 
-	local function buildQueueUpdatePayload(): { queue: { any }, prefetchBuffer: { any } }
+	local function buildQueueUpdatePayload(): { queue: { any }, prefetchBuffer: { any }, activeSet: any? }
 		return {
 			queue = buildQueueTracks(state.queue),
 			prefetchBuffer = buildQueueTracks(autoBuffer),
+			activeSet = buildActiveSetPayload(),
 		}
 	end
 
@@ -638,8 +803,9 @@ local function createMusicSession(deps: {
 		return count
 	end
 
+	local voteSkipThreshold = math.clamp(tonumber(config.VOTE_SKIP_THRESHOLD) or 0.75, 0.01, 1)
 	local function getRequiredVoteCount(totalPlayers: number): number
-		return math.max(1, math.floor(totalPlayers / 2) + 1)
+		return math.max(1, math.ceil(totalPlayers * voteSkipThreshold))
 	end
 
 	local function emitVoteState(payload: any, targetPlayer: Player?)
@@ -807,6 +973,7 @@ local function createMusicSession(deps: {
 		local skipped = 0
 
 		while skipped < maxSkips do
+			materialiseActiveSet()
 			if shouldMaintainAutoBuffer() then
 				ensureAutoBufferDepth(getAutoQueueDepth())
 			end
@@ -814,6 +981,11 @@ local function createMusicSession(deps: {
 			local nextEntry: QueueEntry? = nil
 			if #state.queue > 0 then
 				nextEntry = table.remove(state.queue, 1)
+				-- A set card is not a track: it becomes the active set and the loop takes its first track.
+				if nextEntry.setCard == true then
+					activateSetCard(nextEntry :: QueueEntry, previousTrackId)
+					continue
+				end
 			elseif not state.isDjMode and #autoBuffer > 0 then
 				nextEntry = table.remove(autoBuffer, 1)
 			elseif not state.isDjMode then
@@ -842,10 +1014,30 @@ local function createMusicSession(deps: {
 					trackId = nextEntry.trackId,
 					usePreload = usePreloadValidate,
 				})
+				if activeSet and nextEntry.fromSet == true then
+					MusicActiveSet.markPlayed(activeSet, nextEntry.trackId)
+				end
+				continue
+			end
+
+			if MusicAssetProbe.getTrackStatus(nextTrack) == "Failure" then
+				skipped += 1
+				log:warn("Skipping track: audio unavailable (server probe)", {
+					trackId = nextEntry.trackId,
+					entryId = nextEntry.entryId,
+				})
+				if activeSet and nextEntry.fromSet == true then
+					MusicActiveSet.markPlayed(activeSet, nextEntry.trackId)
+				end
 				continue
 			end
 
 			startTrackPlayback(nextEntry, nextTrack :: TrackInfo)
+			-- A set track starting moves the cursor, then the following set track is queued.
+			if activeSet and nextEntry.fromSet == true then
+				MusicActiveSet.markPlayed(activeSet, nextEntry.trackId)
+			end
+			materialiseActiveSet()
 			log:info("Track changed", {
 				trackId = nextEntry.trackId,
 				entryId = nextEntry.entryId,
@@ -857,6 +1049,35 @@ local function createMusicSession(deps: {
 			end
 			broadcastTrackChanged()
 			broadcastQueueUpdated()
+
+			-- Confirm the started track really loads; if the probe says Failure, skip it.
+			local startedEntryId = nextEntry.entryId
+			local startedTrack = nextTrack :: TrackInfo
+			task.spawn(function()
+				local probeStatus = MusicAssetProbe.probeTrackAsync(startedTrack)
+				if probeStatus == "Failure" and state.currentEntry ~= nil and state.currentEntry.entryId == startedEntryId then
+					log:warn("Current track audio unavailable, auto-skipping", {
+						trackId = startedTrack.id,
+						entryId = startedEntryId,
+					})
+					session:advanceQueue("asset_failure")
+				end
+			end)
+
+			-- Warm the probe cache for the next 2 upcoming tracks (queue first, then auto buffer).
+			local lookahead = 0
+			for _, list in ipairs({ state.queue, autoBuffer }) do
+				for _, upcoming in ipairs(list) do
+					if lookahead >= 2 then
+						break
+					end
+					-- A waiting set card has no track to warm up.
+					if upcoming.setCard ~= true then
+						lookahead += 1
+						MusicAssetProbe.prefetchTrack(getTrackById(upcoming.trackId))
+					end
+				end
+			end
 			return
 		end
 
@@ -883,6 +1104,7 @@ local function createMusicSession(deps: {
 			queue = buildQueueTracks(state.queue),
 			prefetchBuffer = buildQueueTracks(autoBuffer),
 			djEffects = djEffectState,
+			activeSet = buildActiveSetPayload(),
 		}
 	end
 
@@ -983,12 +1205,41 @@ local function createMusicSession(deps: {
 				currentTrackDeleted = currentTrackDeleted,
 			})
 		end
+		if activeSet then
+			MusicActiveSet.dropIds(activeSet, deletedLookup)
+		end
+		for _, set in pairs(queuedSets) do
+			MusicActiveSet.dropIds(set, deletedLookup)
+		end
 		if currentTrackDeleted then
 			session:advanceQueue("track_deleted")
 		elseif queueChanged or bufferChanged then
+			materialiseActiveSet()
 			broadcastQueueUpdated()
 			syncStateToAllMembers()
 		end
+	end
+
+	--- A playlist turned private keeps its track ids, so pruneDeletedTracks never sees it: drop the
+	--- idle DJ's picks from it out of the auto buffer. Player requests in the queue stay.
+	function session:prunePrivateSystemTracks()
+		local newBuffer: { QueueEntry } = {}
+		local prunedCount = 0
+		for _, entry in ipairs(autoBuffer) do
+			local track = repo:getTrack(entry.trackId)
+			if track and isTrackInPrivatePlaylist(track) then
+				prunedCount += 1
+			else
+				table.insert(newBuffer, entry)
+			end
+		end
+		if prunedCount == 0 then
+			return
+		end
+		autoBuffer = newBuffer
+		log:info("Pruned private-playlist tracks from auto buffer", { prunedCount = prunedCount })
+		broadcastQueueUpdated()
+		syncStateToAllMembers()
 	end
 
 	--- Poll/cross-server library reload: refresh metadata for members only.
@@ -1099,7 +1350,8 @@ local function createMusicSession(deps: {
 		end
 	end
 
-	function session:requestTrack(player: Player, trackId: string): (boolean, string, any?)
+	-- canControl: musicControl holders get REQUEST_TRACK_MAX_PER_USER_QUEUE_CONTROL instead of the player limit.
+	function session:requestTrack(player: Player, trackId: string, canControl: boolean?): (boolean, string, any?)
 		if state.isDjMode and not canControlDuringDjMode(player) then
 			return false, "dj_only", nil
 		end
@@ -1115,7 +1367,8 @@ local function createMusicSession(deps: {
 				return false, "already_in_queue", nil
 			end
 		end
-		if state.isPlaying and countQueuedTracksForUser(player.UserId) >= requestTrackMaxPerUserQueue then
+		local perUserLimit = if canControl == true then requestTrackMaxPerControlQueue else requestTrackMaxPerUserQueue
+		if state.isPlaying and countQueuedTracksForUser(player.UserId) >= perUserLimit then
 			return false, "queue_limit_reached", nil
 		end
 
@@ -1134,6 +1387,7 @@ local function createMusicSession(deps: {
 		end
 
 		table.insert(state.queue, entry)
+		MusicAssetProbe.prefetchTrack(track)
 		broadcastQueueUpdated()
 		log:debug("Track requested", { player = player.Name, trackId = trackId })
 		return true, "", {
@@ -1392,7 +1646,13 @@ local function createMusicSession(deps: {
 		end
 		-- Back to the last played song; the song on air returns to the front of the queue.
 		local previousEntry = table.remove(playedHistory) :: QueueEntry
-		table.insert(state.queue, 1, state.currentEntry :: QueueEntry)
+		local onAir = state.currentEntry :: QueueEntry
+		-- A set track going back to the queue un-plays it: the cursor steps back and the waiting set
+		-- track is dropped, so the re-queued one is the set's next track again (no skip, no repeat).
+		if activeSet and onAir.fromSet == true and MusicActiveSet.unmarkPlayed(activeSet, onAir.trackId) then
+			removePendingSetEntries()
+		end
+		table.insert(state.queue, 1, onAir)
 		table.insert(state.queue, 1, previousEntry)
 		skipHistoryOnce = true
 		session:advanceQueue("previous")
@@ -1400,10 +1660,19 @@ local function createMusicSession(deps: {
 	end
 
 	function session:clearQueue(): (boolean, string)
-		if #state.queue == 0 then
+		-- The active set's waiting track is not a request: clearing keeps it (it is queued again below).
+		local kept: { QueueEntry } = {}
+		for _, entry in ipairs(state.queue) do
+			if entry.fromSet == true then
+				table.insert(kept, entry)
+			end
+		end
+		if #kept == #state.queue then
 			return false, "queue_empty"
 		end
-		table.clear(state.queue)
+		state.queue = kept
+		-- Waiting set cards are cleared with the requests, so their sets go too (the active set stays).
+		table.clear(queuedSets)
 		releasePlayOnceTracks()
 		if shouldMaintainAutoBuffer() then
 			ensureAutoBufferDepth(getAutoQueueDepth())
@@ -1419,7 +1688,9 @@ local function createMusicSession(deps: {
 			return false, result.reason
 		end
 		state.queue = result.queue
+		queuedSets[entryId] = nil
 		releasePlayOnceTracks()
+		materialiseActiveSet()
 		if shouldMaintainAutoBuffer() then
 			ensureAutoBufferDepth(getAutoQueueDepth())
 		end
@@ -1479,6 +1750,114 @@ local function createMusicSession(deps: {
 			broadcastQueueUpdated()
 		end
 		return true, "", { added = added }
+	end
+
+	-- Active set (docs/plans/active-set.md). The service resolves the source to ordered items.
+	-- A started set is queued as a set card at the end of the queue (after waiting requests); it becomes
+	-- the active set when it reaches the front. A running set is never replaced.
+	function session:startActiveSet(
+		player: Player,
+		opts: {
+			title: string,
+			sourceKind: string,
+			sourceId: string?,
+			items: { any },
+			shuffle: boolean,
+		}
+	): (boolean, string, any?)
+		if state.isDjMode and not canControlDuringDjMode(player) then
+			return false, "dj_only", nil
+		end
+		if countSets() >= math.max(1, math.floor(tonumber(config.SET_QUEUE_MAX) or 3)) then
+			return false, "set_queue_full", nil
+		end
+		local set = MusicActiveSet.create({
+			id = newEntryId(),
+			title = opts.title,
+			sourceKind = opts.sourceKind,
+			sourceId = opts.sourceId,
+			starterUserId = player.UserId,
+			starterName = player.DisplayName,
+			items = opts.items,
+			cap = config.SET_MAX_TRACKS or 1500,
+			shuffle = opts.shuffle,
+			random = function(upper: number): number
+				return randomGenerator:NextInteger(1, upper)
+			end,
+		})
+		if set == nil then
+			return false, "empty_set", nil
+		end
+		clearAutoBuffer()
+		sanitizeQueue()
+		local cardEntry = MusicDomain.newUserQueueEntry("", newEntryId(), player) :: any
+		cardEntry.setCard = true
+		queuedSets[cardEntry.entryId] = set
+		table.insert(state.queue, cardEntry)
+		log:info("Set queued", { player = player.Name, sourceKind = opts.sourceKind, total = #set.order })
+		if not state.isPlaying then
+			session:advanceQueue()
+		else
+			broadcastQueueUpdated()
+		end
+		return true, "", { total = #set.order }
+	end
+
+	function session:stopActiveSet(): (boolean, string)
+		if activeSet == nil then
+			return false, "no_active_set"
+		end
+		activeSet = nil
+		removePendingSetEntries()
+		log:info("Active set stopped")
+		if shouldMaintainAutoBuffer() then
+			ensureAutoBufferDepth(getAutoQueueDepth())
+		end
+		broadcastQueueUpdated()
+		return true, ""
+	end
+
+	function session:reshuffleActiveSet(): (boolean, string)
+		local set = activeSet
+		if set == nil then
+			return false, "no_active_set"
+		end
+		if MusicActiveSet.remainingCount(set) <= 0 then
+			return false, "set_finished"
+		end
+		removePendingSetEntries()
+		MusicActiveSet.reshuffle(set, function(upper: number): number
+			return randomGenerator:NextInteger(1, upper)
+		end, newEntryId())
+		materialiseActiveSet()
+		if not state.isPlaying then
+			session:advanceQueue()
+		else
+			broadcastQueueUpdated()
+		end
+		return true, ""
+	end
+
+	-- Page of the remaining order (everyone may read it). Returns the reply fields.
+	function session:pageActiveSet(offset: any, limit: any, query: any): (boolean, string, any?)
+		local set = activeSet
+		if set == nil then
+			return false, "no_active_set", nil
+		end
+		local result = MusicActiveSet.page(set, {
+			offset = offset,
+			limit = limit,
+			query = query,
+			pageSize = config.SET_PAGE_SIZE or 50,
+		})
+		if not result.ok then
+			return false, result.reason, nil
+		end
+		local tracks: { any } = {}
+		for _, item in ipairs(result.tracks or {}) do
+			table.insert(tracks, refreshedSetItem(item))
+		end
+		return true, "", { offset = result.offset, total = result.total, tracks = tracks }
 	end
 
 	function session:getDjEffectState(): any

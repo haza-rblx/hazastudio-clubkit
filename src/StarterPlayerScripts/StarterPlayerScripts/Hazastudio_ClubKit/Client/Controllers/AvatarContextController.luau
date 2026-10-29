@@ -29,10 +29,18 @@ local function createAvatarContextController(deps: {
 	logger: ILogger,
 	ui: any,
 	getCachedOverheadPayload: ((userId: number) -> any)?,
+	-- Phone chrome: the ACM sits over the hotbar, so opening it puts the hotbar away for
+	-- HOTBAR_HIDE_DURATION and closing it must bring the hotbar back. The lifecycle is owned
+	-- here, paired with openPanel/closePanel — the old panel-visible watcher lost its binding
+	-- whenever AvatarContextLook swapped the wrapper instance (2026-10-12 phone hotbar bug).
+	notifyAcmOpen: (() -> number)?,
+	notifyAcmClose: (() -> ())?,
 })
 	local log = deps.logger
 	local ui = deps.ui
 	local getCachedOverheadPayload = deps.getCachedOverheadPayload
+	local notifyAcmOpen = deps.notifyAcmOpen
+	local notifyAcmClose = deps.notifyAcmClose
 	local HOVER_SAMPLE_INTERVAL = 1 / 30
 
 	local isOpen = false
@@ -660,7 +668,13 @@ local function createAvatarContextController(deps: {
 		ui:setAfterOpenCallback(function()
 			panelReady = true
 		end)
-		ui:open()
+		-- Phone: hide the hotbar for the panel's entrance (0 on desktop, where notifyAcmOpen
+		-- returns without touching chrome). The hide is released by closePanel.
+		local openDelay = 0
+		if notifyAcmOpen ~= nil then
+			openDelay = math.max(notifyAcmOpen(), 0)
+		end
+		ui:open(openDelay)
 
 		-- PARALLEL ORCHESTRATION (nothing blocks anything else):
 		-- 1. Fire server request (1ms — no YIELD).
@@ -723,6 +737,13 @@ local function createAvatarContextController(deps: {
 		currentPayload = nil
 		instantPaintApplied = false
 		ui:close()
+		-- Phone: the hotbar hide opened with openPanel is released here and only here. All close
+		-- paths (close button, outside tap, target left, request failure, inspect/carry handoff)
+		-- funnel through closePanel, so the pair can never be left half-open. notifyAcmClose is
+		-- a no-op when nothing is hidden (desktop, or a close with no matching open).
+		if notifyAcmClose ~= nil then
+			notifyAcmClose()
+		end
 	end
 
 	function controller:_notifyContextClosed()

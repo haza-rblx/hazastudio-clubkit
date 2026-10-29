@@ -383,6 +383,16 @@ end
 
 -- ── Public ───────────────────────────────────────────────────
 
+--- Phones: part 1 stack closer to the left edge (the bootstrap shrinks the template's UIScale).
+--- Writes the live value only, so part 2's restore still brings back the owner's layout.
+function CinematicLoadingView:applyPhoneLayout(side: number)
+	local wrapper = self._wrapper
+	if wrapper then
+		local position = wrapper.Position
+		wrapper.Position = UDim2.new(position.X.Scale, side, position.Y.Scale, position.Y.Offset)
+	end
+end
+
 --- Part 1 on screen: artwork plays, the card appears once a board snapshot is in.
 function CinematicLoadingView:startPart1()
 	if self._art:IsA("VideoFrame") then

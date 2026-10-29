@@ -1,0 +1,3 @@
+src/client/Net.luau
+src/server/Net.luau
+src/shared/NetTypes.luau

@@ -59,6 +59,7 @@ local ALL_BADGES = {
 -- register prefix attributes in attribute watcher (see watchAttr).
 local _LAYER_ATTR_KEYS = {
 	"SpecialTitle",
+	"SpecialTitleImage",
 	"BadgeGroup",
 	"Level",
 	"SpecialStatus",
@@ -1776,15 +1777,15 @@ function OverheadUI:apply(payload: OverheadPayload)
 	end
 
 	-- V5-only image-title row. It does not exist on V4 and older templates, so a
-	-- place that has not switched renders nothing here. It follows the SpecialTitle
-	-- layer toggle: hiding your title hides the banner under it too.
+	-- place that has not switched renders nothing here. It follows its own
+	-- SpecialTitleImage layer toggle, independent of the SpecialTitle text row.
 	local imageRow = wrapper:FindFirstChild(Config.TitleImage.ROW_NAME)
 	if imageRow and imageRow:IsA("GuiObject") then
 		local imageId = payload.specialTitleImage
 		local imageVisible = imageId ~= nil
 			and isLayerVisible(
-				"SpecialTitle",
-				getPublicMapValue(payload.publicOverheadLayerVisible, "SpecialTitle", true),
+				"SpecialTitleImage",
+				getPublicMapValue(payload.publicOverheadLayerVisible, "SpecialTitleImage", true),
 				payload.userId
 			)
 		if imageRow.Visible ~= imageVisible then

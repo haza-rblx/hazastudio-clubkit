@@ -5,6 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local SettingsDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.SettingsDomain)
+local OverheadDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.OverheadDomain)
 
 type Result<T> = Types.Result<T>
 type SettingsStoredData = Types.SettingsStoredData
@@ -63,7 +64,11 @@ local function createSettingsService(deps: {
 		dirtyByUserId[player.UserId] = false
 		local session = sessionByUserId[player.UserId] or SettingsDomain.defaultSessionData()
 		sessionByUserId[player.UserId] = session
-		return { ok = true, value = SettingsDomain.merge(loaded.value, session) }
+		return {
+			ok = true,
+			value = SettingsDomain.merge(loaded.value, session),
+			titleLayerReset = repo:consumeTitleLayerReset(player.UserId),
+		}
 	end
 
 	function service:get(player: Player): SettingsPayload
@@ -108,6 +113,26 @@ local function createSettingsService(deps: {
 		dirtyByUserId[userId] = false
 		pendingFlushByUserId[userId] = nil
 		return { ok = true, value = stored }
+	end
+
+	-- Grants (admin title, self-service title) force these overhead layer keys on in the
+	-- player's stored settings. Disabled layers are skipped. Returns true when a key changed.
+	function service:grantOverheadLayers(player: Player, keys: { string }): boolean
+		local changed = false
+		local result = service:updateStored(player, function(current)
+			local layers = table.clone(current.overheadLayerVisible)
+			for _, key in ipairs(keys) do
+				if not OverheadDomain.isLayerDisabled(key) and layers[key] ~= true then
+					layers[key] = true
+					changed = true
+				end
+			end
+			if changed then
+				current.overheadLayerVisible = layers
+			end
+			return current
+		end)
+		return result.ok and changed
 	end
 
 	function service:isDirty(player: Player): boolean

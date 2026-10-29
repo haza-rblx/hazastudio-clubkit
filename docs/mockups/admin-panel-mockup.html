@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Club Kit — Admin Panel (Mockup v2)</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --panel-2: #1e222b; --line: #2a2f3a;
+    --text: #e7eaf0; --muted: #8b93a3; --accent: #e0a526;
+    --ok: #3fb97a; --warn: #e0a526; --bad: #e35d5d; --info: #5b9cf0;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); display: flex; min-height: 100vh; }
+  aside { width: 220px; background: var(--panel); border-right: 1px solid var(--line); padding: 18px 12px; flex-shrink: 0; }
+  .brand { font-weight: 700; padding: 4px 8px 16px; }
+  .brand small { display: block; color: var(--muted); font-weight: 400; font-size: 12px; }
+  nav button { display: flex; width: 100%; justify-content: space-between; align-items: center; background: none; border: 0; color: var(--text); padding: 9px 10px; border-radius: 8px; cursor: pointer; text-align: left; font: inherit; }
+  nav button:hover { background: var(--panel-2); }
+  nav button.active { background: var(--panel-2); color: var(--accent); }
+  nav .count { color: var(--muted); font-size: 12px; }
+  .sidebar-foot { margin-top: 24px; padding: 10px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--line); }
+
+  main { flex: 1; min-width: 0; }
+  header.top { display: flex; align-items: center; gap: 12px; padding: 14px 22px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  header.top h1 { font-size: 16px; margin: 0; flex: 1; }
+  select, input { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font: inherit; }
+  .btn { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; font: inherit; cursor: pointer; }
+  .btn.danger { color: var(--bad); }
+
+  .content { padding: 20px 22px 40px; }
+  .view { display: none; } .view.active { display: block; }
+  .grid { display: grid; gap: 14px; }
+  .kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .cols-2 { grid-template-columns: 2fr 1fr; }
+  @media (max-width: 1100px) { .kpis { grid-template-columns: repeat(2, 1fr); } .cols-2 { grid-template-columns: 1fr; } }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .card h2 { font-size: 12px; margin: 0 0 10px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .6px; }
+  .kpi .value { font-size: 26px; font-weight: 700; }
+  .kpi .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; }
+  tr.clickable { cursor: pointer; } tr.clickable:hover td { background: var(--panel-2); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .mono { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+  .muted { color: var(--muted); }
+  .sub-line { color: var(--muted); font-size: 12px; font-family: ui-monospace, Consolas, monospace; }
+
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; border: 1px solid currentColor; white-space: nowrap; }
+  .ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); } .info { color: var(--info); } .off { color: var(--muted); }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: currentColor; margin-right: 6px; }
+
+  .bar { height: 6px; background: var(--panel-2); border-radius: 4px; overflow: hidden; min-width: 80px; }
+  .bar > i { display: block; height: 100%; background: var(--ok); }
+  .bar > i.warn { background: var(--warn); } .bar > i.bad { background: var(--bad); }
+
+  .checks { margin: 0; padding: 0; list-style: none; }
+  .checks li { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); align-items: flex-start; }
+  .checks .detail { color: var(--muted); font-size: 12px; }
+
+  .tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); margin-bottom: 14px; }
+  .tabs button { background: none; border: 0; color: var(--muted); padding: 9px 12px; cursor: pointer; font: inherit; border-bottom: 2px solid transparent; }
+  .tabs button.active { color: var(--text); border-bottom-color: var(--accent); }
+  .subview { display: none; } .subview.active { display: block; }
+
+  .place-head { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; flex-wrap: wrap; }
+  .place-head h2 { margin: 0; font-size: 20px; color: var(--text); text-transform: none; letter-spacing: 0; }
+  .place-head .meta { color: var(--muted); font-size: 12px; }
+
+  .log { background: #0b0d11; border-radius: 8px; padding: 10px; font: 12px/1.7 ui-monospace, Consolas, monospace; }
+  .log .lvl-warn { color: var(--warn); } .log .lvl-err { color: var(--bad); } .log .lvl-info { color: var(--muted); }
+  .diff { font: 12px/1.7 ui-monospace, Consolas, monospace; background: #0b0d11; border-radius: 8px; padding: 10px; white-space: pre; }
+  .diff .add { color: var(--ok); } .diff .del { color: var(--bad); } .diff .ctx { color: var(--muted); }
+
+  .switch { width: 34px; height: 18px; border-radius: 999px; background: var(--line); position: relative; display: inline-block; vertical-align: middle; }
+  .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #ccc; }
+  .switch.on { background: var(--ok); } .switch.on::after { left: 18px; background: #fff; }
+
+  .matrix td, .matrix th { text-align: center; }
+  .matrix td:first-child, .matrix th:first-child { text-align: left; }
+  .note { border-left: 3px solid var(--accent); background: var(--panel-2); padding: 10px 12px; border-radius: 6px; color: var(--muted); font-size: 13px; margin-bottom: 14px; }
+  .note b { color: var(--text); }
+  .schema { font: 12px/1.6 ui-monospace, Consolas, monospace; color: var(--muted); white-space: pre; overflow-x: auto; }
+</style>
+</head>
+<body>
+
+<aside>
+  <div class="brand">Club Kit Admin<small>Mockup v2 · data contoh</small></div>
+  <nav>
+    <button class="nav active" data-view="overview">Ringkasan <span class="count" id="cnt-overview"></span></button>
+    <button class="nav" data-view="places">Semua map <span class="count" id="cnt-places"></span></button>
+    <button class="nav" data-view="place">Detail map <span class="count" id="cnt-place"></span></button>
+    <button class="nav" data-view="bugs">Papan masalah <span class="count" id="cnt-bugs"></span></button>
+    <button class="nav" data-view="matrix">Matriks perbedaan</button>
+    <button class="nav" data-view="actions">Aksi admin</button>
+    <button class="nav" data-view="schema">Kontrak data</button>
+  </nav>
+  <div class="sidebar-foot" id="foot"></div>
+</aside>
+
+<main>
+  <header class="top">
+    <h1 id="pageTitle">Ringkasan</h1>
+    <select aria-label="Rentang waktu"><option>Hari ini</option><option>7 hari</option><option>30 hari</option></select>
+    <button class="btn">Refresh</button>
+  </header>
+
+  <div class="content">
+
+    <!-- RINGKASAN -->
+    <section class="view active" id="view-overview">
+      <div class="grid kpis" id="kpis"></div>
+      <div class="grid cols-2" style="margin-top:14px">
+        <div class="card">
+          <h2>Map yang perlu dicek (health &lt; 75)</h2>
+          <table id="attention"></table>
+        </div>
+        <div class="card">
+          <h2>Log terbaru (semua map)</h2>
+          <div class="log" id="recentLogs"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SEMUA MAP -->
+    <section class="view" id="view-places">
+      <div class="card">
+        <h2>Semua map (satu baris = satu place buyer)</h2>
+        <table id="placesTable"></table>
+        <p class="muted" style="margin:12px 0 0">Kolom Kit dibaca dari <code>KitProduct.KitVersion</code>. Map yang kit-nya tertinggal ditandai kuning, bukan dianggap rusak.</p>
+      </div>
+    </section>
+
+    <!-- DETAIL MAP -->
+    <section class="view" id="view-place">
+      <div class="place-head" id="placeHead"></div>
+      <div class="tabs">
+        <button class="ptab active" data-sub="health">Kesehatan</button>
+        <button class="ptab" data-sub="config">Config vs skema</button>
+        <button class="ptab" data-sub="features">Fitur</button>
+        <button class="ptab" data-sub="logs">Log &amp; sinyal</button>
+        <button class="ptab" data-sub="bugs">Masalah di map ini</button>
+      </div>
+      <div class="subview active" id="sub-health"></div>
+      <div class="subview" id="sub-config"></div>
+      <div class="subview" id="sub-features"></div>
+      <div class="subview" id="sub-logs"></div>
+      <div class="subview" id="sub-bugs"></div>
+    </section>
+
+    <!-- PAPAN MASALAH -->
+    <section class="view" id="view-bugs">
+      <div class="note"><b>Cara baca:</b> satu masalah = satu <code>signature</code>. Kolom Map menunjukkan di mana saja muncul. Masalah yang muncul di banyak map dengan jenis <i>kit</i> berarti perbaikannya di engine; jenis <i>buyer-setup</i> berarti perbaikannya di map.</div>
+      <div class="card"><table id="bugsTable"></table></div>
+    </section>
+
+    <!-- MATRIKS -->
+    <section class="view" id="view-matrix">
+      <div class="note"><b>Inti masalahnya:</b> kit yang sama, tapi tiap map punya config, GUI, dekorasi, dan versi berbeda. Matriks ini dihitung dari data map, bukan ditulis tangan.</div>
+      <div class="card"><table class="matrix" id="matrixTable"></table></div>
+    </section>
+
+    <!-- AKSI -->
+    <section class="view" id="view-actions">
+      <div class="note">Aksi mengikuti yang sudah ada di kit (chat command + privilege <code>adminPanel</code>). Tombol di mockup belum terhubung.</div>
+      <div class="grid cols-2">
+        <div class="card">
+          <h2>Di map terpilih</h2>
+          <table>
+            <tr><td><b>Sync semua ke satu pemain</b><div class="sub-line">/sync all &lt;player&gt;</div></td><td class="num"><button class="btn">Jalankan</button></td></tr>
+            <tr><td><b>Pulihkan streak</b><div class="sub-line">/setstreak &lt;player&gt; &lt;hari&gt;</div></td><td class="num"><button class="btn">Jalankan</button></td></tr>
+            <tr><td><b>Kirim pengumuman</b><div class="muted">broadcast ke pemain map ini</div></td><td class="num"><button class="btn">Buat</button></td></tr>
+            <tr><td><b>Tes donasi (preview)</b><div class="sub-line">/testcash · /testrobux</div></td><td class="num"><button class="btn">Buka</button></td></tr>
+          </table>
+        </div>
+        <div class="card">
+          <h2>Tindakan berisiko</h2>
+          <table>
+            <tr><td><b>Tambah key config yang hilang</b><div class="muted">fill-forward: hanya key baru, nilai buyer tidak ditimpa</div></td><td class="num"><button class="btn danger">Konfirmasi</button></td></tr>
+            <tr><td><b>Matikan kit di map</b><div class="muted">darurat; pemain kehilangan fitur kit</div></td><td class="num"><button class="btn danger">Konfirmasi</button></td></tr>
+          </table>
+          <p class="muted" style="margin:10px 0 0">Tindakan berisiko harus mengetik ulang nama map.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- KONTRAK DATA -->
+    <section class="view" id="view-schema">
+      <div class="note">Ini bentuk data yang dibaca panel. Setiap field diberi sumbernya. Field yang belum dikirim kit ditandai <b>[belum]</b>.</div>
+      <div class="card"><div class="schema">PLACE (satu buyer place)
+  id, name, online                       sumber: telemetry heartbeat [belum]
+  kitVersion                             KitProduct.KitVersion
+  players, peakToday, bootedMinAgo       server (Players, boot time)
+  memMB                                  Stats (server) [belum: tidak dikirim]
+  instances { f9, f9Budget, perPlayer{gui_kit, gui_venue, decor, character} }
+                                         InstanceTelemetry kind="instances" (agregat, tanpa UserId)
+  budget { dsPct, exhausted, lowCount }  BudgetTelemetry kind="budget"
+  config { schemaVersion, missing[], aliases[{legacy,current}], retiredPresent[], changedKeys }
+                                         laporan ConfigBootstrap / fill-forward [belum]
+  features { [key]: value | undefined }  ClubKitConfig.Features (undefined = key tidak ada)
+  signals { [sigId]: { c1h, c7d, last } }  agregat log, BUKAN baris log mentah
+  recentLog [{ t, level, module, msg }]  5 baris terakhir, tanpa player id [belum]
+
+ISSUE (katalog global, satu per signature)
+  id, module, cls ("kit" | "buyer-setup"), title, hint, fixedIn | null
+
+RULE (health; dievaluasi per map, bukan ditulis per map)
+  id, label, owner ("kit" | "buyer" | "map"), penalty, test(place), detail(place)
+
+DERIVED (tidak disimpan, dihitung dari atas)
+  health(place) = 100 − Σ penalty(rule gagal); null jika offline
+  masalah per map = ISSUE dengan signals[id].c7d &gt; 0
+  matriks, KPI ringkasan, kesimpulan per map</div></div>
+    </section>
+
+  </div>
+</main>
+
+<script>
+/* ============================================================
+   DATA — bentuk sama dengan kontrak di tab "Kontrak data".
+   Angka contoh, nama map dari CHANGELOG.
+   ============================================================ */
+const LATEST_KIT = "1.3.0";
+
+// Default skema (contoh) — dipakai untuk menandai key yang belum ada di buyer file.
+const FEATURE_DEFAULTS = { WutwutDance: true, DonationCash: true, SelfCustomTitleEnabled: true };
+
+// Katalog masalah: satu entri per signature. Signature dipakai sebagai kunci lintas map.
+const ISSUES = {
+  "guirefs.duplicate":       { module: "GuiRefs",    cls: "buyer-setup", title: "GUI kit ada lebih dari satu di PlayerGui", hint: "Hapus salinan di map. Kit memakai yang pertama.", fixedIn: null },
+  "role.folder_missing":     { module: "RoleTool",   cls: "buyer-setup", title: "Folder role tidak ada di ServerStorage.Tools", hint: "Buat folder atau hapus role dari config.", fixedIn: "Unreleased" },
+  "donation.emoji_no_handler": { module: "DonationUI", cls: "buyer-setup", title: "Tombol Emoji di GUI donasi tanpa aksi", hint: "Import ulang 09-DonationSystemGUI dari RBXM.", fixedIn: null },
+  "afk.rung_failed":         { module: "AfkGuard",   cls: "kit",         title: "Rung AFK rejoin gagal", hint: "Diperbaiki di Unreleased. Pastikan map sudah di kit terbaru.", fixedIn: "Unreleased" },
+  "donation.donor_fallback": { module: "DonationCtl", cls: "kit",        title: "Nama donor belum resolve (fallback 8 dtk)", hint: "Lookup lambat. Cek budget HTTP dan antrean lookup.", fixedIn: "2026-10-10" },
+};
+
+const PLACES = [
+  {
+    id: "parklab", name: "PARKLAB", online: true, kitVersion: "1.3.0",
+    players: 22, peakToday: 27, bootedMinAgo: 192, memMB: 412,
+    instances: { f9: 31200, f9Budget: 40000, perPlayer: { gui_kit: 9400, gui_venue: 6100, decor: 12800, character: 2900 } },
+    budget: { dsPct: 0.71, exhausted: 0, lowCount: 0 },
+    config: { schemaVersion: "1.3", missing: ["Features.SelfCustomTitleEnabled", "Donation.EffectTheme"], aliases: [{ legacy: "RobuxAuraTiers", current: "AuraTiers" }], retiredPresent: ["Features.Stickers"], changedKeys: 37 },
+    features: { WutwutDance: true, DonationCash: true },
+    signals: { "guirefs.duplicate": { c1h: 1, c7d: 41, last: "13:58" }, "role.folder_missing": { c1h: 19, c7d: 12, last: "14:02" } },
+    recentLog: [
+      { t: "14:02:11", level: "warn", module: "RoleTool", msg: "folder 'VIP' tidak ada di ServerStorage.Tools" },
+      { t: "13:58:04", level: "err",  module: "GuiRefs",  msg: "duplikat '04-AdminPanelv3' (2x)" },
+      { t: "13:48:19", level: "info", module: "Budget",   msg: "DataStore 71%" },
+    ],
+  },
+  {
+    id: "backhome", name: "BACKHOME", online: true, kitVersion: "1.3.0",
+    players: 14, peakToday: 18, bootedMinAgo: 95, memMB: 388,
+    instances: { f9: 27800, f9Budget: 40000, perPlayer: { gui_kit: 9400, gui_venue: 4200, decor: 11400, character: 2800 } },
+    budget: { dsPct: 0.64, exhausted: 0, lowCount: 1 },
+    config: { schemaVersion: "1.3", missing: ["Features.SelfCustomTitleEnabled", "Donation.EffectTheme", "Loading.ArtworkImage", "Loading.ArtworkVideo"], aliases: [], retiredPresent: [], changedKeys: 21 },
+    features: { WutwutDance: false, DonationCash: true },
+    signals: {
+      "guirefs.duplicate": { c1h: 1, c7d: 12, last: "13:40" },
+      "donation.emoji_no_handler": { c1h: 0, c7d: 3, last: "11:02" },
+      "donation.donor_fallback": { c1h: 2, c7d: 8, last: "14:01" },
+    },
+    recentLog: [
+      { t: "14:01:58", level: "err",  module: "DonationCtl", msg: "donor belum resolve (fallback 8 dtk)" },
+      { t: "13:52:01", level: "info", module: "ConfigBoot",  msg: "key belum ada di buyer file: 4 (pakai default)" },
+      { t: "12:10:44", level: "warn", module: "Budget",      msg: "budget_low (1x)" },
+    ],
+  },
+  {
+    id: "nightzone", name: "Night Zone", online: true, kitVersion: "1.2.4",
+    players: 9, peakToday: 12, bootedMinAgo: 1440, memMB: 356,
+    instances: { f9: 24000, f9Budget: 40000, perPlayer: { gui_kit: 8700, gui_venue: 3100, decor: 9800, character: 2400 } },
+    budget: { dsPct: 0.55, exhausted: 0, lowCount: 0 },
+    config: { schemaVersion: "1.2", missing: [], aliases: [], retiredPresent: ["Features.AvatarContextMenuV2"], changedKeys: 44 },
+    features: { WutwutDance: true, DonationCash: false },
+    signals: { "afk.rung_failed": { c1h: 6, c7d: 17, last: "14:01" } },
+    recentLog: [
+      { t: "14:01:40", level: "err",  module: "AfkGuard",   msg: "rung 780s rejoin_failed" },
+      { t: "13:40:02", level: "warn", module: "AfkGuard",   msg: "rung 690s rejoin_failed" },
+      { t: "13:12:55", level: "info", module: "SessionCmd", msg: "rejoin_arrival client=ready" },
+    ],
+  },
+  {
+    id: "stadion", name: "Stadion Timur", online: true, kitVersion: "1.3.0",
+    players: 6, peakToday: 8, bootedMinAgo: 310, memMB: 301,
+    instances: { f9: 22400, f9Budget: 40000, perPlayer: { gui_kit: 8600, gui_venue: 2800, decor: 8900, character: 2100 } },
+    budget: { dsPct: 0.48, exhausted: 0, lowCount: 0 },
+    config: { schemaVersion: "1.3", missing: [], aliases: [], retiredPresent: [], changedKeys: 12 },
+    features: { WutwutDance: true, DonationCash: true, SelfCustomTitleEnabled: true },
+    signals: { "donation.donor_fallback": { c1h: 0, c7d: 8, last: "12:20" } },
+    recentLog: [
+      { t: "13:55:30", level: "info", module: "Donation",    msg: "notif broadcast sinceReceivedSec=1.9" },
+      { t: "13:41:07", level: "info", module: "SessionCmd",  msg: "rejoin_arrival client=ready dist=0.4" },
+    ],
+  },
+  {
+    id: "experiment", name: "Experiment Area", online: false, kitVersion: "1.3.0",
+    players: 0, peakToday: 0, bootedMinAgo: null, memMB: null,
+    instances: { f9: 0, f9Budget: 40000, perPlayer: { gui_kit: 0, gui_venue: 0, decor: 0, character: 0 } },
+    budget: { dsPct: 0, exhausted: 0, lowCount: 0 },
+    config: { schemaVersion: "1.3", missing: [], aliases: [], retiredPresent: [], changedKeys: 0 },
+    features: {},
+    signals: {},
+    recentLog: [],
+  },
+];
+
+// Aturan health: dievaluasi untuk setiap map. Tidak ditulis ulang per map.
+const RULES = [
+  { id: "version",   label: "Versi kit terbaru",                 owner: "buyer", penalty: 20,
+    test: p => p.kitVersion === LATEST_KIT,
+    detail: p => `kit ${p.kitVersion}, terbaru ${LATEST_KIT}` },
+  { id: "config",    label: "Config lengkap terhadap skema",     owner: "buyer", penalty: p => Math.min(20, 4 * p.config.missing.length),
+    test: p => p.config.missing.length === 0,
+    detail: p => `${p.config.missing.length} key belum ada di buyer file` },
+  { id: "guirefs",   label: "Tidak ada GUI kit ganda",           owner: "buyer", penalty: 15,
+    test: p => c1h(p, "guirefs.duplicate") === 0,
+    detail: p => `${c1h(p, "guirefs.duplicate")} kejadian dalam 1 jam` },
+  { id: "roles",     label: "Folder role ada di ServerStorage.Tools", owner: "buyer", penalty: 5,
+    test: p => c1h(p, "role.folder_missing") === 0,
+    detail: p => `${c1h(p, "role.folder_missing")} kejadian dalam 1 jam` },
+  { id: "emoji",     label: "Tombol donasi punya aksi",          owner: "buyer", penalty: 5,
+    test: p => c1h(p, "donation.emoji_no_handler") === 0,
+    detail: p => `${c1h(p, "donation.emoji_no_handler")} kejadian dalam 1 jam` },
+  { id: "afk",       label: "AFK rejoin tanpa rung gagal",       owner: "kit",   penalty: 10,
+    test: p => c1h(p, "afk.rung_failed") === 0,
+    detail: p => `${c1h(p, "afk.rung_failed")} rung gagal dalam 1 jam` },
+  { id: "budget",    label: "DataStore budget aman",             owner: "kit",   penalty: 10,
+    test: p => p.budget.dsPct < 0.9 && p.budget.exhausted === 0,
+    detail: p => `DataStore ${Math.round(p.budget.dsPct * 100)}%, exhausted ${p.budget.exhausted}` },
+  { id: "instances", label: "Instance dalam budget F9",          owner: "map",   penalty: 10,
+    test: p => p.instances.f9 <= p.instances.f9Budget,
+    detail: p => `F9 ${fmtK(p.instances.f9)} / budget ${fmtK(p.instances.f9Budget)}` },
+];
+
+const OWNER_LABEL = { kit: "perbaiki di kit", buyer: "perbaiki di map / config", map: "kurangi dekorasi atau GUI di map" };
+
+/* ============================================================
+   DERIVED — dihitung dari data di atas
+   ============================================================ */
+function c1h(p, sig) { return (p.signals[sig] && p.signals[sig].c1h) || 0; }
+function c7d(p, sig) { return (p.signals[sig] && p.signals[sig].c7d) || 0; }
+
+function health(p) {
+  if (!p.online) return null;
+  let score = 100;
+  const failed = [];
+  for (const r of RULES) {
+    if (r.test(p)) continue;
+    score -= typeof r.penalty === "function" ? r.penalty(p) : r.penalty;
+    failed.push(r);
+  }
+  return { score: Math.max(0, score), failed };
+}
+const HEALTH = Object.fromEntries(PLACES.map(p => [p.id, health(p)]));
+
+function verdict(p) {
+  const h = HEALTH[p.id];
+  if (!h) return "offline";
+  if (h.failed.some(r => r.id === "version")) return "versi";
+  if (h.failed.some(r => r.owner === "kit")) return "kit";
+  if (h.failed.length) return "setup";
+  return "sehat";
+}
+
+const online = PLACES.filter(p => p.online);
+const attention = online.filter(p => HEALTH[p.id].score < 75).sort((a, b) => HEALTH[a.id].score - HEALTH[b.id].score);
+const errors1h = PLACES.reduce((n, p) => n + Object.values(p.signals).reduce((m, s) => m + s.c1h, 0), 0);
+const budgetMax = Math.max(...online.map(p => p.budget.dsPct));
+const openIssues = Object.keys(ISSUES).filter(id => !ISSUES[id].fixedIn && PLACES.some(p => c7d(p, id) > 0)).length;
+
+function issuesFor(p) { return Object.keys(ISSUES).filter(id => c7d(p, id) > 0); }
+function placesFor(id) { return PLACES.filter(p => c7d(p, id) > 0); }
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const fmtK = n => n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n);
+const pill = (cls, txt) => `<span class="pill ${cls}">${esc(txt)}</span>`;
+const barFor = score => {
+  if (score === null) return '<span class="muted">—</span>';
+  const cls = score >= 90 ? "" : score >= 75 ? "warn" : "bad";
+  return `<div class="bar"><i class="${cls}" style="width:${score}%"></i></div><span class="sub-line">${score}</span>`;
+};
+const verdictPill = v => ({
+  sehat: pill("ok", "sehat"), versi: pill("warn", "versi tertinggal"), kit: pill("bad", "bug kit"),
+  setup: pill("info", "setup map"), offline: pill("off", "offline"),
+})[v];
+
+function renderOverview() {
+  $("#kpis").innerHTML = `
+    <div class="card kpi"><h2>Pemain online</h2><div class="value">${online.reduce((n, p) => n + p.players, 0)}</div><div class="sub">di ${online.length} map online · ${PLACES.length} terdaftar</div></div>
+    <div class="card kpi"><h2>Map perlu perhatian</h2><div class="value ${attention.length ? "bad" : "ok"}">${attention.length}</div><div class="sub">health di bawah 75</div></div>
+    <div class="card kpi"><h2>Error 1 jam</h2><div class="value warn">${errors1h}</div><div class="sub">dari ${PLACES.filter(p => Object.keys(p.signals).length).length} map dengan sinyal</div></div>
+    <div class="card kpi"><h2>Budget DataStore tertinggi</h2><div class="value ${budgetMax >= 0.9 ? "bad" : budgetMax >= 0.75 ? "warn" : "ok"}">${Math.round(budgetMax * 100)}%</div><div class="sub">masalah terbuka: ${openIssues}</div></div>`;
+
+  $("#attention").innerHTML = `<tr><th>Map</th><th>Health</th><th>Masalah</th><th>Kit</th></tr>` +
+    (attention.length ? attention.map(p => `
+      <tr class="clickable" data-place="${p.id}">
+        <td><b>${esc(p.name)}</b><div class="sub-line">${p.players} pemain</div></td>
+        <td>${barFor(HEALTH[p.id].score)}</td>
+        <td>${HEALTH[p.id].failed.map(r => esc(r.label)).join(" · ")}</td>
+        <td class="mono ${p.kitVersion !== LATEST_KIT ? "warn" : ""}">${p.kitVersion}</td>
+      </tr>`).join("") : `<tr><td class="ok">Semua map di atas 75.</td></tr>`);
+
+  const logs = PLACES.flatMap(p => p.recentLog.map(l => ({ ...l, place: p.name })))
+    .sort((a, b) => b.t.localeCompare(a.t)).slice(0, 8);
+  $("#recentLogs").innerHTML = logs.map(l =>
+    `<div class="lvl-${l.level === "err" ? "err" : l.level === "warn" ? "warn" : "info"}">[${l.t}] ${esc(l.place)} ${esc(l.module)} ${esc(l.msg)}</div>`
+  ).join("") || '<div class="muted">Belum ada log.</div>';
+}
+
+function renderPlaces() {
+  $("#placesTable").innerHTML = `
+    <tr><th>Map</th><th>Kit</th><th>Config</th><th>Pemain</th><th class="num">F9</th><th>Health</th><th class="num">Error 1 jam</th><th>Status</th></tr>` +
+    PLACES.map(p => {
+      const miss = p.config.missing.length;
+      const cfg = miss === 0 ? pill("ok", "lengkap") : pill(miss > 2 ? "bad" : "warn", `${miss} key kurang`);
+      const kit = p.kitVersion !== LATEST_KIT ? `<span class="warn">${p.kitVersion}</span>` : p.kitVersion;
+      return `<tr class="clickable" data-place="${p.id}">
+        <td><b>${esc(p.name)}</b></td>
+        <td class="mono">${kit}</td>
+        <td>${cfg}</td>
+        <td class="num">${p.players}</td>
+        <td class="num">${p.online ? fmtK(p.instances.f9) : "—"}</td>
+        <td>${barFor(HEALTH[p.id] ? HEALTH[p.id].score : null)}</td>
+        <td class="num">${p.online ? PLACES.length && Object.values(p.signals).reduce((m, s) => m + s.c1h, 0) : "—"}</td>
+        <td>${verdictPill(verdict(p))}</td>
+      </tr>`;
+    }).join("");
+}
+
+let selectedPlace = "parklab";
+
+function renderPlace(id) {
+  const p = PLACES.find(x => x.id === id);
+  selectedPlace = id;
+  $("#cnt-place").textContent = p.name;
+  const h = HEALTH[p.id];
+  $("#placeHead").innerHTML = `
+    <h2>${esc(p.name)}</h2>
+    ${p.online ? pill("ok", "online") : pill("off", "offline")}
+    <span class="meta mono">kit ${p.kitVersion}${p.bootedMinAgo !== null ? ` · boot ${Math.floor(p.bootedMinAgo / 60)}j ${p.bootedMinAgo % 60}m lalu` : ""}</span>
+    <span style="flex:1"></span>
+    ${h ? `<span>Health <b class="${h.score >= 90 ? "ok" : h.score >= 75 ? "warn" : "bad"}">${h.score}</b></span>` : ""}`;
+
+  $("#sub-health").innerHTML = !p.online
+    ? `<div class="card muted">Map offline. Tidak ada data kesehatan.</div>`
+    : `<div class="grid kpis">
+        <div class="card kpi"><h2>Health</h2><div class="value ${h.score >= 75 ? "warn" : "bad"}">${h.score}</div><div class="sub">${h.failed.length} aturan gagal dari ${RULES.length}</div></div>
+        <div class="card kpi"><h2>Instance (F9)</h2><div class="value">${fmtK(p.instances.f9)}</div><div class="sub">budget ${fmtK(p.instances.f9Budget)} · ${Math.round(p.instances.f9 / p.instances.f9Budget * 100)}%</div></div>
+        <div class="card kpi"><h2>Memori</h2><div class="value">${p.memMB ?? "—"} MB</div><div class="sub">server</div></div>
+        <div class="card kpi"><h2>Pemain</h2><div class="value">${p.players}</div><div class="sub">puncak hari ini ${p.peakToday}</div></div>
+      </div>
+      <div class="grid cols-2" style="margin-top:14px">
+        <div class="card">
+          <h2>Aturan kesehatan</h2>
+          <ul class="checks">${RULES.map(r => {
+            const fail = h.failed.includes(r);
+            return `<li>${fail ? pill("bad", "gagal") : pill("ok", "ok")}
+              <div><b>${esc(r.label)}</b><div class="detail">${esc(r.detail(p))}${fail ? " · " + OWNER_LABEL[r.owner] : ""}</div></div></li>`;
+          }).join("")}</ul>
+        </div>
+        <div class="card">
+          <h2>Instance per pemain (Stats.InstanceCount)</h2>
+          <table>
+            <tr><th>Komponen</th><th class="num">Instance</th></tr>
+            <tr><td>GUI kit</td><td class="num">${fmtK(p.instances.perPlayer.gui_kit)}</td></tr>
+            <tr><td>GUI venue (buyer)</td><td class="num">${fmtK(p.instances.perPlayer.gui_venue)}</td></tr>
+            <tr><td>Dekorasi map</td><td class="num">${fmtK(p.instances.perPlayer.decor)}</td></tr>
+            <tr><td>Karakter &amp; accessory</td><td class="num">${fmtK(p.instances.perPlayer.character)}</td></tr>
+          </table>
+          <p class="muted" style="margin:10px 0 0">Jumlah komponen = F9. Dekorasi map bisa lebih berat dari kit meski kit-nya sama.</p>
+        </div>
+      </div>`;
+
+  const cfg = p.config;
+  const diffLines = [
+    ...cfg.missing.map(k => `<span class="add">+ ${esc(k)}   (ada di skema, belum di buyer file)</span>`),
+    ...cfg.aliases.map(a => `<span class="del">- ${esc(a.legacy)}   (alias lama, masih dibaca → ${esc(a.current)})</span>`),
+    ...cfg.retiredPresent.map(k => `<span class="ctx">· ${esc(k)}   (retired, diabaikan)</span>`),
+  ];
+  $("#sub-config").innerHTML = `
+    <div class="note"><b>Read-only.</b> Buyer file tidak pernah ditimpa otomatis. Diff di sini dari laporan fill-forward map (belum dikirim: data contoh).</div>
+    <div class="grid cols-2">
+      <div class="card">
+        <h2>Diff buyer ↔ skema ${LATEST_KIT}</h2>
+        <div class="diff">${diffLines.join("\n") || '<span class="ok">Tidak ada perbedaan.</span>'}
+<span class="ctx">  ${cfg.changedKeys} nilai diubah buyer (tidak ditampilkan)</span></div>
+      </div>
+      <div class="card">
+        <h2>Ringkasan</h2>
+        <table>
+          <tr><td>Key belum ada</td><td class="num">${cfg.missing.length}</td></tr>
+          <tr><td>Alias lama dipakai</td><td class="num">${cfg.aliases.length}</td></tr>
+          <tr><td>Key retired (diabaikan)</td><td class="num">${cfg.retiredPresent.length}</td></tr>
+          <tr><td>Nilai diubah buyer</td><td class="num">${cfg.changedKeys}</td></tr>
+          <tr><td>Versi skema</td><td class="num mono">${cfg.schemaVersion}</td></tr>
+        </table>
+      </div>
+    </div>`;
+
+  $("#sub-features").innerHTML = `
+    <div class="note">Fitur yang nyala berbeda per map. Bug yang "hanya di satu map" sering karena kombinasi fitur.</div>
+    <div class="card"><table>
+      <tr><th>Fitur (ClubKitConfig.Features)</th><th>Nilai di map</th><th>Default skema</th><th>Catatan</th></tr>
+      ${Object.keys(FEATURE_DEFAULTS).map(k => {
+        const v = p.features[k];
+        const def = FEATURE_DEFAULTS[k];
+        const shown = v === undefined
+          ? `<span class="warn">belum ada</span>`
+          : `<span class="switch ${v ? "on" : ""}"></span> ${v ? "on" : "off"}`;
+        const note = v === undefined ? `<span class="warn">key belum ada di buyer file</span>` : (v !== def ? `<span class="info">beda dari default</span>` : `<span class="muted">sama dengan default</span>`);
+        return `<tr><td>${k}</td><td>${shown}</td><td class="muted">${def ? "on" : "off"}</td><td>${note}</td></tr>`;
+      }).join("")}
+    </table></div>`;
+
+  $("#sub-logs").innerHTML = `
+    <div class="grid cols-2">
+      <div class="card">
+        <h2>Log terakhir (tanpa player id)</h2>
+        <div class="log">${p.recentLog.map(l => `<div class="lvl-${l.level === "err" ? "err" : l.level === "warn" ? "warn" : "info"}">[${l.t}] ${esc(l.module)} ${esc(l.msg)}</div>`).join("") || '<span class="muted">Kosong.</span>'}</div>
+      </div>
+      <div class="card">
+        <h2>Sinyal (agregat per signature)</h2>
+        <table>
+          <tr><th>Signature</th><th class="num">1 jam</th><th class="num">7 hari</th><th>Terakhir</th></tr>
+          ${Object.keys(p.signals).map(sig => `<tr><td class="mono">${esc(sig)}</td><td class="num">${p.signals[sig].c1h}</td><td class="num">${p.signals[sig].c7d}</td><td class="muted">${p.signals[sig].last}</td></tr>`).join("") || '<tr><td class="muted" colspan="4">Tidak ada sinyal.</td></tr>'}
+        </table>
+      </div>
+    </div>`;
+
+  const mine = issuesFor(p);
+  $("#sub-bugs").innerHTML = `<div class="card"><table>
+    <tr><th>Masalah</th><th>Jenis</th><th class="num">7 hari</th><th>Status</th><th>Cara perbaiki</th></tr>
+    ${mine.map(id => {
+      const i = ISSUES[id];
+      return `<tr><td><b>${esc(i.title)}</b><div class="sub-line">${esc(id)}</div></td>
+        <td>${pill(i.cls === "kit" ? "bad" : "info", i.cls)}</td>
+        <td class="num">${c7d(p, id)}</td>
+        <td>${i.fixedIn ? pill("ok", "diperbaiki · " + i.fixedIn) : pill("warn", "terbuka")}</td>
+        <td class="muted">${esc(i.hint)}</td></tr>`;
+    }).join("") || '<tr><td class="muted" colspan="5">Tidak ada masalah tercatat 7 hari terakhir.</td></tr>'}
+  </table></div>`;
+}
+
+function renderBugs() {
+  const rows = Object.keys(ISSUES).filter(id => placesFor(id).length);
+  $("#bugsTable").innerHTML = `
+    <tr><th>Masalah</th><th>Jenis</th><th>Map</th><th class="num">7 hari</th><th>Status</th></tr>` +
+    rows.map(id => {
+      const i = ISSUES[id];
+      const ps = placesFor(id);
+      const total = ps.reduce((n, p) => n + c7d(p, id), 0);
+      return `<tr>
+        <td><b>${esc(i.title)}</b><div class="sub-line">${esc(id)} · ${esc(i.module)}</div></td>
+        <td>${pill(i.cls === "kit" ? "bad" : "info", i.cls)}</td>
+        <td>${ps.map(p => esc(p.name)).join(", ")}</td>
+        <td class="num">${total}</td>
+        <td>${i.fixedIn ? pill("ok", "diperbaiki · " + i.fixedIn) : pill("warn", "terbuka")}</td>
+      </tr>`;
+    }).join("");
+}
+
+function renderMatrix() {
+  const cols = PLACES;
+  const cell = (cls, txt) => `<td class="${cls}">${txt}</td>`;
+  const row = (label, fn) => `<tr><td>${label}</td>${cols.map(p => p.online ? fn(p) : cell("off", "—")).join("")}</tr>`;
+  const sumC1h = p => Object.values(p.signals).reduce((m, s) => m + s.c1h, 0);
+  $("#matrixTable").innerHTML = `
+    <tr><th>Cek</th>${cols.map(p => `<th>${esc(p.name)}</th>`).join("")}</tr>
+    ${row("Versi kit", p => cell(p.kitVersion === LATEST_KIT ? "ok" : "warn", p.kitVersion))}
+    ${row("Key config hilang", p => { const n = p.config.missing.length; return cell(n === 0 ? "ok" : n <= 2 ? "warn" : "bad", n); })}
+    ${row("GUI ganda (1 jam)", p => { const n = c1h(p, "guirefs.duplicate"); return cell(n ? "bad" : "ok", n); })}
+    ${row("Instance F9", p => cell(p.instances.f9 <= p.instances.f9Budget * 0.8 ? "ok" : p.instances.f9 <= p.instances.f9Budget ? "warn" : "bad", fmtK(p.instances.f9)))}
+    ${row("Error 1 jam", p => { const n = sumC1h(p); return cell(n === 0 ? "ok" : n < 5 ? "warn" : "bad", n); })}
+    ${row("Fitur WutwutDance", p => p.features.WutwutDance === undefined ? cell("warn", "belum ada") : cell(p.features.WutwutDance ? "ok" : "off", p.features.WutwutDance ? "on" : "off"))}
+    ${row("Health", p => cell(HEALTH[p.id].score >= 90 ? "ok" : HEALTH[p.id].score >= 75 ? "warn" : "bad", HEALTH[p.id].score))}
+    <tr><td><b>Kesimpulan</b></td>${cols.map(p => `<td>${verdictPill(verdict(p))}</td>`).join("")}</tr>`;
+}
+
+function renderSidebar() {
+  $("#cnt-overview").textContent = `${online.length} online`;
+  $("#cnt-places").textContent = PLACES.length;
+  $("#cnt-bugs").textContent = `${openIssues} terbuka`;
+  $("#foot").innerHTML = `Kit (engine) v${LATEST_KIT}<br>Config buyer: berbeda per map<br>Data contoh; belum tersambung ke VPS`;
+}
+
+const TITLES = { overview: "Ringkasan", places: "Semua map", place: "Detail map", bugs: "Papan masalah", matrix: "Matriks perbedaan", actions: "Aksi admin", schema: "Kontrak data" };
+
+function showView(name) {
+  document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === "view-" + name));
+  document.querySelectorAll("nav .nav").forEach(b => b.classList.toggle("active", b.dataset.view === name));
+  $("#pageTitle").textContent = name === "place" ? PLACES.find(p => p.id === selectedPlace).name : TITLES[name];
+}
+
+function openPlace(id) {
+  renderPlace(id);
+  showView("place");
+}
+
+document.querySelectorAll("nav .nav").forEach(b => b.addEventListener("click", () => {
+  if (b.dataset.view === "place") openPlace(selectedPlace); else showView(b.dataset.view);
+}));
+document.addEventListener("click", e => {
+  const row = e.target.closest("[data-place]");
+  if (row) openPlace(row.dataset.place);
+  const t = e.target.closest(".ptab");
+  if (t) {
+    document.querySelectorAll(".ptab").forEach(x => x.classList.toggle("active", x === t));
+    document.querySelectorAll(".subview").forEach(s => s.classList.toggle("active", s.id === "sub-" + t.dataset.sub));
+  }
+});
+
+renderSidebar();
+renderOverview();
+renderPlaces();
+renderPlace(selectedPlace);
+renderBugs();
+renderMatrix();
+</script>
+</body>
+</html>

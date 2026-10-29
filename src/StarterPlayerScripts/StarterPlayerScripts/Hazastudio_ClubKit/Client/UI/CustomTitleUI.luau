@@ -1,7 +1,8 @@
 --!strict
 -- Client/UI/CustomTitleUI.luau
 -- Drives the buyer-installed `1000-01-CT-ADDON` ScreenGui: the self-service custom
--- title panel plus its color-preset and typeface pickers.
+-- title panel plus its color-preset and typeface pickers, which open as a stacked
+-- sheet over the card.
 --
 -- The GUI is place data, not engine, so a buyer can be running the feature flag
 -- with an older StarterGui. `tryCreate` returns nil whenever the ScreenGui or any
@@ -32,13 +33,22 @@ export type TitleForm = {
 }
 
 local DEFAULT_SIZE = "M"
--- Grace period after a dismissal's own duration before the handoff gives up on
--- its callback and shows the incoming frame itself.
+-- Grace period after the close's own duration before the exit hook runs anyway, since
+-- AnimationHelper can skip the dismissal callback it was waiting on.
 local HANDOFF_SAFETY = 0.12
 -- Shown on the preset/typeface buttons when the player has picked neither; the
 -- overhead falls back to the nametag template's own look in that case.
 local NO_PRESET_LABEL = "DEFAULT"
 local NO_FONT_LABEL = "DEFAULT"
+-- Picker navigation (stacked sheet): a picker rises over the main card while the card
+-- shrinks and dims behind it, and drops back the same way.
+local PUSH_TIME = 0.45
+local POP_TIME = 0.3
+-- Picker centre sits this many gui px below the card centre, and the push starts this far below that.
+local STACK_DROP = 44
+local STACK_FROM = 420
+local STACK_SHRINK = 0.92
+local STACK_DIM = 0.55
 
 local function findChild(parent: Instance?, name: string): Instance?
 	return if parent then parent:FindFirstChild(name) else nil
@@ -142,6 +152,23 @@ function CustomTitleUI.tryCreate(playerGui: Instance, anim: any?): any?
 		return nil
 	end
 
+	-- The shipped GUI can be built narrower than its card (281 vs 320), which overhangs the
+	-- close button; the card's width wins. The list is centred so a shrunk card stays centred.
+	local panelFrame = panel :: Frame
+	local cardFrame = mainFrame :: GuiObject
+	local panelList = panelFrame:FindFirstChildWhichIsA("UIListLayout")
+	if panelList then
+		panelList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	end
+	if panelFrame.Size.X.Offset < cardFrame.Size.X.Offset then
+		panelFrame.Size = UDim2.new(
+			panelFrame.Size.X.Scale,
+			cardFrame.Size.X.Offset,
+			panelFrame.Size.Y.Scale,
+			panelFrame.Size.Y.Offset
+		)
+	end
+
 	local sizeRow = findChild(content, "02-SelectSizeInput")
 	local sizeNormal = takeTemplate(sizeRow, "NormalState")
 	local sizeSelected = takeTemplate(sizeRow, "SelectedState")
@@ -168,12 +195,24 @@ function CustomTitleUI.tryCreate(playerGui: Instance, anim: any?): any?
 
 	self._presetModal = asFrame(findChild(gui, "SelectPresetModal"))
 	self._typefaceModal = asFrame(findChild(gui, "SelectTypefaceModal"))
+	self._mainFrame = asFrame(mainFrame)
+	-- Picker sheet state: live tweens keyed by instance, the picker on screen (nil when the
+	-- card is showing), each picker's own UIScale, the card's shrink scale and dim, and the
+	-- confirm label's designed text (captured once per label, before its first overwrite).
+	self._slideTweens = {} :: { [Instance]: any }
+	self._activePicker = nil :: Frame?
+	self._pickerScale = {} :: { [Frame]: UIScale }
+	self._stackScale = nil :: UIScale?
+	self._stackDim = nil :: Frame?
+	self._confirmText = {} :: { [TextLabel]: string }
 
 	self._selectedSize = DEFAULT_SIZE
 	self._selectedPreset = nil :: string?
 	self._selectedFont = nil :: string?
 	self._submitCallback = nil :: ((TitleForm) -> ())?
 	self._removeCallback = nil :: (() -> ())?
+	-- Owner hook (menu shell): its phone focus release. Nil until bindClose.
+	self._onExit = nil :: (() -> ())?
 	self._built = false
 
 	-- Designed transparencies for every fade this panel plays, captured once per element. Strong
@@ -186,6 +225,7 @@ function CustomTitleUI.tryCreate(playerGui: Instance, anim: any?): any?
 	self._choiceKey = nil :: string?
 	self._quotaShown = nil :: number?
 
+	self:_stackPickers()
 	self:_wire()
 	-- Start from a known-closed state whatever the template was saved as, so a
 	-- panel left `Visible = true` in StarterGui does not sit on screen. No tween
@@ -290,8 +330,7 @@ function CustomTitleUI:_buildPicker(
 	end
 end
 
--- The picker's rows cascade in as the modal arrives, never while it is still behind
--- the panel: the handoff calls this the moment the modal is made visible.
+-- The picker's rows cascade in as it rises over the card, once its push has started.
 function CustomTitleUI:_staggerPicker(modal: Instance)
 	local state = self._pickerState[modal]
 	if state and #state.rows > 0 then
@@ -335,6 +374,8 @@ function CustomTitleUI:_wire()
 		self._remove.AutoButtonColor = false
 		self:_bindMotion(self._remove)
 		self._remove.Activated:Connect(function()
+			-- The owner's remove callback releases the phone focus before the write goes out, so
+			-- the panel is not left sitting under the dim overlay while the server answers.
 			if self._removeCallback then
 				self._removeCallback()
 			end
@@ -361,21 +402,23 @@ function CustomTitleUI:_wire()
 	-- Optional chrome the buyer may not have added yet. Resolved by descendant
 	-- rather than direct child: the close control lives in whatever header or drag
 	-- bar the buyer builds around the panel, so its depth is theirs to change.
+	-- Both of these close the panel from inside it, where the dim overlay cannot see
+	-- the tap, so each hands the phone focus back once its dismissal has landed.
 	self:_bindIfButton(self._panel:FindFirstChild("CloseButton", true), function()
-		self:close()
+		CustomTitleUI.close(self, false, self._onExit)
 	end)
 	for _, modal in ipairs({ self._presetModal, self._typefaceModal }) do
 		if modal then
 			local function hidePicker()
 				self:_closePicker(modal)
 			end
-			self:_bindIfButton(findChild(modal, "BackButton"), hidePicker)
+			self:_bindIfButton(modal:FindFirstChild("BackButton", true), hidePicker)
 			self:_bindIfButton(findChild(modal, "ConfirmButton"), hidePicker)
 		end
 	end
 	local backdrop = findChild(self._gui, "Backdrop")
 	self:_bindIfButton(backdrop, function()
-		self:close()
+		CustomTitleUI.close(self, false, self._onExit)
 	end)
 	self._backdrop = if backdrop and backdrop:IsA("GuiObject") then backdrop else nil
 end
@@ -479,10 +522,22 @@ end
 
 -- `immediate` skips the tween for state resets (creation, an already-hidden
 -- frame), where a dismissal would otherwise flash the frame on screen to play it.
-function CustomTitleUI:_dismiss(frame: Frame?, immediate: boolean?, onDone: (() -> ())?)
+-- `onClosed` is the exit hook of the owner-driven close() alone: it runs whichever
+-- way the frame leaves the screen (tween done, tween cancelled, already hidden),
+-- once per close(), so a caller can hand back phone panel focus without depending
+-- on a callback AnimationHelper is free to skip.
+function CustomTitleUI:_dismiss(
+	frame: Frame?,
+	immediate: boolean?,
+	onDone: (() -> ())?,
+	onClosed: (() -> ())?
+)
 	if not frame then
 		if onDone then
 			onDone()
+		end
+		if onClosed then
+			onClosed()
 		end
 		return
 	end
@@ -492,6 +547,9 @@ function CustomTitleUI:_dismiss(frame: Frame?, immediate: boolean?, onDone: (() 
 		if onDone then
 			onDone()
 		end
+		if onClosed then
+			onClosed()
+		end
 		return
 	end
 	self._anim:dismissCenterPanel(frame, function()
@@ -499,57 +557,224 @@ function CustomTitleUI:_dismiss(frame: Frame?, immediate: boolean?, onDone: (() 
 		if onDone then
 			onDone()
 		end
+		if onClosed then
+			onClosed()
+		end
 	end)
 end
 
--- One frame steps aside, then the other pops: the two are never both mid-tween.
---
--- The dismissal's own callback is the happy path, but AnimationHelper skips it
--- whenever that tween is cancelled or superseded by another animation on the same
--- frame — and a handoff chained only off that callback would then leave *both*
--- frames hidden, with nothing on screen to click. So the arrival is also armed on
--- a timer: whichever runs first shows `to`, the other finds it already visible and
--- does nothing. The generation counter keeps a stale timer from re-opening
--- something after a newer interaction has moved on.
---
--- `onArrive` rides the same one-shot guard as the arrival itself: whichever path wins
--- makes `to` visible and runs it, the other returns at `to.Visible` — so it fires
--- exactly once, and never for a handoff a newer interaction superseded.
-function CustomTitleUI:_handoff(from: Frame?, to: Frame?, onArrive: (() -> ())?)
-	self:_bumpMotion()
-	local gen = self._motionGen
-	local function arrive()
-		if gen ~= self._motionGen or not to or to.Visible then
-			return
-		end
-		self:_present(to)
-		if onArrive then
-			onArrive()
-		end
-	end
-	self:_dismiss(from, false, arrive)
-	task.delay(MotionPresets.centerClose().time + HANDOFF_SAFETY, arrive)
-end
-
--- Anything that decides what should be on screen invalidates a pending handoff.
+-- Anything that decides what should be on screen invalidates a pending hide.
 function CustomTitleUI:_bumpMotion()
 	self._motionGen = (self._motionGen or 0) + 1
 end
 
--- A picker takes over the screen rather than stacking on top of the panel.
-function CustomTitleUI:_openPicker(modal: Frame, build: () -> ())
-	build()
-	self:_handoff(self._panel, modal, function()
-		self:_staggerPicker(modal)
-	end)
+function CustomTitleUI:_pickerModals(): { Frame }
+	local modals: { Frame } = {}
+	if self._presetModal then
+		table.insert(modals, self._presetModal)
+	end
+	if self._typefaceModal then
+		table.insert(modals, self._typefaceModal)
+	end
+	return modals
 end
 
--- Back out of a picker: it hands the screen back to the panel it was opened
--- from. Its preset animations stop with it — only the preset picker creates any,
--- so this is a no-op for the typeface one.
+-- Stack both pickers as sheets over the main card. Each picker is parented to the
+-- ScreenGui rather than the card, so it rises above the card's own clipping and layout.
+-- The card gets a shrink scale and a dim overlay that the push drives; the dim is only
+-- visible (and so only takes input) while a picker is up.
+function CustomTitleUI:_stackPickers()
+	local main = self._mainFrame
+	if not main then
+		return
+	end
+	for _, modal in ipairs(self:_pickerModals()) do
+		modal.Parent = self._gui
+		modal.AnchorPoint = Vector2.new(0.5, 0.5)
+		modal.ZIndex = 20
+		modal.Active = true
+		modal.Visible = false
+		local uiScale = modal:FindFirstChildWhichIsA("UIScale")
+		if not uiScale then
+			uiScale = Instance.new("UIScale")
+			uiScale.Parent = modal
+		end
+		uiScale.Scale = 1
+		self._pickerScale[modal] = uiScale
+	end
+
+	local stack = Instance.new("UIScale")
+	stack.Name = "StackScale"
+	stack.Scale = 1
+	stack.Parent = main
+	self._stackScale = stack
+
+	local dim = Instance.new("Frame")
+	dim.Name = "StackDim"
+	dim.Size = UDim2.fromScale(1, 1)
+	dim.BackgroundColor3 = Color3.new(0, 0, 0)
+	dim.BackgroundTransparency = 1
+	dim.BorderSizePixel = 0
+	dim.ZIndex = 50
+	dim.Active = true
+	dim.Visible = false
+	local cardCorner = main:FindFirstChildWhichIsA("UICorner")
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = if cardCorner then cardCorner.CornerRadius else UDim.new(0, 24)
+	corner.Parent = dim
+	dim.Parent = main
+	self._stackDim = dim
+end
+
+-- Where a picker's centre rests, in ScreenGui pixels: the card's centre (measured while
+-- the card is still at rest), dropped by STACK_DROP. Divided by the ScreenGui's own root
+-- UIScale, since offsets in the gui are scaled by it.
+function CustomTitleUI:_pickerBase(): Vector2
+	local main = self._mainFrame :: GuiObject
+	local rootScale = self._gui:FindFirstChildWhichIsA("UIScale")
+	local root = if rootScale then rootScale.Scale else 1
+	local centre = (main.AbsolutePosition + main.AbsoluteSize / 2 - self._gui.AbsolutePosition) / root
+	return Vector2.new(centre.X, centre.Y + STACK_DROP)
+end
+
+-- Stop whatever tween is running on an instance, leaving it where it is.
+function CustomTitleUI:_cancelTween(inst: Instance)
+	local previous = self._slideTweens[inst]
+	if previous then
+		previous:Cancel()
+		self._slideTweens[inst] = nil
+	end
+end
+
+-- Tween one instance's properties, cancelling whatever tween it was already running.
+function CustomTitleUI:_tween(
+	inst: Instance,
+	props: { [string]: any },
+	time: number,
+	style: Enum.EasingStyle,
+	dir: Enum.EasingDirection
+): any
+	self:_cancelTween(inst)
+	local tween = game:GetService("TweenService"):Create(inst, TweenInfo.new(time, style, dir), props)
+	self._slideTweens[inst] = tween
+	tween:Play()
+	return tween
+end
+
+-- Put both pickers away and the card back at rest, with no animation. Used on open and
+-- close so no picker is ever left mid-sheet.
+function CustomTitleUI:_resetPickers()
+	self._activePicker = nil
+	for _, tween in pairs(self._slideTweens) do
+		tween:Cancel()
+	end
+	table.clear(self._slideTweens)
+	for _, modal in ipairs(self:_pickerModals()) do
+		modal.Visible = false
+		local uiScale = self._pickerScale[modal]
+		if uiScale then
+			uiScale.Scale = 1
+		end
+	end
+	if self._stackScale then
+		self._stackScale.Scale = 1
+	end
+	if self._stackDim then
+		self._stackDim.BackgroundTransparency = 1
+		self._stackDim.Visible = false
+	end
+end
+
+-- A picker rises over the card: the card shrinks and dims behind it, and the picker's
+-- rows cascade in once it has arrived.
+function CustomTitleUI:_openPicker(modal: Frame, build: () -> ())
+	build()
+	self:_bumpMotion()
+	-- Measured while the card is still at rest, before its shrink tween starts.
+	local base = self:_pickerBase()
+	local uiScale = self._pickerScale[modal]
+	if uiScale then
+		self:_cancelTween(uiScale)
+		uiScale.Scale = 1
+	end
+	modal.Position = UDim2.fromOffset(base.X, base.Y + STACK_FROM)
+	modal.Visible = true
+	local quint = Enum.EasingStyle.Quint
+	local out = Enum.EasingDirection.Out
+	self:_tween(modal, { Position = UDim2.fromOffset(base.X, base.Y) }, PUSH_TIME, quint, out)
+	if self._stackScale then
+		self:_tween(self._stackScale, { Scale = STACK_SHRINK }, PUSH_TIME, quint, out)
+	end
+	if self._stackDim then
+		self._stackDim.Visible = true
+		self:_tween(self._stackDim, { BackgroundTransparency = STACK_DIM }, PUSH_TIME, quint, out)
+	end
+	self:_setPicked(modal, false)
+	self:_staggerPicker(modal)
+	self._activePicker = modal
+end
+
+-- Back out of a picker: it shrinks away, and the card rises back to rest. Its preset
+-- animations stop with it — only the preset picker creates any, so this is a no-op for
+-- the typeface one. The picker is hidden once the shrink lands, unless a newer
+-- interaction has moved on first.
 function CustomTitleUI:_closePicker(modal: Frame)
 	self:_destroyRowEffects()
-	self:_handoff(modal, self._panel)
+	self:_bumpMotion()
+	local gen = self._motionGen
+	local cubic = Enum.EasingStyle.Cubic
+	local inDir = Enum.EasingDirection.In
+	-- A push still rising is stopped where it is, so the picker shrinks in place.
+	self:_cancelTween(modal)
+	local uiScale = self._pickerScale[modal]
+	if uiScale then
+		local tween = self:_tween(uiScale, { Scale = 0 }, POP_TIME, cubic, inDir)
+		tween.Completed:Once(function()
+			if gen == self._motionGen then
+				modal.Visible = false
+				uiScale.Scale = 1
+			end
+		end)
+	else
+		modal.Visible = false
+	end
+	if self._stackScale then
+		self:_tween(self._stackScale, { Scale = 1 }, POP_TIME, cubic, inDir)
+	end
+	if self._stackDim then
+		local dim = self._stackDim
+		local tween = self:_tween(dim, { BackgroundTransparency = 1 }, POP_TIME, cubic, inDir)
+		tween.Completed:Once(function()
+			if gen == self._motionGen then
+				dim.Visible = false
+			end
+		end)
+	end
+	self._activePicker = nil
+end
+
+-- The confirm button doubles as the picker's way back until a choice is made: it reads
+-- the back label, then the designed text once the player has picked. A change of text
+-- gets a small pop.
+function CustomTitleUI:_setPicked(modal: Frame, picked: boolean)
+	local confirm = findChild(modal, "ConfirmButton")
+	local label = if confirm then confirm:FindFirstChildWhichIsA("TextLabel") else nil
+	if not label then
+		return
+	end
+	local designed = self._confirmText[label]
+	if designed == nil then
+		designed = label.Text
+		self._confirmText[label] = designed
+	end
+	local goal = if picked then designed else (Config.CustomTitle.PICKER_BACK_LABEL or "Back")
+	if label.Text == goal then
+		return
+	end
+	label.Text = goal
+	if picked and confirm and confirm:IsA("GuiButton") then
+		UIMotion.pop(UIMotion.scaleTargetOf(confirm), 1.12)
+	end
 end
 
 function CustomTitleUI:_openPresetPicker()
@@ -568,6 +793,7 @@ function CustomTitleUI:_openPresetPicker()
 		self:_buildPicker(modal, presets, self._selectedPreset, decorate, function(value)
 			self._selectedPreset = value
 			self:_refreshChoiceLabels()
+			self:_setPicked(modal, true)
 			rebuild()
 			self:_flashPickedRow(modal, value)
 		end)
@@ -592,6 +818,7 @@ function CustomTitleUI:_openTypefacePicker()
 		self:_buildPicker(modal, fonts, self._selectedFont, decorate, function(value)
 			self._selectedFont = value
 			self:_refreshChoiceLabels()
+			self:_setPicked(modal, true)
 			rebuild()
 			self:_flashPickedRow(modal, value)
 		end)
@@ -649,7 +876,8 @@ function CustomTitleUI:_submitForm()
 		return
 	end
 	-- No acknowledgement comes back to this panel, so the pop is on the form being
-	-- sendable; it plays over the closing panel.
+	-- sendable; it plays over the closing panel. On a phone the focus goes back as the
+	-- dismissal lands, so the other GUIs are not left disabled while the form settles.
 	UIMotion.pop(UIMotion.scaleTargetOf(self._submit), 1.2)
 	self._submitCallback({
 		title = self._input.Text,
@@ -657,7 +885,7 @@ function CustomTitleUI:_submitForm()
 		preset = self._selectedPreset,
 		font = self._selectedFont,
 	} :: TitleForm)
-	self:close()
+	CustomTitleUI.close(self, false, self._onExit)
 end
 
 -- ============================================================
@@ -670,6 +898,14 @@ end
 
 function CustomTitleUI:bindRemove(callback: () -> ())
 	self._removeCallback = callback
+end
+
+-- The owner (the menu shell) is the only one that knows what the panel is sitting on — on a
+-- phone the panel takes the shared mobile panel focus, which has to come back when the panel
+-- goes. `onExit` runs as the dismissal lands, never on the creation-time close(true), so wiring
+-- it here is safe at any time.
+function CustomTitleUI:bindClose(onExit: (() -> ())?)
+	self._onExit = onExit
 end
 
 -- Load the stored title into the form. Only on a fresh open: this is the half of
@@ -755,6 +991,7 @@ end
 
 function CustomTitleUI:open(payload: any)
 	self:_bumpMotion()
+	self:_resetPickers()
 	-- A fresh open starts from what is stored, so the form is loaded here and
 	-- nowhere else.
 	self:applyPayload(payload, true)
@@ -778,8 +1015,11 @@ function CustomTitleUI:open(payload: any)
 	end
 end
 
-function CustomTitleUI:close(immediate: boolean?)
+function CustomTitleUI:close(immediate: boolean?, onClosed: (() -> ())?)
 	self:_bumpMotion()
+	-- The exit hook belongs to this close alone. A reopen bumps the same counter, so a slow
+	-- dismissal that a newer open superseded cannot release the fresh panel's phone focus.
+	local gen = self._motionGen
 	-- Stop the preset animations rather than leaving 33 RenderStepped loops
 	-- running behind a closed panel. The summary's effect goes too; open() repaints
 	-- it through applyPayload.
@@ -795,9 +1035,36 @@ function CustomTitleUI:close(immediate: boolean?)
 	self._choiceKey = nil
 	-- Whichever of the three is on screen plays the same dismissal; the other two
 	-- take the immediate path, since _dismiss no-ops on an already-hidden frame.
-	self:_dismiss(self._presetModal, immediate)
-	self:_dismiss(self._typefaceModal, immediate)
-	self:_dismiss(self._panel, immediate)
+	-- The exit hook fires on the first of them to land, with a timer as the floor:
+	-- AnimationHelper drops a dismissal callback whenever that tween is cancelled or
+	-- superseded, and a hook chained only off it would then never run.
+	local fired = false
+	local function finish()
+		if fired or gen ~= self._motionGen then
+			return
+		end
+		fired = true
+		if onClosed then
+			onClosed()
+		end
+	end
+	-- The pickers stand outside the card, so an open one shrinks away alongside the card's
+	-- own dismissal instead of snapping off first. Once the card is gone the pickers are
+	-- parked (gen-guarded); open() resets too, covering a dismissal callback AnimationHelper
+	-- skipped. An immediate close resets at once through that same callback.
+	if not immediate and self._activePicker then
+		local uiScale = self._pickerScale[self._activePicker]
+		if uiScale then
+			self:_tween(uiScale, { Scale = 0 }, POP_TIME, Enum.EasingStyle.Cubic, Enum.EasingDirection.In)
+		end
+	end
+	local function resetNested()
+		if gen == self._motionGen then
+			self:_resetPickers()
+		end
+	end
+	self:_dismiss(self._panel, immediate, resetNested, finish)
+	task.delay(MotionPresets.centerClose().time + HANDOFF_SAFETY, finish)
 	if self._backdrop then
 		self._backdrop.Visible = false
 	end

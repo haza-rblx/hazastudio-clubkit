@@ -225,6 +225,21 @@ ClubKitConfig.PaidBroadcast = {
 }
 
 -- =============================================================================
+-- GIVEAWAY (Auto Gacha hourly prize draw). Enabled = false: switch it on here or in
+-- Admin Spotlight > Giveaway. Values changed in that sheet are saved in the DataStore and
+-- win over these values from then on.
+-- =============================================================================
+ClubKitConfig.Giveaway = {
+	Enabled = false,
+	IntervalMinutes = 60,
+	MinPlayers = 50,
+	PrizeRobux = 50,
+	Anchor = "TopCenter", -- "TopLeft" | "TopCenter" | "TopRight"
+	SpinDuration = 4.6,
+	WinFxVariant = 1, -- 0 = None, 1..15
+}
+
+-- =============================================================================
 -- ANNOUNCEMENT (free /announce + free broadcast panel gate)
 -- MinMembership = lowest paid tier that can announce free without Robux.
 -- "Tier1"/"VIP", "Tier2"/"VVIP", "Tier3"/"Supreme". Staff+ / top spenders still free.
@@ -640,6 +655,7 @@ ClubKitConfig.Overhead = {
 	ShowSupporterChip = true,
 	DefaultLayers = {
 		SpecialTitle = true,
+		SpecialTitleImage = true,
 		BadgeGroup = true,
 		Level = true,
 		SpecialRank = true,
@@ -936,7 +952,6 @@ ClubKitConfig.Features = {
 	-- Show the couple chat tag (💕 partner) in the General/chat prefix. Default true.
 	-- false hides the tag in chat only; the couple system + overhead couple name stay on.
 	ShowCoupleChatTag = true,
-	Stickers = true,
 	Leaderboards = true,
 	DonationCash = true,
 	DonationSaweria = true, -- legacy alias for DonationCash

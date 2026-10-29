@@ -20,9 +20,7 @@ export type SlotRefs = {
 export type Refs = {
 	root: ScreenGui,
 	hotbarWrapper: Frame,
-	stickerButtonWrapper: Frame,
 	slots: { SlotRefs },
-	stickerButton: GuiButton?,
 	backpackButton: GuiButton?,
 }
 
@@ -164,21 +162,6 @@ local function collectSlots(container: Frame): { SlotRefs }
 	return slots
 end
 
-local function collectFirstButton(container: Frame): GuiButton?
-	local configured = container:FindFirstChild(Config.Hotbar.STICKER_TRIGGER_NAME, true)
-	if configured and configured:IsA("GuiButton") then
-		return configured :: GuiButton
-	end
-
-	for _, descendant in ipairs(container:GetDescendants()) do
-		if descendant:IsA("GuiButton") then
-			return descendant :: GuiButton
-		end
-	end
-
-	return nil
-end
-
 function HotbarGuiRefs.resolve(playerGui: PlayerGui): Types.Result<Refs>
 	local root = resolveRoot(playerGui)
 	if not root then
@@ -196,17 +179,6 @@ function HotbarGuiRefs.resolve(playerGui: PlayerGui): Types.Result<Refs>
 			ok = false,
 			error = ("HotbarGuiRefs: missing Frame '%s' under %s"):format(
 				Config.Hotbar.HOTBAR_WRAPPER_NAME,
-				root:GetFullName()
-			),
-		}
-	end
-
-	local stickerWrapper = root:FindFirstChild(Config.Hotbar.STICKER_WRAPPER_NAME, true)
-	if not stickerWrapper or not stickerWrapper:IsA("Frame") then
-		return {
-			ok = false,
-			error = ("HotbarGuiRefs: missing Frame '%s' under %s"):format(
-				Config.Hotbar.STICKER_WRAPPER_NAME,
 				root:GetFullName()
 			),
 		}
@@ -231,9 +203,7 @@ function HotbarGuiRefs.resolve(playerGui: PlayerGui): Types.Result<Refs>
 		value = {
 			root = root,
 			hotbarWrapper = hotbarWrapper :: Frame,
-			stickerButtonWrapper = stickerWrapper :: Frame,
 			slots = slots,
-			stickerButton = collectFirstButton(stickerWrapper :: Frame),
 			backpackButton = backpackButton,
 		},
 	}

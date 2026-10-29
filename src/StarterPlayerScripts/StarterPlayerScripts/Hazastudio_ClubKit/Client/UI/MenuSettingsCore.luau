@@ -332,6 +332,8 @@ local SECTION_DEFS: { SettingsSectionDef } = {
 				label = "Top Robux",
 				requiresOverheadFeature = "TopDonate",
 			},
+			{ kind = "toggle", field = "overheadLayerVisible.SpecialTitle", label = "Title Text", requiresOverheadFeature = "SpecialTitle" },
+			{ kind = "toggle", field = "overheadLayerVisible.SpecialTitleImage", label = "Title Image", requiresOverheadFeature = "SpecialTitleImage" },
 			{ kind = "toggle", field = "overheadLayerVisible.Rank", label = "Role" },
 			{ kind = "toggle", field = "overheadLayerVisible.DisplayName", label = "Player Name" },
 			{ kind = "toggle", field = "overheadLayerVisible.CoupleName", label = "Couple Status" },
@@ -523,6 +525,9 @@ local function hasOverheadFeature(feature: string?, overheadPayload: any?): bool
 	end
 	if feature == "SpecialTitle" then
 		return hasText(overheadPayload.specialTitle)
+	end
+	if feature == "SpecialTitleImage" then
+		return hasText(overheadPayload.specialTitleImage)
 	end
 	if feature == "BadgeGroup" then
 		return type(overheadPayload.visibleBadges) == "table" and #overheadPayload.visibleBadges > 0
@@ -1428,41 +1433,42 @@ local function createSliderRow(
 		setSliderVisual(row, item, currentValue, item.min, item.max)
 	end
 
+	-- A finger that lands on the bar may be starting a list scroll. Mouse commits at once; touch
+	-- waits until it travels past the slop, then either takes the slider (horizontal) or leaves it
+	-- to the scroll (vertical). A touch that never moves is a tap: it sets the value on release.
+	local TouchIntent = require(script.Parent.Parent.Utils.TouchIntent)
+	local TouchScrollAssist = require(script.Parent.Parent.Utils.TouchScrollAssist)
+	local pendingTouch: InputObject? = nil
+	local pendingStart = Vector2.zero
+	local pendingStartedAt = 0
+	-- Once the list takes the finger, this script stops hearing it move, so the release looks like
+	-- a still finger: a scroll that started on the bar must not count as a tap.
+	local pendingCanvasStart = Vector2.zero
+	local function onBarPress(input: InputObject)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			beginDrag(input.Position.X)
+		elseif input.UserInputType == Enum.UserInputType.Touch and not dragging and pendingTouch ~= input then
+			pendingTouch = input
+			pendingStart = Vector2.new(input.Position.X, input.Position.Y)
+			pendingStartedAt = os.clock()
+			pendingCanvasStart = if scrollingFrame then scrollingFrame.CanvasPosition else Vector2.zero
+		end
+	end
+
 	local button = row:FindFirstChild("AdjustWrapper")
 	if button and button:IsA("GuiObject") then
 		button.Active = true
-		track(button.InputBegan:Connect(function(input)
-			if
-				input.UserInputType == Enum.UserInputType.MouseButton1
-				or input.UserInputType == Enum.UserInputType.Touch
-			then
-				beginDrag(input.Position.X)
-			end
-		end))
+		track(button.InputBegan:Connect(onBarPress))
 
 		local draggable = button:FindFirstChild("AdjustableFrameWidth")
 		if draggable and draggable:IsA("Frame") then
 			draggable.Active = true
-			track(draggable.InputBegan:Connect(function(input)
-				if
-					input.UserInputType == Enum.UserInputType.MouseButton1
-					or input.UserInputType == Enum.UserInputType.Touch
-				then
-					beginDrag(input.Position.X)
-				end
-			end))
+			track(draggable.InputBegan:Connect(onBarPress))
 
 			local dragButton = draggable:FindFirstChild("DraggableIcon")
 			if dragButton and dragButton:IsA("ImageLabel") then
 				dragButton.Active = true
-				track(dragButton.InputBegan:Connect(function(input)
-					if
-						input.UserInputType == Enum.UserInputType.MouseButton1
-						or input.UserInputType == Enum.UserInputType.Touch
-					then
-						beginDrag(input.Position.X)
-					end
-				end))
+				track(dragButton.InputBegan:Connect(onBarPress))
 			end
 		end
 	end
@@ -1472,6 +1478,17 @@ local function createSliderRow(
 			input.UserInputType == Enum.UserInputType.MouseButton1
 			or input.UserInputType == Enum.UserInputType.Touch
 		then
+			if pendingTouch == input then
+				pendingTouch = nil
+				local delta = Vector2.new(input.Position.X, input.Position.Y) - pendingStart
+				local scrolled = scrollingFrame ~= nil
+					and (scrollingFrame.CanvasPosition - pendingCanvasStart).Magnitude > 1
+				if not scrolled and TouchIntent.isTap(delta, os.clock() - pendingStartedAt) then
+					beginDrag(pendingStart.X)
+					endDrag()
+				end
+				return
+			end
 			if dragging then
 				endDrag()
 			end
@@ -1479,6 +1496,21 @@ local function createSliderRow(
 	end))
 
 	track(UserInputService.InputChanged:Connect(function(input)
+		if pendingTouch == input then
+			local delta = Vector2.new(input.Position.X, input.Position.Y) - pendingStart
+			local verdict = TouchIntent.resolveAxis(delta, "x")
+			if verdict == "pending" then
+				return
+			end
+			pendingTouch = nil
+			if verdict == "slider" then
+				beginDrag(input.Position.X)
+			elseif scrollingFrame then
+				-- Owner test: the list does not take a drag that starts on the bar; scroll it by hand.
+				TouchScrollAssist.follow(input, scrollingFrame, Vector3.new(pendingStart.X, pendingStart.Y, 0))
+			end
+			return
+		end
 		if
 			dragging
 			and (

@@ -108,23 +108,22 @@ end
 
 -- Device-aware press handler.
 --
--- Desktop / hybrid (mouse + keyboard): instant fire on InputBegan, same as
--- original behavior — no delay, no drag detection.
+-- Mouse: instant fire on InputBegan, same as original behavior — no delay, no drag
+-- detection. (Originally this also covered touch on desktop/hybrid devices; that let a
+-- scroll swipe press the row, so all touch now goes through the tap detector below.)
 --
--- Touch-only (phone/tablet without keyboard): tap detector. Track initial touch position
+-- Touch (any device): tap detector. Track initial touch position
 -- on InputBegan, monitor drag via global UserInputService, cancel tap if
--- If finger moves > TAP_DRAG_THRESHOLD px. Fire callback only on InputEnded
--- if still within threshold. Prevent dance row tap when user wants to scroll.
+-- If finger moves > TouchIntent.SLOP px. Fire callback only on InputEnded
+-- if still within threshold and TouchIntent.TAP_MAX_SECONDS. Prevent dance row tap when user wants to scroll.
 --
 -- Return: object with method :Disconnect() (compatible with existing caller
 -- that calls rowConnection:Disconnect()).
-local IS_TOUCH_ONLY_DEVICE = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
--- Phone scroll: looser threshold so scrolling is not mistaken for a dance tap.
-local TAP_DRAG_THRESHOLD_SQ = 42 * 42 -- 42px squared (avoid sqrt per InputChanged)
+local TouchIntent = require(script.Parent.Parent.Utils.TouchIntent)
 
 local function bindPressDown(button: GuiButton, callback: (InputObject) -> ())
 	local connections: { RBXScriptConnection } = {}
-	local pendingTaps: { [InputObject]: Vector2 } = {}
+	local pendingTaps: { [InputObject]: { pos: Vector2, at: number } } = {}
 
 	table.insert(connections, button.InputBegan:Connect(function(input)
 		-- Mouse: always instant (no drag-to-scroll concern on mouse).
@@ -135,45 +134,40 @@ local function bindPressDown(button: GuiButton, callback: (InputObject) -> ())
 		if input.UserInputType ~= Enum.UserInputType.Touch then
 			return
 		end
-		-- Touch on desktop/hybrid (mouse + keyboard available): instant.
-		if not IS_TOUCH_ONLY_DEVICE then
-			callback(input)
-			return
-		end
-		-- Touch-only device: enter tap detector mode.
-		pendingTaps[input] = Vector2.new(input.Position.X, input.Position.Y)
+		-- Any touch, on any device (hybrid laptops and tablets included): wait for the finger to
+		-- show it is a tap before acting, so a scroll swipe over a row never presses it.
+		pendingTaps[input] = { pos = Vector2.new(input.Position.X, input.Position.Y), at = os.clock() }
 	end))
 
-	if IS_TOUCH_ONLY_DEVICE then
-		table.insert(connections, UserInputService.InputChanged:Connect(function(input)
-			if input.UserInputType ~= Enum.UserInputType.Touch then
-				return
-			end
-			local startPos = pendingTaps[input]
-			if not startPos then
-				return
-			end
-			local dx = input.Position.X - startPos.X
-			local dy = input.Position.Y - startPos.Y
-			if (dx * dx + dy * dy) > TAP_DRAG_THRESHOLD_SQ then
-				-- Drag detected — user wants to scroll, not tap. Cancel.
-				pendingTaps[input] = nil
-			end
-		end))
-
-		table.insert(connections, UserInputService.InputEnded:Connect(function(input)
-			if input.UserInputType ~= Enum.UserInputType.Touch then
-				return
-			end
-			local startPos = pendingTaps[input]
-			if not startPos then
-				-- Either tap cancelled by drag, or input not from this button.
-				return
-			end
+	table.insert(connections, UserInputService.InputChanged:Connect(function(input)
+		if input.UserInputType ~= Enum.UserInputType.Touch then
+			return
+		end
+		local pending = pendingTaps[input]
+		if not pending then
+			return
+		end
+		if (Vector2.new(input.Position.X, input.Position.Y) - pending.pos).Magnitude > TouchIntent.SLOP then
+			-- Drag detected — user wants to scroll, not tap. Cancel.
 			pendingTaps[input] = nil
+		end
+	end))
+
+	table.insert(connections, UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType ~= Enum.UserInputType.Touch then
+			return
+		end
+		local pending = pendingTaps[input]
+		if not pending then
+			-- Either tap cancelled by drag, or input not from this button.
+			return
+		end
+		pendingTaps[input] = nil
+		local delta = Vector2.new(input.Position.X, input.Position.Y) - pending.pos
+		if TouchIntent.isTap(delta, os.clock() - pending.at) then
 			callback(input)
-		end))
-	end
+		end
+	end))
 
 	return {
 		Disconnect = function()
@@ -341,10 +335,24 @@ function DancePanelUIBinder.new(deps: {
 	self._speedHandleVisibilityToken = 0
 	ScrollIndicatorHelper.attach(self.refs.mainContent)
 	self:_ensureScrollInputCapture()
+	-- v3 polish (speed row + chip, search glyphs, list/bar sizes); before the placeholder is cached.
+	-- On a phone the layout is the phone one (vertical speed bar, shorter list), which also marks the
+	-- slider vertical before _setupSpeedSlider reads it.
+	local V3Look = require(script.Parent.DancePanelV3Look)
+	self._v3Look = V3Look.applyPhone(self.refs, self.config) or V3Look.apply(self.refs)
 	self._openPosition = self.refs.panelRoot.Position
 	self._openAnchorPoint = self.refs.panelRoot.AnchorPoint
-	-- v3 polish (speed row + chip, search glyphs, list/bar sizes); before the placeholder is cached.
-	self._v3Look = require(script.Parent.DancePanelV3Look).apply(self.refs)
+	if self.refs.v3PhoneLayout then
+		-- Placed once the new sizes are laid out (it measures the panel's height).
+		task.defer(function()
+			local position = V3Look.phonePosition(self.refs.panelRoot, self.config)
+			if position then
+				self._openPosition = position
+				self._openAnchorPoint = self.refs.panelRoot.AnchorPoint
+				self.refs.panelRoot.Position = position
+			end
+		end)
+	end
 	self._defaultSearchPlaceholder = self.refs.searchBox.PlaceholderText ~= "" and self.refs.searchBox.PlaceholderText
 		or "Search dance or pose..."
 	self._preparingSearchPlaceholder = "Preparing dances..."
@@ -458,7 +466,10 @@ function DancePanelUIBinder:_ensurePanelScale(): UIScale
 	end
 
 	-- Mobile: keep baked UIScale (0.75) untouched; open anim uses a separate child only.
+	-- v3 on a phone keeps desktop layout but is scaled through the baked UIScale (MobileScaleService),
+	-- so the open animation must use its own child there as well.
 	local isMobileLayout = self.refs.panelRoot:GetAttribute("DancePanelLayout") == "mobile"
+		or self.refs.panelRoot:GetAttribute("DancePanelPhoneScale") == true
 	if not isMobileLayout then
 		local bakedScale = self.refs.panelRoot:FindFirstChildWhichIsA("UIScale")
 		if bakedScale and bakedScale.Name ~= "DancePanelRootScale" then
@@ -611,6 +622,16 @@ end
 function DancePanelUIBinder:_hideReferenceRows()
 	for _, refRow in pairs(self.refs.rowRefs) do
 		refRow.Visible = false
+		-- A design that holds a template twice (PARKLAB had two FavoritedState) would show the
+		-- unresolved copy as a "Starred" row in the list: hide every sibling with a template's name.
+		local parent = refRow.Parent
+		if parent then
+			for _, sibling in ipairs(parent:GetChildren()) do
+				if sibling ~= refRow and sibling.Name == refRow.Name and sibling:IsA("GuiObject") then
+					sibling.Visible = false
+				end
+			end
+		end
 	end
 end
 
@@ -833,9 +854,13 @@ function DancePanelUIBinder:_setupSpeedSlider()
 	speedFill.Active = true
 	-- Settings slider look (owner, 2026-10-07): segmented bar like Preferences. The value already
 	-- reads in the custom speed field, so the labels inside the bar go (they sat on the segments).
-	-- Horizontal plain-Frame bars only: SegmentedSliderBar is horizontal and uneven in a CanvasGroup.
-	if not self.refs.speedSliderVertical and speedWrapper.ClassName == "Frame" and self.refs.customSpeedField then
-		require(script.Parent.SegmentedSliderBar).attach(speedWrapper, speedFill)
+	-- Plain-Frame bars only (uneven in a CanvasGroup): the horizontal v3 bar and its phone layout's
+	-- vertical bar; the v2 phone slider keeps its own look.
+	local segmented = (not self.refs.speedSliderVertical or self.refs.v3PhoneLayout == true)
+		and speedWrapper.ClassName == "Frame"
+		and self.refs.customSpeedField
+	if segmented then
+		require(script.Parent.SegmentedSliderBar).attach(speedWrapper, speedFill, self.refs.speedSliderVertical)
 		if self.refs.currentSpeedLabel then
 			self.refs.currentSpeedLabel.Visible = false
 		end
@@ -888,14 +913,7 @@ function DancePanelUIBinder:_setupSpeedSlider()
 		end
 	end
 
-	local function beginSliderDrag(input)
-		if
-			input.UserInputType ~= Enum.UserInputType.MouseButton1
-			and input.UserInputType ~= Enum.UserInputType.Touch
-		then
-			return
-		end
-
+	local function commitSliderDrag(input: InputObject)
 		disconnectSlider()
 		self._isSliderDragging = true
 		self:_updateSpeedKnobVisibility()
@@ -916,6 +934,65 @@ function DancePanelUIBinder:_setupSpeedSlider()
 				return
 			end
 			disconnectSlider()
+		end)
+	end
+
+	-- Touch on the bar may be the start of a list scroll (v3 phone: the bar is vertical, so a scroll
+	-- swipe runs along it). Wait for the finger's intent; only travel along the bar's axis takes the
+	-- slider, a tap sets the value on release, anything else is left to the scroll.
+	local pendingMoveConn: RBXScriptConnection? = nil
+	local pendingEndConn: RBXScriptConnection? = nil
+	local function clearPending()
+		if pendingMoveConn then
+			pendingMoveConn:Disconnect()
+			pendingMoveConn = nil
+		end
+		if pendingEndConn then
+			pendingEndConn:Disconnect()
+			pendingEndConn = nil
+		end
+	end
+
+	local function beginSliderDrag(input: InputObject)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			commitSliderDrag(input)
+			return
+		end
+		if input.UserInputType ~= Enum.UserInputType.Touch then
+			return
+		end
+
+		local TouchIntent = require(script.Parent.Parent.Utils.TouchIntent)
+		local axis: "x" | "y" = if self.refs.speedSliderVertical then "y" else "x"
+		local startPos = Vector2.new(input.Position.X, input.Position.Y)
+		local startedAt = os.clock()
+		clearPending()
+
+		pendingMoveConn = UserInputService.InputChanged:Connect(function(changedInput)
+			if changedInput ~= input then
+				return
+			end
+			local delta = Vector2.new(input.Position.X, input.Position.Y) - startPos
+			local verdict = TouchIntent.resolveAxis(delta, axis)
+			if verdict == "pending" then
+				return
+			end
+			clearPending()
+			if verdict == "slider" then
+				commitSliderDrag(input)
+			end
+		end)
+
+		pendingEndConn = UserInputService.InputEnded:Connect(function(endedInput)
+			if endedInput ~= input then
+				return
+			end
+			clearPending()
+			local delta = Vector2.new(input.Position.X, input.Position.Y) - startPos
+			if TouchIntent.isTap(delta, os.clock() - startedAt) then
+				commitSliderDrag(input)
+				disconnectSlider()
+			end
 		end)
 	end
 

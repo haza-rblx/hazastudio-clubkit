@@ -6,6 +6,7 @@
 -- Built from the owner's design pieces found in PlayerGui; a place without the sketch (or its
 -- buttons) gets no modal: `OnboardingUI.open` returns nil and says what was missing.
 
+local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -14,6 +15,7 @@ local Icon = require(ReplicatedStorage.Hazastudio_ClubKit.Icon) :: any
 local Logger = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local AccentService = require(script.Parent.Parent.Parent.Services.AccentService)
 local UIMotion = require(script.Parent.Parent.Parent.Utils.UIMotion)
+local PhoneLayout = require(script.Parent.Parent.Parent.Utils.PhoneLayout)
 local Kit = require(script.Parent.OnboardingKit)
 local Controls = require(script.Parent.OnboardingControls)
 local Steps = require(script.Parent.OnboardingSteps)
@@ -149,7 +151,39 @@ function OnboardingUI.open(options: OpenOptions): (Session?, string?)
 	group.BackgroundTransparency = 1
 	group.BorderSizePixel = 0
 	group.GroupTransparency = 1
-	group.Parent = gui
+	-- Phones: the shell is taller than a landscape phone (iPhone 7 is 667x375), so a FitStage with
+	-- its own UIScale shrinks the whole modal to the screen. shellScale stays the open/close
+	-- motion's: only the first UIScale under a GuiObject applies, so the two sit on different frames.
+	local FIT_MARGIN = 12
+	local fitStage = Instance.new("Frame")
+	fitStage.Name = "FitStage"
+	fitStage.AnchorPoint = Vector2.new(0.5, 0.5)
+	fitStage.Position = UDim2.fromScale(0.5, 0.5)
+	fitStage.Size = group.Size
+	fitStage.BackgroundTransparency = 1
+	fitStage.BorderSizePixel = 0
+	fitStage.Parent = gui
+	local fitScale = Instance.new("UIScale")
+	fitScale.Parent = fitStage
+	local function fitToScreen()
+		local camera = workspace.CurrentCamera
+		if not camera then
+			return
+		end
+		local room = camera.ViewportSize
+		-- On a phone the modal stays clear of the topbar and the hotbar (owner 2026-10-09).
+		local top, bottom = FIT_MARGIN, FIT_MARGIN
+		if PhoneLayout.isPhoneLayout() then
+			local onboarding = Config.Onboarding :: any
+			top = GuiService:GetGuiInset().Y + (tonumber(onboarding.PHONE_TOP_GAP) or 10)
+			bottom = tonumber(onboarding.PHONE_BOTTOM_RESERVE) or 66
+		end
+		local availableY = math.max(1, room.Y - top - bottom)
+		fitScale.Scale = math.min(1, (room.X - 2 * FIT_MARGIN) / SHELL_W, availableY / SHELL_H)
+		fitStage.Position = UDim2.new(0.5, 0, 0, top + availableY / 2)
+	end
+	fitToScreen()
+	group.Parent = fitStage
 	local shellScale = Instance.new("UIScale")
 	shellScale.Scale = 0.94
 	shellScale.Parent = group
@@ -322,6 +356,9 @@ function OnboardingUI.open(options: OpenOptions): (Session?, string?)
 		apply = options.apply,
 		placeName = options.placeName,
 	}
+	if workspace.CurrentCamera then
+		table.insert(ctx.conns, workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fitToScreen))
+	end
 
 	-- ── navigation ─────────────────────────────────────────────────────────────────────────
 	local current = 0

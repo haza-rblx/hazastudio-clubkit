@@ -24,7 +24,9 @@ local SEGMENT_CORNER = 2
 local DIM_TRANSPARENCY = 0.88
 local BOX_COLOR = Color3.fromRGB(28, 28, 30)
 
-function SegmentedSliderBar.attach(box: GuiObject, fill: GuiObject)
+-- `vertical` (dance panel on phones, 2026-10-09): the segments are horizontal bars stacked bottom to
+-- top and light up with the fill's height.
+function SegmentedSliderBar.attach(box: GuiObject, fill: GuiObject, vertical: boolean?)
 	if box:FindFirstChild("Segments") then
 		return
 	end
@@ -50,7 +52,8 @@ function SegmentedSliderBar.attach(box: GuiObject, fill: GuiObject)
 
 	local function paint()
 		local count = #segments
-		local lit = math.round(math.clamp(fill.Size.X.Scale, 0, 1) * count)
+		local value = if vertical then fill.Size.Y.Scale else fill.Size.X.Scale
+		local lit = math.round(math.clamp(value, 0, 1) * count)
 		local on = if AccentService.isDesign() then Color3.new(1, 1, 1) else AccentService.get().fill
 		for index, segment in ipairs(segments) do
 			segment.BackgroundColor3 = on
@@ -99,6 +102,31 @@ function SegmentedSliderBar.attach(box: GuiObject, fill: GuiObject)
 		local height = math.floor(position.Y + size.Y + 0.5) - top
 		if width <= INSET * 2 or height <= INSET * 2 then
 			setCount(0)
+			return
+		end
+		if vertical then
+			-- Same rules with the axes swapped; segment 1 sits at the bottom.
+			local inner = height - INSET * 2
+			local count = math.floor((inner + SEGMENT_GAP) / (SEGMENT_WIDTH + SEGMENT_GAP))
+			local used = count * SEGMENT_WIDTH + (count - 1) * SEGMENT_GAP
+			local startY = INSET + math.floor((inner - used) / 2)
+			local marginSide = startY
+			local segmentWidth = width - marginSide * 2
+			if segmentWidth < 8 then
+				segmentWidth = width - INSET * 2
+				marginSide = INSET
+			end
+			local boxCorner = box:FindFirstChildWhichIsA("UICorner")
+			if boxCorner then
+				boxCorner.CornerRadius = UDim.new((marginSide + SEGMENT_CORNER) / math.min(size.X, size.Y), 0)
+			end
+			setCount(count)
+			local segmentX = (left + marginSide - position.X) / size.X
+			for index, segment in ipairs(segments) do
+				local y = top + height - startY - index * SEGMENT_WIDTH - (index - 1) * SEGMENT_GAP
+				segment.Position = UDim2.fromScale(segmentX, (y - position.Y) / size.Y)
+				segment.Size = UDim2.fromScale(segmentWidth / size.X, SEGMENT_WIDTH / size.Y)
+			end
 			return
 		end
 		local inner = width - INSET * 2

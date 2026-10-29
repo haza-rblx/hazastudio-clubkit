@@ -1197,6 +1197,9 @@ local function populateWorkspaceSurfaces(refs: WorkspaceSurfaceRefs, payload: Do
 
 	applyWorkspaceThumbnail(refs.liveAvatar, payload)
 	popLiveChatInfo(refs)
+	-- Chat-bubble board (owner design 2026-10-10): source colour, amount label, typing + count-up.
+	-- No-op on boards without the bubble layout.
+	require(script.Parent.Parent.UI.LiveChatBoardMotion).present(refs, payload.source, tonumber(payload.amount) or 0)
 end
 
 local function captureWorkspaceSurfaceTemplate(refs: WorkspaceSurfaceRefs): WorkspaceSurfaceTemplate
@@ -1817,13 +1820,19 @@ local function init(_deps: {}?)
 		runningTextToken += 1
 		local token = runningTextToken
 		local states = getWorkspaceSurfaceStates()
-		resetLiveChatInfoVisibilityForStates(states)
+		-- LIVE_CHAT_PERSIST: the idle marquee restart must not hide the last donation's card.
+		if (Config.Donation :: any).LIVE_CHAT_PERSIST == false then
+			resetLiveChatInfoVisibilityForStates(states)
+		end
 		refreshWorkspaceTimestampForStates(states)
 		startRunningTextMarquees(states, function()
 			return runningTextToken == token
 		end)
 	end
 	local function scheduleWorkspaceRestore(expectedToken: number)
+		if (Config.Donation :: any).LIVE_CHAT_PERSIST ~= false then
+			return -- the next donation's populate replaces it; nothing pops out meanwhile
+		end
 		task.delay(Config.Donation.WORKSPACE_RESTORE_DELAY, function()
 			if workspaceRestoreToken ~= expectedToken then
 				return

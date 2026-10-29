@@ -127,7 +127,7 @@ function RoleToolService.new(deps: {
 	return self
 end
 
-function RoleToolService:_resolveFolderNames(payload: OverheadPayload): { string }
+function RoleToolService:_resolveFolderNames(payload: OverheadPayload, toolsRoot: Instance?): { string }
 	local cfg = Config.RoleTools
 	local folderNames = {}
 	local spenderRoles = Config.SpenderRoles
@@ -163,6 +163,17 @@ function RoleToolService:_resolveFolderNames(payload: OverheadPayload): { string
 			then cashConfig.ToolFolder
 			else (cfg.TOP_SPENDER_FOLDER or "TOP RUPIAH SPENDER")
 		addFolders(folderNames, { folder })
+	end
+
+	-- Filter only folders that actually exist in toolsRoot
+	if toolsRoot then
+		local existing = {}
+		for _, name in ipairs(folderNames) do
+			if findRoleToolFolder(toolsRoot, name) then
+				table.insert(existing, name)
+			end
+		end
+		folderNames = existing
 	end
 
 	-- Multi-role / multi-folder: satu folder only — yang prioritas tertinggi.
@@ -288,7 +299,10 @@ function RoleToolService:syncPlayer(player: Player, payload: OverheadPayload?)
 	-- FIX: Unequip tools before destroying to prevent orphaned pose/animation
 	if character then
 		local humanoid = character:FindFirstChildOfClass("Humanoid")
-		if humanoid then
+		local equipped = character:FindFirstChildOfClass("Tool")
+		-- Only unequip when the held tool is a granted role tool about to be destroyed;
+		-- StarterPack/other tools must stay in hand.
+		if humanoid and equipped and equipped:GetAttribute(cfg.GRANT_ATTRIBUTE) then
 			humanoid:UnequipTools()
 		end
 	end
@@ -306,7 +320,7 @@ function RoleToolService:syncPlayer(player: Player, payload: OverheadPayload?)
 		return
 	end
 
-	local folderNames = self:_resolveFolderNames(effectivePayload)
+	local folderNames = self:_resolveFolderNames(effectivePayload, toolsRoot)
 	if #folderNames == 0 then
 		-- Downgrade to debug for Guest role (expected behavior, not an error)
 		local role = tostring(effectivePayload.role)
@@ -319,6 +333,8 @@ function RoleToolService:syncPlayer(player: Player, payload: OverheadPayload?)
 			role = role,
 			effectiveMembership = tostring(effectivePayload.effectiveMembership or ""),
 		})
+		-- Mark synced so GUARD 1 skips repeat syncs for roles without a folder.
+		self._lastSyncedRole[player.UserId] = newRole
 		notifyClientToolsSynced(player, countBackpackTools(player))
 		return
 	end

@@ -108,6 +108,8 @@ function RoleCategoryBuilder.build(clubKit: any): BuiltRoles
 
 	local categories = clubKit.RoleCategories
 	if type(categories) == "table" then
+		-- Sort a shallow copy: the array is the buyer's config table, shared by reference.
+		categories = table.clone(categories)
 		table.sort(categories, function(a, b)
 			return (a.priority or 0) > (b.priority or 0)
 		end)

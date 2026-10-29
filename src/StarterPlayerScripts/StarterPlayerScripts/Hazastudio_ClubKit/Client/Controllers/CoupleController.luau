@@ -366,6 +366,10 @@ local function init(deps: { icon: any? }?): ()
 	local partnerName = ""
 	local partnerId: number? = nil
 	local panelOpen = false
+	-- The panel can be closed by its own X (and by the breakup flow), not only by the topbar icon,
+	-- so those paths must deselect the icon too: the icon's deselected handler is what tells
+	-- MobilePanelManager to give the other GUIs back (2026-10-12 phone stale-UI bug).
+	local topbarIcon = deps and deps.icon or nil
 	local allPlayers: { { userId: number, displayName: string, username: string } } = {}
 	local playerCardPool = {} :: { PlayerListEntry }
 	local ringHandle: AnimationHelper.ProgressRingHandle? = nil
@@ -529,6 +533,18 @@ local function init(deps: { icon: any? }?): ()
 			activeTabPage = nil
 			lastListSignature = nil
 		end
+	end
+	-- Every close that does not come from the icon itself goes through here: deselect is what
+	-- tells MobilePanelManager to stop hiding every other GUI, and its deselected handler runs
+	-- showPanel(false) — so this is the single dismiss, never two.
+	local function requestClose(): ()
+		if topbarIcon ~= nil and type(topbarIcon.deselect) == "function" and topbarIcon.isSelected == true then
+			pcall(function()
+				topbarIcon:deselect()
+			end)
+			return
+		end
+		showPanel(false)
 	end
 	local function stopRing(): ()
 		if ringHandle then
@@ -950,7 +966,7 @@ local function init(deps: { icon: any? }?): ()
 	if closeModalButton then
 		bindButtonMotion(closeModalButton)
 		closeModalButton.Activated:Connect(function()
-			showPanel(false)
+			requestClose()
 		end)
 	end
 	-- ============================================================
@@ -1013,7 +1029,7 @@ local function init(deps: { icon: any? }?): ()
 		applyLocalCoupleChatTag(localPlayer.UserId, nil)
 		applyLocalCoupleChatTag(previousPartnerId, nil)
 		hideNotif()
-		showPanel(false)
+		requestClose()
 	end)
 	-- ============================================================
 	-- Incoming request notification (recipient)
@@ -1135,7 +1151,6 @@ local function init(deps: { icon: any? }?): ()
 	-- ============================================================
 	-- TopbarPlus icon
 	-- ============================================================
-	local topbarIcon = deps and deps.icon or nil
 	if topbarIcon then
 		topbarIcon.selected:Connect(function()
 			showPanel(true)

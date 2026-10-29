@@ -6,10 +6,13 @@
 -- PlayerGui copy. Measured: -4,218 instances; respawn left every PlayerGui GUI intact, 0 warnings.
 --
 -- What stays:
+-- - every GUI that is not the kit's (only numbered names and Config.ClientFootprint.STARTER_GUI_TRIM_EXTRA
+--   are trimmed): a venue script may clone its template on demand, e.g. PARKLAB's DualGlowStick
+--   destroys its PlayerGui copy on equip and re-clones StarterGui.DualGlowColorGui;
 -- - each ScreenGui shell, because ForeignGuiGuardService asks StarterGui:FindFirstChild(name);
--- - templates that are cloned on demand (Sticker, PaidBroadcast) plus Config.ClientFootprint.STARTER_GUI_KEEP;
+-- - templates that are cloned on demand (PaidBroadcast) plus Config.ClientFootprint.STARTER_GUI_KEEP;
 -- - any template whose PlayerGui copy is missing, because the ensure*/fallback paths clone it.
--- Every fallback in the kit (TopMenuGuiRefs, StickerController, PaidBroadcastController,
+-- Every fallback in the kit (TopMenuGuiRefs, PaidBroadcastController,
 -- Main.client ensurePlayerGuiChild) checks PlayerGui first, so it never reaches an emptied template.
 
 local Players = game:GetService("Players")
@@ -25,15 +28,23 @@ local function keepNames(): { [string]: boolean }
 	for _, name in ipairs(Config.ClientFootprint.STARTER_GUI_KEEP) do
 		keep[name] = true
 	end
-	local sticker = Config.Sticker and Config.Sticker.GUI_NAME
 	local broadcast = Config.PaidBroadcast and Config.PaidBroadcast.GUI_NAME
-	if type(sticker) == "string" then
-		keep[sticker] = true
-	end
 	if type(broadcast) == "string" then
 		keep[broadcast] = true
 	end
 	return keep
+end
+
+local function isKitGui(name: string): boolean
+	if string.match(name, "^%d+%-") then
+		return true
+	end
+	local extra = (Config.ClientFootprint :: any).STARTER_GUI_TRIM_EXTRA
+	if type(extra) == "table" then
+		return table.find(extra, name) ~= nil
+	end
+	-- Engine Config predating the list: the two kit GUIs without a number.
+	return name == "AvatarContextMenu" or name == "CommandLibraryGUI"
 end
 
 -- Returns how many instances were removed.
@@ -48,7 +59,7 @@ function StarterGuiTrimService.run(): number
 	local keep = keepNames()
 	local removed = 0
 	for _, template in ipairs(StarterGui:GetChildren()) do
-		if template:IsA("LayerCollector") and not keep[template.Name] then
+		if template:IsA("LayerCollector") and not keep[template.Name] and isKitGui(template.Name) then
 			local live = playerGui:FindFirstChild(template.Name)
 			if live and live.ClassName == template.ClassName then
 				for _, child in ipairs(template:GetChildren()) do

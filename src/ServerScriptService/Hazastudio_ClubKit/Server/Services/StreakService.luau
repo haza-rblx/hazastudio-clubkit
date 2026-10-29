@@ -87,6 +87,25 @@ local function createStreakService(deps: {
 		return ResultUtil.Ok(streakResult)
 	end
 
+	function service:setStreak(userId: number, newDays: number): Types.Result<boolean>
+		if type(userId) ~= "number" or type(newDays) ~= "number" then
+			return ResultUtil.Err("invalid args")
+		end
+		newDays = math.floor(math.max(0, newDays))
+		local updateResult = repo:update(userId, function(current)
+			return OverheadDomain.mergeStored(current, {
+				streakDays  = newDays,
+				lastLoginAt = os.time(),
+			})
+		end)
+		if not updateResult.ok then
+			log:warn("setStreak failed", { userId = userId, err = updateResult.error })
+			return ResultUtil.Err(updateResult.error)
+		end
+		log:info("setStreak ok", { userId = userId, newDays = newDays })
+		return ResultUtil.Ok(true)
+	end
+
 	return service
 end
 

@@ -246,7 +246,11 @@ function MusicDomain.validatePlaylist(data: { [string]: any }): (boolean, string
 	return true, ""
 end
 
--- A copy of `durations` when it holds one positive number per part, else nil.
+-- Shorter than this is a placeholder, not a measured part (PARKLAB's "WIB" set sent 1 s for each
+-- of its 5 parts, so the player skipped through it and showed a total of seconds).
+local MIN_PART_DURATION_SECONDS = 5
+
+-- A copy of `durations` when it holds one plausible length per part, else nil.
 -- Optional data: a bad list is dropped (the client measures instead), never a
 -- reason to refuse the track.
 function MusicDomain.readPartDurations(durations: any, parts: any): { number }?
@@ -255,7 +259,7 @@ function MusicDomain.readPartDurations(durations: any, parts: any): { number }?
 	end
 	local copy = table.create(#durations)
 	for i, value in ipairs(durations) do
-		if type(value) ~= "number" or value ~= value or value <= 0 or value == math.huge then
+		if type(value) ~= "number" or value ~= value or value < MIN_PART_DURATION_SECONDS or value == math.huge then
 			return nil
 		end
 		copy[i] = value

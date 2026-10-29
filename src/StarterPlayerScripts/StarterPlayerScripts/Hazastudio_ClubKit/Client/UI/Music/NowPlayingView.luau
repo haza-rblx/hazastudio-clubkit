@@ -12,7 +12,12 @@ local Workspace = game:GetService("Workspace")
 local MusicDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicDomain)
 local GuiRefs = require(script.Parent.GuiRefs)
 local UIMotion = require(script.Parent.Parent.Parent.Utils.UIMotion)
+local SmoothScrollHelper = require(script.Parent.Parent.Parent.Utils.SmoothScrollHelper)
 local Visuals = require(script.Parent.Visuals)
+local ListPool = require(script.Parent.ListPool)
+local SetCardView = require(script.Parent.SetCardView)
+local SetBanner = require(script.Parent.SetBanner)
+local WavyProgress = require(script.Parent.WavyProgress)
 
 local PROGRESS_INTERVAL = 0.2
 local ROW_STAGGER_SECONDS = 0.04
@@ -28,13 +33,18 @@ type QueueRow = {
 	length: TextLabel,
 	requester: TextLabel,
 	avatar: ImageLabel,
+	info: Frame,
+	wrapper: Frame,
 	coverHost: Frame,
 	coverImage: ImageLabel,
+	-- The set banner a waiting set card wears (built lazily, hidden for track rows).
+	banner: any?,
 	remove: ImageButton,
 	entryId: string?,
-	key: string?,
 	fade: { GuiObject }?,
 	fadeBases: { [GuiObject]: number }?,
+	avatarPosition: UDim2?,
+	avatarEndPosition: UDim2?,
 }
 
 local function findPlaylist(playlists: any, playlistId: any): any?
@@ -53,10 +63,15 @@ local function findPlaylist(playlists: any, playlistId: any): any?
 	return nil
 end
 
+-- Identity of a queue entry: the same entry keeps its row when the queue shifts.
+local function queueKey(track: any): string
+	return string.format("%s|%s", tostring(track.queueEntryId or track.id), tostring(track.requesterUserId))
+end
+
 local NowPlayingView = {}
 NowPlayingView.__index = NowPlayingView
 
-function NowPlayingView.new(deps: { refs: GuiRefs.Refs, store: any, config: any, fire: (string, ...any) -> () })
+function NowPlayingView.new(deps: { refs: GuiRefs.Refs, store: any, config: any, fire: (string, ...any) -> (), setSheet: any? })
 	local self = setmetatable({}, NowPlayingView) :: any
 	self._refs = deps.refs.nowPlaying
 	self._mainWrapper = deps.refs.mainWrapper
@@ -64,7 +79,12 @@ function NowPlayingView.new(deps: { refs: GuiRefs.Refs, store: any, config: any,
 	self._store = deps.store
 	self._config = deps.config
 	self._fire = deps.fire
-	self._rows = {} :: { QueueRow }
+	self._queueKeys = {} :: { [string]: boolean }
+	self._prevKeys = {} :: { [string]: boolean }
+	self._bindEpoch = 0
+	self._renderForce = false
+	self._entering = 0
+	self._playlists = nil :: any
 	self._track = nil :: any
 	self._totalDuration = 0
 	self._shownSecond = -1
@@ -72,11 +92,52 @@ function NowPlayingView.new(deps: { refs: GuiRefs.Refs, store: any, config: any,
 	self._progressConn = nil :: RBXScriptConnection?
 	self._connections = {} :: { RBXScriptConnection }
 	self._unsubscribers = {} :: { () -> () }
+	self._scrollHandles = {} :: { { destroy: () -> () } }
+	-- The queue rows are children of the queue ScrollingFrame (the template's parent).
+	local queueScroll = self._template.Parent :: ScrollingFrame
+	-- The Set card sits above the rows; ListPool keeps it out of the index math (`leading`).
+	self._setCard = SetCardView.new({
+		scroll = queueScroll,
+		refs = deps.refs,
+		store = deps.store,
+		config = deps.config,
+		fire = self._fire,
+		onViewAll = function()
+			if deps.setSheet then
+				deps.setSheet:open()
+			end
+		end,
+	})
+	self._pool = ListPool.new({
+		scroll = queueScroll,
+		container = queueScroll,
+		template = self._template,
+		leading = self._setCard.frame,
+		keyOf = function(track: any): string
+			return string.format("%d#%s", self._bindEpoch, queueKey(track))
+		end,
+		createRow = function(instance: GuiObject): any
+			return self:_createQueueRow(instance)
+		end,
+		bindRow = function(row: any, track: any)
+			self:_bindQueueRow(row, track)
+		end,
+	})
 	return self
 end
 
 function NowPlayingView:bind()
 	local refs = self._refs
+	if not self._wavy then
+		self._wavy = WavyProgress.new({
+			fill = refs.progressFill,
+			startLabel = refs.elapsedLabel,
+			endLabel = refs.lengthLabel,
+			isPlaying = function(): boolean
+				return self._store:get().isPlaying == true
+			end,
+		})
+	end
 	Visuals.setText(refs.voteSkipLabel, "Vote Skip")
 	table.insert(
 		self._connections,
@@ -90,6 +151,7 @@ function NowPlayingView:bind()
 	self._djFade = { refs.djAvatar, refs.djName }
 	self._djBases = UIMotion.captureBases(self._djFade)
 	self:_bindTransport()
+	table.insert(self._scrollHandles, SmoothScrollHelper.attach(self._template.Parent :: ScrollingFrame))
 	-- Playlist names/covers arrive with the library; re-resolve what is already on screen.
 	table.insert(
 		self._unsubscribers,
@@ -98,9 +160,16 @@ function NowPlayingView:bind()
 			self:renderQueue(self._store:get().queue or {}, true)
 		end)
 	)
+	table.insert(
+		self._unsubscribers,
+		self._store:subscribe("activeSet", function(set: any)
+			self._setCard:update(set)
+		end)
+	)
 	local state = self._store:get()
 	self:setDjMode(state.isDjMode == true)
 	self:updateTrack(state.currentTrack)
+	self._setCard:update(state.activeSet)
 	self:renderQueue(state.queue or {})
 end
 
@@ -176,7 +245,14 @@ end
 
 function NowPlayingView:setDjMode(enabled: boolean)
 	local refs = self._refs
-	local ownerId = self._store:get().djOwnerUserId
+	local state = self._store:get()
+	local ownerId = state.djOwnerUserId
+	-- The stage is the audience view. The DJ and anyone with control (admins) keep the normal hero
+	-- with the transport row, or they could not skip/seek during their own set.
+	local localPlayer = Players.LocalPlayer
+	local canControl = state.isControlAllowed == true
+		or (type(ownerId) == "number" and localPlayer ~= nil and ownerId == localPlayer.UserId)
+	enabled = enabled and not canControl
 	local key = if enabled then "dj:" .. tostring(ownerId) else "off"
 	if self._djKey == key then
 		return
@@ -312,6 +388,7 @@ function NowPlayingView:setTransportAllowed(allowed: boolean)
 		Visuals.setVisible(button, allowed)
 	end
 	Visuals.setVisible(self._refs.clearQueueButton, allowed)
+	self._setCard:setControl(allowed)
 	-- Remove visibility depends on it.
 	self:renderQueue(self._store:get().queue or {}, true)
 end
@@ -416,29 +493,36 @@ end
 -- Queue
 -- ============================================================
 
-function NowPlayingView:_row(index: number): QueueRow
-	local existing = self._rows[index]
-	if existing then
-		return existing
-	end
-	local instance = self._template:Clone() :: TextButton
+-- Called by ListPool once per pooled instance (already parented, hidden).
+function NowPlayingView:_createQueueRow(instance: GuiObject): QueueRow
+	local button = instance :: TextButton
 	local info = GuiRefs.need(instance, "TrackInformationSection", "Frame")
 	local trackInfo = GuiRefs.need(info, "TrackInfo", "Frame")
 	local coverHost = GuiRefs.need(GuiRefs.need(instance, "Wrapper", "Frame"), "RelatedPlaylistCover", "Frame")
 	local remove = GuiRefs.need(info, "RemovefromQueueButton", "ImageButton")
 	local row: QueueRow = {
-		instance = instance,
+		instance = button,
 		title = GuiRefs.need(trackInfo, "TrackTitle", "TextLabel"),
 		creator = GuiRefs.need(trackInfo, "TrackCreator", "TextLabel"),
 		length = GuiRefs.need(trackInfo, "TrackLength", "TextLabel"),
 		requester = GuiRefs.need(GuiRefs.need(info, "RequesterWrapper", "Frame"), "RequesterDisplayName", "TextLabel"),
 		avatar = GuiRefs.need(info, "RequesterProfilePicture", "ImageLabel"),
+		info = info,
+		wrapper = GuiRefs.need(instance, "Wrapper", "Frame") :: Frame,
 		coverHost = coverHost,
 		coverImage = GuiRefs.need(coverHost, "ImageLabel", "ImageLabel"),
 		remove = remove,
 		entryId = nil,
-		key = nil,
 	}
+	-- "Queued by : <name>" on one line: the design wraps it, so a long name fell onto a second line
+	-- below the 23 px chip and the chip read "Queued by :". The chip fills its row and ends in "...".
+	row.requester.AutomaticSize = Enum.AutomaticSize.None
+	row.requester.Size = UDim2.fromScale(1, 1)
+	row.requester.TextWrapped = false
+	row.requester.TextTruncate = Enum.TextTruncate.AtEnd
+	-- The avatar sits left of the remove button; it moves into that slot when the button is hidden.
+	row.avatarPosition = row.avatar.Position
+	row.avatarEndPosition = UDim2.new(remove.Position.X.Scale, remove.Position.X.Offset, row.avatar.Position.Y.Scale, row.avatar.Position.Y.Offset)
 	-- Resolved before the bind below: the icon tier may move the icon into its UIMotionIconSlot.
 	local removeIcon = remove:FindFirstChildWhichIsA("ImageLabel")
 	table.insert(
@@ -452,22 +536,69 @@ function NowPlayingView:_row(index: number): QueueRow
 	)
 	row.fade = { row.title, row.creator, row.length, row.requester, row.coverImage }
 	row.fadeBases = UIMotion.captureBases(row.fade)
-	instance.Parent = self._template.Parent
-	-- Register before anything else can throw: an unregistered clone would sit parented forever,
-	-- never hidden by renderQueue, showing the template's placeholder text.
-	self._rows[index] = row
-	-- After parenting: the squash target is chosen from the live ancestry (list layout, groups).
+	-- After parenting (ListPool parents before createRow): the squash target is chosen from the live ancestry.
 	local ok, err = pcall(function()
 		self:_bindMotion(remove)
-		self:_bindMotion(instance)
+		self:_bindMotion(button)
 	end)
 	if not ok then
-		warn(string.format("[NowPlayingView] queue row %d: motion bind failed, row shown without motion: %s", index, tostring(err)))
+		warn(string.format("[NowPlayingView] queue row: motion bind failed, row shown without motion: %s", tostring(err)))
 	end
 	return row
 end
 
+-- The banner a waiting set card wears: the same face as the active Set card (SetBanner), built once
+-- per row. Its remove control is wired here; it shows only when the row's remove rule allows it.
+function NowPlayingView:_setBanner(row: QueueRow): any
+	local existing = row.banner
+	if existing then
+		return existing
+	end
+	local banner = SetBanner.new(row.instance, {
+		kicker = "UP NEXT SET",
+		family = row.title.FontFace.Family,
+		trashIcon = SetBanner.TRASH_ICON,
+		oneLineTitle = true,
+	})
+	row.banner = banner
+	local trash = banner.trash :: TextButton
+	local trashIcon = trash:FindFirstChildWhichIsA("ImageLabel")
+	table.insert(
+		self._connections,
+		trash.Activated:Connect(function()
+			if row.entryId then
+				UIMotion.wiggle(trashIcon, 16)
+				self._fire("OnTransport", "remove", { entryId = row.entryId })
+			end
+		end)
+	)
+	return banner
+end
+
+function NowPlayingView:_bindSetBanner(row: QueueRow, track: any, playlist: any?)
+	local banner = self:_setBanner(row)
+	local count = math.floor(tonumber(track.total) or 0)
+	local fill, onFill = SetBanner.colorsFor(playlist, self._config)
+	banner:setData({
+		title = tostring(track.name or ""),
+		starterName = tostring(track.requesterDisplayName or ""),
+		starterUserId = tonumber(track.requesterUserId),
+		counter = string.format("%d %s", count, if count == 1 then "Track" else "Tracks"),
+	})
+	banner:paint(fill, onFill)
+	Visuals.setVisible(banner.frame, true)
+end
+
 function NowPlayingView:_bindRow(row: QueueRow, track: any, playlist: any?)
+	local isSet = track.setCard == true
+	-- A waiting set card is drawn as its banner alone: the track layout (cover, text, length) hides.
+	Visuals.setVisible(row.wrapper, not isSet)
+	Visuals.setVisible(row.info, not isSet)
+	if isSet then
+		self:_bindSetBanner(row, track, playlist)
+	elseif row.banner then
+		Visuals.setVisible(row.banner.frame, false)
+	end
 	Visuals.setText(row.title, tostring(track.name or ""))
 	Visuals.setText(row.creator, tostring(track.creator or ""))
 	Visuals.setText(row.length, Visuals.formatClock(tonumber(track.totalDuration) or 0))
@@ -479,69 +610,85 @@ function NowPlayingView:_bindRow(row: QueueRow, track: any, playlist: any?)
 		Visuals.setVisible(row.avatar, true)
 		Visuals.setHeadshot(row.avatar, tonumber(track.requesterUserId))
 	end
-	Visuals.applyTrackCover(
-		row.coverImage,
-		track,
-		playlist,
-		self._config,
-		{ gradientHost = row.coverHost, listThumb = true }
-	)
+	if not isSet then
+		Visuals.applyTrackCover(
+			row.coverImage,
+			track,
+			playlist,
+			self._config,
+			{ gradientHost = row.coverHost, listThumb = true }
+		)
+	end
 	row.entryId = if type(track.queueEntryId) == "string" then track.queueEntryId else nil
 	local localPlayer = Players.LocalPlayer
 	local ownRequest = track.isSystemAssigned ~= true
 		and localPlayer ~= nil
 		and tonumber(track.requesterUserId) == localPlayer.UserId
-	Visuals.setVisible(row.remove, row.entryId ~= nil and (self._transportAllowed == true or ownRequest))
+	local canRemove = row.entryId ~= nil and (self._transportAllowed == true or ownRequest)
+	Visuals.setVisible(row.remove, canRemove)
+	if row.banner then
+		Visuals.setVisible(row.banner.trash, canRemove)
+	end
+	local avatarPosition = if canRemove then row.avatarPosition else row.avatarEndPosition
+	if avatarPosition and row.avatar.Position ~= avatarPosition then
+		row.avatar.Position = avatarPosition
+	end
 	row.instance.Name = tostring(track.queueEntryId or track.id or "QueueRow")
 end
 
--- Rows are pooled by position and rebound only when the entry in that slot changes.
+-- ListPool binds a row only when the entry in its slot changes; a row that already holds the entry
+-- moves with it. A key not in the previous render fades in; forced re-resolves rebind without motion.
+function NowPlayingView:_bindQueueRow(row: QueueRow, track: any)
+	if not self._renderForce and not self._prevKeys[queueKey(track)] and row.fade and row.fadeBases then
+		UIMotion.fadeIn(row.fade, row.fadeBases, ROW_STAGGER_SECONDS * math.min(self._entering, 8))
+		self._entering += 1
+	end
+	self:_bindRow(row, track, findPlaylist(self._playlists, track.playlistId))
+end
+
 function NowPlayingView:renderQueue(queue: { any }, force: boolean?)
-	local playlists = self._store:get().playlists
-	local count = 0
-	local entering = 0
+	-- A forced render changes every key, so the pool rebinds each row it shows.
+	if force then
+		self._bindEpoch += 1
+	end
+	local items = {}
+	local keys = {} :: { [string]: boolean }
 	for _, track in ipairs(queue) do
-		if type(track) ~= "table" then
+		-- Tracks from the active set are drawn by the Set card, not as rows.
+		if type(track) ~= "table" or track.fromSet == true then
 			continue
 		end
-		count += 1
-		local row = self:_row(count)
-		local key = string.format("%s|%s", tostring(track.queueEntryId or track.id), tostring(track.requesterUserId))
-		if force or row.key ~= key then
-			-- A slot that now holds a different entry fades in; forced re-resolves do not.
-			if not force and row.fade and row.fadeBases then
-				UIMotion.fadeIn(row.fade, row.fadeBases, ROW_STAGGER_SECONDS * math.min(entering, 8))
-				entering += 1
-			end
-			row.key = key
-			self:_bindRow(row, track, findPlaylist(playlists, track.playlistId))
-		end
-		if row.instance.LayoutOrder ~= count then
-			row.instance.LayoutOrder = count
-		end
-		Visuals.setVisible(row.instance, true)
+		table.insert(items, track)
+		keys[queueKey(track)] = true
 	end
-	for index = count + 1, #self._rows do
-		local row = self._rows[index]
-		row.key = nil
-		Visuals.setVisible(row.instance, false)
-	end
+	self._prevKeys = self._queueKeys
+	self._queueKeys = keys
+	self._renderForce = force == true
+	self._entering = 0
+	self._playlists = self._store:get().playlists
+	self._pool:setItems(items)
 end
 
 function NowPlayingView:destroy()
 	self:stopProgress()
+	if self._wavy then
+		self._wavy:destroy()
+		self._wavy = nil
+	end
 	for _, connection in ipairs(self._connections) do
 		connection:Disconnect()
 	end
 	for _, unsubscribe in ipairs(self._unsubscribers) do
 		unsubscribe()
 	end
-	for _, row in ipairs(self._rows) do
-		row.instance:Destroy()
+	for _, handle in ipairs(self._scrollHandles) do
+		handle.destroy()
 	end
+	self._pool:destroy()
+	self._setCard:destroy()
 	table.clear(self._connections)
 	table.clear(self._unsubscribers)
-	table.clear(self._rows)
+	table.clear(self._scrollHandles)
 end
 
 return NowPlayingView

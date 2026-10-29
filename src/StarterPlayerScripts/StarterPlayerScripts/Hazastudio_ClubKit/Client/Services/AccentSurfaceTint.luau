@@ -19,6 +19,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local AccentDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.AccentDomain)
+local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local AccentService = require(script.Parent.AccentService)
 
 local AccentSurfaceTint = {}
@@ -38,10 +39,6 @@ local DESIGN_ATTRIBUTE_PREFIX = "AccentDesign"
 
 -- Engine GUIs that manage their own look.
 local SKIPPED_SCREEN_GUIS = {
-	TopbarStandard = true,
-	TopbarStandardClipped = true,
-	TopbarCentered = true,
-	TopbarCenteredClipped = true,
 	BubbleChat = true,
 	Chat = true,
 }
@@ -409,6 +406,23 @@ function AccentSurfaceTint.attach(root: Instance)
 	end
 end
 
+-- Kit ScreenGuis: numbered ("01-…", "99-…", "1000-01-…"), the kit's runtime "ClubKit…" hosts, and
+-- the two unnumbered kit GUIs. A venue's own GUI (PARKLAB's DualGlowColorGui swatches) keeps its
+-- colours, and so does every name in Config.Branding.ACCENT_NO_TINT_GUIS (the music player).
+local UNNUMBERED_KIT_GUIS = { AvatarContextMenu = true, CommandLibraryGUI = true, TopbarStandard = true, TopbarStandardClipped = true, TopbarCentered = true, TopbarCenteredClipped = true }
+local function isThemedScreenGui(name: string): boolean
+	local noTint = (Config.Branding :: any).ACCENT_NO_TINT_GUIS
+	if type(noTint) ~= "table" then
+		noTint = { "06-MusicPlayerGUI", "04-AdminPanelv3", "04-AdminHub" } -- engine Config predating the key
+	end
+	if table.find(noTint, name) then
+		return false
+	end
+	return string.match(name, "^%d+%-") ~= nil
+		or string.match(name, "^ClubKit") ~= nil
+		or UNNUMBERED_KIT_GUIS[name] == true
+end
+
 -- Every kit ScreenGui in PlayerGui, including ones added later (lazy-loaded panels).
 local playerGuiAttached = false
 function AccentSurfaceTint.attachPlayerGui(playerGui: Instance)
@@ -417,7 +431,7 @@ function AccentSurfaceTint.attachPlayerGui(playerGui: Instance)
 	end
 	playerGuiAttached = true
 	local function consider(child: Instance)
-		if child:IsA("ScreenGui") and not SKIPPED_SCREEN_GUIS[child.Name] then
+		if child:IsA("ScreenGui") and not SKIPPED_SCREEN_GUIS[child.Name] and isThemedScreenGui(child.Name) then
 			AccentSurfaceTint.attach(child)
 		end
 	end

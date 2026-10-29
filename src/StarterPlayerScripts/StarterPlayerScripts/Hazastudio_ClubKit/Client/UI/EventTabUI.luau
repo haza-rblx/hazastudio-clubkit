@@ -23,6 +23,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
 local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 local EventCardKit = require(script.Parent.EventCardKit)
+local EventPostPopupUI = require(script.Parent.EventPostPopupUI)
 
 local cfg = Config.EventBoard
 local path, setText, setVisible = EventCardKit.path, EventCardKit.setText, EventCardKit.setVisible
@@ -144,6 +145,7 @@ function EventTabUI.tryCreate(playerGui: PlayerGui): any?
 	self._popup = nil :: GuiObject?
 	self._popupGui = nil :: ScreenGui?
 	self._popupPostId = nil :: number?
+	self._postPopup = nil :: any
 
 	if postsSection ~= questsSection then
 		local identity = path(postsSection, "SectionIdentity")
@@ -207,10 +209,25 @@ end
 
 function EventTabUI:_buildPopup(menuGui: Instance)
 	local source = menuGui:FindFirstChild(cfg.POPUP_NAME)
+	if source and source:IsA("GuiObject") then
+		source.Visible = false
+	end
+	-- 2026-10-09: the popup is a large Event card (EventPostPopupUI) with the post's image, fitted
+	-- to the screen. The old PopUpMenuTemplate stays the fallback for a GUI without card templates.
+	local cardTemplate = self._templates.image or self._templates.basic
+	local playerGui = menuGui.Parent
+	if cardTemplate and playerGui and playerGui:IsA("PlayerGui") then
+		self._postPopup = EventPostPopupUI.create(playerGui, cardTemplate)
+		if self._postPopup then
+			self._postPopup:onClose(function()
+				self._popupPostId = nil
+			end)
+			return
+		end
+	end
 	if not (source and source:IsA("GuiObject")) then
 		return
 	end
-	source.Visible = false
 	-- Its own ScreenGui: the menu's is disabled while the menu is closed.
 	local playerGui = menuGui.Parent
 	local existing = playerGui and playerGui:FindFirstChild(POPUP_GUI_NAME)
@@ -261,6 +278,22 @@ end
 
 function EventTabUI:openPost(postId: number)
 	local post = self:postById(postId)
+	if post and self._postPopup then
+		self._popupPostId = post.id
+		self._postPopup:open({
+			header = cfg.HEADER_LABELS.announcement,
+			category = if post.category ~= "" then EventCardKit.spaced(post.category) else "",
+			title = post.title,
+			date = self:_postDate(post),
+			body = post.body,
+			imageAssetId = post.imageAssetId,
+			closeText = cfg.BUTTON_CLOSE_POPUP,
+		})
+		if self._onPostSeen then
+			self._onPostSeen(post.id)
+		end
+		return
+	end
 	if not post or not self._popup or not self._popupGui then
 		return
 	end
@@ -280,6 +313,9 @@ function EventTabUI:openPost(postId: number)
 end
 
 function EventTabUI:closePopup()
+	if self._postPopup then
+		self._postPopup:close()
+	end
 	if self._popupGui then
 		self._popupGui.Enabled = false
 	end
@@ -678,6 +714,9 @@ function EventTabUI:destroy()
 	table.clear(self._cards)
 	if self._popupGui then
 		self._popupGui:Destroy()
+	end
+	if self._postPopup then
+		self._postPopup:destroy()
 	end
 end
 

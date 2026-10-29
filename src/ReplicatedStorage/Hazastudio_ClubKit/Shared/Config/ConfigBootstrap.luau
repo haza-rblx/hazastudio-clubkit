@@ -670,37 +670,57 @@ function ConfigBootstrap.apply(config: any)
 		end
 	end
 
+	-- Giveaway (Auto Gacha): buyer defaults. Live values come from the admin sheet (DataStore).
+	local giveaway = clubKit.Giveaway
+	if type(config.Giveaway) == "table" and type(giveaway) == "table" then
+		config.Giveaway.DEFAULT_ENABLED = giveaway.Enabled == true
+		config.Giveaway.DEFAULT_INTERVAL_MINUTES = tonumber(giveaway.IntervalMinutes) or config.Giveaway.DEFAULT_INTERVAL_MINUTES
+		config.Giveaway.DEFAULT_MIN_PLAYERS = tonumber(giveaway.MinPlayers) or config.Giveaway.DEFAULT_MIN_PLAYERS
+		config.Giveaway.DEFAULT_PRIZE_ROBUX = tonumber(giveaway.PrizeRobux) or config.Giveaway.DEFAULT_PRIZE_ROBUX
+		local anchor = giveaway.Anchor
+		if anchor == "TopLeft" or anchor == "TopCenter" or anchor == "TopRight" then
+			config.Giveaway.DEFAULT_ANCHOR = anchor
+		end
+		config.Giveaway.DEFAULT_SPIN_DURATION = tonumber(giveaway.SpinDuration) or config.Giveaway.DEFAULT_SPIN_DURATION
+		config.Giveaway.DEFAULT_WIN_FX_VARIANT = tonumber(giveaway.WinFxVariant) or config.Giveaway.DEFAULT_WIN_FX_VARIANT
+	end
+
 	local announcement = clubKit.Announcement
 	if type(config.Announcement) == "table" and type(announcement) == "table" then
 		local minRaw = announcement.MinMembership
 		if type(minRaw) == "string" and minRaw ~= "" then
-			-- Resolve without requiring OverheadDomain (Config is still loading → recursive require).
-			local aliases = config.Membership and config.Membership.ALIASES
-			local mapped = if type(aliases) == "table"
-				then aliases[minRaw] or aliases[string.lower(minRaw)]
-				else nil
-			local minTier = if type(mapped) == "string" then mapped else minRaw
-			local tiers = config.Membership and config.Membership.Tiers
-			local paid = config.Membership and config.Membership.PAID_TIERS
-			if type(tiers) == "table" and type(tiers[minTier]) ~= "table" then
-				local lowered = string.lower(minRaw)
-				for key, cfg in pairs(tiers) do
-					if type(key) == "string" and type(cfg) == "table" then
-						local label = cfg.label
-						if type(label) == "string" and string.lower(label) == lowered then
-							minTier = key
-							break
+			if string.lower(minRaw) == "none" or string.lower(minRaw) == "disabled" then
+				config.Announcement.MIN_MEMBERSHIP_TIER = "none"
+				config.Announcement.MSG_NO_PERM = "[Announcement] Free announcement is disabled for membership tiers."
+			else
+				-- Resolve without requiring OverheadDomain (Config is still loading → recursive require).
+				local aliases = config.Membership and config.Membership.ALIASES
+				local mapped = if type(aliases) == "table"
+					then aliases[minRaw] or aliases[string.lower(minRaw)]
+					else nil
+				local minTier = if type(mapped) == "string" then mapped else minRaw
+				local tiers = config.Membership and config.Membership.Tiers
+				local paid = config.Membership and config.Membership.PAID_TIERS
+				if type(tiers) == "table" and type(tiers[minTier]) ~= "table" then
+					local lowered = string.lower(minRaw)
+					for key, cfg in pairs(tiers) do
+						if type(key) == "string" and type(cfg) == "table" then
+							local label = cfg.label
+							if type(label) == "string" and string.lower(label) == lowered then
+								minTier = key
+								break
+							end
 						end
 					end
 				end
-			end
-			if type(paid) == "table" and paid[minTier] == true then
-				config.Announcement.MIN_MEMBERSHIP_TIER = minTier
-				local tierCfg = tiers and tiers[minTier]
-				local label = if type(tierCfg) == "table" and type(tierCfg.label) == "string" and tierCfg.label ~= ""
-					then tierCfg.label
-					else minTier
-				config.Announcement.MSG_NO_PERM = "[Announcement] This command is " .. label .. "-only and above."
+				if type(paid) == "table" and paid[minTier] == true then
+					config.Announcement.MIN_MEMBERSHIP_TIER = minTier
+					local tierCfg = tiers and tiers[minTier]
+					local label = if type(tierCfg) == "table" and type(tierCfg.label) == "string" and tierCfg.label ~= ""
+						then tierCfg.label
+						else minTier
+					config.Announcement.MSG_NO_PERM = "[Announcement] This command is " .. label .. "-only and above."
+				end
 			end
 		end
 		-- Per-role-group rate limits (partial override; fill-forward per group).
@@ -750,7 +770,6 @@ function ConfigBootstrap.apply(config: any)
 			Settings = "SettingsEnabled",
 			Shop = "ShopEnabled",
 			Couples = "CouplesEnabled",
-			Stickers = "StickersEnabled",
 			Leaderboards = "LeaderboardEnabled",
 			DonationCash = "DonationCashEnabled",
 			DonationSaweria = "DonationSaweriaEnabled",

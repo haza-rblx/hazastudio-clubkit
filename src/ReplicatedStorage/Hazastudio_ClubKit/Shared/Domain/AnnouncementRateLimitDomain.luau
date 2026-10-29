@@ -57,6 +57,9 @@ function AnnouncementRateLimitDomain.resolve(roleKey: string?, effectiveMembersh
 		return readBudget("RATE_LIMIT_SPENDER_MAX", "RATE_LIMIT_SPENDER_WINDOW", "Spender")
 	end
 	local minTierRaw = Config.Announcement and Config.Announcement.MIN_MEMBERSHIP_TIER
+	if minTierRaw == "none" or minTierRaw == "None" or minTierRaw == "disabled" or minTierRaw == false then
+		return readBudget("RATE_LIMIT_PLAYER_MAX", "RATE_LIMIT_PLAYER_WINDOW", "Player")
+	end
 	local minTier = OverheadDomain.normalizeMembershipTier(minTierRaw) or "Tier2"
 	if OverheadDomain.hasMembershipAtLeast(effectiveMembership, minTier) then
 		return readBudget("RATE_LIMIT_MEMBER_MAX", "RATE_LIMIT_MEMBER_WINDOW", "Member")

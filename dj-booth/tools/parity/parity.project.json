@@ -1,0 +1,9 @@
+{
+	"name": "HazaDJ_Test",
+	"tree": {
+		"$className": "Folder",
+		"Parity": { "$path": "Parity.luau" },
+		"Run": { "$path": "Run.luau" },
+		"Golden": { "$path": "../../tests/golden" }
+	}
+}

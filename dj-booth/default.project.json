@@ -1,0 +1,24 @@
+{
+	"name": "HazaDJ",
+	"tree": {
+		"$className": "DataModel",
+		"ReplicatedStorage": {
+			"HazaDJ": {
+				"$className": "Folder",
+				"Packages": { "$path": "Packages" },
+				"Shared": { "$path": "src/shared" }
+			}
+		},
+		"ServerScriptService": {
+			"HazaDJ": {
+				"$path": "src/server",
+				"ServerPackages": { "$path": "ServerPackages" }
+			}
+		},
+		"StarterPlayer": {
+			"StarterPlayerScripts": {
+				"HazaDJ": { "$path": "src/client" }
+			}
+		}
+	}
+}

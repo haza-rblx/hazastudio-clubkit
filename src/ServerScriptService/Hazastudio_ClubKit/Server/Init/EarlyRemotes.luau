@@ -18,6 +18,21 @@ local function ensureRemoteEvent(parent: Instance, name: string): RemoteEvent
 	return remote
 end
 
+local function ensureRemoteFunction(parent: Instance, name: string): RemoteFunction
+	local existing = parent:FindFirstChild(name)
+	if existing then
+		if existing:IsA("RemoteFunction") then
+			return existing
+		end
+		existing:Destroy()
+	end
+
+	local remote = Instance.new("RemoteFunction")
+	remote.Name = name
+	remote.Parent = parent
+	return remote
+end
+
 local function ensureFolder(parent: Instance, name: string): Folder
 	local existing = parent:FindFirstChild(name)
 	if existing then
@@ -61,10 +76,22 @@ local function provisionRemotesFolder(remotes: Folder, config: any)
 	ensureRemoteEvent(remotes, config.Admin.REMOTE_RESET_TITLE)
 	ensureRemoteEvent(remotes, config.Admin.REMOTE_SET_TITLE_IMAGE)
 	ensureRemoteEvent(remotes, config.Admin.REMOTE_TITLE_IMAGE_LIST)
+	ensureRemoteFunction(remotes, config.Admin.REMOTE_GET_STATS)
+	ensureRemoteFunction(remotes, config.Admin.REMOTE_SET_STATS)
 
 	ensureRemoteEvent(remotes, config.CinematicDock.REMOTE_REQUEST)
 	ensureRemoteEvent(remotes, config.CinematicDock.REMOTE_BROADCAST)
 	ensureRemoteEvent(remotes, config.CinematicDock.REMOTE_TARGETS)
+
+	for _, name in ipairs({
+		config.Giveaway.REMOTE_STATE,
+		config.Giveaway.REMOTE_SPIN,
+		config.Giveaway.REMOTE_ADMIN,
+		config.Giveaway.REMOTE_HISTORY,
+		config.Giveaway.REMOTE_NOTICE,
+	}) do
+		ensureRemoteEvent(remotes, name)
+	end
 
 	ensureRemoteEvent(remotes, config.Drone.REMOTE_REQUEST)
 	ensureRemoteEvent(remotes, config.Drone.REMOTE_CAMERA)

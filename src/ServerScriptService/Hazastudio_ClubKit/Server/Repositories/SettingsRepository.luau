@@ -17,6 +17,8 @@ local PlayerDocWriter = require(script.Parent.Parent.Persistence.PlayerDocWriter
 
 local SETTINGS_INVALIDATE_TOPIC = "SettingsInvalidate"
 local SESSION_NS = "settings"
+-- Set when a raw DataStore read predates the title-layer reset; consumed once on join.
+local titleLayerResetByUserId: { [number]: boolean } = {}
 
 type Result<T> = Types.Result<T>
 type SettingsStoredData = Types.SettingsStoredData
@@ -110,6 +112,9 @@ local function createSettingsRepository(datastoreKey: string?): any
 			return Result.Err(result.error)
 		end
 
+		if SettingsDomain.needsTitleLayerReset(result.value) then
+			titleLayerResetByUserId[userId] = true
+		end
 		local data = SettingsDomain.sanitizeStored(result.value)
 		Cache.set(cacheKey, data, Config.DataStore.CACHE_TTL)
 		PlayerSessionStore.hydrate(SESSION_NS, userId, data)
@@ -118,6 +123,12 @@ local function createSettingsRepository(datastoreKey: string?): any
 
 	function repo:load(userId: number): Result<SettingsStoredData>
 		return self:loadStrict(userId)
+	end
+
+	function repo:consumeTitleLayerReset(userId: number): boolean
+		local pending = titleLayerResetByUserId[userId] == true
+		titleLayerResetByUserId[userId] = nil
+		return pending
 	end
 
 	function repo:update(

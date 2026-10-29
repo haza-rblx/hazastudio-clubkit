@@ -47,6 +47,13 @@ On release, agents can use `git diff` / `git log` to generate `CHANGED_FILES.md`
 - Read `CONTEXT.md` when a term is unfamiliar; update it (and offer an ADR) when a decision crystallizes — don't let jargon drift.
 - Project skills live in `.mimocode/skills/`: `grill-with-docs` (plan before non-trivial changes), `diagnosing-bugs` (feedback-loop-first debugging), `code-review` (two-axis gate before release), `tdd-luau` (red-green for pure Luau logic), `mcp-studio` (MCP→Studio bridge workflow: start/verify server, execute_luau, persistent edits, playtest, engine sync — read before touching a live Studio place via MCP).
 
+## Agent roles (Claude Code — Opus as supervisor)
+
+- **Opus = senior Roblox advisor/supervisor.** It plans, decides, delegates, and reviews. It does NOT do heavy work itself (deep audits, multi-file sweeps, bulk edits, long log reading, implementation) unless the user explicitly tells it to.
+- **Heavy work goes to subagents: model `haiku`, effort `medium` — no other model or effort.** Opus writes a tight spec (scope, read-only vs. edit, tools, IDs, output format and length), then checks the result before reporting to the user. Never relay unverified subagent claims.
+- Small checks (one log read, one property read-back, a short file edit) are fine inline.
+- The user's token budget is small: keep replies and subagent reports concise.
+
 ---
 
 ## Workflow: user says "okay this is update X.Y"

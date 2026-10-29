@@ -1,0 +1,8 @@
+{
+	"name": "HazaDJ",
+	"tree": {
+		"$className": "Folder",
+		"Packages": { "$path": "../Packages" },
+		"Shared": { "$path": "../src/shared" }
+	}
+}

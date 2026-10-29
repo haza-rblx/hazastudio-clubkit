@@ -253,7 +253,8 @@ function QueueIsland.observe(queue: { any }?, config: any, playlists: any?)
 		local key = entryKey(entry)
 		if key then
 			current[key] = true
-			if not known[key] and primed and enabled and entry.isSystemAssigned ~= true then
+			-- An active set queues its next song itself (fromSet); that is not someone's request.
+			if not known[key] and primed and enabled and entry.isSystemAssigned ~= true and entry.fromSet ~= true then
 				table.insert(pending, { key = key, entry = entry })
 			end
 		end

@@ -2,7 +2,7 @@
 -- Shared character readiness for small maps (near-instant) and large/streamed maps.
 -- Tiers:
 --   parts — Humanoid + HumanoidRootPart
---   adorn — parts + stable Head (nametag / stickers / loading suppress)
+--   adorn — parts + stable Head (nametag / loading suppress)
 --   anim  — parts + Animator under Humanoid (dance restore / sync) — does NOT need Head
 
 local Players = game:GetService("Players")
@@ -359,7 +359,7 @@ function CharacterReady.onHeadAdded(character: Model, callback: (head: BasePart)
 	end)
 end
 
---- Sticker / adorn part resolution (matches StickerService priority).
+--- Adorn part resolution: first priority name found, else the first BasePart.
 function CharacterReady.findAdornee(character: Model, priorityNames: { string }?): BasePart?
 	local priority = priorityNames or DEFAULT_ADORNEE_PRIORITY
 	for _, partName in ipairs(priority) do

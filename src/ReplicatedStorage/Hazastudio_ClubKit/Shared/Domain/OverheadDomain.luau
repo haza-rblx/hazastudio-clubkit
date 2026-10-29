@@ -104,6 +104,7 @@ local GIFTABLE_ROLES: { [string]: true } = buildRoleFlagMap("giftable")
 -- the buyer's (the same trap Config.Template.TEMPLATE_NAME hit).
 local DEFAULT_PUBLIC_LAYER_VISIBLE: { [string]: boolean } = {
 	SpecialTitle = true,
+	SpecialTitleImage = true,
 	BadgeGroup = true,
 	Level = true,
 	SpecialRank = true,

@@ -60,8 +60,24 @@ local function createEventBoardController(deps: {
 	progressRepo: any, -- VenueQuestProgressRepository
 	levelService: any?,
 	logger: any?,
+	-- Optional: stored-settings write for title grants (own client shows the layer).
+	settingsService: any?,
+	settingsSync: { syncPlayer: ((Player) -> ())? }?,
 })
 	local log = deps.logger or Logger.new("EventBoardController")
+	local settingsService = deps.settingsService
+	local settingsSync = deps.settingsSync
+
+	-- Only an online target has loaded settings to write into.
+	local function grantStoredLayers(userId: number, keys: { string })
+		local onlineTarget = game:GetService("Players"):GetPlayerByUserId(userId)
+		if not settingsService or not onlineTarget then
+			return
+		end
+		if settingsService:grantOverheadLayers(onlineTarget, keys) and settingsSync and settingsSync.syncPlayer then
+			settingsSync.syncPlayer(onlineTarget)
+		end
+	end
 	local cfg = Config.EventBoard
 	local notify = deps.notify
 	local repo = deps.repo
@@ -440,6 +456,9 @@ local function createEventBoardController(deps: {
 			end)
 			if not updated.ok then
 				return false, cfg.MSG_SAVE_FAILED
+			end
+			if not skipped then
+				grantStoredLayers(userId, { "SpecialTitle" })
 			end
 			if skipped then
 				return true, cfg.MSG_REWARD_SKIPPED_TITLE
@@ -1030,6 +1049,89 @@ local function createEventBoardController(deps: {
 
 	function controller:getBoard(): Board
 		return board()
+	end
+
+	-- ── admin stats (AdminController "Edit stats") ───────────────────────────────────────
+	-- The live streak quest a player checks in to: the first running streak quest on the board.
+	local function activeStreakQuest(): Quest?
+		for _, quest in ipairs(EventBoardDomain.visibleQuests(board(), today())) do
+			if quest.goalType == "streak" then
+				return quest
+			end
+		end
+		return nil
+	end
+
+	-- Read-only snapshot for the admin sheet. nil when the player is not loaded or no streak quest runs.
+	function controller:getStreakQuestStanding(userId: number): { label: string, progress: number, goal: number, completed: boolean }?
+		local session = sessions[userId]
+		local quest = activeStreakQuest()
+		if not session or not session.loaded or not quest then
+			return nil
+		end
+		local standing = EventBoardDomain.standing(quest, session.doc, 0, today())
+		return {
+			label = quest.title,
+			progress = standing.current,
+			goal = standing.target,
+			completed = standing.complete,
+		}
+	end
+
+	-- Admin write of the streak quest progress. Keeps the run going: after a non-zero progress
+	-- write on a day not yet checked in, lastDay is set to yesterday so today's check-in counts.
+	function controller:setStreakQuestStanding(userId: number, progress: number?, completed: boolean?): (boolean, string)
+		local session = sessions[userId]
+		if not session or not session.loaded then
+			return false, "Player quest data is not ready"
+		end
+		if session.saving or session.busy then
+			return false, "Try again in a moment"
+		end
+		local quest = activeStreakQuest()
+		if not quest then
+			return false, "No active streak quest"
+		end
+		local day = today()
+		local goal = quest.goalValue
+		local key = tostring(quest.id)
+		local entry = session.doc.quests[key]
+		if not entry then
+			entry = { progress = 0, lastDay = 0, completed = false, claimedAt = nil, dueDay = quest.dueDay }
+			session.doc.quests[key] = entry
+		elseif entry.dueDay == nil then
+			entry.dueDay = quest.dueDay
+		end
+
+		local newProgress = entry.progress
+		if progress ~= nil then
+			newProgress = math.clamp(math.floor(progress), 0, goal)
+		end
+		local newCompleted = entry.completed
+		if completed ~= nil then
+			newCompleted = completed
+		elseif progress ~= nil then
+			newCompleted = newProgress >= goal
+		end
+		if newCompleted then
+			newProgress = goal
+		end
+
+		local newLastDay = entry.lastDay
+		if newProgress == 0 then
+			newLastDay = 0
+		elseif entry.lastDay ~= day then
+			newLastDay = day - 1
+		end
+
+		entry.progress = newProgress
+		entry.completed = newCompleted
+		entry.lastDay = newLastDay
+		session.dirty = true
+		flush(session)
+		push(session)
+		log:info("Streak quest set by admin", { userId = userId, progress = newProgress, completed = newCompleted })
+		return true, "Quest updated"
 	end
 
 	for _, player in ipairs(Players:GetPlayers()) do

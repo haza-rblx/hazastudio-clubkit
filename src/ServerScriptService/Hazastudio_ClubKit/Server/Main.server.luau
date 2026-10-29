@@ -62,6 +62,8 @@ do
 		kitFolder:SetAttribute("Vendor", KitProduct.Vendor)
 	end
 end
+-- Retired GUIs (sticker panel): drop their StarterGui copies before any player spawns.
+ServerMods.RetiredGuiSweep.run()
 if Config.DataStoreScope.IS_STUDIO and Config.DataStoreScope.USE_STUDIO_ISOLATION then
 	log:info("DataStore scope: Studio (isolated from live, persists across Studio restarts)", {
 		prefix = Config.DataStoreScope.PREFIX,
@@ -261,11 +263,6 @@ local AvatarContextUpdatedRemote = ensureRemoteEvent(Remotes, Config.AvatarConte
 local AvatarContextLikeRequestRemote = ensureRemoteEvent(Remotes, Config.AvatarContext.REMOTE_LIKE_REQUEST)
 local AvatarContextLikeResultRemote = ensureRemoteEvent(Remotes, Config.AvatarContext.REMOTE_LIKE_RESULT)
 local AvatarLikeEffectRemote = ensureRemoteEvent(Remotes, Config.AvatarContext.REMOTE_LIKE_EFFECT)
-ensureRemoteEvent(Remotes, Config.Sticker.REMOTE_SET)
-ensureRemoteEvent(Remotes, Config.Sticker.REMOTE_CLEAR)
-ensureRemoteEvent(Remotes, Config.Sticker.REMOTE_ADD)
-ensureRemoteEvent(Remotes, Config.Sticker.REMOTE_REQUEST)
-ensureRemoteEvent(Remotes, Config.Sticker.REMOTE_SYNC)
 ensureRemoteEvent(Remotes, Config.AfkGuard.REMOTE_REQUEST or "AfkRejoinRequest")
 local AfkRejoinResponseRemote = ensureRemoteEvent(Remotes, Config.AfkGuard.REMOTE_RESPONSE or "AfkRejoinResponse")
 -- Settings remotes
@@ -276,6 +273,8 @@ ensureRemoteEvent(Remotes, Config.Settings.REMOTE_RESET)
 ensureRemoteEvent(Remotes, Config.ProfileMenu.REMOTE_REQUEST)
 ensureRemoteEvent(Remotes, Config.ProfileMenu.REMOTE_SYNC)
 ensureRemoteEvent(Remotes, Config.ProfileMenu.REMOTE_UPDATE)
+-- Instance-diet probe (temporary): client batches arrive here; start() also runs the server sampler.
+ServerMods.InstanceTelemetry.start(ensureRemoteEvent(Remotes, "InstanceProbeReport"))
 -- Music remotes (early so client MusicPlayerController can bind before MusicService loads)
 if Config.FeatureFlags.MusicPlayerEnabled then
 	local musicConfig = Config.Music
@@ -300,6 +299,13 @@ if Config.FeatureFlags.MusicPlayerEnabled then
 end
 -- Late-bound controller remotes: create early so client boot does not wait on heavy server wiring.
 provisionEarlyRemotes(ReplicatedStorage, Remotes, Config)
+-- Drop kit ScreenGui templates this server never binds before anyone spawns with a copy.
+do
+	local pruned = ServerMods.pruneStarterGui(Config)
+	if #pruned > 0 then
+		log:info("Pruned unused StarterGui templates", { names = table.concat(pruned, ",") })
+	end
+end
 -- Interface Notify - inject into controller as deps
 type NotifyPayload = {
 	message: string,
@@ -422,6 +428,9 @@ local playerSnapshotService = ServerMods.createPlayerSnapshotService.create({
 local backgroundJobScheduler = ServerMods.createBackgroundJobScheduler.create({
 	logger = Logger.new("BackgroundJobScheduler"),
 })
+-- Late-bound bridge: grants write stored overhead layers, then push the target's settings.
+-- SettingsController is constructed later; its syncPlayer is populated there.
+local settingsSync: { syncPlayer: ((Player) -> ())? } = { syncPlayer = nil }
 local overheadService = ServerMods.createOverheadService({
 	repo = repo,
 	avatarLikeRepository = avatarLikeRepository,
@@ -436,6 +445,8 @@ local profileMenuService = ServerMods.createProfileMenuService({
 	profileRepository = profileRepo,
 	overheadRepository = repo,
 	profileCommandService = profileCommandService,
+	settingsService = settingsService,
+	settingsSync = settingsSync,
 })
 local avatarContextService = ServerMods.createAvatarContextService({
 	logger = Logger.new("AvatarContextService"),
@@ -478,14 +489,6 @@ ServerMods.MovementGuard.start({
 	carryService = carryService,
 	playerSnapshotService = playerSnapshotService,
 })
-local stickerService = trackLifecycle(
-	"StickerService",
-	ServerMods.createStickerService.new({
-		logger = Logger.new("StickerService"),
-		repository = ServerMods.StickerRepository,
-		-- profileLoader wired after SharedProfileLoader is created (before startAll).
-	})
-)
 trackLifecycle(
 	"RoleToolService",
 	ServerMods.RoleToolService.new({
@@ -615,6 +618,9 @@ local streakController = ServerMods.createStreakController({
 })
 -- Event board (ADR 0015): venue posts + venue quests from the customer dashboard. Registers its
 -- own players (current and joining) and pulls the board on onStart.
+-- Giveaway (Auto Gacha): hourly prize draw; settings + history in DataStore Giveaway_v1.
+trackLifecycle("GiveawayService", ServerMods.createGiveawayService({ remotes = Remotes }))
+
 local eventBoardController = trackLifecycle(
 	"EventBoardController",
 	ServerMods.createEventBoardController({
@@ -624,6 +630,8 @@ local eventBoardController = trackLifecycle(
 		overheadController = overheadController,
 		progressRepo = ServerMods.VenueQuestProgressRepository.new({ logger = Logger.new("VenueQuestProgressRepository") }),
 		levelService = levelService,
+		settingsService = settingsService,
+		settingsSync = settingsSync,
 		logger = Logger.new("EventBoardController"),
 	})
 )
@@ -715,7 +723,7 @@ sharedProfileLoader:onLoaded(function(event)
 	end)
 end)
 -- Critical join kinds only (overhead + profile). Secondary kinds
--- (likes_summary, favorites, settings, stickers, music_favorites) are deferred
+-- (likes_summary, favorites, settings, music_favorites) are deferred
 -- so join storms do not saturate DataStoreScheduler GetAsync slots.
 local function enqueueCriticalJoinLoads(player: Player)
 	sharedProfileLoader:enqueueKind(player, "overhead")
@@ -778,7 +786,12 @@ local _adminController = ServerMods.createAdminController({
 	membershipCommandService = membershipCommandService,
 	playerLookupService = playerLookupService, -- DI fixed: inject lookup service
 	profileMenuSync = profileMenuSync,
+	settingsService = settingsService,
+	settingsSync = settingsSync,
 	titleImageRegistry = ServerMods.TitleImageRegistryRepository.create({}),
+	levelService = levelService,
+	streakService = streakService,
+	eventBoardController = eventBoardController,
 })
 if Config.FeatureFlags.CouplesEnabled ~= false then
 	ServerMods.createCoupleController({
@@ -1128,33 +1141,14 @@ do
 			profileLoader = sharedProfileLoader,
 		})
 	)
+	settingsSync.syncPlayer = function(player: Player)
+		settingsController:syncPlayer(player)
+	end
 	settingsController:init()
-end
-if Config.FeatureFlags.StickersEnabled ~= false then
-	-- Stickers join load folds into SharedProfileLoader (registered in onStart).
-	stickerService._profileLoader = sharedProfileLoader
-	trackLifecycle(
-		"StickerController",
-		ServerMods.createStickerController.new({
-			logger = Logger.new("StickerController"),
-			remotes = Remotes,
-			service = stickerService,
-			rateLimiters = {
-				SET = ServerMods.RateLimiter.new(Config.Sticker.RATE_LIMITS.SET.max, Config.Sticker.RATE_LIMITS.SET.window),
-				CLEAR = ServerMods.RateLimiter.new(Config.Sticker.RATE_LIMITS.CLEAR.max, Config.Sticker.RATE_LIMITS.CLEAR.window),
-				ADD = ServerMods.RateLimiter.new(Config.Sticker.RATE_LIMITS.ADD.max, Config.Sticker.RATE_LIMITS.ADD.window),
-				REQUEST = ServerMods.RateLimiter.new(
-					Config.Sticker.RATE_LIMITS.REQUEST.max,
-					Config.Sticker.RATE_LIMITS.REQUEST.window
-				),
-			},
-		})
-	)
 end
 -- serverLifecycle:startAll() called after all modules registered (below)
 -- ── Lifecycle startAll ──────────────────────────────────────
 -- Call onStart() for all modules registered via trackLifecycle.
--- StickerService and StickerController also start here.
 serverLifecycle:startAll()
 -- Start the proximity recompute loop (drives ServerMods.InterestManager channel membership).
 -- Must be called AFTER serverLifecycle:startAll() so all other services are live.
@@ -1444,13 +1438,63 @@ if Config.FeatureFlags.MusicPlayerEnabled then
 	musicFavoritesRepo = musicBoot.musicFavoritesRepo
 	_musicService = musicBoot.musicService
 end
+-- /setstreak <namaPlayer> <angka> — restore streak by admin
+do
+	local PermissionDomain_local = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.PermissionDomain)
+	chatCommandService:register("setstreak", function(caller: Player, unfilteredText: string, _requestId: string)
+		local callerRoleKey: string? = nil
+		if overheadService and type(overheadService.getEffectivePayload) == "function" then
+			local pr = overheadService:getEffectivePayload(caller)
+			if pr.ok then callerRoleKey = pr.value.role end
+		end
+		if not PermissionDomain_local.canUseAdminPanel(callerRoleKey, caller.UserId) then
+			Notify.player(caller, "[setstreak] Tidak punya izin.", "WARNING")
+			return
+		end
+
+		local _, args = unfilteredText:match("^/(%S+)%s*(.-)%s*$")
+		local targetName, daysStr = (args or ""):match("^(%S+)%s+(%d+)%s*$")
+		if not targetName or not daysStr then
+			Notify.player(caller, "[setstreak] Pemakaian: /setstreak <nama> <angka>", "WARNING")
+			return
+		end
+		local days = tonumber(daysStr)
+		if not days or days < 0 or days > 9999 then
+			Notify.player(caller, "[setstreak] Angka tidak valid (0–9999).", "WARNING")
+			return
+		end
+
+		local targetPlayer: Player? = nil
+		local lowerName = string.lower(targetName)
+		for _, p in ipairs(Players:GetPlayers()) do
+			if string.lower(p.Name) == lowerName or string.lower(p.DisplayName) == lowerName then
+				targetPlayer = p
+				break
+			end
+		end
+		if not targetPlayer then
+			Notify.player(caller, ("[setstreak] Player '%s' tidak ada di server ini."):format(targetName), "WARNING")
+			return
+		end
+
+		local result = streakService:setStreak(targetPlayer.UserId, days)
+		if result.ok then
+			Notify.player(caller, ("[setstreak] Streak %s -> %d hari."):format(targetPlayer.Name, days), "SUCCESS")
+			Notify.player(targetPlayer, ("[Admin] Streak kamu diset ke %d hari."):format(days), "INFO")
+			overheadController:refreshPlayer(targetPlayer)
+		else
+			Notify.player(caller, ("[setstreak] Gagal: %s"):format(tostring(result.error)), "ERROR")
+		end
+	end)
+end
+
 local _chatCommandController = ServerMods.createChatCommandController({
 	chatCommandService = chatCommandService,
 	commandExecutionService = commandExecutionService,
 })
 _chatCommandController:init()
 log:info(
-	"Server initialized. Overhead + Gift + Streak + Level + Couple + Shop + Sticker + Notify + AvatarContext + AvatarLike + Carry + CommandRouter + CommandLibrary + Settings ready."
+	"Server initialized. Overhead + Gift + Streak + Level + Couple + Shop + Notify + AvatarContext + AvatarLike + Carry + CommandRouter + CommandLibrary + Settings ready."
 )
 -- ============================================================
 -- AUTOSAVE + ServerRestartScheduled early flush

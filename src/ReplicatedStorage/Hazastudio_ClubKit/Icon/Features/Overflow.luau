@@ -73,6 +73,12 @@ function Overflow.start(incomingIcon)
 end
 
 function Overflow.getWidth(icon, getMaxWidth)
+	-- Rows in the overflow dropdown are stretched to a fixed width, so while an icon is
+	-- inside one we use the width it had on the topbar (recorded when it joined)
+	local restWidth = icon.parentIconUID and icon.overflowRestWidth
+	if restWidth then
+		return restWidth
+	end
 	local widget = icon.widget
 	return widget:GetAttribute("TargetWidth") or widget.AbsoluteSize.X
 end
@@ -163,6 +169,58 @@ function Overflow.getRealXPositions(alignment, orderedIcons)
 	return realXPositions
 end
 
+-- Dropdown rows look like Roblox's own menu: 44 px tall, icon + label left-aligned in one column.
+-- Applied as a removable modification, so an icon that leaves the overflow gets its topbar look back.
+-- Icon-only buttons need a label here: icon.overflowLabel, or Icon.overflowLabels[<image asset>].
+local ROW_WIDTH, ROW_HEIGHT, ROW_ICON, ROW_GAP, ROW_PAD = 200, 44, 24, 12, 16
+function Overflow.styleRow(icon, overflowIcon, topbarX)
+	local image = icon:getInstance("IconImage")
+	local hasImage = image.Image ~= ""
+	-- The row order overwrites the topbar LayoutOrder, and removeModification does not put the old
+	-- value back: an icon leaving the dropdown kept order*1000 and jumped right of Menu (PARKLAB).
+	-- Keep the real order once, use it for the row and restore it on leave.
+	if icon.overflowTopbarOrder == nil then
+		icon.overflowTopbarOrder = icon.widget.LayoutOrder
+	end
+	local topbarOrder = icon.overflowTopbarOrder
+	local mods = {
+		{"Widget", "MinimumWidth", ROW_WIDTH},
+		{"Widget", "MinimumHeight", ROW_HEIGHT},
+		{"IconLabel", "TextSize", 16},
+		{"IconLabel", "TextXAlignment", Enum.TextXAlignment.Left},
+		{"PaddingLeft", "Size", UDim2.fromOffset(hasImage and ROW_PAD or ROW_PAD + ROW_ICON + ROW_GAP, 0)},
+		{"PaddingCenter", "Size", UDim2.fromOffset(hasImage and ROW_GAP or 0, 0)},
+		{"IconImage", "Size", UDim2.fromOffset(ROW_ICON, ROW_ICON)},
+		{"ContentsList", "Padding", UDim.new(0, 0)},
+		-- Same order as on the topbar: the icon's order first, its screen position breaks ties
+		{"Widget", "LayoutOrder", topbarOrder * 1000 + math.clamp(math.floor(topbarX), 0, 999)},
+	}
+	if icon:getInstance("IconLabel").Text == "" then
+		local text = icon.overflowLabel or (Icon.overflowLabels and Icon.overflowLabels[image.Image])
+		if text then
+			table.insert(mods, {"IconLabel", "Text", text})
+		end
+	end
+	icon:modifyTheme(mods, "OverflowRow")
+	icon.joinJanitor:add(function()
+		icon:removeModification("OverflowRow")
+		if icon.overflowTopbarOrder ~= nil then
+			icon:setOrder(icon.overflowTopbarOrder / 100)
+			icon.overflowTopbarOrder = nil
+		end
+	end)
+	if not overflowIcon.overflowDropdownStyled then
+		overflowIcon.overflowDropdownStyled = true
+		local dropdown = overflowIcon:getInstance("Dropdown")
+		dropdown.DropdownCorner.CornerRadius = UDim.new(0, 12)
+		local padding = dropdown.DropdownScroller:FindFirstChild("DropdownPadding")
+		if padding then
+			padding.PaddingTop = UDim.new(0, 8)
+			padding.PaddingBottom = UDim.new(0, 8)
+		end
+	end
+end
+
 function Overflow.updateBoundary(alignment)
 
 	-- We only track items that are directly on the topbar (i.e. not within a parent icon) or within an overflow
@@ -194,20 +252,17 @@ function Overflow.updateBoundary(alignment)
 		local order = (isLeft and -9999999) or 9999999
 		overflowIcon = Icon.new()--:setLabel(`{alignment}`)
 		overflowIcon:setImage(6069276526, "Deselected")
+		overflowIcon:setImage("rbxasset://textures/ui/InspectMenu/x.png", "Selected") -- close button while open
+		overflowIcon:modifyTheme({"IconImage", "Size", UDim2.fromScale(0.375, 0.375), "Selected"}) -- 3/4 of the dots size
 		overflowIcon:setName("Overflow"..alignment)
 		overflowIcon:setOrder(order)
 		overflowIcon:setAlignment(alignment)
 		overflowIcon:autoDeselect(false)
 		overflowIcon.isAnOverflow = true
-		--overflowIcon:freezeMenu()
-		overflowIcon:select("OverflowStart", overflowIcon)
+		-- Starts closed: the three dots open a dropdown below the topbar
 		overflowIcon:setEnabled(false)
 		overflowIcons[alignment] = overflowIcon
 		overflowIconUIDs[overflowIcon.UID] = true
-		if not Icon.closeableOverflowMenus then
-			local iconSpot = overflowIcon:getInstance("IconSpot")
-			iconSpot.Visible = false
-		end
 	end
 
 	-- The default boundary is the point where both the left-most-right-icon
@@ -321,36 +376,103 @@ function Overflow.updateBoundary(alignment)
 	-- We calculate the the absolute position of icons instead of reading
 	-- directly to determine where they would be if not within an overflow
 	local joinOverflow = false
-	local realXPositions = Overflow.getRealXPositions(alignment, ourOrderedIcons)
-	for i = #ourOrderedIcons, 1, -1 do
-		local icon = ourOrderedIcons[i]
+	-- Icons flagged alwaysOverflow (phone: freecam, music refresh) always sit in the dropdown, so
+	-- they do not take part in the "does it fit on the topbar" measurement.
+	local measuredIcons = {}
+	for _, icon in ipairs(ourOrderedIcons) do
+		if not icon.alwaysOverflow then
+			table.insert(measuredIcons, icon)
+		end
+	end
+	local realXPositions = Overflow.getRealXPositions(alignment, measuredIcons)
+	for i = #measuredIcons, 1, -1 do
+		local icon = measuredIcons[i]
 		local widgetX = Overflow.getWidth(icon)
 		local xPos = realXPositions[icon.UID]
 		if (isLeft and xPos + widgetX >= boundary) or (isRight and xPos <= boundary) then
 			joinOverflow = true
 		end
 	end
+	-- Icons flagged keepOutsideOverflow (e.g. the Menu button) always stay on the topbar.
+	-- They still count for the boundaries above, they are just never moved.
+	local joinableCount = 0
+	for i = #ourOrderedIcons, 1, -1 do
+		local icon = ourOrderedIcons[i]
+		if not overflowIconUIDs[icon.UID] and not icon.keepOutsideOverflow then
+			joinableCount += 1
+		end
+	end
+	if joinableCount == 0 then
+		joinOverflow = false
+	end
+	local widthOverflow = joinOverflow
+	for _, icon in ipairs(ourOrderedIcons) do
+		if icon.alwaysOverflow and not icon.keepOutsideOverflow and not overflowIconUIDs[icon.UID] then
+			joinOverflow = true
+			break
+		end
+	end
+	-- On the right the three dots sit just left of the pinned icons, so Menu stays the right-most button
+	if isRight then
+		local pinnedOrder
+		for _, icon in ipairs(ourOrderedIcons) do
+			if icon.keepOutsideOverflow and not overflowIconUIDs[icon.UID] then
+				local order = icon.widget.LayoutOrder
+				if not pinnedOrder or order < pinnedOrder then
+					pinnedOrder = order
+				end
+			end
+		end
+		if pinnedOrder and overflowIcon.overflowLayoutOrder ~= pinnedOrder - 1 then
+			overflowIcon.overflowLayoutOrder = pinnedOrder - 1
+			overflowIcon:modifyTheme({"IconSpot", "LayoutOrder", pinnedOrder - 1})
+			overflowIcon:modifyTheme({"Widget", "LayoutOrder", pinnedOrder - 1})
+		end
+	end
 	for i = #ourOrderedIcons, 1, -1 do
 		local icon = ourOrderedIcons[i]
 		local isOverflow = overflowIconUIDs[icon.UID]
 		if not isOverflow then
-			if joinOverflow and not icon.parentIconUID then
-				icon:joinMenu(overflowIcon)
-			elseif not joinOverflow and icon.parentIconUID then
+			if icon.keepOutsideOverflow then
+				if icon.parentIconUID then
+					icon.overflowRestWidth = nil
+					icon:leave()
+				end
+			elseif (widthOverflow or icon.alwaysOverflow) and not icon.parentIconUID then
+				-- joinDropdown (vertical list under the three dots) instead of joinMenu
+				-- (horizontal strip), so phones keep the topbar single-row.
+				icon.overflowRestWidth = Overflow.getWidth(icon)
+				local topbarX = icon.widget.AbsolutePosition.X
+				icon:joinDropdown(overflowIcon)
+				Overflow.styleRow(icon, overflowIcon, topbarX)
+				-- Picking a row closes the dropdown (user taps only, not code-driven selects).
+				-- An icon with overflowAction runs that instead of toggling itself (e.g. the music
+				-- icon's row is just "Reload Music" here).
+				icon.joinJanitor:add(icon.selected:Connect(function(fromSource)
+					if fromSource ~= "User" then
+						return
+					end
+					if icon.overflowAction then
+						icon:deselect("OverflowAction", icon)
+						task.spawn(icon.overflowAction)
+					end
+					if overflowIcon.isSelected then
+						overflowIcon:deselect("OverflowPick", overflowIcon)
+					end
+				end))
+			elseif not (widthOverflow or icon.alwaysOverflow) and icon.parentIconUID then
+				icon.overflowRestWidth = nil
 				icon:leave()
 			end
 		end
 	end
-	
+
 	-- Hide the overflows when not in use
 	if overflowIcon.isEnabled ~= joinOverflow then
 		overflowIcon:setEnabled(joinOverflow)
 	end
-	
-	-- Have the menus auto selected
-	if overflowIcon.isEnabled and not overflowIcon.overflowAlreadyOpened then
-		overflowIcon.overflowAlreadyOpened = true
-		overflowIcon:select()
+	if not joinOverflow and overflowIcon.isSelected then
+		overflowIcon:deselect("OverflowEmpty", overflowIcon)
 	end
 
 end

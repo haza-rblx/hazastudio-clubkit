@@ -14,6 +14,7 @@ local GuiRefs = require(script.Parent.GuiRefs)
 local LibraryView = require(script.Parent.LibraryView)
 local UIMotion = require(script.Parent.Parent.Parent.Utils.UIMotion)
 local NowPlayingView = require(script.Parent.NowPlayingView)
+local SetSheetView = require(script.Parent.SetSheetView)
 local VoteModalView = require(script.Parent.VoteModalView)
 
 type Refs = GuiRefs.Refs
@@ -41,6 +42,7 @@ local CALLBACK_SETTERS = {
 	"setOnResolveRequestAsset",
 	"setOnFormNotify",
 	"setOnTransport",
+	"setOnTransportRequest",
 	"setOnAdminSkip",
 }
 
@@ -78,7 +80,9 @@ function PanelShell.new(deps: { refs: Refs, store: any, config: any })
 	local fire = function(key: string, ...: any): any
 		return self:_fire(key, ...)
 	end
-	local viewDeps = { refs = deps.refs, store = deps.store, config = deps.config, fire = fire }
+	-- Full set sheet: built before the views so the Set card can open it.
+	self._setSheet = SetSheetView.new({ refs = deps.refs, store = deps.store, fire = fire })
+	local viewDeps = { refs = deps.refs, store = deps.store, config = deps.config, fire = fire, setSheet = self._setSheet }
 	self._nowPlaying = NowPlayingView.new(viewDeps)
 	-- The vote-skip prompt is a notification island unless the buyer switched it off.
 	local island = (require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config) :: any).NotificationIsland
@@ -121,6 +125,8 @@ function PanelShell:_applyDjGating()
 	local localPlayer = Players.LocalPlayer
 	local isDjOwner = state.isDjMode == true and localPlayer ~= nil and state.djOwnerUserId == localPlayer.UserId
 	local locked = state.isDjMode == true and not (isDjOwner or state.isControlAllowed == true)
+	-- Stage vs hero also depends on control/ownership, which can change without isDjMode changing.
+	self._nowPlaying:setDjMode(state.isDjMode == true)
 	if self._djLocked == locked then
 		return
 	end
@@ -346,6 +352,7 @@ function PanelShell:renderTracks(tracks: { [any]: any }?, query: string?)
 end
 
 function PanelShell:destroy()
+	self._setSheet:destroy()
 	self._nowPlaying:destroy()
 	self._vote:destroy()
 	self._library:destroy()

@@ -693,7 +693,8 @@ trackClientLifecycle("PaidBroadcastController", ClientMods.PaidBroadcastControll
 trackClientLifecycle("AdminController", ClientMods.AdminController)
 trackClientLifecycle("AvatarLikeWorldEffect", ClientMods.AvatarLikeWorldEffect)
 trackClientLifecycle("TopMenuController", ClientMods.TopMenuController)
-trackClientLifecycle("StickerBillboardAnimator", ClientMods.StickerBillboardAnimator)
+-- Instance-diet probe (temporary; docs/plans/instance-diet-2026-10-09.md phase 1). Samples after gameplay.
+trackPostGameplayBootTask("InstanceProbe", ClientMods.InstanceProbeClient.start)
 
 local function createSubscriptionGroup(name: string): any
 	local groupLog = Logger.new(name)
@@ -945,6 +946,8 @@ local function setTopbarFill(icon: any, color: Color3)
 			{ "Widget", "BackgroundTransparency", 1 },
 			{ "IconButton", "BackgroundColor3", color },
 			{ "IconButton", "BackgroundTransparency", TOPBAR_FILL_TRANSPARENCY },
+			{ "WidgetStroke", "Color", color:Lerp(Color3.fromRGB(255, 255, 255), 0.35) },
+			{ "WidgetStroke", "Transparency", 0.7 },
 		})
 	end
 
@@ -1089,20 +1092,25 @@ end
 -- NukeEffectController.init({
 -- 	logger = Logger.new("NukeEffectController"),
 -- })
--- === Sticker Billboard Animations ===
-if Config.FeatureFlags.StickersEnabled ~= false then
-	ClientMods.StickerBillboardAnimator.init({
-		logger = Logger.new("StickerBillboardAnimator"),
-	})
-end
 ClientMods.ChatTagsController.init({})
 -- === Shared Topbar Icons ===
 -- Created BEFORE controller init so icons already exist
 -- when controller tries to bind .selected/.deselected
 local menuIcon = Icon.new()
+-- The Menu button never moves into the topbar overflow dropdown (Features/Overflow reads this flag).
+menuIcon.keepOutsideOverflow = true
+-- Row labels for icon-only buttons inside the overflow dropdown (Features/Overflow.styleRow).
+do
+	local iconModuleAny: any = Icon
+	iconModuleAny.overflowLabels = {
+		[Config.Icons.Topbar.Camera] = "Freecam",
+		[Config.Icons.Topbar.Command] = "Command Library",
+	}
+end
 menuIcon:setImage(Config.Icons.Topbar.Menu, "Deselected")
 menuIcon:setLabel(Config.TopbarMenu.LABEL or "Menu")
-placeTopbarIcon(menuIcon, Config.TopbarMenu.ORDER)
+-- Phone: Menu is the right-most button (nothing sits to its right; the three dots sit just left of it).
+placeTopbarIcon(menuIcon, if PhoneLayout.isPhoneLayout() then 1000 else Config.TopbarMenu.ORDER)
 setCompactTopbarWidth(menuIcon, 72)
 setTopbarHorizontalPadding(menuIcon, 8)
 styleTopbarPill(menuIcon)
@@ -1135,10 +1143,12 @@ do
 			MobilePanelManager.close(panelId)
 		end)
 	end
+	-- Admin Hub on = the code-built Spotlight owns the admin surface; registering the old
+	-- 04-AdminHub shell made phones open the empty template and hide the Spotlight.
 	MobilePanelManager.register(
 		"admin",
 		if Config.FeatureFlags.AdminHubEnabled == true
-			then (Config.Admin.HUB_GUI_NAME or Config.Admin.GUI_NAME)
+			then (Config.Admin.SPOTLIGHT_GUI_NAME or Config.Admin.GUI_NAME)
 			else Config.Admin.GUI_NAME,
 		function()
 			adminIcon:deselect()
@@ -1242,8 +1252,11 @@ if Config.FeatureFlags.MusicPlayerEnabled then
 			if Config.Music.TOPBAR_ICON ~= "rbxassetid://0" then
 				icon:setImage(Config.Music.TOPBAR_ICON)
 			end
-			icon:setLabel(Config.Music.TOPBAR_LABEL)
+			-- Phone: only a "Reload Music" row under the three dots; the player opens from the Menu.
+			local onPhone = PhoneLayout.isPhoneLayout()
+			icon:setLabel(if onPhone then (Config.Music.TOPBAR_MENU_LOAD_TRACK_LABEL or "Reload Music") else Config.Music.TOPBAR_LABEL)
 			placeTopbarIcon(icon, Config.Music.TOPBAR_ORDER)
+			icon.alwaysOverflow = onPhone
 			setCompactTopbarWidth(icon, 36)
 			removeTopbarInnerPadding(icon)
 			styleTopbarPill(icon)
@@ -1305,7 +1318,13 @@ local _mobileFreecamController = trackClientLifecycle(
 		return Icon.new()
 	end,
 	applyTopbarStyle = function(icon: any)
-		placeTopbarIconLeft(icon, 1)
+		if PhoneLayout.isPhoneLayout() then
+			-- Phone: Freecam is a row under the three dots (same strip as Reload Music).
+			icon.alwaysOverflow = true
+			placeTopbarIcon(icon, 1)
+		else
+			placeTopbarIconLeft(icon, 1)
+		end
 		setCompactTopbarWidth(icon, 36)
 		removeTopbarInnerPadding(icon)
 		styleTopbarPill(icon)
@@ -1381,17 +1400,22 @@ do
 	end)
 	bindPanelIcon(settingsIcon, "settings")
 	if musicTopbarIcon ~= nil then
+		-- Overlay tap: openPlayer toggles an open panel shut (the icon is usually not selected
+		-- when the panel came from the top menu row, so deselect alone would leave it open).
 		MobilePanelManager.register("music", Config.Music.GUI_NAME, function()
+			if ClientMods.MusicPlayerStore:get().isOpen == true then
+				musicTopbarIcon:openPlayer()
+			end
 			musicTopbarIcon:deselect()
 		end)
-		-- Mobile focus when Music Player menu item opens the panel (not parent menu toggle).
-		if type(musicTopbarIcon.onOpenPlayer) == "function" then
-			musicTopbarIcon:onOpenPlayer(function()
+		-- Mobile focus follows the panel itself, not the icon: the panel's own close button and the
+		-- top menu row never select/deselect the icon, which left every other GUI hidden.
+		ClientMods.MusicPlayerStore:subscribe("isOpen", function(isOpen)
+			if isOpen == true then
 				MobilePanelManager.open("music")
-			end)
-		end
-		musicTopbarIcon:onDeselected(function()
-			MobilePanelManager.close("music")
+			else
+				MobilePanelManager.close("music")
+			end
 		end)
 	end
 end
@@ -1485,10 +1509,17 @@ if Config.FeatureFlags.AdminHubEnabled == true then
 					adminPanelApi.show()
 				end
 			end,
+			openGiveaway = function()
+				ClientMods.GiveawayController.open()
+			end,
 		})
 		trackClientLifecycle("AdminHubController", hubApi)
 	end)
 end
+trackBootTask("GiveawayController.init", function()
+	local giveawayApi = ClientMods.GiveawayController.init({ remotes = Remotes })
+	trackClientLifecycle("GiveawayController", giveawayApi)
+end)
 trackBootTask("CommandLibraryController.init", function()
 	local commandLibraryService = trackClientLifecycle(
 		"CommandLibraryService",
@@ -1524,6 +1555,7 @@ trackBootTask("SettingsController.init", function()
 		)
 	then
 		local freeTitleIcon = Icon.new()
+		freeTitleIcon.keepOutsideOverflow = true -- self custom title stays on the topbar
 		freeTitleIcon:setImage(Config.FreeTitleEvent.TOPBAR_ICON)
 		freeTitleIcon:setLabel("")
 		freeTitleIcon:setOrder(Config.FreeTitleEvent.TOPBAR_ORDER)
@@ -1561,6 +1593,7 @@ trackBootTask("SettingsController.init", function()
 		})
 	)
 	settingsCtrl:init()
+	ClientMods.TopMenuController.setSettingsController(settingsCtrl)
 	-- Onboarding modal: registered always (manual open for tests), opened on its own only with
 	-- Config.Onboarding.ENABLED, once per session after the loading screen is done.
 	ClientMods.OnboardingController.register({
@@ -1663,38 +1696,6 @@ trackBootTask("HotbarController.init", function()
 			end,
 		})
 	end
-	if Config.FeatureFlags.StickersEnabled == false and refsResult.value.stickerButtonWrapper then
-		refsResult.value.stickerButtonWrapper.Visible = false
-	end
-	ensurePlayerGuiChild(playerGui, Config.Sticker.GUI_NAME, 10, hotbarLog)
-
-	local stickerCtrl = nil
-	if Config.FeatureFlags.StickersEnabled ~= false then
-		stickerCtrl = trackClientLifecycle(
-			"StickerController",
-			ClientMods.StickerController.create({
-				remotes = Remotes,
-				logger = Logger.new("StickerController"),
-			})
-		)
-		stickerCtrl:init()
-		-- Register sticker panel here (stickerCtrl available in this scope)
-		MobilePanelManager.register("sticker", Config.Sticker.GUI_NAME, function()
-			stickerCtrl:closePanel()
-		end)
-	end
-	binder:bindStickerRequested(function()
-		if Config.FeatureFlags.StickersEnabled == false or not stickerCtrl then
-			return
-		end
-		if stickerCtrl:isOpen() then
-			stickerCtrl:closePanel()
-			MobilePanelManager.close("sticker")
-		else
-			stickerCtrl:openPanel()
-			MobilePanelManager.open("sticker")
-		end
-	end)
 	local controller = trackClientLifecycle(
 		"HotbarController",
 		ClientMods.HotbarController.new({
@@ -1713,9 +1714,6 @@ trackBootTask("HotbarController.init", function()
 			if refsResult.value.root and refsResult.value.root.Parent then
 				refsResult.value.root.ResetOnSpawn = false
 				refsResult.value.root.Enabled = true
-				if refsResult.value.stickerButtonWrapper then
-					refsResult.value.stickerButtonWrapper.Visible = Config.FeatureFlags.StickersEnabled ~= false
-				end
 			end
 			service:refresh()
 		end)
@@ -1798,6 +1796,20 @@ if clubKitOwnedSyncDance then
 						return Icon.new()
 					end,
 					onRequestSyncToLeader = requestLeadDanceSync,
+					onRequestUnsync = function()
+						task.spawn(function()
+							local deadline = os.clock() + 8
+							while os.clock() < deadline do
+								if syncDanceController and type(syncDanceController.onUnsync) == "function" then
+									syncDanceController:onUnsync()
+									return
+								end
+								task.wait(0.1)
+							end
+							Logger.new("SyncDanceBootstrap"):warn("Lead Dance unsync handler unavailable")
+						end)
+					end,
+					syncStore = ClientMods.SyncStore,
 				})
 			)
 		end
@@ -1851,9 +1863,11 @@ if clubKitOwnedSyncDance then
 			local state = ClientMods.SyncStore:get()
 			emotePanel:setSyncOverlay(state.isSyncing, state.leaderDisplay, state.visualAnim)
 		end
-		-- Dance panel stays above other UI; it does not use MobilePanelManager focus hiding.
+		-- Dance panel stays above other UI; it does not use MobilePanelManager focus hiding. On a
+		-- phone it only puts the hotbar away while open (it reaches down over it).
 		syncDanceSubscriptions:subscribe(ClientMods.SyncStore, "isPanelOpen", function(isOpen)
 			emotePanel:setOpen(isOpen)
+			MobilePanelManager.notifyDancePanel(isOpen == true)
 		end)
 		syncDanceSubscriptions:subscribe(ClientMods.SyncStore, "favoritedAnims", function(favorites)
 			emotePanel:setFavorites(favorites, true)
@@ -1996,6 +2010,10 @@ trackBootTask("AvatarContextController.init", function()
 			logger = Logger.new("AvatarContextController"),
 			ui = avatarContextUI,
 			getCachedOverheadPayload = OverheadController.getCachedPayload,
+			-- Phone hotbar lifecycle: openPanel hides, closePanel releases. See
+			-- AvatarContextController for why this no longer watches the panel's Visible.
+			notifyAcmOpen = MobilePanelManager.notifyAcmOpen,
+			notifyAcmClose = MobilePanelManager.notifyAcmClose,
 		})
 	)
 	avatarContextUI:setCloseCallback(function()
@@ -2064,9 +2082,6 @@ trackBootTask("AvatarContextController.init", function()
 		if carryController and type(carryController.requestCarryByUserId) == "function" then
 			carryController:requestCarryByUserId(targetUserId)
 		end
-	end)
-	avatarContextUI:setBeforeOpenCallback(function(): number
-		return MobilePanelManager.notifyAcmOpen()
 	end)
 	if clubKitOwnedSyncDance and type(avatarContextUI.setSyncState) == "function" then
 		local avatarSyncSubscriptions = trackClientLifecycle(
@@ -2278,7 +2293,6 @@ do
 	if not okGui then
 		studioWarn("[ImagePreload] PlayerGui sweep failed: " .. tostring(guiErr))
 	end
-	reg("background", Config.Sticker, "Config.Sticker")
 
 	ImagePreloadService.start()
 end

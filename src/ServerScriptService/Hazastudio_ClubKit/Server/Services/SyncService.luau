@@ -67,6 +67,12 @@ export type SyncService = {
 	clearPreparedRefresh: (self: SyncService, player: Player) -> (),
 	captureSyncSnapshotForTeleport: (self: SyncService, player: Player) -> any?,
 	getTopLeaderByFollowerCount: (self: SyncService, excludeUserId: number?) -> Player?,
+	isDancingOrSynced: (self: SyncService, player: Player) -> boolean,
+	isDanceStateHealthy: (self: SyncService, player: Player) -> boolean,
+	setSyncNotifier: (self: SyncService, callback: (player: Player, payload: { [string]: any }) -> ()) -> (),
+	startLeaderGrace: (self: SyncService, leaderUserId: number, followerUserIds: { number }) -> (),
+	hasLeaderGrace: (self: SyncService, leaderUserId: number) -> boolean,
+	rebindGraceFollowers: (self: SyncService, leader: Player) -> (),
 	restoreAfterAfkRejoin: (
 		self: SyncService,
 		player: Player,
@@ -176,6 +182,22 @@ local function create(deps: {
 	local prewarmLoadsInWindow = 0
 
 	local onFollowersHardUnsyncedCallback: ((leaderName: string, followerNames: { string }) -> ())? = nil
+
+	-- Leader return grace (owner 2026-10-10): a leader who drops (AFK rejoin teleport, a
+	-- disconnect) keeps their followers for Config.Sync.LEADER_RETURN_GRACE_SEC. The followers
+	-- keep dancing their current track, unbound; when the leader dances again inside the window
+	-- they are bound back. Keyed by the leader's UserId; followers by UserId.
+	local leaderGrace: { [number]: { expiresAt: number, followerUserIds: { number } } } = {}
+	-- sync_success to a player's client (Main wires SyncNotification); used for grace re-binds.
+	local syncNotifier: ((player: Player, payload: { [string]: any }) -> ())? = nil
+	-- AFK-rejoined followers dancing the snapshot solo while their leader is away: still re-bound
+	-- by the grace (they look "dancing" otherwise). Cleared when they pick a dance themselves.
+	local graceWaitingSolo: { [number]: number } = {}
+	-- Set to self:rebindGraceFollowers once `self` exists (replicateAnimation is defined before it).
+	local rebindGraceHook: ((leader: Player) -> ())? = nil
+	local function leaderReturnGraceSec(): number
+		return math.max(0, tonumber(config.LEADER_RETURN_GRACE_SEC) or 90)
+	end
 
 	-- Dance request throttle: at least switch fade so crossfades cannot stack.
 	local SWITCH_FADE = math.max(
@@ -701,6 +723,13 @@ local function create(deps: {
 			elseif activeSpeeds[rootPlayer.Name] == nil then
 				activeSpeeds[rootPlayer.Name] = config.DEFAULT_SPEED or 1
 			end
+			-- A leader back inside their grace dances again: bind the waiting followers back.
+			if leaderGrace[rootPlayer.UserId] and rebindGraceHook then
+				local hook = rebindGraceHook
+				task.defer(function()
+					hook(rootPlayer)
+				end)
+			end
 		end
 
 		-- Read once for the fallback only. The per-player work below is task.spawn'd, so a
@@ -916,6 +945,9 @@ local function create(deps: {
 	-- PUBLIC API
 -- ============================================================
 local self = {} :: any
+rebindGraceHook = function(leader: Player)
+	self:rebindGraceFollowers(leader)
+end
 
 	function self:executeAnimation(
 		player: Player,
@@ -925,6 +957,8 @@ local self = {} :: any
 		intent: string?,
 		_loadedAnimations: { [string]: any }?
 	): Result<string>
+		-- The player chose a dance (or stop) themselves: no longer waiting for a grace re-bind.
+		graceWaitingSolo[player.UserId] = nil
 		-- Wutwut restart gets its own tight interval; play/stop/switch keep the
 		-- >= switch-fade cooldown so crossfades cannot stack.
 		if
@@ -1381,16 +1415,22 @@ local self = {} :: any
 	function self:onPlayerRemoving(player: Player)
 		local affectedFollowerNames: { string } = {}
 		local followers = followerMap[player.Name]
+		local graceSec = leaderReturnGraceSec()
+		local graceFollowerUserIds: { number } = {}
 		if followers then
 			for followerName in pairs(followers) do
 				table.insert(affectedFollowerNames, followerName)
 				local follower = Players:FindFirstChild(followerName)
 				if follower then
-					local animator = AnimatorUtils.getAnimator(follower)
+					-- Inside the grace the follower keeps dancing its current track (unbound).
+					local animator = if graceSec > 0 then nil else AnimatorUtils.getAnimator(follower)
 					if animator then
 						pcall(function()
 							AnimatorUtils.stopAllDances(animator, prewarmAnimations, FADE_OUT)
 						end)
+					end
+					if graceSec > 0 and follower:IsA("Player") then
+						table.insert(graceFollowerUserIds, follower.UserId)
 					end
 					if follower.Character then
 						follower.Character:SetAttribute("Syncing", nil)
@@ -1401,6 +1441,10 @@ local self = {} :: any
 			end
 			followerMap[player.Name] = nil
 		end
+		if #graceFollowerUserIds > 0 then
+			self:startLeaderGrace(player.UserId, graceFollowerUserIds)
+		end
+		graceWaitingSolo[player.UserId] = nil
 
 		unregisterSync(player.Name)
 		activeAnimations[player.Name] = nil
@@ -1675,6 +1719,139 @@ local self = {} :: any
 		}
 	end
 
+	-- True when the player follows a leader or dances solo right now. The AFK rejoin check uses it
+	-- to tell whether its early restore survived the client's load (a respawn wipes it).
+	function self:isDancingOrSynced(player: Player): boolean
+		local character = player.Character
+		local syncing = character and character:GetAttribute("Syncing")
+		if type(syncing) == "string" and syncing ~= "" then
+			return true
+		end
+		return activeAnimations[player.Name] ~= nil
+	end
+
+	-- True when what the server state says should be playing is actually playing on the
+	-- player's Animator. A follower of an idle leader (nothing to play) counts as healthy.
+	function self:isDanceStateHealthy(player: Player): boolean
+		local character = player.Character
+		if not character then
+			return false
+		end
+		local syncing = character:GetAttribute("Syncing")
+		local expectsTrack = false
+		if type(syncing) == "string" and syncing ~= "" then
+			expectsTrack = activeAnimations[syncing] ~= nil
+		else
+			expectsTrack = activeAnimations[player.Name] ~= nil
+		end
+		if not expectsTrack then
+			return true
+		end
+		local animator = AnimatorUtils.getAnimator(player)
+		if not animator then
+			return false
+		end
+		local track = AnimatorUtils.getPlayingDanceTrack(animator, prewarmAnimations)
+		return track ~= nil
+	end
+
+	function self:setSyncNotifier(callback: (player: Player, payload: { [string]: any }) -> ())
+		syncNotifier = callback
+	end
+
+	-- Hold `followerUserIds` for the leader until the grace runs out. Re-arming (a second drop,
+	-- or an AFK follower arriving) merges the followers and keeps the earlier deadline.
+	function self:startLeaderGrace(leaderUserId: number, followerUserIds: { number })
+		local graceSec = leaderReturnGraceSec()
+		if graceSec <= 0 or #followerUserIds == 0 then
+			return
+		end
+		local record = leaderGrace[leaderUserId]
+		if not record or os.clock() > record.expiresAt then
+			record = { expiresAt = os.clock() + graceSec, followerUserIds = {} }
+			leaderGrace[leaderUserId] = record
+			task.delay(graceSec, function()
+				if leaderGrace[leaderUserId] ~= record then
+					return
+				end
+				leaderGrace[leaderUserId] = nil
+				-- Leader never came back: stop what the waiting followers still dance from them.
+				for _, followerUserId in ipairs(record.followerUserIds) do
+					if graceWaitingSolo[followerUserId] == leaderUserId then
+						graceWaitingSolo[followerUserId] = nil
+					end
+					local follower = Players:GetPlayerByUserId(followerUserId)
+					if follower and not self:isDancingOrSynced(follower) then
+						local animator = AnimatorUtils.getAnimator(follower)
+						if animator then
+							pcall(function()
+								AnimatorUtils.stopAllDances(animator, prewarmAnimations, FADE_OUT)
+							end)
+						end
+					end
+				end
+				logger:info("leader_grace_expired", { leaderUserId = leaderUserId, followers = #record.followerUserIds })
+			end)
+		end
+		for _, followerUserId in ipairs(followerUserIds) do
+			if not table.find(record.followerUserIds, followerUserId) then
+				table.insert(record.followerUserIds, followerUserId)
+			end
+		end
+		logger:info("leader_grace_started", {
+			leaderUserId = leaderUserId,
+			followers = #record.followerUserIds,
+			secondsLeft = math.floor(record.expiresAt - os.clock()),
+		})
+	end
+
+	function self:hasLeaderGrace(leaderUserId: number): boolean
+		local record = leaderGrace[leaderUserId]
+		return record ~= nil and os.clock() <= record.expiresAt
+	end
+
+	-- The leader dances again: bind back every waiting follower that is still here and has not
+	-- picked another leader or a dance of its own meanwhile.
+	function self:rebindGraceFollowers(leader: Player)
+		local record = leaderGrace[leader.UserId]
+		if not record then
+			return
+		end
+		leaderGrace[leader.UserId] = nil
+		if os.clock() > record.expiresAt then
+			return
+		end
+		local rebound = 0
+		for _, followerUserId in ipairs(record.followerUserIds) do
+			local follower = Players:GetPlayerByUserId(followerUserId)
+			local waitingSolo = graceWaitingSolo[followerUserId] == leader.UserId
+			graceWaitingSolo[followerUserId] = nil
+			local syncingOther = follower ~= nil
+				and follower.Character ~= nil
+				and type(follower.Character:GetAttribute("Syncing")) == "string"
+			if follower and follower.Character and not syncingOther and (waitingSolo or not self:isDancingOrSynced(follower)) then
+				local result = self:handleSyncRequest(follower, leader, true)
+				if result.ok then
+					rebound += 1
+					if syncNotifier then
+						pcall(syncNotifier, follower, {
+							type = "sync_success",
+							leaderName = result.value,
+							leaderDisplay = self:getLeaderDisplayName(result.value),
+							currentAnim = self:getCurrentAnimationName(result.value),
+							targetUserId = leader.UserId,
+						})
+					end
+				end
+			end
+		end
+		logger:info("leader_grace_rebound", {
+			leaderUserId = leader.UserId,
+			waiting = #record.followerUserIds,
+			rebound = rebound,
+		})
+	end
+
 	function self:getTopLeaderByFollowerCount(excludeUserId: number?): Player?
 		local afkConfig = Config.AfkGuard or {}
 		local requireDancing = afkConfig.SYNC_REQUIRE_LEADER_DANCING == true
@@ -1768,6 +1945,13 @@ local self = {} :: any
 			return
 		end
 
+		-- Idempotent: the rejoin restore can run twice (at spawn and again once the client is in
+		-- gameplay), and handleSyncRequest toggles a sync OFF when asked for the current leader.
+		if self:isDancingOrSynced(player) then
+			logger:info("afk_restore_sync_already_applied", { player = player.Name, userId = player.UserId })
+			return
+		end
+
 		local snapshot = validated.value
 		local afkConfig = Config.AfkGuard or {}
 		local notifyPlayer = options and options.notifyPlayer
@@ -1829,6 +2013,18 @@ local self = {} :: any
 			return true
 		end
 
+		if not snapshot.wasSyncing and snapshot.isLeader and snapshot.animationName then
+			-- A leader comes back leading (owner 2026-10-10): their own dance at its phase. That
+			-- dance re-binds the followers held by the leader grace (replicateAnimation hook).
+			restoreSoloAnimation(player, snapshot)
+			logger:info("afk_restore_sync_leader_solo", {
+				player = player.Name,
+				userId = player.UserId,
+				animation = snapshot.animationName,
+			})
+			return
+		end
+
 		if not snapshot.wasSyncing then
 			-- Wasn't following a leader before the rejoin. If they were dancing
 			-- solo, pull them onto the current top leader (per user request);
@@ -1870,6 +2066,29 @@ local self = {} :: any
 				})
 				return
 			end
+		end
+
+		-- The leader is away inside their grace (dropped / rejoining too) or here but not dancing
+		-- yet: dance the snapshot solo and wait for them instead of moving to another leader.
+		local lastLeaderUserId = snapshot.lastLeaderUserId
+		if lastLeaderUserId and (lastLeader ~= nil or self:hasLeaderGrace(lastLeaderUserId)) and snapshot.animationName then
+			restoreSoloAnimation(player, snapshot)
+			graceWaitingSolo[player.UserId] = lastLeaderUserId
+			self:startLeaderGrace(lastLeaderUserId, { player.UserId })
+			if notifyPlayer then
+				notifyPlayer(
+					player,
+					afkConfig.MSG_SYNC_WAITING or "[Session] Rejoined. Waiting for your dance leader to come back.",
+					"INFO"
+				)
+			end
+			logger:info("afk_restore_sync_waiting_for_leader", {
+				player = player.Name,
+				userId = player.UserId,
+				leaderUserId = lastLeaderUserId,
+				leaderPresent = lastLeader ~= nil,
+			})
+			return
 		end
 
 		if trySyncTopLeader(lastLeader and lastLeader.DisplayName or nil) then

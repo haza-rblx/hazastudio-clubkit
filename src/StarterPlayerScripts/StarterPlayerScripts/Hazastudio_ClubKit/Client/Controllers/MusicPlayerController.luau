@@ -1781,6 +1781,8 @@ function MusicPlayerController:_applyServerState(data: any, options: { forcePlay
 		isPlayOnceAllowed = data.isPlayOnceAllowed == true,
 		queue = newQueue,
 		prefetchBuffer = newBuffer,
+		-- The Set card's payload; NONE clears it when no set is active.
+		activeSet = if type(data.activeSet) == "table" then data.activeSet else self._store.NONE,
 	})
 	require(script.Parent.Parent.UI.Music.QueueIsland).observe(newQueue, self._config, self._store:get().playlists)
 	self:_setMusicIconVisible(self:_computeIconVisible())
@@ -2094,7 +2096,15 @@ function MusicPlayerController:_bootstrapInitialPlayback()
 	})
 end
 
--- v3 transport actions (pause, resume, seek, previous, clear, remove, request_many).
+-- Yields until the server replies with the transport result (`{ ok, data?, error? }`). Callers
+-- run it in a spawned task; the Set sheet uses it for set_page.
+function MusicPlayerController:_requestTransportAsync(action: string, payload: { [string]: any }?): any
+	local request = if type(payload) == "table" then table.clone(payload) else {}
+	request.action = action
+	return self:_requestMusicAsync("transport", self._transportRE, request)
+end
+
+-- v3 transport actions (pause, resume, seek, previous, clear, remove, request_many, set_*).
 function MusicPlayerController:_sendTransport(action: string, payload: { [string]: any }?)
 	local request = if type(payload) == "table" then table.clone(payload) else {}
 	request.action = action
@@ -2109,6 +2119,13 @@ function MusicPlayerController:_sendTransport(action: string, payload: { [string
 					domain = "music",
 					dedupeKey = "music_request_many",
 				}, "success")
+			elseif action == "set_start" then
+				self:_showNotification({
+					title = "Set added",
+					message = "The set was added to the queue.",
+					domain = "music",
+					dedupeKey = "music_set_start",
+				}, "success")
 			end
 			return
 		end
@@ -2119,10 +2136,18 @@ function MusicPlayerController:_sendTransport(action: string, payload: { [string
 			not_playing = "Nothing is playing right now.",
 			queue_empty = "The queue is already empty.",
 			queue_limit_reached = "Your queue is full. Let a song play first.",
+			sets_control_only = "Only DJs and admins can queue a whole set. Request songs one by one.",
+			set_queue_full = "The queue already has 3 sets. Wait for one to finish.",
 			nothing_to_add = "Everything in this set is already queued.",
 			not_owner = "You can only remove your own requests.",
 			not_found = "That request already left the queue.",
 			dj_only = "The DJ is controlling the queue right now.",
+			invalid_source = "That set can't be played.",
+			playlist_not_found = "That playlist no longer exists.",
+			empty_set = "This set has no playable tracks.",
+			no_active_set = "No set is playing right now.",
+			set_finished = "The set has already finished.",
+			payload_too_large = "That request was too big. Try a smaller set.",
 		}
 		self._log:debug("Transport failed", { action = action, error = err })
 		self:_showNotification({
@@ -2505,6 +2530,7 @@ function MusicPlayerController:initEngine()
 			store:set({
 				queue = data.queue or {},
 				prefetchBuffer = data.prefetchBuffer or {},
+				activeSet = if type(data.activeSet) == "table" then data.activeSet else store.NONE,
 			})
 			require(script.Parent.Parent.UI.Music.QueueIsland).observe(store:get().queue, self._config, store:get().playlists)
 			if self._panelInitialized then
@@ -2604,6 +2630,10 @@ function MusicPlayerController:initPanel()
 
 	binder:setOnTransport(function(action: string, payload: any)
 		self:_sendTransport(action, payload)
+	end)
+
+	binder:setOnTransportRequest(function(action: string, payload: any)
+		return self:_requestTransportAsync(action, payload)
 	end)
 
 	binder:setOnAdminSkip(function()
@@ -3025,13 +3055,16 @@ function MusicPlayerController:_loadLibraryData(playlistId: string?, expectedSes
 		return
 	end
 
-	-- Every track this player may see (the server leaves private ones out): DJ Sets derive from it.
+	-- Every track this player may see (the server leaves private ones out).
 	local allTracks = self:_fetchTracks(nil, false)
 	if not self:_isPanelSessionActive(expectedSessionId) then
 		return
 	end
 	if allTracks and allTracks ~= self._store:get().allTracks then
-		self._store:set({ allTracks = allTracks, djSets = MusicLibraryModel.deriveDjSets(allTracks) })
+		-- DJ Sets (one card per track creator) are retired (owner, 2026-10-09): creator names on
+		-- tracks are inconsistent, so the cards scattered one DJ across many sets. The Library
+		-- lists playlists only; djSets stays empty and the LibraryView renders no set cards.
+		self._store:set({ allTracks = allTracks, djSets = {} })
 	end
 
 	local tracks
@@ -3109,6 +3142,8 @@ function MusicPlayerController:_resolveRequestAsset(assetIdRaw: string)
 			message = "Only DJs and admins can request songs by asset ID here."
 		elseif err == "asset_not_audio" then
 			message = "That asset ID isn't an audio file."
+		elseif err == "asset_unavailable" then
+			message = "This audio can't be played (private or removed)."
 		elseif err == "asset_unverified" then
 			message = "Couldn't check that asset right now. Try again in a moment."
 		elseif err == "invalid_asset_id" then

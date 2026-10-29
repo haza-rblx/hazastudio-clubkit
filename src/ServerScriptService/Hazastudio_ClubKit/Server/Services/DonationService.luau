@@ -36,6 +36,7 @@ local HttpRequest = require(script.Parent.Parent.Net.HttpRequest)
 local BackendClient = require(script.Parent.Parent.Net.BackendClient)
 local PlayerLookupBatcher = require(script.Parent.Parent.Net.PlayerLookupBatcher)
 local DeliveryReportQueue = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.DeliveryReportQueue)
+local DailyRobuxRepository = require(script.Parent.Parent.Repositories.DailyRobuxRepository)
 -- Per-userId caches that must outlive a visit are bounded (production hardening P1, H5).
 local USER_KEYED_LRU_CAPACITY = 1000
 type DonationEntry = Types.DonationEntry
@@ -370,7 +371,11 @@ local function createDonationService(
 	local assignedRanks: { [string]: number } = {}
 	-- Daily Robux tracking (in-memory). Reset tiap tengah malam WIB; window 00:01-23:59:59.
 	-- { [userId]: { userId, username, displayName, thumbnail, total } }
+	-- This server's copy only; the boards read the cross-server DailyRobuxRepository and
+	-- merge this in, so a failed shared write still shows here.
 	local cachedDailyRobux: { [number]: any } = {}
+	-- Last shared read (DailyRobuxRepository.list), reused for a few seconds per refresh burst.
+	local sharedDailyRobux: { day: number, at: number, rows: { any }? } = { day = -1, at = 0, rows = nil }
 	-- Hidden Robux donors' totals this server session (bounded LRU, production hardening P1).
 	local sessionRobuxTotals = BoundedLru.new(USER_KEYED_LRU_CAPACITY)
 	local currentRobuxDayBucket: number = -1
@@ -791,6 +796,10 @@ local function createDonationService(
 		if deliveryBatchEnabled() then
 			-- Dropped when this server never fired that donation, or the player floods reports.
 			DeliveryReportQueue.push(p3State.deliveryQueue, "display", donationId, player.UserId, displayEntry, os.clock())
+			return
+		end
+		-- Same guard as the batched path: only donations this server actually fired.
+		if not DeliveryReportQueue.isKnown(p3State.deliveryQueue, donationId, os.clock()) then
 			return
 		end
 		table.insert(_displayFlushQueue, displayEntry)
@@ -1545,6 +1554,8 @@ local function createDonationService(
 		-- Reliability v2: donation id from the Worker (D1 donations.id). 0/nil
 		-- means "untracked" (manual /fakecash, legacy paths) — no ack expected.
 		donationId: number?,
+		-- Unix seconds the backend received the donation; only used to log end-to-end latency.
+		receivedAt: number?,
 	})
 		local amount = math.floor(tonumber(args.amount) or 0)
 		if amount <= 0 then
@@ -1604,6 +1615,10 @@ local function createDonationService(
 				worldEffect = payload.worldEffect,
 				staggerMs = math.floor(staggerDelay * 1000),
 				donationId = if donationId > 0 then donationId else nil,
+				-- Backend-received -> broadcast, seconds (nil for manual/test paths).
+				sinceReceivedSec = if (tonumber(args.receivedAt) or 0) > 0
+					then os.time() - (args.receivedAt :: number)
+					else nil,
 			})
 
 			-- Reliability v2: register the delivery in the Worker's ledger and
@@ -2026,14 +2041,44 @@ local function createDonationService(
 					pending -= 1
 				end)
 			end
-			-- Wait for all parallel resolves to complete
-			while pending > 0 do
+			-- Wait for all parallel resolves to complete, but not forever: one hung name/filter
+			-- lookup used to hold every donation in the batch until the poll watchdog (45s) fired,
+			-- and the cursor had already moved on, so those donations were not fetched again.
+			local resolveTimeoutSec = 8
+			local resolveDeadline = os.clock() + resolveTimeoutSec
+			while pending > 0 and os.clock() < resolveDeadline do
 				task.wait()
 			end
+			local resolveTimedOut = pending > 0
 
 			-- Phase 3: Fire notifications in order (staggered by fireCashDonationPresentation)
 			for i, data in ipairs(resolved) do
-				if data and data.filteredDonatorName then
+				local info = validItems[i]
+				if resolveTimedOut and info and not (data and data.filteredDonatorName) then
+					-- Resolve still pending: show the donation now with what we already know
+					-- (filtered fallback name, no message) instead of losing or delaying it.
+					log:warn("Donation resolve timed out; firing fallback notification", {
+						id = info.notifId,
+						timeoutSec = resolveTimeoutSec,
+					})
+					fireCashDonationPresentation({
+						filteredDonatorName = getProviderDonorFallback(),
+						amount = info.amount,
+						message = nil,
+						newRank = info.newRank,
+						robloxUsername = info.providerRobloxUsername,
+						robloxUserId = info.providerRobloxUserId,
+						totalDonationAmount = if (tonumber(info.totalAfter) or 0) > 0 then info.totalAfter else nil,
+						logDonor = info.donatorName,
+						donationId = tonumber(info.item.id) or 0,
+						receivedAt = info.ts,
+					})
+					if info.notifId ~= "" then
+						markNotifProcessed(info.notifId)
+					end
+					hadNewDonations = true
+				elseif data and data.filteredDonatorName then
+					data.receivedAt = data.ts
 					fireCashDonationPresentation(data)
 					if data.notifId ~= "" then
 						markNotifProcessed(data.notifId)
@@ -3226,6 +3271,7 @@ local function createDonationService(
 		displayName: string?,
 		thumbnail: string?,
 		amount: number,
+		purchaseId: string?,
 	})
 		ensureRobuxDailyFresh()
 		local now = os.time()
@@ -3270,6 +3316,24 @@ local function createDonationService(
 				lastDonationAt = now,
 			}
 		end
+		if (Config.Leaderboards :: any).DAILY_ROBUX_SHARED ~= false then
+			local shared, sharedErr = DailyRobuxRepository.record(currentRobuxDayBucket, {
+				userId = userId,
+				amount = amount,
+				at = now,
+				purchaseId = record.purchaseId,
+				username = record.username,
+				displayName = record.displayName,
+				thumbnail = record.thumbnail,
+			})
+			if not shared then
+				log:warn("Daily Robux shared write failed; this server's board still shows it", {
+					userId = userId,
+					error = sharedErr,
+				})
+			end
+			sharedDailyRobux.at = 0
+		end
 	end
 	function service:getSessionRobuxTotal(userId: number): number
 		if not isHiddenRobuxUser(userId) then
@@ -3286,8 +3350,33 @@ local function createDonationService(
 			1,
 			Config.Leaderboards.MAX_LIMIT
 		)
+		-- Shared totals (every server) merged with this server's own copy; per donor the
+		-- higher total wins, so a shared write that failed here still shows on this server.
+		local byUser: { [number]: any } = {}
+		if (Config.Leaderboards :: any).DAILY_ROBUX_SHARED ~= false then
+			local nowClock = os.clock()
+			if sharedDailyRobux.day ~= currentRobuxDayBucket or nowClock - sharedDailyRobux.at > 10 then
+				local rows = DailyRobuxRepository.list(currentRobuxDayBucket, Config.Leaderboards.MAX_LIMIT)
+				if rows then
+					sharedDailyRobux.rows = rows
+					sharedDailyRobux.day = currentRobuxDayBucket
+					sharedDailyRobux.at = nowClock
+				elseif sharedDailyRobux.day ~= currentRobuxDayBucket then
+					sharedDailyRobux.rows = nil
+				end
+			end
+			for _, row in ipairs(sharedDailyRobux.rows or {}) do
+				byUser[row.userId] = row
+			end
+		end
+		for userId, entry in pairs(cachedDailyRobux) do
+			local existing = byUser[userId]
+			if not existing or (tonumber(entry.total) or 0) > (tonumber(existing.total) or 0) then
+				byUser[userId] = entry
+			end
+		end
 		local sorted = {}
-		for _, entry in pairs(cachedDailyRobux) do
+		for _, entry in pairs(byUser) do
 			if isHiddenRobuxUser(tonumber(entry.userId) or 0) then
 				continue
 			end

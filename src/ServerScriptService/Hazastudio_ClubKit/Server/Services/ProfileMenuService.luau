@@ -56,12 +56,37 @@ local function createProfileMenuService(deps: {
 	-- Only read when the Free Title event runs in "Donation" mode, so a place that
 	-- does not run that variant never pays for the lookup.
 	donationService: any?,
+	-- Optional: stored-settings write so the player's own client shows the text layer.
+	settingsService: any?,
+	settingsSync: { syncPlayer: ((Player) -> ())? }?,
 })
 	local _log = deps.logger
 	local profileRepository = deps.profileRepository
 	local overheadRepository = deps.overheadRepository
 	local profileCommandService = deps.profileCommandService
 	local donationService = deps.donationService
+
+	-- A self-service title write forces the text layer on in the public map (the
+	-- buyer's hard-off still wins, via isLayerDisabled).
+	local function publicLayersWithTitle(current: OverheadStoredData): { [string]: boolean }
+		local layers = table.clone(current.publicOverheadLayerVisible or {})
+		if not OverheadDomain.isLayerDisabled("SpecialTitle") then
+			layers.SpecialTitle = true
+		end
+		return layers
+	end
+
+	-- Stored-settings write for the player's own client. Only when settings are loaded.
+	local function grantStoredLayers(player: Player, keys: { string })
+		local settingsService = deps.settingsService
+		local settingsSync = deps.settingsSync
+		if not settingsService then
+			return
+		end
+		if settingsService:grantOverheadLayers(player, keys) and settingsSync and settingsSync.syncPlayer then
+			settingsSync.syncPlayer(player)
+		end
+	end
 
 	local service = {}
 
@@ -469,6 +494,7 @@ local function createProfileMenuService(deps: {
 				end
 				local changes: { [string]: any } = {
 					specialTitle = filteredResult.value,
+					publicOverheadLayerVisible = publicLayersWithTitle(current),
 					specialTitleChanges = TitleQuotaDomain.record(current.specialTitleChanges, now, quotaConfig),
 					-- The title is now theirs, not an admin's: it stops shielding future
 					-- edits, which is what makes "one free title" mean one.
@@ -494,6 +520,7 @@ local function createProfileMenuService(deps: {
 			if not saved.ok then
 				return Result.Err(Config.AvatarContext.MSG_SAVE_FAILED)
 			end
+			grantStoredLayers(player, { "SpecialTitle" })
 
 			return refreshPayload(player)
 		end
@@ -550,11 +577,13 @@ local function createProfileMenuService(deps: {
 			local saved = overheadRepository:update(player.UserId, function(current: OverheadStoredData): OverheadStoredData
 				return OverheadDomain.mergeStored(current, {
 					specialTitle = filteredResult.value,
+					publicOverheadLayerVisible = publicLayersWithTitle(current),
 				})
 			end)
 			if not saved.ok then
 				return Result.Err(Config.AvatarContext.MSG_SAVE_FAILED)
 			end
+			grantStoredLayers(player, { "SpecialTitle" })
 
 			return refreshPayload(player)
 		end

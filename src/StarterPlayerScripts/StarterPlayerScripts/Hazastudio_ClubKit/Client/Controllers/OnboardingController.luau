@@ -57,6 +57,12 @@ local function resolvePlaceName(): string
 	pcall(function()
 		name = MarketplaceService:GetProductInfo(game.PlaceId).Name
 	end)
+	-- Venue names carry tags like "[/Rnb/HipHop/OriginalTrack]"; in the welcome title they break
+	-- mid-word on a phone. Keep the name itself.
+	local bare = string.gsub(string.gsub(name, "%s*%b[]", ""), "^%s*(.-)%s*$", "%1")
+	if bare ~= "" then
+		name = bare
+	end
 	placeNameCache = name
 	return name
 end

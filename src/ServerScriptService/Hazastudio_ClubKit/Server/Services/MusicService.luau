@@ -13,6 +13,8 @@ local Config = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Con
 local MusicDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicDomain)
 local PermissionDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.PermissionDomain)
 local MusicPlayOncePolicy = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicPlayOncePolicy)
+local MusicLibraryModel = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.MusicLibraryModel)
+local MusicAssetProbe = require(script.Parent.MusicAssetProbe)
 
 local RateLimiter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.RateLimiter)
 local HttpApiCounter = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.HttpApiCounter)
@@ -383,6 +385,7 @@ local function createMusicService(deps: {
 		if next(removedTrackIds) ~= nil then
 			session:pruneDeletedTracks(removedTrackIds)
 		end
+		session:prunePrivateSystemTracks()
 		session:onLibraryReloaded()
 	end
 
@@ -481,6 +484,10 @@ local function createMusicService(deps: {
 			return false, buildReason, nil
 		end
 
+		if MusicAssetProbe.probeTrackAsync(track) == "Failure" then
+			return false, "asset_unavailable", nil
+		end
+
 		local after = evaluatePlayOnce(player, now)
 		if not after.allowed then
 			return false, after.reason, { retryAfter = after.retryAfter }
@@ -523,7 +530,7 @@ local function createMusicService(deps: {
 			local allowed, _ = requestTrackLimiter:check(player.UserId)
 			if not allowed then return false, "rate_limited", nil end
 		end
-		return getOrCreateSession():requestTrack(player, trackId)
+		return getOrCreateSession():requestTrack(player, trackId, service:isControlAllowed(player))
 	end
 
 	function service:voteSkip(player: Player, voteType: string?): (boolean, string)
@@ -545,8 +552,43 @@ local function createMusicService(deps: {
 		return sess:adminSkip()
 	end
 
-	-- v3 transport. Pause / resume / seek / previous / clear need live control; removing your own
-	-- queue entry and bulk requests do not (the session caps them per player).
+	-- Active set (docs/plans/active-set.md): the source is resolved here, in the order the Library
+	-- list shows it (name, creator, id; New Drops newest first), then handed to the session.
+	function service:startActiveSet(player: Player, source: any, shuffle: boolean): (boolean, string, any?)
+		local kind = if type(source) == "table" then source.kind else nil
+		local title = ""
+		local sourceId: string? = nil
+		local tracks: { [string]: TrackInfo } = {}
+		if kind == "favorites" then
+			title = "Liked Tracks"
+			tracks = service:getTracksForPlaylist(player, SPECIAL_PLAYLIST_FAVORITES_ID)
+		elseif kind == "new_drops" then
+			title = "New Drops"
+			tracks = service:getTracksForPlaylist(player, SPECIAL_PLAYLIST_NEW_DROPS_ID)
+		elseif kind == "playlist" then
+			local id = if type(source.id) == "string" then source.id else ""
+			local playlist = if id ~= "" then repo:getPlaylist(id) else nil
+			if not playlist then
+				return false, "playlist_not_found", nil
+			end
+			title = tostring(playlist.name or "Playlist")
+			sourceId = id
+			tracks = service:getTracksForPlaylist(player, id)
+		else
+			return false, "invalid_source", nil
+		end
+		local ordered = MusicLibraryModel.filterTracks(tracks, nil, kind == "new_drops")
+		return getOrCreateSession():startActiveSet(player, {
+			title = title,
+			sourceKind = kind,
+			sourceId = sourceId,
+			items = ordered,
+			shuffle = shuffle,
+		})
+	end
+
+	-- v3 transport. Pause / resume / seek / previous / clear and bulk requests (Add set / Shuffle,
+	-- owner 2026-10-09) need live control; removing your own queue entry does not.
 	function service:transport(player: Player, action: string, payload: any): (boolean, string, any?)
 		local sess = getOrCreateSession()
 		local canControl = service:isControlAllowed(player)
@@ -554,6 +596,9 @@ local function createMusicService(deps: {
 			local ok, err = sess:removeQueueEntry(player, tostring(payload.entryId or ""), canControl)
 			return ok, err, nil
 		elseif action == "request_many" then
+			if not canControl then
+				return false, "sets_control_only", nil
+			end
 			if not isStudioMode then
 				local allowed, _ = requestTrackLimiter:check(player.UserId)
 				if not allowed then
@@ -561,6 +606,25 @@ local function createMusicService(deps: {
 				end
 			end
 			return sess:requestMany(player, payload.trackIds or {}, payload.shuffle == true, canControl)
+		elseif action == "set_page" then
+			-- Everyone may read the remaining order of the active set.
+			return sess:pageActiveSet(payload.offset, payload.limit, payload.query)
+		elseif action == "set_start" or action == "set_stop" or action == "set_reshuffle" then
+			if not canControl then
+				return false, "sets_control_only", nil
+			end
+			if action == "set_start" then
+				if not isStudioMode then
+					local allowed, _ = requestTrackLimiter:check(player.UserId)
+					if not allowed then
+						return false, "rate_limited", nil
+					end
+				end
+				return service:startActiveSet(player, payload.source, payload.shuffle == true)
+			elseif action == "set_stop" then
+				return sess:stopActiveSet()
+			end
+			return sess:reshuffleActiveSet()
 		end
 
 		if not canControl then

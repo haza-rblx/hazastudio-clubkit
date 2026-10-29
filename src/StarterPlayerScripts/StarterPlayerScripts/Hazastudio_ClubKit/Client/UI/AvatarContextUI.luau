@@ -189,12 +189,11 @@ local function createDisabledAvatarContextUI(): any
 	function ui:setSendGiftCallback(_callback: (number) -> ()) end
 	function ui:setCarryCallback(_callback: (number) -> ()) end
 	function ui:setProposeCoupleCallback(_callback: (number) -> (), _isAvailable: (any) -> boolean) end
-	function ui:setBeforeOpenCallback(_callback: () -> number) end
 	function ui:setAfterOpenCallback(_callback: (() -> ())?) end
 	function ui:setSyncState(_isSyncing: boolean, _targetUserId: number?) end
 	function ui:setViewerIsLeader(_isLeader: boolean) end
 	function ui:setLikeCallback(_callback: (number) -> ()) end
-	function ui:open() end
+	function ui:open(_delaySeconds: number?) end
 	function ui:close() end
 	function ui:setLoading(_loading: boolean) end
 	function ui:setError(_message: string) end
@@ -405,7 +404,6 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 	local sendFriendRequestCallback: ((number) -> ())? = nil
 	local sendGiftCallback: ((number) -> ())? = nil
 	local carryCallback: ((number) -> ())? = nil
-	local beforeOpenCallback: (() -> number)? = nil
 	local afterOpenCallback: (() -> ())? = nil
 	local likeButtonCallback: ((number) -> ())? = nil
 	local syncDanceCallback: ((number) -> ())? = nil
@@ -864,14 +862,11 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 		end)
 	end
 
-	function ui:open()
+	function ui:open(delaySeconds: number?)
 		visibilityToken += 1
 		local openToken = visibilityToken
-		local delaySeconds = 0
-		if beforeOpenCallback then
-			delaySeconds = math.max(beforeOpenCallback(), 0)
-		end
-		if delaySeconds <= 0 then
+		local delay = math.max(delaySeconds or 0, 0)
+		if delay <= 0 then
 			presentPanelFromBottom()
 			playEntrance()
 			if afterOpenCallback then
@@ -1479,10 +1474,6 @@ local function createAvatarContextUIUnsafe(deps: { logger: ILogger })
 
 	function ui:setCarryCallback(callback: (number) -> ())
 		carryCallback = callback
-	end
-
-	function ui:setBeforeOpenCallback(callback: () -> number)
-		beforeOpenCallback = callback
 	end
 
 	function ui:setAfterOpenCallback(callback: (() -> ())?)

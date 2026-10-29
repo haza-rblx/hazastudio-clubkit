@@ -166,6 +166,7 @@ local function createSettingsController(deps: {
 
 	local OVERHEAD_LAYER_LABELS: { [string]: string } = {
 		SpecialTitle = "Custom Title",
+		SpecialTitleImage = "Title Image",
 		BadgeGroup = "Badges",
 		SpecialRank = "Special Rank",
 		TopSpender = CashCurrencyDomain.getActive().shortRoleLabel,
@@ -563,6 +564,7 @@ local function createSettingsController(deps: {
 			textures = payload.textures,
 			musicVolume = payload.musicVolume,
 			_musicVolBase = payload._musicVolBase,
+			_titleLayerBase = payload._titleLayerBase,
 			graphicsPreset = payload.graphicsPreset,
 			shadowQuality = payload.shadowQuality,
 			postEffects = (payload :: any).postEffects == true,
@@ -1597,7 +1599,7 @@ local function applyPostProcessingSetting(instance: Instance, mode: GraphicsQual
 			return
 		end
 		for _, child in ipairs(playerGui:GetChildren()) do
-			if child:IsA("ScreenGui") and child.Name ~= SETTINGS_GUI_NAME then
+			if child:IsA("ScreenGui") and child.Name ~= SETTINGS_GUI_NAME and child.Name ~= Config.TopbarMenu.QUICK_GUI_NAME then
 				if hide then
 					if child:GetAttribute(SETTINGS_HIDE_ALL_GUI_ORIGINAL) == nil then
 						child:SetAttribute(SETTINGS_HIDE_ALL_GUI_ORIGINAL, child.Enabled)
@@ -1756,6 +1758,10 @@ local function applyPostProcessingSetting(instance: Instance, mode: GraphicsQual
 			_musicVolBase = math.max(
 				tonumber(currentPayload._musicVolBase) or 0,
 				SettingsDomain.MUSIC_VOLUME_BASE_SCHEMA
+			),
+			_titleLayerBase = math.max(
+				tonumber(currentPayload._titleLayerBase) or 0,
+				SettingsDomain.TITLE_LAYER_BASE_SCHEMA
 			),
 			graphicsPreset = currentPayload.graphicsPreset,
 			shadowQuality = currentPayload.shadowQuality,
@@ -2044,7 +2050,7 @@ local function applyPostProcessingSetting(instance: Instance, mode: GraphicsQual
 							if uiscale then
 								uiscale.Scale = getGlobalScaleValue()
 							end
-							if currentPayload.hideAllGui == true and child.Name ~= SETTINGS_GUI_NAME then
+							if currentPayload.hideAllGui == true and child.Name ~= SETTINGS_GUI_NAME and child.Name ~= Config.TopbarMenu.QUICK_GUI_NAME then
 								if child:GetAttribute(SETTINGS_HIDE_ALL_GUI_ORIGINAL) == nil then
 									child:SetAttribute(SETTINGS_HIDE_ALL_GUI_ORIGINAL, child.Enabled)
 								end

@@ -3,6 +3,8 @@
 local Players = game:GetService("Players")
 local TeleportService = game:GetService("TeleportService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local ServerStorage = game:GetService("ServerStorage")
 
 local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local AfkGuardDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.AfkGuardDomain)
@@ -35,8 +37,6 @@ local function createSessionCommandService(deps: {
 	local log = Logger.new("SessionCommandService")
 	local limiter = RateLimiter.new(Config.Session.RATE_MAX, Config.Session.RATE_WINDOW)
 	local pendingRespawnRestore: { [number]: RestorePayload } = {}
-	local pendingJoinRestore: { [number]: RestorePayload } = {}
-	local pendingAfkSyncRestore: { [number]: AfkGuardDomain.SyncRestorePayload } = {}
 	-- True while a /re in-place appearance refresh is in flight.
 	local pendingReSyncRestore: { [number]: boolean } = {}
 
@@ -83,7 +83,8 @@ local function createSessionCommandService(deps: {
 	): (boolean, string?)
 		local timeoutSec = math.max(3, tonumber(Config.AfkGuard.TELEPORT_INIT_TIMEOUT_SEC) or 10)
 		if requireConfirmedExit then
-			timeoutSec = math.max(timeoutSec, tonumber(Config.AfkGuard.TELEPORT_CONFIRM_TIMEOUT_SEC) or 15)
+			local confirmKey = sameServer and "TELEPORT_CONFIRM_TIMEOUT_SEC_SAME_SERVER" or "TELEPORT_CONFIRM_TIMEOUT_SEC_ANY_SERVER"
+			timeoutSec = math.max(timeoutSec, tonumber(Config.AfkGuard[confirmKey]) or (sameServer and 30 or 20))
 		end
 		local watch: TeleportWatch = { done = false, errMessage = nil }
 		teleportWatchers[player.UserId] = watch
@@ -320,6 +321,20 @@ local function createSessionCommandService(deps: {
 	-- instead of double-pivoting or racing clear of pending.
 	local restoreFlightId: { [number]: number } = {}
 
+	-- Set when the client fires ClientGameplayReady (Main.client enterGameplay).
+	local clientGameplayReady: { [number]: boolean } = {}
+	local clientReadyConn: RBXScriptConnection? = nil
+
+	local function waitForClientGameplayReady(player: Player): boolean
+		local userId = player.UserId
+		local timeout = tonumber(Config.Session.RESTORE_CLIENT_READY_TIMEOUT) or 60
+		local deadline = os.clock() + timeout
+		while not clientGameplayReady[userId] and os.clock() < deadline and player.Parent do
+			task.wait(0.25)
+		end
+		return clientGameplayReady[userId] == true and player.Parent ~= nil
+	end
+
 	local function restoreAfterCharacterAdded(player: Player, payload: RestorePayload)
 		local userId = player.UserId
 		local flight = (restoreFlightId[userId] or 0) + 1
@@ -346,7 +361,6 @@ local function createSessionCommandService(deps: {
 			local restoreCFrame = deserializeCFrame(payload.cframe)
 			if not restoreCFrame then
 				pendingRespawnRestore[userId] = nil
-				pendingJoinRestore[userId] = nil
 				clearRefreshLock(player)
 				return
 			end
@@ -377,7 +391,6 @@ local function createSessionCommandService(deps: {
 
 			-- Claim position pending only after a successful pivot.
 			pendingRespawnRestore[userId] = nil
-			pendingJoinRestore[userId] = nil
 
 			local function reassertIfDrifted()
 				if not isFlight() then
@@ -402,125 +415,280 @@ local function createSessionCommandService(deps: {
 					humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
 				end
 			end)
+		end)
+	end
 
-			local syncPayload = pendingAfkSyncRestore[userId]
-			if syncPayload then
-				pendingAfkSyncRestore[userId] = nil
-				pendingReSyncRestore[userId] = nil
-				if syncService and type(syncService.restoreAfterAfkRejoin) == "function" then
-					task.defer(function()
-						local options: AfkSyncRestoreOptions = {
-							fireSyncNotification = syncNotify,
-							notifyPlayer = function(target: Player, message: string, kind: string?)
-								notify.player(target, message, kind)
-							end,
-						}
-						syncService:restoreAfterAfkRejoin(player, syncPayload, options)
-					end)
+	-- Teleport arrival (AFK rejoin and /rejoin): ONE path, run once the client reports gameplay
+	-- (the inifixdulu order). Restoring while the client still loads gets overwritten by the client
+	-- or a venue loading screen (back at spawn), and a second CharacterAdded wipes the sync. No
+	-- ready signal in time -> restore anyway instead of giving up. Then re-check twice and redo
+	-- whatever did not hold, judged by the real Animator track, not the sync bookkeeping.
+	local function restoreArrival(player: Player, restoreCFrame: CFrame?, syncPayload: any?)
+		local userId = player.UserId
+		local ready = waitForClientGameplayReady(player)
+		if not player.Parent then
+			return
+		end
+		local wantsDance = syncPayload ~= nil
+			and (syncPayload.wasSyncing == true or syncPayload.animationName ~= nil)
+		local positionFixes = 0
+		local syncFixes = 0
+		local options: AfkSyncRestoreOptions = {
+			fireSyncNotification = syncNotify,
+			notifyPlayer = function(target: Player, message: string, kind: string?)
+				notify.player(target, message, kind)
+			end,
+		}
+
+		local function currentRoot(): (Model?, BasePart?)
+			local deadline = os.clock() + 10
+			while player.Parent and os.clock() < deadline do
+				local character = player.Character
+				local hrp = character and character:FindFirstChild("HumanoidRootPart")
+				if character and character.Parent and hrp and hrp:IsA("BasePart") then
+					return character, hrp
 				end
-				log:info("afk_restore_position_ok", {
-					player = player.Name,
-					userId = userId,
-				})
+				task.wait(0.1)
+			end
+			return nil, nil
+		end
+
+		local function settlePosition(force: boolean): number?
+			if not restoreCFrame then
+				return nil
+			end
+			local character, hrp = currentRoot()
+			if not character or not hrp then
+				return nil
+			end
+			local target = restoreCFrame.Position + Vector3.new(0, Config.Session.RESTORE_Y_OFFSET, 0)
+			if force or (hrp.Position - target).Magnitude > 8 then
+				restorePositionWithStream(player, character, restoreCFrame)
+				if not force then
+					positionFixes += 1
+				end
+			end
+			return (hrp.Position - target).Magnitude
+		end
+
+		local function settleSync(first: boolean)
+			if not wantsDance or not syncService then
 				return
 			end
-		end)
+			-- A respawn mid-check leaves Character nil for a moment; wait for the new one.
+			if not currentRoot() then
+				return
+			end
+			if type(syncService.restoreAfterAfkRejoin) ~= "function" then
+				return
+			end
+			if not first then
+				local engaged = syncService:isDancingOrSynced(player)
+				if engaged and syncService:isDanceStateHealthy(player) then
+					return
+				end
+				if engaged then
+					-- Stale bookkeeping without a playing track: clear it, or the restore below
+					-- early-returns (or toggles the sync off).
+					syncService:handleSyncRequest(player, player, false)
+				end
+				syncFixes += 1
+			end
+			syncService:restoreAfterAfkRejoin(player, syncPayload, options)
+		end
+
+		settlePosition(true)
+		settleSync(true)
+		local finalDistance: number? = nil
+		local function recheck(): boolean
+			-- Checks at +2s, +5s and +10s after a restore.
+			for _, waitSec in ipairs({ 2, 3, 5 }) do
+				task.wait(waitSec)
+				if not player.Parent then
+					return false
+				end
+				finalDistance = settlePosition(false)
+				settleSync(false)
+			end
+			return true
+		end
+		if not recheck() then
+			return
+		end
+		-- No ready signal in time (slow phone, or the app in the background after a long AFK): the
+		-- client's own loading still runs later and drops the avatar back at spawn. Restore again
+		-- once it does report ready.
+		local lateReady = false
+		if not ready then
+			local lateTimeout = tonumber(Config.Session.RESTORE_LATE_READY_TIMEOUT) or 0
+			local deadline = os.clock() + lateTimeout
+			while not clientGameplayReady[userId] and os.clock() < deadline and player.Parent do
+				task.wait(0.5)
+			end
+			if clientGameplayReady[userId] and player.Parent then
+				lateReady = true
+				settlePosition(true)
+				settleSync(false)
+				if not recheck() then
+					return
+				end
+			end
+		end
+		log:info("rejoin_arrival", {
+			player = player.Name,
+			userId = userId,
+			clientReady = ready,
+			lateReady = lateReady,
+			finalDistance = finalDistance,
+			positionFixes = positionFixes,
+			wantsDance = wantsDance,
+			syncFixes = syncFixes,
+			danceHealthy = if syncService and type(syncService.isDanceStateHealthy) == "function"
+				then syncService:isDanceStateHealthy(player)
+				else nil,
+		})
+	end
+
+	-- What an AFK rejoin carries: where the player stood and what they danced / who they followed.
+	local function buildAfkTeleportData(player: Player, useSameServer: boolean): { [string]: any }?
+		local restoreCFrame = getCharacterRestoreCFrame(player)
+		if not restoreCFrame then
+			return nil
+		end
+		local syncRestore: any = nil
+		if syncService and type(syncService.captureSyncSnapshotForTeleport) == "function" then
+			local rawSnapshot = syncService:captureSyncSnapshotForTeleport(player)
+			if rawSnapshot then
+				local validatedSnapshot = AfkGuardDomain.validateSyncRestorePayload(rawSnapshot)
+				if validatedSnapshot.ok then
+					syncRestore = validatedSnapshot.value
+				end
+			end
+		end
+		return {
+			sessionRestore = {
+				placeId = game.PlaceId,
+				jobId = game.JobId,
+				cframe = serializeCFrame(restoreCFrame),
+				afkRejoin = true,
+				preferSameServer = useSameServer,
+				syncRestore = syncRestore,
+			},
+		}
+	end
+
+	-- Reads a join's TeleportData (handleRejoin / handleAfkRejoin wrote it) and hands the arrival
+	-- to restoreArrival, which runs once the client is ready.
+	local function applyJoinTeleportData(player: Player, teleportData: any)
+		local restoreData = if type(teleportData) == "table" then teleportData.sessionRestore else nil
+		if type(restoreData) ~= "table" then
+			return
+		end
+		local placeId = tonumber(restoreData.placeId)
+		local jobId = tostring(restoreData.jobId or "")
+		local values = restoreData.cframe
+		local afkRejoin = restoreData.afkRejoin == true
+		local restoreCFrame: CFrame? = nil
+		local syncPayload: any = nil
+		if placeId == game.PlaceId and type(values) == "table" and (jobId == game.JobId or afkRejoin) then
+			restoreCFrame = deserializeCFrame(values)
+		end
+		if afkRejoin and type(restoreData.syncRestore) == "table" then
+			local validated = AfkGuardDomain.validateSyncRestorePayload(restoreData.syncRestore)
+			if validated.ok then
+				syncPayload = validated.value
+			else
+				log:warn("Invalid AFK sync restore payload", {
+					player = player.Name,
+					userId = player.UserId,
+					error = validated.error,
+				})
+			end
+		end
+		if afkRejoin and jobId ~= "" and jobId ~= game.JobId then
+			task.defer(function()
+				if player.Parent then
+					notify.player(player, Config.AfkGuard.MSG_FALLBACK_SERVER, "WARNING")
+				end
+			end)
+		end
+		if restoreCFrame or syncPayload then
+			task.spawn(restoreArrival, player, restoreCFrame, syncPayload)
+		end
 	end
 
 	local function wirePlayer(player: Player)
 		local joinData = player:GetJoinData()
-		local teleportData = joinData and joinData.TeleportData
-		if type(teleportData) == "table" then
-			local restoreData = (teleportData :: any).sessionRestore
-			if type(restoreData) == "table" then
-				local placeId = tonumber(restoreData.placeId)
-				local jobId = tostring(restoreData.jobId or "")
-				local values = restoreData.cframe
-				local afkRejoin = restoreData.afkRejoin == true
-				if placeId == game.PlaceId and type(values) == "table" and (jobId == game.JobId or afkRejoin) then
-					pendingJoinRestore[player.UserId] = {
-						cframe = values,
-					}
-				end
-				if afkRejoin and type(restoreData.syncRestore) == "table" then
-					local validated = AfkGuardDomain.validateSyncRestorePayload(restoreData.syncRestore)
-					if validated.ok then
-						pendingAfkSyncRestore[player.UserId] = validated.value
-					else
-						log:warn("Invalid AFK sync restore payload", {
-							player = player.Name,
-							userId = player.UserId,
-							error = validated.error,
-						})
-					end
-				end
-				if afkRejoin and jobId ~= "" and jobId ~= game.JobId then
-					task.defer(function()
-						if player.Parent then
-							notify.player(player, Config.AfkGuard.MSG_FALLBACK_SERVER, "WARNING")
-						end
-					end)
-				end
-			end
-		end
+		applyJoinTeleportData(player, joinData and joinData.TeleportData)
 
 		player.CharacterAdded:Connect(function(_character)
 			-- Keep pending until pivot succeeds. Each CharacterAdded starts a new
 			-- flight that supersedes the previous loop (no double-pivot race).
-			local pending = pendingRespawnRestore[player.UserId] or pendingJoinRestore[player.UserId]
-			local syncPayload = pendingAfkSyncRestore[player.UserId]
-			if not pending and not syncPayload then
-				return
-			end
+			-- Teleport arrivals are not restored here; restoreArrival handles them once the client is ready.
+			local pending = pendingRespawnRestore[player.UserId]
 			if pending then
 				restoreAfterCharacterAdded(player, pending)
-				return
 			end
-			-- Native respawn (Reset button / LoadCharacter / reconnect) carries no
-			-- teleport JoinData, so position restore above has no payload — but the
-			-- AFK sync snapshot may still be pending. Restore the dance sync too.
-			-- Single-flight guard: supersede any older flight for this user.
-			local flight = (restoreFlightId[player.UserId] or 0) + 1
-			restoreFlightId[player.UserId] = flight
-			task.defer(function()
-				if restoreFlightId[player.UserId] ~= flight or not player.Parent then
-					return
-				end
-				pendingAfkSyncRestore[player.UserId] = nil
-				if syncService and type(syncService.restoreAfterAfkRejoin) == "function" then
-					local options: AfkSyncRestoreOptions = {
-						fireSyncNotification = syncNotify,
-						notifyPlayer = function(target: Player, message: string, kind: string?)
-							notify.player(target, message, kind)
-						end,
-					}
-					syncService:restoreAfterAfkRejoin(player, syncPayload, options)
-					log:info("afk_restore_sync_native_respawn", {
-						player = player.Name,
-						userId = player.UserId,
-					})
-				end
-			end)
 		end)
 	end
 
 	function service:init()
+		-- Followers bound back by the leader-return grace hear about it the same way an AFK
+		-- sync restore tells them (SyncNotification sync_success).
+		if syncNotify and syncService and type(syncService.setSyncNotifier) == "function" then
+			syncService:setSyncNotifier(syncNotify)
+		end
 		for _, player in ipairs(Players:GetPlayers()) do
 			wirePlayer(player)
 		end
 		Players.PlayerAdded:Connect(wirePlayer)
 
+		if not clientReadyConn then
+			local readyName = tostring(Config.ClientBoot.CLIENT_GAMEPLAY_READY_REMOTE or "ClientGameplayReady")
+			local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+			local readyRemote = remotes and remotes:FindFirstChild(readyName)
+			if readyRemote and readyRemote:IsA("RemoteEvent") then
+				clientReadyConn = readyRemote.OnServerEvent:Connect(function(player: Player)
+					clientGameplayReady[player.UserId] = true
+				end)
+			else
+				log:warn("ClientGameplayReady remote missing; rejoin restore runs without the ready wait", {
+					remote = readyName,
+				})
+			end
+		end
+
 		if not teleportFailedConn then
 			teleportFailedConn = TeleportService.TeleportInitFailed:Connect(onTeleportInitFailed)
+		end
+
+		-- Studio only: a teleport cannot run in Studio, so a playtest harness replays an arrival
+		-- through the same path. Invoke(player, "build") returns the TeleportData an AFK rejoin would
+		-- send right now; Invoke(player, teleportData, clearReady) feeds it in, optionally marks the
+		-- client as still loading, and respawns the character.
+		if RunService:IsStudio() and not ServerStorage:FindFirstChild("ClubKitStudioRejoinProbe") then
+			local probe = Instance.new("BindableFunction")
+			probe.Name = "ClubKitStudioRejoinProbe"
+			probe.OnInvoke = function(player: Player, teleportData: any, clearReady: boolean?)
+				if teleportData == "build" then
+					return buildAfkTeleportData(player, true)
+				end
+				if clearReady then
+					clientGameplayReady[player.UserId] = nil
+				end
+				applyJoinTeleportData(player, teleportData)
+				player:LoadCharacter()
+				return true
+			end
+			probe.Parent = ServerStorage
 		end
 	end
 
 	function service:onPlayerRemoving(player: Player)
 		pendingRespawnRestore[player.UserId] = nil
-		pendingJoinRestore[player.UserId] = nil
-		pendingAfkSyncRestore[player.UserId] = nil
 		pendingReSyncRestore[player.UserId] = nil
 		restoreFlightId[player.UserId] = nil
+		clientGameplayReady[player.UserId] = nil
 		teleportWatchers[player.UserId] = nil
 	end
 
@@ -655,37 +823,15 @@ local function createSessionCommandService(deps: {
 			return Result.Err("disabled")
 		end
 
-		local restoreCFrame = getCharacterRestoreCFrame(player)
-		if not restoreCFrame then
-			notify.player(player, afkConfig.MSG_REJOIN_FAILED, "ERROR")
-			return Result.Err(Config.Session.MSG_RESTORE_FAILED)
-		end
-
-		local syncRestore: any = nil
-		if syncService and type(syncService.captureSyncSnapshotForTeleport) == "function" then
-			local rawSnapshot = syncService:captureSyncSnapshotForTeleport(player)
-			if rawSnapshot then
-				local validatedSnapshot = AfkGuardDomain.validateSyncRestorePayload(rawSnapshot)
-				if validatedSnapshot.ok then
-					syncRestore = validatedSnapshot.value
-				end
-			end
-		end
-
 		-- Ladder rungs 1-2 aim at this exact server; later rungs fall back to any
 		-- public server (different crowd, but far better than a disconnect).
 		local useSameServer = sameServer ~= false and afkConfig.TELEPORT_PREFER_SAME_SERVER == true
 
-		local teleportData = {
-			sessionRestore = {
-				placeId = game.PlaceId,
-				jobId = game.JobId,
-				cframe = serializeCFrame(restoreCFrame),
-				afkRejoin = true,
-				preferSameServer = useSameServer,
-				syncRestore = syncRestore,
-			},
-		}
+		local teleportData = buildAfkTeleportData(player, useSameServer)
+		if not teleportData then
+			notify.player(player, afkConfig.MSG_REJOIN_FAILED, "ERROR")
+			return Result.Err(Config.Session.MSG_RESTORE_FAILED)
+		end
 
 		notify.player(player, afkConfig.MSG_REJOINING, "INFO")
 		log:info("afk_teleport_started", {
@@ -717,6 +863,49 @@ local function createSessionCommandService(deps: {
 		-- and the next rung fires shortly. AfkGuardService notifies only when it
 		-- has no rung left to try.
 		return Result.Err(tostring(err))
+	end
+
+	-- /sync all <player>: bind every other player in the server to the leader's dance chain.
+	-- Players already following that chain are skipped (a repeat sync request toggles OFF).
+	function service:handleSyncAll(player: Player, leader: Player): Result<nil>
+		if not syncService or type(syncService.handleSyncRequest) ~= "function" then
+			return Result.Err("sync_unavailable")
+		end
+		if not limiter:check(player.UserId) then
+			notify.player(player, Config.Session.MSG_RATE_LIMIT, "WARNING")
+			return Result.Err(Config.Session.MSG_RATE_LIMIT)
+		end
+		local leaderCharacter = leader.Character
+		local upstream = leaderCharacter and leaderCharacter:GetAttribute("Syncing")
+		local chainRoot = if type(upstream) == "string" and upstream ~= "" then upstream else leader.Name
+		local synced = 0
+		for _, other in ipairs(Players:GetPlayers()) do
+			local character = other.Character
+			if other == leader or other.Name == chainRoot or not character then
+				continue
+			end
+			if character:GetAttribute("Syncing") == chainRoot then
+				continue
+			end
+			local ok, result = pcall(function()
+				return syncService:handleSyncRequest(other, leader, true)
+			end)
+			if ok and result and result.ok then
+				synced += 1
+				if syncNotify then
+					pcall(syncNotify, other, {
+						type = "sync_success",
+						leaderName = result.value,
+						leaderDisplay = syncService:getLeaderDisplayName(result.value),
+						currentAnim = syncService:getCurrentAnimationName(result.value),
+						targetUserId = leader.UserId,
+					})
+				end
+			end
+		end
+		notify.player(player, string.format(Config.Session.MSG_SYNC_ALL_DONE, synced, leader.DisplayName), "SUCCESS")
+		log:info("sync_all", { player = player.Name, leader = leader.Name, synced = synced })
+		return Result.Ok(nil)
 	end
 
 	function service:handleBring(player: Player, target: Player): Result<nil>

@@ -54,6 +54,11 @@ Config.Branding = {
 	DISCORD_INVITE = "",
 	-- Venue default accent (ClubKitConfig.Branding.DefaultAccent; AccentDomain ids).
 	DEFAULT_ACCENT = "multicolor",
+	-- Kit GUIs the accent theme leaves as designed (AccentSurfaceTint). Venue GUIs are never themed.
+	-- Music player: track covers are artwork. Admin panels: title presets animate their own
+	-- colours, and the tint fighting them every frame made the choices flicker (owner, 2026-10-10).
+	-- Custom title editor: its preset previews animate their own colours too.
+	ACCENT_NO_TINT_GUIS = { "06-MusicPlayerGUI", "04-AdminPanelv3", "04-AdminHub", "1000-01-CT-ADDON" },
 }
 -- ============================================================
 -- MEMBERSHIP TIERS (system-wide presentation config)
@@ -572,6 +577,25 @@ Config.PaidBroadcast = {
 	MSG_PRODUCT_NOT_CONFIGURED = "[Broadcast] Paid broadcast is not available yet.",
 	MSG_PURCHASE_FAILED = "[Broadcast] Purchase could not be completed.",
 }
+-- Giveaway (Auto Gacha): hourly prize draw. Buyer defaults are ClubKitConfig.Giveaway (ConfigBootstrap
+-- writes DEFAULT_*). Live values edited in the admin sheet persist in DataStore STORE_NAME/STORE_KEY
+-- (versioned: never rename) and win over the defaults.
+Config.Giveaway = {
+	STORE_NAME = "Giveaway_v1",
+	STORE_KEY = "state",
+	REMOTE_STATE = "GiveawayState",
+	REMOTE_SPIN = "GiveawaySpin",
+	REMOTE_ADMIN = "GiveawayAdmin",
+	REMOTE_HISTORY = "GiveawayHistory",
+	REMOTE_NOTICE = "GiveawayNotice",
+	DEFAULT_ENABLED = false,
+	DEFAULT_INTERVAL_MINUTES = 60,
+	DEFAULT_MIN_PLAYERS = 50,
+	DEFAULT_PRIZE_ROBUX = 50,
+	DEFAULT_ANCHOR = "TopCenter",
+	DEFAULT_SPIN_DURATION = 4.6,
+	DEFAULT_WIN_FX_VARIANT = 1,
+}
 Config.CinematicDock = {
 	REMOTE_REQUEST = "CinematicDockRequest",
 	REMOTE_BROADCAST = "CinematicDockBroadcast",
@@ -785,6 +809,7 @@ Config.Overhead = {
 	-- everyone and hides the layer's Settings row too.
 	DEFAULT_LAYER_VISIBLE = {
 		SpecialTitle = true,
+		SpecialTitleImage = true,
 		BadgeGroup = true,
 		Level = true,
 		SpecialRank = true,
@@ -1115,6 +1140,10 @@ Config.AutoDance = {
 	STOP_ON_DISABLE = true,
 }
 Config.Sync = {
+	-- A leader who leaves (AFK rejoin teleport, disconnect) keeps their followers this long:
+	-- they keep dancing, and are bound back when the leader dances again. 0 = old behaviour
+	-- (followers stop at once). An AFK same-server rejoin takes about 10-30 s.
+	LEADER_RETURN_GRACE_SEC = 90,
 	REMOTE_FOLDER = "SyncRemotes",
 	REMOTE_ANIMATION_START = "animationStart",
 	REMOTE_START_SYNC = "startSync",
@@ -1217,6 +1246,16 @@ Config.Sync = {
 	-- IconGroup: panel v2 UIScale + 03-MainContentWrapper height (root IconGroup UIScale stays 1).
 	DANCE_PANEL_V2_SCALE_MOBILE = 0.75,
 	DANCE_PANEL_V2_SCALE_DESKTOP = 0.9,
+	-- DancePanelGUIWrapperv3 on phone (touch + short viewport; owner-approved mock 2026-10-09): the
+	-- desktop panel is ~570 px tall. On a phone it keeps a readable scale, gets wider, and the dance
+	-- list is shorter; the speed bar stands on the list's right (DancePanelV3Look.applyPhone). Placed
+	-- right of DancePanelButton with its top edge just under the topbar; the hotbar hides while open.
+	DANCE_PANEL_V3_SCALE_MOBILE = 0.75,
+	DANCE_PANEL_V3_WIDTH_MOBILE = 256,
+	DANCE_PANEL_V3_CONTENT_HEIGHT_MOBILE = 260,
+	DANCE_PANEL_V3_X_MOBILE = 69,
+	DANCE_PANEL_V3_TOP_MOBILE = 60, -- screen px from the top edge
+
 	DANCE_MAIN_CONTENT_WRAPPER_HEIGHT_MOBILE = 270,
 	DANCE_MAIN_CONTENT_WRAPPER_HEIGHT_DESKTOP = 330,
 	TRIGGER_ATTRIBUTE = "OpensDancePanel",
@@ -1339,8 +1378,8 @@ Config.Hotbar = {
 	},
 	HOTBAR_WRAPPER_NAME = "HotbarWrapper",
 	HOTBAR_CHROME_ROOT_NAME = "HotbarChromeRoot",
-	STICKER_WRAPPER_NAME = "StickerButtonWrapper",
-	STICKER_TRIGGER_NAME = "StickerPanelTrigger",
+	-- Retired hotbar children (sticker panel removed 3.x): hidden on the client, swept at server boot.
+	RETIRED_CHILD_NAMES = { "StickerButtonWrapper" },
 	MAX_SLOTS = 10,
 	-- PhoneLayout uses this cap for hotbar slot count (club mobile layout).
 	MAX_SLOTS_MOBILE = 7,
@@ -1406,82 +1445,8 @@ Config.RoleTools = {
 	TOP_SPENDER_FOLDER = "TOP RUPIAH SPENDER",
 	TOP_DONATE_FOLDER = "TOP ROBUX DONATOR",
 }
--- ============================================================
--- STICKER SYSTEM
--- ============================================================
-Config.Sticker = {
-	GUI_NAME = "11-StickerSystemGUI",
-	DISPLAY_ORDER = 60,
-	BILLBOARD_GUI_NAME = "ShoulderStickerGUI",
-	BILLBOARD_IMAGE_NAME = "Sticker",
-	STICKER_IMAGE_ATTRIBUTE = "StickerImage",
-	STICKER_CLEAR_ATTRIBUTE = "StickerClear",
-	DATASTORE_NAME = scopedDataStoreKey("StickerCollection_v1"),
-	KEY_PREFIX = "Player_",
-	-- Shared pool: one upload appears in every player's picker (DataStore key separate from Player_*).
-	GLOBAL_POOL_KEY = "GlobalPool_v1",
-	REMOTE_SET = "StickerSet",
-	REMOTE_CLEAR = "StickerClear",
-	REMOTE_ADD = "StickerAdd",
-	REMOTE_REQUEST = "StickerRequest",
-	REMOTE_SYNC = "StickerSync",
-	REMOTE_READY_TIMEOUT = 10,
-	MAX_COLLECTION_SIZE = 80,
-	DEFAULT_COLLECTION = {
-		"rbxassetid://84494880468556",
-	},
-	DEFAULT_ADORNEE_PRIORITY = {
-		"UpperTorso",
-		"Torso",
-		"HumanoidRootPart",
-		"Head",
-	},
-	BILLBOARD_SIZE = UDim2.new(2.5, 0, 1.5, 0),
-	BILLBOARD_STUDS_OFFSET = Vector3.new(2.1, 1.8, 0),
-	BILLBOARD_MAX_DISTANCE = 40,
-	BILLBOARD_LIGHT_INFLUENCE = 1,
-	IMAGE_TRANSPARENCY = 0,
-	DISPLAY_DURATION_SECONDS = 5,
-	-- Picker click shows on shoulder only (session); DataStore write only on upload (ADD).
-	PERSIST_SELECTION_ON_SET = false,
-	PANEL_TWEEN_TIME = 0.22,
-	PANEL_CLOSED_OFFSET = 32,
-	MODAL_TWEEN_TIME = 0.18,
-	MODAL_CLOSED_SCALE = 0.94,
-	DEBUG = false,
-	-- Rate limits per remote command (server-side, per player)
-	RATE_LIMITS = {
-		SET = { max = 8, window = 5 },
-		CLEAR = { max = 8, window = 5 },
-		ADD = { max = 5, window = 10 },
-		REQUEST = { max = 3, window = 5 },
-	},
-}
--- ============================================================
--- STICKER BILLBOARD ANIMATION (client-side visual)
--- ============================================================
-Config.StickerAnim = {
-	-- Entrance (pop-in bounce)
-	ENTRANCE_DURATION = 0.38, -- total entrance time (seconds)
-	ENTRANCE_OVERSHOOT = 1.18, -- scale overshoot before settling to 1.0
-	-- Exit (fade-out + scale down)
-	EXIT_DURATION = 0.32,
-	EXIT_SCALE = 0.7, -- final scale before hiding
-	-- Idle float (sinusoidal Y offset)
-	FLOAT_SPEED = 2.2, -- radians per second
-	FLOAT_AMPLITUDE = 0.12, -- studs up/down
-	-- Idle wobble (subtle rotation)
-	WOBBLE_SPEED = 1.8, -- radians per second
-	WOBBLE_AMPLITUDE = 2.5, -- degrees
-	-- Sparkle particles on entrance
-	SPARKLE_COUNT = 5,
-	SPARKLE_SIZE_MIN = 10,
-	SPARKLE_SIZE_MAX = 16,
-	SPARKLE_DELAY_MAX = 0.2, -- stagger delay per sparkle
-	SPARKLE_FADE_IN = 0.25,
-	SPARKLE_HOLD = 0.3, -- hold visible before fading out
-	SPARKLE_FADE_OUT = 0.35,
-}
+-- Retired kit GUIs: the server boot sweep destroys these StarterGui templates (Server/Init/RetiredGuiSweep).
+Config.RETIRED_GUI_NAMES = { "11-StickerSystemGUI" }
 -- ============================================================
 -- FEATURE FLAGS
 -- ============================================================
@@ -1520,7 +1485,6 @@ Config.FeatureFlags = {
 	LevelSystemEnabled = true,
 	ShopEnabled = true,
 	CouplesEnabled = true,
-	StickersEnabled = true,
 	LeaderboardEnabled = true,
 	DonationCashEnabled = true,
 	DonationSaweriaEnabled = true,
@@ -1607,10 +1571,14 @@ Config.Loading = {
 	WELCOME_DISMISS_FORMAT = "Welcome to the club, %s",
 	-- PRIMARY_GREETING: filled by ConfigBootstrap from ClubKitConfig.Branding.Greeting
 	-- "classic" = StarterGui.00-LoadingScreen template + six-shot avatar orbit.
-	-- "cinematic" = two parts (experiment, CONTEXT.md "Loading style"): a skippable artwork
-	-- screen while the kit boots, then the character intro, played through without input.
+	-- "cinematic" = two parts (default since 2026-10-17, CONTEXT.md "Loading style"): a skippable
+	-- artwork screen while the kit boots, then the character intro, played through without input.
 	-- Engine constant, not a buyer key.
-	STYLE = "classic",
+	STYLE = "cinematic",
+	-- Phones (touch, no keyboard, short side under MobilePanelManager.TABLET_MIN_SHORT_SIDE): the
+	-- template's ContentWrapper UIScale (authored for desktop) and the cinematic stack's left margin.
+	PHONE_UI_SCALE = 0.6,
+	PHONE_STACK_SIDE = 24,
 	-- Part 1 background (ClubKitConfig.Loading.ArtworkImage / ArtworkVideo); "" = experience thumbnail.
 	ARTWORK_IMAGE = "",
 	ARTWORK_VIDEO = "",
@@ -1745,10 +1713,11 @@ Config.UIMotion = {
 	-- Transitions only (panel / modal / sidebar TRAVEL: slide, settle, scale-in), on top of
 	-- MOTION_SCALE. Fades and content motion (stagger, hover, press) never read it. 1 = as designed.
 	TRANSITION_SCALE = 1,
-	-- 2026-09-16 feel pass: the centre panel opens longer and softer, and always closes faster than
-	-- it opens. These shadow the same-named fallbacks in Client/Utils/MotionPresets — change both.
-	CENTER_OPEN_TIME = 0.40,
-	CENTER_CLOSE_TIME = 0.24,
+	-- 2026-10-17 shrink pass (owner A/B on the dance panel): centre panels grow from / shrink to
+	-- scale 0 — Exponential Out open, Cubic In close — and still close faster than they open.
+	-- These shadow the same-named fallbacks in Client/Utils/MotionPresets — change both.
+	CENTER_OPEN_TIME = 1.20,
+	CENTER_CLOSE_TIME = 0.75,
 	SIDEBAR_SPRING_FREQ = 3.8, -- TopMenu / sidebar critically-damped spring (softer = lower)
 	-- CanvasGroup textures are re-created whenever their size changes (Roblox docs), and
 	-- render BLANK when the client's texture budget is exceeded. When true, every UIScale
@@ -2117,7 +2086,7 @@ Config.Community = {
 -- the event first fires at ~129s of idle, then EXACTLY every 30s, and its `time`
 -- argument tracks real idle seconds since the last input. Roblox disconnects at
 -- 20:00 (1200s). Ladder times below are therefore reached on the tick at
--- 129 + 30k, e.g. the 780s rung actually fires at ~789s.
+-- 129 + 30k, e.g. the 600s rung actually fires at ~609s.
 --
 -- The old design fired a single rung at 17:00 (~1029s), leaving only 171s of
 -- margin, and the server's 1-token/900s limiter made retries impossible inside
@@ -2164,31 +2133,35 @@ Config.AfkGuard = {
 	IDLE_WARN_SEC = 120,
 	-- First ladder rung; also the floor for server-side request validation
 	-- (min accepted idle = IDLE_THRESHOLD_SEC - IDLE_TOLERANCE_SEC).
-	IDLE_THRESHOLD_SEC = 13 * 60,
+	IDLE_THRESHOLD_SEC = 10 * 60,
 	IDLE_TOLERANCE_SEC = 30,
 	-- Escalation ladder. Each rung is one rejoin attempt; sameServer rungs come
 	-- first so the player lands back with the same crowd, then any-server rungs
 	-- as a last resort. Retries within one idle streak do NOT need a new rate
 	-- token (see AUTO_REJOIN_CYCLE_TTL_SEC).
 	REJOIN_LADDER = {
-		{ atIdleSec = 13 * 60, sameServer = true },
-		{ atIdleSec = 870, sameServer = true },
-		{ atIdleSec = 16 * 60, sameServer = false },
-		{ atIdleSec = 1050, sameServer = false },
+		{ atIdleSec = 10 * 60, sameServer = true },
+		{ atIdleSec = 690, sameServer = true },
+		{ atIdleSec = 13 * 60, sameServer = false },
+		{ atIdleSec = 870, sameServer = false },
 	},
 	-- Stop attempting past this: teleporting into the 20:00 kick window risks
 	-- landing the player mid-disconnect instead of cleanly rejoining.
 	HARD_STOP_IDLE_SEC = 19 * 60,
 	-- One token opens one AFK *cycle* (idle streak), not one request. Window is
-	-- below the 13-minute first rung so a fresh streak always has a token.
+	-- below the 10-minute first rung so a fresh streak always has a token.
 	AUTO_REJOIN_RATE_MAX = 1,
-	AUTO_REJOIN_RATE_WINDOW = 600,
-	-- How long a cycle stays open server-side; ladder spans 780s..1050s (270s).
+	AUTO_REJOIN_RATE_WINDOW = 540,
+	-- How long a cycle stays open server-side; ladder spans 600s..870s (270s).
 	AUTO_REJOIN_CYCLE_TTL_SEC = 600,
 	-- Teleport init failures are async (TeleportInitFailed); give up waiting after this long.
 	TELEPORT_INIT_TIMEOUT_SEC = 10,
 	-- AFK path only: how long to wait for the player to ACTUALLY leave before
-	-- calling the attempt failed. "No error reported" is not success.
+	-- calling the attempt failed. "No error reported" is not success. A same-server rejoin
+	-- lands slower than a jump to any server, so it gets the longer window.
+	TELEPORT_CONFIRM_TIMEOUT_SEC_SAME_SERVER = 30,
+	TELEPORT_CONFIRM_TIMEOUT_SEC_ANY_SERVER = 20,
+	-- Deprecated (superseded by the two keys above); no longer read by the engine.
 	TELEPORT_CONFIRM_TIMEOUT_SEC = 15,
 	-- Deprecated (superseded by REJOIN_LADDER); kept so buyer configs that set
 	-- them keep loading. No longer read by the engine.
@@ -2208,6 +2181,7 @@ Config.AfkGuard = {
 	MSG_SYNC_RESTORED = "[Session] Synced back to %s.",
 	MSG_SYNC_FALLBACK = "[Session] %s left — synced to %s.",
 	MSG_SYNC_SOLO = "[Session] Rejoined. Dance sync could not be restored.",
+	MSG_SYNC_WAITING = "[Session] Rejoined. Waiting for your dance leader to come back.",
 	MSG_FALLBACK_SERVER = "[Session] Rejoined on a new server — your friends may be on a different one.",
 }
 Config.Session = {
@@ -2215,9 +2189,14 @@ Config.Session = {
 	CMD_ALIAS_REJOIN = "rejoin",
 	CMD_ALIAS_BRING = "bring",
 	CMD_ALIAS_TO = "to",
+	CMD_ALIAS_SYNC = "sync",
 	RATE_MAX = 10,
 	RATE_WINDOW = 30,
 	RESTORE_Y_OFFSET = 0,
+	-- Rejoin restore waits this many seconds for ClientGameplayReady, then restores anyway.
+	RESTORE_CLIENT_READY_TIMEOUT = 120,
+	-- After that timeout, keep watching this long for a late ready and restore again (0 = off).
+	RESTORE_LATE_READY_TIMEOUT = 600,
 	TELEPORT_Y_OFFSET = 3,
 	TELEPORT_FORWARD_OFFSET = 4,
 	-- Max seconds a /re in-flight lock may stick if apply/settle never finishes.
@@ -2232,6 +2211,9 @@ Config.Session = {
 	MSG_USAGE_REFRESH = "[Session] Just use /re.",
 	MSG_USAGE_REJOIN = "[Session] Just use /rejoin.",
 	MSG_USAGE_BRING = "[Teleport] Use /bring <player>.",
+	MSG_USAGE_SYNC_ALL = "[Sync] Use /sync all <player>.",
+	MSG_SYNC_ALL_NO_PERM = "[Sync] /sync all is for admins only.",
+	MSG_SYNC_ALL_DONE = "[Sync] %d player(s) synced to %s.",
 	MSG_USAGE_TO = "[Teleport] Use /to <player>.",
 	MSG_TELEPORT_NO_PERM = "[Teleport] This command is " .. Config.Membership.Tiers.Tier3.label .. "-only and above.",
 	MSG_TELEPORT_SELF = "[Teleport] Pick another player.",
@@ -2328,6 +2310,8 @@ Config.Admin = {
 	-- candidates above stay the v2 path, so a place without v3 is unaffected.
 	GUI_NAME_V3 = "04-AdminPanelv3",
 	HUB_GUI_NAME = "04-AdminHub",
+	-- Code-built Admin Spotlight (AdminSpotlightUI) that replaced the 04-AdminHub shell.
+	SPOTLIGHT_GUI_NAME = "04-AdminSpotlight",
 	GUI_WAIT_TIMEOUT = 30, -- WaitForChild GUI timeout (seconds)
 	GUI_SCALE_BAKED = 0.82,
 	GUI_SCALE_MOBILE = 0.54,
@@ -2346,6 +2330,10 @@ Config.Admin = {
 	REMOTE_SET_TITLE_IMAGE = "AdminSetTitleImage",
 	-- Client asks, server replies to that client with the place-global registry.
 	REMOTE_TITLE_IMAGE_LIST = "AdminTitleImageList",
+	-- Admin Spotlight "Edit stats". RemoteFunctions: Get(targetUserId) -> snapshot,
+	-- Set(targetUserId, changes) -> (ok, message). Gate: canUseAdminPanel + RATE_*.
+	REMOTE_GET_STATS = "AdminGetStats",
+	REMOTE_SET_STATS = "AdminSetStats",
 	RATE_MAX = 5,
 	RATE_WINDOW = 30,
 	-- v3 header tabs. Applied over the template's own text only when that text is
@@ -2677,6 +2665,9 @@ Config.CinematicDock.TOPBAR_ICON = Config.Icons.Topbar.Camera
 -- ============================================================
 Config.TopbarMenu = {
 	GUI_NAME = "15-TopMenuGUI",
+	-- Own ScreenGui for the quick toggles row above the menu. It is exempt from Hide UI, so the
+	-- row can always bring the UI back.
+	QUICK_GUI_NAME = "15-QuickToggleGui",
 	DESKTOP_FRAME_NAME = "TopBarMenu",
 	PHONE_FRAME_NAME = "TopBarMenuPhone",
 	LABEL = "Menu",
@@ -2811,6 +2802,7 @@ Config.CustomTitle = {
 	MSG_LOCKED_PANEL = "%s to unlock this custom feature.",
 	-- Replaces the quota line while the free title is what is opening the panel.
 	MSG_FREE_TITLE = "Your first title is free — this one is on the house.",
+	PICKER_BACK_LABEL = "Back", -- picker footer button before a choice is made
 	UNLOCK_LEVEL = "reach Lv %d",
 	UNLOCK_ROBUX = "donate %d R$",
 	UNLOCK_CASH = "donate %s",
@@ -3223,6 +3215,9 @@ Config.Donation = {
 	NOTIF_SLIDE_DURATION = 0.45, -- slide-in animation duration (seconds)
 	NOTIF_GAP_DURATION = 0.18, -- gap between notifications for distinct transitions
 	WORKSPACE_RESTORE_DELAY = 60,
+	-- true = the workspace live chat board (and running text) keep showing the last donation
+	-- until the next one replaces it, instead of popping out after WORKSPACE_RESTORE_DELAY.
+	LIVE_CHAT_PERSIST = true,
 	-- CollectionService tag applied to Workspace roots that host donation SurfaceGuis.
 	-- TagDonationDisplayRoots.server.luau applies this at runtime so the tag survives
 	-- place reloads without a manual Studio Command Bar step.
@@ -3398,6 +3393,10 @@ Config.Leaderboards = {
 	CLIENT_PLAY_ANIMATIONS = true,
 	-- Daily boards: DailyDonations (combined R$+RP), DailyDonationsRobux, DailyDonationsCash.
 	DAILY_ROBUX_ENABLED = true,
+	-- Daily Robux totals shared by every server through a MemoryStore SortedMap per WIB day
+	-- (Server/Repositories/DailyRobuxRepository). false = each server only knows its own.
+	DAILY_ROBUX_SHARED = true,
+	DAILY_ROBUX_STORE_NAME = "ClubKitDailyRobux_v1",
 	-- Merge daily Robux + cash into payload.dailyCombined (sorted by lastDonationAt desc).
 	DAILY_COMBINED_ENABLED = true,
 	-- Cap for combined list after merge (before showcase paging).
@@ -3662,7 +3661,7 @@ Config.Music = {
 	-- (DataStore cache miss = ~500ms, BudgetGate defer up to 5s) plus per-track
 	-- thumbnail resolution. 10s tripped on cold boot.
 	REMOTE_REQUEST_TIMEOUT = 30,
-	VIRTUAL_TRACK_ROW_BUFFER = 6,
+	VIRTUAL_TRACK_ROW_BUFFER = 4,
 	VIRTUAL_TRACK_MAX_RENDERED_ROWS = 60,
 	THUMBNAIL_CACHE_MAX = 100,
 	-- Playback
@@ -3671,7 +3670,7 @@ Config.Music = {
 	-- the literal in MusicDomain.validateTrack and brm-api's MAX_TRACK_PARTS.
 	MAX_TRACK_PARTS = 26,
 	NEW_DROPS_WINDOW_SECONDS = 7 * 24 * 60 * 60,
-	VOTE_SKIP_THRESHOLD = 0.5, -- 50% of players must vote
+	VOTE_SKIP_THRESHOLD = 0.75, -- share of the players in the vote who must vote skip (owner 2026-10-09: 75%)
 	-- Default playback speed for music GUI when track has no
 	-- per-track override (track.playbackSpeed = nil).
 	-- Controller and binder read this value on first load.
@@ -3998,10 +3997,12 @@ Config.Music = {
 	VOTE_SKIP_RATE_WINDOW = 30,
 	REQUEST_TRACK_RATE_MAX = 100,
 	REQUEST_TRACK_RATE_WINDOW = 30,
-	-- v3 Add sets / Shuffle: max tracks one DJ/admin request can queue (players get their free
-	-- REQUEST_TRACK_MAX_PER_USER_QUEUE slots instead).
+	-- v3 Add sets / Shuffle: DJs and admins only (owner 2026-10-09); max tracks one press queues.
 	REQUEST_MANY_MAX = 25,
-	REQUEST_TRACK_MAX_PER_USER_QUEUE = 100,
+	-- Songs one player may have waiting in the queue at once (owner 2026-10-09: 3).
+	REQUEST_TRACK_MAX_PER_USER_QUEUE = 3,
+	-- The same limit for musicControl holders (DJs, admins) (owner 2026-10-16: 300).
+	REQUEST_TRACK_MAX_PER_USER_QUEUE_CONTROL = 300,
 	-- Play-once request (3.0, ADR 0010): a pasted audio asset ID plays once and is never saved.
 	-- PLAY_ONCE_REQUEST comes from ClubKitConfig.Music.PlayOnceRequest: "everyone" | "control" | "off".
 	-- Players without musicControl: MAX_PENDING waiting at a time, MAX_PER_WINDOW per WINDOW_SECONDS.
@@ -4026,6 +4027,11 @@ Config.Music = {
 	DJ_EFFECT_RATE_WINDOW = 60,
 	TRANSPORT_RATE_MAX = 30,
 	TRANSPORT_RATE_WINDOW = 30,
+	-- Active set (docs/plans/active-set.md): one server-side set source, materialised one track at a time.
+	SET_MAX_TRACKS = 1500,
+	SET_QUEUE_MAX = 3, -- sets in the queue at once, the active set included
+	SET_PAGE_SIZE = 50,
+	SET_PAGE_RATE = { count = 10, window = 10 },
 	-- D2 (quota-efficiency-pass-2026-06, Phase 1): extended from 15s to 30s.
 	-- Music library rarely changes. Revert to 15s via Config if admin upload track UX issue.
 	-- DataStore-heavy path, not HTTP-API culprit. Default OK.
@@ -4109,7 +4115,6 @@ Config.MobileScale = {
 	CUSTOM_TITLE_GUI = 0.55, -- 1000-01-CT-ADDON root UIScale on phone layout
 	FREE_TITLE_EVENT_CARD = 0.7, -- IconGroup.ADDON-FreeTitleEventTrigger resting UIScale on phone layout
 	JOIN_COMMUN_GUI = 0.48, -- 16-JoinCommunPrompt root UIScale on phone layout
-	STICKER_GUI = 0.8, -- 11-StickerSystemGUI
 	NOTIF_GUI = 0.75, -- 99-NotificationCenter
 	COMMAND_GUI = 0.8, -- CommandLibraryGUI
 	ACM_GUI = 0.68, -- AvatarContextMenu (+ remove Y offset on MainWrapper)
@@ -4309,6 +4314,11 @@ Config.Telemetry = {
 	ENABLED = true,
 	BUDGET_INTERVAL_SEC = 900,
 	PATH = "/v3/telemetry",
+	-- Instance-diet probe (docs/plans/instance-diet-2026-10-09.md). Temporary; flip to false to stop.
+	INSTANCES_ENABLED = true,
+	INSTANCES_SAMPLE_SEC = 60, -- client + server sample cadence
+	INSTANCES_CLIENT_BATCH_SEC = 300, -- one client → server RemoteEvent per 5 min
+	INSTANCES_FLUSH_SEC = 900, -- one POST per 15 min (HTTP budget rule, ADR 0007)
 }
 -- HTTP API wrapper — dedup + cache for GroupService/Players at 100 CCU.
 Config.HttpApi = {
@@ -4532,8 +4542,12 @@ Config.ClientFootprint = {
 	-- After boot, empty the StarterGui templates that already have their PlayerGui copy
 	-- (StarterGuiTrimService). -4,200 instances. Legacy: false.
 	TRIM_STARTER_GUI = true,
-	-- Templates that stay whole besides Sticker / PaidBroadcast (cloned on demand).
+	-- Templates that stay whole besides PaidBroadcast (cloned on demand).
 	STARTER_GUI_KEEP = { "00-LoadingScreen" },
+	-- Only kit GUIs are trimmed: numbered names ("01-…", "99-…", "1000-01-…") plus these.
+	-- A venue's own GUI is never touched — its scripts may clone the StarterGui template on
+	-- demand (PARKLAB DualGlowStick re-clones DualGlowColorGui on every equip).
+	STARTER_GUI_TRIM_EXTRA = { "AvatarContextMenu", "CommandLibraryGUI" },
 	-- The server leaderboard renderer drops row decoration that draws nothing (disabled UIStroke,
 	-- zero UIPadding, UICorner on a transparent Frame) and turns aspect-ratio constraints into
 	-- fixed sizes (rows are fixed height). Same pixels, about 5 fewer instances per row (-1,500
@@ -4549,6 +4563,10 @@ Config.ClientFootprint = {
 -- not buyer config. Off until the owner releases it.
 Config.Onboarding = {
 	ENABLED = false,
+	-- Phones: the modal fits in the band between the topbar and the hotbar, with this gap
+	-- under the topbar inset and this much kept clear at the bottom (hotbar + gap), in px.
+	PHONE_TOP_GAP = 10,
+	PHONE_BOTTOM_RESERVE = 66,
 }
 -- ============================================================
 -- CONFIG VALIDATION

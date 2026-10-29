@@ -166,8 +166,14 @@ local function init(deps: {
 				else
 					topbarIcon:setEnabled(false)
 					ui:hide()
+					-- The icon is what holds mobile panel focus; deselect so the other GUIs come
+					-- back when an admin loses the role while the panel is open (2026-10-12 bug).
+					if type(topbarIcon.deselect) == "function" then
+						topbarIcon:deselect()
+					end
 				end
 			elseif not bindTopbar and not isAdmin then
+				-- Icon belongs to the Admin Hub / v3 panel here; they own enable + deselect.
 				ui:hide()
 			end
 		end

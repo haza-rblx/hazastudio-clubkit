@@ -5,7 +5,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config         = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Constants.Config)
-local OverheadDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.OverheadDomain)
+local PermissionDomain = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.PermissionDomain)
 local RateLimiter    = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.RateLimiter)
 local Logger         = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Utils.Logger)
 local function createLevelController(deps: {
@@ -59,8 +59,14 @@ local function createLevelController(deps: {
 			local username, levelStr = lower:match("^/setlevel%s+(%S+)%s+(%d+)$")
 			if username and levelStr then
 				-- Auth check before rate limit - cegah unauthorized waste rate limit slots
-				local giverRole = overheadService:getRawGroupRole(player)
-				if not OverheadDomain.canGift(giverRole) then
+				local giverRole: string? = nil
+				if type(overheadService.getEffectivePayload) == "function" then
+					local payloadResult = overheadService:getEffectivePayload(player)
+					if payloadResult.ok then
+						giverRole = payloadResult.value.role
+					end
+				end
+				if not PermissionDomain.canUseAdminPanel(giverRole, player.UserId) then
 					return
 				end
 				if not setLevelLimiter:check(player.UserId) then return end

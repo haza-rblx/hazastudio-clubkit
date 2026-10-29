@@ -104,6 +104,14 @@ local function getOrCreateUIScale(frame: Frame): UIScale
 	s.Parent = frame
 	return s
 end
+-- Only the first UIScale under a GuiObject applies, so a panel whose layout scale lives on that
+-- UIScale (dance panel v3 on phones) sets `UIScaleRest`; the center open/close motion is relative
+-- to it instead of ending at 1.
+local UI_SCALE_REST_ATTRIBUTE = "UIScaleRest"
+local function getUIScaleRest(frame: GuiObject): number
+	local rest = frame:GetAttribute(UI_SCALE_REST_ATTRIBUTE)
+	return if type(rest) == "number" and rest > 0 then rest else 1
+end
 -- Per-target motion bookkeeping: one STRONG record per Instance, reclaimed on its `Destroying`
 -- (InstanceState; ADR 0011 addendum, 2026-09-17). These used to be weak-keyed tables, and Roblox
 -- drops such an entry while the panel is still alive — which orphaned an in-flight present/dismiss
@@ -703,20 +711,21 @@ function AnimationHelper:presentCenterPanel(modal: Frame, onDone: (() -> ())?, o
 		return
 	end
 	local uiScale = getOrCreateUIScale(modal)
+	local rest = getUIScaleRest(modal)
 	local token = beginAnimation(modal)
 	if reduced() then
-		uiScale.Scale = 1
+		uiScale.Scale = rest
 		modal.Visible = true
 		snapComplete(modal, token, onDone)
 		return
 	end
 
-	uiScale.Scale = openPreset.startScale
+	uiScale.Scale = openPreset.startScale * rest
 	modal.Visible = true
 	local scaleTween = TweenService:Create(
 		uiScale,
 		MotionPresets.centerOpenTransitionInfo(),
-		{ Scale = 1 }
+		{ Scale = rest }
 	)
 	registerTweens(modal, { scaleTween }, modal.Position)
 	scaleTween.Completed:Once(function(playbackState)
@@ -724,7 +733,7 @@ function AnimationHelper:presentCenterPanel(modal: Frame, onDone: (() -> ())?, o
 			return
 		end
 		completeTweens(modal)
-		uiScale.Scale = 1
+		uiScale.Scale = rest
 		if playbackState == Enum.PlaybackState.Completed and onDone then
 			onDone()
 		end
@@ -749,10 +758,11 @@ function AnimationHelper:dismissCenterPanel(modal: Frame, onDone: (() -> ())?, o
 		return
 	end
 	local uiScale = getOrCreateUIScale(modal)
+	local rest = getUIScaleRest(modal)
 	local token = beginAnimation(modal)
 	if reduced() then
 		modal.Visible = false
-		uiScale.Scale = 1
+		uiScale.Scale = rest
 		snapComplete(modal, token, onDone)
 		return
 	end
@@ -761,7 +771,7 @@ function AnimationHelper:dismissCenterPanel(modal: Frame, onDone: (() -> ())?, o
 	local scaleTween = TweenService:Create(
 		uiScale,
 		MotionPresets.centerCloseTransitionInfo(),
-		{ Scale = closePreset.endScale }
+		{ Scale = closePreset.endScale * rest }
 	)
 	registerTweens(modal, { scaleTween }, modal.Position)
 	scaleTween.Completed:Once(function(playbackState)
@@ -770,7 +780,7 @@ function AnimationHelper:dismissCenterPanel(modal: Frame, onDone: (() -> ())?, o
 		end
 		completeTweens(modal)
 		modal.Visible = false
-		uiScale.Scale = 1
+		uiScale.Scale = rest
 		if playbackState == Enum.PlaybackState.Completed and onDone then
 			onDone()
 		end

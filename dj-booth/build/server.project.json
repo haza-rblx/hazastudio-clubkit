@@ -1,0 +1,7 @@
+{
+	"name": "HazaDJ",
+	"tree": {
+		"$path": "../src/server",
+		"ServerPackages": { "$path": "../ServerPackages" }
+	}
+}

@@ -20,9 +20,12 @@ type Result<T> = Types.Result<T>
 -- window is just the confirmation wait plus slack.
 local function inFlightStaleAfterSec(): number
 	local cfg = Config.AfkGuard
-	local confirm = tonumber(cfg.TELEPORT_CONFIRM_TIMEOUT_SEC) or 15
+	-- Track the largest confirm window (same-server=30s default, any-server=20s default)
+	-- so a late-landing teleport is still guarded against double-teleport.
+	local confirmSame = tonumber(cfg.TELEPORT_CONFIRM_TIMEOUT_SEC_SAME_SERVER) or 30
+	local confirmAny = tonumber(cfg.TELEPORT_CONFIRM_TIMEOUT_SEC_ANY_SERVER) or 20
 	local init = tonumber(cfg.TELEPORT_INIT_TIMEOUT_SEC) or 10
-	return math.max(confirm, init) + 20
+	return math.max(confirmSame, confirmAny, init) + 20
 end
 
 -- One rate token opens one AFK cycle (idle streak). Every rung of the ladder

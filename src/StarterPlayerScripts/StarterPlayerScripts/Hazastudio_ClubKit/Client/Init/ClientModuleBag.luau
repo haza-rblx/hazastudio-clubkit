@@ -24,6 +24,7 @@ return {
 	GiftController = require(Client.Controllers.GiftController),
 	AdminController = require(Client.Controllers.AdminController),
 	AdminHubController = require(Client.Controllers.AdminHubController),
+	GiveawayController = require(Client.Controllers.GiveawayController),
 	AdminTitleV3Controller = require(Client.Controllers.AdminTitleV3Controller),
 	createAvatarContextController = require(Client.Controllers.AvatarContextController),
 	createCarryController = require(Client.Controllers.CarryController),
@@ -33,7 +34,6 @@ return {
 	createSyncController = require(Client.Controllers.SyncController),
 	createSyncPanelTriggerController = require(Client.Controllers.SyncPanelTriggerController),
 	HotbarController = require(Client.Controllers.HotbarController),
-	StickerController = require(Client.Controllers.StickerController),
 	DonationLeaderboardController = require(Client.Controllers.DonationLeaderboardController),
 	DonationNotificationController = require(Client.Controllers.DonationNotificationController),
 	DonationSystemController = require(Client.Controllers.DonationSystemController),
@@ -63,7 +63,6 @@ return {
 	AvatarLikeWorldEffect = require(Client.Utils.AvatarLikeWorldEffect),
 	-- Side-effect load (legacy): keep so NukeEffectController still registers listeners.
 	_NukeEffectController = require(Client.Utils.NukeEffectController),
-	StickerBillboardAnimator = require(Client.Utils.StickerBillboardAnimator),
 	CommandLibraryStore = require(Client.State.CommandLibraryStore),
 	CarryStore = require(Client.State.CarryStore),
 	InventoryStore = require(Client.State.InventoryStore),
@@ -75,4 +74,6 @@ return {
 	MusicTopbarIcon = require(Client.UI.MusicTopbarIcon),
 	HotbarInventoryService = require(Client.Services.HotbarInventoryService),
 	NotifService = require(Client.Services.NotifService),
+	-- Instance-diet probe (temporary; docs/plans/instance-diet-2026-10-09.md phase 1).
+	InstanceProbeClient = require(Client.Services.InstanceProbeClient),
 }

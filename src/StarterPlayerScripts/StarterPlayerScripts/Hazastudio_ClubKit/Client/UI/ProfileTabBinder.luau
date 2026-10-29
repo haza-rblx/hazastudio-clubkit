@@ -8,6 +8,7 @@ local Types = require(ReplicatedStorage.Hazastudio_ClubKit.Shared.Domain.Types)
 local AvatarPrewarmShared = require(script.Parent.Parent.Utils.AvatarPrewarmShared)
 local AvatarViewport3D = require(script.Parent.Parent.Utils.AvatarViewport3D)
 local GroupedRowCornerUtil = require(script.Parent.Parent.Utils.GroupedRowCornerUtil)
+local TouchScrollAssist = require(script.Parent.Parent.Utils.TouchScrollAssist)
 local UIMotion = require(script.Parent.Parent.Utils.UIMotion)
 local ButtonVisualUtil = require(script.Parent.ButtonVisualUtil)
 local MenuGuiRefs = require(script.Parent.MenuGuiRefs)
@@ -470,6 +471,25 @@ function ProfileTabBinder.new(refs: Refs)
 		self._avatar:setPrewarmPool(AvatarPrewarmShared.getPool())
 		-- Same cursor gaze as the ACM, anywhere over the menu panel.
 		self._avatar:setGazeFollow(true, refs.outerWrapper)
+		-- A touch that lands on the avatar must scroll the profile (the avatar fills most of a
+		-- phone's first screen): the ViewportFrame in the touch stack kept the ScrollingFrame from
+		-- taking the drag, and so did an Active frame between them (PARKLAB's MainContent).
+		pcall(function()
+			(refs.avatarViewport :: any).Interactable = false
+		end)
+		local node = refs.avatarViewport.Parent
+		while node and not node:IsA("ScrollingFrame") and not node:IsA("LayerCollector") do
+			if node:IsA("GuiObject") and not node:IsA("GuiButton") and node.Active then
+				node.Active = false
+			end
+			node = node.Parent
+		end
+		-- Owner test: the engine still would not scroll a drag that starts on the avatar, so
+		-- scroll the profile by hand for those touches.
+		local avatarRegion = refs.avatarViewport.Parent
+		if node and node:IsA("ScrollingFrame") and avatarRegion and avatarRegion:IsA("GuiObject") then
+			TouchScrollAssist.attach(avatarRegion, node)
+		end
 	end
 	self._avatarLoadedUserId = nil :: number?
 	self._currentPayload = nil :: ProfileMenuPayload?

@@ -11,7 +11,7 @@ export type ButtonMap = { [string]: TextButton }
 
 export type Refs = {
 	root: ScreenGui,
-	desktopMenu: Frame,
+	desktopMenu: GuiObject,
 	phoneMenu: ScrollingFrame,
 	desktopButtons: ButtonMap,
 	phoneButtons: ButtonMap,
@@ -42,9 +42,14 @@ local function expect(parent: Instance, name: string, timeout: number?): Instanc
 	return child
 end
 
-local function asFrame(instance: Instance): Frame
-	assert(instance:IsA("Frame"), ("Expected Frame, got %s"):format(instance.ClassName))
-	return instance :: Frame
+-- The desktop menu may be a ScrollingFrame (a place that made a tall menu scroll); a
+-- ScrollingFrame is not a Frame, so accept both.
+local function asMenuFrame(instance: Instance): GuiObject
+	assert(
+		instance:IsA("Frame") or instance:IsA("ScrollingFrame"),
+		("Expected Frame or ScrollingFrame, got %s"):format(instance.ClassName)
+	)
+	return instance :: GuiObject
 end
 
 local function asScrollingFrame(instance: Instance): ScrollingFrame
@@ -115,7 +120,7 @@ function TopMenuGuiRefs.resolve(playerGui: PlayerGui): Refs
 	local cfg = Config.TopbarMenu
 	local root = resolveRoot(playerGui, cfg.GUI_NAME)
 
-	local desktopMenu = asFrame(expect(root, cfg.DESKTOP_FRAME_NAME, 15))
+	local desktopMenu = asMenuFrame(expect(root, cfg.DESKTOP_FRAME_NAME, 15))
 	local phoneMenu = asScrollingFrame(expect(root, cfg.PHONE_FRAME_NAME, 15))
 
 	local desktopButtons = resolveButtons(desktopMenu)

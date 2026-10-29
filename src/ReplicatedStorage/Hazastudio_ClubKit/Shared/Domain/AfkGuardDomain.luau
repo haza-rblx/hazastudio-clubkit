@@ -50,7 +50,19 @@ export type RejoinResponse = {
 	requestId: string,
 	outcome: RejoinOutcome,
 	retryAfterSec: number?,
+	-- Reason string for rejoin_failed/denied_* outcomes so the client can
+	-- classify infra-flake (transient) vs genuine fault (permanent).
+	reason: string?,
 }
+
+-- Classification tier for a RejoinOutcome. Drives the client's firedSteps
+-- un-fire decision instead of a hand-maintained allowlist:
+--   success    -> keep fired, cycle continues
+--   transient  -> un-fire rung, re-arm with cooldown+jitter (retry-able)
+--   permanent  -> keep fired, escalate next rung (genuine client fault)
+-- Only denied_invalid is permanent. TeleportAsync failures are always
+-- retry-able at the API level, so rejoin_failed is transient by default.
+export type OutcomeTier = "success" | "transient" | "permanent"
 
 -- Client state for ONE idle streak. Rungs are scheduled by idle time (see
 -- Config.AfkGuard.REJOIN_LADDER), not by a backoff counter, so a denial can
@@ -63,7 +75,7 @@ export type RejoinResponse = {
 -- alone leak stale state across streaks.
 export type ClientCycleState = {
 	cycleId: string?,
-	firedSteps: { [number]: boolean },
+	firedSteps: { [number]: number? },
 	prevIdleSec: number?,
 }
 
@@ -95,12 +107,28 @@ function AfkGuardDomain.isRejoinThreshold(idleSec: number): boolean
 	return idleSec >= threshold
 end
 
+-- Classify an outcome into a tier that drives the client's firedSteps decision.
+-- Only denied_invalid is permanent (genuine client payload fault). All other
+-- denials and rejoin_failed are transient (retry-able) because TeleportAsync
+-- failures are always retry-able at the API level, and infra/service outages
+-- resolve on their own. This fixes the latent contradiction where the domain
+-- comment claimed "transient denials must not burn the attempt budget" yet
+-- isTransientDenial excluded denied_service_unavailable and rejoin_failed.
+function AfkGuardDomain.outcomeTier(outcome: RejoinOutcome): OutcomeTier
+	if outcome == "allowed" then
+		return "success"
+	end
+	if outcome == "denied_invalid" then
+		return "permanent"
+	end
+	return "transient"
+end
+
 -- Is this outcome a transient denial (worth retrying later without burning
--- the attempt budget)? Rate-limit / in-flight / carry all resolve on their own.
+-- the attempt budget)? Now driven by outcomeTier so rejoin_failed and
+-- denied_service_unavailable are correctly classified as transient.
 function AfkGuardDomain.isTransientDenial(outcome: RejoinOutcome): boolean
-	return outcome == "denied_rate_limited"
-		or outcome == "denied_in_flight"
-		or outcome == "denied_carry_active"
+	return AfkGuardDomain.outcomeTier(outcome) == "transient"
 end
 
 -- Delay (seconds) before the client may fire the next request after `outcome`.
@@ -167,13 +195,21 @@ function AfkGuardDomain.isIdleRegression(prevIdleSec: number?, idleSec: number):
 end
 
 -- Which rung should fire on this tick? Picks the HIGHEST rung whose time has
--- passed and that has not fired yet, so a client that was blocked for a while
--- escalates straight to the most urgent rung instead of replaying stale ones.
--- Returns nil past the hard stop — teleporting into the kick window is worse
--- than letting the disconnect happen cleanly.
+-- passed and is ready (not on cooldown), so a client that was blocked for a
+-- while escalates straight to the most urgent rung instead of replaying stale
+-- ones. Returns nil past the hard stop -- teleporting into the kick window is
+-- worse than letting the disconnect happen cleanly.
+--
+-- firedSteps[index] is now a deadline timestamp (os.clock) of when the rung
+-- may re-fire, or nil if ready. A transient denial sets the deadline to
+-- now + retryAfterSec (+jitter); a permanent denial sets it to math.huge.
+-- This replaces the old boolean latch that permanently killed rungs on
+-- rejoin_failed/denied_service_unavailable, which was the root cause of
+-- intermittent AFK kick leaks (the ladder silently ran out of rungs).
 function AfkGuardDomain.resolveLadderStep(
 	idleSec: number,
-	firedSteps: { [number]: boolean }
+	firedSteps: { [number]: number? },
+	now: number
 ): (number?, LadderStep?)
 	if idleSec > AfkGuardDomain.getHardStopIdleSec() then
 		return nil, nil
@@ -182,7 +218,9 @@ function AfkGuardDomain.resolveLadderStep(
 	local ladder = AfkGuardDomain.getLadder()
 	local chosenIndex: number? = nil
 	for index, step in ipairs(ladder) do
-		if idleSec >= step.atIdleSec and not firedSteps[index] then
+		local armedAt = firedSteps[index]
+		local ready = armedAt == nil or now >= armedAt
+		if idleSec >= step.atIdleSec and ready then
 			chosenIndex = index
 		end
 	end
@@ -192,6 +230,39 @@ function AfkGuardDomain.resolveLadderStep(
 	end
 	return nil, nil
 end
+
+-- Mark a rung as fired with a re-arm deadline. Transient denials re-arm after
+-- the cooldown (with jitter); permanent denials never re-arm (math.huge).
+-- Called by the client BEFORE FireServer so a throw cannot cause a tight retry.
+function AfkGuardDomain.markFired(
+	firedSteps: { [number]: number? },
+	stepIndex: number,
+	outcome: RejoinOutcome?,
+	retryAfterSec: number?,
+	now: number
+): ()
+	if outcome == nil then
+		-- Pre-fire mark: assume transient (will be un-fired on permanent denial
+		-- via response handler, or re-armed on transient denial).
+		local delay = AfkGuardDomain.nextRetryDelaySec("denied_rate_limited", retryAfterSec)
+		firedSteps[stepIndex] = now + delay
+		return
+	end
+	if AfkGuardDomain.outcomeTier(outcome) == "permanent" then
+		firedSteps[stepIndex] = math.huge
+	else
+		local delay = AfkGuardDomain.nextRetryDelaySec(outcome, retryAfterSec)
+		firedSteps[stepIndex] = now + delay
+	end
+end
+
+-- Un-fire a rung (set to nil = ready) after a transient denial so it re-fires
+-- on the next eligible tick. Only called for transient outcomes.
+function AfkGuardDomain.unfireStep(firedSteps: { [number]: number? }, stepIndex: number): ()
+	firedSteps[stepIndex] = nil
+end
+
+
 
 function AfkGuardDomain.validateRequestId(requestId: any): boolean
 	return type(requestId) == "string" and #requestId > 0 and #requestId <= 64
@@ -319,3 +390,4 @@ function AfkGuardDomain.validateSyncRestorePayload(raw: any): Result<SyncRestore
 end
 
 return AfkGuardDomain
+

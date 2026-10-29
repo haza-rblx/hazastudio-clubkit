@@ -4,8 +4,8 @@
 -- Call MobileScaleService.init(playerGui) once during bootstrap.
 -- Uses ChildAdded so it handles GUIs that load asynchronously.
 --
--- Hotbar: scales are applied to HotbarWrapper and StickerButtonWrapper
---   children (each already has its own UIScale), NOT to the root ScreenGui.
+-- Hotbar: scales are applied to the HotbarWrapper child (it already has its own UIScale),
+--   NOT to the root ScreenGui.
 -- Loading screen: Content Size.Y and UIPadding.PaddingBottom are adjusted.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -19,7 +19,7 @@ local mpm = Config.MobilePanelManager
 local TOPBAR_PLUS_NAMES = { "TopbarPlusGui", "TopbarPlus", "TopbarPlusHolder", "TopbarIcons" }
 
 -- Hotbar child frame names that each have their own UIScale.
-local HOTBAR_FRAME_NAMES = { "HotbarWrapper", "StickerButtonWrapper" }
+local HOTBAR_FRAME_NAMES = { "HotbarWrapper" }
 
 -- Root ScreenGui name → mobile UIScale value.
 -- Hotbar root is intentionally excluded; handled per-child below.
@@ -31,7 +31,6 @@ local SCALE_MAP: { [string]: number } = {
 	[Config.Music.GUI_NAME] = ms.MUSIC_GUI,
 	[Config.Settings.GUI_NAME] = ms.MENU_GUI,
 	[Config.Donation.GUI_NAME] = ms.DONATION_GUI,
-	[Config.Sticker.GUI_NAME] = ms.STICKER_GUI,
 	[Config.NotificationCenter.GUI_NAME] = ms.NOTIF_GUI,
 	[Config.NotificationCenter.GUI_NAME_V2] = ms.NOTIF_GUI,
 	[Config.CommandLibrary.GUI_NAME] = ms.COMMAND_GUI,
@@ -144,6 +143,8 @@ end
 local function applyIconGroupLayout(iconGroupGui: Instance): ()
 	if iconGroupGui:IsA("ScreenGui") then
 		iconGroupGui.IgnoreGuiInset = Config.MobileScale.ICON_GROUP_IGNORE_GUI_INSET == true
+		-- Above TouchGui (0): otherwise the engine thumbstick takes swipes on the Dance list.
+		iconGroupGui.DisplayOrder = math.max(iconGroupGui.DisplayOrder, 1)
 	end
 
 	local syncCfg = Config.Sync
@@ -176,7 +177,21 @@ local function applyIconGroupLayout(iconGroupGui: Instance): ()
 		end
 		local panelGui = panel :: GuiObject
 
-		local isV2Mobile = panelName == v2MobileName
+		-- v3 has one layout. On phones it is scaled to fit the screen height and moved right of
+			-- DancePanelButton; on desktop it keeps its authored size and position.
+			if panelName == (if type(roots) == "table" then roots.v3 else "DancePanelGUIWrapperv3") then
+				panelGui:SetAttribute("DancePanelPhoneScale", mobile)
+				-- The open/close motion tweens this same UIScale; it settles here instead of at 1.
+				panelGui:SetAttribute("UIScaleRest", if mobile then syncCfg.DANCE_PANEL_V3_SCALE_MOBILE else nil)
+				-- Size and position are DancePanelUIBinder's (DancePanelV3Look.applyPhone), which also
+				-- records the open position the panel returns to.
+				if mobile then
+					getOrCreateRootScale(panelGui).Scale = syncCfg.DANCE_PANEL_V3_SCALE_MOBILE
+				end
+				continue
+			end
+
+			local isV2Mobile = panelName == v2MobileName
 		local isV2Desktop = panelName == v2Name
 
 		if isV2Mobile then

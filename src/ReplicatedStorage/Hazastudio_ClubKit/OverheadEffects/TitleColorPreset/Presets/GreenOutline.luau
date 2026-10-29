@@ -14,6 +14,7 @@ return function(uiInstance: GuiObject, speed: number, size: number, customColor:
 	Connection = SharedTickConnection({}, function(dt)
 		if (not mainStroke.Instance or mainStroke.Instance.Parent == nil) then
 			Connection:Disconnect();
+			return;
 		end;
 		Rotation = Rotation + speed * dt;
 		strokeGradient:SetRotation(Rotation, 1);

@@ -45,7 +45,7 @@ local function createLevelService(deps: {
 		end)
 
 		if not updateResult.ok then
-			pendingXp[userId] = pending
+			pendingXp[userId] = (pendingXp[userId] or 0) + pending
 			log:error("Failed to save XP", { userId = userId, err = updateResult.error })
 			return ResultUtil.Err(updateResult.error)
 		end
@@ -111,6 +111,24 @@ local function createLevelService(deps: {
 		pendingXp[userId] = nil
 
 		log:info("Level set by admin", { userId = userId, level = newLevel })
+		return ResultUtil.Ok(nil)
+	end
+
+	-- Admin XP write. Clamped to 0..xpNeeded(level)-1 against the stored level, so XP can never
+	-- sit at or past the next level threshold. Pending (unflushed) gains still add on top later.
+	function service:setXp(userId: number, xp: number): Result<nil>
+		local updateResult = repo:update(userId, function(current)
+			local level = current.level or 1
+			local maxXp = math.max(0, LevelDomain.xpNeeded(level) - 1)
+			return OverheadDomain.mergeStored(current, {
+				xp = math.clamp(math.floor(xp), 0, maxXp),
+			})
+		end)
+		if not updateResult.ok then
+			return ResultUtil.Err(updateResult.error)
+		end
+
+		log:info("XP set by admin", { userId = userId, xp = xp })
 		return ResultUtil.Ok(nil)
 	end
 
