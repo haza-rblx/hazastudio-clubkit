@@ -1,22 +1,26 @@
 --!strict
--- Background preload (ADR 0021 §7): asks Roblox to fetch the DJ deck's audio ahead of time, so a deck's
--- first load is a cache hit. Order: the tracks on the decks, the queue, then the library newest first.
--- Each id is asked for once; a slow fetch frees its slot after 25 s even if Roblox has not answered.
-local ContentProvider = game:GetService("ContentProvider")
+-- Background preload (ADR 0021 §7): loads the DJ deck's audio once ahead of time, so a deck's
+-- first load is a cache hit. Order: the live DJ's hints, the tracks on the decks, the queue, then the
+-- library newest first (only players who may open the panel get the library). Each id is asked for
+-- once; a slow fetch frees its slot after 25 s even if Roblox has not answered. Each preloaded track
+-- keeps ~0.7 MB of sound memory for the session (measured 2026-10-30), hence the caps.
+local SoundService = game:GetService("SoundService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 
-local Charm = require(ReplicatedStorage.HazaDJ.Packages.Charm)
-local LoadPolicy = require(ReplicatedStorage.HazaDJ.Shared.LoadPolicy)
+local Charm = require(ReplicatedStorage.CosmicDJ.Packages.Charm)
+local LoadPolicy = require(ReplicatedStorage.CosmicDJ.Shared.LoadPolicy)
 local Store = require(script.Parent.Store)
 
 local Preload = {}
 
 local DEBOUNCE = 2 -- seconds a change waits before the list is rebuilt
 local SLOT_TIME = 25 -- seconds before a slot is freed, whether or not Roblox has answered
+local HINT_CAP = 30 -- hinted tracks a client preloads per session, on top of the cap below
 
 local seen: { [number]: boolean } = {} -- asset ids already queued (never twice)
 local queued = 0 -- ids queued in total, against the cap
+local hinted = 0 -- hinted ids queued, against HINT_CAP
 local waiting: { number } = {}
 local inFlight = 0
 local scheduled = false
@@ -54,16 +58,16 @@ local function collect(): { number }
 end
 
 local function fetch(id: number)
-	-- a Sound carries the id: a bare string id is fetched as an image ("Asset type does not match")
+	-- a silent Sound in the DataModel that is waited on until it has loaded: measured 2026-10-30, a
+	-- ContentProvider.PreloadAsync on a loose Sound left a deck's first load at 600-760 ms, while a
+	-- Sound that actually loaded once makes every later load of that id take a frame or two
 	local holder = Instance.new("Sound")
+	holder.Name = "CosmicDJ_Warm"
+	holder.Volume = 0
 	holder.SoundId = LoadPolicy.contentId(id, 1)
-	local finished = false
-	task.spawn(function()
-		pcall(ContentProvider.PreloadAsync, ContentProvider, { holder })
-		finished = true
-	end)
+	holder.Parent = SoundService
 	local t0 = os.clock()
-	while not finished and os.clock() - t0 < SLOT_TIME do
+	while not holder.IsLoaded and os.clock() - t0 < SLOT_TIME do
 		task.wait(0.1)
 	end
 	holder:Destroy()
@@ -77,6 +81,20 @@ function Preload.pump()
 		inFlight += 1
 		task.spawn(fetch, id)
 	end
+end
+
+-- the live DJ's hints jump the line, at once (no debounce): the DJ is about to play one of them
+local function queueHints(stage: any)
+	for i = #stage.hints, 1, -1 do
+		local t = stage.tracks[stage.hints[i]]
+		local id = if t and t.status ~= "unavailable" then t.assetId else nil
+		if id and not seen[id] and hinted < HINT_CAP then
+			seen[id] = true
+			hinted += 1
+			table.insert(waiting, 1, id)
+		end
+	end
+	Preload.pump()
 end
 
 -- rebuild the list (debounced) and queue what is new
@@ -113,6 +131,11 @@ function Preload.start()
 		Store.stageAtom()
 		Store.sessionAtom()
 		schedule()
+	end)
+	Charm.effect(function()
+		if Store.readyAtom() then
+			queueHints(Store.stageAtom())
+		end
 	end)
 end
 

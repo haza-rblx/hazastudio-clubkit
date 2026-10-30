@@ -6,7 +6,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
-local Shared = ReplicatedStorage.HazaDJ.Shared
+local Shared = ReplicatedStorage.CosmicDJ.Shared
 local Dict = require(Shared.Dict)
 local DeckClock = require(Shared.DeckClock)
 local Mix = require(Shared.Mix)
@@ -430,7 +430,7 @@ local function autoCrossfade()
 		-- no length yet: skip the tick, keep checking, say so once per track
 		if unknownWarned[from] ~= d.trackId then
 			unknownWarned[from] = d.trackId
-			warn("[HazaDJ] deck " .. from .. " has no track length; auto crossfade waits for one")
+			warn("[CosmicDJ] deck " .. from .. " has no track length; auto crossfade waits for one")
 		end
 		return
 	end
@@ -457,7 +457,7 @@ local function autoCrossfade()
 		end)
 		sweeping = false
 		if not ok then
-			warn("[HazaDJ] crossfade sweep failed: " .. tostring(err))
+			warn("[CosmicDJ] crossfade sweep failed: " .. tostring(err))
 		end
 	end)
 end

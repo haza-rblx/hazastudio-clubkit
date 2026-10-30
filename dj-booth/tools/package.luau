@@ -1,9 +1,9 @@
 --!nocheck
 -- Packages the three install pieces into the djX download template (docs/plans/djx-stamping.md).
 --   lune run tools/package     (run from dj-booth/, after the rojo builds have written build/*.rbxm)
--- Reads build/shared.rbxm, build/server.rbxm, build/client.rbxm (each one root HazaDJ) and writes
+-- Reads build/shared.rbxm, build/server.rbxm, build/client.rbxm (each one root CosmicDJ) and writes
 -- build/djx-template.rbxm: a root Folder "djX" with ReplicatedStorage / ServerScriptService /
--- StarterPlayerScripts folders, each holding its HazaDJ piece. The buyer moves each HazaDJ into
+-- StarterPlayerScripts folders, each holding its CosmicDJ piece. The buyer moves each CosmicDJ into
 -- the service its folder names. The licence server stamps this template per download.
 local fs = require("@lune/fs")
 local roblox = require("@lune/roblox")
@@ -12,8 +12,8 @@ local BUILD = "build/"
 
 local function loadPiece(name)
 	local roots = roblox.deserializeModel(fs.readFile(BUILD .. name .. ".rbxm"))
-	if #roots ~= 1 or roots[1].Name ~= "HazaDJ" then
-		error(name .. ".rbxm must hold exactly one root HazaDJ")
+	if #roots ~= 1 or roots[1].Name ~= "CosmicDJ" then
+		error(name .. ".rbxm must hold exactly one root CosmicDJ")
 	end
 	return roots[1]
 end

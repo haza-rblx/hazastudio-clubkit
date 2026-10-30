@@ -5,11 +5,11 @@ local T = script.Parent
 local Parity = require(T.Parity)
 
 return function(goldenName, steps, ignore, maxList)
-	local g = game.Players.LocalPlayer.PlayerGui:WaitForChild("HazaDJ", 10)
+	local g = game.Players.LocalPlayer.PlayerGui:WaitForChild("CosmicDJ", 10)
 	if not g then
-		return "no HazaDJ gui"
+		return "no CosmicDJ gui"
 	end
-	local hook = g:WaitForChild("HazaDJ_Test", 10)
+	local hook = g:WaitForChild("CosmicDJ_Test", 10)
 	for _, s in steps or {} do
 		hook:Invoke(table.unpack(s))
 		task.wait(0.15)

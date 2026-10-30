@@ -6,7 +6,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
-local Vide = require(ReplicatedStorage.HazaDJ.Packages.Vide)
+local Vide = require(ReplicatedStorage.CosmicDJ.Packages.Vide)
 local Base = require(script.Parent.Base)
 local Hover = require(script.Parent.Hover)
 local Theme = require(script.Parent.Parent.Theme)
@@ -41,14 +41,25 @@ export type ButtonOpts = {
 	fg: (() -> Color3)?,
 	-- a drawn icon instead of text: "plus" | "minus" | "cross" (see Base.glyph)
 	glyph: ("plus" | "minus" | "cross")?,
+	-- a drawn icon before the text (auto-width buttons only)
+	icon: ("plus" | "minus" | "cross")?,
 }
+
+local ICON, ICON_GAP = 10, 8
 
 function Controls.button(o: ButtonOpts, props: Props?): TextButton
 	local k = KINDS[o.kind or "secondary"]
 	local hover = source(false)
+	local icon = nil
+	if o.icon and not o.glyph and not o.w then
+		icon = Base.glyph(o.icon, ICON, o.fg or k.fg)
+		-- the padding pushes the text right; pull the icon back into that gap
+		icon.Position = UDim2.new(0, -(ICON_GAP + ICON / 2), 0.5, 0)
+	end
 	return create("TextButton")(with({
 		Text = if o.glyph then "" else o.text,
 		if o.glyph then Base.glyph(o.glyph, 10, o.fg or k.fg) else nil,
+		icon,
 		FontFace = B,
 		TextSize = 13,
 		TextColor3 = o.fg or k.fg,
@@ -61,7 +72,7 @@ function Controls.button(o: ButtonOpts, props: Props?): TextButton
 		AutomaticSize = if o.w then Enum.AutomaticSize.None else Enum.AutomaticSize.X,
 		Hover.track(hover),
 		Activated = o.onClick,
-		if o.w then nil else pad(14),
+		if o.w then nil elseif icon then pad(14 + ICON + ICON_GAP, 14) else pad(14),
 		corner(4),
 	}, props))
 end
@@ -248,16 +259,16 @@ function Controls.toggle(on: any, onChange: (boolean) -> (), props: Props?): Tex
 			end
 		end
 		go(cap, { Position = UDim2.fromOffset(if v then 23 else 3, 3), BackgroundColor3 = if v then W else C.card2 })
-		go(
-			led,
-			{ Position = UDim2.fromOffset(if v then 13 else 36, 12), BackgroundColor3 = if v then C.red else C.faint }
-		)
+		go(led, {
+			Position = UDim2.fromOffset(if v then 13 else 36, 12),
+			BackgroundColor3 = if v then Theme.accent() else C.faint,
+		})
 		go(glow, { Transparency = if v then 0.7 else 1 })
 		for _, g in grooves do
 			go(g, { BackgroundColor3 = if v then C.soft else C.faint })
 		end
 	end
-	glow = create("UIStroke")({ Color = C.red, Thickness = 2, Transparency = 1 })
+	glow = create("UIStroke")({ Color = Theme.accent, Thickness = 2, Transparency = 1 })
 	led = Base.new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(3, 10), corner(1), glow })
 	for i, x in { -3, 2 } do
 		grooves[i] = Base.new("Frame", {
@@ -519,7 +530,7 @@ function Controls.buildMenu(anchor: GuiObject, options: { string }, current: num
 		items,
 	}) :: ScrollingFrame
 	local m = create("TextButton")({
-		Name = "HazaDJ_Menu",
+		Name = "CosmicDJ_Menu",
 		Text = "",
 		AutoButtonColor = false,
 		BackgroundTransparency = 1,
@@ -612,7 +623,7 @@ function Controls.buildConfirm(o: ConfirmOpts, done: () -> ())
 	if not gui then
 		return
 	end
-	local old = gui:FindFirstChild("HazaDJ_Modal")
+	local old = gui:FindFirstChild("CosmicDJ_Modal")
 	if old then
 		old:Destroy()
 	end
@@ -679,7 +690,7 @@ function Controls.buildConfirm(o: ConfirmOpts, done: () -> ())
 		}),
 	})
 	scrim = create("TextButton")({
-		Name = "HazaDJ_Modal",
+		Name = "CosmicDJ_Modal",
 		Text = "",
 		AutoButtonColor = false,
 		Size = UDim2.fromScale(1, 1),

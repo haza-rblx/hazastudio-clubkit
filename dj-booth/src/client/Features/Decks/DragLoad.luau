@@ -8,7 +8,7 @@ local GuiService = game:GetService("GuiService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 
-local Vide = require(ReplicatedStorage.HazaDJ.Packages.Vide)
+local Vide = require(ReplicatedStorage.CosmicDJ.Packages.Vide)
 local Theme = require(script.Parent.Parent.Parent.Theme)
 local Base = require(script.Parent.Parent.Parent.UI.Base)
 local Covers = require(script.Parent.Parent.Parent.UI.Covers)
@@ -36,7 +36,7 @@ function DragLoad.target(n: number, f: GuiObject, outlined: boolean)
 			Name = "DropOutline",
 			ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
 			BorderStrokePosition = Enum.BorderStrokePosition.Inner,
-			Color = C.red,
+			Color = Theme.accent,
 			Thickness = 2,
 			Enabled = false,
 			Parent = f,
@@ -96,7 +96,7 @@ local function light(n: number?)
 end
 
 -- row: the library row; title + color for the ghost; onDrop(n) loads deck n
-function DragLoad.bind(row: GuiObject, title: string, color: Color3, onDrop: (number) -> ())
+function DragLoad.bind(row: GuiObject, title: string, color: Color3 | () -> Color3, onDrop: (number) -> ())
 	row.InputBegan:Connect(function(io: InputObject)
 		local touch = io.UserInputType == Enum.UserInputType.Touch
 		if io.UserInputType ~= Enum.UserInputType.MouseButton1 and not touch then

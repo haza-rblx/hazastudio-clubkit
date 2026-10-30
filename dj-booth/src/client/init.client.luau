@@ -1,9 +1,9 @@
 --!strict
--- HazaDJ client: state sync, the panel, toasts, world effects and the deck audio.
+-- CosmicDJ client: state sync, the panel, toasts, world effects and the deck audio.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Vide = require(ReplicatedStorage.HazaDJ.Packages.Vide)
+local Vide = require(ReplicatedStorage.CosmicDJ.Packages.Vide)
 -- instances start exactly as Instance.new makes them (the prototype's baseline); every helper sets
 -- what it needs
 Vide.defaults = false

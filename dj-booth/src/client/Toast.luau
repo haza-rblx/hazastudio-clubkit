@@ -16,7 +16,7 @@ local function ensure(): ScreenGui
 		return gui
 	end
 	local g = Instance.new("ScreenGui")
-	g.Name = "HazaDJ_Toast"
+	g.Name = "CosmicDJ_Toast"
 	g.ResetOnSpawn = false
 	g.DisplayOrder = 20
 	g.IgnoreGuiInset = false

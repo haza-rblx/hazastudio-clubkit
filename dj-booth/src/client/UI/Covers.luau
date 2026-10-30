@@ -3,8 +3,8 @@
 -- library columns, the initials track cover, and the DJ avatar.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Vide = require(ReplicatedStorage.HazaDJ.Packages.Vide)
-local Shared = ReplicatedStorage.HazaDJ.Shared
+local Vide = require(ReplicatedStorage.CosmicDJ.Packages.Vide)
+local Shared = ReplicatedStorage.CosmicDJ.Shared
 local Format = require(Shared.Format)
 local Types = require(Shared.Types)
 local Base = require(script.Parent.Base)
@@ -19,7 +19,8 @@ local Covers = {}
 
 Covers.COVER_R = 4 -- a touch sharper than the template (owner, 2026-10-22)
 
--- a playlist's colour, a track's colour (its first playlist's; none = dark)
+-- a playlist's colour, a track's colour (its first playlist's; none = dark). No colour set = the
+-- accent: call these inside a prop function so default covers follow an accent change.
 function Covers.playlistColor(pl: Types.Playlist?): Color3
 	if pl and pl.color then
 		local ok, c = pcall(Color3.fromHex, pl.color)
@@ -27,7 +28,7 @@ function Covers.playlistColor(pl: Types.Playlist?): Color3
 			return c
 		end
 	end
-	return Theme.RED_COVER
+	return Theme.accent()
 end
 
 function Covers.trackColor(lib: Types.Library, trackId: string): Color3
@@ -208,13 +209,13 @@ end
 export type AvatarPerson = { userId: number, name: string, handle: string }
 
 -- the Roblox headshot when there is a real user id, else initials on a grey; live = red ring,
--- online = a small white dot
+-- online = a small green dot
 function Covers.avatar(p: AvatarPerson, size: number, live: boolean, online: boolean, props: Base.Props?): Frame
 	local real = p.userId > 0
 	local ring = nil
 	if live then
 		ring = create("UIStroke")({
-			Color = C.red,
+			Color = Theme.accent,
 			Thickness = if size > 60 then 3 else 2,
 			ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
 		})
@@ -224,7 +225,7 @@ function Covers.avatar(p: AvatarPerson, size: number, live: boolean, online: boo
 			Size = UDim2.fromOffset(d, d),
 			AnchorPoint = Vector2.new(1, 1),
 			Position = UDim2.fromScale(1, 1),
-			BackgroundColor3 = W,
+			BackgroundColor3 = C.ok,
 			ZIndex = 2,
 			corner(d // 2),
 			create("UIStroke")({ Color = C.tile, Thickness = 2 }),

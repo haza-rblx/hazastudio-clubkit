@@ -4,7 +4,7 @@
 -- Cooldowns are deck-wide and enforced here; the ready time syncs so the pads count down.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Shared = ReplicatedStorage.HazaDJ.Shared
+local Shared = ReplicatedStorage.CosmicDJ.Shared
 local Dict = require(Shared.Dict)
 local Net = require(script.Parent.Parent.Net)
 local State = require(script.Parent.State)

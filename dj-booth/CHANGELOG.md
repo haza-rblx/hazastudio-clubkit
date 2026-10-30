@@ -2,6 +2,77 @@
 
 Releases go to the licence server with `lune run tools/release` (version from `wally.toml`).
 
+## [Unreleased]
+
+### Accent colour (Settings › Show › Look)
+- New game setting `accent` (6 hex digits, "" = the default red), owner-chosen, one per game:
+  8 preset swatches plus a custom swatch (hue ring) that opens the HSV picker under the row. Previews live while Settings is open; Discard, closing the
+  panel or leaving the tab puts the saved one back. Blink schema + Net regenerated.
+- `Theme.accent` is a Vide source (`Theme.accentText` = 30 % toward white). Live, active tab,
+  toggles, cue pins, playing ring, DUAL DECK badge follow it; destructive buttons, errors,
+  licence states and VU peaks stay `C.red`. `Theme.RED_COVER` removed.
+- Default playlist and track covers (no colour set) follow it live: call sites pass
+  `Covers.playlistColor` / `trackColor` inside a prop function. Access "Now" text and the low-band
+  lane pick it up on the next rebuild.
+
+### Rename: HazaDJ → CosmicDJ
+- Module roots (`ReplicatedStorage` / `ServerScriptService` / `StarterPlayerScripts` `.CosmicDJ`),
+  Rojo projects, `tools/package.luau`, the PlayerGui, instance names, log prefix `[CosmicDJ]`,
+  tags and attributes (`CosmicDJ_DjDeck`, `_Stand`, `_Speaker`, `_BPM`, `_BeatAt`, `_Fixture`,
+  `_LicenseStub*`), test hook `CosmicDJ_Test`, Blink scope `COSMICDJ` (Net regenerated).
+- Kept so saved data and activations survive: DataStores `HazaDJ_v1`, `HazaDJ_Prefs_v1`,
+  `HazaDJ_License_v1` and their topics; the legacy `HazaDJ_Booth` tag is still accepted.
+- Wordmark: "by kosmik" → "by cosmic".
+
+### Track loads and skips (`client/Preload.luau`, `client/Audio.luau`)
+- Fixed: a track loaded onto a playing deck played from the old track's position until the
+  watchdog caught it, 1-2.5 s later and at a different moment on each client (a playing Sound keeps
+  its TimePosition across a SoundId swap, and the anchor had already been recorded before the load
+  finished). The load loop now forgets the anchor when a load lands, so the playhead is set at once.
+- Preload now warms the cache for real: each id is loaded once into a silent Sound in SoundService
+  until `IsLoaded`. `ContentProvider.PreloadAsync` on a loose Sound did not help: a deck's first
+  load of a "preloaded" track still took 600-760 ms; it now takes 16-19 ms.
+- The load loop checks `IsLoaded` every frame instead of every 50 ms.
+- Measured in a 2-client Studio playtest (DJ on client 1): a skip starts on the DJ's client
+  ~0.2-0.3 s after the click (one server round trip), at the right position, and the other client
+  plays within 12-62 ms of it once its copy has loaded. Players who can't open the panel don't get
+  the library, so they only preload the decks and the queue; a skip to a track outside those still
+  loads cold for them (0.25-1.7 s seen).
+- New `Hint` event (Blink, unreliable, client → server): when the live DJ hovers a track row in the
+  deck library for 0.3 s, or presses it, the server keeps it in `State.hints` (newest 3, live DJ
+  only, rate-limited) and sends it to everyone in the stage (`Stage.hints`). Every client preloads
+  hinted tracks at once (no 2 s debounce), up to 30 per session (`HINT_CAP`). Measured: with a hint
+  0.6 s before the click a listener's cold skip started with the DJ (~0.3 s after the click, same as
+  the DJ); without one it lagged 0.55-0.8 s. Too short a gap (hint still loading) doesn't help.
+- Resources, measured: each preloaded or played track keeps ~0.7 MB of sound memory on that client
+  for the session (Stats `Sounds` tag; it is not released). A listener grew 6.0 → 7.4 MB over four
+  skips. No CosmicDJ errors on server or either client.
+
+### Header mark (`Features/Header.luau`)
+- The "xfade" wordmark is gone; the mark is the red outlined tag alone, now reading DUAL DECK DJ and
+  opening with two platters (9 px, in the tag's accent text colour, each with a 3 px dark spindle
+  hole). One 3 px margin runs round and between them, so the tag is 15 px tall. "by cosmic" sits
+  3 px under it (was touching). Picked live: a separate platter mark before an "XFADE" wordmark
+  (outlined, solid, A/B), the platters alone in the tag, the tag before XFADE, XFADE in Inter, and
+  an all-white tag were tried and turned down.
+- One builder, `Header.mark(zIndex)`, now draws it in the header and at the top of the lock
+  screen's right column (which also lost "xfade"). The lock form keeps its old position
+  (`LOGO_H` unchanged), so the shorter mark leaves a little more air above it.
+
+### Other
+- `UI/ColorPicker.luau`: the HSV picker (square, hue bar, chip, hex, Default) pulled out of
+  CoverPop; the playlist cover popover and the accent row both use it.
+- Settings groups have 4 px corners (`Layout.group`).
+- Side nav (Access, Settings, deck library) is a tree: rows hang off a 1 px guide line (`C.card2`)
+  under their caption, each on a 2 px-radius branch into a 4 px pill; the group's last visible row
+  ends the line; the selected branch is in the accent. Captions after the first are 44 px (was 32).
+  Picked live from four takes (white pill, headline groups and stacked tiles were turned down).
+- Settings test hook: `settings diff` lists the draft keys that differ from the saved values.
+- Online dot and "In this server" text are green (`C.ok`) in the list, the avatar and the detail.
+- Plus buttons (Add track, New, Add DJ) draw the icon (`Controls.button{ icon = "plus" }`)
+  instead of a "+" glyph.
+- Settings: "Skip silence" row hidden — decks never read `autoCue`.
+
 ## [0.2.2] — 2026-10-29
 
 ### Lock screen (`Features/Lock.luau`)

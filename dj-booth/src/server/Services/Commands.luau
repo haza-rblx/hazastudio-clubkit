@@ -4,7 +4,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Shared = ReplicatedStorage.HazaDJ.Shared
+local Shared = ReplicatedStorage.CosmicDJ.Shared
 local Dict = require(Shared.Dict)
 local QueueLogic = require(Shared.Queue)
 local Rules = require(Shared.Rules)
@@ -260,6 +260,11 @@ handlers.SettingsSave = function(_, c)
 	if v.deckOff ~= "" and DeckBrakeConfig.Presets[v.deckOff] == nil then
 		v.deckOff = DeckBrakeConfig.Preset
 	end
+	-- the game accent: 6 hex digits, lowercase; anything else is the default red
+	v.accent = string.lower(v.accent)
+	if not string.match(v.accent, "^%x%x%x%x%x%x$") then
+		v.accent = ""
+	end
 	State.settings(v)
 	return ok()
 end
@@ -434,7 +439,7 @@ function Commands.run(player: Player, c: any): Result
 	end
 	local success, result = pcall(h, player, c)
 	if not success then
-		warn("[HazaDJ] " .. kind .. " failed: " .. tostring(result))
+		warn("[CosmicDJ] " .. kind .. " failed: " .. tostring(result))
 		return no("Something went wrong.")
 	end
 	return result
@@ -456,6 +461,22 @@ function Commands.start()
 			return
 		end
 		Decks.live(deck, param, value)
+	end)
+	Net.Hint.On(function(player, id)
+		if not License.unlocked() or State.session().live ~= player.UserId or not allow(player, 0.5) then
+			return
+		end
+		local cur = State.hints()
+		if cur[1] == id or not State.library().tracks[id] then
+			return
+		end
+		local nextHints = { id }
+		for _, h in cur do
+			if h ~= id and #nextHints < State.HINT_MAX then
+				table.insert(nextHints, h)
+			end
+		end
+		State.hints(nextHints)
 	end)
 	Net.Nudge.On(function(player, deck, delta)
 		if not License.unlocked() or State.session().live ~= player.UserId then

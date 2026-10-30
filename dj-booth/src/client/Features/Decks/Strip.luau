@@ -5,7 +5,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
-local Vide = require(ReplicatedStorage.HazaDJ.Packages.Vide)
+local Vide = require(ReplicatedStorage.CosmicDJ.Packages.Vide)
 local Store = require(script.Parent.Parent.Parent.Store)
 local Actions = require(script.Parent.Parent.Parent.Actions)
 local Theme = require(script.Parent.Parent.Parent.Theme)
@@ -69,7 +69,7 @@ local function side(m: Model.Deck, x: number, mirror: boolean): Frame
 			44,
 			-- playing: a lit red rim, like a hit hot cue or a synced SYNC key
 			function()
-				return if d().playing then C.red else C.tile
+				return if d().playing then Theme.accent() else C.tile
 			end,
 			function()
 				return if d().playing then 2 else 1
@@ -79,7 +79,7 @@ local function side(m: Model.Deck, x: number, mirror: boolean): Frame
 			end,
 			16,
 			function()
-				return if d().playing then C.red else W
+				return if d().playing then Theme.accent() else W
 			end,
 			{
 				Activated = function()
@@ -118,7 +118,7 @@ local function side(m: Model.Deck, x: number, mirror: boolean): Frame
 			30 + TOP,
 			34,
 			function()
-				return if isHit() then C.red elseif isSet() then C.soft else C.tile
+				return if isHit() then Theme.accent() elseif isSet() then C.soft else C.tile
 			end,
 			function()
 				return if isHit() then 2 else 1

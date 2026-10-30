@@ -5,7 +5,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Shared = ReplicatedStorage.HazaDJ.Shared
+local Shared = ReplicatedStorage.CosmicDJ.Shared
 local Dict = require(Shared.Dict)
 local Rules = require(Shared.Rules)
 local Net = require(script.Parent.Parent.Net)

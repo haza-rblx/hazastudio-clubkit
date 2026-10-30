@@ -1,5 +1,9 @@
 --!strict
 -- Design tokens: black, white and one red (owner, 2026-10-22), Inter, two motion curves.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Vide = require(ReplicatedStorage.CosmicDJ.Packages.Vide)
+
 local Theme = {}
 
 local FAMILY = "rbxassetid://12187365364" -- Inter
@@ -43,7 +47,23 @@ Theme.C = {
 	countText = Color3.fromHex("6f6f6f"),
 }
 
-Theme.RED_COVER = Color3.fromRGB(228, 16, 36)
+-- the game accent (Settings › Show › Accent colour): live, tabs, highlights. C.red stays the
+-- destructive red. Reactive: read it in a prop or a function; plain reads are a snapshot.
+local DEFAULT_ACCENT = Color3.fromRGB(228, 16, 36)
+Theme.accent = Vide.source(DEFAULT_ACCENT)
+-- the accent as text on black: 30% toward white
+Theme.accentText = function(): Color3
+	return Theme.accent():Lerp(Theme.W, 0.3)
+end
+-- "" or a bad hex = the default red
+function Theme.setAccent(hex: string)
+	local ok, c = pcall(Color3.fromHex, hex)
+	local want = if ok and hex ~= "" then c else DEFAULT_ACCENT
+	-- the settings echo re-runs this with nothing changed: don't wake the readers
+	if want ~= Theme.accent() then
+		Theme.accent(want)
+	end
+end
 
 Theme.FAST = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 Theme.SLIDE = TweenInfo.new(0.22, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)

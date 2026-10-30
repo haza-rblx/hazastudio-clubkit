@@ -4,8 +4,8 @@
 -- add form on the right. Rule pages widen the middle to 937.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Vide = require(ReplicatedStorage.HazaDJ.Packages.Vide)
-local Shared = ReplicatedStorage.HazaDJ.Shared
+local Vide = require(ReplicatedStorage.CosmicDJ.Packages.Vide)
+local Shared = ReplicatedStorage.CosmicDJ.Shared
 local Format = require(Shared.Format)
 local Types = require(Shared.Types)
 local Actions = require(script.Parent.Parent.Actions)
@@ -49,11 +49,11 @@ local function lastText(p: Person): string
 	return Format.ago(p.lastSet, os.time())
 end
 
-local function status(p: Person): (string, Color3, Color3)
+local function status(p: Person): (string, any, any)
 	if p.live then
-		return "On the decks", C.red, C.redText
+		return "On the decks", Theme.accent, Theme.accentText
 	elseif p.online then
-		return "In this server", W, C.soft
+		return "In this server", C.ok, C.soft
 	end
 	return "Offline", C.faint, C.dim
 end
@@ -154,7 +154,8 @@ function Access.new(props: Base.Props?): Frame
 		local top = Layout.pageHead(
 			title,
 			Controls.button({
-				text = "+  Add DJ",
+				text = "Add DJ",
+				icon = "plus",
 				kind = "primary",
 				h = 32,
 				onClick = function()
@@ -311,7 +312,7 @@ function Access.new(props: Base.Props?): Frame
 						),
 						fixed(last, 520, 0, 88, 52, {
 							TextSize = 13,
-							TextColor3 = if last == "Now" then C.redText else C.soft,
+							TextColor3 = if last == "Now" then Theme.accentText() else C.soft,
 							TextXAlignment = Enum.TextXAlignment.Right,
 						}),
 						if i < #shown then Base.rule(true, PAGE_PAD) else nil,
@@ -555,7 +556,7 @@ function Access.new(props: Base.Props?): Frame
 			if not p then
 				return C.dim
 			end
-			return if p.live then C.redText elseif p.online then C.soft else C.dim
+			return if p.live then Theme.accentText() elseif p.online then C.ok else C.dim
 		end
 		local stat = function(i: number, value: () -> string, name: string)
 			return frame({

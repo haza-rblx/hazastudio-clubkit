@@ -7,7 +7,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
-local Shared = ReplicatedStorage.HazaDJ.Shared
+local Shared = ReplicatedStorage.CosmicDJ.Shared
 local DeckBrakeConfig = require(Shared.DeckBrakeConfig)
 
 local DeckBrake = {}
@@ -146,7 +146,7 @@ function DeckBrake.stop(sound: Sound, config: DeckBrakeConfig.BrakePreset?, onDo
 		return
 	end
 	local eq = Instance.new("EqualizerSoundEffect")
-	eq.Name = "HazaDJ_Brake"
+	eq.Name = "CosmicDJ_Brake"
 	eq.Priority = 10
 	eq.LowGain = 0
 	eq.MidGain = 0

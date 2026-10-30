@@ -5,7 +5,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 
-local Vide = require(ReplicatedStorage.HazaDJ.Packages.Vide)
+local Vide = require(ReplicatedStorage.CosmicDJ.Packages.Vide)
 local Base = require(script.Parent.Base)
 local Hover = require(script.Parent.Hover)
 local Theme = require(script.Parent.Parent.Theme)

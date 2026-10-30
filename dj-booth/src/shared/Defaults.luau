@@ -60,6 +60,7 @@ function Defaults.settings(): Types.Settings
 		lights = true,
 		camFx = true,
 		camFxAmount = 50,
+		accent = "",
 	}
 end
 
@@ -68,7 +69,7 @@ Defaults.SECTION_KEYS = {
 	sound = { "volume", "normalize", "limiter", "fadeOut", "crossfade" },
 	decks = { "pitch", "keyLock", "syncOnLoad", "autoCue", "playOnLoad", "busyDeck", "padCooldown", "deckOff" },
 	djDeck = { "speakers", "openAtDjDeck", "standLock", "maxSet", "idle" },
-	show = { "announce", "nowPlaying", "billboard", "lights", "camFx", "camFxAmount" },
+	show = { "announce", "nowPlaying", "billboard", "lights", "camFx", "camFxAmount", "accent" },
 	panel = { "panelSize", "hotkey", "reduceMotion" },
 }
 
@@ -118,7 +119,7 @@ function Defaults.session(): Types.Session
 end
 
 function Defaults.stage(): Types.Stage
-	return { tracks = {} }
+	return { tracks = {}, hints = {} }
 end
 
 return Defaults

@@ -1,13 +1,13 @@
 --!strict
 -- Talks to the licence server (ADR 0022): activate a code, redeem a guest pass, verify a licence.
 -- Every call comes back as a LicensePolicy.Answer: ok, a definitive denial, or unreachable. In
--- Studio with the place attribute `HazaDJ_LicenseStub` set, an in-memory stand-in answers instead,
+-- Studio with the place attribute `CosmicDJ_LicenseStub` set, an in-memory stand-in answers instead,
 -- so the lock can be tested before the real server exists.
 local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
-local LicensePolicy = require(ReplicatedStorage.HazaDJ.Shared.LicensePolicy)
+local LicensePolicy = require(ReplicatedStorage.CosmicDJ.Shared.LicensePolicy)
 local Stamp = require(script.Parent.Parent.Stamp)
 
 type Answer = LicensePolicy.Answer
@@ -86,16 +86,16 @@ end
 
 -- ── the Studio stand-in ──
 -- codes: "GUEST-…" a guest pass (GUEST-<n>M-… lasts n minutes, else 7 days), "BAD…" invalid,
--- "USED…" already used, anything else a full licence. Set `HazaDJ_LicenseStubRevoke` to make
--- verify say revoked, `HazaDJ_LicenseStubDown` to make every call unreachable.
+-- "USED…" already used, anything else a full licence. Set `CosmicDJ_LicenseStubRevoke` to make
+-- verify say revoked, `CosmicDJ_LicenseStubDown` to make every call unreachable.
 local stubIssued: { [string]: { kind: LicensePolicy.Kind, licenseId: string, expiresAt: number? } } = {}
 
 local function stubOn(): boolean
-	return RunService:IsStudio() and workspace:GetAttribute("HazaDJ_LicenseStub") == true
+	return RunService:IsStudio() and workspace:GetAttribute("CosmicDJ_LicenseStub") == true
 end
 
 local function stubDown(): Answer?
-	if workspace:GetAttribute("HazaDJ_LicenseStubDown") == true then
+	if workspace:GetAttribute("CosmicDJ_LicenseStubDown") == true then
 		return { kind = "unreachable", detail = "stub: down" }
 	end
 	return nil
@@ -143,7 +143,7 @@ local function stubVerify(secret: string): Answer
 	if down then
 		return down
 	end
-	if workspace:GetAttribute("HazaDJ_LicenseStubRevoke") == true then
+	if workspace:GetAttribute("CosmicDJ_LicenseStubRevoke") == true then
 		return { kind = "denied", reason = "revoked" }
 	end
 	local entry = stubIssued[secret]
@@ -187,7 +187,7 @@ end
 -- and forget: the answer is ignored, and a failure is silent.
 function LicenseApi.beacon(reason: string)
 	if stubOn() then
-		print(`[HazaDJ] licence beacon (stub): {reason}`)
+		print(`[CosmicDJ] licence beacon (stub): {reason}`)
 		return
 	end
 	local payload = identity()

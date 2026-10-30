@@ -20,7 +20,7 @@ Living log for the standalone DJ deck (dj-booth). Newest entry first.
 ### Runtime-only (not in repo)
 - "Replay unlock" button in client-1 (ScreenGui ReplayTest) for testing. It disappears when the playtest restarts.
 
-### Rebrand (HazaDJ -> XFADEBYKOSMIK), mapped, not started
+### Rebrand: done 2026-10-30 as HazaDJ -> CosmicDJ (kosmik -> cosmic); DataStore keys kept (see CHANGELOG). Original plan below.
 - Mapped: 177 occurrences in about 80 files under dj-booth.
 - Phase 1 (display text only) is the agreed starting point.
 - Keep unchanged unless migrated: DataStore keys (HazaDJ_v1, HazaDJ_Prefs_v1, HazaDJ_License_v1 and their topics), Blink remote scope (HAZADJ / HAZADJ_BLINK), buyer-facing tags and attributes (HazaDJ_DjDeck, HazaDJ_Booth, HazaDJ_Stand, HazaDJ_Speaker, HazaDJ_BPM, HazaDJ_BeatAt, HazaDJ_Fixture, HazaDJ_LicenseStub*).

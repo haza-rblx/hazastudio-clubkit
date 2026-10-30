@@ -1,10 +1,10 @@
 --!strict
--- The 40 px header: page tabs on the left, the "xfade" mark in the middle, the Deck · Window ·
+-- The 40 px header: page tabs on the left, the DUAL DECK DJ mark in the middle, the Deck · Window ·
 -- Full switch with its tiny screens, and close on the right.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
-local Vide = require(ReplicatedStorage.HazaDJ.Packages.Vide)
+local Vide = require(ReplicatedStorage.CosmicDJ.Packages.Vide)
 local Base = require(script.Parent.Parent.UI.Base)
 local Hover = require(script.Parent.Parent.UI.Hover)
 local Theme = require(script.Parent.Parent.Theme)
@@ -35,7 +35,7 @@ local function tabButton(p: Props, key: string, text: string, order: number)
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.fromScale(0.5, 1),
 		Size = if untrack(on) then UDim2.new(1, -20, 0, 2) else UDim2.new(0, 0, 0, 2),
-		BackgroundColor3 = C.red,
+		BackgroundColor3 = Theme.accent,
 	})
 	local first = true
 	effect(function()
@@ -109,6 +109,7 @@ local MODES = {
 	{ "window", "Window", Vector2.new(5, 3), Vector2.new(8, 6) },
 	{ "full", "Full", Vector2.new(2, 2), Vector2.new(14, 8) },
 }
+local PLATTER, TAG_M = 9, 3 -- the wordmark tag's platters and the margin round them
 local BW = 84
 
 local function viewSwitch(p: Props)
@@ -231,6 +232,65 @@ local function capsule(order: number, isClose: boolean, onClick: () -> ())
 	})
 end
 
+-- the mark (owner, picked live 2026-10-30): a red outlined DUAL DECK DJ tag that opens with two
+-- platters, each with a dark spindle hole; one 3 px margin runs round and between them (1:3 to the
+-- 9 px platters), then a small "by cosmic" at 50 %. The header and the lock screen stack these 3 px
+-- apart. The "xfade" wordmark it used to follow is gone.
+function Header.mark(z: number): { Instance }
+	return {
+		frame({
+			Size = UDim2.fromOffset(0, PLATTER + TAG_M * 2),
+			AutomaticSize = Enum.AutomaticSize.X,
+			LayoutOrder = 1,
+			ZIndex = z,
+			Base.corner(2),
+			Base.stroke(Theme.accent, 1),
+			Base.pad(TAG_M, TAG_M, 0, 0),
+			hlist(TAG_M),
+			(function()
+				local platters = {}
+				for i = 1, 2 do
+					table.insert(
+						platters,
+						Base.new("Frame", {
+							Size = UDim2.fromOffset(PLATTER, PLATTER),
+							BackgroundColor3 = Theme.accentText,
+							LayoutOrder = i,
+							ZIndex = z,
+							Base.round(0.5),
+							Base.new("Frame", {
+								AnchorPoint = Vector2.new(0.5, 0.5),
+								Position = UDim2.fromScale(0.5, 0.5),
+								Size = UDim2.fromOffset(3, 3),
+								BackgroundColor3 = C.tile,
+								ZIndex = z,
+								Base.round(0.5),
+							}),
+						})
+					)
+				end
+				return platters
+			end)(),
+			label("DUAL DECK DJ", {
+				AutomaticSize = Enum.AutomaticSize.X,
+				Size = UDim2.fromScale(0, 1),
+				FontFace = Theme.BRAND,
+				TextSize = 12,
+				TextColor3 = Theme.accentText,
+				LayoutOrder = 3,
+				ZIndex = z,
+			}),
+		}),
+		label("by cosmic", {
+			FontFace = Theme.SB,
+			TextSize = 12,
+			TextTransparency = 0.5,
+			LayoutOrder = 2,
+			ZIndex = z,
+		}),
+	}
+end
+
 function Header.new(p: Props): Frame
 	local tabs = {}
 	for i, t in TABS do
@@ -260,51 +320,15 @@ function Header.new(p: Props): Frame
 				tabs,
 			}),
 		}),
-		-- the wordmark (owner, 2026-10-26, picked live): "xfade" with a red outlined DUAL DECK tag, over
-		-- a small "by kosmik" at 50 %; nudged 1 px up so it reads centred (no descenders)
+		-- the mark (see Header.mark), nudged 1 px up so it reads centred
 		frame({
 			Name = "Title",
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.new(0.5, 0, 0.5, -1),
 			AutomaticSize = Enum.AutomaticSize.XY,
 			ZIndex = 5,
-			Base.vlist(0, { HorizontalAlignment = Enum.HorizontalAlignment.Center }),
-			frame({
-				AutomaticSize = Enum.AutomaticSize.XY,
-				LayoutOrder = 1,
-				ZIndex = 5,
-				hlist(5),
-				label("xfade", {
-					FontFace = Font.new(Theme.BRAND.Family, Enum.FontWeight.ExtraBold),
-					TextSize = 19,
-					LayoutOrder = 1,
-					ZIndex = 5,
-				}),
-				frame({
-					Size = UDim2.fromOffset(0, 16),
-					AutomaticSize = Enum.AutomaticSize.X,
-					LayoutOrder = 2,
-					ZIndex = 5,
-					Base.corner(2),
-					Base.stroke(C.redText, 1),
-					Base.pad(5, 5, 0, 0),
-					label("DUAL DECK", {
-						AutomaticSize = Enum.AutomaticSize.X,
-						Size = UDim2.fromScale(0, 1),
-						FontFace = Theme.BRAND,
-						TextSize = 12,
-						TextColor3 = C.redText,
-						ZIndex = 5,
-					}),
-				}),
-			}),
-			label("by kosmik", {
-				FontFace = Theme.SB,
-				TextSize = 12,
-				TextTransparency = 0.5,
-				LayoutOrder = 2,
-				ZIndex = 5,
-			}),
+			Base.vlist(3, { HorizontalAlignment = Enum.HorizontalAlignment.Center }),
+			Header.mark(5),
 		}),
 		frame({
 			Size = UDim2.fromScale(0.36, 1),

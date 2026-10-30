@@ -12,7 +12,7 @@ local camera = workspace.CurrentCamera
 local function shake(intensity: number, duration: number)
 	local amp = 0.04 + intensity / 100 * 0.5
 	local t0 = os.clock()
-	local name = "HazaDJ_Shake"
+	local name = "CosmicDJ_Shake"
 	RunService:BindToRenderStep(name, Enum.RenderPriority.Camera.Value + 1, function()
 		local t = os.clock() - t0
 		if t >= duration then
@@ -28,7 +28,7 @@ end
 local function roll(intensity: number, duration: number)
 	local deg = 2 + intensity / 100 * 18
 	local t0 = os.clock()
-	local name = "HazaDJ_Roll"
+	local name = "CosmicDJ_Roll"
 	RunService:BindToRenderStep(name, Enum.RenderPriority.Camera.Value + 1, function()
 		local t = os.clock() - t0
 		if t >= duration then
@@ -41,10 +41,10 @@ local function roll(intensity: number, duration: number)
 end
 
 local function darken(intensity: number, duration: number)
-	local cc = Lighting:FindFirstChild("HazaDJ_Darken") :: ColorCorrectionEffect?
+	local cc = Lighting:FindFirstChild("CosmicDJ_Darken") :: ColorCorrectionEffect?
 	if not cc then
 		local c = Instance.new("ColorCorrectionEffect")
-		c.Name = "HazaDJ_Darken"
+		c.Name = "CosmicDJ_Darken"
 		c.Parent = Lighting
 		cc = c
 	end

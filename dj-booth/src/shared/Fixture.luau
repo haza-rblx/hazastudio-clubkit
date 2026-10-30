@@ -1,6 +1,6 @@
 --!strict
 -- The prototype's mock data (DJXTabs, 2026-10-23), as a demo fixture. Seeded only in Studio when
--- `workspace:SetAttribute("HazaDJ_Fixture", true)`, so the rebuild can be compared with the
+-- `workspace:SetAttribute("CosmicDJ_Fixture", true)`, so the rebuild can be compared with the
 -- prototype screen for screen. Never used in a live game.
 local Types = require(script.Parent.Types)
 local Defaults = require(script.Parent.Defaults)

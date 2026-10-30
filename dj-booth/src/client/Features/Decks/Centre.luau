@@ -5,12 +5,10 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
-local Vide = require(ReplicatedStorage.HazaDJ.Packages.Vide)
+local Vide = require(ReplicatedStorage.CosmicDJ.Packages.Vide)
 local Theme = require(script.Parent.Parent.Parent.Theme)
 local Base = require(script.Parent.Parent.Parent.UI.Base)
 local Model = require(script.Parent.Model)
-
-local C = Theme.C
 
 local Centre = {}
 
@@ -20,7 +18,7 @@ local SEGS, PITCH = 151, 2 -- 138 for the lane plus the 13 that fill the 26 px h
 local DIM = Color3.fromHex("313131")
 local LANE = Color3.fromHex("151515")
 local N, HIST_P = 128, 45 -- history rows; the newest sits on row 45 (the playhead, 35 % down)
-local LOW, MIDC, HIGH = Color3.fromRGB(228, 16, 36), Color3.fromRGB(105, 105, 105), Color3.fromRGB(104, 104, 104)
+local MIDC, HIGH = Color3.fromRGB(105, 105, 105), Color3.fromRGB(104, 104, 104)
 
 local function segColor(i: number): Color3
 	local t = i / 138
@@ -93,7 +91,7 @@ function Centre.new(props: Base.Props?): Frame
 			Size = UDim2.new(1, 0, 0, 2),
 			AnchorPoint = Vector2.new(0, 0.5),
 			Position = UDim2.fromScale(0, 0.35),
-			BackgroundColor3 = C.red,
+			BackgroundColor3 = Theme.accent,
 			ZIndex = 5,
 		}),
 	})
@@ -134,7 +132,7 @@ function Centre.new(props: Base.Props?): Frame
 			local v = h[k] or 0
 			local bar = rows[HIST_P - k + 1]
 			bar.Size = UDim2.new(v * 0.96, 0, 1 / N, 0)
-			bar.BackgroundColor3 = if v < 0.5 then HIGH:Lerp(MIDC, v * 2) else MIDC:Lerp(LOW, (v - 0.5) * 2)
+			bar.BackgroundColor3 = if v < 0.5 then HIGH:Lerp(MIDC, v * 2) else MIDC:Lerp(Theme.accent(), (v - 0.5) * 2)
 		end
 	end
 	local lv = { 0, 0 }

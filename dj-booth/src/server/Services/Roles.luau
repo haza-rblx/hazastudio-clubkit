@@ -7,9 +7,9 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
-local Charm = require(ReplicatedStorage.HazaDJ.Packages.Charm)
-local Janitor = require(ReplicatedStorage.HazaDJ.Packages.Janitor)
-local Shared = ReplicatedStorage.HazaDJ.Shared
+local Charm = require(ReplicatedStorage.CosmicDJ.Packages.Charm)
+local Janitor = require(ReplicatedStorage.CosmicDJ.Packages.Janitor)
+local Shared = ReplicatedStorage.CosmicDJ.Shared
 local Defaults = require(Shared.Defaults)
 local Dict = require(Shared.Dict)
 local Fixture = require(Shared.Fixture)

@@ -5,8 +5,8 @@ local GuiService = game:GetService("GuiService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 
-local Vide = require(ReplicatedStorage.HazaDJ.Packages.Vide)
-local Shared = ReplicatedStorage.HazaDJ.Shared
+local Vide = require(ReplicatedStorage.CosmicDJ.Packages.Vide)
+local Shared = ReplicatedStorage.CosmicDJ.Shared
 local Format = require(Shared.Format)
 local Mix = require(Shared.Mix)
 local Actions = require(script.Parent.Parent.Parent.Actions)
@@ -121,7 +121,7 @@ function Deck.header(m: Model.Deck, props: Base.Props?): Frame
 						return UDim2.fromScale(Model.progress(m), 1)
 					end,
 					BackgroundColor3 = function()
-						return if m.live() then C.red else W
+						return if m.live() then Theme.accent() else W
 					end,
 				}),
 			}),
@@ -161,7 +161,7 @@ function Deck.header(m: Model.Deck, props: Base.Props?): Frame
 					local half = math.ceil(PIN_W / 2)
 					for i, c in cues do
 						local hit = d.lastCue == c.n
-						local color = if hit then C.red else W
+						local color: any = if hit then Theme.accent else W
 						local x = math.floor(math.clamp(c.at / len, 0, 1) * HEAD_W)
 						table.insert(
 							out,
@@ -207,7 +207,7 @@ function Deck.header(m: Model.Deck, props: Base.Props?): Frame
 								Position = UDim2.fromScale(0.5, 0),
 								Size = UDim2.fromOffset(8, 8),
 								Rotation = 45,
-								BackgroundColor3 = C.red,
+								BackgroundColor3 = Theme.accent,
 								ZIndex = 30,
 							}),
 						})
@@ -366,7 +366,9 @@ local function jog(m: Model.Deck, cx: number, cy: number): Frame
 			-- only the red end shows; the far end is transparent so it blends into the platter
 			create("UIGradient")({
 				Rotation = 90,
-				Color = ColorSequence.new(C.red),
+				Color = function()
+					return ColorSequence.new(Theme.accent())
+				end,
 				Transparency = NumberSequence.new({
 					NumberSequenceKeypoint.new(0, 0),
 					NumberSequenceKeypoint.new(0.5, 0),
@@ -489,7 +491,7 @@ function Deck.body(m: Model.Deck, mirror: boolean, props: Base.Props?): Frame
 		create("UIStroke")({
 			ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
 			Color = function()
-				return if synced() then C.red else C.root
+				return if synced() then Theme.accent() else C.root
 			end,
 			Thickness = function()
 				return if synced() then 2 else 1

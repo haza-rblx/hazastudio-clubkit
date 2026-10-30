@@ -1,23 +1,23 @@
 {
-	"name": "HazaDJ",
+	"name": "CosmicDJ",
 	"tree": {
 		"$className": "DataModel",
 		"ReplicatedStorage": {
-			"HazaDJ": {
+			"CosmicDJ": {
 				"$className": "Folder",
 				"Packages": { "$path": "Packages" },
 				"Shared": { "$path": "src/shared" }
 			}
 		},
 		"ServerScriptService": {
-			"HazaDJ": {
+			"CosmicDJ": {
 				"$path": "src/server",
 				"ServerPackages": { "$path": "ServerPackages" }
 			}
 		},
 		"StarterPlayer": {
 			"StarterPlayerScripts": {
-				"HazaDJ": { "$path": "src/client" }
+				"CosmicDJ": { "$path": "src/client" }
 			}
 		}
 	}

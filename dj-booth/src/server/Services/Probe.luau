@@ -8,8 +8,8 @@ local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
 
-local Janitor = require(ReplicatedStorage.HazaDJ.Packages.Janitor)
-local Dict = require(ReplicatedStorage.HazaDJ.Shared.Dict)
+local Janitor = require(ReplicatedStorage.CosmicDJ.Packages.Janitor)
+local Dict = require(ReplicatedStorage.CosmicDJ.Shared.Dict)
 local State = require(script.Parent.State)
 local Store = require(script.Parent.Store)
 
@@ -22,7 +22,7 @@ local ATTEMPTS = 3
 local DEADLINE = ATTEMPTS * TIMEOUT + 10 -- Probe.many stops waiting after this, with what it has
 local PENDING_EVERY = 300 -- pending (timed out) tracks and sounds are re-checked this often
 local folder = Instance.new("Folder")
-folder.Name = "HazaDJ_Probe"
+folder.Name = "CosmicDJ_Probe"
 folder.Parent = ServerStorage
 
 local cache: { [number]: { result: Result, at: number } } = {}

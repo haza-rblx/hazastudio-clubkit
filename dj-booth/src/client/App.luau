@@ -8,9 +8,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
-local Icon = require(ReplicatedStorage.HazaDJ.Packages.TopbarPlus)
-local Vide = require(ReplicatedStorage.HazaDJ.Packages.Vide)
-local LicensePolicy = require(ReplicatedStorage.HazaDJ.Shared.LicensePolicy)
+local Icon = require(ReplicatedStorage.CosmicDJ.Packages.TopbarPlus)
+local Vide = require(ReplicatedStorage.CosmicDJ.Packages.Vide)
+local LicensePolicy = require(ReplicatedStorage.CosmicDJ.Shared.LicensePolicy)
 local Actions = require(script.Parent.Actions)
 local Store = require(script.Parent.Store)
 local Theme = require(script.Parent.Theme)
@@ -42,6 +42,13 @@ function App.new(): ScreenGui
 	end)
 
 	local tab, open = Store.tab, Store.open
+	-- the game accent: the saved one, or Settings' draft while the panel is open on the Settings tab
+	-- (closing the panel or leaving Settings puts the saved one back)
+	effect(function()
+		local preview = Settings.accentDraft()
+		local live = open() and tab() == "Settings"
+		Theme.setAccent(if live and preview ~= nil then preview else Store.settings().accent)
+	end)
 	-- the owner of a locked DJ deck sees the lock screen (ADR 0022); it always takes the Window size
 	local locked = function()
 		return Store.me().role == "Owner" and not LicensePolicy.unlocked(Store.license())
@@ -53,7 +60,12 @@ function App.new(): ScreenGui
 	-- the Studio demo fixture opens straight away, like the prototype
 	local fixtureOpened = false
 	effect(function()
-		if not fixtureOpened and Store.ready() and Store.me().canOpen and workspace:GetAttribute("HazaDJ_Fixture") then
+		if
+			not fixtureOpened
+			and Store.ready()
+			and Store.me().canOpen
+			and workspace:GetAttribute("CosmicDJ_Fixture")
+		then
 			fixtureOpened = true
 			open(true)
 		end
@@ -472,7 +484,7 @@ function App.new(): ScreenGui
 	end)
 
 	-- the topbar button (TopbarPlus): shown to anyone with access, selected while the panel is open
-	local icon = Icon.new():setName("HazaDJ"):setImage(Theme.MUSIC_ICON):setLabel("DJ"):setCaption("DJ deck")
+	local icon = Icon.new():setName("CosmicDJ"):setImage(Theme.MUSIC_ICON):setLabel("DJ"):setCaption("DJ deck")
 	icon.toggled:Connect(function(selected: boolean)
 		if selected ~= untrack(open) then
 			open(selected)
@@ -494,7 +506,7 @@ function App.new(): ScreenGui
 	end)
 
 	gui = create("ScreenGui")({
-		Name = "HazaDJ",
+		Name = "CosmicDJ",
 		ResetOnSpawn = false,
 		IgnoreGuiInset = true,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
@@ -593,7 +605,7 @@ function App.new(): ScreenGui
 	end)
 	-- the DJ deck's "Open the decks" prompt
 	ProximityPromptService.PromptTriggered:Connect(function(prompt, who)
-		if who == Players.LocalPlayer and prompt.Name == "HazaDJ_Open" and untrack(canOpen) then
+		if who == Players.LocalPlayer and prompt.Name == "CosmicDJ_Open" and untrack(canOpen) then
 			open(true)
 		end
 	end)

@@ -4,8 +4,8 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
-local Vide = require(ReplicatedStorage.HazaDJ.Packages.Vide)
-local Shared = ReplicatedStorage.HazaDJ.Shared
+local Vide = require(ReplicatedStorage.CosmicDJ.Packages.Vide)
+local Shared = ReplicatedStorage.CosmicDJ.Shared
 local DeckBrakeConfig = require(Shared.DeckBrakeConfig)
 local Format = require(Shared.Format)
 local Mix = require(Shared.Mix)

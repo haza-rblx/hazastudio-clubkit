@@ -9,15 +9,15 @@
 -- This file is not meant to be edited
 
 _G._BLINK = _G._BLINK or {}
-if _G._BLINK["HAZADJ"] then
-	error("[Blink]: An instance of blink is already running with the remote scope \"HAZADJ\". Change the remote scope of either instance to avoid conflicts.")
+if _G._BLINK["COSMICDJ"] then
+	error("[Blink]: An instance of blink is already running with the remote scope \"COSMICDJ\". Change the remote scope of either instance to avoid conflicts.")
 end
-_G._BLINK["HAZADJ"] = true
+_G._BLINK["COSMICDJ"] = true
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local SerdesFunctions = {}
-local BASE_EVENT_NAME = "HAZADJ_BLINK"
+local BASE_EVENT_NAME = "COSMICDJ_BLINK"
 local Invocations = 0
 
 local SendSize = 64
@@ -176,11 +176,11 @@ export type LiveParam = ("Pitch" | "Vol" | "Filter" | "EqHigh" | "EqMid" | "EqLo
 export type RoleChoice = ("Resident" | "Guest")
 export type Gate = ("Group" | "Pass")
 export type BatchItem = { AssetId: number, Title: string, Artist: string, Len: number? }
-export type SettingsValues = { volume: number, normalize: boolean, limiter: boolean, fadeOut: number, crossfade: number, pitch: number, keyLock: boolean, syncOnLoad: boolean, autoCue: boolean, playOnLoad: boolean, busyDeck: number, padCooldown: number, deckOff: string, speakers: number, openAtDjDeck: boolean, standLock: boolean, maxSet: number, idle: number, announce: boolean, nowPlaying: boolean, billboard: boolean, lights: boolean, camFx: boolean, camFxAmount: number }
-export type Command = { Kind: "TrackAdd", AssetId: number, Title: string, Artist: string, Bpm: number?, Key: string?, Len: number?, Speed: number, Lists: { string } } | { Kind: "TrackAddBatch", Items: { { AssetId: number, Title: string, Artist: string, Len: number? } }, Lists: { string } } | { Kind: "TrackEdit", Id: string, Field: ("Title" | "Artist" | "Bpm" | "Key" | "Speed" | "Gain" | "Start" | "AssetId"), Text: string?, Number: number? } | { Kind: "TrackRemove", Id: string } | { Kind: "TrackInPlaylist", Track: string, Playlist: string, On: boolean } | { Kind: "TrackMove", Playlist: string, Track: string, By: number } | { Kind: "PlaylistCreate",  } | { Kind: "PlaylistEdit", Id: string, Field: ("Name" | "CoverText" | "Image" | "Color" | "Shuffle"), Text: string?, Number: number?, Flag: boolean? } | { Kind: "PlaylistDelete", Id: string } | { Kind: "SoundAdd", AssetId: number } | { Kind: "SoundRemove", Id: string } | { Kind: "PadEdit", Index: number, Field: ("Label" | "Kind" | "Sound" | "Effect" | "Volume" | "Reach" | "Intensity" | "Duration" | "Cooldown"), Text: string?, Number: number? } | { Kind: "PadAssign", Index: number } | { Kind: "PadClear", Index: number } | { Kind: "PadsReset",  } | { Kind: "PersonAdd", Who: string, Role: ("Resident" | "Guest"), Ends: number } | { Kind: "PersonEdit", UserId: number, Role: ("Resident" | "Guest")?, Ends: number? } | { Kind: "PersonRemove", UserId: number } | { Kind: "GateEdit", Gate: ("Group" | "Pass"), On: boolean?, Value: string?, Rank: string? } | { Kind: "TakeOverPolicy", Policy: number } | { Kind: "SettingsSave", Values: { volume: number, normalize: boolean, limiter: boolean, fadeOut: number, crossfade: number, pitch: number, keyLock: boolean, syncOnLoad: boolean, autoCue: boolean, playOnLoad: boolean, busyDeck: number, padCooldown: number, deckOff: string, speakers: number, openAtDjDeck: boolean, standLock: boolean, maxSet: number, idle: number, announce: boolean, nowPlaying: boolean, billboard: boolean, lights: boolean, camFx: boolean, camFxAmount: number } } | { Kind: "PrefsSet", PanelSize: number?, ReduceMotion: boolean?, Hotkey: number?, View: string? } | { Kind: "Load", Deck: number, Track: string } | { Kind: "QueueAdd", Track: string } | { Kind: "QueueRemove", Key: string } | { Kind: "QueueMove", Key: string, By: number } | { Kind: "QueueClear",  } | { Kind: "QueueAll", Playlist: string } | { Kind: "Automix", On: boolean } | { Kind: "Deck", Deck: number, Action: ("Play" | "Pause" | "CueDown" | "CueUp" | "Sync" | "Eject") } | { Kind: "HotCue", Deck: number, N: number, Clear: boolean } | { Kind: "Seek", Deck: number, Seconds: number } | { Kind: "PadPress", Index: number } | { Kind: "TakeDjDeck",  } | { Kind: "EndSet",  } | { Kind: "Activate", Code: string } | { Kind: "RedeemGuest", Code: string }
+export type SettingsValues = { volume: number, normalize: boolean, limiter: boolean, fadeOut: number, crossfade: number, pitch: number, keyLock: boolean, syncOnLoad: boolean, autoCue: boolean, playOnLoad: boolean, busyDeck: number, padCooldown: number, deckOff: string, speakers: number, openAtDjDeck: boolean, standLock: boolean, maxSet: number, idle: number, announce: boolean, nowPlaying: boolean, billboard: boolean, lights: boolean, camFx: boolean, camFxAmount: number, accent: string }
+export type Command = { Kind: "TrackAdd", AssetId: number, Title: string, Artist: string, Bpm: number?, Key: string?, Len: number?, Speed: number, Lists: { string } } | { Kind: "TrackAddBatch", Items: { { AssetId: number, Title: string, Artist: string, Len: number? } }, Lists: { string } } | { Kind: "TrackEdit", Id: string, Field: ("Title" | "Artist" | "Bpm" | "Key" | "Speed" | "Gain" | "Start" | "AssetId"), Text: string?, Number: number? } | { Kind: "TrackRemove", Id: string } | { Kind: "TrackInPlaylist", Track: string, Playlist: string, On: boolean } | { Kind: "TrackMove", Playlist: string, Track: string, By: number } | { Kind: "PlaylistCreate",  } | { Kind: "PlaylistEdit", Id: string, Field: ("Name" | "CoverText" | "Image" | "Color" | "Shuffle"), Text: string?, Number: number?, Flag: boolean? } | { Kind: "PlaylistDelete", Id: string } | { Kind: "SoundAdd", AssetId: number } | { Kind: "SoundRemove", Id: string } | { Kind: "PadEdit", Index: number, Field: ("Label" | "Kind" | "Sound" | "Effect" | "Volume" | "Reach" | "Intensity" | "Duration" | "Cooldown"), Text: string?, Number: number? } | { Kind: "PadAssign", Index: number } | { Kind: "PadClear", Index: number } | { Kind: "PadsReset",  } | { Kind: "PersonAdd", Who: string, Role: ("Resident" | "Guest"), Ends: number } | { Kind: "PersonEdit", UserId: number, Role: ("Resident" | "Guest")?, Ends: number? } | { Kind: "PersonRemove", UserId: number } | { Kind: "GateEdit", Gate: ("Group" | "Pass"), On: boolean?, Value: string?, Rank: string? } | { Kind: "TakeOverPolicy", Policy: number } | { Kind: "SettingsSave", Values: { volume: number, normalize: boolean, limiter: boolean, fadeOut: number, crossfade: number, pitch: number, keyLock: boolean, syncOnLoad: boolean, autoCue: boolean, playOnLoad: boolean, busyDeck: number, padCooldown: number, deckOff: string, speakers: number, openAtDjDeck: boolean, standLock: boolean, maxSet: number, idle: number, announce: boolean, nowPlaying: boolean, billboard: boolean, lights: boolean, camFx: boolean, camFxAmount: number, accent: string } } | { Kind: "PrefsSet", PanelSize: number?, ReduceMotion: boolean?, Hotkey: number?, View: string? } | { Kind: "Load", Deck: number, Track: string } | { Kind: "QueueAdd", Track: string } | { Kind: "QueueRemove", Key: string } | { Kind: "QueueMove", Key: string, By: number } | { Kind: "QueueClear",  } | { Kind: "QueueAll", Playlist: string } | { Kind: "Automix", On: boolean } | { Kind: "Deck", Deck: number, Action: ("Play" | "Pause" | "CueDown" | "CueUp" | "Sync" | "Eject") } | { Kind: "HotCue", Deck: number, N: number, Clear: boolean } | { Kind: "Seek", Deck: number, Seconds: number } | { Kind: "PadPress", Index: number } | { Kind: "TakeDjDeck",  } | { Kind: "EndSet",  } | { Kind: "Activate", Code: string } | { Kind: "RedeemGuest", Code: string }
 export type Result = { Ok: boolean, Message: string?, Id: string? }
 export type ProbeResult = { AssetId: number, Ok: boolean, Name: string?, Creator: string?, Len: number?, Pending: boolean? }
-function SerdesFunctions.WriteFUNCTION_DATA_Do(Value: { Kind: "TrackAdd", AssetId: number, Title: string, Artist: string, Bpm: number?, Key: string?, Len: number?, Speed: number, Lists: { string } } | { Kind: "TrackAddBatch", Items: { { AssetId: number, Title: string, Artist: string, Len: number? } }, Lists: { string } } | { Kind: "TrackEdit", Id: string, Field: ("Title" | "Artist" | "Bpm" | "Key" | "Speed" | "Gain" | "Start" | "AssetId"), Text: string?, Number: number? } | { Kind: "TrackRemove", Id: string } | { Kind: "TrackInPlaylist", Track: string, Playlist: string, On: boolean } | { Kind: "TrackMove", Playlist: string, Track: string, By: number } | { Kind: "PlaylistCreate",  } | { Kind: "PlaylistEdit", Id: string, Field: ("Name" | "CoverText" | "Image" | "Color" | "Shuffle"), Text: string?, Number: number?, Flag: boolean? } | { Kind: "PlaylistDelete", Id: string } | { Kind: "SoundAdd", AssetId: number } | { Kind: "SoundRemove", Id: string } | { Kind: "PadEdit", Index: number, Field: ("Label" | "Kind" | "Sound" | "Effect" | "Volume" | "Reach" | "Intensity" | "Duration" | "Cooldown"), Text: string?, Number: number? } | { Kind: "PadAssign", Index: number } | { Kind: "PadClear", Index: number } | { Kind: "PadsReset",  } | { Kind: "PersonAdd", Who: string, Role: ("Resident" | "Guest"), Ends: number } | { Kind: "PersonEdit", UserId: number, Role: ("Resident" | "Guest")?, Ends: number? } | { Kind: "PersonRemove", UserId: number } | { Kind: "GateEdit", Gate: ("Group" | "Pass"), On: boolean?, Value: string?, Rank: string? } | { Kind: "TakeOverPolicy", Policy: number } | { Kind: "SettingsSave", Values: { volume: number, normalize: boolean, limiter: boolean, fadeOut: number, crossfade: number, pitch: number, keyLock: boolean, syncOnLoad: boolean, autoCue: boolean, playOnLoad: boolean, busyDeck: number, padCooldown: number, deckOff: string, speakers: number, openAtDjDeck: boolean, standLock: boolean, maxSet: number, idle: number, announce: boolean, nowPlaying: boolean, billboard: boolean, lights: boolean, camFx: boolean, camFxAmount: number } } | { Kind: "PrefsSet", PanelSize: number?, ReduceMotion: boolean?, Hotkey: number?, View: string? } | { Kind: "Load", Deck: number, Track: string } | { Kind: "QueueAdd", Track: string } | { Kind: "QueueRemove", Key: string } | { Kind: "QueueMove", Key: string, By: number } | { Kind: "QueueClear",  } | { Kind: "QueueAll", Playlist: string } | { Kind: "Automix", On: boolean } | { Kind: "Deck", Deck: number, Action: ("Play" | "Pause" | "CueDown" | "CueUp" | "Sync" | "Eject") } | { Kind: "HotCue", Deck: number, N: number, Clear: boolean } | { Kind: "Seek", Deck: number, Seconds: number } | { Kind: "PadPress", Index: number } | { Kind: "TakeDjDeck",  } | { Kind: "EndSet",  } | { Kind: "Activate", Code: string } | { Kind: "RedeemGuest", Code: string }, InvocationIdentifier: number): ()
+function SerdesFunctions.WriteFUNCTION_DATA_Do(Value: { Kind: "TrackAdd", AssetId: number, Title: string, Artist: string, Bpm: number?, Key: string?, Len: number?, Speed: number, Lists: { string } } | { Kind: "TrackAddBatch", Items: { { AssetId: number, Title: string, Artist: string, Len: number? } }, Lists: { string } } | { Kind: "TrackEdit", Id: string, Field: ("Title" | "Artist" | "Bpm" | "Key" | "Speed" | "Gain" | "Start" | "AssetId"), Text: string?, Number: number? } | { Kind: "TrackRemove", Id: string } | { Kind: "TrackInPlaylist", Track: string, Playlist: string, On: boolean } | { Kind: "TrackMove", Playlist: string, Track: string, By: number } | { Kind: "PlaylistCreate",  } | { Kind: "PlaylistEdit", Id: string, Field: ("Name" | "CoverText" | "Image" | "Color" | "Shuffle"), Text: string?, Number: number?, Flag: boolean? } | { Kind: "PlaylistDelete", Id: string } | { Kind: "SoundAdd", AssetId: number } | { Kind: "SoundRemove", Id: string } | { Kind: "PadEdit", Index: number, Field: ("Label" | "Kind" | "Sound" | "Effect" | "Volume" | "Reach" | "Intensity" | "Duration" | "Cooldown"), Text: string?, Number: number? } | { Kind: "PadAssign", Index: number } | { Kind: "PadClear", Index: number } | { Kind: "PadsReset",  } | { Kind: "PersonAdd", Who: string, Role: ("Resident" | "Guest"), Ends: number } | { Kind: "PersonEdit", UserId: number, Role: ("Resident" | "Guest")?, Ends: number? } | { Kind: "PersonRemove", UserId: number } | { Kind: "GateEdit", Gate: ("Group" | "Pass"), On: boolean?, Value: string?, Rank: string? } | { Kind: "TakeOverPolicy", Policy: number } | { Kind: "SettingsSave", Values: { volume: number, normalize: boolean, limiter: boolean, fadeOut: number, crossfade: number, pitch: number, keyLock: boolean, syncOnLoad: boolean, autoCue: boolean, playOnLoad: boolean, busyDeck: number, padCooldown: number, deckOff: string, speakers: number, openAtDjDeck: boolean, standLock: boolean, maxSet: number, idle: number, announce: boolean, nowPlaying: boolean, billboard: boolean, lights: boolean, camFx: boolean, camFxAmount: number, accent: string } } | { Kind: "PrefsSet", PanelSize: number?, ReduceMotion: boolean?, Hotkey: number?, View: string? } | { Kind: "Load", Deck: number, Track: string } | { Kind: "QueueAdd", Track: string } | { Kind: "QueueRemove", Key: string } | { Kind: "QueueMove", Key: string, By: number } | { Kind: "QueueClear",  } | { Kind: "QueueAll", Playlist: string } | { Kind: "Automix", On: boolean } | { Kind: "Deck", Deck: number, Action: ("Play" | "Pause" | "CueDown" | "CueUp" | "Sync" | "Eject") } | { Kind: "HotCue", Deck: number, N: number, Clear: boolean } | { Kind: "Seek", Deck: number, Seconds: number } | { Kind: "PadPress", Index: number } | { Kind: "TakeDjDeck",  } | { Kind: "EndSet",  } | { Kind: "Activate", Code: string } | { Kind: "RedeemGuest", Code: string }, InvocationIdentifier: number): ()
 	-- Allocate BLOCK: 3 bytes
 	local BLOCK_START = Allocate(3)
 	buffer.writeu8(SendBuffer, BLOCK_START + 0, 0)
@@ -569,8 +569,8 @@ function SerdesFunctions.WriteFUNCTION_DATA_Do(Value: { Kind: "TrackAdd", AssetI
 		buffer.writeu8(SendBuffer, BLOCK_START + 0, Value.Policy)
 	elseif Value.Kind == "SettingsSave" then
 		buffer.writeu8(SendBuffer, BLOCK_START + 2, 20)
-		-- Allocate BLOCK: 25 bytes
-		local BLOCK_START = Allocate(25)
+		-- Allocate BLOCK: 26 bytes
+		local BLOCK_START = Allocate(26)
 		buffer.writeu16(SendBuffer, BLOCK_START + 0, Value.Values.volume)
 		buffer.writeu8(SendBuffer, BLOCK_START + 2, Value.Values.normalize and 1 or 0)
 		buffer.writeu8(SendBuffer, BLOCK_START + 3, Value.Values.limiter and 1 or 0)
@@ -598,6 +598,10 @@ function SerdesFunctions.WriteFUNCTION_DATA_Do(Value: { Kind: "TrackAdd", AssetI
 		buffer.writeu8(SendBuffer, BLOCK_START + 22, Value.Values.lights and 1 or 0)
 		buffer.writeu8(SendBuffer, BLOCK_START + 23, Value.Values.camFx and 1 or 0)
 		buffer.writeu8(SendBuffer, BLOCK_START + 24, Value.Values.camFxAmount)
+		local Length = #Value.Values.accent
+		buffer.writeu8(SendBuffer, BLOCK_START + 25, Length)
+		Allocate(Length)
+		buffer.writestring(SendBuffer, SendOffset, Value.Values.accent, Length)
 	elseif Value.Kind == "PrefsSet" then
 		buffer.writeu8(SendBuffer, BLOCK_START + 2, 21)
 		-- Allocate BLOCK: 4 bytes
@@ -883,10 +887,20 @@ function SerdesFunctions.WriteEVENT_Live(Value1: number, Value2: ("Pitch" | "Vol
 	buffer.writef32(SendBuffer, BLOCK_START + 3, Value3)
 end
 
+function SerdesFunctions.WriteEVENT_Hint(Value: string): ()
+	-- Allocate BLOCK: 2 bytes
+	local BLOCK_START = Allocate(2)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 0)
+	local Length = #Value
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, Length)
+	Allocate(Length)
+	buffer.writestring(SendBuffer, SendOffset, Value, Length)
+end
+
 function SerdesFunctions.WriteEVENT_Nudge(Value1: number, Value2: number): ()
 	-- Allocate BLOCK: 6 bytes
 	local BLOCK_START = Allocate(6)
-	buffer.writeu8(SendBuffer, BLOCK_START + 0, 0)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 1)
 	buffer.writeu8(SendBuffer, BLOCK_START + 1, Value1)
 	buffer.writef32(SendBuffer, BLOCK_START + 2, Value2)
 end
@@ -945,6 +959,9 @@ if not RunService:IsRunning() then
 		Invoke = NOOP
 	},
 	Live = {
+		Fire = NOOP
+	},
+	Hint = {
 		Fire = NOOP
 	},
 	Nudge = {
@@ -1099,7 +1116,7 @@ local Returns = table.freeze({
 	StepReplication = StepReplication,
 
 	Do = {
-		Invoke = function(Value: { Kind: "TrackAdd", AssetId: number, Title: string, Artist: string, Bpm: number?, Key: string?, Len: number?, Speed: number, Lists: { string } } | { Kind: "TrackAddBatch", Items: { { AssetId: number, Title: string, Artist: string, Len: number? } }, Lists: { string } } | { Kind: "TrackEdit", Id: string, Field: ("Title" | "Artist" | "Bpm" | "Key" | "Speed" | "Gain" | "Start" | "AssetId"), Text: string?, Number: number? } | { Kind: "TrackRemove", Id: string } | { Kind: "TrackInPlaylist", Track: string, Playlist: string, On: boolean } | { Kind: "TrackMove", Playlist: string, Track: string, By: number } | { Kind: "PlaylistCreate",  } | { Kind: "PlaylistEdit", Id: string, Field: ("Name" | "CoverText" | "Image" | "Color" | "Shuffle"), Text: string?, Number: number?, Flag: boolean? } | { Kind: "PlaylistDelete", Id: string } | { Kind: "SoundAdd", AssetId: number } | { Kind: "SoundRemove", Id: string } | { Kind: "PadEdit", Index: number, Field: ("Label" | "Kind" | "Sound" | "Effect" | "Volume" | "Reach" | "Intensity" | "Duration" | "Cooldown"), Text: string?, Number: number? } | { Kind: "PadAssign", Index: number } | { Kind: "PadClear", Index: number } | { Kind: "PadsReset",  } | { Kind: "PersonAdd", Who: string, Role: ("Resident" | "Guest"), Ends: number } | { Kind: "PersonEdit", UserId: number, Role: ("Resident" | "Guest")?, Ends: number? } | { Kind: "PersonRemove", UserId: number } | { Kind: "GateEdit", Gate: ("Group" | "Pass"), On: boolean?, Value: string?, Rank: string? } | { Kind: "TakeOverPolicy", Policy: number } | { Kind: "SettingsSave", Values: { volume: number, normalize: boolean, limiter: boolean, fadeOut: number, crossfade: number, pitch: number, keyLock: boolean, syncOnLoad: boolean, autoCue: boolean, playOnLoad: boolean, busyDeck: number, padCooldown: number, deckOff: string, speakers: number, openAtDjDeck: boolean, standLock: boolean, maxSet: number, idle: number, announce: boolean, nowPlaying: boolean, billboard: boolean, lights: boolean, camFx: boolean, camFxAmount: number } } | { Kind: "PrefsSet", PanelSize: number?, ReduceMotion: boolean?, Hotkey: number?, View: string? } | { Kind: "Load", Deck: number, Track: string } | { Kind: "QueueAdd", Track: string } | { Kind: "QueueRemove", Key: string } | { Kind: "QueueMove", Key: string, By: number } | { Kind: "QueueClear",  } | { Kind: "QueueAll", Playlist: string } | { Kind: "Automix", On: boolean } | { Kind: "Deck", Deck: number, Action: ("Play" | "Pause" | "CueDown" | "CueUp" | "Sync" | "Eject") } | { Kind: "HotCue", Deck: number, N: number, Clear: boolean } | { Kind: "Seek", Deck: number, Seconds: number } | { Kind: "PadPress", Index: number } | { Kind: "TakeDjDeck",  } | { Kind: "EndSet",  } | { Kind: "Activate", Code: string } | { Kind: "RedeemGuest", Code: string }): ({ Ok: boolean, Message: string?, Id: string? })
+		Invoke = function(Value: { Kind: "TrackAdd", AssetId: number, Title: string, Artist: string, Bpm: number?, Key: string?, Len: number?, Speed: number, Lists: { string } } | { Kind: "TrackAddBatch", Items: { { AssetId: number, Title: string, Artist: string, Len: number? } }, Lists: { string } } | { Kind: "TrackEdit", Id: string, Field: ("Title" | "Artist" | "Bpm" | "Key" | "Speed" | "Gain" | "Start" | "AssetId"), Text: string?, Number: number? } | { Kind: "TrackRemove", Id: string } | { Kind: "TrackInPlaylist", Track: string, Playlist: string, On: boolean } | { Kind: "TrackMove", Playlist: string, Track: string, By: number } | { Kind: "PlaylistCreate",  } | { Kind: "PlaylistEdit", Id: string, Field: ("Name" | "CoverText" | "Image" | "Color" | "Shuffle"), Text: string?, Number: number?, Flag: boolean? } | { Kind: "PlaylistDelete", Id: string } | { Kind: "SoundAdd", AssetId: number } | { Kind: "SoundRemove", Id: string } | { Kind: "PadEdit", Index: number, Field: ("Label" | "Kind" | "Sound" | "Effect" | "Volume" | "Reach" | "Intensity" | "Duration" | "Cooldown"), Text: string?, Number: number? } | { Kind: "PadAssign", Index: number } | { Kind: "PadClear", Index: number } | { Kind: "PadsReset",  } | { Kind: "PersonAdd", Who: string, Role: ("Resident" | "Guest"), Ends: number } | { Kind: "PersonEdit", UserId: number, Role: ("Resident" | "Guest")?, Ends: number? } | { Kind: "PersonRemove", UserId: number } | { Kind: "GateEdit", Gate: ("Group" | "Pass"), On: boolean?, Value: string?, Rank: string? } | { Kind: "TakeOverPolicy", Policy: number } | { Kind: "SettingsSave", Values: { volume: number, normalize: boolean, limiter: boolean, fadeOut: number, crossfade: number, pitch: number, keyLock: boolean, syncOnLoad: boolean, autoCue: boolean, playOnLoad: boolean, busyDeck: number, padCooldown: number, deckOff: string, speakers: number, openAtDjDeck: boolean, standLock: boolean, maxSet: number, idle: number, announce: boolean, nowPlaying: boolean, billboard: boolean, lights: boolean, camFx: boolean, camFxAmount: number, accent: string } } | { Kind: "PrefsSet", PanelSize: number?, ReduceMotion: boolean?, Hotkey: number?, View: string? } | { Kind: "Load", Deck: number, Track: string } | { Kind: "QueueAdd", Track: string } | { Kind: "QueueRemove", Key: string } | { Kind: "QueueMove", Key: string, By: number } | { Kind: "QueueClear",  } | { Kind: "QueueAll", Playlist: string } | { Kind: "Automix", On: boolean } | { Kind: "Deck", Deck: number, Action: ("Play" | "Pause" | "CueDown" | "CueUp" | "Sync" | "Eject") } | { Kind: "HotCue", Deck: number, N: number, Clear: boolean } | { Kind: "Seek", Deck: number, Seconds: number } | { Kind: "PadPress", Index: number } | { Kind: "TakeDjDeck",  } | { Kind: "EndSet",  } | { Kind: "Activate", Code: string } | { Kind: "RedeemGuest", Code: string }): ({ Ok: boolean, Message: string?, Id: string? })
 			local InvocationIdentifier = Invoke()
 			if Calls[InvocationIdentifier] ~= nil then
 				Invocations -= 1
@@ -1133,6 +1150,17 @@ local Returns = table.freeze({
 	Live = {
 		Fire = function(Value1: number, Value2: ("Pitch" | "Vol" | "Filter" | "EqHigh" | "EqMid" | "EqLow" | "Echo" | "Reverb" | "Flanger" | "Xfader" | "Curve" | "Master"), Value3: number): ()
 			SerdesFunctions.WriteEVENT_Live(Value1, Value2, Value3)
+		end
+	},
+	Hint = {
+		Fire = function(Value: string): ()
+			local Previous = Save()
+			Load()
+			SerdesFunctions.WriteEVENT_Hint(Value)
+			local Buffer = buffer.create(SendCursor)
+			buffer.copy(Buffer, 0, SendBuffer, 0, SendCursor)
+			Unreliable:FireServer(Buffer, SendInstances)
+			Load(Previous)
 		end
 	},
 	Nudge = {

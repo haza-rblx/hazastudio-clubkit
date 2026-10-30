@@ -1,10 +1,10 @@
 --!strict
--- HazaDJ server: starts the DJ deck's services in dependency order. The licence (ADR 0022) gates
+-- CosmicDJ server: starts the DJ deck's services in dependency order. The licence (ADR 0022) gates
 -- them at the edges: a locked DJ deck takes only the owner's activation, opens for no one else, and
 -- plays nothing; the background asset checks wait until the DJ deck is first unlocked.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local LicensePolicy = require(ReplicatedStorage.HazaDJ.Shared.LicensePolicy)
+local LicensePolicy = require(ReplicatedStorage.CosmicDJ.Shared.LicensePolicy)
 local Services = script.Services
 
 local Store = require(Services.Store)
@@ -46,4 +46,4 @@ if License.unlocked() then
 	Probe.start()
 end
 
-print(`[HazaDJ] DJ deck ready ({Store.status()}, licence {License.view().status})`)
+print(`[CosmicDJ] DJ deck ready ({Store.status()}, licence {License.view().status})`)

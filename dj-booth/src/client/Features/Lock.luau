@@ -1,6 +1,6 @@
 --!strict
 -- The lock screen (ADR 0022): a full-bleed artwork panel with a compact form (one code field,
--- Activate, "Have a guest pass?" opening a sub-modal), the xfade mark on top and a copyright line.
+-- Activate, "Have a guest pass?" opening a sub-modal), the DUAL DECK DJ mark on top and a copyright line.
 -- An accepted code makes the panel rise with everything in it, then the decks are there. A guest pass
 -- that ran out shows the same screen with a different title. Only the place owner ever sees it (nobody
 -- else may open a locked DJ deck).
@@ -9,13 +9,14 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
-local Vide = require(ReplicatedStorage.HazaDJ.Packages.Vide)
-local LicensePolicy = require(ReplicatedStorage.HazaDJ.Shared.LicensePolicy)
+local Vide = require(ReplicatedStorage.CosmicDJ.Packages.Vide)
+local LicensePolicy = require(ReplicatedStorage.CosmicDJ.Shared.LicensePolicy)
 local Actions = require(script.Parent.Parent.Actions)
 local Store = require(script.Parent.Parent.Store)
 local Theme = require(script.Parent.Parent.Theme)
 local Base = require(script.Parent.Parent.UI.Base)
 local Hover = require(script.Parent.Parent.UI.Hover)
+local Header = require(script.Parent.Header)
 
 local create, source, effect, untrack, cleanup = Vide.create, Vide.source, Vide.effect, Vide.untrack, Vide.cleanup
 local C, W = Theme.C, Theme.W
@@ -35,7 +36,7 @@ export type Props = {
 local CANVAS_W, CANVAS_H = 1250, 802
 local FORM_W = 300
 local FORM_H = 212 -- the form's height
-local LOGO_TOP, LOGO_H = 40, 62 -- the xfade mark sits at the top of the right column
+local LOGO_TOP, LOGO_H = 40, 62 -- the mark sits at the top of the right column
 local COPY_TOP = CANVAS_H - 36 -- the copyright's top edge
 local RIGHT_X = 937 -- centre of the right-hand column (the artwork fills the left)
 local FORM_Y = math.floor((LOGO_TOP + LOGO_H + COPY_TOP) / 2) -- the form sits centred between the mark and the copyright
@@ -224,7 +225,7 @@ function Lock.new(p: Props): Frame
 	local formGroup: CanvasGroup
 	local codeBox: TextBox
 	-- ── the reveal to the decks (owner): the whole panel rises with everything in it, then the decks are
-	-- there. In Studio, changing HazaDJ's UnlockPreview attribute replays it. ──
+	-- there. In Studio, changing CosmicDJ's UnlockPreview attribute replays it. ──
 	local function flyAway()
 		if p.onReveal then
 			task.spawn(p.onReveal)
@@ -590,9 +591,10 @@ function Lock.new(p: Props): Frame
 		glyph.Parent = close
 	end)
 
-	-- the xfade mark at the top of the right column (static props, so the compact-mode bindings never move it)
+	-- the DUAL DECK DJ mark at the top of the right column, as in the header (static props, so the
+	-- compact-mode bindings never move it)
 	local logo = frame({
-		Name = "XfadeLogo",
+		Name = "Logo",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.fromOffset(RIGHT_X, LOGO_TOP),
 		AutomaticSize = Enum.AutomaticSize.XY,
@@ -600,37 +602,8 @@ function Lock.new(p: Props): Frame
 		Visible = function()
 			return not p.compact()
 		end,
-		Base.vlist(4, { HorizontalAlignment = Enum.HorizontalAlignment.Center }),
-		label("xfade", {
-			FontFace = Font.new(Theme.BRAND.Family, Enum.FontWeight.ExtraBold),
-			TextSize = 19,
-			LayoutOrder = 1,
-			ZIndex = 62,
-		}),
-		frame({
-			Size = UDim2.fromOffset(0, 16),
-			AutomaticSize = Enum.AutomaticSize.X,
-			LayoutOrder = 2,
-			ZIndex = 62,
-			Base.corner(2),
-			Base.stroke(C.redText, 1),
-			Base.pad(5, 5, 0, 0),
-			label("DUAL DECK", {
-				AutomaticSize = Enum.AutomaticSize.X,
-				Size = UDim2.fromScale(0, 1),
-				FontFace = Theme.BRAND,
-				TextSize = 12,
-				TextColor3 = C.redText,
-				ZIndex = 62,
-			}),
-		}),
-		label("by kosmik", {
-			FontFace = Theme.SB,
-			TextSize = 12,
-			TextTransparency = 0.5,
-			LayoutOrder = 3,
-			ZIndex = 62,
-		}),
+		Base.vlist(3, { HorizontalAlignment = Enum.HorizontalAlignment.Center }),
+		Header.mark(62),
 	})
 
 	-- the copyright mark under the right column
@@ -698,7 +671,7 @@ function Lock.new(p: Props): Frame
 
 	-- Studio only: replay the unlock without a code (see the reveal above)
 	if RunService:IsStudio() then
-		local replay = ReplicatedStorage.HazaDJ:GetAttributeChangedSignal("UnlockPreview"):Connect(function()
+		local replay = ReplicatedStorage.CosmicDJ:GetAttributeChangedSignal("UnlockPreview"):Connect(function()
 			if untrack(done) or not untrack(isOwner) then
 				return
 			end

@@ -1,9 +1,9 @@
--- HazaDJ network schema. Compile: `blink net/djdeck` (from dj-booth/).
+-- CosmicDJ network schema. Compile: `blink net/djdeck` (from dj-booth/).
 -- Everything a client asks for goes through `Do` (edits, with a result) or `Live` (continuous
 -- controls: faders, knobs, the crossfader). The server validates the sender's role on every call.
 
 option Casing = Pascal
-option RemoteScope = "HAZADJ"
+option RemoteScope = "COSMICDJ"
 option ClientOutput = "../src/client/Net.luau"
 option ServerOutput = "../src/server/Net.luau"
 option TypesOutput = "../src/shared/NetTypes.luau"
@@ -51,6 +51,7 @@ struct SettingsValues {
 	lights: boolean,
 	camFx: boolean,
 	camFxAmount: u8(0..100),
+	accent: string(0..6),
 }
 
 enum Command = "Kind" {
@@ -138,6 +139,14 @@ event Live {
 	Type: Reliable,
 	Call: SingleSync,
 	Data: (Deck, LiveParam, f32),
+}
+
+-- the live DJ is about to play this track (hovering or dragging its row): everyone preloads it
+event Hint {
+	From: Client,
+	Type: Unreliable,
+	Call: SingleSync,
+	Data: Id,
 }
 
 -- jog: nudge the playhead by a few seconds while scratching

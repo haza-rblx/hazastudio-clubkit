@@ -4,7 +4,7 @@
 -- after the top level). A function-valued prop is reactive (Vide creates the effect).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Vide = require(ReplicatedStorage.HazaDJ.Packages.Vide)
+local Vide = require(ReplicatedStorage.CosmicDJ.Packages.Vide)
 local Theme = require(script.Parent.Parent.Theme)
 
 local create = Vide.create

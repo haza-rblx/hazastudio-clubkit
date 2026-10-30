@@ -4,12 +4,12 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Packages = ReplicatedStorage.HazaDJ.Packages
+local Packages = ReplicatedStorage.CosmicDJ.Packages
 local Charm = require(Packages.Charm)
 local CharmSync = require(Packages.CharmSync)
 local Vide = require(Packages.Vide)
 local VideCharm = require(Packages.VideCharm)
-local Shared = ReplicatedStorage.HazaDJ.Shared
+local Shared = ReplicatedStorage.CosmicDJ.Shared
 local Defaults = require(Shared.Defaults)
 local LicensePolicy = require(Shared.LicensePolicy)
 local Types = require(Shared.Types)

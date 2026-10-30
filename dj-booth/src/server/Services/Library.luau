@@ -4,7 +4,7 @@
 local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Shared = ReplicatedStorage.HazaDJ.Shared
+local Shared = ReplicatedStorage.CosmicDJ.Shared
 local Defaults = require(Shared.Defaults)
 local Dict = require(Shared.Dict)
 local QueueLogic = require(Shared.Queue)

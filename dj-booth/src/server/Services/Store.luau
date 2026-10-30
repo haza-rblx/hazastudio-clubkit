@@ -9,8 +9,8 @@ local MessagingService = game:GetService("MessagingService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
-local Charm = require(ReplicatedStorage.HazaDJ.Packages.Charm)
-local Shared = ReplicatedStorage.HazaDJ.Shared
+local Charm = require(ReplicatedStorage.CosmicDJ.Packages.Charm)
+local Shared = ReplicatedStorage.CosmicDJ.Shared
 local Defaults = require(Shared.Defaults)
 local Fixture = require(Shared.Fixture)
 local Types = require(Shared.Types)
@@ -106,7 +106,7 @@ local function retry<T>(label: string, fn: () -> T): (boolean, T?)
 		if ok then
 			return true, result
 		end
-		warn(`[HazaDJ] {label} failed (attempt {attempt}): {result}`)
+		warn(`[CosmicDJ] {label} failed (attempt {attempt}): {result}`)
 		task.wait(delayS)
 		delayS *= 2
 	end
@@ -122,7 +122,7 @@ local function save()
 	local doc = snapshot()
 	local size = #HttpService:JSONEncode(doc)
 	if size > SIZE_WARN then
-		warn(`[HazaDJ] DJ deck document is {size} bytes; the library is close to the DataStore limit`)
+		warn(`[CosmicDJ] DJ deck document is {size} bytes; the library is close to the DataStore limit`)
 	end
 	local ok = retry("save", function()
 		return (store :: DataStore):UpdateAsync(DOC_KEY, function(old: Doc?)
@@ -168,7 +168,7 @@ local function reload()
 end
 
 function Store.start()
-	if RunService:IsStudio() and workspace:GetAttribute("HazaDJ_Fixture") then
+	if RunService:IsStudio() and workspace:GetAttribute("CosmicDJ_Fixture") then
 		Store.fixture = true
 		local now = os.time()
 		State.library(Fixture.cues(Fixture.library()))
@@ -178,7 +178,7 @@ function Store.start()
 	end
 	local ok, ds = pcall(DataStoreService.GetDataStore, DataStoreService, STORE_NAME)
 	if not ok then
-		warn("[HazaDJ] DataStores unavailable (enable Studio API access to save); the DJ deck runs from memory")
+		warn("[CosmicDJ] DataStores unavailable (enable Studio API access to save); the DJ deck runs from memory")
 		memoryOnly = true
 		return
 	end
@@ -187,7 +187,7 @@ function Store.start()
 		return (ds :: DataStore):GetAsync(DOC_KEY)
 	end)
 	if not loaded then
-		warn("[HazaDJ] could not read the DJ deck document; the DJ deck runs from memory: " .. tostring(doc))
+		warn("[CosmicDJ] could not read the DJ deck document; the DJ deck runs from memory: " .. tostring(doc))
 		memoryOnly = true
 		return
 	end

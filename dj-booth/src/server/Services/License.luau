@@ -10,8 +10,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local ServerStorage = game:GetService("ServerStorage")
 
-local Janitor = require(ReplicatedStorage.HazaDJ.Packages.Janitor)
-local LicensePolicy = require(ReplicatedStorage.HazaDJ.Shared.LicensePolicy)
+local Janitor = require(ReplicatedStorage.CosmicDJ.Packages.Janitor)
+local LicensePolicy = require(ReplicatedStorage.CosmicDJ.Shared.LicensePolicy)
 local LicenseApi = require(script.Parent.LicenseApi)
 local Roles = require(script.Parent.Roles)
 local State = require(script.Parent.State)
@@ -112,7 +112,7 @@ local function read(): Record?
 		return (store :: DataStore):GetAsync(KEY)
 	end)
 	if not ok then
-		warn("[HazaDJ] could not read the licence record: " .. tostring(value))
+		warn("[CosmicDJ] could not read the licence record: " .. tostring(value))
 		return record
 	end
 	return if type(value) == "table" then value :: Record else nil
@@ -129,7 +129,7 @@ local function write(rec: Record)
 		end)
 	end)
 	if not ok then
-		warn("[HazaDJ] could not save the licence record: " .. tostring(err))
+		warn("[CosmicDJ] could not save the licence record: " .. tostring(err))
 		return
 	end
 	pcall(MessagingService.PublishAsync, MessagingService, TOPIC, { job = game.JobId })
@@ -226,7 +226,7 @@ local function mountTestHook()
 		return
 	end
 	local f = Instance.new("BindableFunction")
-	f.Name = "HazaDJ_LicenseTest"
+	f.Name = "CosmicDJ_LicenseTest"
 	f.OnInvoke = function(cmd: string, arg: any): any
 		if cmd == "view" then
 			return State.license()
@@ -274,7 +274,7 @@ function License.start()
 		if ok then
 			store = ds
 		else
-			warn("[HazaDJ] DataStores unavailable; an activation only lasts this session")
+			warn("[CosmicDJ] DataStores unavailable; an activation only lasts this session")
 		end
 		record = read()
 	end
@@ -282,13 +282,13 @@ function License.start()
 	if not Store.fixture and not (RunService:IsStudio() and game.GameId == 0) then
 		gameMismatch = LicensePolicy.gameMismatch(Stamp, here())
 		if gameMismatch then
-			warn("[HazaDJ] this download was made for another game: " .. gameMismatch)
+			warn("[CosmicDJ] this download was made for another game: " .. gameMismatch)
 			LicenseApi.beacon(gameMismatch)
 		end
 	end
 	refresh()
 	if LicenseApi.usingStub() then
-		print("[HazaDJ] licence: using the Studio stand-in")
+		print("[CosmicDJ] licence: using the Studio stand-in")
 	end
 
 	-- another server activated, redeemed or got a verdict: read the record again

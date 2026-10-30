@@ -1,4 +1,4 @@
-# HazaDJ — standalone DJ deck
+# CosmicDJ — standalone DJ deck
 
 The DJ deck designed live in Place1 (2026-10-22/23), rebuilt as a real, self-contained system:
 two decks with server-side audio, a library with playlists and pads, access control and DJ deck
@@ -21,9 +21,9 @@ settings, all persisted. It does not depend on the Club Kit. Decision record:
 
 ```
 net/djdeck.blink          network schema (generates src/*/Net.luau and src/shared/NetTypes.luau)
-src/shared/              ReplicatedStorage.HazaDJ.Shared — pure modules
+src/shared/              ReplicatedStorage.CosmicDJ.Shared — pure modules
   Types  Defaults  Fixture  Format  Mix  Queue  Rules  Dict
-src/server/              ServerScriptService.HazaDJ
+src/server/              ServerScriptService.CosmicDJ
   init.server            starts the services in order
   Services/State         Charm signals: library, access, settings, session, per-player me
   Services/Store         the DJ deck document (load, debounced save, cross-server reload)
@@ -36,7 +36,7 @@ src/server/              ServerScriptService.HazaDJ
   Services/Probe         asset checks (name, creator, length; background re-check)
   Services/Show          announcements, now playing, name billboard, beat attributes, DJ deck prompt
   Services/Commands      the one door in: role checks, rate limit, dispatch
-src/client/              StarterPlayerScripts.HazaDJ
+src/client/              StarterPlayerScripts.CosmicDJ
   init.client  App  Store  Actions  Theme  Toast  WorldFx  Debug(Studio only)
   UI/                    Base, Controls, Layout, Covers, Hardware — the design system
   Features/              Header, Decks/*, Library/*, Access, Settings
@@ -57,7 +57,7 @@ selene src && stylua --check src    # lint / format
 
 Install in a place: put `build/shared.rbxm` in **ReplicatedStorage**, `build/server.rbxm` in
 **ServerScriptService**, `build/client.rbxm` in **StarterPlayer › StarterPlayerScripts** (each
-arrives as a `HazaDJ` folder/script). Turn on *Game Settings › Security › Enable Studio Access to
+arrives as a `CosmicDJ` folder/script). Turn on *Game Settings › Security › Enable Studio Access to
 API Services* to save in Studio. Development can also use `rojo serve default.project.json`.
 
 ### Deck off (the brake) and the queue
@@ -72,12 +72,12 @@ API Services* to save in Studio. Development can also use `rojo serve default.pr
 
 | Tag | Used for |
 |---|---|
-| `HazaDJ_DjDeck` (or the older `HazaDJ_Booth`, still accepted) | the "Open the decks" prompt, the live DJ's name billboard, "near the DJ deck" pads |
-| `HazaDJ_Stand` | the floor behind the decks ("DJs only behind the decks" keeps others off it) |
-| `HazaDJ_Speaker` | where the decks play from in *Club zone* / *DJ deck area* mode |
+| `CosmicDJ_DjDeck` (or the older `HazaDJ_Booth`, still accepted) | the "Open the decks" prompt, the live DJ's name billboard, "near the DJ deck" pads |
+| `CosmicDJ_Stand` | the floor behind the decks ("DJs only behind the decks" keeps others off it) |
+| `CosmicDJ_Speaker` | where the decks play from in *Club zone* / *DJ deck area* mode |
 
-Club lights can follow the beat from `workspace:GetAttribute("HazaDJ_BPM")` and
-`HazaDJ_BeatAt` (server time of a beat).
+Club lights can follow the beat from `workspace:GetAttribute("CosmicDJ_BPM")` and
+`CosmicDJ_BeatAt` (server time of a beat).
 
 ### Who can do what
 
@@ -93,7 +93,7 @@ The server enforces every row; the client only mirrors it.
 ## Parity with the prototype
 
 The prototype (`docs/plans/dj-panel-experiment/`) was dumped screen by screen as display lists
-(`tests/golden/`). With `workspace:SetAttribute("HazaDJ_Fixture", true)` in Studio, the server seeds
+(`tests/golden/`). With `workspace:SetAttribute("CosmicDJ_Fixture", true)` in Studio, the server seeds
 the prototype's mock data, and `tools/parity` compares what the new panel draws with each golden
 (occlusion-aware, 1 px tolerance). Last run (2026-10-23): Library, Access and Settings screens
 **100 %** (a couple of single-label exceptions), Decks **99.9 %** once live readouts are excluded.

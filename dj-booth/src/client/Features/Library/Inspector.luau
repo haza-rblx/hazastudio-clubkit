@@ -4,8 +4,8 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
-local Vide = require(ReplicatedStorage.HazaDJ.Packages.Vide)
-local Shared = ReplicatedStorage.HazaDJ.Shared
+local Vide = require(ReplicatedStorage.CosmicDJ.Packages.Vide)
+local Shared = ReplicatedStorage.CosmicDJ.Shared
 local Format = require(Shared.Format)
 local Types = require(Shared.Types)
 local Actions = require(script.Parent.Parent.Parent.Actions)
@@ -179,7 +179,9 @@ local function playlistChips(order: number, isIn: (string) -> boolean, toggleIn:
 						Covers.cover({
 							text = pl.coverText or pl.name,
 							image = pl.image,
-							color = Covers.playlistColor(pl),
+							color = function()
+								return Covers.playlistColor(pl)
+							end,
 							textSize = 11,
 						}, { Size = UDim2.fromScale(1, 1) }),
 						-- the dimmer sits over the cover, not in it (the cover's padding would inset it)

@@ -4,8 +4,8 @@
 -- Queue N tabs, search, sort). Rows load with D1 / D2; Q adds a track to the end of the queue.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Vide = require(ReplicatedStorage.HazaDJ.Packages.Vide)
-local Shared = ReplicatedStorage.HazaDJ.Shared
+local Vide = require(ReplicatedStorage.CosmicDJ.Packages.Vide)
+local Shared = ReplicatedStorage.CosmicDJ.Shared
 local Format = require(Shared.Format)
 local Types = require(Shared.Types)
 local Actions = require(script.Parent.Parent.Parent.Actions)
@@ -26,6 +26,7 @@ local frame, label, fixed, caption, corner = Base.frame, Base.label, Base.fixed,
 local DeckLibrary = {}
 
 local HEAD = 40
+local HINT_DWELL = 0.3 -- seconds a row is hovered before listeners are told to preload it
 
 function DeckLibrary.new(height: number, props: Base.Props?): Frame
 	local view = source("all") -- "all" | a playlist id | "queue"
@@ -111,7 +112,9 @@ function DeckLibrary.new(height: number, props: Base.Props?): Frame
 					coverText = pl.coverText or pl.name,
 					count = Format.plural(#pl.tracks),
 					image = pl.image,
-					color = Covers.playlistColor(pl),
+					color = function()
+						return Covers.playlistColor(pl)
+					end,
 					onClick = function()
 						view(pl.id)
 						browse(pl.id)
@@ -146,7 +149,7 @@ function DeckLibrary.new(height: number, props: Base.Props?): Frame
 				AnchorPoint = Vector2.new(0, 1),
 				Position = UDim2.fromScale(0, 1),
 				Size = UDim2.new(1, 0, 0, 2),
-				BackgroundColor3 = C.red,
+				BackgroundColor3 = Theme.accent,
 				Visible = on,
 			}),
 		})
@@ -619,12 +622,9 @@ function DeckLibrary.new(height: number, props: Base.Props?): Frame
 							TextColor3 = if pos == 1 then W else C.dim,
 						})
 						else nil,
-					Covers.track(
-						t.title,
-						Covers.trackColor(lib, t.id),
-						36,
-						{ Position = UDim2.fromOffset(if isQ then QX - 48 else 16, 8) }
-					),
+					Covers.track(t.title, function()
+						return Covers.trackColor(lib, t.id)
+					end, 36, { Position = UDim2.fromOffset(if isQ then QX - 48 else 16, 8) }),
 					fixed(t.title, tx, 9, titleW, 18, {
 						TextSize = 14,
 						TextColor3 = if dead then C.dim else W,
@@ -655,7 +655,24 @@ function DeckLibrary.new(height: number, props: Base.Props?): Frame
 					if i < #rs then Base.rule(true, 16) else nil,
 				})
 				if not dead then
-					DragLoad.bind(row, t.title, Covers.trackColor(lib, t.id), loadOnto)
+					DragLoad.bind(row, t.title, function()
+						return Covers.trackColor(lib, t.id)
+					end, loadOnto)
+					-- a row hovered for HINT_DWELL, or pressed, is probably next: listeners preload it
+					Vide.effect(function()
+						if hover() then
+							task.delay(HINT_DWELL, function()
+								if untrack(hover) then
+									Actions.hint(t.id)
+								end
+							end)
+						end
+					end)
+					row.InputBegan:Connect(function(io: InputObject)
+						if Base.isPress(io) then
+							Actions.hint(t.id)
+						end
+					end)
 				end
 				table.insert(out, row)
 			end

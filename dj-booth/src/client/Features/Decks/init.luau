@@ -3,7 +3,7 @@
 -- the pad row (70) and the library (261), on the panel's 2 px gutters.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Vide = require(ReplicatedStorage.HazaDJ.Packages.Vide)
+local Vide = require(ReplicatedStorage.CosmicDJ.Packages.Vide)
 local Store = require(script.Parent.Parent.Store)
 local Theme = require(script.Parent.Parent.Theme)
 local Base = require(script.Parent.Parent.UI.Base)

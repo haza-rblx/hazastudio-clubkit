@@ -18,7 +18,7 @@ function Debug.mount(parent: Instance)
 		return
 	end
 	local f = Instance.new("BindableFunction")
-	f.Name = "HazaDJ_Test"
+	f.Name = "CosmicDJ_Test"
 	f.OnInvoke = function(name: string, ...)
 		local h = handlers[name]
 		if not h then

@@ -6,8 +6,8 @@ local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Vide = require(ReplicatedStorage.HazaDJ.Packages.Vide)
-local Shared = ReplicatedStorage.HazaDJ.Shared
+local Vide = require(ReplicatedStorage.CosmicDJ.Packages.Vide)
+local Shared = ReplicatedStorage.CosmicDJ.Shared
 local Defaults = require(Shared.Defaults)
 local DeckBrakeConfig = require(Shared.DeckBrakeConfig)
 local Format = require(Shared.Format)
@@ -19,6 +19,7 @@ local Theme = require(script.Parent.Parent.Theme)
 local Base = require(script.Parent.Parent.UI.Base)
 local Controls = require(script.Parent.Parent.UI.Controls)
 local Layout = require(script.Parent.Parent.UI.Layout)
+local ColorPicker = require(script.Parent.Parent.UI.ColorPicker)
 local Debug = require(script.Parent.Parent.Debug)
 
 local source, untrack = Vide.source, Vide.untrack
@@ -26,6 +27,12 @@ local C = Theme.C
 local frame, label = Base.frame, Base.label
 
 local Settings = {}
+
+-- the accent the draft shows; App resolves it (it only previews while Settings is open on screen)
+Settings.accentDraft = source(nil :: string?)
+
+-- the game accent presets (hex, no "#"); e41024 is the default red, stored as ""
+local ACCENTS = { "e41024", "ff6a00", "ffc400", "2fd27a", "00c2d1", "2f7bff", "8a4dff", "ff3d9a" }
 
 local PAGE_H, PAGE_PAD, PAGE_HEAD = Theme.PAGE_H, Theme.PAGE_PAD, Theme.PAGE_HEAD
 
@@ -132,11 +139,24 @@ function Settings.new(props: Base.Props?): Frame
 	local val = function(k: string)
 		return untrack(draft)[k]
 	end
+	-- the draft's accent previews live (App applies it only while the panel shows Settings)
+	Vide.effect(function()
+		Settings.accentDraft(draft().accent)
+	end)
 	Debug.on("settings", function(cmd: string, a: any, b: any)
 		if cmd == "section" then
 			current(a)
 		elseif cmd == "set" then
 			set(a)(b)
+		elseif cmd == "diff" then
+			-- the keys the draft holds apart from the saved values: "key=draft/saved"
+			local s, d, out = untrack(saved), untrack(draft), {}
+			for k, v in d do
+				if s[k] ~= v then
+					table.insert(out, `{k}={tostring(v)}/{tostring(s[k])}`)
+				end
+			end
+			return table.concat(out, ", ")
 		end
 		return "ok"
 	end)
@@ -220,6 +240,101 @@ function Settings.new(props: Base.Props?): Frame
 	local function drop(k: string, options: { string })
 		return Controls.dropdown(options, val(k), set(k), 200)
 	end
+	-- the accent as the draft has it ("" reads as the default red)
+	local function accentNow(): string
+		local a = draft().accent
+		return if a == "" then "e41024" else a
+	end
+	-- preset swatches, then a custom swatch that opens the HSV picker (the Cover colour one) below
+	local pickerOpen = source(false)
+	local isPreset = function(): boolean
+		return table.find(ACCENTS, accentNow()) ~= nil
+	end
+	local function pickAccent(hex: string)
+		set("accent")(if hex == "e41024" then "" else hex)
+	end
+	local function accentControl()
+		local kids = {}
+		for i, hex in ACCENTS do
+			kids[i] = Base.new("TextButton", {
+				Text = "",
+				AutoButtonColor = false,
+				BorderSizePixel = 0,
+				Size = UDim2.fromOffset(20, 20),
+				LayoutOrder = i,
+				BackgroundColor3 = Color3.fromHex(hex),
+				Activated = function()
+					pickAccent(hex)
+				end,
+				Base.round(1),
+				Base.stroke(Theme.W, 2, {
+					ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+					Transparency = function()
+						return if accentNow() == hex then 0 else 1
+					end,
+				}),
+			})
+		end
+		-- the custom swatch: a hue ring around the current custom colour (or a plus when a preset is on)
+		local hues = {}
+		for i = 0, 6 do
+			table.insert(hues, ColorSequenceKeypoint.new(i / 6, Color3.fromHSV((i / 6) % 1, 1, 1)))
+		end
+		kids[#ACCENTS + 1] = Base.new("TextButton", {
+			Text = "",
+			AutoButtonColor = false,
+			BorderSizePixel = 0,
+			Size = UDim2.fromOffset(20, 20),
+			LayoutOrder = #ACCENTS + 1,
+			BackgroundColor3 = Theme.W,
+			Activated = function()
+				pickerOpen(not pickerOpen())
+			end,
+			Base.round(1),
+			Vide.create("UIGradient")({ Color = ColorSequence.new(hues), Rotation = 45 }),
+			Base.new("Frame", {
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(0.5, 0.5),
+				Size = UDim2.fromOffset(12, 12),
+				BackgroundColor3 = function()
+					return if isPreset() then C.tile else Color3.fromHex(accentNow())
+				end,
+				Base.round(1),
+			}),
+			Base.stroke(Theme.W, 2, {
+				ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+				Transparency = function()
+					return if pickerOpen() or not isPreset() then 0 else 1
+				end,
+			}),
+		})
+		return frame({
+			Size = UDim2.fromOffset(9 * 20 + 8 * 8, 32),
+			Base.hlist(8, Enum.HorizontalAlignment.Right, { VerticalAlignment = Enum.VerticalAlignment.Center }),
+			kids,
+		})
+	end
+	-- the picker under the swatches, right-aligned with them; hidden until the custom swatch opens it
+	local function accentPicker(order: number)
+		return frame({
+			Size = UDim2.new(1, 0, 0, ColorPicker.height() + 16),
+			LayoutOrder = order,
+			Visible = pickerOpen,
+			ColorPicker.new({
+				value = function()
+					return Color3.fromHex(accentNow())
+				end,
+				onPick = function(c: Color3)
+					pickAccent(c:ToHex())
+				end,
+				placeholder = "#e41024",
+				onDefault = function(): Color3
+					pickAccent("e41024")
+					return Color3.fromHex("e41024")
+				end,
+			}, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0) }),
+		})
+	end
 	BUILD.sound = function(nx)
 		local out = {}
 		for _, x in
@@ -293,7 +408,7 @@ function Settings.new(props: Base.Props?): Frame
 					"A dropped or loaded track starts right away",
 					toggle("playOnLoad")
 				),
-				Layout.settingRow(nx(), "Skip silence", "Start at the first sound, not at 0:00", toggle("autoCue")),
+				-- "Skip silence" (autoCue) hidden: decks don't read it yet, they always start at track.start
 				Layout.settingRow(
 					nx(),
 					"Loading onto a playing deck",
@@ -390,6 +505,20 @@ function Settings.new(props: Base.Props?): Frame
 					}),
 					true
 				),
+			})
+		do
+			table.insert(out, x)
+		end
+		for _, x in
+			Layout.group(nx, "Look", {
+				Layout.settingRow(
+					nx(),
+					"Accent colour",
+					"Live, tabs and highlights. Delete buttons stay red.",
+					accentControl(),
+					true
+				),
+				accentPicker(nx()),
 			})
 		do
 			table.insert(out, x)

@@ -3,7 +3,7 @@
 -- deck-wide cooldown comes back as a ready time, drawn as a draining fill and a countdown chip.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Vide = require(ReplicatedStorage.HazaDJ.Packages.Vide)
+local Vide = require(ReplicatedStorage.CosmicDJ.Packages.Vide)
 local Actions = require(script.Parent.Parent.Parent.Actions)
 local Store = require(script.Parent.Parent.Parent.Store)
 local Theme = require(script.Parent.Parent.Parent.Theme)

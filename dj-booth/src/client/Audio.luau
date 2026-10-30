@@ -10,9 +10,9 @@ local SoundService = game:GetService("SoundService")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Charm = require(ReplicatedStorage.HazaDJ.Packages.Charm)
-local Janitor = require(ReplicatedStorage.HazaDJ.Packages.Janitor)
-local Shared = ReplicatedStorage.HazaDJ.Shared
+local Charm = require(ReplicatedStorage.CosmicDJ.Packages.Charm)
+local Janitor = require(ReplicatedStorage.CosmicDJ.Packages.Janitor)
+local Shared = ReplicatedStorage.CosmicDJ.Shared
 local DeckBrakeConfig = require(Shared.DeckBrakeConfig)
 local DeckClock = require(Shared.DeckClock)
 local DeckParams = require(Shared.DeckParams)
@@ -233,8 +233,9 @@ local function loadLoop(d: Deck, gen: number)
 			end)
 			local t0 = os.clock()
 			local limit = LoadPolicy.timeout(isTouch)
+			-- every frame: a preloaded track is ready in a frame or two, so a coarser poll would be the delay
 			while d.gen == gen and not sound.IsLoaded and os.clock() - t0 < limit do
-				task.wait(0.05)
+				task.wait()
 			end
 			if d.gen ~= gen then
 				break
@@ -245,13 +246,18 @@ local function loadLoop(d: Deck, gen: number)
 					d.running = nil
 				end
 				d.loader:RemoveNoClean("loop")
+				-- a Sound that was playing keeps playing (and keeps its TimePosition) across a SoundId
+				-- swap, so a track loaded onto a running deck would play from the old track's spot until
+				-- the watchdog caught it (measured 2026-10-30: 1-2.5 s, different per client). Forget the
+				-- anchor so applyTransport puts the playhead where the deck is right now.
+				d.anchorPos, d.anchorAt = nil, nil
 				applyTransport(d)
 				return
 			end
 			setId(sound, "")
 			if not warned then
 				warned = true
-				warn("[HazaDJ] deck " .. d.n .. " is still loading its track; retrying")
+				warn("[CosmicDJ] deck " .. d.n .. " is still loading its track; retrying")
 			end
 			task.wait(LoadPolicy.backoff(attempt))
 		end
@@ -466,7 +472,7 @@ local function playPad(assetId: number, volume: number, nearDjDeck: boolean)
 	s.SoundId = "rbxassetid://" .. string.format("%d", assetId)
 	s.Volume = volume
 	local djDeck = if nearDjDeck
-		then CollectionService:GetTagged("HazaDJ_DjDeck")[1] or CollectionService:GetTagged("HazaDJ_Booth")[1]
+		then CollectionService:GetTagged("CosmicDJ_DjDeck")[1] or CollectionService:GetTagged("HazaDJ_Booth")[1]
 		else nil
 	if djDeck and djDeck:IsA("BasePart") then
 		s.RollOffMode = Enum.RollOffMode.InverseTapered
@@ -498,13 +504,13 @@ end
 
 local function build2D()
 	folder = Instance.new("Folder")
-	folder.Name = "HazaDJ_Audio"
+	folder.Name = "CosmicDJ_Audio"
 	folder.Parent = SoundService
 	master = Instance.new("SoundGroup")
-	master.Name = "HazaDJ_Master"
+	master.Name = "CosmicDJ_Master"
 	master.Parent = folder
 	limiter = Instance.new("CompressorSoundEffect")
-	limiter.Name = "HazaDJ_Limiter"
+	limiter.Name = "CosmicDJ_Limiter"
 	limiter.Parent = master
 end
 
@@ -528,7 +534,7 @@ function Audio.start()
 			end
 		end)
 		if not ok then
-			warn("[HazaDJ] deck sync: " .. tostring(err))
+			warn("[CosmicDJ] deck sync: " .. tostring(err))
 		end
 	end)
 
@@ -547,7 +553,7 @@ function Audio.start()
 			for n = 1, 2 do
 				local ok, err = pcall(watch, decks[n])
 				if not ok then
-					warn("[HazaDJ] deck watchdog: " .. tostring(err))
+					warn("[CosmicDJ] deck watchdog: " .. tostring(err))
 				end
 			end
 		end

@@ -5,8 +5,8 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
-local Vide = require(ReplicatedStorage.HazaDJ.Packages.Vide)
-local Shared = ReplicatedStorage.HazaDJ.Shared
+local Vide = require(ReplicatedStorage.CosmicDJ.Packages.Vide)
+local Shared = ReplicatedStorage.CosmicDJ.Shared
 local Format = require(Shared.Format)
 local Types = require(Shared.Types)
 local Actions = require(script.Parent.Parent.Actions)
@@ -106,7 +106,8 @@ function Library.new(props: Base.Props?): (Frame, () -> number)
 			caption(text, { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 16, 1, -8) }),
 			if withPlus
 				then Controls.button({
-					text = "+  New",
+					text = "New",
+					icon = "plus",
 					kind = "ghost",
 					h = 24,
 					onClick = function()
@@ -185,7 +186,9 @@ function Library.new(props: Base.Props?): (Frame, () -> number)
 					coverText = pl.coverText or pl.name,
 					count = Format.plural(#pl.tracks),
 					image = pl.image,
-					color = Covers.playlistColor(pl),
+					color = function()
+						return Covers.playlistColor(pl)
+					end,
 					onClick = function()
 						open(pl.id)
 					end,
@@ -206,7 +209,8 @@ function Library.new(props: Base.Props?): (Frame, () -> number)
 		return if isPl() then HERO_H else 56
 	end
 	local addBtn = Controls.button({
-		text = "+  Add track",
+		text = "Add track",
+		icon = "plus",
 		kind = "primary",
 		h = 32,
 		onClick = function()
@@ -587,7 +591,9 @@ function Library.new(props: Base.Props?): (Frame, () -> number)
 							S.selected(t.id)
 							S.adding(false)
 						end,
-						Covers.track(t.title, Covers.trackColor(lib, t.id), 36, { Position = UDim2.fromOffset(16, 8) }),
+						Covers.track(t.title, function()
+							return Covers.trackColor(lib, t.id)
+						end, 36, { Position = UDim2.fromOffset(16, 8) }),
 						fixed(t.title, 64, 9, 200, 18, { TextSize = 14, TextColor3 = if dead then C.dim else W }),
 						fixed(t.artist, 64, 28, 200, 16, { FontFace = R, TextSize = 12, TextColor3 = C.dim }),
 						fixed(Format.speed(t.speed), 272, 0, 44, 52, {

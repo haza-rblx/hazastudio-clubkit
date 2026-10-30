@@ -4,8 +4,8 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SoundService = game:GetService("SoundService")
 
-local Vide = require(ReplicatedStorage.HazaDJ.Packages.Vide)
-local Shared = ReplicatedStorage.HazaDJ.Shared
+local Vide = require(ReplicatedStorage.CosmicDJ.Packages.Vide)
+local Shared = ReplicatedStorage.CosmicDJ.Shared
 local Defaults = require(Shared.Defaults)
 local Format = require(Shared.Format)
 local Types = require(Shared.Types)
@@ -31,7 +31,7 @@ local GRID_H = 56 + PH * 2 + GAP + 16
 
 -- one local preview Sound for the sounds list and the editor
 local preview = Instance.new("Sound")
-preview.Name = "HazaDJ_Preview"
+preview.Name = "CosmicDJ_Preview"
 preview.Volume = 0.6
 preview.Parent = SoundService
 

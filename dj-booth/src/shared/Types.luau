@@ -112,6 +112,7 @@ export type Settings = {
 	lights: boolean,
 	camFx: boolean,
 	camFxAmount: number,
+	accent: string, -- 6 hex digits, no "#"; "" = the default red
 }
 
 export type Prefs = {
@@ -156,6 +157,7 @@ export type Session = {
 -- what every player gets (ADR 0021): the tracks on the decks and in the queue, by id
 export type Stage = {
 	tracks: { [string]: Track },
+	hints: { string }, -- tracks the live DJ is about to play, newest first (preload only)
 }
 
 export type Me = {

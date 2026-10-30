@@ -3,8 +3,8 @@
 -- a toast); dragged controls stream through `Live`, throttled to ~30 Hz with a trailing send.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Janitor = require(ReplicatedStorage.HazaDJ.Packages.Janitor)
-local NetTypes = require(ReplicatedStorage.HazaDJ.Shared.NetTypes)
+local Janitor = require(ReplicatedStorage.CosmicDJ.Packages.Janitor)
+local NetTypes = require(ReplicatedStorage.CosmicDJ.Shared.NetTypes)
 local Net = require(script.Parent.Net)
 local Store = require(script.Parent.Store)
 local Toast = require(script.Parent.Toast)
@@ -32,6 +32,17 @@ function Actions.quiet(cmd: NetTypes.Command): Result
 		return { Ok = false, Message = "The DJ deck didn't answer. Try again." }
 	end
 	return result
+end
+
+-- the live DJ is about to play `trackId` (a row hovered for a moment, or pressed): tell the server so
+-- every listener preloads it. Only the live DJ sends; the same track is not sent twice in a row.
+local lastHint: string? = nil
+function Actions.hint(trackId: string)
+	if trackId == lastHint or Store.sessionAtom().live ~= game:GetService("Players").LocalPlayer.UserId then
+		return
+	end
+	lastHint = trackId
+	Net.Hint.Fire(trackId)
 end
 
 -- fire and forget (handlers that must not yield)

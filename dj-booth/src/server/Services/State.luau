@@ -3,8 +3,8 @@
 -- Values are frozen in Studio (Charm's `frozen` flag), so every write goes through Dict helpers.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Shared = ReplicatedStorage.HazaDJ.Shared
-local Charm = require(ReplicatedStorage.HazaDJ.Packages.Charm)
+local Shared = ReplicatedStorage.CosmicDJ.Shared
+local Charm = require(ReplicatedStorage.CosmicDJ.Packages.Charm)
 local Types = require(Shared.Types)
 local Defaults = require(Shared.Defaults)
 
@@ -20,9 +20,14 @@ State.stage = Charm.atom(Defaults.stage())
 -- the licence as owners may see it (ADR 0022): a LicensePolicy.View, never the secret
 State.license = Charm.atom({ status = "locked" } :: any)
 
+-- tracks the live DJ is about to play (Net.Hint), newest first; reach everyone through the stage
+State.hints = Charm.atom({} :: { string })
+State.HINT_MAX = 3
+
 Charm.effect(function()
 	local s = State.session()
 	local lib = State.library()
+	local hints = State.hints()
 	local tracks: { [string]: Types.Track } = {}
 	local function add(id: string?)
 		local t = if id then lib.tracks[id] else nil
@@ -36,7 +41,14 @@ Charm.effect(function()
 	for _, e in s.queue do
 		add(e.trackId)
 	end
-	State.stage({ tracks = tracks })
+	local live = {}
+	for _, id in hints do
+		if lib.tracks[id] then
+			add(id)
+			table.insert(live, id)
+		end
+	end
+	State.stage({ tracks = tracks, hints = live })
 end)
 
 -- per-player "me" (role, abilities, prefs), keyed by userId

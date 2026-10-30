@@ -5,7 +5,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local CharmSync = require(ReplicatedStorage.HazaDJ.Packages.CharmSync)
+local CharmSync = require(ReplicatedStorage.CosmicDJ.Packages.CharmSync)
 local Net = require(script.Parent.Parent.Net)
 local Roles = require(script.Parent.Roles)
 local State = require(script.Parent.State)

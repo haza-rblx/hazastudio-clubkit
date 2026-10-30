@@ -1,16 +1,16 @@
 --!strict
 -- What the room sees: "… is live" and now-playing toasts, the live DJ's name over the DJ deck, the
 -- beat for club lights, and the DJ deck's prompt / floor. The game opts in by tagging parts:
---   HazaDJ_DjDeck  - the DJ deck (name billboard, "Open the decks" prompt, near-DJ deck pads);
+--   CosmicDJ_DjDeck  - the DJ deck (name billboard, "Open the decks" prompt, near-DJ deck pads);
 --                    the older HazaDJ_Booth tag still works
---   HazaDJ_Stand   - the floor behind the decks (kept for DJs when "DJs only" is on)
---   HazaDJ_Speaker - where the decks are heard from in club-zone / DJ deck area mode
--- Lights listen to workspace attributes HazaDJ_BPM and HazaDJ_BeatAt (server time of a beat).
+--   CosmicDJ_Stand   - the floor behind the decks (kept for DJs when "DJs only" is on)
+--   CosmicDJ_Speaker - where the decks are heard from in club-zone / DJ deck area mode
+-- Lights listen to workspace attributes CosmicDJ_BPM and CosmicDJ_BeatAt (server time of a beat).
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Charm = require(ReplicatedStorage.HazaDJ.Packages.Charm)
+local Charm = require(ReplicatedStorage.CosmicDJ.Packages.Charm)
 local DjDeck = require(script.Parent.DjDeck)
 local Net = require(script.Parent.Parent.Net)
 local Roles = require(script.Parent.Roles)
@@ -31,11 +31,11 @@ local function nameOf(userId: number?): string?
 end
 
 local function billboard()
-	local djDeck = CollectionService:GetTagged("HazaDJ_DjDeck")[1] or CollectionService:GetTagged("HazaDJ_Booth")[1]
+	local djDeck = CollectionService:GetTagged("CosmicDJ_DjDeck")[1] or CollectionService:GetTagged("HazaDJ_Booth")[1]
 	if not djDeck or not djDeck:IsA("BasePart") then
 		return
 	end
-	local bb = djDeck:FindFirstChild("HazaDJ_Name") :: BillboardGui?
+	local bb = djDeck:FindFirstChild("CosmicDJ_Name") :: BillboardGui?
 	local name = nameOf(State.session().live)
 	local on = State.settings().billboard and name ~= nil
 	if not on then
@@ -46,7 +46,7 @@ local function billboard()
 	end
 	if not bb then
 		local g = Instance.new("BillboardGui")
-		g.Name = "HazaDJ_Name"
+		g.Name = "CosmicDJ_Name"
 		g.Size = UDim2.fromOffset(240, 40)
 		g.StudsOffset = Vector3.new(0, djDeck.Size.Y / 2 + 3, 0)
 		g.AlwaysOnTop = false
@@ -67,15 +67,15 @@ local function billboard()
 end
 
 local function prompt()
-	local djDeck = CollectionService:GetTagged("HazaDJ_DjDeck")[1] or CollectionService:GetTagged("HazaDJ_Booth")[1]
+	local djDeck = CollectionService:GetTagged("CosmicDJ_DjDeck")[1] or CollectionService:GetTagged("HazaDJ_Booth")[1]
 	if not djDeck or not djDeck:IsA("BasePart") then
 		return
 	end
-	local pp = djDeck:FindFirstChild("HazaDJ_Open") :: ProximityPrompt?
+	local pp = djDeck:FindFirstChild("CosmicDJ_Open") :: ProximityPrompt?
 	if State.settings().openAtDjDeck then
 		if not pp then
 			local p = Instance.new("ProximityPrompt")
-			p.Name = "HazaDJ_Open"
+			p.Name = "CosmicDJ_Open"
 			p.ActionText = "Open the decks"
 			p.ObjectText = "DJ deck"
 			p.MaxActivationDistance = 12
@@ -92,7 +92,7 @@ local function guardStand()
 	if not State.settings().standLock then
 		return
 	end
-	for _, stand in CollectionService:GetTagged("HazaDJ_Stand") do
+	for _, stand in CollectionService:GetTagged("CosmicDJ_Stand") do
 		if not stand:IsA("BasePart") then
 			continue
 		end
@@ -116,10 +116,10 @@ local function beat()
 	local d = s.decks[from]
 	local t = d.trackId and State.library().tracks[d.trackId]
 	if State.settings().lights and d.playing and t and t.bpm then
-		workspace:SetAttribute("HazaDJ_BPM", t.bpm * t.speed * (1 + d.pitch))
-		workspace:SetAttribute("HazaDJ_BeatAt", d.at - (d.pos % (60 / t.bpm)))
+		workspace:SetAttribute("CosmicDJ_BPM", t.bpm * t.speed * (1 + d.pitch))
+		workspace:SetAttribute("CosmicDJ_BeatAt", d.at - (d.pos % (60 / t.bpm)))
 	else
-		workspace:SetAttribute("HazaDJ_BPM", 0)
+		workspace:SetAttribute("CosmicDJ_BPM", 0)
 	end
 end
 
