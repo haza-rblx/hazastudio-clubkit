@@ -455,15 +455,12 @@ function Deck.body(m: Model.Deck, mirror: boolean, props: Base.Props?): Frame
 	end
 	local CAP = BH - 22 -- one bottom caption line for every column
 	local d = m.deck
-	local range = function()
-		return Mix.PITCH_RANGES[Store.settings().pitch] or 0.16
-	end
 	-- tempo fader: 0 top = fastest; the centre is 1.00x
 	local pitch = m.value("Pitch", function()
 		return d().pitch
 	end)
 	local tempoV = function()
-		return math.clamp(0.5 - pitch() / (2 * range()), 0, 1)
+		return Mix.pitchFader(pitch(), Store.settings().pitch)
 	end
 	-- both SYNC keys light while the decks are linked (this one follows, or the other one does)
 	local synced = function()
@@ -547,7 +544,7 @@ function Deck.body(m: Model.Deck, mirror: boolean, props: Base.Props?): Frame
 				return Mix.pitchLabel(pitch())
 			end, X(40), 44, W, 0.5),
 			Hardware.vfader(X(40) - 18, 62, CAP - 8 - 62, tempoV, 36, 8, function(v)
-				m.set("Pitch", (0.5 - v) * 2 * range())
+				m.set("Pitch", Mix.faderPitch(v, Vide.untrack(Store.settings).pitch))
 			end, 0.5),
 			small(function()
 				return "TEMPO " .. (Mix.PITCH_LABELS[Store.settings().pitch] or "±16%")

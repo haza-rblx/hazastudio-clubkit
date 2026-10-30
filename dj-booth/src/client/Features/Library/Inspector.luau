@@ -109,16 +109,16 @@ end
 local function speedField(order: number, value: number, onChange: (number) -> ()): Frame
 	return Layout.field(order, "Playback speed", Controls.RULER_H, {
 		Controls.ruler(279, {
-			min = 0.5,
-			max = 1.5,
+			min = 0,
+			max = 3,
 			step = 0.01,
 			value = value,
 			default = 1,
 			origin = 1,
-			detent = 0.015,
-			ticks = 40,
-			major = 10,
-			mid = 2,
+			detent = 0.03,
+			ticks = 60,
+			major = 20,
+			mid = 10,
 			label = function(v)
 				return if v == 1 then "1x" else string.format("%gx", v)
 			end,

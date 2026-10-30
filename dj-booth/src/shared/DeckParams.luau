@@ -9,7 +9,7 @@ local DeckParams = {}
 
 export type DeckOut = {
 	volume: number,
-	speed: number, -- PlaybackSpeed, clamped 0.2 .. 5
+	speed: number, -- PlaybackSpeed, clamped 0.05 .. 5
 	shiftEnabled: boolean,
 	octave: number, -- 1 when the shift is off
 	high: number,
@@ -56,7 +56,7 @@ function DeckParams.deck(
 	local gain = if track then Mix.dbToGain(track.gain) else 1
 	local volume = math.clamp(deck.vol * x * gain, 0, 10)
 	local rate = DeckClock.rate(deck, track)
-	local speed = math.clamp(rate, 0.2, 5)
+	local speed = math.clamp(rate, 0.05, 5)
 	-- key lock: shift back by the tempo change so the key stays (PitchShift spans 0.5 .. 2)
 	local keep = settings.keyLock and math.abs(deck.pitch) > 0.0005
 	local octave = if keep then math.clamp(1 / (1 + deck.pitch), 0.5, 2) else 1

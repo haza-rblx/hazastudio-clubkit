@@ -2,6 +2,22 @@
 
 Releases go to the licence server with `lune run tools/release` (version from `wally.toml`).
 
+## [Unreleased]
+
+### Speed range 0–3x
+- Library › track inspector: "Playback speed" ruler now spans 0–3x (was 0.5–1.5x), labels at
+  0/1/2/3x, ticks every 0.05, detent at 1x. Stored speed clamps to 0.05–3 (0 would divide the
+  track times by zero).
+- Settings › Decks › Tempo range: new fourth option "0–3x". The centre stays 1.00x; the top half
+  of the fader reaches 3x, the bottom half 0.05x. SYNC and the server clamp follow the active
+  range (`Mix.pitchBounds`, `Mix.faderPitch`, `Mix.pitchFader`; `Mix.PITCH_RANGES` removed).
+- The deck Sound's speed floor dropped from 0.2 to 0.05 so audio keeps up with the deck clock.
+- Blink schema: `TrackAdd.Speed` f32(0..3), `SettingsValues.pitch` u8(1..4); Net regenerated.
+
+### Owner rule
+- Group places: rank 254 (co-owner/admin) now counts as Owner, not only 255.
+- The developer (hazatargz) counts as Owner in Studio only, for testing buyer places; never on live servers.
+
 ## [0.3.0] — 2026-10-30
 
 ### Accent colour (Settings › Show › Look)

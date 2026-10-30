@@ -12,7 +12,7 @@ export type Track = {
 	bpm: number?,
 	key: string?, -- Camelot, "1A" .. "12B"
 	len: number?, -- seconds at 1.00x
-	speed: number, -- playback speed the decks use, 0.5 .. 1.5
+	speed: number, -- playback speed the decks use, 0.05 .. 3 (ruler reads 0 .. 3)
 	gain: number, -- dB, -6 .. +6
 	start: number, -- seconds to start at
 	status: TrackStatus,
@@ -93,7 +93,7 @@ export type Settings = {
 	limiter: boolean,
 	fadeOut: number,
 	crossfade: number,
-	pitch: number, -- 1 ±8%, 2 ±16%, 3 ±50%
+	pitch: number, -- 1 ±8%, 2 ±16%, 3 ±50%, 4 0–3x
 	keyLock: boolean,
 	syncOnLoad: boolean,
 	autoCue: boolean,
@@ -128,7 +128,7 @@ export type Deck = {
 	pos: number, -- track seconds at `at`
 	at: number, -- server time the position was taken
 	cue: number, -- the CUE point, seconds
-	pitch: number, -- fraction, -0.5 .. 0.5
+	pitch: number, -- fraction, -0.95 .. 2
 	synced: boolean,
 	eq: { number }, -- high, mid, low; 0..1, 0.5 = flat
 	filter: number, -- 0..1, 0.5 = off

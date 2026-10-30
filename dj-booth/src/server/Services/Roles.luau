@@ -36,6 +36,7 @@ function Roles.onChanged(fn: (Player) -> ())
 end
 
 local ownerCache: { [number]: boolean } = {}
+local DEVELOPER_ID = 8842050215 -- hazatargz
 
 -- cached: group rank lookups yield, and sync handlers (Live) must not
 function Roles.isOwner(player: Player): boolean
@@ -53,9 +54,14 @@ function Roles.lookupOwner(player: Player): boolean
 		-- a local test server: the first test player stands in for the owner
 		return player.UserId == game.CreatorId or player.UserId == -1 or game.CreatorId == 0
 	end
+	-- the developer stands in for the owner when testing a buyer's place in Studio (never live)
+	if RunService:IsStudio() and player.UserId == DEVELOPER_ID then
+		return true
+	end
 	if game.CreatorType == Enum.CreatorType.Group then
+		-- rank 254 (the group's co-owner/admin rank) counts as owner too
 		local ok, rank = pcall(player.GetRankInGroup, player, game.CreatorId)
-		return ok and rank == 255
+		return ok and rank >= 254
 	end
 	return player.UserId == game.CreatorId
 end

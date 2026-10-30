@@ -96,7 +96,7 @@ function Library.addTrack(c: any): (boolean, string?, string?)
 			bpm = c.Bpm,
 			key = key,
 			len = c.Len,
-			speed = math.floor(math.clamp(c.Speed, 0.5, 1.5) * 100 + 0.5) / 100,
+			speed = math.floor(math.clamp(c.Speed, 0.05, 3) * 100 + 0.5) / 100,
 			gain = 0,
 			start = 0,
 			status = "ready",
@@ -167,7 +167,7 @@ function Library.editTrack(c: any): (boolean, string?)
 	elseif f == "Key" then
 		patch.key = if c.Text and KEYS[c.Text] then c.Text else Dict.None
 	elseif f == "Speed" then
-		patch.speed = math.floor(math.clamp(c.Number or 1, 0.5, 1.5) * 100 + 0.5) / 100
+		patch.speed = math.floor(math.clamp(c.Number or 1, 0.05, 3) * 100 + 0.5) / 100
 	elseif f == "Gain" then
 		patch.gain = math.floor(math.clamp(c.Number or 0, -6, 6) * 2 + 0.5) / 2
 	elseif f == "Start" then

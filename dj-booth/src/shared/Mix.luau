@@ -2,8 +2,25 @@
 -- Mixer maths shared by the audio engine (server) and the readouts (client).
 local Mix = {}
 
-Mix.PITCH_RANGES = { 0.08, 0.16, 0.5 }
-Mix.PITCH_LABELS = { "±8%", "±16%", "±50%" }
+-- the tempo fader's reach as { lowest, highest } pitch; "0–3x" bottoms out at 0.05x (the deck's floor)
+Mix.PITCH_BOUNDS = { { -0.08, 0.08 }, { -0.16, 0.16 }, { -0.5, 0.5 }, { -0.95, 2 } }
+Mix.PITCH_LABELS = { "±8%", "±16%", "±50%", "0–3x" }
+
+function Mix.pitchBounds(i: number): (number, number)
+	local b = Mix.PITCH_BOUNDS[i] or Mix.PITCH_BOUNDS[2]
+	return b[1], b[2]
+end
+
+-- tempo fader position (0 top .. 1 bottom, 0.5 = 1.00x) to pitch and back: each half spans its own side
+function Mix.faderPitch(v: number, i: number): number
+	local lo, hi = Mix.pitchBounds(i)
+	return (0.5 - v) * 2 * (if v < 0.5 then hi else -lo)
+end
+
+function Mix.pitchFader(p: number, i: number): number
+	local lo, hi = Mix.pitchBounds(i)
+	return math.clamp(0.5 - p / (2 * (if p >= 0 then hi else -lo)), 0, 1)
+end
 
 -- an EQ knob (0..1, 0.5 = flat) in dB: -12 .. +12, and the label under it
 function Mix.eqDb(v: number): number

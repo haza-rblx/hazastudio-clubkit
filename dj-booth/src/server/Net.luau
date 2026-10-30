@@ -222,8 +222,8 @@ function SerdesFunctions.ReadFUNCTION_DATA_Do(): ({ Kind: "TrackAdd", AssetId: n
 			Value.Len = buffer.readf32(RecieveBuffer, BLOCK_START + 0)
 		end
 		Value.Speed = buffer.readf32(RecieveBuffer, BLOCK_START + 13)
-		if not (Value.Speed >= 0.5) then error(`Expected "Value.Speed" to be larger than or equal to 0.5, got {Value.Speed} instead.`) end
-		if not (Value.Speed <= 1.5) then error(`Expected "Value.Speed" to be smaller than or equal to 1.5, got {Value.Speed} instead.`) end
+		if not (Value.Speed >= 0) then error(`Expected "Value.Speed" to be larger than or equal to 0, got {Value.Speed} instead.`) end
+		if not (Value.Speed <= 3) then error(`Expected "Value.Speed" to be smaller than or equal to 3, got {Value.Speed} instead.`) end
 		-- START ARRAY
 		Length = buffer.readu8(RecieveBuffer, BLOCK_START + 17)
 		if Length < 0 then error(`Expected "Length" to be larger than or equal to 0, got {Length} instead.`) end
@@ -636,7 +636,7 @@ function SerdesFunctions.ReadFUNCTION_DATA_Do(): ({ Kind: "TrackAdd", AssetId: n
 		if Value.Values.crossfade > 12 then error(`Expected "Value.Values.crossfade" to be smaller than or equal to 12, got {Value.Values.crossfade} instead.`) end
 		Value.Values.pitch = buffer.readu8(RecieveBuffer, BLOCK_START + 6)
 		if Value.Values.pitch < 1 then error(`Expected "Value.Values.pitch" to be larger than or equal to 1, got {Value.Values.pitch} instead.`) end
-		if Value.Values.pitch > 3 then error(`Expected "Value.Values.pitch" to be smaller than or equal to 3, got {Value.Values.pitch} instead.`) end
+		if Value.Values.pitch > 4 then error(`Expected "Value.Values.pitch" to be smaller than or equal to 4, got {Value.Values.pitch} instead.`) end
 		Value.Values.keyLock = (buffer.readu8(RecieveBuffer, BLOCK_START + 7) == 1)
 		Value.Values.syncOnLoad = (buffer.readu8(RecieveBuffer, BLOCK_START + 8) == 1)
 		Value.Values.autoCue = (buffer.readu8(RecieveBuffer, BLOCK_START + 9) == 1)

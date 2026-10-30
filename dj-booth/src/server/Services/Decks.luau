@@ -92,14 +92,14 @@ end
 -- the pitch that makes deck n match the other deck: the same BPM when both tracks have one,
 -- otherwise the same playback rate (owner, 2026-10-23: sync is about speed, not a BPM gate)
 local function syncPitch(t: Types.Track, other: Types.Track, otherPitch: number): number
-	local range = Mix.PITCH_RANGES[State.settings().pitch]
+	local lo, hi = Mix.pitchBounds(State.settings().pitch)
 	local target, own
 	if t.bpm and other.bpm then
 		target, own = other.bpm * other.speed * (1 + otherPitch), t.bpm * t.speed
 	else
 		target, own = other.speed * (1 + otherPitch), t.speed
 	end
-	return math.clamp(target / own - 1, -range, range)
+	return math.clamp(target / own - 1, lo, hi)
 end
 
 function Decks.load(n: number, trackId: string): (boolean, string?)
@@ -339,11 +339,11 @@ end
 
 -- a continuous control
 function Decks.live(n: number, param: string, v: number)
-	local range = Mix.PITCH_RANGES[State.settings().pitch]
+	local lo, hi = Mix.pitchBounds(State.settings().pitch)
 	if param == "Pitch" then
 		-- a follower moving its own pitch unlinks; the leader moving drags the follower along
 		local leader = deckState(3 - n).synced
-		anchor(n, { pitch = math.clamp(v, -range, range), synced = false })
+		anchor(n, { pitch = math.clamp(v, lo, hi), synced = false })
 		local t, other = trackOf(3 - n), trackOf(n)
 		if leader and t and other then
 			anchor(3 - n, { pitch = syncPitch(t, other, deckState(n).pitch) })
