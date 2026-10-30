@@ -2,7 +2,7 @@
 
 Releases go to the licence server with `lune run tools/release` (version from `wally.toml`).
 
-## [Unreleased]
+## [0.3.1] — 2026-10-30
 
 ### Speed range 0–3x
 - Library › track inspector: "Playback speed" ruler now spans 0–3x (was 0.5–1.5x), labels at
