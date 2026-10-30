@@ -2,7 +2,7 @@
 
 Releases go to the licence server with `lune run tools/release` (version from `wally.toml`).
 
-## [Unreleased]
+## [0.3.0] — 2026-10-30
 
 ### Accent colour (Settings › Show › Look)
 - New game setting `accent` (6 hex digits, "" = the default red), owner-chosen, one per game:
